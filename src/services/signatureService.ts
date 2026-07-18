@@ -1,0 +1,150 @@
+import { USE_MOCK } from '../config/mock';
+import { apiRequest, authHeaders } from '../api/client';
+
+export interface SavedSignature {
+  id: number | string;
+  name: string;
+  dataUrl: string;
+  type: 'drawn' | 'uploaded';
+  isDefault: boolean;
+  createdAt: string;
+}
+
+export interface DocumentSignatureRecord {
+  id: string;
+  module: string;
+  referenceId: string;
+  signatureId: string;
+  signedBy: string;
+  signedAt: string;
+  dataUrl: string;
+  comments?: string;
+}
+
+export interface SignDocumentPayload {
+  module: string;
+  referenceId: string;
+  signatureId: string;
+  comments?: string;
+}
+
+const SIG_STORAGE_KEY = 'heliflow_signatures';
+const DOC_SIG_STORAGE_KEY = 'heliflow_doc_signatures';
+
+function readSigs(): SavedSignature[] {
+  try {
+    const raw = localStorage.getItem(SIG_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeSigs(sigs: SavedSignature[]) {
+  localStorage.setItem(SIG_STORAGE_KEY, JSON.stringify(sigs));
+}
+
+function readDocSigs(): DocumentSignatureRecord[] {
+  try {
+    const raw = localStorage.getItem(DOC_SIG_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeDocSigs(records: DocumentSignatureRecord[]) {
+  localStorage.setItem(DOC_SIG_STORAGE_KEY, JSON.stringify(records));
+}
+
+async function mockList(): Promise<SavedSignature[]> {
+  await new Promise((r) => setTimeout(r, 200));
+  return readSigs();
+}
+
+async function mockCreate(data: { name: string; dataUrl: string; type: 'drawn' | 'uploaded' }): Promise<SavedSignature> {
+  const sigs = readSigs();
+  const sig: SavedSignature = {
+    id: Date.now(),
+    name: data.name,
+    dataUrl: data.dataUrl,
+    type: data.type,
+    isDefault: sigs.length === 0,
+    createdAt: new Date().toISOString(),
+  };
+  writeSigs([sig, ...sigs]);
+  return sig;
+}
+
+async function mockDelete(id: string | number): Promise<void> {
+  writeSigs(readSigs().filter((s) => s.id !== id));
+}
+
+async function mockSetDefault(id: string | number): Promise<void> {
+  writeSigs(readSigs().map((s) => ({ ...s, isDefault: s.id === id })));
+}
+
+async function mockSignDocument(payload: SignDocumentPayload): Promise<DocumentSignatureRecord> {
+  const sig = readSigs().find((s) => s.id === payload.signatureId);
+  const record: DocumentSignatureRecord = {
+    id: String(Date.now()),
+    module: payload.module,
+    referenceId: payload.referenceId,
+    signatureId: payload.signatureId,
+    signedBy: 'Current User',
+    signedAt: new Date().toISOString(),
+    dataUrl: sig?.dataUrl || '',
+    comments: payload.comments,
+  };
+  writeDocSigs([...readDocSigs(), record]);
+  return record;
+}
+
+async function mockGetDocumentSignatures(module: string, referenceId: string): Promise<DocumentSignatureRecord[]> {
+  return readDocSigs().filter((d) => d.module === module && d.referenceId === referenceId);
+}
+
+async function apiList(): Promise<SavedSignature[]> {
+  return apiRequest<SavedSignature[]>('/signatures');
+}
+
+async function apiCreate(data: { name: string; dataUrl: string; type: 'drawn' | 'uploaded' }): Promise<SavedSignature> {
+  return apiRequest<SavedSignature>('/signatures', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+async function apiDelete(id: string | number): Promise<void> {
+  await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/signatures/${id}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+}
+
+async function apiSetDefault(id: string | number): Promise<void> {
+  await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/signatures/${id}/default`, {
+    method: 'PUT',
+    headers: authHeaders(),
+  });
+}
+
+async function apiSignDocument(payload: SignDocumentPayload): Promise<DocumentSignatureRecord> {
+  return apiRequest<DocumentSignatureRecord>('/signatures/sign', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+async function apiGetDocumentSignatures(module: string, referenceId: string): Promise<DocumentSignatureRecord[]> {
+  return apiRequest<DocumentSignatureRecord[]>(`/signatures/document/${module}/${referenceId}`);
+}
+
+export const signatureService = {
+  list: USE_MOCK ? mockList : apiList,
+  create: USE_MOCK ? mockCreate : apiCreate,
+  delete: USE_MOCK ? mockDelete : apiDelete,
+  setDefault: USE_MOCK ? mockSetDefault : apiSetDefault,
+  signDocument: USE_MOCK ? mockSignDocument : apiSignDocument,
+  getDocumentSignatures: USE_MOCK ? mockGetDocumentSignatures : apiGetDocumentSignatures,
+};

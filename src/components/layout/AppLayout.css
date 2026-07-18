@@ -1,0 +1,82 @@
+/* ═══════════════════════════════════════════════════════════
+   Heliflow App Layout — Sidebar + TopBar + Content
+   ═══════════════════════════════════════════════════════════ */
+
+.app-layout {
+  display: flex;
+  min-height: 100vh;
+  background: var(--surface);
+}
+
+/* ─── Main Area (next to sidebar) ────────────────────────── */
+
+.app-layout__main {
+  flex: 1;
+  margin-left: 260px;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.app-layout--collapsed .app-layout__main {
+  margin-left: 72px;
+}
+
+/* ─── Content Area ───────────────────────────────────────── */
+
+.app-layout__content {
+  flex: 1;
+  padding: 28px 32px;
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.app-layout__footer {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 32px 18px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* ─── Sidebar Hover Expand (Desktop & Tablet) ─────────── */
+/* Shift main content when collapsed sidebar is hover-expanded */
+@media (min-width: 769px) {
+  .app-layout--collapsed:has(.sidebar:hover) .app-layout__main {
+    margin-left: 260px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Responsive
+   ═══════════════════════════════════════════════════════════ */
+
+/* Tablet: sidebar auto-collapses to 72px */
+@media (max-width: 1023px) and (min-width: 769px) {
+  .app-layout__main {
+    margin-left: 72px;
+  }
+}
+
+/* Mobile: no margin, full-width content */
+@media (max-width: 768px) {
+  .app-layout__main {
+    margin-left: 0;
+  }
+
+  .app-layout--collapsed .app-layout__main {
+    margin-left: 0;
+  }
+
+  .app-layout__content {
+    padding: 20px 16px;
+  }
+
+  .app-layout__footer {
+    padding: 0 16px 16px;
+  }
+}

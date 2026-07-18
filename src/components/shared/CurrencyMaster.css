@@ -1,0 +1,504 @@
+/* ═══════════════════════════════════════════════════════════
+   Heliflow — Currency Master (reusable)
+   ═══════════════════════════════════════════════════════════ */
+
+/* ─── Searchable Currency Selector ───────────────────────── */
+
+.cur-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  position: relative;
+}
+
+.cur-selector__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* ─── Trigger Button ─────────────────────────────────────── */
+
+.cur-selector__trigger-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cur-selector__trigger-row .cur-selector__trigger {
+  flex: 1;
+}
+
+.cur-selector__trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+  text-align: left;
+  position: relative;
+}
+
+.cur-selector__trigger:hover {
+  border-color: var(--border-strong);
+}
+
+.cur-selector__trigger:focus-visible {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.1);
+}
+
+.cur-selector__trigger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cur-selector__trigger--open {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.1);
+}
+
+.cur-selector__trigger-icon {
+  color: var(--text-placeholder);
+  flex-shrink: 0;
+}
+
+.cur-selector__selected {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.cur-selector__flag {
+  font-size: 16px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.cur-selector__selected-code {
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.cur-selector__selected-name {
+  font-size: 11px;
+  color: var(--text-placeholder);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cur-selector__chevron-wrap {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.cur-selector__chevron {
+  color: var(--text-placeholder);
+  transition: transform 0.2s;
+}
+
+.cur-selector__chevron--up {
+  transform: rotate(180deg);
+}
+
+.cur-selector__refresh {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--text-placeholder);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: color 0.2s, background 0.2s;
+  margin-left: 2px;
+}
+
+.cur-selector__refresh:hover {
+  color: var(--primary-500);
+  background: rgba(10, 110, 209, 0.08);
+}
+
+.cur-selector__refresh--spinning svg {
+  animation: curSpin 0.8s linear infinite;
+}
+
+@keyframes curSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Small variant ──────────────────────────────────────── */
+
+.cur-selector--sm .cur-selector__trigger {
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.cur-selector--sm .cur-selector__flag {
+  font-size: 14px;
+}
+
+.cur-selector--sm .cur-selector__selected-code {
+  font-size: 12px;
+}
+
+.cur-selector--sm .cur-selector__selected-name {
+  display: none;
+}
+
+.cur-selector--sm .cur-selector__refresh {
+  width: 20px;
+  height: 20px;
+}
+
+/* ─── Dropdown Panel ──────────────────────────────────────── */
+
+.cur-selector__dropdown {
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.cur-selector__search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.cur-selector__search-icon {
+  position: absolute;
+  left: 14px;
+  color: var(--text-placeholder);
+  pointer-events: none;
+}
+
+.cur-selector__search-input {
+  width: 100%;
+  padding: 7px 10px 7px 30px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.cur-selector__search-input:focus {
+  border-color: var(--border-focus);
+}
+
+.cur-selector__search-input::placeholder {
+  color: var(--text-placeholder);
+}
+
+.cur-selector__loading-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 11px;
+  color: var(--text-placeholder);
+  border-bottom: 1px solid var(--border);
+}
+
+.cur-selector__loading-spin {
+  animation: curSpin 0.8s linear infinite;
+}
+
+.cur-selector__options {
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.cur-selector__no-results {
+  padding: 20px 14px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-placeholder);
+}
+
+/* ─── Option Items ────────────────────────────────────────── */
+
+.cur-selector__option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.cur-selector__option:hover {
+  background: var(--surface-hover);
+}
+
+.cur-selector__option--selected {
+  background: rgba(10, 110, 209, 0.06);
+  color: var(--primary-500);
+}
+
+[data-theme="dark"] .cur-selector__option--selected {
+  background: rgba(10, 110, 209, 0.12);
+}
+
+.cur-selector__option-flag {
+  font-size: 18px;
+  line-height: 1;
+  flex-shrink: 0;
+  width: 22px;
+  text-align: center;
+}
+
+.cur-selector__option-flag svg {
+  color: var(--text-placeholder);
+  width: 16px;
+  height: 16px;
+}
+
+.cur-selector__option-info {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.cur-selector__option-info--compact {
+  align-items: center;
+}
+
+.cur-selector__option-code {
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.cur-selector__option-symbol {
+  font-size: 12px;
+  color: var(--text-placeholder);
+  flex-shrink: 0;
+}
+
+.cur-selector__option-name {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cur-selector__option-check {
+  flex-shrink: 0;
+  color: var(--primary-500);
+}
+
+/* ─── Converted Amount Display ────────────────────────────── */
+
+.cur-converted {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-placeholder);
+}
+
+.cur-converted__arrow {
+  display: inline-flex;
+  align-items: center;
+  color: var(--warning-500);
+}
+
+.cur-converted__value {
+  color: var(--primary-500);
+  cursor: help;
+  border-bottom: 1px dashed rgba(10, 110, 209, 0.3);
+}
+
+.cur-converted__loading {
+  animation: curPulse 1s ease-in-out infinite;
+}
+
+@keyframes curPulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+/* ─── Amount Input ────────────────────────────────────────── */
+
+.cur-amount-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: visible;
+  background: var(--surface);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.cur-amount-input:focus-within {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.1);
+}
+
+.cur-amount-input__currency {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px 6px 12px;
+  background: var(--surface-elevated);
+  border-right: 2px solid var(--border);
+  border-radius: 7px 0 0 7px;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: background 0.15s;
+  user-select: none;
+}
+
+.cur-amount-input__currency:hover {
+  background: var(--surface-hover);
+}
+
+.cur-amount-input__currency svg {
+  color: var(--text-placeholder);
+  flex-shrink: 0;
+}
+
+.cur-amount-input__cur-text {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  min-width: 28px;
+}
+
+.cur-amount-input__chevron {
+  color: var(--text-placeholder);
+  transition: transform 0.2s;
+}
+
+.cur-amount-input__chevron--up {
+  transform: rotate(180deg);
+}
+
+/* Dropdown for amount input */
+.cur-amount-input__dropdown {
+  width: 260px;
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.cur-amount-input__amount {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding-left: 8px;
+}
+
+.cur-amount-input__symbol {
+  position: absolute;
+  left: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-placeholder);
+  pointer-events: none;
+}
+
+.cur-amount-input__amount input {
+  width: 100%;
+  padding: 8px 10px 8px 30px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+}
+
+.cur-amount-input__amount input::placeholder {
+  color: var(--text-placeholder);
+}
+
+.cur-amount-input__amount input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ─── Currency Badge ──────────────────────────────────────── */
+
+.cur-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(10, 110, 209, 0.08);
+  color: var(--primary-500);
+  font-weight: 700;
+}
+
+.cur-badge__flag {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.cur-badge--sm {
+  font-size: 10px;
+}
+
+.cur-badge--sm .cur-badge__flag {
+  font-size: 12px;
+}
+
+.cur-badge--md {
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+.cur-badge--md .cur-badge__flag {
+  font-size: 16px;
+}
+
+[data-theme=\"dark\"] .cur-badge {
+  background: rgba(10, 110, 209, 0.15);
+}

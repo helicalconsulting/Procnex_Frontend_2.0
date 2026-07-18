@@ -1,0 +1,561 @@
+/* ═══════════════════════════════════════════════════════════
+   SAP Fiori-Style Login Page — Theme Aware
+   ═══════════════════════════════════════════════════════════ */
+
+/* ─── Layout: Split Panel ──────────────────────────────────── */
+
+.sap-login {
+  display: flex;
+  min-height: 100vh;
+  background: var(--surface-elevated);
+}
+
+/* ─── Left Panel: Branding ─────────────────────────────────── */
+
+.sap-login__brand-panel {
+  flex: 0 0 420px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 48px 40px 32px;
+  background: var(--shell-bg);
+  color: var(--shell-text);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Subtle geometric background pattern */
+.sap-login__brand-panel::before {
+  content: '';
+  position: absolute;
+  top: -80px;
+  right: -80px;
+  width: 320px;
+  height: 320px;
+  border: 1px solid var(--shell-border);
+  border-radius: 50%;
+}
+
+.sap-login__brand-panel::after {
+  content: '';
+  position: absolute;
+  bottom: -120px;
+  left: -60px;
+  width: 400px;
+  height: 400px;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  border-radius: 50%;
+}
+
+.sap-login__brand-content {
+  position: relative;
+  z-index: 1;
+}
+
+/* Logo */
+.sap-login__logo {
+  margin-bottom: 32px;
+}
+
+.sap-login__logo-icon {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.sap-login__brand-title {
+  font-size: 32px;
+  font-weight: 700;
+  margin: 0 0 8px;
+  letter-spacing: -0.5px;
+  color: var(--shell-text);
+}
+
+.sap-login__brand-tagline {
+  font-size: 15px;
+  color: var(--shell-text-secondary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.sap-login__brand-divider {
+  width: 40px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.2);
+  margin: 32px 0;
+  border-radius: 1px;
+}
+
+/* Feature List */
+.sap-login__features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sap-login__features li {
+  font-size: 14px;
+  color: var(--shell-text-secondary);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  line-height: 1.5;
+}
+
+.sap-login__feature-icon {
+  color: var(--shell-accent);
+  font-size: 8px;
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+
+/* Footer */
+.sap-login__brand-footer {
+  position: relative;
+  z-index: 1;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.25);
+}
+
+/* ─── Theme Toggle (corner) ────────────────────────────────── */
+
+.sap-login__theme-toggle {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.2s;
+  box-shadow: var(--shadow-sm);
+}
+
+.sap-login__theme-toggle:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+  transform: scale(1.05);
+}
+
+/* ─── Right Panel: Form ────────────────────────────────────── */
+
+.sap-login__form-panel {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  background: var(--surface-elevated);
+  position: relative;
+}
+
+.sap-login__form-container {
+  width: 100%;
+  max-width: 400px;
+}
+
+/* Mobile Logo (hidden on desktop) */
+.sap-login__mobile-logo {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 32px;
+}
+
+.sap-login__mobile-logo-icon {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
+.sap-login__mobile-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* Form Header */
+.sap-login__form-header {
+  margin-bottom: 28px;
+}
+
+/* Tab Toggle */
+.sap-login__tab-toggle {
+  display: flex;
+  gap: 1px;
+  margin-bottom: 24px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--border);
+}
+
+.sap-login__tab {
+  flex: 1;
+  padding: 10px 16px;
+  border: none;
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sap-login__tab:hover {
+  background: var(--surface-hover);
+}
+
+.sap-login__tab--active {
+  background: var(--primary-500);
+  color: #fff;
+}
+
+.sap-login__form-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 6px;
+}
+
+.sap-login__form-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* ─── Success ──────────────────────────────────────────────── */
+
+.sap-login__success {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 20px;
+  border-radius: var(--radius-sm);
+  background: #ecfdf5;
+  border-left: 3px solid #059669;
+  color: #065f46;
+  font-size: 13px;
+  animation: sapSlideDown 0.25s ease-out;
+}
+
+[data-theme="dark"] .sap-login__success {
+  background: #064e3b;
+  border-left-color: #34d399;
+  color: #a7f3d0;
+}
+
+/* ─── Error ────────────────────────────────────────────────── */
+
+.sap-login__error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 20px;
+  border-radius: var(--radius-sm);
+  background: var(--error-bg);
+  border-left: 3px solid var(--error-border);
+  color: var(--error-text);
+  font-size: 13px;
+  animation: sapSlideDown 0.25s ease-out;
+}
+
+@keyframes sapSlideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Form ─────────────────────────────────────────────────── */
+
+.sap-login__form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ─── SAP-style Fields ─────────────────────────────────────── */
+
+.sap-field__label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.sap-field__required {
+  color: var(--danger-500);
+  margin-left: 1px;
+}
+
+.sap-field__input {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  box-sizing: border-box;
+}
+
+.sap-field__input::placeholder {
+  color: var(--text-placeholder);
+}
+
+.sap-field__input:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px rgba(10, 110, 209, 0.16);
+}
+
+[data-theme="dark"] .sap-field__input:focus {
+  box-shadow: 0 0 0 2px rgba(77, 177, 255, 0.2);
+}
+
+.sap-field__input:disabled {
+  background: var(--surface-hover);
+  color: var(--text-placeholder);
+  cursor: not-allowed;
+}
+
+/* Password wrapper */
+.sap-field__input-wrap {
+  position: relative;
+}
+
+.sap-field__input-wrap .sap-field__input {
+  padding-right: 38px;
+}
+
+.sap-field__eye {
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sap-field__eye:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+/* ─── Submit Button ────────────────────────────────────────── */
+
+.sap-login__submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 10px 20px;
+  margin-top: 4px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--primary-500);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+  min-height: 40px;
+}
+
+.sap-login__submit:hover:not(:disabled) {
+  background: var(--primary-600);
+}
+
+.sap-login__submit:active:not(:disabled) {
+  background: var(--primary-700);
+}
+
+.sap-login__submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+[data-theme="dark"] .sap-login__submit {
+  box-shadow: 0 2px 8px rgba(10, 110, 209, 0.3);
+}
+
+/* ─── Spinner ──────────────────────────────────────────────── */
+
+.sap-login__spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: sapSpin 0.6s linear infinite;
+}
+
+@keyframes sapSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Demo Credentials ─────────────────────────────────────── */
+
+.sap-login__demo {
+  margin-top: 32px;
+}
+
+.sap-login__demo-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.sap-login__demo-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.sap-login__demo-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  white-space: nowrap;
+}
+
+.sap-login__demo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sap-login__demo-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  text-align: left;
+}
+
+.sap-login__demo-btn:hover {
+  border-color: var(--border-focus);
+  background: var(--surface-hover);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Role Badge */
+.sap-login__demo-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+  color: #fff;
+}
+
+.sap-login__demo-badge--admin { background: #354a5f; }
+.sap-login__demo-badge--proc  { background: var(--primary-500); }
+.sap-login__demo-badge--fin   { background: var(--success-500); }
+.sap-login__demo-badge--vendor { background: #f97316; }
+
+.sap-login__demo-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sap-login__demo-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.sap-login__demo-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+/* ─── Auth Loading Screen ──────────────────────────────────── */
+
+.auth-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: var(--surface);
+}
+
+.auth-loading__spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary-500);
+  border-radius: 50%;
+  animation: sapSpin 0.8s linear infinite;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Responsive
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 900px) {
+  .sap-login__brand-panel {
+    flex: 0 0 340px;
+    padding: 40px 32px 28px;
+  }
+
+  .sap-login__brand-title { font-size: 26px; }
+}
+
+@media (max-width: 768px) {
+  .sap-login { flex-direction: column; }
+  .sap-login__brand-panel { display: none; }
+  .sap-login__mobile-logo { display: flex; }
+
+  .sap-login__form-panel {
+    padding: 32px 24px;
+    min-height: 100vh;
+  }
+
+  .sap-login__form-container { max-width: 100%; }
+}
+
+@media (max-width: 480px) {
+  .sap-login__form-panel { padding: 24px 20px; }
+  .sap-login__form-title { font-size: 20px; }
+}

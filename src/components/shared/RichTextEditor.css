@@ -1,0 +1,511 @@
+/* ── Rich Text Editor ─────────────────────────────────────── */
+
+.rte-wrapper {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+}
+
+.rte-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  background: #f7f9fa;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.rte-toolbar__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #556b82;
+  transition: all 0.15s;
+}
+
+.rte-toolbar__btn:hover {
+  background: #e5e9ed;
+  color: #1d2d3e;
+}
+
+.rte-toolbar__btn--active {
+  background: #d4e3f7;
+  color: #0064d9;
+}
+
+.rte-toolbar__sep {
+  width: 1px;
+  height: 20px;
+  background: #d9dee3;
+  margin: 0 4px;
+}
+
+.rte-editor {
+  padding: 12px 16px;
+  overflow-y: auto;
+}
+
+.rte-editor__content {
+  min-height: 180px;
+  outline: none;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #1d2d3e;
+  font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+}
+
+.rte-editor__content:empty::before {
+  content: attr(data-placeholder);
+  color: #9ca3af;
+  font-style: italic;
+  pointer-events: none;
+}
+
+.rte-editor__content p {
+  margin: 0 0 8px;
+}
+
+.rte-editor__content ul,
+.rte-editor__content ol {
+  margin: 4px 0 8px;
+  padding-left: 24px;
+}
+
+.rte-editor__content li {
+  margin-bottom: 4px;
+}
+
+.rte-editor__content strong {
+  font-weight: 700;
+}
+
+.rte-editor__content em {
+  font-style: italic;
+}
+
+.rte-editor__content u {
+  text-decoration: underline;
+}
+
+
+/* ── Email Templates Section ──────────────────────────────── */
+
+.cs-email-templates {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.cs-email-templates__sidebar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  background: #f7f9fa;
+}
+
+.cs-email-templates__sidebar-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.cs-email-templates__sidebar-btn:hover {
+  border-color: var(--primary-300);
+  color: var(--primary-500);
+  background: #f0f6ff;
+}
+
+.cs-email-templates__sidebar-btn--active {
+  background: var(--primary-500);
+  border-color: var(--primary-500);
+  color: #fff;
+}
+
+.cs-email-templates__sidebar-btn--active:hover {
+  background: var(--primary-600);
+  border-color: var(--primary-600);
+  color: #fff;
+}
+
+.cs-email-templates__editor {
+  padding: 24px;
+}
+
+.cs-email-templates__editor-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.cs-email-templates__editor-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a2332;
+  margin: 0;
+}
+
+.cs-email-templates__editor-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.cs-email-templates__editor-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  background: var(--primary-500);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.cs-email-templates__editor-save:hover:not(:disabled) {
+  background: var(--primary-600);
+}
+
+.cs-email-templates__editor-save:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.cs-email-templates__editor-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: transparent;
+  color: #bb0000;
+  border: 1px solid #ffcdd2;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.cs-email-templates__editor-reset:hover {
+  background: #fff1f1;
+}
+
+.cs-email-templates__placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--text-secondary);
+  gap: 12px;
+}
+
+.cs-email-templates__placeholder-icon {
+  opacity: 0.3;
+}
+
+.cs-email-templates__placeholder-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.cs-email-templates__placeholder-text {
+  font-size: 13px;
+  color: var(--text-placeholder);
+  max-width: 360px;
+  line-height: 1.5;
+}
+
+/* ── Placeholders info ────────────────────────────────────── */
+
+.cs-email-placeholders {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: #f0f6ff;
+  border: 1px solid #d4e3f7;
+  border-radius: 6px;
+}
+
+.cs-email-placeholders__title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0064d9;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.cs-email-placeholders__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+
+.cs-email-placeholders__item {
+  font-size: 12px;
+  color: #556b82;
+}
+
+.cs-email-placeholders__code {
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 11px;
+  background: #e5edf7;
+  padding: 2px 6px;
+  border-radius: 3px;
+  color: #0064d9;
+}
+
+/* ── Default badge ────────────────────────────────────────── */
+
+.cs-email-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.cs-email-badge--custom {
+  background: #ecfdf3;
+  color: #107e3e;
+  border: 1px solid #c8e6c9;
+}
+
+.cs-email-badge--default {
+  background: #f7f9fa;
+  color: #6a6d70;
+  border: 1px solid #d9d9d9;
+}
+
+/* ── Sidebar badge dot ────────────────────────────────────── */
+
+.cs-email-sidebar-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 6px;
+}
+
+.cs-email-sidebar-dot--custom {
+  background: #107e3e;
+}
+
+.cs-email-sidebar-dot--default {
+  background: #9ca3af;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   DARK MODE
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Wrapper ── */
+[data-theme="dark"] .rte-wrapper {
+  border-color: var(--border);
+  background: var(--surface);
+}
+
+/* ── Toolbar ── */
+[data-theme="dark"] .rte-toolbar {
+  background: var(--surface-elevated);
+  border-bottom-color: var(--border);
+}
+
+[data-theme="dark"] .rte-toolbar__btn {
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .rte-toolbar__btn:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .rte-toolbar__btn--active {
+  background: rgba(77, 177, 255, 0.15);
+  color: #4db1ff;
+}
+
+[data-theme="dark"] .rte-toolbar__sep {
+  background: var(--border);
+}
+
+/* ── Editor ── */
+[data-theme="dark"] .rte-editor__content {
+  color: var(--text-primary);
+}
+
+/* ── Editor Content — Dark Mode Overrides for Template HTML ── */
+[data-theme="dark"] .rte-editor__content h1,
+[data-theme="dark"] .rte-editor__content h2,
+[data-theme="dark"] .rte-editor__content h3,
+[data-theme="dark"] .rte-editor__content p,
+[data-theme="dark"] .rte-editor__content li,
+[data-theme="dark"] .rte-editor__content strong,
+[data-theme="dark"] .rte-editor__content div,
+[data-theme="dark"] .rte-editor__content span,
+[data-theme="dark"] .rte-editor__content table,
+[data-theme="dark"] .rte-editor__content td,
+[data-theme="dark"] .rte-editor__content th {
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .rte-editor__content {
+  background: transparent !important;
+}
+
+[data-theme="dark"] .rte-editor__content .parties,
+[data-theme="dark"] .rte-editor__content .signature-block,
+[data-theme="dark"] .rte-editor__content .footer,
+[data-theme="dark"] .rte-editor__content div[class*="signature"],
+[data-theme="dark"] .rte-editor__content table {
+  background: var(--surface-elevated) !important;
+  border-color: var(--border) !important;
+}
+
+[data-theme="dark"] .rte-editor__content hr {
+  border-color: var(--border) !important;
+}
+
+[data-theme="dark"] .rte-editor__content a {
+  color: #4db1ff !important;
+}
+
+/* ── Email Templates Sidebar ── */
+[data-theme="dark"] .cs-email-templates__sidebar {
+  background: var(--surface-elevated);
+  border-bottom-color: var(--border);
+}
+
+[data-theme="dark"] .cs-email-templates__sidebar-btn {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .cs-email-templates__sidebar-btn:hover {
+  border-color: #4db1ff;
+  color: #4db1ff;
+  background: rgba(77, 177, 255, 0.08);
+}
+
+[data-theme="dark"] .cs-email-templates__sidebar-btn--active {
+  background: var(--primary-500);
+  border-color: var(--primary-500);
+  color: #fff;
+}
+
+[data-theme="dark"] .cs-email-templates__sidebar-btn--active:hover {
+  background: var(--primary-600);
+  border-color: var(--primary-600);
+  color: #fff;
+}
+
+/* ── Editor Header ── */
+[data-theme="dark"] .cs-email-templates__editor-title {
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .cs-email-templates__editor-save {
+  background: var(--primary-500);
+}
+
+[data-theme="dark"] .cs-email-templates__editor-save:hover:not(:disabled) {
+  background: var(--primary-600);
+}
+
+[data-theme="dark"] .cs-email-templates__editor-reset {
+  color: #ff6b6b;
+  border-color: rgba(255, 77, 77, 0.3);
+}
+
+[data-theme="dark"] .cs-email-templates__editor-reset:hover {
+  background: rgba(187, 0, 0, 0.15);
+}
+
+/* ── Placeholders ── */
+[data-theme="dark"] .cs-email-placeholders {
+  background: rgba(77, 177, 255, 0.08);
+  border-color: rgba(77, 177, 255, 0.2);
+}
+
+[data-theme="dark"] .cs-email-placeholders__title {
+  color: #4db1ff;
+}
+
+[data-theme="dark"] .cs-email-placeholders__item {
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .cs-email-placeholders__code {
+  background: rgba(77, 177, 255, 0.12);
+  color: #4db1ff;
+}
+
+/* ── Badges ── */
+[data-theme="dark"] .cs-email-badge--custom {
+  background: rgba(16, 126, 62, 0.2);
+  color: #34d399;
+  border-color: rgba(16, 126, 62, 0.35);
+}
+
+[data-theme="dark"] .cs-email-badge--default {
+  background: rgba(100, 116, 139, 0.15);
+  color: #94a3b8;
+  border-color: rgba(100, 116, 139, 0.25);
+}
+
+/* ── Sidebar dot ── */
+[data-theme="dark"] .cs-email-sidebar-dot--custom {
+  background: #34d399;
+}
+
+[data-theme="dark"] .cs-email-sidebar-dot--default {
+  background: #5a6068;
+}
+
+/* ── Placeholder text ── */
+[data-theme="dark"] .cs-email-templates__placeholder {
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .cs-email-templates__placeholder-icon {
+  opacity: 0.2;
+}
+
+[data-theme="dark"] .cs-email-templates__placeholder-title {
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .cs-email-templates__placeholder-text {
+  color: var(--text-placeholder);
+}

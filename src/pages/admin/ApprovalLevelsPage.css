@@ -1,0 +1,714 @@
+/* ═══════════════════════════════════════════════════════════
+   Heliflow — Approval Levels Page
+   ═══════════════════════════════════════════════════════════ */
+
+.alvl-page { color: var(--text-primary); display: flex; flex-direction: column; gap: 24px; }
+
+/* Header */
+.alvl-page__header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+.alvl-page__header-left h1 { font-size: 24px; font-weight: 700; margin: 0 0 4px; }
+.alvl-page__header-left p { font-size: 14px; color: var(--text-secondary); margin: 0; }
+
+.alvl-page__add-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 22px; border-radius: var(--radius-md); border: none;
+  background: var(--primary-500); color: #fff; font-size: 14px; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+  box-shadow: 0 2px 8px rgba(10,110,209,0.25);
+}
+.alvl-page__add-btn:hover { background: var(--primary-600); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(10,110,209,0.35); }
+.alvl-page__add-btn:active { transform: translateY(0); }
+
+/* Summary */
+.alvl-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+
+.alvl-summary-card {
+  padding: 20px; border-radius: var(--radius-lg); background: var(--surface-card);
+  border: 1px solid var(--border); display: flex; align-items: center; gap: 16px;
+  box-shadow: var(--shadow-sm); transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s; cursor: default;
+}
+.alvl-summary-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-md); transform: translateY(-2px); }
+
+.alvl-summary-card__icon {
+  width: 44px; height: 44px; border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.alvl-summary-card__icon--total   { background: rgba(10,110,209,0.1);  color: var(--primary-500); }
+.alvl-summary-card__icon--modules { background: rgba(139,92,246,0.1);  color: #8b5cf6; }
+.alvl-summary-card__icon--avg     { background: rgba(233,115,12,0.1);  color: var(--warning-500); }
+.alvl-summary-card__icon--max     { background: rgba(16,126,62,0.1);   color: var(--success-500); }
+
+[data-theme="dark"] .alvl-summary-card__icon--total   { background: rgba(10,110,209,0.18); }
+[data-theme="dark"] .alvl-summary-card__icon--modules { background: rgba(139,92,246,0.18); }
+[data-theme="dark"] .alvl-summary-card__icon--avg     { background: rgba(233,115,12,0.18); }
+[data-theme="dark"] .alvl-summary-card__icon--max     { background: rgba(16,126,62,0.18); }
+
+.alvl-summary-card__info { display: flex; flex-direction: column; gap: 2px; }
+.alvl-summary-card__value { font-size: 26px; font-weight: 700; line-height: 1.1; }
+.alvl-summary-card__label { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.4px; }
+
+/* Module Filter */
+.alvl-module-filter { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.alvl-module-pill {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: 20px; font-size: 13px; font-weight: 600;
+  cursor: pointer; border: 1px solid transparent;
+  background: var(--surface-elevated); color: var(--text-secondary);
+  transition: all 0.2s; font-family: inherit;
+}
+.alvl-module-pill:hover { color: var(--text-primary); background: var(--surface-hover); }
+.alvl-module-pill--active { border-color: var(--primary-500); color: var(--primary-500); background: rgba(10,110,209,0.06); }
+.alvl-module-pill__count { font-weight: 700; font-size: 12px; }
+
+/* ─── System Toggle ──────────────────────────────────────── */
+
+.alvl-system-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.alvl-system-toggle__btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px;
+  border-radius: var(--radius-lg);
+  border: 2px solid var(--border);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.alvl-system-toggle__btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 0 0 2px 2px;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+
+.alvl-system-toggle__btn--rfq::before {
+  background: linear-gradient(90deg, #d97706, #f59e0b);
+}
+
+.alvl-system-toggle__btn--heliflow::before {
+  background: linear-gradient(90deg, var(--primary-500), #8b5cf6);
+}
+
+.alvl-system-toggle__btn:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.alvl-system-toggle__btn--active {
+  color: var(--text-primary);
+  box-shadow: var(--shadow-md);
+}
+
+.alvl-system-toggle__btn--active::before {
+  opacity: 1;
+}
+
+.alvl-system-toggle__btn--rfq.alvl-system-toggle__btn--active {
+  border-color: #d97706;
+  background: rgba(217, 119, 6, 0.04);
+}
+
+.alvl-system-toggle__btn--heliflow.alvl-system-toggle__btn--active {
+  border-color: var(--primary-500);
+  background: rgba(10, 110, 209, 0.04);
+}
+
+[data-theme="dark"] .alvl-system-toggle__btn--rfq.alvl-system-toggle__btn--active {
+  background: rgba(217, 119, 6, 0.08);
+}
+
+[data-theme="dark"] .alvl-system-toggle__btn--heliflow.alvl-system-toggle__btn--active {
+  background: rgba(10, 110, 209, 0.08);
+}
+
+.alvl-system-toggle__sub {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-placeholder);
+  margin-left: auto;
+}
+
+/* ─── System Tags on Chain Cards ─────────────────────────── */
+
+.alvl-chain-card__system-tag {
+  display: inline-flex;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  vertical-align: middle;
+}
+
+.alvl-chain-card__system-tag--rfq {
+  background: rgba(217, 119, 6, 0.1);
+  color: #d97706;
+}
+
+.alvl-chain-card__system-tag--heliflow {
+  background: rgba(10, 110, 209, 0.1);
+  color: var(--primary-500);
+}
+
+[data-theme="dark"] .alvl-chain-card__system-tag--rfq { background: rgba(217, 119, 6, 0.15); }
+[data-theme="dark"] .alvl-chain-card__system-tag--heliflow { background: rgba(10, 110, 209, 0.15); }
+
+/* ─── Disabled / Greyed Out Chain Cards ──────────────────── */
+
+.alvl-chain-card--disabled {
+  opacity: 0.45;
+  filter: grayscale(0.6);
+  pointer-events: none;
+  user-select: none;
+  position: relative;
+}
+
+.alvl-chain-card--disabled::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-lg);
+  background: repeating-linear-gradient(
+    135deg,
+    transparent,
+    transparent 10px,
+    rgba(128, 128, 128, 0.03) 10px,
+    rgba(128, 128, 128, 0.03) 20px
+  );
+  pointer-events: none;
+}
+
+.alvl-chain-card--disabled:hover {
+  border-color: var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Locked Badge */
+.alvl-chain-card__locked-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--radius-md);
+  background: var(--surface-elevated);
+  color: var(--text-placeholder);
+  font-size: 11px;
+  font-weight: 600;
+  pointer-events: auto;
+}
+
+.alvl-chain-card {
+  background: var(--surface-card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); overflow: hidden;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.alvl-chain-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-md); }
+
+.alvl-chain-card__header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 24px; border-bottom: 1px solid var(--border);
+}
+
+.alvl-chain-card__header-left { display: flex; align-items: center; gap: 14px; }
+
+.alvl-chain-card__module-icon {
+  width: 40px; height: 40px; border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #fff;
+}
+.alvl-chain-card__module-icon--rfq       { background: linear-gradient(135deg,var(--primary-500),var(--vendor-accent)); }
+.alvl-chain-card__module-icon--quotations { background: linear-gradient(135deg,#0891b2,#22d3ee); }
+.alvl-chain-card__module-icon--po         { background: linear-gradient(135deg,#8b5cf6,#c084fc); }
+.alvl-chain-card__module-icon--accounts   { background: linear-gradient(135deg,#0f766e,#2dd4bf); }
+.alvl-chain-card__module-icon--payments   { background: linear-gradient(135deg,#b45309,#f59e0b); }
+.alvl-chain-card__module-icon--sales      { background: linear-gradient(135deg,#2563eb,#38bdf8); }
+.alvl-chain-card__module-icon--approvals  { background: linear-gradient(135deg,#059669,#34d399); }
+
+.alvl-chain-card__module-name { font-size: 16px; font-weight: 700; display: block; }
+.alvl-chain-card__level-count { font-size: 12px; color: var(--text-secondary); font-weight: 500; display: block; margin-top: 2px; }
+
+.alvl-chain-card__add-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 6px 14px; border-radius: var(--radius-md);
+  border: 1px solid var(--primary-500); background: transparent;
+  color: var(--primary-500); font-size: 12px; font-weight: 600;
+  cursor: pointer; font-family: inherit; transition: all 0.2s;
+}
+.alvl-chain-card__add-btn:hover { background: var(--primary-500); color: #fff; }
+
+.alvl-chain-card__body { padding: 24px; }
+
+.alvl-chain-card__empty {
+  display: flex; align-items: center; gap: 10px;
+  padding: 20px 24px; font-size: 13px; color: var(--text-secondary);
+}
+.alvl-chain-card__empty svg { color: var(--warning-500); flex-shrink: 0; }
+
+/* ─── Pipeline ───────────────────────────────────────────── */
+
+.alvl-pipeline { display: flex; flex-direction: column; gap: 0; }
+
+.alvl-pipeline__step { display: flex; gap: 16px; }
+
+.alvl-pipeline__connector {
+  display: flex; flex-direction: column; align-items: center;
+  width: 36px; flex-shrink: 0;
+}
+
+.alvl-pipeline__dot {
+  width: 32px; height: 32px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 800; color: #fff; flex-shrink: 0;
+  position: relative; z-index: 1;
+}
+.alvl-pipeline__dot--rfq       { background: linear-gradient(135deg,var(--primary-500),var(--vendor-accent)); }
+.alvl-pipeline__dot--quotations { background: linear-gradient(135deg,#0891b2,#22d3ee); }
+.alvl-pipeline__dot--po         { background: linear-gradient(135deg,#8b5cf6,#c084fc); }
+.alvl-pipeline__dot--accounts   { background: linear-gradient(135deg,#0f766e,#2dd4bf); }
+.alvl-pipeline__dot--payments   { background: linear-gradient(135deg,#b45309,#f59e0b); }
+.alvl-pipeline__dot--sales      { background: linear-gradient(135deg,#2563eb,#38bdf8); }
+.alvl-pipeline__dot--approvals  { background: linear-gradient(135deg,#059669,#34d399); }
+
+.alvl-pipeline__line {
+  width: 3px; flex: 1; min-height: 20px; border-radius: 2px;
+  opacity: 0.3;
+}
+.alvl-pipeline__line--rfq       { background: var(--primary-500); }
+.alvl-pipeline__line--quotations { background: #0891b2; }
+.alvl-pipeline__line--po         { background: #8b5cf6; }
+.alvl-pipeline__line--accounts   { background: #0f766e; }
+.alvl-pipeline__line--payments   { background: #b45309; }
+.alvl-pipeline__line--sales      { background: #2563eb; }
+.alvl-pipeline__line--approvals  { background: #059669; }
+
+.alvl-pipeline__content { flex: 1; padding-bottom: 16px; }
+
+.alvl-pipeline__step:last-child .alvl-pipeline__content { padding-bottom: 0; }
+
+.alvl-pipeline__role-card {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; border-radius: var(--radius-md);
+  background: var(--surface-elevated); border: 1px solid var(--border);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.alvl-pipeline__role-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+
+.alvl-pipeline__role-info { display: flex; flex-direction: column; gap: 2px; }
+.alvl-pipeline__level-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); }
+.alvl-pipeline__role-name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+
+.alvl-pipeline__actions { display: flex; gap: 2px; }
+
+.alvl-pipeline__action-btn {
+  width: 30px; height: 30px; border-radius: var(--radius-sm);
+  border: none; background: transparent; color: var(--text-secondary);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+.alvl-pipeline__action-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
+.alvl-pipeline__action-btn--danger:hover { background: rgba(187,0,0,0.08); color: var(--danger-500); }
+.alvl-pipeline__action-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.alvl-pipeline__action-btn:disabled:hover { background: transparent; color: var(--text-secondary); }
+
+/* ─── Module Badge (when pre-selected) ─────────────────── */
+
+.alvl-modal__module-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.alvl-modal__module-badge svg {
+  opacity: 0.6;
+}
+
+/* ─── Modal ──────────────────────────────────────────────── */
+
+.alvl-modal-backdrop {
+  position: fixed; inset: 0; background: var(--overlay);
+  backdrop-filter: blur(4px); z-index: 500;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+  animation: alvlFadeIn 0.2s ease;
+}
+@keyframes alvlFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.alvl-modal {
+  background: var(--surface-card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+  width: 100%; max-width: 480px; max-height: 90vh;
+  display: flex; flex-direction: column;
+  animation: alvlSlideIn 0.25s cubic-bezier(0.4,0,0.2,1);
+}
+@keyframes alvlSlideIn {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.alvl-modal__header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 24px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.alvl-modal__title {
+  font-size: 17px; font-weight: 700; color: var(--text-primary);
+  display: flex; align-items: center; gap: 10px;
+}
+.alvl-modal__title svg { opacity: 0.5; }
+
+.alvl-modal__close {
+  width: 32px; height: 32px; border-radius: var(--radius-sm);
+  border: none; background: transparent; color: var(--text-secondary);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+.alvl-modal__close:hover { background: var(--surface-hover); color: var(--text-primary); }
+
+.alvl-modal__body { padding: 24px; display: flex; flex-direction: column; gap: 18px; overflow-y: auto; flex: 1; }
+
+.alvl-modal__field { display: flex; flex-direction: column; gap: 6px; }
+.alvl-modal__label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.alvl-modal__label span { color: var(--danger-500); }
+
+.alvl-modal__select-wrap { position: relative; }
+
+.alvl-modal__select {
+  width: 100%; padding: 10px 36px 10px 14px;
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--surface); color: var(--text-primary);
+  font-size: 14px; font-family: inherit; appearance: none;
+  transition: border-color 0.2s, box-shadow 0.2s; outline: none; cursor: pointer;
+}
+.alvl-modal__select:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(10,110,209,0.1); }
+.alvl-modal__select:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.alvl-modal__select-icon {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  color: var(--text-placeholder); pointer-events: none;
+}
+
+.alvl-modal__preview {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px; border-radius: var(--radius-md);
+  background: rgba(10,110,209,0.05); font-size: 13px;
+  color: var(--primary-500); font-weight: 500;
+}
+[data-theme="dark"] .alvl-modal__preview { background: rgba(10,110,209,0.08); }
+.alvl-modal__preview svg { flex-shrink: 0; }
+
+.alvl-modal__footer {
+  display: flex; align-items: center; justify-content: flex-end;
+  gap: 10px; padding: 16px 24px; border-top: 1px solid var(--border); flex-shrink: 0;
+}
+
+.alvl-modal__btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 22px; border-radius: var(--radius-md);
+  font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit;
+  transition: background 0.2s, transform 0.15s, box-shadow 0.2s; border: 1px solid transparent;
+}
+.alvl-modal__btn--primary {
+  background: var(--primary-500); color: #fff; border-color: var(--primary-500);
+  box-shadow: 0 2px 8px rgba(10,110,209,0.25);
+}
+.alvl-modal__btn--primary:hover { background: var(--primary-600); transform: translateY(-1px); }
+.alvl-modal__btn--primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+.alvl-modal__btn--primary:disabled:hover { background: var(--primary-500); transform: none; }
+
+.alvl-modal__btn--secondary { background: var(--surface-card); color: var(--text-primary); border-color: var(--border); }
+.alvl-modal__btn--secondary:hover { background: var(--surface-hover); border-color: var(--border-strong); }
+
+/* ─── Pipeline Time Badge ────────────────────────────────── */
+
+.alvl-pipeline__time-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--warning-500);
+}
+
+.alvl-pipeline__time-badge svg {
+  flex-shrink: 0;
+}
+
+.alvl-pipeline__time-hint {
+  color: var(--text-placeholder);
+  font-weight: 500;
+  font-size: 10px;
+}
+
+/* ─── Pipeline Value Badge ───────────────────────────────── */
+
+.alvl-pipeline__value-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  margin-left: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--primary-500);
+}
+
+.alvl-pipeline__value-badge svg {
+  flex-shrink: 0;
+}
+
+/* ─── Currency Selector Row in Modal ────────────────────── */
+
+.alvl-modal__currency-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.alvl-modal__currency-row .cur-selector__select {
+  font-weight: 600;
+}
+
+/* ─── Modal Value Range Input ────────────────────────────── */
+
+.alvl-modal__value-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.alvl-modal__value-input-wrap {
+  position: relative;
+  flex: 1;
+}
+
+.alvl-modal__value-currency {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-placeholder);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.alvl-modal__input--value {
+  padding-left: 28px !important;
+}
+
+.alvl-modal__value-sep {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-placeholder);
+  flex-shrink: 0;
+}
+
+.alvl-modal__value-presets {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.alvl-modal__value-preset {
+  padding: 5px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface-elevated);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+.alvl-modal__value-preset:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
+
+.alvl-modal__value-preset--active {
+  border-color: var(--primary-500);
+  color: var(--primary-500);
+  background: rgba(10,110,209,0.06);
+}
+
+[data-theme="dark"] .alvl-modal__value-preset--active {
+  background: rgba(10,110,209,0.12);
+}
+
+.alvl-modal__value-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(10,110,209,0.06);
+  font-size: 12px;
+  color: var(--primary-500);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.alvl-modal__value-note svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+[data-theme="dark"] .alvl-modal__value-note {
+  background: rgba(10,110,209,0.1);
+}
+
+/* ─── Modal Time Input ───────────────────────────────────── */
+
+.alvl-modal__input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+}
+
+.alvl-modal__input:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(10,110,209,0.1);
+}
+
+.alvl-modal__time-input-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.alvl-modal__time-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.alvl-modal__time-input-wrap .alvl-modal__input {
+  padding-right: 60px;
+}
+
+.alvl-modal__time-unit {
+  position: absolute;
+  right: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-placeholder);
+  pointer-events: none;
+}
+
+.alvl-modal__time-presets {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.alvl-modal__time-preset {
+  padding: 5px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface-elevated);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+.alvl-modal__time-preset:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
+
+.alvl-modal__time-preset--active {
+  border-color: var(--primary-500);
+  color: var(--primary-500);
+  background: rgba(10,110,209,0.06);
+}
+
+[data-theme="dark"] .alvl-modal__time-preset--active {
+  background: rgba(10,110,209,0.12);
+}
+
+.alvl-modal__time-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(233,115,12,0.06);
+  font-size: 12px;
+  color: var(--warning-500);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.alvl-modal__time-note svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+[data-theme="dark"] .alvl-modal__time-note {
+  background: rgba(233,115,12,0.1);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Responsive
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 1023px) { .alvl-summary { grid-template-columns: repeat(2, 1fr); } }
+
+@media (max-width: 768px) {
+  .alvl-page__header { flex-direction: column; align-items: flex-start; }
+  .alvl-page__header-left h1 { font-size: 20px; }
+  .alvl-summary { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .alvl-summary-card { padding: 16px; }
+  .alvl-summary-card__value { font-size: 22px; }
+  .alvl-module-filter { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 4px; }
+  .alvl-module-pill { flex-shrink: 0; }
+  .alvl-chain-card__header { padding: 14px 18px; }
+  .alvl-chain-card__body { padding: 18px; }
+  .alvl-modal { max-width: 100%; margin: 10px; }
+}
+
+@media (max-width: 480px) { .alvl-summary { grid-template-columns: 1fr; } }

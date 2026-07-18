@@ -1,0 +1,719 @@
+/* ═══════════════════════════════════════════════════════════
+   Vendor Orders Page — Styles
+   ═══════════════════════════════════════════════════════════ */
+
+/* ─── Back Button ────────────────────────────────────────── */
+
+.vo-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--vendor-radius-sm);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+  margin-bottom: 12px;
+}
+
+.vo-back-btn:hover {
+  border-color: var(--vendor-primary);
+  color: var(--vendor-primary);
+  background: color-mix(in srgb, var(--vendor-primary) 4%, transparent);
+}
+
+/* ─── Toolbar ────────────────────────────────────────────── */
+
+.vo-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.vo-toolbar__search {
+  position: relative;
+  width: 100%;
+}
+
+.vo-toolbar__search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-placeholder);
+  pointer-events: none;
+}
+
+.vo-toolbar__search input {
+  width: 100%;
+  padding: 11px 14px 11px 42px;
+  border: 1px solid var(--border);
+  border-radius: var(--vendor-radius-md);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+}
+
+.vo-toolbar__search input::placeholder {
+  color: var(--text-placeholder);
+}
+
+.vo-toolbar__search input:focus {
+  border-color: var(--vendor-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--vendor-primary) 8%, transparent);
+}
+
+/* ─── Filter Chips ───────────────────────────────────────── */
+
+.vo-toolbar__filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.vo-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.vo-filter-chip:hover {
+  border-color: var(--vendor-primary);
+  color: var(--vendor-primary);
+}
+
+.vo-filter-chip--active {
+  background: linear-gradient(135deg, var(--vendor-primary), var(--vendor-primary-light));
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--vendor-primary) 25%, transparent);
+}
+
+.vo-filter-chip--active:hover {
+  color: #fff;
+}
+
+.vo-filter-chip__count {
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.vo-filter-chip--active .vo-filter-chip__count {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* ─── Orders List ────────────────────────────────────────── */
+
+.vo-orders {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ─── Order Card ─────────────────────────────────────────── */
+
+.vo-order-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--vendor-radius-lg);
+  overflow: hidden;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: slideInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.vo-order-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--vendor-card-shadow-md);
+}
+
+.vo-order-card--expanded {
+  border-color: var(--vendor-primary);
+  box-shadow: var(--vendor-card-shadow-lg);
+}
+
+/* Header row */
+.vo-order-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 24px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.vo-order-card__header:hover {
+  background: var(--surface-hover);
+}
+
+.vo-order-card__left {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.vo-order-card__po {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.vo-order-card__po-number {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.vo-order-card__rfq {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--vendor-primary);
+  background: color-mix(in srgb, var(--vendor-primary) 6%, transparent);
+  padding: 2px 10px;
+  border-radius: 10px;
+}
+
+.vo-order-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+
+.vo-order-card__dot {
+  color: var(--border-strong);
+}
+
+.vo-order-card__date {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.vo-order-card__right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.vo-order-card__amount {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.vo-order-card__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+
+.vo-order-card__chevron {
+  color: var(--text-secondary);
+  transition: transform 0.25s;
+  flex-shrink: 0;
+}
+
+.vo-order-card__chevron--open {
+  transform: rotate(180deg);
+}
+
+/* ─── Expanded Body ──────────────────────────────────────── */
+
+.vo-order-card__body {
+  border-top: 1px solid var(--border);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  animation: fadeIn 0.3s;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ─── Progress Tracker ───────────────────────────────────── */
+
+.vo-progress {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  padding: 8px 0;
+}
+
+.vo-progress__step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  flex: 1;
+}
+
+.vo-progress__dot {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-elevated);
+  border: 2px solid var(--border);
+  color: var(--text-placeholder);
+  z-index: 1;
+  transition: all 0.3s;
+}
+
+.vo-progress__dot-circle {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.vo-progress__step--done .vo-progress__dot {
+  background: linear-gradient(135deg, var(--vendor-primary), var(--vendor-primary-light));
+  border-color: var(--vendor-primary);
+  color: #fff;
+}
+
+.vo-progress__step--current .vo-progress__dot {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--vendor-primary) 15%, transparent);
+}
+
+.vo-progress__line {
+  position: absolute;
+  top: 16px;
+  left: calc(50% + 18px);
+  width: calc(100% - 36px);
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+}
+
+.vo-progress__step--done .vo-progress__line {
+  background: linear-gradient(90deg, var(--vendor-primary), var(--vendor-primary-light));
+}
+
+.vo-progress__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.vo-progress__step--done .vo-progress__label {
+  color: var(--vendor-primary);
+}
+
+.vo-progress__step--current .vo-progress__label {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+/* Cancelled Notice */
+.vo-cancelled-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  background: rgba(187, 0, 0, 0.06);
+  border: 1px solid rgba(187, 0, 0, 0.15);
+  border-radius: var(--vendor-radius-md);
+  color: #bb0000;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ─── Order Details Grid ─────────────────────────────────── */
+
+.vo-order-details {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 24px;
+}
+
+.vo-order-details__section h4,
+.vo-order-details__info h4 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+/* ─── Items Table ────────────────────────────────────────── */
+
+.vo-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--border);
+  border-radius: var(--vendor-radius-md);
+  overflow: hidden;
+}
+
+.vo-items-table th {
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-secondary);
+  background: var(--surface-elevated);
+  border-bottom: 1px solid var(--border);
+}
+
+.vo-items-table td {
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+}
+
+.vo-items-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.vo-items-table tbody tr:hover {
+  background: var(--surface-hover);
+}
+
+.vo-items-table__name {
+  font-weight: 600;
+}
+
+.vo-items-table__total {
+  font-weight: 700;
+}
+
+.vo-items-table tfoot td {
+  padding: 12px 14px;
+  background: var(--surface-elevated);
+  border-top: 2px solid var(--border);
+  border-bottom: none;
+}
+
+.vo-items-table__grand-label {
+  text-align: right;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.vo-items-table__grand-total {
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--vendor-primary);
+}
+
+.vo-items-table__grand-sub {
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--text-secondary, #6a6d70);
+}
+
+/* ─── Info Rows ──────────────────────────────────────────── */
+
+.vo-info-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.vo-info-row {
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--surface-elevated);
+  border-radius: var(--vendor-radius-sm);
+  color: var(--text-secondary);
+  align-items: flex-start;
+}
+
+.vo-info-row > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.vo-info-row__label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--text-secondary);
+}
+
+.vo-info-row__value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.vo-info-row__value--success {
+  color: #107e3e;
+}
+
+.vo-info-row__value--primary {
+  color: var(--vendor-primary);
+  font-family: monospace;
+  font-size: 13px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Responsive
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 1024px) {
+  .vo-order-details {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .vo-order-card__header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .vo-order-card__right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .vo-order-card__body {
+    padding: 16px;
+  }
+
+  .vo-progress {
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
+  }
+
+  .vo-progress__step {
+    flex-direction: row;
+    gap: 12px;
+    padding: 8px 0;
+  }
+
+  .vo-progress__line {
+    position: absolute;
+    top: calc(50% + 18px);
+    left: 16px;
+    width: 3px;
+    height: calc(100% - 4px);
+  }
+
+  .vo-toolbar__filters {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 480px) {
+  .vo-order-card__meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .vo-order-card__dot {
+    display: none;
+  }
+}
+
+/* ─── Back Button for Quotations Page ────────────────────── */
+
+.quot-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+  margin-bottom: 8px;
+}
+
+.quot-back-btn:hover {
+  border-color: var(--primary-500);
+  color: var(--primary-500);
+  background: color-mix(in srgb, var(--vendor-primary) 4%, transparent);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Quotation Item Status Indicators (✓/✗)
+   ═══════════════════════════════════════════════════════════ */
+
+.vo-items-table__actions-th {
+  width: 40px;
+  text-align: center;
+  padding: 0 !important;
+}
+
+.vo-items-table__actions-td {
+  width: 40px;
+  text-align: center;
+  padding: 0 !important;
+}
+
+.vo-items-table__status {
+  text-align: center !important;
+  white-space: nowrap;
+}
+
+.vo-item-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  letter-spacing: 0.2px;
+}
+
+.vo-item-status--selected {
+  background: rgba(16, 126, 62, 0.1);
+  color: #107e3e;
+  border: 1px solid rgba(16, 126, 62, 0.25);
+}
+
+.vo-item-status--not-selected {
+  background: rgba(187, 0, 0, 0.06);
+  color: #bb0000;
+  border: 1px solid rgba(187, 0, 0, 0.15);
+}
+
+[data-theme="dark"] .vo-item-status--selected {
+  background: rgba(16, 126, 62, 0.18);
+  color: #4ade80;
+  border-color: rgba(16, 126, 62, 0.3);
+}
+
+[data-theme="dark"] .vo-item-status--not-selected {
+  background: rgba(187, 0, 0, 0.12);
+  color: #f87171;
+  border-color: rgba(187, 0, 0, 0.2);
+}
+
+.vo-item-name-text {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Excel Download Button (for accepted quotations)
+   ═══════════════════════════════════════════════════════════ */
+
+.vrfq-excel-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  border: 1px solid rgba(16, 126, 62, 0.25);
+  border-radius: var(--vendor-radius-sm, 8px);
+  background: rgba(16, 126, 62, 0.06);
+  color: #107e3e;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-right: auto;
+}
+
+.vrfq-excel-btn:hover:not(:disabled) {
+  background: rgba(16, 126, 62, 0.12);
+  border-color: rgba(16, 126, 62, 0.4);
+  box-shadow: 0 2px 8px rgba(16, 126, 62, 0.15);
+  transform: translateY(-1px);
+}
+
+.vrfq-excel-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.vrfq-excel-btn__spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(16, 126, 62, 0.3);
+  border-top-color: #107e3e;
+  border-radius: 50%;
+  animation: vrfq-spin 0.6s linear infinite;
+}
+
+@keyframes vrfq-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Items Table Toolbar ────────────────────────────────── */
+
+.vrfq-items-table__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  margin-bottom: 4px;
+}

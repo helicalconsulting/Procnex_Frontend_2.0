@@ -1,0 +1,253 @@
+/* ═══════════════════════════════════════════════════════════
+   Heliflow — Reusable PhoneInput Component
+   ═══════════════════════════════════════════════════════════ */
+
+/* ─── Container ──────────────────────────────────────────── */
+
+.phone-input-wrap {
+  display: flex;
+  gap: 0;
+  position: relative;
+}
+
+/* ─── Trigger Button (replaces native <select>) ──────────── */
+
+.phone-input-trigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  min-width: 100px;
+  max-width: 170px;
+  padding: 10px 8px 10px 12px;
+  border: 1px solid var(--border);
+  border-right: none;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.15s;
+  position: relative;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.phone-input-trigger:hover {
+  background-color: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+
+.phone-input-trigger:focus-visible,
+.phone-input-trigger--open {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.1);
+  z-index: 1;
+  position: relative;
+}
+
+.phone-input-trigger-icon {
+  color: var(--text-placeholder);
+  flex-shrink: 0;
+}
+
+.phone-input-trigger-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.phone-input-trigger-arrow {
+  flex-shrink: 0;
+  color: var(--text-placeholder);
+  transition: transform 0.2s;
+  margin-left: auto;
+}
+
+.phone-input-trigger-arrow--open {
+  transform: rotate(180deg);
+}
+
+/* ─── Dropdown Popup ─────────────────────────────────────── */
+
+.phone-input-dropdown {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 4px);
+  z-index: 9999;
+  width: 280px;
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  animation: phoneDropdownIn 0.18s cubic-bezier(0.32, 0.72, 0, 1);
+  transform-origin: top center;
+}
+
+@keyframes phoneDropdownIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ─── Search Input ───────────────────────────────────────── */
+
+.phone-input-search-wrap {
+  position: relative;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.phone-input-search-icon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-placeholder);
+  pointer-events: none;
+}
+
+.phone-input-search {
+  width: 100%;
+  padding: 8px 10px 8px 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.phone-input-search::placeholder {
+  color: var(--text-placeholder);
+}
+
+.phone-input-search:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.1);
+}
+
+/* ─── Options List ───────────────────────────────────────── */
+
+.phone-input-options {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+/* Custom scrollbar */
+.phone-input-options::-webkit-scrollbar {
+  width: 4px;
+}
+.phone-input-options::-webkit-scrollbar-track {
+  background: transparent;
+}
+.phone-input-options::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
+/* ─── Country Option ─────────────────────────────────────── */
+
+.phone-country-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+}
+
+.phone-country-option:hover,
+.phone-country-option:focus-visible {
+  background: var(--surface-hover);
+  outline: none;
+}
+
+.phone-country-option--selected {
+  background: rgba(10, 110, 209, 0.06);
+  font-weight: 600;
+}
+
+.phone-country-option-flag {
+  font-size: 16px;
+  flex-shrink: 0;
+  width: 22px;
+  text-align: center;
+}
+
+.phone-country-option-dial {
+  color: var(--text-secondary);
+  font-weight: 500;
+  flex-shrink: 0;
+  min-width: 48px;
+}
+
+.phone-country-option-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phone-country-option-check {
+  flex-shrink: 0;
+  color: var(--primary-500);
+}
+
+/* ─── No Results ─────────────────────────────────────────── */
+
+.phone-input-no-results {
+  padding: 20px 10px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-placeholder);
+}
+
+/* ─── Phone Number Input ─────────────────────────────────── */
+
+.phone-input-field {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.phone-input-field::placeholder {
+  color: var(--text-placeholder);
+}
+
+.phone-input-field:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.1);
+}

@@ -1,0 +1,398 @@
+/* ═══════════════════════════════════════════════════════════
+   Heliflow TopBar — SAP Fiori Inspired Shell Header
+   ═══════════════════════════════════════════════════════════ */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  padding: 0 24px;
+  background: var(--surface-card);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  flex-shrink: 0;
+}
+
+/* ─── Left Side — Breadcrumbs ─────────────────────────────── */
+
+.topbar__left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.topbar__hamburger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.topbar__hamburger:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+/* Breadcrumb */
+.topbar__breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.topbar__breadcrumb-home {
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color 0.15s;
+  flex-shrink: 0;
+}
+
+.topbar__breadcrumb-home:hover {
+  color: var(--primary-500);
+}
+
+.topbar__breadcrumb-sep {
+  color: var(--border-strong);
+  flex-shrink: 0;
+}
+
+.topbar__breadcrumb-section {
+  color: var(--text-secondary);
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.topbar__breadcrumb-section:hover {
+  color: var(--primary-500);
+}
+
+.topbar__breadcrumb-current {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* ─── Right Side ────────────────────────────────────────── */
+
+.topbar__right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* Icon Buttons */
+.topbar__icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, transform 0.15s;
+  position: relative;
+}
+
+.topbar__icon-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.topbar__icon-btn:active {
+  transform: scale(0.95);
+}
+
+/* Notification badge */
+.topbar__notif-badge {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--danger-500);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  border: 2px solid var(--surface-card);
+  line-height: 1;
+  letter-spacing: -0.2px;
+  animation: topbarBadgePulse 2s ease-in-out infinite;
+}
+
+@keyframes topbarBadgePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+/* Triggered bounce — plays once on SSE notification arrival */
+.topbar__notif-badge--bounce {
+  animation: topbarBadgeBounce 0.45s ease 1;
+}
+
+@keyframes topbarBadgeBounce {
+  0%   { transform: scale(1); }
+  30%  { transform: scale(1.3); }
+  60%  { transform: scale(0.92); }
+  80%  { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+/* ─── Divider ───────────────────────────────────────────── */
+
+.topbar__divider {
+  width: 1px;
+  height: 24px;
+  background: var(--border);
+  margin: 0 6px;
+  flex-shrink: 0;
+}
+
+/* ─── User Section ──────────────────────────────────────── */
+
+.topbar__user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px 4px 4px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background 0.15s;
+  position: relative;
+}
+
+.topbar__user:hover {
+  background: var(--surface-hover);
+}
+
+.topbar__avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+  letter-spacing: 0.5px;
+  border: 1px solid transparent;
+  transition: background 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+}
+
+/* Light mode */
+.topbar__avatar {
+  background: linear-gradient(135deg, var(--primary-50), var(--primary-100));
+  color: var(--primary-700);
+  border-color: var(--primary-200);
+  box-shadow: 0 1px 3px rgba(10, 110, 209, 0.1);
+}
+
+/* Dark mode */
+[data-theme="dark"] .topbar__avatar {
+  background: linear-gradient(135deg, var(--primary-600), var(--primary-700));
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 1px 3px rgba(10, 110, 209, 0.25);
+}
+
+.topbar__user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.topbar__user-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+.topbar__user-role {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.3;
+}
+
+.topbar__chevron {
+  color: var(--text-secondary);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+}
+
+.topbar__chevron--open {
+  transform: rotate(180deg);
+}
+
+/* ─── User Dropdown Popup ──────────────────────────────── */
+/* Positioned via CSS absolute (no FloatingMenu) to avoid zoom/fixed positioning conflict */
+.topbar__dropdown-popup {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 9999;
+  min-width: 280px;
+  max-width: 340px;
+  width: fit-content;
+  padding: 6px;
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.12);
+  animation: topbarDropdownIn 0.15s ease-out;
+}
+
+@keyframes topbarDropdownIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.topbar__dropdown-popup__body {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Dropdown Header */
+.topbar__dropdown-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--surface-elevated);
+  margin-bottom: 4px;
+}
+
+.topbar__dropdown-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+  letter-spacing: 0.5px;
+  border: 1px solid transparent;
+  transition: background 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+}
+
+/* Light mode */
+.topbar__dropdown-avatar {
+  background: linear-gradient(135deg, var(--primary-50), var(--primary-100));
+  color: var(--primary-700);
+  border-color: var(--primary-200);
+}
+
+/* Dark mode */
+[data-theme="dark"] .topbar__dropdown-avatar {
+  background: linear-gradient(135deg, var(--primary-600), var(--primary-700));
+  color: #fff;
+  border-color: transparent;
+}
+
+.topbar__dropdown-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+.topbar__dropdown-email {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.topbar__dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.topbar__dropdown-item:hover {
+  background: var(--surface-hover);
+}
+
+.topbar__dropdown-item--danger {
+  color: var(--danger-500);
+}
+
+.topbar__dropdown-item--danger:hover {
+  background: var(--error-bg);
+}
+
+.topbar__dropdown-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 8px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Responsive
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+  .topbar {
+    padding: 0 16px;
+    height: 56px;
+  }
+
+  .topbar__hamburger {
+    display: flex;
+  }
+
+  .topbar__breadcrumb-section,
+  .topbar__breadcrumb-sep:first-of-type {
+    display: none;
+  }
+
+  .topbar__user-info {
+    display: none;
+  }
+
+  .topbar__divider {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .topbar__breadcrumb-current {
+    font-size: 13px;
+  }
+}

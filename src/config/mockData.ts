@@ -1,0 +1,487 @@
+/**
+ * Comprehensive Mock Data for Development
+ * Includes users (internal + vendor), RFQ, Quotations, POs, and approvals
+ */
+
+import type {
+  User,
+  RFQ,
+  RFQItem,
+  RFQVendor,
+  Quotation,
+  QuotationItem,
+  Vendor,
+  PurchaseOrder,
+  PurchaseOrderItem,
+  ApprovalLevel,
+  RequestApproval,
+  Notification,
+} from '../types';
+
+// ─── Internal Users ─────────────────────────────────────────
+export const INTERNAL_USERS: (User & { password: string; roles: string[] })[] = [
+  {
+    id: '1',
+    username: 'admin',
+    email: 'admin@heliflow.com',
+    fullName: 'System Administrator',
+    companyCode: 'HFL',
+    department: 'IT',
+    phone: '+91-9876543210',
+    isActive: true,
+    lastLoginAt: new Date().toISOString(),
+    createdAt: '2025-01-01T00:00:00.000Z',
+    password: 'admin123',
+    roles: ['Super Admin'],
+  },
+  {
+    id: '2',
+    username: 'procurement',
+    email: 'procurement@heliflow.com',
+    fullName: 'Procurement Manager',
+    companyCode: 'HFL',
+    department: 'Supply Chain',
+    phone: '+91-9876543211',
+    isActive: true,
+    lastLoginAt: new Date().toISOString(),
+    createdAt: '2025-01-01T00:00:00.000Z',
+    password: 'proc123',
+    roles: ['Procurement Manager'],
+  },
+  {
+    id: '3',
+    username: 'finance',
+    email: 'finance@heliflow.com',
+    fullName: 'Finance Approver',
+    companyCode: 'HFL',
+    department: 'Finance',
+    phone: '+91-9876543212',
+    isActive: true,
+    lastLoginAt: new Date().toISOString(),
+    createdAt: '2025-01-01T00:00:00.000Z',
+    password: 'fin123',
+    roles: ['Finance Approver'],
+  },
+];
+
+// ─── Vendor Users (for Vendor Portal) ────────────────────────
+export const VENDOR_USERS: (User & { password: string; roles: string[] })[] = [
+  {
+    id: '100',
+    username: 'vendor1',
+    email: 'vendor1@acmetech.com',
+    fullName: 'Acme Tech Solutions',
+    companyCode: 'ACME',
+    department: 'Sales',
+    phone: '+91-8765432100',
+    isActive: true,
+    lastLoginAt: new Date().toISOString(),
+    createdAt: '2025-01-05T00:00:00.000Z',
+    password: 'vendor123',
+    roles: ['Vendor'],
+  },
+  {
+    id: '101',
+    username: 'vendor2',
+    email: 'vendor2@globalsupply.com',
+    fullName: 'Global Supply Corp',
+    companyCode: 'GSC',
+    department: 'Business Development',
+    phone: '+91-8765432101',
+    isActive: true,
+    lastLoginAt: new Date().toISOString(),
+    createdAt: '2025-01-05T00:00:00.000Z',
+    password: 'vendor123',
+    roles: ['Vendor'],
+  },
+  {
+    id: '102',
+    username: 'vendor3',
+    email: 'vendor3@qualityparts.com',
+    fullName: 'Quality Parts Ltd',
+    companyCode: 'QPL',
+    department: 'Operations',
+    phone: '+91-8765432102',
+    isActive: true,
+    lastLoginAt: new Date().toISOString(),
+    createdAt: '2025-01-05T00:00:00.000Z',
+    password: 'vendor123',
+    roles: ['Vendor'],
+  },
+];
+
+// ─── All Users Combined ──────────────────────────────────────
+export const ALL_MOCK_USERS = [...INTERNAL_USERS, ...VENDOR_USERS];
+
+// ─── Vendors ────────────────────────────────────────────────
+export const MOCK_VENDORS: Vendor[] = [
+  {
+    id: '1',
+    name: 'Acme Tech Solutions',
+    email: 'vendor1@acmetech.com',
+    createdBy: '2',
+    isActive: true,
+    performance: {
+      id: '1',
+      vendorId: '1',
+      avgQuality: 4.5,
+      avgDelivery: 4.2,
+      avgPriceScore: 3.8,
+      overallScore: 4.17,
+    },
+  },
+  {
+    id: '2',
+    name: 'Global Supply Corp',
+    email: 'vendor2@globalsupply.com',
+    createdBy: '2',
+    isActive: true,
+    performance: {
+      id: '2',
+      vendorId: '2',
+      avgQuality: 4.0,
+      avgDelivery: 4.5,
+      avgPriceScore: 4.2,
+      overallScore: 4.23,
+    },
+  },
+  {
+    id: '3',
+    name: 'Quality Parts Ltd',
+    email: 'vendor3@qualityparts.com',
+    createdBy: '2',
+    isActive: true,
+    performance: {
+      id: '3',
+      vendorId: '3',
+      avgQuality: 4.8,
+      avgDelivery: 4.0,
+      avgPriceScore: 3.5,
+      overallScore: 4.1,
+    },
+  },
+];
+
+// ─── RFQ Items ──────────────────────────────────────────────
+export const MOCK_RFQ_ITEMS: RFQItem[] = [
+  {
+    id: '1',
+    rfqId: '1',
+    itemName: 'Industrial LED Panel',
+    description: 'High brightness LED panel 48x48 inches',
+    quantity: 50,
+    unit: 'pcs',
+    expectedDate: '2025-03-15',
+  },
+  {
+    id: '2',
+    rfqId: '1',
+    itemName: 'Control Module',
+    description: 'Smart control module for LED panels',
+    quantity: 50,
+    unit: 'pcs',
+    expectedDate: '2025-03-15',
+  },
+  {
+    id: '3',
+    rfqId: '2',
+    itemName: 'Server CPU',
+    description: 'Intel Xeon Platinum 8380',
+    quantity: 10,
+    unit: 'pcs',
+    expectedDate: '2025-02-28',
+  },
+  {
+    id: '4',
+    rfqId: '3',
+    itemName: 'Office Chairs',
+    description: 'Ergonomic office chair - mesh back',
+    quantity: 100,
+    unit: 'pcs',
+    expectedDate: '2025-04-10',
+  },
+];
+
+// ─── RFQ Vendors ────────────────────────────────────────────
+export const MOCK_RFQ_VENDORS: RFQVendor[] = [
+  { id: '1', rfqId: '1', vendorId: '1', status: 'SENT' },
+  { id: '2', rfqId: '1', vendorId: '2', status: 'SENT' },
+  { id: '3', rfqId: '2', vendorId: '2', status: 'SENT' },
+  { id: '4', rfqId: '2', vendorId: '3', status: 'SENT' },
+  { id: '5', rfqId: '3', vendorId: '1', status: 'SENT' },
+];
+
+// ─── RFQs ───────────────────────────────────────────────────
+export const MOCK_RFQS: RFQ[] = [
+  {
+    id: '1',
+    rfqNumber: 'RFQ-2025-001',
+    title: 'LED Panel Assembly Supply',
+    description: 'Supply of industrial LED panels with control modules',
+    createdBy: '2',
+    status: 'IN_PROGRESS',
+    createdAt: '2025-02-01T10:00:00.000Z',
+    creator: INTERNAL_USERS[1],
+    items: MOCK_RFQ_ITEMS.filter((i) => i.rfqId === '1'),
+    vendors: MOCK_RFQ_VENDORS.filter((v) => v.rfqId === '1'),
+  },
+  {
+    id: '2',
+    rfqNumber: 'RFQ-2025-002',
+    title: 'Server Hardware Procurement',
+    description: 'High-performance server CPU procurement',
+    createdBy: '2',
+    status: 'SENT',
+    createdAt: '2025-02-05T14:30:00.000Z',
+    creator: INTERNAL_USERS[1],
+    items: MOCK_RFQ_ITEMS.filter((i) => i.rfqId === '2'),
+    vendors: MOCK_RFQ_VENDORS.filter((v) => v.rfqId === '2'),
+  },
+  {
+    id: '3',
+    rfqNumber: 'RFQ-2025-003',
+    title: 'Office Furniture Bulk Order',
+    description: 'Supply of ergonomic office chairs for new office setup',
+    createdBy: '2',
+    status: 'DRAFT',
+    createdAt: '2025-02-10T09:00:00.000Z',
+    creator: INTERNAL_USERS[1],
+    items: MOCK_RFQ_ITEMS.filter((i) => i.rfqId === '3'),
+    vendors: MOCK_RFQ_VENDORS.filter((v) => v.rfqId === '3'),
+  },
+];
+
+// ─── Quotation Items ────────────────────────────────────────
+export const MOCK_QUOTATION_ITEMS: QuotationItem[] = [
+  {
+    id: '1',
+    quotationId: '1',
+    rfqItemId: '1',
+    unitPrice: 2500,
+    totalPrice: 125000,
+  },
+  {
+    id: '2',
+    quotationId: '1',
+    rfqItemId: '2',
+    unitPrice: 1200,
+    totalPrice: 60000,
+  },
+  {
+    id: '3',
+    quotationId: '2',
+    rfqItemId: '1',
+    unitPrice: 2800,
+    totalPrice: 140000,
+  },
+  {
+    id: '4',
+    quotationId: '2',
+    rfqItemId: '2',
+    unitPrice: 1100,
+    totalPrice: 55000,
+  },
+  {
+    id: '5',
+    quotationId: '3',
+    rfqItemId: '3',
+    unitPrice: 4500,
+    totalPrice: 45000,
+  },
+  {
+    id: '6',
+    quotationId: '4',
+    rfqItemId: '4',
+    unitPrice: 8500,
+    totalPrice: 850000,
+  },
+];
+
+// ─── Quotations ─────────────────────────────────────────────
+export const MOCK_QUOTATIONS: Quotation[] = [
+  {
+    id: '1',
+    rfqId: '1',
+    vendorId: '1',
+    totalPrice: 185000,
+    leadTimeDays: 21,
+    paymentTerms: 'NET 30',
+    score: 4.5,
+    status: 'SUBMITTED',
+    submittedAt: '2025-02-02T11:00:00.000Z',
+    vendor: MOCK_VENDORS[0],
+    items: MOCK_QUOTATION_ITEMS.filter((i) => i.quotationId === '1'),
+  },
+  {
+    id: '2',
+    rfqId: '1',
+    vendorId: '2',
+    totalPrice: 195000,
+    leadTimeDays: 18,
+    paymentTerms: 'NET 45',
+    score: 4.2,
+    status: 'SUBMITTED',
+    submittedAt: '2025-02-02T15:00:00.000Z',
+    vendor: MOCK_VENDORS[1],
+    items: MOCK_QUOTATION_ITEMS.filter((i) => i.quotationId === '2'),
+  },
+  {
+    id: '3',
+    rfqId: '2',
+    vendorId: '2',
+    totalPrice: 45000,
+    leadTimeDays: 14,
+    paymentTerms: 'NET 30',
+    score: 4.3,
+    status: 'SUBMITTED',
+    submittedAt: '2025-02-06T10:00:00.000Z',
+    vendor: MOCK_VENDORS[1],
+    items: MOCK_QUOTATION_ITEMS.filter((i) => i.quotationId === '3'),
+  },
+  {
+    id: '4',
+    rfqId: '3',
+    vendorId: '1',
+    totalPrice: 850000,
+    leadTimeDays: 7,
+    paymentTerms: 'NET 60',
+    score: 4.1,
+    status: 'SUBMITTED',
+    submittedAt: '2025-02-11T09:00:00.000Z',
+    vendor: MOCK_VENDORS[0],
+    items: MOCK_QUOTATION_ITEMS.filter((i) => i.quotationId === '4'),
+  },
+];
+
+// ─── Approval Levels ────────────────────────────────────────
+export const MOCK_APPROVAL_LEVELS: ApprovalLevel[] = [
+  {
+    id: '1',
+    module: 'RFQ',
+    levelNumber: 1,
+    requiredRole: 'Procurement Manager',
+    timeLimitHours: 24,
+    currency: 'KES',
+  },
+  {
+    id: '2',
+    module: 'RFQ',
+    levelNumber: 2,
+    requiredRole: 'Finance Approver',
+    timeLimitHours: 48,
+    currency: 'KES',
+  },
+  {
+    id: '3',
+    module: 'Purchase Orders',
+    levelNumber: 1,
+    requiredRole: 'Finance Approver',
+    timeLimitHours: 24,
+    currency: 'KES',
+  },
+];
+
+// ─── Request Approvals ──────────────────────────────────────
+export const MOCK_REQUEST_APPROVALS: RequestApproval[] = [
+  {
+    id: '1',
+    module: 'RFQ',
+    referenceId: '1',
+    levelId: '1',
+    status: 'APPROVED',
+    approverId: '2',
+    level: MOCK_APPROVAL_LEVELS[0],
+    approver: INTERNAL_USERS[1],
+  },
+  {
+    id: '2',
+    module: 'RFQ',
+    referenceId: '1',
+    levelId: '2',
+    status: 'PENDING',
+    approverId: undefined,
+    level: MOCK_APPROVAL_LEVELS[1],
+    approver: undefined,
+  },
+  {
+    id: '3',
+    module: 'RFQ',
+    referenceId: '2',
+    levelId: '1',
+    status: 'PENDING',
+    approverId: undefined,
+    level: MOCK_APPROVAL_LEVELS[0],
+    approver: undefined,
+  },
+  {
+    id: '4',
+    module: 'RFQ',
+    referenceId: '3',
+    levelId: '1',
+    status: 'PENDING',
+    approverId: undefined,
+    level: MOCK_APPROVAL_LEVELS[0],
+    approver: undefined,
+  },
+];
+
+// ─── Purchase Orders ────────────────────────────────────────
+export const MOCK_PURCHASE_ORDERS: PurchaseOrder[] = [
+  {
+    id: '1',
+    poNumber: 'PO-2025-001',
+    rfqId: '1',
+    vendorId: '1',
+    totalAmount: 185000,
+    status: 'APPROVED',
+    createdAt: '2025-02-05T10:00:00.000Z',
+    rfq: MOCK_RFQS[0],
+    vendor: MOCK_VENDORS[0] as unknown as Vendor,
+    items: [
+      {
+        id: '1',
+        poId: '1',
+        itemName: 'Industrial LED Panel',
+        quantity: 50,
+        unitPrice: 2500,
+        totalPrice: 125000,
+      },
+      {
+        id: '2',
+        poId: '1',
+        itemName: 'Control Module',
+        quantity: 50,
+        unitPrice: 1200,
+        totalPrice: 60000,
+      },
+    ] as PurchaseOrderItem[],
+  },
+];
+
+// ─── Notifications ──────────────────────────────────────────
+export const MOCK_NOTIFICATIONS: Notification[] = [
+  {
+    id: '1',
+    userId: '2',
+    title: 'RFQ Approval Pending',
+    message: 'RFQ-2025-001 awaits your approval (Level 2 - Finance)',
+    isRead: false,
+  },
+  {
+    id: '2',
+    userId: '2',
+    title: 'New Quotation Received',
+    message: 'Quotation received from Acme Tech for RFQ-2025-001',
+    isRead: true,
+  },
+  {
+    id: '3',
+    userId: '3',
+    title: 'RFQ Approved',
+    message: 'RFQ-2025-002 has been approved by Procurement Manager',
+    isRead: false,
+  },
+];
+
+// ─── Mock Token ──────────────────────────────────────────────
+export const MOCK_TOKEN = 'mock-jwt-token-heliflow-2025';

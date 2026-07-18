@@ -1,0 +1,381 @@
+import { useState, useRef, type FormEvent } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { useServiceData } from '../../hooks/useServiceData';
+import { vendorService } from '../../services/vendorService';
+import { vendorPortalService, type VendorProfileData } from '../../services/vendorPortalService';
+import {
+  Building, CreditCard, FileCheck,
+  CheckCircle2, AlertTriangle, FileText,
+  MapPin, Phone, Mail, Globe, Lock, Eye, EyeOff,
+  Loader2, Upload, Edit3, Save, X,
+  Paperclip,
+} from 'lucide-react';
+import '../../styles/vendor-portal.css';
+
+const DOC_TYPES = [
+  'GST Registration Certificate',
+  'PAN Card',
+  'Company Incorporation Certificate',
+  'Cancelled Cheque / Bank Letter',
+  'ISO 9001 Certificate',
+  'MSME Registration',
+  'Insurance Certificate',
+  'Trade License',
+  'Other',
+];
+
+const EMPTY_PROFILE: VendorProfileData = {
+  company: { name: '', email: '', phone: null, address: null, location: null, website: null, category: null, contactPerson: null, gstNumber: null, panNumber: null, status: '', isActive: false, createdAt: '' },
+  banking: { bankName: null, bankBranch: null, bankAccountNumber: null, bankIfscCode: null },
+  documents: [],
+  performance: { avgQuality: 0, avgDelivery: 0, avgPriceScore: 0, overallScore: 0, quotationWinRate: 0, totalQuotations: 0, totalOrders: 0, deliveredOrders: 0 },
+};
+
+export default function VendorProfilePage() {
+  const { user } = useAuth();
+  const { data: profile, loading, reload } = useServiceData(
+    () => vendorPortalService.getProfile(),
+    EMPTY_PROFILE,
+  );
+
+  // Password
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [pwMsg, setPwMsg] = useState('');
+  const [pwLoading, setPwLoading] = useState(false);
+
+  // Banking edit
+  const [editBank, setEditBank] = useState(false);
+  const [bankForm, setBankForm] = useState({ bankName: '', bankBranch: '', bankAccountNumber: '', bankIfscCode: '' });
+  const [bankSaving, setBankSaving] = useState(false);
+  const [bankMsg, setBankMsg] = useState('');
+
+  // Doc upload — added selectedFile state for feedback
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [docType, setDocType] = useState(DOC_TYPES[0]);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null); // ← NEW
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState('');
+
+  const handleChangePassword = async (e: FormEvent) => {
+    e.preventDefault();
+    setPwMsg('');
+    if (newPassword.length < 8) { setPwMsg('New password must be at least 8 characters.'); return; }
+    if (newPassword !== confirmPassword) { setPwMsg('New passwords do not match.'); return; }
+    setPwLoading(true);
+    try {
+      await vendorService.changePassword(currentPassword, newPassword, confirmPassword);
+      setPwMsg('Password updated successfully.');
+      setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
+    } catch (err) { setPwMsg(err instanceof Error ? err.message : 'Failed'); }
+    finally { setPwLoading(false); }
+  };
+
+  const startEditBank = () => {
+    setBankForm({
+      bankName: profile.banking.bankName || '',
+      bankBranch: profile.banking.bankBranch || '',
+      bankAccountNumber: '',
+      bankIfscCode: profile.banking.bankIfscCode || '',
+    });
+    setBankMsg('');
+    setEditBank(true);
+  };
+
+  const handleSaveBank = async () => {
+    setBankSaving(true); setBankMsg('');
+    try {
+      await vendorPortalService.updateBanking(bankForm);
+      setBankMsg('Banking details updated!');
+      setEditBank(false);
+      reload();
+      setTimeout(() => setBankMsg(''), 4000);
+    } catch (err) { setBankMsg(err instanceof Error ? err.message : 'Failed'); }
+    finally { setBankSaving(false); }
+  };
+
+  const handleUploadDoc = async () => {
+    const file = fileRef.current?.files?.[0];
+    if (!file) { setUploadMsg('Select a file first'); return; }
+    setUploading(true); setUploadMsg('');
+    try {
+      await vendorPortalService.uploadDocument(file, docType);
+      setUploadMsg('Document uploaded! Admin will verify it shortly.');
+      if (fileRef.current) fileRef.current.value = '';
+      setSelectedFile(null); // ← clear preview after upload
+      reload();
+      setTimeout(() => setUploadMsg(''), 5000);
+    } catch (err) { setUploadMsg(err instanceof Error ? err.message : 'Upload failed'); }
+    finally { setUploading(false); }
+  };
+
+  // Format bytes helper
+  function formatBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  const { company, banking, documents } = profile;
+
+
+
+  if (loading) {
+    return (
+      <div className="vendor-portal">
+        <div className="vendor-portal__container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 400, gap: 12, color: 'var(--text-secondary)' }}>
+          <Loader2 size={20} className="spin" /> Loading profile…
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="vendor-portal">
+      <div className="vendor-portal__container">
+
+        {/* Header */}
+        <div className="vendor-header">
+          <div className="vendor-header__content">
+            <h1>Company Profile 🏢</h1>
+            <p>Manage your company information, documents, and banking details</p>
+          </div>
+        </div>
+
+        {/* ── Company & Banking ────────────── */}
+        <div className="vprof-grid">
+          <div className="vprof-card">
+            <div className="vprof-card__header">
+              <Building size={18} style={{ color: 'var(--vendor-primary)' }} />
+              Company Information
+            </div>
+            <div className="vprof-card__body">
+              {[
+                { label: 'Company Name', value: company.name || '—' },
+                { label: 'GSTIN', value: company.gstNumber || '—' },
+                { label: 'PAN', value: company.panNumber || '—' },
+                { label: 'Category', value: company.category || '—' },
+                { label: 'Contact Person', value: company.contactPerson || '—' },
+                { label: 'Status', value: company.isActive ? 'Active' : company.status || '—' },
+                { label: 'Member Since', value: company.createdAt ? new Date(company.createdAt).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : '—' },
+              ].map(f => (
+                <div key={f.label} className="vprof-field">
+                  <span className="vprof-field__label">{f.label}</span>
+                  <span className="vprof-field__value">{f.value}</span>
+                </div>
+              ))}
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {company.address && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+                    <MapPin size={14} style={{ color: 'var(--vendor-primary)', flexShrink: 0 }} /> {company.address}
+                  </div>
+                )}
+                {company.phone && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+                    <Phone size={14} style={{ color: 'var(--vendor-primary)', flexShrink: 0 }} /> {company.phone}
+                  </div>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+                  <Mail size={14} style={{ color: 'var(--vendor-primary)', flexShrink: 0 }} /> {company.email}
+                </div>
+                {company.website && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+                    <Globe size={14} style={{ color: 'var(--vendor-primary)', flexShrink: 0 }} /> {company.website}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Banking — Editable */}
+          <div className="vprof-card">
+            <div className="vprof-card__header">
+              <CreditCard size={18} style={{ color: 'var(--vendor-primary)' }} />
+              Banking Details
+              {!editBank && (
+                <button onClick={startEditBank} className="vprof-edit-btn" title="Edit banking details">
+                  <Edit3 size={14} /> Edit
+                </button>
+              )}
+            </div>
+            <div className="vprof-card__body">
+              {bankMsg && (
+                <div className={`vprof-msg ${bankMsg.includes('updated') ? 'vprof-msg--ok' : 'vprof-msg--err'}`}>
+                  {bankMsg.includes('updated') ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />} {bankMsg}
+                </div>
+              )}
+              {!editBank ? (
+                <>
+                  {[
+                    { label: 'Bank Name', value: banking.bankName || '—' },
+                    { label: 'Branch', value: banking.bankBranch || '—' },
+                    { label: 'Account Number', value: banking.bankAccountNumber || '—' },
+                    { label: 'IFSC Code', value: banking.bankIfscCode || '—' },
+                  ].map(f => (
+                    <div key={f.label} className="vprof-field">
+                      <span className="vprof-field__label">{f.label}</span>
+                      <span className="vprof-field__value">{f.value}</span>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <div className="vprof-bank-form">
+                  {[
+                    { label: 'Bank Name', key: 'bankName' as const, ph: 'e.g. HDFC Bank' },
+                    { label: 'Branch', key: 'bankBranch' as const, ph: 'e.g. Hinjewadi, Pune' },
+                    { label: 'Account Number', key: 'bankAccountNumber' as const, ph: 'Full account number' },
+                    { label: 'IFSC Code', key: 'bankIfscCode' as const, ph: 'e.g. HDFC0001234' },
+                  ].map(f => (
+                    <div key={f.key} className="vprof-bank-form__field">
+                      <label>{f.label}</label>
+                      <input
+                        type="text"
+                        value={bankForm[f.key]}
+                        onChange={e => setBankForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+                        placeholder={f.ph}
+                      />
+                    </div>
+                  ))}
+                  <div className="vprof-bank-form__actions">
+                    <button className="vprof-bank-form__save" onClick={handleSaveBank} disabled={bankSaving}>
+                      {bankSaving ? <Loader2 size={14} className="spin" /> : <Save size={14} />}
+                      {bankSaving ? 'Saving…' : 'Save Changes'}
+                    </button>
+                    <button className="vprof-bank-form__cancel" onClick={() => setEditBank(false)}>
+                      <X size={14} /> Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Compliance Documents ─────────── */}
+        <div className="vprof-grid">
+          <div className="vprof-card vprof-card--full">
+            <div className="vprof-card__header">
+              <FileCheck size={18} style={{ color: 'var(--vendor-primary)' }} />
+              Compliance Documents
+              <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>
+                <FileText size={13} style={{ verticalAlign: -2, marginRight: 4 }} />
+                {documents.length} Document{documents.length !== 1 ? 's' : ''} Uploaded
+              </span>
+            </div>
+            <div className="vprof-card__body">
+
+              {/* ── Upload area ── */}
+              <div className="vprof-upload">
+                <div className="vprof-upload__row">
+                  <select value={docType} onChange={e => setDocType(e.target.value)} className="vprof-upload__select">
+                    {DOC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  <label className="vprof-upload__file-btn">
+                    <Paperclip size={14} /> Choose File
+                    <input
+                      type="file"
+                      ref={fileRef}
+                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+                      hidden
+                      onChange={e => setSelectedFile(e.target.files?.[0] ?? null)}
+                    />
+                  </label>
+                  <button
+                    className="vprof-upload__submit"
+                    onClick={handleUploadDoc}
+                    disabled={uploading || !selectedFile}
+                  >
+                    {uploading
+                      ? <><Loader2 size={14} className="spin" /> Uploading…</>
+                      : <><Upload size={14} /> Upload</>}
+                  </button>
+                </div>
+
+                {/* ── File preview chip — shown once a file is selected ── */}
+                {selectedFile && !uploading && (
+                  <div className="vprof-upload__file-preview">
+                    <FileText size={14} className="vprof-upload__file-preview-icon" />
+                    <span className="vprof-upload__file-preview-name">{selectedFile.name}</span>
+                    <span className="vprof-upload__file-preview-size">{formatBytes(selectedFile.size)}</span>
+                    <button
+                      className="vprof-upload__file-preview-clear"
+                      onClick={() => {
+                        setSelectedFile(null);
+                        if (fileRef.current) fileRef.current.value = '';
+                      }}
+                      title="Remove selected file"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                )}
+
+                {uploadMsg && (
+                  <div className={`vprof-msg ${uploadMsg.includes('uploaded') ? 'vprof-msg--ok' : 'vprof-msg--err'}`} style={{ marginTop: 8 }}>
+                    {uploadMsg.includes('uploaded') ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />} {uploadMsg}
+                  </div>
+                )}
+              </div>
+
+              {/* Document list */}
+              {documents.length > 0 ? documents.map(doc => (
+                <div key={doc.id} className="vprof-doc">
+                  <div className="vprof-doc__left">
+                    <FileText size={18} className="vprof-doc__icon" />
+                    <div>
+                      <div className="vprof-doc__name">{doc.name}</div>
+                      <div className="vprof-doc__date">
+                        {doc.type} · Uploaded: {new Date(doc.uploadedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )) : (
+                <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-placeholder)', fontSize: 13 }}>
+                  No documents uploaded yet. Upload your first document above.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+
+
+        {/* ── Change Password ─────────────── */}
+        <div className="vprof-grid">
+          <div className="vprof-card vprof-card--full">
+            <div className="vprof-card__header">
+              <Lock size={18} style={{ color: 'var(--vendor-primary)' }} />
+              Portal Password
+            </div>
+            <div className="vprof-card__body">
+              <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--text-secondary)' }}>
+                Signed in as <strong>{user?.email}</strong>. Change your portal password below.
+              </p>
+              <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 400 }}>
+                <label style={{ fontSize: 12, fontWeight: 600 }}>Current password</label>
+                <input type={showPw ? 'text' : 'password'} value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)' }} />
+                <label style={{ fontSize: 12, fontWeight: 600 }}>New password (min 8 characters)</label>
+                <input type={showPw ? 'text' : 'password'} value={newPassword} onChange={e => setNewPassword(e.target.value)} required minLength={8} style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)' }} />
+                <label style={{ fontSize: 12, fontWeight: 600 }}>Confirm new password</label>
+                <input type={showPw ? 'text' : 'password'} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required minLength={8} style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)' }} />
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button type="button" onClick={() => setShowPw(s => !s)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                    {showPw ? <EyeOff size={16} /> : <Eye size={16} />} {showPw ? 'Hide' : 'Show'}
+                  </button>
+                  <button type="submit" disabled={pwLoading} style={{ padding: '10px 20px', background: 'var(--vendor-primary)', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, cursor: pwLoading ? 'wait' : 'pointer' }}>
+                    {pwLoading ? 'Updating…' : 'Update password'}
+                  </button>
+                </div>
+                {pwMsg && <p style={{ margin: 0, fontSize: 13, color: pwMsg.includes('success') ? '#059669' : '#dc2626' }}>{pwMsg}</p>}
+              </form>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
