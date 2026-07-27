@@ -85,3 +85,5 @@ export function MessageStrip({
     </div>
   );
 }
+
+export default MessageStrip;

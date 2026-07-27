@@ -178,8 +178,9 @@ async function apiRemoveVendor(id: string, vendorId: string): Promise<void> {
   await apiRequest(`/rfqs/${id}/vendors/${vendorId}`, { method: 'DELETE' });
 }
 
-async function apiDelete(id: string): Promise<void> {
-  await apiRequest(`/rfqs/${id}`, { method: 'DELETE' });
+async function apiDelete(id: string, options?: { force?: boolean }): Promise<void> {
+  const query = options?.force ? '?force=true' : '';
+  await apiRequest(`/rfqs/${id}${query}`, { method: 'DELETE' });
 }
 
 // ─── RFQ Type System: Evaluation Parameters & Scores ───

@@ -33,6 +33,7 @@ import {
   Check,
   BarChart3,
   Zap,
+  Building2,
   Minus,
   Maximize2,
   Minimize2,
@@ -43,6 +44,7 @@ import '../../styles/vendor-portal.css';
 import '../dashboard/DashboardPage.css';
 import '../rfq/RFQPage.css';
 import './VendorDashboard.css';
+import '../dashboard/DashboardPage.css';
 
 // ─────────────────────────────────────────────────────────────
 //  Helpers (unchanged from original VendorDashboard)
@@ -310,16 +312,13 @@ export default function VendorDashboard() {
 
   // ── KPI Modal state ──
   type KpiModalState = 'open' | 'expanded' | 'minimized';
-  type KpiTab = 'summary' | 'breakdown' | 'related';
   type KpiType = 'rfqs' | 'quotes' | 'orders' | 'invoices' | 'revenue';
 
   const [selectedKpiType, setSelectedKpiType] = useState<KpiType | null>(null);
   const [kpiModalState, setKpiModalState] = useState<KpiModalState>('open');
-  const [activeKpiTab, setActiveKpiTab] = useState<KpiTab>('summary');
 
   const openKpiModal = (type: KpiType) => {
     setSelectedKpiType(type);
-    setActiveKpiTab('summary');
     setKpiModalState('open');
   };
 
@@ -345,11 +344,15 @@ export default function VendorDashboard() {
 
   // Apply backend preferences once loaded — order by sortOrder
   useEffect(() => {
-    const active = widgetPrefs
-      .filter((p) => p.isActive)
-      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
-      .map((p) => p.widgetId);
-    setActiveWidgets(active);
+    if (!widgetPrefs || widgetPrefs.length === 0) {
+      setActiveWidgets(VENDOR_WIDGETS.map((w) => w.id));
+    } else {
+      const active = widgetPrefs
+        .filter((p) => p.isActive)
+        .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+        .map((p) => p.widgetId);
+      setActiveWidgets(active);
+    }
   }, [widgetPrefs]);
 
   // Debounced save to backend (avoids rapid toggles causing multiple calls)
@@ -521,60 +524,59 @@ export default function VendorDashboard() {
 
       case 'kpis':
         return (
-          <div className="vnd-card">
-            <div className="vnd-card__header">
-              <span className="vnd-card__title">
+          <div className="dash-card">
+            <div className="dash-card__header">
+              <span className="dash-card__title">
                 <BarChart3 size={16} /> KPI Overview
               </span>
             </div>
-            <div className="vnd-card__body">
-              <div className="vnd-kpis">
-                <button className="vnd-kpi vnd-kpi--rfqs" onClick={() => openKpiModal('rfqs')}>
-                  <div className="vnd-kpi__icon"><FileText size={20} /></div>
-                  <div className="vnd-kpi__body">
-                    <span className="vnd-kpi__label">Open RFQs</span>
-                    <span className="vnd-kpi__value">{kpis.openRfqs}</span>
-                    <span className="vnd-kpi__trend">Pending response</span>
+            <div className="dash-card__body" style={{ padding: 0 }}>
+              <div className="dash-kpis">
+                <button className="dash-kpi dash-kpi--rfq" onClick={() => openKpiModal('rfqs')}>
+                  <div className="dash-kpi__icon"><FileText size={20} /></div>
+                  <div className="dash-kpi__body">
+                    <span className="dash-kpi__label">OPEN RFQS</span>
+                    <span className="dash-kpi__value">{kpis.openRfqs}</span>
                   </div>
                 </button>
 
-                <button className="vnd-kpi vnd-kpi--quotes" onClick={() => openKpiModal('quotes')}>
-                  <div className="vnd-kpi__icon"><CheckCircle2 size={20} /></div>
-                  <div className="vnd-kpi__body">
-                    <span className="vnd-kpi__label">Quotations</span>
-                    <span className="vnd-kpi__value">{kpis.totalQuotations}</span>
-                    <span className="vnd-kpi__trend vnd-kpi__trend--good">{kpis.acceptedQuotations} accepted</span>
+                <button className="dash-kpi dash-kpi--approvals" onClick={() => openKpiModal('quotes')}>
+                  <div className="dash-kpi__icon"><Clock size={20} /></div>
+                  <div className="dash-kpi__body">
+                    <span className="dash-kpi__label">PENDING EVAL</span>
+                    <span className="dash-kpi__value">{kpis.openRfqs > 0 ? kpis.openRfqs : 0}</span>
                   </div>
                 </button>
 
-                <button className="vnd-kpi vnd-kpi--orders" onClick={() => openKpiModal('orders')}>
-                  <div className="vnd-kpi__icon"><Package size={20} /></div>
-                  <div className="vnd-kpi__body">
-                    <span className="vnd-kpi__label">Active Orders</span>
-                    <span className="vnd-kpi__value">{kpis.activeOrders}</span>
-                    <span className="vnd-kpi__trend">{kpis.shippedOrders > 0 ? `${kpis.shippedOrders} dispatched` : 'None dispatched'}</span>
+                <button className="dash-kpi dash-kpi--pos" onClick={() => openKpiModal('orders')}>
+                  <div className="dash-kpi__icon"><Package size={20} /></div>
+                  <div className="dash-kpi__body">
+                    <span className="dash-kpi__label">ACTIVE ORDERS</span>
+                    <span className="dash-kpi__value">{kpis.activeOrders}</span>
                   </div>
                 </button>
 
-                <button className="vnd-kpi vnd-kpi--invoices" onClick={() => openKpiModal('invoices')}>
-                  <div className="vnd-kpi__icon"><Receipt size={20} /></div>
-                  <div className="vnd-kpi__body">
-                    <span className="vnd-kpi__label">Pending Invoices</span>
-                    <span className="vnd-kpi__value">{kpis.pendingInvoices}</span>
-                    <span className={`vnd-kpi__trend ${kpis.overdueInvoices > 0 ? 'vnd-kpi__trend--warn' : ''}`}>
-                      {kpis.overdueInvoices > 0 ? `${kpis.overdueInvoices} overdue` : 'All on time'}
-                    </span>
+                <button className="dash-kpi dash-kpi--vendors" onClick={() => openKpiModal('invoices')}>
+                  <div className="dash-kpi__icon"><Receipt size={20} /></div>
+                  <div className="dash-kpi__body">
+                    <span className="dash-kpi__label">PENDING INVOICES</span>
+                    <span className="dash-kpi__value">{kpis.pendingInvoices}</span>
                   </div>
                 </button>
 
-                <button className="vnd-kpi vnd-kpi--revenue" onClick={() => openKpiModal('revenue')}>
-                  <div className="vnd-kpi__icon"><DollarSign size={20} /></div>
-                  <div className="vnd-kpi__body">
-                    <span className="vnd-kpi__label">Revenue (YTD)</span>
-                    <span className="vnd-kpi__value">{kpis.revenueLabel}</span>
-                    <span className="vnd-kpi__trend vnd-kpi__trend--good">
-                      {kpis.paidCount > 0 ? `${kpis.paidCount} order${kpis.paidCount > 1 ? 's' : ''} paid` : 'No payments yet'}
-                    </span>
+                <button className="dash-kpi dash-kpi--spend" onClick={() => openKpiModal('revenue')}>
+                  <div className="dash-kpi__icon"><DollarSign size={20} /></div>
+                  <div className="dash-kpi__body">
+                    <span className="dash-kpi__label">QUOTATIONS</span>
+                    <span className="dash-kpi__value">{kpis.totalQuotations}</span>
+                  </div>
+                </button>
+
+                <button className="dash-kpi dash-kpi--lead" onClick={() => openKpiModal('revenue')}>
+                  <div className="dash-kpi__icon"><TrendingUp size={20} /></div>
+                  <div className="dash-kpi__body">
+                    <span className="dash-kpi__label">REVENUE YTD</span>
+                    <span className="dash-kpi__value">{kpis.revenueLabel}</span>
                   </div>
                 </button>
               </div>
@@ -584,16 +586,16 @@ export default function VendorDashboard() {
 
       case 'deadlines':
         return (
-          <div className="vnd-card">
-            <div className="vnd-card__header">
-              <span className="vnd-card__title">
+          <div className="dash-card">
+            <div className="dash-card__header">
+              <span className="dash-card__title">
                 <Clock size={16} /> Upcoming Deadlines
               </span>
               <button className="vnd-card__action" onClick={() => navigate('/vendor/rfqs')}>
                 View All <ArrowRight size={13} />
               </button>
             </div>
-            <div className="vnd-card__body">
+            <div className="dash-card__body">
               <div className="vnd-deadlines">
                 {deadlines.length > 0 ? deadlines.map((d) => (
                   <div key={d.rfqNumber} className="vnd-deadline-row">
@@ -616,13 +618,13 @@ export default function VendorDashboard() {
 
       case 'activity':
         return (
-          <div className="vnd-card">
-            <div className="vnd-card__header">
-              <span className="vnd-card__title">
+          <div className="dash-card">
+            <div className="dash-card__header">
+              <span className="dash-card__title">
                 <FileText size={16} /> Recent Activity
               </span>
             </div>
-            <div className="vnd-card__body">
+            <div className="dash-card__body">
               <div className="vnd-timeline">
                 {recentActivity.length > 0 ? recentActivity.map((a, i) => (
                   <div key={i} className="vnd-tl-item">
@@ -644,29 +646,42 @@ export default function VendorDashboard() {
 
       case 'quicknav':
         return (
-          <div className="vnd-card">
-            <div className="vnd-card__header">
-              <span className="vnd-card__title">
-                <Zap size={16} /> Quick Navigation
+          <div className="dash-card">
+            <div className="dash-card__header">
+              <span className="dash-card__title">
+                <Zap size={16} /> Quick Actions
               </span>
             </div>
-            <div className="vnd-card__body">
-              <div className="vnd-quick-nav">
+            <div className="dash-card__body">
+              <div className="quick-actions">
                 {[
-                  { icon: <FileText size={16} />, label: 'Submit Quotation', desc: 'Respond to open RFQs', path: '/vendor/rfqs' },
-                  { icon: <Package size={16} />, label: 'Track Orders', desc: 'View shipment status', path: '/vendor/orders' },
-                  { icon: <Receipt size={16} />, label: 'Manage Invoices', desc: 'Upload & track invoices', path: '/vendor/invoices' },
-                  { icon: <TrendingUp size={16} />, label: 'Company Profile', desc: 'Documents & compliance', path: '/vendor/profile' },
-                ].map((nav) => (
-                  <button key={nav.label} className="vnd-nav-row" onClick={() => navigate(nav.path)}>
-                    <div className="vnd-nav-icon">{nav.icon}</div>
-                    <div className="vnd-nav-info">
-                      <span className="vnd-nav-label">{nav.label}</span>
-                      <span className="vnd-nav-desc">{nav.desc}</span>
-                    </div>
-                    <ArrowRight size={14} className="vnd-nav-arrow" />
-                  </button>
-                ))}
+                  { id: 'submit-quote', label: 'Submit Quotation', desc: 'Respond to open RFQs', icon: FileText, path: '/vendor/rfqs', accent: '#0a6ed1' },
+                  { id: 'track-orders', label: 'Track Orders', desc: 'View shipment status', icon: Package, path: '/vendor/orders', accent: '#e9730c' },
+                  { id: 'manage-invoices', label: 'Manage Invoices', desc: 'Upload & track invoices', icon: Receipt, path: '/vendor/invoices', accent: '#8b5cf6' },
+                  { id: 'my-contracts', label: 'My Contracts', desc: 'View & sign agreements', icon: CheckCircle2, path: '/vendor/contracts', accent: '#0891b2' },
+                  { id: 'company-profile', label: 'Company Profile', desc: 'Documents & compliance', icon: Building2, path: '/vendor/profile', accent: '#059669' },
+                  { id: 'notifications', label: 'Notifications', desc: 'View system alerts', icon: Zap, path: '/notifications', accent: '#ec4899' },
+                ].map((action) => {
+                  const Icon = action.icon;
+                  return (
+                    <button
+                      key={action.id}
+                      className="quick-action"
+                      onClick={() => navigate(action.path)}
+                    >
+                      <div
+                        className="quick-action__icon"
+                        style={{ background: `${action.accent}15`, color: action.accent }}
+                      >
+                        <Icon size={18} />
+                      </div>
+                      <div className="quick-action__text">
+                        <span className="quick-action__label">{action.label}</span>
+                        <span className="quick-action__desc">{action.desc}</span>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -717,22 +732,7 @@ export default function VendorDashboard() {
                           </span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                          {q.score != null && (
-                            <span
-                              style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 3,
-                                padding: '2px 8px', borderRadius: 6,
-                                fontSize: 12, fontWeight: 700,
-                                background: getScoreBg(q.score),
-                                color: getScoreColor(q.score),
-                                border: `1px solid ${getScoreColor(q.score)}33`,
-                              }}
-                              title={`Score: ${q.score}/100`}
-                            >
-                              <TrendingUp size={11} />
-                              {Math.round(q.score)}%
-                            </span>
-                          )}
+
                           <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
                             {formatAmount(Number(q.totalPrice), q.currency || displayCurrency)}
                           </span>
@@ -766,28 +766,26 @@ export default function VendorDashboard() {
 
   // ── Render ────────────────────────────────────────────────
   return (
-    <div className="vendor-dashboard">
+    <div className="dashboard">
 
       {/* ── Header ─────────────────────────────────────────── */}
-      <header className="vnd-header">
-        <div className="vnd-header__text">
-          <h1>Welcome, {user?.fullName || 'Vendor'} 👋</h1>
+      <header className="dash-header">
+        <div className="dash-header__text">
+          <h1>Vendor Portal Overview</h1>
           <p>
-            {hasWidgets
-              ? "Here's your procurement activity at a glance."
-              : 'Build your personalized vendor command center by adding widgets.'}
+            {user?.fullName ? `${user.fullName} · ` : ''}Real-time RFQs, quotations, active orders &amp; financial metrics
           </p>
         </div>
-        <div className="vnd-header__actions">
-          <div className="vnd-header__date">
+        <div className="dash-header__actions">
+          <div className="dash-header__date">
             <CalendarDays size={15} />
             {today}
           </div>
-          <button className="vnd-customize-btn" onClick={openGallery}>
+          <button className="dash-customize-btn" onClick={openGallery}>
             <Sparkles size={16} />
             <span>Customize</span>
             {hasWidgets && (
-              <span className="vnd-customize-btn__badge">{activeWidgets.length}</span>
+              <span className="dash-customize-btn__badge">{activeWidgets.length}</span>
             )}
           </button>
         </div>
@@ -795,19 +793,19 @@ export default function VendorDashboard() {
 
       {/* ── Hero strip ─────────────────────────────────────── */}
       {hasWidgets && (
-        <div className="vnd-hero">
-          <div className="vnd-hero__glow vnd-hero__glow--1" />
-          <div className="vnd-hero__glow vnd-hero__glow--2" />
-          <div className="vnd-hero__content">
-            <span className="vnd-hero__stat">
+        <div className="dash-hero">
+          <div className="dash-hero__glow dash-hero__glow--1" />
+          <div className="dash-hero__glow dash-hero__glow--2" />
+          <div className="dash-hero__content">
+            <span className="dash-hero__stat">
               <strong>{activeWidgets.length}</strong> active widgets
             </span>
-            <span className="vnd-hero__divider" />
-            <span className="vnd-hero__stat">
-              <strong>{availableWidgets.length}</strong> available
+            <span className="dash-hero__divider" />
+            <span className="dash-hero__stat">
+              <strong>{availableWidgets.length}</strong> available for your role
             </span>
-            <span className="vnd-hero__divider" />
-            <span className="vnd-hero__hint">
+            <span className="dash-hero__divider" />
+            <span className="dash-hero__hint">
               <GripVertical size={14} aria-hidden />
               Drag top bar to reorder widgets
             </span>
@@ -817,27 +815,27 @@ export default function VendorDashboard() {
 
       {/* ── Empty state ────────────────────────────────────── */}
       {!hasWidgets && (
-        <div className="vnd-empty">
-          <div className="vnd-empty__visual">
-            <div className="vnd-empty__ring vnd-empty__ring--1" />
-            <div className="vnd-empty__ring vnd-empty__ring--2" />
-            <div className="vnd-empty__ring vnd-empty__ring--3" />
-            <div className="vnd-empty__icon">
+        <div className="dash-empty">
+          <div className="dash-empty__visual">
+            <div className="dash-empty__ring dash-empty__ring--1" />
+            <div className="dash-empty__ring dash-empty__ring--2" />
+            <div className="dash-empty__ring dash-empty__ring--3" />
+            <div className="dash-empty__icon">
               <LayoutGrid size={48} />
             </div>
           </div>
-          <h2 className="vnd-empty__title">Your Portal, Your Way</h2>
-          <p className="vnd-empty__subtitle">
+          <h2 className="dash-empty__title">Your Portal, Your Way</h2>
+          <p className="dash-empty__subtitle">
             Add widgets to build your personalized vendor command center.
             Choose exactly the data that matters to your business.
           </p>
-          <button className="vnd-empty__cta" onClick={openGallery}>
+          <button className="dash-empty__cta" onClick={openGallery}>
             <Sparkles size={18} />
             Open Widget Gallery
           </button>
-          <div className="vnd-empty__particles">
+          <div className="dash-empty__particles">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className={`vnd-empty__particle vnd-empty__particle--${i + 1}`} />
+              <div key={i} className={`dash-empty__particle dash-empty__particle--${i + 1}`} />
             ))}
           </div>
         </div>
@@ -845,7 +843,7 @@ export default function VendorDashboard() {
 
       {/* ── Widget grid ────────────────────────────────────── */}
       {hasWidgets && (
-        <div className={`vnd-widget-grid${draggedId ? ' vnd-widget-grid--dragging' : ''}`}>
+        <div className={`dash-widget-grid${draggedId ? ' dash-widget-grid--dragging' : ''}`}>
           {activeWidgetDefs.map((widget, index) => {
             const isDragging = draggedId === widget.id;
             const isDropTarget = dropTargetId === widget.id;
@@ -857,16 +855,16 @@ export default function VendorDashboard() {
                 key={widget.id}
                 data-vnd-widget-id={widget.id}
                 className={[
-                  'vnd-widget-wrapper',
-                  widget.fullWidth ? 'vnd-widget-wrapper--full' : '',
-                  isDragging ? 'vnd-widget-wrapper--dragging' : '',
-                  isDropTarget ? 'vnd-widget-wrapper--drop-target' : '',
+                  'dash-widget-wrapper',
+                  widget.fullWidth ? 'dash-widget-wrapper--full' : '',
+                  isDragging ? 'dash-widget-wrapper--dragging' : '',
+                  isDropTarget ? 'dash-widget-wrapper--drop-target' : '',
                 ].filter(Boolean).join(' ')}
                 style={{ animationDelay: `${index * 0.06}s` }}
               >
                 {/* Drag handle */}
                 <div
-                  className="vnd-widget__drag-bar"
+                  className="dash-widget__drag-bar"
                   onPointerDown={(e) => startDrag(e, widget.id)}
                   title={`Drag ${widget.name} to reorder`}
                   role="button"
@@ -874,14 +872,14 @@ export default function VendorDashboard() {
                   aria-label={`Drag ${widget.name} to reorder`}
                   onKeyDown={(e) => { if (e.key === 'Escape') cancelDrag(); }}
                 >
-                  <GripVertical size={16} className="vnd-widget__drag-bar-icon" />
-                  <span className="vnd-widget__drag-bar-hint">Drag to reorder</span>
+                  <GripVertical size={16} className="dash-widget__drag-bar-icon" />
+                  <span className="dash-widget__drag-bar-hint">Drag to reorder</span>
                 </div>
 
                 {/* Remove button */}
                 <button
                   type="button"
-                  className="vnd-widget__remove"
+                  className="dash-widget__remove"
                   onClick={() => removeWidget(widget.id)}
                   title={`Remove ${widget.name}`}
                   aria-label={`Remove ${widget.name}`}
@@ -890,7 +888,7 @@ export default function VendorDashboard() {
                 </button>
 
                 {/* Widget content */}
-                <div className={`vnd-widget-content ${widget.fullWidth ? '' : 'vnd-card'}`}>
+                <div className="dash-widget-content">
                   {content}
                 </div>
               </div>
@@ -1039,66 +1037,53 @@ export default function VendorDashboard() {
                   </div>
                 </div>
 
-                {/* Tabs */}
-                <div className="rfq-modal__tabs">
-                  {[
-                    ['summary', 'Summary', BarChart3],
-                    ['breakdown', 'Breakdown', ListChecks],
-                    ['related', 'Related', CalendarDays],
-                  ].map(([tab, label, Icon]) => (
-                    <button
-                      key={tab}
-                      type="button"
-                      className={`rfq-modal__tab ${activeKpiTab === tab ? 'rfq-modal__tab--active' : ''}`}
-                      onClick={() => setActiveKpiTab(tab as KpiTab)}
-                    >
-                      <Icon size={13} />
-                      {label}
-                    </button>
-                  ))}
-                </div>
-
                 {/* Body */}
-                <div className="rfq-modal__body">
-                  {activeKpiTab === 'summary' && (
-                    <div className="rfq-modal__info-panel">
-                      <div className="rfq-modal__info-grid dash-kpi-modal__info-grid">
-                        {(() => {
-                          const rows: Array<{ label: string; value: string; helper?: string }> =
-                            selectedKpiType === 'rfqs' ? [
-                              { label: 'Open RFQs', value: String(kpis.openRfqs), helper: 'Pending your response' },
-                              { label: 'Total RFQs', value: String(rfqs.length), helper: 'All time' },
-                              { label: 'Active Deadlines', value: String(deadlines.length), helper: 'Closing soon' },
-                            ] : selectedKpiType === 'quotes' ? [
-                              { label: 'Total Submitted', value: String(kpis.totalQuotations), helper: 'All quotations' },
-                              { label: 'Accepted', value: String(kpis.acceptedQuotations), helper: 'Won bids' },
-                              { label: 'Win Rate', value: kpis.totalQuotations > 0 ? `${Math.round((kpis.acceptedQuotations / kpis.totalQuotations) * 100)}%` : '—' },
-                            ] : selectedKpiType === 'orders' ? [
-                              { label: 'Active Orders', value: String(kpis.activeOrders), helper: 'In progress' },
-                              { label: 'Dispatched', value: String(kpis.shippedOrders), helper: 'On the way' },
-                              { label: 'Total Orders', value: String(orders.length), helper: 'All orders' },
-                            ] : selectedKpiType === 'invoices' ? [
-                              { label: 'Pending', value: String(kpis.pendingInvoices), helper: 'Awaiting payment' },
-                              { label: 'Overdue', value: String(kpis.overdueInvoices), helper: 'Past due date' },
-                              { label: 'Total Invoices', value: String(invoices.length), helper: 'All invoices' },
-                            ] : [
-                              { label: 'Revenue (YTD)', value: kpis.revenueLabel, helper: 'Year to date' },
-                              { label: 'Paid Orders', value: String(kpis.paidCount), helper: 'Completed payments' },
-                            ];
-                          return rows.map((row) => (
-                            <div key={row.label} className="rfq-modal__info-item">
-                              <span className="rfq-modal__info-label"><BarChart3 size={12} /> {row.label}</span>
-                              <span className="rfq-modal__info-value">{row.value}</span>
-                              {row.helper && <span className="dash-kpi-modal__helper">{row.helper}</span>}
-                            </div>
-                          ));
-                        })()}
-                      </div>
+                <div className="rfq-modal__body sap-kpi-modal-body">
+                  {/* Summary Metrics Section */}
+                  <div className="sap-kpi-section">
+                    <div className="sap-kpi-section__title">
+                      <BarChart3 size={13} /> Key Overview Metrics
                     </div>
-                  )}
+                    <div className="rfq-modal__info-grid dash-kpi-modal__info-grid">
+                      {(() => {
+                        const rows: Array<{ label: string; value: string; helper?: string }> =
+                          selectedKpiType === 'rfqs' ? [
+                            { label: 'Open RFQs', value: String(kpis.openRfqs), helper: 'Pending your response' },
+                            { label: 'Total RFQs', value: String(rfqs.length), helper: 'All time' },
+                            { label: 'Active Deadlines', value: String(deadlines.length), helper: 'Closing soon' },
+                          ] : selectedKpiType === 'quotes' ? [
+                            { label: 'Total Submitted', value: String(kpis.totalQuotations), helper: 'All quotations' },
+                            { label: 'Accepted', value: String(kpis.acceptedQuotations), helper: 'Won bids' },
+                            { label: 'Win Rate', value: kpis.totalQuotations > 0 ? `${Math.round((kpis.acceptedQuotations / kpis.totalQuotations) * 100)}%` : '—' },
+                          ] : selectedKpiType === 'orders' ? [
+                            { label: 'Active Orders', value: String(kpis.activeOrders), helper: 'In progress' },
+                            { label: 'Dispatched', value: String(kpis.shippedOrders), helper: 'On the way' },
+                            { label: 'Total Orders', value: String(orders.length), helper: 'All orders' },
+                          ] : selectedKpiType === 'invoices' ? [
+                            { label: 'Pending', value: String(kpis.pendingInvoices), helper: 'Awaiting payment' },
+                            { label: 'Overdue', value: String(kpis.overdueInvoices), helper: 'Past due date' },
+                            { label: 'Total Invoices', value: String(invoices.length), helper: 'All invoices' },
+                          ] : [
+                            { label: 'Revenue (YTD)', value: kpis.revenueLabel, helper: 'Year to date' },
+                            { label: 'Paid Orders', value: String(kpis.paidCount), helper: 'Completed payments' },
+                          ];
+                        return rows.map((row) => (
+                          <div key={row.label} className="rfq-modal__info-item sap-kpi-card">
+                            <span className="rfq-modal__info-label"><BarChart3 size={12} /> {row.label}</span>
+                            <span className="rfq-modal__info-value">{row.value}</span>
+                            {row.helper && <span className="dash-kpi-modal__helper">{row.helper}</span>}
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  </div>
 
-                  {activeKpiTab === 'breakdown' && (
-                    <div className="rfq-modal__quotations-panel">
+                  {/* Distribution & Breakdown Section */}
+                  <div className="sap-kpi-section" style={{ marginTop: 18 }}>
+                    <div className="sap-kpi-section__title">
+                      <ListChecks size={13} /> Distribution & Breakdown
+                    </div>
+                    <div className="rfq-modal__quotations-panel sap-kpi-panel">
                       {(() => {
                         const items = selectedKpiType === 'rfqs' ?
                           rfqs.filter((r) => !('hasSubmittedQuotation' in r && (r as RFQ & { hasSubmittedQuotation?: boolean }).hasSubmittedQuotation)).slice(0, 10).map((r) => ({
@@ -1152,10 +1137,14 @@ export default function VendorDashboard() {
                         ));
                       })()}
                     </div>
-                  )}
+                  </div>
 
-                  {activeKpiTab === 'related' && (
-                    <div className="rfq-modal__quotations-panel">
+                  {/* Related Activity Section */}
+                  <div className="sap-kpi-section" style={{ marginTop: 18 }}>
+                    <div className="sap-kpi-section__title">
+                      <CalendarDays size={13} /> Recent Related Activity
+                    </div>
+                    <div className="rfq-modal__quotations-panel sap-kpi-panel">
                       {selectedKpiType === 'quotes' ? (
                         metrics.length > 0 ? (
                           metrics.map((m) => (
@@ -1211,7 +1200,7 @@ export default function VendorDashboard() {
                         )
                       )}
                     </div>
-                  )}
+                  </div>
                 </div>
               </>
             )}

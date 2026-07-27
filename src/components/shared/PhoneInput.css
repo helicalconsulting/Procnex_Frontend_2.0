@@ -251,3 +251,11 @@
   border-color: var(--border-focus);
   box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.1);
 }
+
+.phone-input-field--error {
+  border-color: var(--error-500, #ef4444) !important;
+}
+
+.phone-input-field--error:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15) !important;
+}

@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom';
 import { BarChart3, ArrowRight } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import { useServiceData } from '../../../hooks/useServiceData';
+import { sseClient } from '../../../services/sseClient';
 import { dashboardService } from '../../../services/dashboardService';
 import { MessageStrip } from '../../../components/shared/MessageStrip';
 import type { DashboardPipelineItem } from '../../../types/viewModels';
@@ -15,10 +16,17 @@ const STATUS_MODIFIER: Record<string, string> = {
 };
 
 export default function ProcurementPipelineWidget() {
-  const { data: pipeline, loading, error } = useServiceData(
+  const { data: pipeline, loading, error, reload } = useServiceData(
     () => dashboardService.getPipeline(),
     [] as DashboardPipelineItem[]
   );
+
+  // SSE real-time refresh — when contract signed or PO created, refresh pipeline data
+  useEffect(() => {
+    const unsubSigned = sseClient.on('contract_signed', () => reload());
+    const unsubPO = sseClient.on('po_created', () => reload());
+    return () => { unsubSigned(); unsubPO(); };
+  }, [reload]);
 
   const pipelineData = useMemo(() => {
     const max = Math.max(...pipeline.map((p) => p.count), 1);
@@ -46,8 +54,8 @@ export default function ProcurementPipelineWidget() {
         {loading && <div className="dash-pipeline__loading">Loading pipeline…</div>}
         {!loading && !error && (
           <div className="dash-pipeline">
-            {pipelineData.map((item) => (
-              <div key={item.modifier} className="dash-pipeline__bar">
+            {pipelineData.map((item, index) => (
+              <div key={`${item.modifier}-${index}`} className="dash-pipeline__bar">
                 <span className="dash-pipeline__label">{item.label}</span>
                 <div className="dash-pipeline__track">
                   <div

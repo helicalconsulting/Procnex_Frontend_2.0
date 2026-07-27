@@ -24,16 +24,20 @@ import {
   ChevronRight,
   AlertTriangle,
   FileSignature,
+  ExternalLink,
+  Minus,
 } from 'lucide-react';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import '../../components/shared/ColumnCustomizer.css';
 import { MessageStrip } from '../../components/shared/MessageStrip';
+import { TableSkeleton } from '../../components/shared/Skeleton';
+import { apiRequest } from '../../api/client';
 import './ApprovalsPage.css';
 
 // ─── Types ──────────────────────────────────────────────────
 
 type ApprovalStatusType = 'PENDING' | 'APPROVED' | 'REJECTED' | 'RETURNED';
-type ModuleType = 'RFQ' | 'Purchase Order' | 'Quotation';
+type ModuleType = 'RFQ' | 'Purchase Order' | 'Quotation' | 'Contract';
 type PriorityType = 'HIGH' | 'MEDIUM' | 'LOW';
 
 type ApprovalRequest = ApprovalTableRow;
@@ -49,6 +53,7 @@ const MODULE_ICONS: Record<ModuleType, React.ReactNode> = {
   RFQ: <FileText size={15} />,
   'Purchase Order': <ShoppingCart size={15} />,
   Quotation: <ClipboardList size={15} />,
+  Contract: <FileSignature size={15} />,
 };
 
 const PRIORITY_CLASS: Record<PriorityType, string> = { HIGH: 'high', MEDIUM: 'medium', LOW: 'low' };
@@ -95,22 +100,44 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
     key: 'priority', label: 'Priority', defaultVisible: true, width: '100px',
     render: (req) => (
       <span className={`approvals-priority approvals-priority--${PRIORITY_CLASS[req.priority]}`}>
-        {req.priority === 'HIGH' && <AlertTriangle size={11} />}{req.priority}
+        {req.priority}
       </span>
     ),
   },
   {
-    key: 'level', label: 'Approval Level', defaultVisible: true, width: '130px',
-    render: (req) => (
-      <div className="approvals-level">
-        <div className="approvals-level__bar">
-          {Array.from({ length: req.totalLevels }, (_, i) => (
-            <div key={i} className={`approvals-level__dot ${i < req.currentLevel ? 'approvals-level__dot--filled' : ''} ${i === req.currentLevel - 1 ? 'approvals-level__dot--current' : ''}`} />
-          ))}
+    key: 'level', label: 'Approval Level', defaultVisible: true, width: '150px',
+    render: (req) => {
+      const total = req.totalLevels;
+      const current = req.currentLevel;
+      return (
+        <div className="approvals-level">
+          <div className="approvals-level__steps">
+            {Array.from({ length: total }, (_, i) => {
+              const stepNum = i + 1;
+              const isDone    = stepNum < current;
+              const isCurrent = stepNum === current;
+              return (
+                <div key={i} className="approvals-level__step">
+                  <div
+                    className={[
+                      'approvals-level__step-circle',
+                      isDone    ? 'approvals-level__step-circle--done'    : '',
+                      isCurrent ? 'approvals-level__step-circle--current' : '',
+                    ].filter(Boolean).join(' ')}
+                  >
+                    {isDone ? '✓' : stepNum}
+                  </div>
+                  {i < total - 1 && (
+                    <div className={`approvals-level__step-connector ${isDone ? 'approvals-level__step-connector--done' : ''}`} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <span className="approvals-level__text">L{current}/{total}</span>
         </div>
-        <span className="approvals-level__text">L{req.currentLevel}/{req.totalLevels}</span>
-      </div>
-    ),
+      );
+    },
   },
   {
     key: 'status', label: 'Status', defaultVisible: true, width: '110px',
@@ -134,6 +161,219 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
     render: (req) => <span className="approvals-table__date">{req.requestedBy}</span>,
   },
 ];
+
+// ═══════════════════════════════════════════════════════════════
+// Approval Chain View — Shows approval timeline for any module
+// ═══════════════════════════════════════════════════════════════
+
+type ChainEntry = {
+  levelNumber: number;
+  requiredRole: string;
+  status: string;
+  approverName: string | null;
+  comments: string | null;
+  actionAt: string | null;
+  deadline: string | null;
+  createdAt: string;
+};
+
+function ApprovalChainView({ module, referenceId, onClose }: { module: string; referenceId: string; onClose: () => void }) {
+  const [chainData, setChainData] = useState<{
+    levels: ChainEntry[];
+    timeline: ChainEntry[];
+    currentLevel: number;
+    totalLevels: number;
+    isComplete: boolean;
+    isRejected: boolean;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchChain = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await apiRequest<typeof chainData>(`/approvals/${module}/${referenceId}/chain`);
+        if (!cancelled) setChainData(data);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load approval chain');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetchChain();
+    return () => { cancelled = true; };
+  }, [module, referenceId]);
+
+  const formatDt = (d: string | null) => {
+    if (!d) return '—';
+    return new Date(d).toLocaleDateString('en-IN', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+  };
+
+  const statusIcon = (status: string) => {
+    switch (status) {
+      case 'APPROVED': return <CheckCircle2 size={14} style={{ color: '#107e3e' }} />;
+      case 'REJECTED': return <XCircle size={14} style={{ color: '#bb0000' }} />;
+      case 'RETURNED': return <RotateCcw size={14} style={{ color: '#e9730c' }} />;
+      case 'PENDING': return <Clock size={14} style={{ color: '#e9730c' }} />;
+      case 'AUTO_FORWARDED': return <AlertTriangle size={14} style={{ color: '#8b5cf6' }} />;
+      default: return <Minus size={14} style={{ color: 'var(--text-secondary)' }} />;
+    }
+  };
+
+  const statusLabel = (status: string) => {
+    switch (status) {
+      case 'APPROVED': return 'Approved';
+      case 'REJECTED': return 'Rejected';
+      case 'RETURNED': return 'Returned';
+      case 'PENDING': return 'Pending';
+      case 'AUTO_FORWARDED': return 'Auto-Forwarded';
+      default: return status;
+    }
+  };
+
+  const statusColor = (status: string) => {
+    switch (status) {
+      case 'APPROVED': return '#107e3e';
+      case 'REJECTED': return '#bb0000';
+      case 'RETURNED': return '#e9730c';
+      case 'PENDING': return '#e9730c';
+      case 'AUTO_FORWARDED': return '#8b5cf6';
+      default: return 'var(--text-secondary)';
+    }
+  };
+
+  return (
+    <div className="approvals-modal-backdrop" onClick={onClose}>
+      <div className="approvals-modal approvals-modal--detail" onClick={e => e.stopPropagation()}>
+        <div className="approvals-modal__header">
+          <div className="approvals-modal__title"><Clock size={20} /><span>Approval Chain — {module}</span></div>
+          <button className="approvals-modal__close" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="approvals-modal__body">
+          {loading && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-secondary)' }}>Loading approval chain…</div>}
+          {error && <div style={{ textAlign: 'center', padding: 32, color: '#bb0000' }}>{error}</div>}
+          {!loading && !error && (!chainData || chainData.levels.length === 0) && (
+            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-secondary)' }}>No approval chain data available.</div>
+          )}
+          {chainData && chainData.levels.length > 0 && (
+            <>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+                {chainData.isComplete && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px', borderRadius: 12, background: 'rgba(16,126,62,0.1)', color: '#107e3e', fontSize: 11, fontWeight: 700 }}>
+                    <CheckCircle2 size={12} /> Chain Complete
+                  </span>
+                )}
+                {chainData.isRejected && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px', borderRadius: 12, background: 'rgba(187,0,0,0.08)', color: '#bb0000', fontSize: 11, fontWeight: 700 }}>
+                    <XCircle size={12} /> Rejected
+                  </span>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                {(chainData.timeline.length > 0 ? chainData.timeline : chainData.levels).map((level, idx) => {
+                  const isLast = idx === (chainData.timeline.length > 0 ? chainData.timeline : chainData.levels).length - 1;
+                  const isActive = level.status === 'PENDING';
+                  return (
+                    <div key={idx} style={{ position: 'relative', paddingLeft: 32, paddingBottom: isLast ? 0 : 24 }}>
+                      {/* Timeline line */}
+                      {!isLast && (
+                        <div style={{
+                          position: 'absolute', left: 11, top: 20, bottom: 0, width: 2,
+                          background: level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED'
+                            ? '#107e3e' : level.status === 'REJECTED' ? '#bb0000' : 'var(--border)',
+                        }} />
+                      )}
+                      {/* Timeline dot */}
+                      <div style={{
+                        position: 'absolute', left: 4, top: 4, width: 16, height: 16,
+                        borderRadius: '50%',
+                        background: isActive ? '#e9730c' : level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED'
+                          ? '#107e3e' : level.status === 'REJECTED' ? '#bb0000' : 'var(--surface-card)',
+                        border: `2px solid ${
+                          isActive ? '#e9730c' : level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED'
+                            ? '#107e3e' : level.status === 'REJECTED' ? '#bb0000' : 'var(--border)'
+                        }`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        {level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED' ? (
+                          <CheckCircle2 size={10} style={{ color: '#fff' }} />
+                        ) : level.status === 'REJECTED' ? (
+                          <XCircle size={10} style={{ color: '#fff' }} />
+                        ) : (
+                          <span style={{ fontSize: 9, fontWeight: 700, color: isActive ? '#fff' : 'var(--text-secondary)' }}>{level.levelNumber}</span>
+                        )}
+                      </div>
+                      {/* Content card */}
+                      <div style={{
+                        padding: '12px 14px',
+                        background: isActive ? 'rgba(233,115,12,0.06)' : 'var(--surface-elevated)',
+                        border: `1px solid ${
+                          isActive ? 'rgba(233,115,12,0.2)' : level.status === 'APPROVED' ? 'rgba(16,126,62,0.15)' : level.status === 'REJECTED' ? 'rgba(187,0,0,0.15)' : 'var(--border)'
+                        }`,
+                        borderRadius: 8,
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                            Level {level.levelNumber} — {level.requiredRole.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                          </span>
+                          <span style={{
+                            fontSize: 11, fontWeight: 600, color: statusColor(level.status),
+                            display: 'inline-flex', alignItems: 'center', gap: 3,
+                          }}>
+                            {statusIcon(level.status)}
+                            {statusLabel(level.status)}
+                          </span>
+                        </div>
+                        {level.approverName && (
+                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                            By: <strong>{level.approverName}</strong>
+                          </div>
+                        )}
+                        {level.comments && (
+                          <div style={{
+                            fontSize: 12, color: 'var(--text-primary)',
+                            padding: '6px 10px', marginTop: 4,
+                            background: 'var(--surface-card)', borderRadius: 4,
+                            border: '1px solid var(--border)',
+                          }}>
+                            "{level.comments}"
+                          </div>
+                        )}
+                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 6 }}>
+                          {level.actionAt ? `Acted: ${formatDt(level.actionAt)}` : `Deadline: ${formatDt(level.deadline)}`}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+        <div className="approvals-modal__footer">
+          <button className="approvals-modal__btn approvals-modal__btn--secondary" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Canonical module name mapping for chain API endpoint ────
+// ApprovalTableRow uses display names (e.g. 'Purchase Order', 'Quotation')
+// but the backend expects canonical names (e.g. 'PurchaseOrders', 'Quotations')
+const CANONICAL_MODULE: Record<string, string> = {
+  'Purchase Order': 'PurchaseOrders',
+  'Quotation': 'Quotations',
+  'Contract': 'Contracts',
+  'RFQ': 'RFQ',
+};
 
 // ─── Component ──────────────────────────────────────────────
 
@@ -161,7 +401,8 @@ export default function ApprovalsPage() {
   const [actionModal, setActionModal] = useState<{ request: ApprovalRequest; action: 'approve' | 'reject' | 'return' } | null>(null);
   const [actionComment, setActionComment] = useState('');
   const [detailRequest, setDetailRequest] = useState<ApprovalRequest | null>(null);
-  useBodyScrollLock(!!(actionModal || detailRequest));
+  const [chainModal, setChainModal] = useState<{ module: string; referenceId: string } | null>(null);
+  useBodyScrollLock(!!(actionModal || detailRequest || chainModal));
   const perPage = 8;
 
   // ── Column state ──
@@ -267,7 +508,6 @@ export default function ApprovalsPage() {
           {toast.message}
         </MessageStrip>
       )}
-      {loading && <div className="approvals-page__loading">Loading approvals…</div>}
       {/* Header */}
       <div className="approvals-page__header">
         <div className="approvals-page__header-left">
@@ -308,7 +548,11 @@ export default function ApprovalsPage() {
       </div>
 
       {/* Table */}
-      {paginated.length > 0 ? (
+      {loading ? (
+        <div className="approvals-table-card">
+          <TableSkeleton rows={4} columns={5} />
+        </div>
+      ) : paginated.length > 0 ? (
         <div className="approvals-table-card">
           <div className="approvals-table-wrap">
             <table className="approvals-table" style={{ tableLayout: 'fixed', minWidth: '750px' }}>
@@ -356,7 +600,7 @@ export default function ApprovalsPage() {
               </thead>
               <tbody>
                 {paginated.map((req) => (
-                  <tr key={req.id}>
+                  <tr key={req.id} className={`approvals-row--${req.status.toLowerCase()}`}>
                     {visibleColumns.map((col) => (
                       <td key={col.key} style={{ textAlign: col.align || 'left' }}>
                         {col.render(req, formatDateTime)}
@@ -514,6 +758,24 @@ export default function ApprovalsPage() {
                   <p className="approvals-detail-comments__text">{detailRequest.comments}</p>
                 </div>
               )}
+              {detailRequest.module === 'Contract' && (
+                <button
+                  className="approvals-modal__btn approvals-modal__btn--view-contract"
+                  onClick={() => window.open(`/contracts/${detailRequest.referenceId}`, '_blank')}
+                  style={{ width: '100%', justifyContent: 'center' }}
+                >
+                  <ExternalLink size={16} /> View Contract
+                </button>
+              )}
+              {detailRequest.module !== 'RFQ' && (
+                <button
+                  className="approvals-modal__btn approvals-modal__btn--view-contract"
+                  onClick={() => setChainModal({ module: CANONICAL_MODULE[detailRequest.module] || detailRequest.module, referenceId: detailRequest.referenceId })}
+                  style={{ width: '100%', justifyContent: 'center' }}
+                >
+                  <Clock size={16} /> View Approval Chain
+                </button>
+              )}
             </div>
             <div className="approvals-modal__footer">
               <button className="approvals-modal__btn approvals-modal__btn--secondary" onClick={() => setDetailRequest(null)}>Close</button>
@@ -530,6 +792,15 @@ export default function ApprovalsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Approval Chain Modal */}
+      {chainModal && (
+        <ApprovalChainView
+          module={chainModal.module}
+          referenceId={chainModal.referenceId}
+          onClose={() => setChainModal(null)}
+        />
       )}
     </div>
   );

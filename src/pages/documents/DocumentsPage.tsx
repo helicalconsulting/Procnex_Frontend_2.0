@@ -24,6 +24,7 @@ import {
   Link2,
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
+import { TableSkeleton } from '../../components/shared/Skeleton';
 import './DocumentsPage.css';
 
 // ─── Types ──────────────────────────────────────────────────
@@ -166,7 +167,6 @@ export default function DocumentsPage() {
   return (
     <div className="docs-page">
       {error && <MessageStrip type="error">{error}</MessageStrip>}
-      {loading && <div className="docs-page__loading">Loading documents…</div>}
       {/* Header */}
       <div className="docs-page__header">
         <div className="docs-page__header-left">
@@ -228,7 +228,11 @@ export default function DocumentsPage() {
       </div>
 
       {/* Content */}
-      {paginated.length > 0 ? (
+      {loading ? (
+        <div className="docs-table-card">
+          <TableSkeleton rows={4} columns={5} />
+        </div>
+      ) : paginated.length > 0 ? (
         view === 'table' ? (
           <div className="docs-table-card">
             <div className="docs-table-wrap">

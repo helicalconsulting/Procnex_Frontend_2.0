@@ -343,6 +343,8 @@
 }
 
 .vc-status--ACTIVE,
+.vc-status--ACCEPTED,
+.vc-status--APPROVED,
 .vc-status--VENDOR_SIGNED,
 .vc-status--COMPLETED {
   background: rgba(16,126,62,0.1);
@@ -381,7 +383,44 @@
   border: 1px solid rgba(187,0,0,0.15);
 }
 
-/* ─── Dark Theme ──────────────────────────────────────────── */
+/* ─── Dark Theme Status Badges ────────────────────────────── */
+
+[data-theme="dark"] .vc-status--ACTIVE,
+[data-theme="dark"] .vc-status--ACCEPTED,
+[data-theme="dark"] .vc-status--APPROVED,
+[data-theme="dark"] .vc-status--VENDOR_SIGNED,
+[data-theme="dark"] .vc-status--COMPLETED {
+  background: rgba(52, 211, 153, 0.18) !important;
+  color: #34d399 !important;
+  border-color: rgba(52, 211, 153, 0.35) !important;
+}
+
+[data-theme="dark"] .vc-status--AWAITING_VENDOR_SIGNATURE,
+[data-theme="dark"] .vc-status--PENDING_VENDOR_SIGNATURE {
+  background: rgba(167, 139, 250, 0.15) !important;
+  color: #a78bfa !important;
+  border-color: rgba(167, 139, 250, 0.3) !important;
+}
+
+[data-theme="dark"] .vc-status--DRAFT {
+  background: rgba(148, 163, 184, 0.15) !important;
+  color: #94a3b8 !important;
+  border-color: rgba(148, 163, 184, 0.3) !important;
+}
+
+[data-theme="dark"] .vc-status--AWAITING_CUSTOMER_SIGNATURE,
+[data-theme="dark"] .vc-status--EXPIRING_SOON {
+  background: rgba(251, 191, 36, 0.15) !important;
+  color: #fbbf24 !important;
+  border-color: rgba(251, 191, 36, 0.3) !important;
+}
+
+[data-theme="dark"] .vc-status--TERMINATED,
+[data-theme="dark"] .vc-status--CANCELLED {
+  background: rgba(248, 113, 113, 0.15) !important;
+  color: #f87171 !important;
+  border-color: rgba(248, 113, 113, 0.3) !important;
+}
 
 [data-theme="dark"] .vc-hero {
   background: linear-gradient(135deg, #074a8a 0%, #0a6ed1 50%, #1a8af7 100%);
@@ -517,8 +556,30 @@
   line-height: 1.7;
   color: #333;
 }
+
+/* Dark mode: white BG + dark text so the document looks like a printed page */
 [data-theme="dark"] .vc-preview-doc {
-  color: #e2e8f0;
+  background: #ffffff !important;
+  color: #1e293b !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 8px !important;
+  padding: 24px !important;
+}
+[data-theme="dark"] .vc-preview-doc * {
+  color: #1e293b !important;
+  background-color: transparent !important;
+}
+[data-theme="dark"] .vc-preview-doc h1,
+[data-theme="dark"] .vc-preview-doc h2,
+[data-theme="dark"] .vc-preview-doc h3 {
+  color: #0f172a !important;
+}
+[data-theme="dark"] .vc-preview-doc table th,
+[data-theme="dark"] .vc-preview-doc table td {
+  border-color: #cbd5e1 !important;
+}
+[data-theme="dark"] .vc-preview-doc p {
+  color: #1e293b !important;
 }
 
 .vc-preview-doc h1, .vc-preview-doc h2, .vc-preview-doc h3 {
@@ -527,6 +588,22 @@
 
 .vc-preview-doc p {
   margin-bottom: 10px;
+}
+
+.vc-preview-modal--fullscreen {
+  max-width: 95vw !important;
+  max-height: 95vh !important;
+  width: 95vw !important;
+  height: 95vh !important;
+}
+
+.vc-preview-modal--fullscreen .vc-preview-modal__body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.vc-preview-modal--fullscreen .vc-preview-doc {
+  max-width: 900px;
 }
 
 .vc-preview-empty {

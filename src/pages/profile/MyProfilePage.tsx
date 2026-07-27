@@ -20,7 +20,9 @@ import {
   Eye,
   ExternalLink,
   BadgeCheck,
+  Download,
 } from 'lucide-react';
+import { downloadDocument } from '../../utils/download';
 import './MyProfilePage.css';
 
 function initials(name: string): string {
@@ -262,14 +264,25 @@ export default function MyProfilePage() {
                       <div className="sap-doc-item__name">{doc.originalName} · {formatFileSize(doc.fileSize)}</div>
                     </div>
                     <span className="sap-doc-item__date">{formatDate(doc.uploadedAt)}</span>
-                    <a
-                      href={doc.publicUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="sap-doc-item__link"
-                    >
-                      <Eye size={13} /> View <ExternalLink size={11} />
-                    </a>
+                    <div className="sap-doc-item__actions">
+                      <a
+                        href={doc.publicUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="sap-doc-item__link"
+                      >
+                        <Eye size={13} /> View <ExternalLink size={11} />
+                      </a>
+                      <button
+                        type="button"
+                        className="sap-doc-item__link"
+                        onClick={() => downloadDocument(doc.publicUrl, doc.originalName)}
+                        title="Download document"
+                        aria-label="Download document"
+                      >
+                        <Download size={13} /> Download
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

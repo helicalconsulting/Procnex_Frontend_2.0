@@ -40,10 +40,10 @@ export const purchaseOrderService = {
       await new Promise(r => setTimeout(r, 400));
       return { id: String(Date.now()), poNumber: `PO-${Date.now()}` };
     }
-    const data = await apiRequest<{ data: { poNumber: string; id: string } }>('/purchase-orders', {
+    const data = await apiRequest<{ poNumber: string; id: string }>('/purchase-orders', {
       method: 'POST',
       body: JSON.stringify({ rfqId, notes }),
     });
-    return data.data;
+    return data;
   },
 };

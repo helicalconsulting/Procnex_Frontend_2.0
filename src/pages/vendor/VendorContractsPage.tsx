@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useServiceData } from '../../hooks/useServiceData';
@@ -6,16 +6,17 @@ import { contractService, type Contract } from '../../services/contractService';
 import {
   FileText, Search, Eye, Download, FileSignature, Clock, CheckCircle2,
   AlertTriangle, XCircle, ChevronDown, Calendar, IndianRupee, Building2,
-  Ban, X, Maximize2,
+  Ban, X, Maximize2, Minimize2,
 } from 'lucide-react';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
 import { downloadContractAsPdf } from '../../utils/pdfDownload';
+import { sseClient } from '../../services/sseClient';
 import '../../styles/vendor-portal.css';
 import './VendorContractsPage.css';
 
 // ─── Types ──────────────────────────────────────────────────
 
-type ContractStatus = 'DRAFT' | 'PENDING_VENDOR_SIGNATURE' | 'AWAITING_CUSTOMER_SIGNATURE' | 'AWAITING_VENDOR_SIGNATURE' | 'VENDOR_SIGNED' | 'COMPLETED' | 'ACTIVE' | 'EXPIRING_SOON' | 'EXPIRED' | 'CANCELLED' | 'TERMINATED';
+type ContractStatus = 'DRAFT' | 'PENDING_VENDOR_SIGNATURE' | 'AWAITING_CUSTOMER_SIGNATURE' | 'AWAITING_VENDOR_SIGNATURE' | 'VENDOR_SIGNED' | 'ACCEPTED' | 'COMPLETED' | 'ACTIVE' | 'EXPIRING_SOON' | 'EXPIRED' | 'CANCELLED' | 'TERMINATED';
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: 'Draft',
@@ -23,12 +24,13 @@ const STATUS_LABELS: Record<string, string> = {
   AWAITING_CUSTOMER_SIGNATURE: 'Awaiting Buyer Signature',
   AWAITING_VENDOR_SIGNATURE: 'Awaiting Your Signature',
   VENDOR_SIGNED: 'Vendor Signed',
+  ACCEPTED: 'Accepted',
   COMPLETED: 'Completed',
   ACTIVE: 'Active',
   EXPIRING_SOON: 'Expiring Soon',
   EXPIRED: 'Expired',
   CANCELLED: 'Cancelled',
-  TERMINATED: 'Cancelled',
+  TERMINATED: 'Terminated',
 };
 
 const STATUS_ICONS: Record<string, React.ReactNode> = {
@@ -37,6 +39,7 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
   AWAITING_CUSTOMER_SIGNATURE: <Clock size={12} />,
   AWAITING_VENDOR_SIGNATURE: <Clock size={12} />,
   VENDOR_SIGNED: <CheckCircle2 size={12} />,
+  ACCEPTED: <CheckCircle2 size={12} />,
   COMPLETED: <CheckCircle2 size={12} />,
   ACTIVE: <CheckCircle2 size={12} />,
   EXPIRING_SOON: <AlertTriangle size={12} />,
@@ -51,7 +54,7 @@ export default function VendorContractsPage() {
   const navigate = useNavigate();
   useAuth();
   const { formatAmount, companyDefaultCurrency } = useCurrency();
-  const { data: contracts, loading } = useServiceData(
+  const { data: contracts, loading, reload } = useServiceData(
     () => contractService.listVendorContracts().then(r => r.contracts),
     [] as Contract[],
     [],
@@ -61,11 +64,18 @@ export default function VendorContractsPage() {
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [previewContract, setPreviewContract] = useState<Contract | null>(null);
+  const [previewFullscreen, setPreviewFullscreen] = useState(false);
+
+  // SSE real-time refresh — when contract signed or PO created, refresh the list
+  useEffect(() => {
+    const unsubSigned = sseClient.on('contract_signed', () => reload());
+    const unsubPO = sseClient.on('po_created', () => reload());
+    return () => { unsubSigned(); unsubPO(); };
+  }, [reload]);
 
   const summary = useMemo(() => ({
     total: contracts.length,
-    pendingSignature: contracts.filter(c => c.status === 'AWAITING_VENDOR_SIGNATURE' || c.status === 'PENDING_VENDOR_SIGNATURE').length,
-    active: contracts.filter(c => ['VENDOR_SIGNED', 'COMPLETED', 'ACTIVE'].includes(c.status)).length,
+    pendingSignature: contracts.filter(c => c.status === 'AWAITING_VENDOR_SIGNATURE' || c.status === 'PENDING_VENDOR_SIGNATURE').length,      active: contracts.filter(c => ['VENDOR_SIGNED', 'ACCEPTED', 'COMPLETED', 'ACTIVE'].includes(c.status)).length,
     totalValue: contracts.reduce((s, c) => s + c.contractValue, 0),
   }), [contracts]);
 
@@ -239,21 +249,22 @@ export default function VendorContractsPage() {
 
                       <div className="vc-card__actions">
                         <button
-                          className="vc-btn vc-btn--secondary"
-                          onClick={() => handleDownload(contract)}
+                          className="vc-btn vc-btn--primary"
+                          onClick={(e) => { e.stopPropagation(); navigate(`/vendor/contracts/${contract.id}`); }}
                         >
-                          <Download size={15} /> Download
+                          <Eye size={15} /> View Details
                         </button>
                         <button
                           className="vc-btn vc-btn--secondary"
-                          onClick={() => handlePreview(contract)}
+                          onClick={(e) => { e.stopPropagation(); handleDownload(contract); }}
                         >
-                          <Eye size={15} /> Preview
+                          <Download size={15} /> Download
                         </button>
                         {(status === 'AWAITING_VENDOR_SIGNATURE' || status === 'PENDING_VENDOR_SIGNATURE' || status === 'AWAITING_CUSTOMER_SIGNATURE') && (
                           <button
                             className="vc-btn vc-btn--primary"
-                            onClick={() => handleSign(contract.id)}
+                            style={{ background: 'linear-gradient(135deg, #107e3e, #059669)' }}
+                            onClick={(e) => { e.stopPropagation(); handleSign(contract.id); }}
                           >
                             <FileSignature size={15} /> Sign Contract
                           </button>
@@ -281,7 +292,7 @@ export default function VendorContractsPage() {
       {/* ── Document Preview Modal ── */}
       {previewContract && (
         <div className="vc-preview-backdrop" onClick={closePreview}>
-          <div className="vc-preview-modal" onClick={e => e.stopPropagation()}>
+          <div className={`vc-preview-modal ${previewFullscreen ? 'vc-preview-modal--fullscreen' : ''}`} onClick={e => e.stopPropagation()}>
             <div className="vc-preview-modal__header">
               <div className="vc-preview-modal__title">
                 <Eye size={18} />
@@ -293,6 +304,13 @@ export default function VendorContractsPage() {
               <div className="vc-preview-modal__header-actions">
                 <button className="vc-preview-btn" onClick={() => handleDownload(previewContract)} title="Download">
                   <Download size={16} />
+                </button>
+                <button
+                  className="vc-preview-btn"
+                  onClick={() => setPreviewFullscreen(!previewFullscreen)}
+                  title={previewFullscreen ? 'Exit full screen' : 'Full screen'}
+                >
+                  {previewFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
                 </button>
                 <button className="vc-preview-btn" onClick={closePreview} title="Close">
                   <X size={18} />
@@ -321,14 +339,23 @@ export default function VendorContractsPage() {
                   {STATUS_ICONS[previewContract.status]} {STATUS_LABELS[previewContract.status]}
                 </span>
               </span>
-              {(previewContract.status === 'AWAITING_VENDOR_SIGNATURE' || previewContract.status === 'PENDING_VENDOR_SIGNATURE') && (
+              <div style={{ display: 'flex', gap: 8 }}>
                 <button
                   className="vc-btn vc-btn--primary"
-                  onClick={() => { closePreview(); handleSign(previewContract.id); }}
+                  onClick={() => { closePreview(); navigate(`/vendor/contracts/${previewContract.id}`); }}
                 >
-                  <FileSignature size={15} /> Sign This Contract
+                  <Eye size={15} /> View Full Details
                 </button>
-              )}
+                {(previewContract.status === 'AWAITING_VENDOR_SIGNATURE' || previewContract.status === 'PENDING_VENDOR_SIGNATURE') && (
+                  <button
+                    className="vc-btn vc-btn--primary"
+                    style={{ background: 'linear-gradient(135deg, #107e3e, #059669)' }}
+                    onClick={() => { closePreview(); handleSign(previewContract.id); }}
+                  >
+                    <FileSignature size={15} /> Sign This Contract
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

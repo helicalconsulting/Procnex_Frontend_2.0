@@ -14,6 +14,8 @@ interface PhoneInputProps {
   onChange: (value: string) => void;
   /** Placeholder text for the phone input (default: '712345678') */
   placeholder?: string;
+  /** Optional visual error flag */
+  hasError?: boolean;
 }
 
 /**
@@ -40,6 +42,7 @@ export default function PhoneInput({
   value,
   onChange,
   placeholder = '712345678',
+  hasError = false,
 }: PhoneInputProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -111,7 +114,9 @@ export default function PhoneInput({
   };
 
   const handlePhoneChange = (e: ChangeEvent<HTMLInputElement>) => {
-    onChange(e.target.value);
+    // Only allow digits, spaces, hyphens, and parentheses
+    const sanitized = e.target.value.replace(/[^\d\s\-\+\(\)]/g, '');
+    onChange(sanitized);
   };
 
   const handleTriggerKeyDown = (e: KeyboardEvent) => {
@@ -224,7 +229,7 @@ export default function PhoneInput({
       {/* Phone number input */}
       <input
         type="tel"
-        className="phone-input-field"
+        className={`phone-input-field ${hasError ? 'phone-input-field--error' : ''}`}
         value={value}
         onChange={handlePhoneChange}
         placeholder={placeholder}

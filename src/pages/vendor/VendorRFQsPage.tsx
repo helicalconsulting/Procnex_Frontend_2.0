@@ -12,11 +12,12 @@ import {
   FileText, Search, ChevronDown, Clock, Send, X, Calendar,
   CheckCircle2, AlertTriangle, RotateCcw, Plus, Check,
   Minus, Maximize2, Minimize2, ChevronUp, ChevronRight, Eye,
-  Trash2, Pencil, Shield, Upload,
+  Trash2, Pencil, Shield, Upload, Sliders,
 } from 'lucide-react';
 import { CurrencySelector, CurrencyAmountInput, CurrencyBadge, useCurrency } from '../../components/shared/CurrencyMaster';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { quotationService } from '../../services/quotationService';
+import { rfqService } from '../../services/rfqService';
 import type { QuotationBidSecurity } from '../../types';
 import '../../styles/vendor-portal.css';
 
@@ -136,9 +137,35 @@ function mapVendorRfq(r: RFQ & {
     department: ext.department || '—',
     rfqType: r.rfqType || 'RFQ',
     needsResubmit: r.needsResubmit || false,
-    latestQuotationId: r.latestQuotationId || null,
-    customFields: r.customFields || [],
-    evaluationCategories: r.evaluationCategories || [],
+    customFields: (r.customFields || []).map((cf: any) => {
+      let parsed: any = {};
+      if (typeof cf.value === 'string' && cf.value.trim().startsWith('{')) {
+        try { parsed = JSON.parse(cf.value); } catch {}
+      }
+      return {
+        id: parsed.id || cf.id,
+        fieldName: parsed.fieldName || cf.fieldName || cf.key,
+        fieldType: parsed.fieldType || cf.fieldType || 'text',
+        required: parsed.required ?? cf.required ?? false,
+        weightage: parsed.weightage ?? cf.weightage ?? 0,
+      };
+    }),
+    evaluationCategories: (r.evaluationCategories || []).map((cat: any) => ({
+      id: cat.id || cat.name,
+      name: cat.name,
+      weightage: cat.weightage || 0,
+      enabled: cat.enabled ?? true,
+      subParameters: (cat.subParameters || []).map((sp: any) => ({
+        id: sp.id || sp.name,
+        name: sp.name,
+        source: sp.source || 'custom',
+        enabled: sp.enabled ?? true,
+        required: sp.required ?? false,
+        weightage: sp.weightage || 0,
+        maxScore: sp.maxScore || 10,
+        description: sp.description || '',
+      })),
+    })),
     bidSecurityRequired: r.bidSecurityRequired ?? false,
     bidBondRequired: r.bidBondRequired ?? false,
     bidSecurityType: r.bidSecurityType,
@@ -358,11 +385,13 @@ export default function VendorRFQsPage() {
   };
 
   // Open quotation modal
-  const openQuotModal = useCallback((rfq: VendorRFQ) => {
-    setQuotModal(rfq);
+  const openQuotModal = useCallback(async (rfq: VendorRFQ) => {
+    let currentRfq = rfq;
+    setQuotModal(currentRfq);
+
     const prices: Record<number, number> = {};
     const initCurrencies: Record<number, string> = {};
-    rfq.items.forEach((_, idx) => {
+    currentRfq.items.forEach((_, idx) => {
       prices[idx] = 0;
       initCurrencies[idx] = companyDefaultCurrency;
     });
@@ -376,26 +405,29 @@ export default function VendorRFQsPage() {
     setAttachments([]);
     // Initialize custom field values
     const initCustomValues: Record<string, string | number> = {};
-    (rfq.customFields || []).forEach((cf) => {
+    (currentRfq.customFields || []).forEach((cf) => {
       initCustomValues[cf.id] = cf.fieldType === 'number' ? 0 : '';
     });
     setCustomFieldValues(initCustomValues);
     // Initialize evaluation parameter values (empty strings — vendor fills info, not scores)
     const initEvalValues: Record<string, string> = {};
-    (rfq.evaluationCategories || []).forEach((cat) => {
-      cat.subParameters.filter(p => p.enabled).forEach((sp) => {
+    (currentRfq.evaluationCategories || []).forEach((cat) => {
+      (cat.subParameters || []).filter(p => p.enabled !== false).forEach((sp) => {
         initEvalValues[sp.id] = '';
       });
     });
     setEvalParamValues(initEvalValues);
     // All categories collapsed by default — vendor clicks to expand
     setExpandedEvalCats(new Set());
-    // Reset bid security & bid bond state
-    setBidSecValueType('FIXED_AMOUNT');
+    // Pre-fill bid security & bid bond format fields (type, currency, unit) from RFQ.
+    // Value and validity fields are kept empty — buyer requirements are shown as hints.
+    setBidSecValueType(
+      (currentRfq.bidSecurityValueType as 'FIXED_AMOUNT' | 'PERCENTAGE') || 'FIXED_AMOUNT'
+    );
     setBidSecValue('');
-    setBidSecCurrency(companyDefaultCurrency || 'KES');
+    setBidSecCurrency(currentRfq.bidSecurityCurrency || companyDefaultCurrency || 'KES');
     setBidSecValidityValue('');
-    setBidSecValidityUnit('DAYS');
+    setBidSecValidityUnit((currentRfq.bidSecurityValidityUnit as 'DAYS' | '') || 'DAYS');
     setBidSecFile(null);
     setBidSecBondNumber('');
     setBidSecIssuer('');
@@ -404,15 +436,15 @@ export default function VendorRFQsPage() {
     setBidBondNumber('');
     setBidBondIssuer('');
     setBidBondAmount('');
-    setBidBondCurrency(companyDefaultCurrency || 'KES');
+    setBidBondCurrency(currentRfq.bidSecurityCurrency || companyDefaultCurrency || 'KES');
     setBidBondIssueDate('');
     setBidBondExpiryDate('');
     setBidBondValidityValue('');
     setBidBondValidityUnit('DAYS');
     // Also reset card-body bid security upload state to prevent stale loading indicator
-    setBidSecurityUploadingRfqId(prev => prev === rfq.id ? null : prev);
-    setBidSecurityErrors(prev => { const n = { ...prev }; delete n[rfq.id]; return n; });
-    setQuotModalTitle(rfq.needsResubmit ? 'Resubmit Quotation' : 'Submit Quotation');
+    setBidSecurityUploadingRfqId(prev => prev === currentRfq.id ? null : prev);
+    setBidSecurityErrors(prev => { const n = { ...prev }; delete n[currentRfq.id]; return n; });
+    setQuotModalTitle(currentRfq.needsResubmit ? 'Resubmit Quotation' : 'Submit Quotation');
     setVquotModalState('open');
   }, [companyDefaultCurrency, defaultPayTerm]);
 
@@ -670,6 +702,17 @@ export default function VendorRFQsPage() {
                         <FileText size={16} style={{ color: 'var(--vendor-primary)' }} />
                         <span className="vrfq-card__rfq-id">{rfq.rfqNumber}</span>
                         <span className={`vendor-badge vendor-badge--${statusCfg.cls}`}>{statusCfg.label}</span>
+                        <span className="vendor-badge" style={{
+                          background: rfq.rfqType === 'TENDER' ? 'rgba(124, 58, 237, 0.12)' : 'rgba(10, 110, 209, 0.1)',
+                          color: rfq.rfqType === 'TENDER' ? '#7c3aed' : '#0a6ed1',
+                          fontWeight: 700,
+                          fontSize: 11,
+                          padding: '2px 8px',
+                          borderRadius: 4,
+                          marginLeft: 6,
+                        }}>
+                          {rfq.rfqType === 'TENDER' ? 'Tender' : 'RFQ'}
+                        </span>
                       </div>
                       <span className="vrfq-card__title">{rfq.title} · {rfq.buyerCompany}</span>
                     </div>
@@ -1249,24 +1292,27 @@ export default function VendorRFQsPage() {
                     </div>
                   )}
 
-                  {/* ── Evaluation Parameters Input (Custom RFQ) ──────── */}
+                  {/* ── Evaluation Parameters Input (Tender / Custom RFQ) ──────── */}
                   {(quotModal.rfqType === 'TENDER' || quotModal.rfqType === 'CUSTOM') && quotModal.evaluationCategories && quotModal.evaluationCategories.length > 0 && (
                     <div className="vquot-eval-section">
                       <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
                         <span style={{
                           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                          width: 20, height: 20, borderRadius: 4,
-                          background: 'linear-gradient(135deg, #7c3aed, #a78bfa)',
-                          color: '#fff', fontSize: 11, fontWeight: 700,
-                        }}>E</span>
+                          width: 22, height: 22, borderRadius: 5,
+                          background: 'rgba(10, 110, 209, 0.1)',
+                          color: 'var(--primary-600, #0a6ed1)',
+                          fontSize: 12, fontWeight: 700,
+                        }}>
+                          <Sliders size={13} />
+                        </span>
                         Evaluation Parameters
-                        <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 400 }}>— provide your scores</span>
+                        <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 400 }}>— fill required parameter information</span>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {quotModal.evaluationCategories.filter(c => c.enabled).map((cat) => {
+                        {quotModal.evaluationCategories.filter(c => c.enabled !== false).map((cat) => {
                           const isExpanded = expandedEvalCats.has(cat.id);
-                          const filledCount = cat.subParameters.filter(p => p.enabled && evalParamValues[p.id]?.trim()).length;
-                          const totalCount = cat.subParameters.filter(p => p.enabled).length;
+                          const filledCount = (cat.subParameters || []).filter(p => p.enabled !== false && evalParamValues[p.id]?.trim()).length;
+                          const totalCount = (cat.subParameters || []).filter(p => p.enabled !== false).length;
                           return (
                             <div key={cat.id} className={`vquot-eval-category ${isExpanded ? 'vquot-eval-category--expanded' : ''}`}>
                               <button
@@ -1289,15 +1335,15 @@ export default function VendorRFQsPage() {
                                 </div>
                                 <div className="vquot-eval-category__head-right">
                                   {!isExpanded && filledCount > 0 && (
-                                    <span className="vquot-eval-category__count">{filledCount}/{totalCount}</span>
+                                    <span className="vquot-eval-category__count">{filledCount}/{totalCount} filled</span>
                                   )}
-                                  <span className="vquot-eval-category__weight">{cat.weightage}%</span>
+                                  <span className="vquot-eval-category__weight">{cat.weightage}% weight</span>
                                 </div>
                               </button>
                               <div className={`vquot-eval-params ${isExpanded ? 'vquot-eval-params--open' : ''}`}>
                                 <div className="vquot-eval-params__inner">
-                                {cat.subParameters.filter(p => p.enabled).map((sp) => (
-                                  <div key={sp.id} className="vquot-eval-param-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+                                {(cat.subParameters || []).filter(p => p.enabled !== false).map((sp) => (
+                                  <div key={sp.id} className="vquot-eval-param-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                       <span className="vquot-eval-param-name">{sp.name}</span>
                                       {sp.required && <span className="vquot-eval-param-required">*</span>}
@@ -1307,24 +1353,10 @@ export default function VendorRFQsPage() {
                                     </div>
                                     <input
                                       type="text"
-                                      placeholder={sp.description || `Enter ${sp.name.toLowerCase()}`}
+                                      className="vquot-eval-input"
+                                      placeholder={sp.description || `Provide ${sp.name.toLowerCase()} details`}
                                       value={evalParamValues[sp.id] ?? ''}
                                       onChange={(e) => setEvalParamValues(prev => ({ ...prev, [sp.id]: e.target.value }))}
-                                      style={{
-                                        padding: '10px 12px',
-                                        border: '1px solid var(--eval-purple-300)',
-                                        borderRadius: 6,
-                                        background: 'var(--surface-card)',
-                                        color: 'var(--text-primary)',
-                                        fontSize: 13,
-                                        fontFamily: 'inherit',
-                                        outline: 'none',
-                                        transition: 'border-color 0.15s',
-                                        width: '100%',
-                                        boxSizing: 'border-box',
-                                      }}
-                                      onFocus={e => e.target.style.borderColor = 'var(--eval-purple-700)'}
-                                      onBlur={e => e.target.style.borderColor = 'var(--eval-purple-300)'}
                                     />
                                   </div>
                                 ))}
@@ -1352,6 +1384,28 @@ export default function VendorRFQsPage() {
                             <div className="vquot-section-header__sub">Required by buyer — provide your bid security information</div>
                           </div>
                         </div>
+
+                        {/* ── Buyer requirement hints ── */}
+                        {(quotModal.bidSecurityValue != null || quotModal.bidSecurityMinValue != null || quotModal.bidSecurityValidityValue != null || quotModal.bidSecurityMinValidity != null) && (
+                          <div style={{
+                            padding: '8px 12px', background: 'rgba(10,110,209,0.06)',
+                            border: '1px solid rgba(10,110,209,0.15)', borderRadius: 'var(--radius-sm)',
+                            marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: '6px 16px',
+                            fontSize: 12, color: 'var(--primary-600, #0a6ed1)',
+                          }}>
+                            <span style={{ fontWeight: 600, marginRight: 4 }}>ℹ Buyer Requirement:</span>
+                            {(quotModal.bidSecurityValue != null || quotModal.bidSecurityMinValue != null) && (
+                              <span>
+                                Min. Value: <strong>{quotModal.bidSecurityValue ?? quotModal.bidSecurityMinValue}{quotModal.bidSecurityValueType === 'PERCENTAGE' ? '%' : ` ${quotModal.bidSecurityCurrency || 'KES'}`}</strong>
+                              </span>
+                            )}
+                            {(quotModal.bidSecurityValidityValue != null || quotModal.bidSecurityMinValidity != null) && (
+                              <span>
+                                Min. Validity: <strong>{quotModal.bidSecurityValidityValue ?? quotModal.bidSecurityMinValidity} days</strong>
+                              </span>
+                            )}
+                          </div>
+                        )}
 
                         <div className="vquot-modal__field">
                           <label className="vquot-modal__label">Value Type *</label>
@@ -1526,6 +1580,28 @@ export default function VendorRFQsPage() {
                             <div className="vquot-section-header__sub">Required by buyer — provide your bid bond information</div>
                           </div>
                         </div>
+
+                        {/* ── Buyer requirement hints ── */}
+                        {(quotModal.bidBondMinValue != null || quotModal.bidBondMinValidity != null) && (
+                          <div style={{
+                            padding: '8px 12px', background: 'rgba(10,110,209,0.06)',
+                            border: '1px solid rgba(10,110,209,0.15)', borderRadius: 'var(--radius-sm)',
+                            marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: '6px 16px',
+                            fontSize: 12, color: 'var(--primary-600, #0a6ed1)',
+                          }}>
+                            <span style={{ fontWeight: 600, marginRight: 4 }}>ℹ Buyer Requirement:</span>
+                            {quotModal.bidBondMinValue != null && (
+                              <span>
+                                Min. Amount: <strong>{quotModal.bidBondMinValue} {quotModal.bidSecurityCurrency || 'KES'}</strong>
+                              </span>
+                            )}
+                            {quotModal.bidBondMinValidity != null && (
+                              <span>
+                                Min. Validity: <strong>{quotModal.bidBondMinValidity} days</strong>
+                              </span>
+                            )}
+                          </div>
+                        )}
 
                         <div className="vquot-bidbond-grid">
                           <div className="vquot-modal__field">

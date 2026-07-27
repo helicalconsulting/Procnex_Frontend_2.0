@@ -151,19 +151,7 @@
   animation: fadeIn 0.3s;
 }
 
-.va-card__grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-@media (max-width: 768px) {
-  .va-card__grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.va-card__info-section {
+.va-card__section {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -203,32 +191,6 @@
 
 .va-status--signed {
   color: #107e3e;
-}
-
-/* ─── Signature Block ─────────────────────────────────────── */
-
-.va-card__sig-block {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.va-card__sig-preview {
-  display: flex;
-  justify-content: flex-end;
-  padding: 6px 12px;
-  background: var(--surface-elevated);
-  border-radius: var(--vendor-radius-sm);
-}
-
-.va-card__sig-preview img {
-  height: 40px;
-  max-width: 180px;
-  object-fit: contain;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 4px 8px;
-  background: #fff;
 }
 
 /* ─── Actions ─────────────────────────────────────────────── */

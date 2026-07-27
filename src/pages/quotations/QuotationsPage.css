@@ -204,12 +204,15 @@
 /* ── Score bar ───────────────────────────────────────────── */
 
 .quot-score { display: flex; align-items: center; gap: 8px; min-width: 80px; }
-.quot-score__bar  { flex: 1; height: 6px; background: var(--surface-elevated); border-radius: 3px; overflow: hidden; }
-.quot-score__fill { height: 100%; border-radius: 3px; }
+.quot-score__bar  { flex: 1; height: 6px; background: var(--surface-elevated); border-radius: 3px; overflow: hidden; transition: box-shadow 0.2s, height 0.15s; }
+.quot-score__bar:hover { height: 7px; box-shadow: 0 0 0 1px var(--border); }
+.quot-score__fill { height: 100%; border-radius: 3px; transition: width 0.6s cubic-bezier(0.4,0,0.2,1), opacity 0.3s; }
+.quot-score__bar:hover .quot-score__fill { opacity: 0.85; }
 .quot-score__fill--high { background: linear-gradient(90deg, var(--success-500), #34d399); }
 .quot-score__fill--mid  { background: linear-gradient(90deg, var(--warning-500), #fbbf24); }
 .quot-score__fill--low  { background: linear-gradient(90deg, var(--danger-500),  #f87171); }
-.quot-score__value { font-size: 13px; font-weight: 700; min-width: 24px; text-align: right; }
+.quot-score__value { font-size: 13px; font-weight: 700; min-width: 24px; text-align: right; transition: color 0.2s; }
+.quot-score__bar:hover + .quot-score__value { color: var(--text-primary); }
 
 /* ── Action buttons ──────────────────────────────────────── */
 
@@ -1032,12 +1035,22 @@
   border-radius: 4px;
   overflow: hidden;
   border: 1px solid var(--border);
+  transition: box-shadow 0.2s, height 0.15s;
+}
+
+.quot-action-modal__score-bar:hover {
+  height: 10px;
+  box-shadow: 0 0 0 1px var(--primary-200);
 }
 
 .quot-action-modal__score-fill {
   height: 100%;
   border-radius: 4px;
-  transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+  transition: width 0.5s cubic-bezier(0.4,0,0.2,1), opacity 0.3s;
+}
+
+.quot-action-modal__score-bar:hover .quot-action-modal__score-fill {
+  opacity: 0.85;
 }
 
 .quot-action-modal__score-fill--high { background: linear-gradient(90deg, var(--success-500), #34d399); }
@@ -1892,9 +1905,9 @@
   position: fixed;
   inset: 0;
   background: var(--overlay, rgba(0,0,0,0.5));
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  z-index: 700;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 10000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2486,11 +2499,25 @@
   border-radius: 999px;
   font-size: 13px;
   font-weight: 700;
+  cursor: help;
+  transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+  border: 1px solid transparent;
+}
+
+.quot-card__score:hover {
+  transform: scale(1.1);
 }
 
 .quot-card__score--high { background: rgba(16,126,62,0.1); color: var(--success-500); }
+.quot-card__score--high:hover { background: rgba(16,126,62,0.18); border-color: rgba(16,126,62,0.3); box-shadow: 0 2px 8px rgba(16,126,62,0.2); }
 .quot-card__score--mid  { background: rgba(233,115,12,0.1); color: var(--warning-500); }
+.quot-card__score--mid:hover  { background: rgba(233,115,12,0.18); border-color: rgba(233,115,12,0.3); box-shadow: 0 2px 8px rgba(233,115,12,0.2); }
 .quot-card__score--low  { background: rgba(187,0,0,0.08);  color: var(--danger-500);  }
+.quot-card__score--low:hover  { background: rgba(187,0,0,0.14);  border-color: rgba(187,0,0,0.25); box-shadow: 0 2px 8px rgba(187,0,0,0.15);  }
+
+[data-theme="dark"] .quot-card__score--high:hover { background: rgba(16,126,62,0.25); }
+[data-theme="dark"] .quot-card__score--mid:hover  { background: rgba(233,115,12,0.25); }
+[data-theme="dark"] .quot-card__score--low:hover  { background: rgba(187,0,0,0.2);  }
 
 /* ── Card Action Buttons ──────────────────────────────── */
 
@@ -2687,11 +2714,27 @@
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 32px; padding: 3px 8px; border-radius: 12px;
   font-size: 12px; font-weight: 700;
+  cursor: help;
+  transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+  border: 1px solid transparent;
+  position: relative;
+}
+
+.quot-listing-table__score:hover {
+  transform: scale(1.12);
+  z-index: 2;
 }
 
 .quot-listing-table__score--high { background: rgba(16,126,62,0.1); color: var(--success-500); }
+.quot-listing-table__score--high:hover { background: rgba(16,126,62,0.18); box-shadow: 0 2px 8px rgba(16,126,62,0.25); border-color: rgba(16,126,62,0.3); }
 .quot-listing-table__score--mid  { background: rgba(233,115,12,0.1); color: var(--warning-500); }
-.quot-listing-table__score--low  { background: rgba(187,0,0,0.08);  color: var(--danger-500); }
+.quot-listing-table__score--mid:hover  { background: rgba(233,115,12,0.18); box-shadow: 0 2px 8px rgba(233,115,12,0.25); border-color: rgba(233,115,12,0.3); }
+.quot-listing-table__score--low  { background: rgba(187,0,0,0.08);  color: var(--danger-500);  }
+.quot-listing-table__score--low:hover  { background: rgba(187,0,0,0.14);  box-shadow: 0 2px 8px rgba(187,0,0,0.18);  border-color: rgba(187,0,0,0.25); }
+
+[data-theme="dark"] .quot-listing-table__score--high:hover { background: rgba(16,126,62,0.25); box-shadow: 0 2px 8px rgba(16,126,62,0.3); }
+[data-theme="dark"] .quot-listing-table__score--mid:hover  { background: rgba(233,115,12,0.25); box-shadow: 0 2px 8px rgba(233,115,12,0.3); }
+[data-theme="dark"] .quot-listing-table__score--low:hover  { background: rgba(187,0,0,0.2);  box-shadow: 0 2px 8px rgba(187,0,0,0.25); }
 
 .quot-listing-table__status-cell { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
 
@@ -2853,3 +2896,459 @@
 }
 
 @media (max-width: 480px) { .quot-summary { grid-template-columns: 1fr; } }
+
+/* ═══════════════════════════════════════════════════════════
+   SAP Fiori Horizon — Quotation Evaluation Panel
+   quot-eval-sap BEM block
+   ═══════════════════════════════════════════════════════════ */
+
+.quot-eval-sap {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: var(--surface-card, #fff);
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border, #e5e5e5);
+  font-family: '72', 'SAP-icons', 'Noto Sans', Arial, Helvetica, sans-serif;
+}
+
+/* ── Object Page Header ── */
+.quot-eval-sap__obj-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #0070f2 0%, #0057c2 100%);
+  flex-wrap: wrap;
+}
+
+.quot-eval-sap__obj-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.quot-eval-sap__vendor-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.25);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+  border: 2px solid rgba(255,255,255,0.4);
+}
+
+.quot-eval-sap__obj-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.2;
+}
+
+.quot-eval-sap__obj-subtitle {
+  font-size: 11px;
+  color: rgba(255,255,255,0.75);
+  margin-top: 2px;
+}
+
+/* ── KPI chips ── */
+.quot-eval-sap__kpi-chips {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: rgba(255,255,255,0.15);
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.25);
+  overflow: hidden;
+}
+
+.quot-eval-sap__kpi-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 16px;
+  gap: 2px;
+}
+
+.quot-eval-sap__kpi-chip-val {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+}
+
+.quot-eval-sap__kpi-chip-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: rgba(255,255,255,0.7);
+  white-space: nowrap;
+}
+
+.quot-eval-sap__kpi-divider {
+  width: 1px;
+  height: 32px;
+  background: rgba(255,255,255,0.25);
+  flex-shrink: 0;
+}
+
+/* ── Status badge ── */
+.quot-eval-sap__status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.quot-eval-sap__status-badge--positive {
+  background: rgba(16,126,62,0.9);
+  color: #fff;
+}
+
+.quot-eval-sap__status-badge--neutral {
+  background: rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.9);
+}
+
+/* ── Loading ── */
+.quot-eval-sap__loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 24px 20px;
+  font-size: 13px;
+  color: var(--text-secondary, #6b7280);
+}
+
+.quot-eval-sap__loading-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border, #e5e5e5);
+  border-top-color: #0070f2;
+  border-radius: 50%;
+  animation: quot-eval-spin 0.6s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes quot-eval-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Message strip ── */
+.quot-eval-sap__message-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.quot-eval-sap__message-strip--error {
+  background: #fef2f2;
+  color: #bb0000;
+  border-bottom: 1px solid #fca5a5;
+}
+
+[data-theme='dark'] .quot-eval-sap__message-strip--error {
+  background: rgba(187,0,0,0.1);
+  color: #f87171;
+  border-bottom-color: rgba(187,0,0,0.3);
+}
+
+/* ── Overall bar ── */
+.quot-eval-sap__overall-bar-section {
+  padding: 14px 20px 12px;
+  border-bottom: 1px solid var(--border, #e5e5e5);
+  background: var(--surface-elevated, #f7f8fa);
+}
+
+.quot-eval-sap__overall-bar-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary, #6b7280);
+  margin-bottom: 8px;
+}
+
+.quot-eval-sap__overall-bar-pct {
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.quot-eval-sap__overall-bar-track {
+  height: 8px;
+  background: var(--border, #e5e5e5);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.quot-eval-sap__overall-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ── Table section ── */
+.quot-eval-sap__table-section {
+  flex: 1;
+}
+
+.quot-eval-sap__table-title {
+  padding: 10px 20px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-secondary, #6b7280);
+  background: var(--surface-elevated, #f7f8fa);
+  border-bottom: 1px solid var(--border, #e5e5e5);
+}
+
+.quot-eval-sap__table {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Category block ── */
+.quot-eval-sap__cat-block {
+  border-bottom: 1px solid var(--border, #e5e5e5);
+}
+
+.quot-eval-sap__cat-block:last-child {
+  border-bottom: none;
+}
+
+.quot-eval-sap__cat-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  background: var(--surface-card, #fff);
+  justify-content: space-between;
+}
+
+.quot-eval-sap__cat-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.quot-eval-sap__cat-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #1a1a2e);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quot-eval-sap__cat-weight {
+  font-size: 10px;
+  color: var(--text-secondary, #6b7280);
+  font-weight: 500;
+}
+
+.quot-eval-sap__cat-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.quot-eval-sap__cat-bar-track {
+  width: 140px;
+  height: 6px;
+  background: var(--border, #e5e5e5);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.quot-eval-sap__cat-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+.quot-eval-sap__cat-pct {
+  font-size: 13px;
+  font-weight: 700;
+  min-width: 38px;
+  text-align: right;
+}
+
+.quot-eval-sap__cat-pts {
+  font-size: 11px;
+  color: var(--text-secondary, #6b7280);
+  min-width: 42px;
+  text-align: right;
+}
+
+/* ── Cat description ── */
+.quot-eval-sap__cat-desc {
+  padding: 0 20px 10px 20px;
+  font-size: 11px;
+  color: var(--text-secondary, #6b7280);
+  font-style: italic;
+}
+
+/* ── Sub-parameter table ── */
+.quot-eval-sap__sub-table {
+  background: var(--surface-elevated, #f7f8fa);
+  border-top: 1px solid var(--border, #e5e5e5);
+}
+
+.quot-eval-sap__sub-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 20px 7px 36px;
+  border-bottom: 1px solid var(--border-subtle, #f0f0f0);
+  transition: background 0.1s;
+}
+
+.quot-eval-sap__sub-row:last-child {
+  border-bottom: none;
+}
+
+.quot-eval-sap__sub-row:hover {
+  background: var(--surface-hover, rgba(0,112,242,0.04));
+}
+
+.quot-eval-sap__sub-row-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.quot-eval-sap__sub-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.quot-eval-sap__sub-dot--filled {
+  background: #107e3e;
+  box-shadow: 0 0 0 2px rgba(16,126,62,0.2);
+}
+
+.quot-eval-sap__sub-dot--empty {
+  background: transparent;
+  border: 2px solid #a0aec0;
+}
+
+.quot-eval-sap__sub-name {
+  font-size: 12px;
+  color: var(--text-primary, #1a1a2e);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quot-eval-sap__sub-row-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.quot-eval-sap__sub-value {
+  font-size: 11px;
+  color: var(--text-secondary, #6b7280);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quot-eval-sap__sub-score {
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 36px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.quot-eval-sap__sub-score--full {
+  color: #107e3e;
+}
+
+.quot-eval-sap__sub-score--zero {
+  color: #a0aec0;
+}
+
+/* ── No data ── */
+.quot-eval-sap__no-data {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 20px;
+  gap: 8px;
+}
+
+.quot-eval-sap__no-data-score {
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.quot-eval-sap__no-data-msg {
+  font-size: 12px;
+  color: var(--text-secondary, #6b7280);
+  text-align: center;
+}
+
+/* ── Dark mode overrides ── */
+[data-theme='dark'] .quot-eval-sap {
+  background: var(--surface-card, #1e1e2e);
+  border-color: var(--border, #333);
+}
+
+[data-theme='dark'] .quot-eval-sap__obj-header {
+  background: linear-gradient(135deg, #1a6ad0 0%, #0d4fa0 100%);
+}
+
+[data-theme='dark'] .quot-eval-sap__overall-bar-section,
+[data-theme='dark'] .quot-eval-sap__table-title {
+  background: var(--surface-elevated, #16162a);
+}
+
+[data-theme='dark'] .quot-eval-sap__cat-header {
+  background: var(--surface-card, #1e1e2e);
+}
+
+[data-theme='dark'] .quot-eval-sap__sub-table {
+  background: var(--surface-elevated, #16162a);
+}
+
+[data-theme='dark'] .quot-eval-sap__sub-row:hover {
+  background: rgba(0,112,242,0.08);
+}
+
+[data-theme='dark'] .quot-eval-sap__cat-bar-track,
+[data-theme='dark'] .quot-eval-sap__overall-bar-track {
+  background: rgba(255,255,255,0.1);
+}
+

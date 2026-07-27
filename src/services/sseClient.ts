@@ -57,6 +57,8 @@ class SSEClient {
     'vendor_onboarding_accepted',
     'vendor_onboarding_documents_submitted',
     'evaluation_scores_updated',
+    'contract_signed',
+    'po_status_changed',
   ];
 
   /**

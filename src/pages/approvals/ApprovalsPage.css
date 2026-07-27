@@ -1,6 +1,29 @@
 /* ═══════════════════════════════════════════════════════════
-   Heliflow — Approvals Page Styles
+   Heliflow — Approvals Page · SAP Fiori Table + Original Header
    ═══════════════════════════════════════════════════════════ */
+
+/* SAP semantic color tokens (table-only) */
+:root {
+  --sap-brand:        #0070f2;
+  --sap-positive:     #107e3e;
+  --sap-critical:     #e9730c;
+  --sap-negative:     #bb0000;
+  --sap-neutral:      #6a6d70;
+  --sap-border-sap:   #d9d9d9;
+  --sap-border-strong:#8d9093;
+  --sap-row-hover:    #ebf5fe;
+  --sap-row-stripe:   #fafafa;
+  --sap-focus-ring:   rgba(0,112,242,0.25);
+}
+
+[data-theme="dark"] {
+  --sap-row-hover:    rgba(0,112,242,0.08);
+  --sap-row-stripe:   rgba(255,255,255,0.015);
+  --sap-border-sap:   #2e3542;
+  --sap-border-strong:#4a5568;
+}
+
+/* ─── Page layout ──────────────────────────────────────────── */
 
 .approvals-page {
   color: var(--text-primary);
@@ -11,7 +34,7 @@
   max-width: 100%;
 }
 
-/* ─── Header ─────────────────────────────────────────────── */
+/* ─── Header (original) ───────────────────────────────────── */
 
 .approvals-page__header {
   display: flex;
@@ -24,7 +47,7 @@
 .approvals-page__header-left h1 { font-size: 24px; font-weight: 700; margin: 0 0 4px; }
 .approvals-page__header-left p { font-size: 14px; color: var(--text-secondary); margin: 0; }
 
-/* ─── Summary Cards ──────────────────────────────────────── */
+/* ─── Summary Cards (original) ───────────────────────────── */
 
 .approvals-summary {
   display: grid;
@@ -72,7 +95,7 @@
 .approvals-summary-card__value { font-size: 26px; font-weight: 700; line-height: 1.1; }
 .approvals-summary-card__label { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.4px; }
 
-/* ─── Toolbar ────────────────────────────────────────────── */
+/* ─── Toolbar (original) ─────────────────────────────────── */
 
 .approvals-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 
@@ -94,55 +117,106 @@
 .approvals-toolbar__search input::placeholder { color: var(--text-placeholder); }
 .approvals-toolbar__search input:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(10,110,209,0.1); }
 
-/* ─── Table ──────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════
+   SAP FIORI TABLE SECTION
+   ═══════════════════════════════════════════════════════════ */
+
+/* ─── Table card ────────────────────────────────────────────── */
 
 .approvals-table-card {
-  background: var(--surface-card); border: 1px solid var(--border);
-  border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); overflow: hidden;
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
 }
 
 .approvals-table-wrap { overflow-x: auto; }
 
-.approvals-table { width: 100%; border-collapse: collapse; min-width: 750px; }
+/* ─── SAP Fiori Table ──────────────────────────────────────── */
+
+.approvals-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 750px;
+  font-size: 13px;
+}
+
+/* Sticky column header — SAP style */
+.approvals-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
 
 .approvals-table th {
-  text-align: left; font-size: 11px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.5px;
-  color: var(--text-secondary); padding: 12px 10px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface-elevated); white-space: nowrap;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-secondary);
+  padding: 10px 12px;
+  border-bottom: 2px solid var(--border);
+  border-right: 1px solid var(--border);
+  background: var(--surface-elevated);
+  white-space: nowrap;
 }
 
+.approvals-table th:last-child { border-right: none; }
+
+/* Body rows */
 .approvals-table td {
-  padding: 12px 10px; font-size: 13px; color: var(--text-primary);
-  border-bottom: 1px solid var(--border); vertical-align: middle;
+  padding: 9px 12px;
+  font-size: 13px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  vertical-align: middle;
+  line-height: 1.4;
 }
 
-.approvals-table tr:last-child td { border-bottom: none; }
-.approvals-table tbody tr { transition: background 0.15s; }
-.approvals-table tbody tr:hover { background: var(--surface-hover); }
+.approvals-table td:last-child { border-right: none; }
 
-/* Request cell */
-.approvals-table__request { display: flex; align-items: center; gap: 12px; }
+.approvals-table tbody tr {
+  transition: background 0.1s;
+  background: var(--surface-card);
+}
+
+[data-theme="dark"] .approvals-table tbody tr:nth-child(even) {
+  background: var(--sap-row-stripe);
+}
+
+.approvals-table tbody tr:hover {
+  background: var(--surface-hover) !important;
+}
+
+/* SAP left-edge status indicator */
+.approvals-table tbody tr.approvals-row--pending  { border-left: 3px solid var(--sap-critical); }
+.approvals-table tbody tr.approvals-row--approved { border-left: 3px solid var(--sap-positive); }
+.approvals-table tbody tr.approvals-row--rejected { border-left: 3px solid var(--sap-negative); }
+.approvals-table tbody tr.approvals-row--returned { border-left: 3px solid #8b5cf6; }
+
+/* ─── Request Cell ─────────────────────────────────────────── */
+
+.approvals-table__request { display: flex; align-items: center; gap: 10px; }
 
 .approvals-table__avatar {
-  width: 38px; height: 38px; border-radius: 50%;
+  width: 36px; height: 36px; border-radius: 4px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 13px; font-weight: 700; flex-shrink: 0;
-  border: 1px solid transparent;
-  transition: background 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+  font-size: 12px; font-weight: 700; flex-shrink: 0;
 }
 
-/* Light mode — softer backgrounds with dark text and visible border */
-.approvals-table__avatar--1 { background: linear-gradient(135deg,var(--primary-50),var(--primary-100)); color: var(--primary-700); border-color: var(--primary-200); }
-.approvals-table__avatar--2 { background: linear-gradient(135deg,#f3e8ff,#e9d5ff); color: #6b21a8; border-color: #d8b4fe; }
-.approvals-table__avatar--3 { background: linear-gradient(135deg,#ecfeff,#cffafe); color: #155e75; border-color: #5eead4; }
-.approvals-table__avatar--4 { background: linear-gradient(135deg,#ecfdf5,#d1fae5); color: #065f46; border-color: #6ee7b7; }
-.approvals-table__avatar--5 { background: linear-gradient(135deg,#fef2f2,#fee2e2); color: #991b1b; border-color: #fca5a5; }
-.approvals-table__avatar--6 { background: linear-gradient(135deg,#fffbeb,#fef3c7); color: #92400e; border-color: #fcd34d; }
+/* Light mode */
+.approvals-table__avatar--1 { background: linear-gradient(135deg,var(--primary-50),var(--primary-100)); color: var(--primary-700); }
+.approvals-table__avatar--2 { background: linear-gradient(135deg,#f3e8ff,#e9d5ff); color: #6b21a8; }
+.approvals-table__avatar--3 { background: linear-gradient(135deg,#ecfeff,#cffafe); color: #155e75; }
+.approvals-table__avatar--4 { background: linear-gradient(135deg,#ecfdf5,#d1fae5); color: #065f46; }
+.approvals-table__avatar--5 { background: linear-gradient(135deg,#fef2f2,#fee2e2); color: #991b1b; }
+.approvals-table__avatar--6 { background: linear-gradient(135deg,#fffbeb,#fef3c7); color: #92400e; }
 
-/* Dark mode — restore current vibrant gradients with white text, no visible border */
-[data-theme="dark"] .approvals-table__avatar { color: #fff; border-color: transparent; }
+/* Dark mode */
+[data-theme="dark"] .approvals-table__avatar { color: #fff; }
 [data-theme="dark"] .approvals-table__avatar--1 { background: linear-gradient(135deg,var(--primary-600),var(--primary-700)); }
 [data-theme="dark"] .approvals-table__avatar--2 { background: linear-gradient(135deg,#8b5cf6,#c084fc); }
 [data-theme="dark"] .approvals-table__avatar--3 { background: linear-gradient(135deg,#0891b2,#22d3ee); }
@@ -150,92 +224,191 @@
 [data-theme="dark"] .approvals-table__avatar--5 { background: linear-gradient(135deg,#dc2626,#f87171); }
 [data-theme="dark"] .approvals-table__avatar--6 { background: linear-gradient(135deg,#d97706,#fbbf24); }
 
-.approvals-table__request-info { display: flex; flex-direction: column; gap: 2px; }
-.approvals-table__ref { font-size: 13px; font-weight: 700; color: var(--primary-500); }
-.approvals-table__title { font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+.approvals-table__request-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.approvals-table__ref { font-size: 12px; font-weight: 700; color: var(--primary-500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+.approvals-table__title { font-size: 12px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
 .approvals-table__requester { font-size: 11px; color: var(--text-secondary); }
 .approvals-table__amount { font-weight: 700; font-family: var(--font-mono); white-space: nowrap; }
 .approvals-table__date { white-space: nowrap; color: var(--text-secondary); font-size: 12px; }
 
-/* Module badge */
+/* ─── SAP Module Badge ─────────────────────────────────────── */
+
 .approvals-module-badge {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 4px 10px; border-radius: 12px;
-  font-size: 11px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.3px; white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  border: 1px solid currentColor;
 }
 
-.approvals-module-badge--rfq { background: rgba(10,110,209,0.1); color: var(--primary-500); }
-.approvals-module-badge--purchase-order { background: rgba(139,92,246,0.1); color: #8b5cf6; }
-.approvals-module-badge--quotation { background: rgba(8,145,178,0.1); color: #0891b2; }
+.approvals-module-badge--rfq            { background: rgba(10,110,209,0.07);  color: #0057c2; border-color: rgba(10,110,209,0.3); }
+.approvals-module-badge--purchase-order { background: rgba(107,33,168,0.07);  color: #6b21a8; border-color: rgba(107,33,168,0.3); }
+.approvals-module-badge--quotation      { background: rgba(8,145,178,0.07);   color: #0e7c99; border-color: rgba(8,145,178,0.3); }
+.approvals-module-badge--contract       { background: rgba(16,126,62,0.07);   color: #107e3e; border-color: rgba(16,126,62,0.3); }
 
-[data-theme="dark"] .approvals-module-badge--rfq { background: rgba(10,110,209,0.18); }
-[data-theme="dark"] .approvals-module-badge--purchase-order { background: rgba(139,92,246,0.15); }
-[data-theme="dark"] .approvals-module-badge--quotation { background: rgba(8,145,178,0.15); }
+[data-theme="dark"] .approvals-module-badge--rfq            { background: rgba(10,110,209,0.15);  color: #7ab8f5; border-color: rgba(10,110,209,0.3); }
+[data-theme="dark"] .approvals-module-badge--purchase-order { background: rgba(139,92,246,0.15);  color: #c084fc; border-color: rgba(139,92,246,0.3); }
+[data-theme="dark"] .approvals-module-badge--quotation      { background: rgba(8,145,178,0.15);   color: #22d3ee; border-color: rgba(8,145,178,0.3); }
+[data-theme="dark"] .approvals-module-badge--contract       { background: rgba(16,126,62,0.15);   color: #34d399; border-color: rgba(16,126,62,0.3); }
 
-/* Priority */
+/* ─── SAP Priority Indicator ────────────────────────────────── */
+
 .approvals-priority {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 3px 10px; border-radius: 12px;
-  font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
 }
 
-.approvals-priority--high   { background: rgba(187,0,0,0.08);  color: var(--danger-500); }
-.approvals-priority--medium { background: rgba(233,115,12,0.1); color: var(--warning-500); }
-.approvals-priority--low    { background: rgba(100,116,139,0.1); color: #64748b; }
+.approvals-priority::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
 
-[data-theme="dark"] .approvals-priority--high   { background: rgba(187,0,0,0.15); }
-[data-theme="dark"] .approvals-priority--medium { background: rgba(233,115,12,0.15); }
-[data-theme="dark"] .approvals-priority--low    { background: rgba(100,116,139,0.12); color: #94a3b8; }
+.approvals-priority--high::before   { background: var(--sap-negative); }
+.approvals-priority--medium::before { background: var(--sap-critical); }
+.approvals-priority--low::before    { background: var(--sap-neutral); }
 
-/* Approval Level */
-.approvals-level { display: flex; align-items: center; gap: 8px; }
+.approvals-priority--high   { color: var(--danger-500); }
+.approvals-priority--medium { color: var(--warning-500); }
+.approvals-priority--low    { color: #64748b; }
 
-.approvals-level__bar { display: flex; gap: 4px; }
+[data-theme="dark"] .approvals-priority--low { color: #94a3b8; }
 
-.approvals-level__dot {
-  width: 10px; height: 10px; border-radius: 50%;
-  background: var(--surface-elevated); border: 2px solid var(--border);
+/* ─── SAP Process Step — Approval Level ─────────────────────── */
+
+.approvals-level {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.approvals-level__steps {
+  display: flex;
+  align-items: center;
+}
+
+.approvals-level__step {
+  display: flex;
+  align-items: center;
+}
+
+.approvals-level__step-circle {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  background: var(--surface-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: 800;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
   transition: all 0.2s;
 }
 
-.approvals-level__dot--filled { background: var(--success-500); border-color: var(--success-500); }
-.approvals-level__dot--current { box-shadow: 0 0 0 3px rgba(16,126,62,0.2); }
-.approvals-level__text { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
-
-/* Status badge */
-.approvals-badge {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 4px 12px; border-radius: 12px;
-  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap;
+.approvals-level__step-circle--done {
+  background: var(--success-500);
+  border-color: var(--success-500);
+  color: #fff;
 }
 
-.approvals-badge--PENDING  { background: rgba(233,115,12,0.1); color: var(--warning-500); }
-.approvals-badge--APPROVED { background: rgba(16,126,62,0.1);  color: var(--success-500); }
-.approvals-badge--REJECTED { background: rgba(187,0,0,0.08);   color: var(--danger-500); }
-.approvals-badge--RETURNED { background: rgba(139,92,246,0.1); color: #8b5cf6; }
+.approvals-level__step-circle--current {
+  background: var(--primary-500);
+  border-color: var(--primary-500);
+  color: #fff;
+  box-shadow: 0 0 0 3px rgba(10,110,209,0.2);
+}
 
-[data-theme="dark"] .approvals-badge--PENDING  { background: rgba(233,115,12,0.15); }
-[data-theme="dark"] .approvals-badge--APPROVED { background: rgba(16,126,62,0.18); }
+.approvals-level__step-connector {
+  width: 14px;
+  height: 2px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.approvals-level__step-connector--done {
+  background: var(--success-500);
+}
+
+.approvals-level__text {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* ─── SAP Object Status Badge ───────────────────────────────── */
+
+.approvals-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  border-left: 3px solid transparent;
+}
+
+.approvals-badge--PENDING  { background: rgba(233,115,12,0.08);  color: var(--warning-500); border-left-color: var(--warning-500); }
+.approvals-badge--APPROVED { background: rgba(16,126,62,0.08);   color: var(--success-500); border-left-color: var(--success-500); }
+.approvals-badge--REJECTED { background: rgba(187,0,0,0.06);     color: var(--danger-500);  border-left-color: var(--danger-500); }
+.approvals-badge--RETURNED { background: rgba(139,92,246,0.08);  color: #8b5cf6;            border-left-color: #8b5cf6; }
+
+[data-theme="dark"] .approvals-badge--PENDING  { background: rgba(233,115,12,0.14); }
+[data-theme="dark"] .approvals-badge--APPROVED { background: rgba(16,126,62,0.14); }
 [data-theme="dark"] .approvals-badge--REJECTED { background: rgba(187,0,0,0.12); }
-[data-theme="dark"] .approvals-badge--RETURNED { background: rgba(139,92,246,0.15); }
+[data-theme="dark"] .approvals-badge--RETURNED { background: rgba(139,92,246,0.14); }
 
-/* Actions */
-.approvals-table__actions { display: flex; gap: 4px; }
+/* ─── SAP Action Buttons ────────────────────────────────────── */
+
+.approvals-table__actions { display: flex; gap: 4px; align-items: center; }
 
 .approvals-table__action-btn {
-  width: 32px; height: 32px; border-radius: var(--radius-sm);
-  border: none; background: transparent; color: var(--text-secondary);
-  cursor: pointer; display: flex; align-items: center; justify-content: center;
-  transition: background 0.15s, color 0.15s;
+  width: 30px;
+  height: 28px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
 
-.approvals-table__action-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
-.approvals-table__action-btn--approve:hover { background: rgba(16,126,62,0.1); color: var(--success-500); }
-.approvals-table__action-btn--reject:hover  { background: rgba(187,0,0,0.08);  color: var(--danger-500); }
-.approvals-table__action-btn--return:hover  { background: rgba(139,92,246,0.1); color: #8b5cf6; }
+.approvals-table__action-btn:hover           { background: var(--surface-hover); border-color: var(--border); color: var(--text-primary); }
+.approvals-table__action-btn--approve        { color: var(--success-500); border-color: rgba(16,126,62,0.25); background: rgba(16,126,62,0.06); }
+.approvals-table__action-btn--approve:hover  { background: rgba(16,126,62,0.14); border-color: var(--success-500); }
+.approvals-table__action-btn--reject         { color: var(--danger-500);  border-color: rgba(187,0,0,0.2);   background: rgba(187,0,0,0.05); }
+.approvals-table__action-btn--reject:hover   { background: rgba(187,0,0,0.12);  border-color: var(--danger-500); }
+.approvals-table__action-btn--return         { color: #8b5cf6;            border-color: rgba(139,92,246,0.2); background: rgba(139,92,246,0.05); }
+.approvals-table__action-btn--return:hover   { background: rgba(139,92,246,0.12); border-color: #8b5cf6; }
 
-/* ─── Pagination ─────────────────────────────────────────── */
+/* ─── Pagination (original) ──────────────────────────────── */
 
 .approvals-pagination {
   display: flex; align-items: center; justify-content: space-between;
@@ -257,14 +430,14 @@
 .approvals-pagination__btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .approvals-pagination__btn--active { background: var(--primary-500); color: #fff; border-color: var(--primary-500); }
 
-/* ─── Empty ──────────────────────────────────────────────── */
+/* ─── Empty (original) ───────────────────────────────────── */
 
 .approvals-empty { text-align: center; padding: 64px 24px; }
 .approvals-empty__icon { color: var(--text-placeholder); margin-bottom: 16px; }
 .approvals-empty__title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
 .approvals-empty__desc { font-size: 14px; color: var(--text-secondary); }
 
-/* ─── Modals ─────────────────────────────────────────────── */
+/* ─── Modals (SAP Dialog style) ────────────────────────────── */
 
 .approvals-modal-backdrop {
   position: fixed; inset: 0; background: var(--overlay);
@@ -393,6 +566,29 @@
 
 .approvals-modal__btn--return:hover { background: #7c3aed; transform: translateY(-1px); }
 
+.approvals-modal__btn--view-contract {
+  background: var(--surface-card);
+  color: var(--primary-500);
+  border-color: var(--primary-200);
+  box-shadow: none;
+}
+
+.approvals-modal__btn--view-contract:hover {
+  background: var(--primary-50);
+  border-color: var(--primary-500);
+  transform: translateY(-1px);
+}
+
+[data-theme="dark"] .approvals-modal__btn--view-contract {
+  background: var(--surface-elevated);
+  border-color: rgba(10,110,209,0.3);
+}
+
+[data-theme="dark"] .approvals-modal__btn--view-contract:hover {
+  background: rgba(10,110,209,0.12);
+  border-color: var(--primary-500);
+}
+
 .approvals-modal__btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
 .approvals-modal__btn:disabled:hover { transform: none; }
 
@@ -433,7 +629,6 @@
   .approvals-summary-card__value { font-size: 22px; }
   .approvals-toolbar { flex-direction: column; align-items: stretch; }
   .approvals-toolbar__search { min-width: 100%; }
-
   .approvals-pagination { flex-direction: column; gap: 12px; text-align: center; }
   .approvals-modal { max-width: 100%; margin: 10px; max-height: 85vh; }
   .approvals-detail-grid { grid-template-columns: 1fr; }

@@ -121,6 +121,7 @@ export interface VendorQuotationRow {
   leadTimeDays: number | null;
   paymentTerms: string | null;
   paymentPlanSnapshot?: Array<{ title: string; percentage: number }> | null;
+  customFieldValues?: Record<string, string | number> | null;
   score: number | null;
   status: string;
   submittedAt: string;
@@ -451,7 +452,10 @@ export interface VendorProfileData {
 }
 
 async function apiGetProfile(): Promise<VendorProfileData> {
-  return vendorFetch<VendorProfileData>('/profile');
+  // cacheTtlMs=0 ensures every vendor profile fetch goes directly to the backend.
+  // This prevents stale vendor data from showing in the document upload form
+  // when switching between vendor accounts in the same browser.
+  return vendorFetch<VendorProfileData>('/profile', { cacheTtlMs: 0 });
 }
 
 export interface UpdateBankingPayload {

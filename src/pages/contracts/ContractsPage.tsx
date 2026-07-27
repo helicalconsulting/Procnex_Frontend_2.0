@@ -3,22 +3,25 @@ import { useNavigate } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { contractService, type Contract } from '../../services/contractService';
+import { sseClient } from '../../services/sseClient';
 import { companySettingsService } from '../../services/companySettingsService';
 import {
   FileText, Search, Plus, Eye, Edit3, X, ChevronLeft, ChevronRight,
-  LayoutList, LayoutGrid, Calendar, IndianRupee, AlertTriangle,
+  LayoutList, LayoutGrid, Calendar, DollarSign, AlertTriangle,
   Clock, CheckCircle2, XCircle, FileSignature, Trash2, Download,
-  Ban, Printer,
+  Ban, Printer, Bell, ArrowRight,
 } from 'lucide-react';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import '../../components/shared/ColumnCustomizer.css';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
+import { TableSkeleton } from '../../components/shared/Skeleton';
+import { downloadContractAsPdf } from '../../utils/pdfDownload';
 import './ContractsPage.css';
 
 // ─── Types ──────────────────────────────────────────────────
 
-type ContractStatus = 'DRAFT' | 'PENDING_VENDOR_SIGNATURE' | 'AWAITING_CUSTOMER_SIGNATURE' | 'AWAITING_VENDOR_SIGNATURE' | 'VENDOR_SIGNED' | 'COMPLETED' | 'ACTIVE' | 'EXPIRING_SOON' | 'EXPIRED' | 'CANCELLED' | 'TERMINATED';
+type ContractStatus = 'DRAFT' | 'PENDING_VENDOR_SIGNATURE' | 'AWAITING_CUSTOMER_SIGNATURE' | 'AWAITING_VENDOR_SIGNATURE' | 'VENDOR_SIGNED' | 'ACCEPTED' | 'COMPLETED' | 'ACTIVE' | 'EXPIRING_SOON' | 'EXPIRED' | 'CANCELLED' | 'TERMINATED';
 
 interface ContractRow {
   id: string;
@@ -41,12 +44,13 @@ const STATUS_LABELS: Record<string, string> = {
   AWAITING_CUSTOMER_SIGNATURE: 'Awaiting Your Signature',
   AWAITING_VENDOR_SIGNATURE: 'Pending Vendor Signature',
   VENDOR_SIGNED: 'Vendor Signed',
+  ACCEPTED: 'Accepted',
   COMPLETED: 'Completed',
   ACTIVE: 'Active',
   EXPIRING_SOON: 'Expiring Soon',
   EXPIRED: 'Expired',
   CANCELLED: 'Cancelled',
-  TERMINATED: 'Cancelled',
+  TERMINATED: 'Terminated',
 };
 
 function getStatusIcon(status: string) {
@@ -56,6 +60,7 @@ function getStatusIcon(status: string) {
     case 'AWAITING_CUSTOMER_SIGNATURE':
     case 'AWAITING_VENDOR_SIGNATURE': return <Clock size={12} />;
     case 'VENDOR_SIGNED':
+    case 'ACCEPTED':
     case 'COMPLETED':
     case 'ACTIVE': return <CheckCircle2 size={12} />;
     case 'EXPIRING_SOON': return <AlertTriangle size={12} />;
@@ -77,13 +82,8 @@ export default function ContractsPage() {
   const navigate = useNavigate();
   const { formatAmount, companyDefaultCurrency: displayCurrency } = useCurrency();
 
-  // ─── Dynamic contract types (MUST be declared before useMemo that references it) ──
-  const [contractTypeLabels, setContractTypeLabels] = useState<Record<string, string>>({
-    PURCHASE_CONTRACT: 'Purchase',
-    SERVICE_CONTRACT: 'Service',
-    AMC: 'AMC',
-    BINDING_CONTRACT: 'Binding',
-  });
+  // ─── Contract types from Company Settings ──
+  const [contractTypeLabels, setContractTypeLabels] = useState<Record<string, string>>({});
 
   const { data: rawResult, loading, error, reload } = useServiceData(
     () => contractService.listContracts().then(r => ({
@@ -124,15 +124,78 @@ export default function ContractsPage() {
   useBodyScrollLock(!!deleteTarget || !!terminateTarget);
   const perPage = 10;
 
+  // ── Recently signed contract banner state ──────────────────
+  const [recentlySigned, setRecentlySigned] = useState<Array<{
+    contractId: string;
+    contractNumber: string;
+    vendorName: string;
+    signedBy: string;
+    signedAt: string;
+    contractValue: number;
+    currency: string;
+    rfqNumber: string | null;
+    rfqTitle: string | null;
+  }>>([]);
+
+  // Subscribe to SSE for real-time contract signing alerts
+  useEffect(() => {
+    const unsub = sseClient.on('contract_signed', (data: unknown) => {
+      const event = data as {
+        contractId: string;
+        contractNumber: string;
+        vendorName: string;
+        signedBy: string;
+        signedAt: string;
+        contractValue: number;
+        currency: string;
+        rfqNumber: string | null;
+        rfqTitle: string | null;
+      };
+
+      setRecentlySigned(prev => {
+        // Avoid duplicates if multiple SSE events arrive
+        if (prev.some(s => s.contractId === event.contractId)) return prev;
+        // Keep last 5
+        return [event, ...prev].slice(0, 5);
+      });
+
+      // Auto-refresh the contract list to reflect new status
+      reload();
+
+      // Auto-dismiss after 60 seconds
+      setTimeout(() => {
+        setRecentlySigned(prev => prev.filter(s => s.contractId !== event.contractId));
+      }, 60_000);
+    });
+
+    // Subscribe to PO creation events — refresh list so balance/status updates show
+    const unsubPO = sseClient.on('po_created', () => {
+      reload();
+    });
+
+    // Connect SSE client if not already connected
+    sseClient.connect();
+
+    return () => {
+      unsub();
+      unsubPO();
+    };
+  }, [reload]);
+
+  // Dismiss all banners
+  const dismissAllSigned = useCallback(() => {
+    setRecentlySigned([]);
+  }, []);
+
   useEffect(() => {
     (async () => {
       try {
         const templates = await companySettingsService.listContractTemplates();
         if (templates.length > 0) {
           const labels = Object.fromEntries(templates.map(t => [t.type, t.name]));
-          setContractTypeLabels(prev => ({ ...prev, ...labels }));
+          setContractTypeLabels(labels);
         }
-      } catch { /* keep defaults */ }
+      } catch { /* no company settings configured */ }
     })();
   }, []);
 
@@ -147,7 +210,6 @@ export default function ContractsPage() {
         <div className="ctr-table__contract-info">
           <span className="ctr-table__contract-number">{r.contractNumber}</span>
           <span className="ctr-table__contract-title">{r.title}</span>
-          <span className="ctr-table__meta">{r.contractType} · {r.sourceRfq}</span>
         </div>
       ),
     },
@@ -242,7 +304,7 @@ export default function ContractsPage() {
 
   const summary = useMemo(() => ({
     total: contracts.length,
-    vendorSigned: contracts.filter(r => ['VENDOR_SIGNED', 'COMPLETED', 'ACTIVE'].includes(r.status)).length,
+    vendorSigned: contracts.filter(r => ['VENDOR_SIGNED', 'ACCEPTED', 'COMPLETED', 'ACTIVE'].includes(r.status)).length,
     pendingSignature: contracts.filter(r => ['PENDING_VENDOR_SIGNATURE', 'AWAITING_CUSTOMER_SIGNATURE', 'AWAITING_VENDOR_SIGNATURE'].includes(r.status)).length,
     totalValue: contracts.reduce((s, r) => s + r.contractValue, 0),
   }), [contracts]);
@@ -250,6 +312,26 @@ export default function ContractsPage() {
   const formatDate = useCallback((d: string) =>
     new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
   []);
+
+  // Navigate to RFQ's purchase-requisition page with contractId pre-fill
+  const handleNavigateToPO = useCallback((contractId: string) => {
+    const contract = contracts.find(c => c.id === contractId);
+    if (contract?.sourceRfq) {
+      // Find the actual contract to get the rfqId
+      const fullContract = rawResult.rawContracts.find(c => c.id === contractId);
+      if (fullContract?.rfqId) {
+        navigate(`/procurement/purchase-requisition/${fullContract.rfqId}?contractId=${contractId}`);
+        return;
+      }
+    }
+    // Fallback: just go to contract detail
+    navigate(`/contracts/${contractId}`);
+  }, [navigate, contracts, rawResult.rawContracts]);
+
+  // Dismiss a single banner
+  const dismissSignedBanner = useCallback((contractId: string) => {
+    setRecentlySigned(prev => prev.filter(s => s.contractId !== contractId));
+  }, []);
 
   // ─── Action Handlers ────────────────────────────────────────
 
@@ -279,10 +361,45 @@ export default function ContractsPage() {
     }
   }, [reload]);
 
-  const handleDownload = useCallback((r: ContractRow) => {
-    // Navigate to detail page which has a Download button
-    navigate(`/contracts/${r.id}`);
-  }, [navigate]);
+  const handleDownload = useCallback(async (r: ContractRow) => {
+    try {
+      setPageMsg(null);
+      let contentHtml: string | null = null;
+      try {
+        const res = await contractService.getContract(r.id);
+        if (res?.contract?.contentSnapshot) {
+          contentHtml = res.contract.contentSnapshot;
+        }
+      } catch {
+        /* fallback to formatted row HTML */
+      }
+
+      if (!contentHtml) {
+        contentHtml = `
+          <div style="font-family: inherit; padding: 20px;">
+            <h1 style="color: #0a6ed1; border-bottom: 2px solid #0a6ed1; padding-bottom: 8px;">${r.title || r.contractNumber}</h1>
+            <table style="width: 100%; border-collapse: collapse; margin-top: 16px;">
+              <tr><td style="font-weight: 700; width: 180px; padding: 8px; border: 1px solid #ddd;">Contract Number</td><td style="padding: 8px; border: 1px solid #ddd;">${r.contractNumber}</td></tr>
+              <tr><td style="font-weight: 700; padding: 8px; border: 1px solid #ddd;">Supplier</td><td style="padding: 8px; border: 1px solid #ddd;">${r.vendorName}</td></tr>
+              <tr><td style="font-weight: 700; padding: 8px; border: 1px solid #ddd;">Contract Value</td><td style="padding: 8px; border: 1px solid #ddd;">${r.currency} ${r.contractValue.toLocaleString('en-IN')}</td></tr>
+              <tr><td style="font-weight: 700; padding: 8px; border: 1px solid #ddd;">Type</td><td style="padding: 8px; border: 1px solid #ddd;">${r.contractType}</td></tr>
+              <tr><td style="font-weight: 700; padding: 8px; border: 1px solid #ddd;">Status</td><td style="padding: 8px; border: 1px solid #ddd;">${r.status}</td></tr>
+              <tr><td style="font-weight: 700; padding: 8px; border: 1px solid #ddd;">Owner</td><td style="padding: 8px; border: 1px solid #ddd;">${r.contractOwner}</td></tr>
+            </table>
+          </div>
+        `;
+      }
+
+      await downloadContractAsPdf(
+        contentHtml,
+        r.contractNumber || `Contract-${r.id}`,
+        r.title || r.contractNumber
+      );
+    } catch (err) {
+      console.error('Failed to download contract PDF:', err);
+      setPageMsg('Failed to download contract PDF. Please try again.');
+    }
+  }, []);
 
   const handleTerminateConfirm = useCallback(async () => {
     if (!terminateTarget) return;
@@ -328,7 +445,88 @@ export default function ContractsPage() {
         </MessageStrip>
       )}
       {error && <MessageStrip type="error">{error}</MessageStrip>}
-      {loading && <div className="ctr-page__loading">Loading contracts…</div>}
+
+      {/* ── Recently Signed Contracts Banner ── */}
+      {recentlySigned.length > 0 && (
+        <div className="ctr-signed-banner-wrap">
+          <div className="ctr-signed-banner-header">
+            <div className="ctr-signed-banner-header__left">
+              <Bell size={16} className="ctr-signed-banner-header__icon" />
+              <span>Recently Signed Contracts</span>
+            </div>
+            <button
+              className="ctr-signed-banner-header__dismiss-all"
+              onClick={dismissAllSigned}
+            >
+              Dismiss all
+            </button>
+          </div>
+          <div className="ctr-signed-banner-list">
+            {recentlySigned.map(event => {
+              const timeAgo = getTimeAgo(event.signedAt);
+              return (
+                <div key={event.contractId} className="ctr-signed-banner">
+                  <div className="ctr-signed-banner__ribbon">
+                    <span>JUST SIGNED</span>
+                  </div>
+                  <div className="ctr-signed-banner__content">
+                    <div className="ctr-signed-banner__info">
+                      <div className="ctr-signed-banner__vendor">
+                        <CheckCircle2 size={18} />
+                        <span>{event.vendorName}</span>
+                      </div>
+                      <div className="ctr-signed-banner__meta">
+                        <span className="ctr-signed-banner__contract">
+                          {event.contractNumber}
+                        </span>
+                        <span className="ctr-signed-banner__sep">·</span>
+                        <span className="ctr-signed-banner__value">
+                          {formatCurrency(event.contractValue, event.currency)}
+                        </span>
+                        {event.rfqNumber && (
+                          <>
+                            <span className="ctr-signed-banner__sep">·</span>
+                            <span className="ctr-signed-banner__rfq">{event.rfqNumber}</span>
+                          </>
+                        )}
+                      </div>
+                      <div className="ctr-signed-banner__time">
+                        <Clock size={12} />
+                        <span>{timeAgo}</span>
+                        <span className="ctr-signed-banner__sep">·</span>
+                        <span>Signed by {event.signedBy}</span>
+                      </div>
+                    </div>
+                    <div className="ctr-signed-banner__actions">
+                      <button
+                        className="ctr-signed-banner__btn ctr-signed-banner__btn--primary"
+                        onClick={() => handleView(event.contractId)}
+                      >
+                        <Eye size={14} />
+                        <span>View</span>
+                      </button>
+                      <button
+                        className="ctr-signed-banner__btn ctr-signed-banner__btn--secondary"
+                        onClick={() => handleNavigateToPO(event.contractId)}
+                      >
+                        <ArrowRight size={14} />
+                        <span>Create PO</span>
+                      </button>
+                      <button
+                        className="ctr-signed-banner__dismiss"
+                        onClick={() => dismissSignedBanner(event.contractId)}
+                        title="Dismiss"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div className="ctr-page__header">
@@ -344,7 +542,7 @@ export default function ContractsPage() {
           { icon: <FileText size={22} />, val: summary.total, label: 'Total Contracts', cls: 'total' },
           { icon: <CheckCircle2 size={22} />, val: summary.vendorSigned, label: 'Vendor Signed', cls: 'active' },
           { icon: <Clock size={22} />, val: summary.pendingSignature, label: 'Pending Signature', cls: 'pending' },
-          { icon: <IndianRupee size={22} />, val: formatCurrency(summary.totalValue, displayCurrency), label: 'Total Value', cls: 'value' },
+          { icon: <DollarSign size={22} />, val: formatCurrency(summary.totalValue, displayCurrency), label: 'Total Value', cls: 'value' },
         ].map(c => (
           <div key={c.cls} className="ctr-summary-card">
             <div className={`ctr-summary-card__icon ctr-summary-card__icon--${c.cls}`}>{c.icon}</div>
@@ -380,17 +578,17 @@ export default function ContractsPage() {
               <option key={t} value={t}>{contractTypeLabels[t] || t}</option>
             ))}
           </select>
-          <div className="ctr-toolbar__status-filters">
-            {(['ALL', 'DRAFT', 'PENDING_VENDOR_SIGNATURE', 'VENDOR_SIGNED', 'COMPLETED', 'CANCELLED'] as const).map(s => (
-              <button
-                key={s}
-                className={`ctr-toolbar__status-btn ${statusFilter === s ? 'ctr-toolbar__status-btn--active' : ''}`}
-                onClick={() => { setStatusFilter(s); setCurrentPage(1); }}
-              >
-                {s === 'ALL' ? 'All' : STATUS_LABELS[s] || s}
-              </button>
+          <select
+            className="ctr-toolbar__filter-select"
+            value={statusFilter}
+            onChange={e => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+            style={{ minWidth: '160px' }}
+          >
+            <option value="ALL">All Statuses</option>
+            {(['DRAFT', 'PENDING_VENDOR_SIGNATURE', 'VENDOR_SIGNED', 'ACCEPTED', 'COMPLETED', 'CANCELLED', 'TERMINATED'] as const).map(s => (
+              <option key={s} value={s}>{STATUS_LABELS[s] || s}</option>
             ))}
-          </div>
+          </select>
           <div className="ctr-toolbar__view-toggle">
             <button
               className={`ctr-toolbar__view-btn ${view === 'table' ? 'ctr-toolbar__view-btn--active' : ''}`}
@@ -405,7 +603,11 @@ export default function ContractsPage() {
       </div>
 
       {/* Content */}
-      {paginated.length > 0 ? (
+      {loading ? (
+        <div className="ctr-table-card">
+          <TableSkeleton rows={4} columns={6} />
+        </div>
+      ) : paginated.length > 0 ? (
         view === 'table' ? (
           <div className="ctr-table-card">
             <div className="ctr-table-wrap">
@@ -488,8 +690,8 @@ export default function ContractsPage() {
                             ><Download size={15} /></button>
                           )}
 
-                          {/* Create PO — Active or Expiring Soon */}
-                          {(r.status === 'ACTIVE' || r.status === 'EXPIRING_SOON') && (
+                          {/* Create PO — Accepted, Active, Vendor Signed, or Expiring Soon */}
+                          {['ACCEPTED', 'ACTIVE', 'VENDOR_SIGNED', 'EXPIRING_SOON'].includes(r.status) && (
                             <button
                               className="ctr-table__action-btn"
                               title="Create Purchase Order"
@@ -498,8 +700,8 @@ export default function ContractsPage() {
                             ><Plus size={15} /></button>
                           )}
 
-                          {/* Terminate — Active or Expiring Soon */}
-                          {(r.status === 'ACTIVE' || r.status === 'EXPIRING_SOON') && (
+                          {/* Terminate — Accepted, Active, or Expiring Soon */}
+                          {['ACCEPTED', 'ACTIVE', 'EXPIRING_SOON'].includes(r.status) && (
                             <button
                               className="ctr-table__action-btn ctr-table__action-btn--danger"
                               title="Terminate contract"
@@ -670,4 +872,16 @@ export default function ContractsPage() {
 
 function formatCurrency(value: number, currency: string): string {
   return new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value);
+}
+
+function getTimeAgo(dateStr: string): string {
+  const now = Date.now();
+  const date = new Date(dateStr).getTime();
+  const diffSec = Math.floor((now - date) / 1000);
+  if (diffSec < 60) return 'Just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  return `${Math.floor(diffHr / 24)}d ago`;
 }

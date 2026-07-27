@@ -18,7 +18,7 @@
   right: -32px;
   width: 320px;
   height: 320px;
-  background: radial-gradient(circle, rgba(5, 150, 105, 0.08) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(10, 110, 209, 0.08) 0%, transparent 70%);
   pointer-events: none;
   z-index: 0;
 }
@@ -42,26 +42,27 @@
 .vnd-header::after {
   content: '';
   position: absolute;
-  bottom: -12px;
+  bottom: -10px;
   left: 0;
-  width: 72px;
+  width: 64px;
   height: 3px;
-  border-radius: 3px;
-  background: linear-gradient(90deg, #059669, var(--primary-500));
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--primary-500, #0a6ed1), #4db1ff);
 }
 
 .vnd-header__text h1 {
-  font-size: 28px;
-  font-weight: 800;
-  margin: 0 0 6px;
-  letter-spacing: -0.02em;
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  letter-spacing: -0.01em;
   color: var(--text-primary);
 }
 
 .vnd-header__text p {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-secondary);
   margin: 0;
+  font-weight: 500;
 }
 
 .vnd-header__actions {
@@ -99,16 +100,16 @@
   font-weight: 700;
   cursor: pointer;
   color: #fff;
-  background: linear-gradient(135deg, #059669, var(--primary-500), #059669);
+  background: linear-gradient(135deg, #8b5cf6, #6366f1, var(--primary-500));
   background-size: 200% 200%;
   animation: vndShimmerGrad 3s ease infinite;
-  box-shadow: 0 2px 12px rgba(5, 150, 105, 0.3);
+  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3);
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .vnd-customize-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 20px rgba(5, 150, 105, 0.4);
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
 }
 
 .vnd-customize-btn__badge {
@@ -150,7 +151,7 @@
   height: 120px;
   top: -40px;
   left: 10%;
-  background: rgba(5, 150, 105, 0.2);
+  background: rgba(139, 92, 246, 0.2);
   animation: vndHeroGlow 6s ease-in-out infinite;
 }
 
@@ -183,7 +184,7 @@
 }
 
 .vnd-hero__stat strong {
-  color: #059669;
+  color: var(--primary-500, #0a6ed1);
   font-weight: 800;
   margin-right: 4px;
 }
@@ -559,14 +560,14 @@ body.vnd-is-dragging * { cursor: grabbing !important; }
   overflow: hidden;
 }
 
-.vnd-widget-wrapper:not(.vnd-widget-wrapper--full) .vnd-card {
+.vnd-widget-wrapper .vnd-card {
   border-top: none;
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 
 .vnd-widget-content { height: 100%; }
 
-.vnd-widget-wrapper:hover .vnd-widget-content.vnd-card {
+.vnd-widget-wrapper:hover .vnd-card {
   box-shadow: var(--shadow-md);
   border-color: var(--border-strong);
 }
@@ -1225,4 +1226,52 @@ body.vnd-is-dragging * { cursor: grabbing !important; }
   .vnd-hero__content { flex-direction: column; gap: 8px; }
   .vnd-hero__divider { display: none; }
   .vnd-gallery { width: 100vw; }
+}
+
+/* ─── SAP Fiori Style KPI Overview Modal ────────────────────── */
+
+.sap-kpi-modal-body {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sap-kpi-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sap-kpi-section__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.sap-kpi-section__title svg {
+  color: var(--primary-500);
+}
+
+.sap-kpi-card {
+  border-left: 3px solid var(--primary-500) !important;
+  background: var(--surface-card);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.sap-kpi-card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.sap-kpi-panel {
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
 }

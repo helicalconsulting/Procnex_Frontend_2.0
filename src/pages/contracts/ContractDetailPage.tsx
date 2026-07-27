@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
-import { contractService, type Contract, type ContractItem, type ContractClause, type ContractSLAEntry, type ContractMilestone } from '../../services/contractService';
+import { contractService, type Contract, type ContractItem, type ContractClause, type ContractSLAEntry, type ContractMilestone, type ContractBalance } from '../../services/contractService';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
 import {
@@ -10,9 +10,11 @@ import {
   FileSignature, Download, Printer, Plus, Eye, ChevronDown, ChevronRight,
   Check, X, Trash2, Calendar, IndianRupee, Building2, Users, Shield,
   PenLine, AlertCircle, Ban, FileSpreadsheet, Activity, Package,
-  ChevronLeft, ChevronUp,
+  ChevronLeft, ChevronUp, DollarSign, PieChart,
 } from 'lucide-react';
 import { downloadContractAsPdf } from '../../utils/pdfDownload';
+import { sseClient } from '../../services/sseClient';
+import { DetailSkeleton } from '../../components/shared/Skeleton';
 import './ContractDetailPage.css';
 
 // ─── Status helpers ──────────────────────────────────────────
@@ -23,12 +25,13 @@ const STATUS_LABELS: Record<string, string> = {
   AWAITING_VENDOR_SIGNATURE: 'Pending Vendor Signature',
   AWAITING_CUSTOMER_SIGNATURE: 'Awaiting Your Signature',
   VENDOR_SIGNED: 'Vendor Signed',
+  ACCEPTED: 'Accepted',
   COMPLETED: 'Completed',
   ACTIVE: 'Active',
   EXPIRING_SOON: 'Expiring Soon',
   EXPIRED: 'Expired',
   CANCELLED: 'Cancelled',
-  TERMINATED: 'Cancelled',
+  TERMINATED: 'Terminated',
 };
 
 const STATUS_ICONS: Record<string, React.ReactNode> = {
@@ -37,6 +40,7 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
   AWAITING_CUSTOMER_SIGNATURE: <Clock size={14} />,
   AWAITING_VENDOR_SIGNATURE: <Clock size={14} />,
   VENDOR_SIGNED: <CheckCircle2 size={14} />,
+  ACCEPTED: <CheckCircle2 size={14} />,
   COMPLETED: <CheckCircle2 size={14} />,
   ACTIVE: <CheckCircle2 size={14} />,
   EXPIRING_SOON: <AlertTriangle size={14} />,
@@ -51,6 +55,7 @@ const STATUS_CLASSES: Record<string, string> = {
   AWAITING_CUSTOMER_SIGNATURE: 'ctr-badge--AWAITING_CUSTOMER_SIGNATURE',
   AWAITING_VENDOR_SIGNATURE: 'ctr-badge--AWAITING_VENDOR_SIGNATURE',
   VENDOR_SIGNED: 'ctr-badge--ACTIVE',
+  ACCEPTED: 'ctr-badge--ACTIVE',
   COMPLETED: 'ctr-badge--ACTIVE',
   ACTIVE: 'ctr-badge--ACTIVE',
   EXPIRING_SOON: 'ctr-badge--EXPIRING_SOON',
@@ -248,6 +253,9 @@ export default function ContractDetailPage() {
   const [sendingToVendor, setSendingToVendor] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [clauseOpen, setClauseOpen] = useState<string | null>(null);
+  const [contractBalance, setContractBalance] = useState<ContractBalance | null>(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+  const poTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   useBodyScrollLock(showSignModal || showTerminateConfirm);
 
@@ -266,37 +274,7 @@ export default function ContractDetailPage() {
     }
   }, [searchParams, data]);
 
-  if (loading) return <div className="ctr-detail"><div className="ctr-detail__loading">Loading contract…</div></div>;
-  if (error) return (
-    <div className="ctr-detail">
-      <button className="ctr-detail__back" onClick={() => navigate('/contracts')}><ChevronLeft size={16} /> Back to Contracts</button>
-      <div className="ctr-detail__error">
-        <div className="ctr-detail__error-icon"><AlertCircle size={48} /></div>
-        <div className="ctr-detail__error-title">Failed to load contract</div>
-        <div className="ctr-detail__error-desc">{error}</div>
-        <button className="ctr-detail__action-btn" onClick={reload}>Retry</button>
-      </div>
-    </div>
-  );
-  if (!data) return null;
-
-  const { contract, activity } = data;
-
-  // ─── Computed values ─────────────────────────────────────
-
-  const formatDate = (d: string | null | undefined) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
-
-  const pageTitle = `${contract.contractNumber} — ${contract.title}`;
-
-  const canSign = contract.status === 'DRAFT' || contract.status === 'AWAITING_CUSTOMER_SIGNATURE';
-  const canSendToVendor = contract.status === 'DRAFT';
-  const canComplete = contract.status === 'VENDOR_SIGNED' || contract.status === 'ACTIVE';
-  const canCreatePO = contract.status === 'VENDOR_SIGNED' || contract.status === 'COMPLETED' || contract.status === 'ACTIVE';
-  const canTerminate = ['VENDOR_SIGNED', 'COMPLETED', 'ACTIVE', 'EXPIRING_SOON'].includes(contract.status);
-  const canEdit = contract.status === 'DRAFT';
-
-  // ─── Handlers ────────────────────────────────────────────
-
+  // ─── Handlers (moved BEFORE early returns to obey Rules of Hooks) ─
   const handleSign = useCallback(async (signerName: string, signerTitle: string, signatureDataUrl: string) => {
     if (!id) return;
     setSigning(true);
@@ -310,19 +288,31 @@ export default function ContractDetailPage() {
     }
   }, [id, reload]);
 
+  // Fetch contract balance when contract is accepted
+  const isAccepted = ['ACCEPTED', 'VENDOR_SIGNED', 'ACTIVE', 'COMPLETED'].includes(data?.contract?.status || '');
+  useEffect(() => {
+    if (!id || !isAccepted) return;
+    setBalanceLoading(true);
+    contractService.getContractBalance(id)
+      .then(setContractBalance)
+      .catch(() => {})
+      .finally(() => setBalanceLoading(false));
+  }, [id, isAccepted, reload]);
+
+  // Refresh balance after PO creation
+  const refreshBalance = useCallback(async () => {
+    if (!id) return;
+    try {
+      const balance = await contractService.getContractBalance(id);
+      setContractBalance(balance);
+    } catch {}
+  }, [id]);
+
   const handleCreatePO = useCallback(async () => {
     if (!id) return;
-    setCreatingPO(true);
-    try {
-      const result = await contractService.createPOFromContract(id);
-      setPageMsg(`Purchase Order ${result.poNumber} created from contract.`);
-      await reload();
-    } catch (err) {
-      setPageMsg(err instanceof Error ? err.message : 'Failed to create PO');
-    } finally {
-      setCreatingPO(false);
-    }
-  }, [id, reload]);
+    // Navigate to Purchase Requisition page with contract data pre-fill
+    navigate(`/procurement/purchase-requisition/${data?.contract?.rfqId || ''}?contractId=${id}`);
+  }, [id, navigate, data?.contract?.rfqId]);
 
   const handleSendToVendor = useCallback(async () => {
     if (!id) return;
@@ -357,7 +347,7 @@ export default function ContractDetailPage() {
     setTerminating(true);
     try {
       await contractService.terminateContract(id, terminateReason || undefined);
-      setPageMsg(`Contract ${contract.contractNumber} terminated.`);
+      setPageMsg(`Contract ${data?.contract?.contractNumber || ''} terminated.`);
       setShowTerminateConfirm(false);
       await reload();
     } catch (err) {
@@ -365,15 +355,95 @@ export default function ContractDetailPage() {
     } finally {
       setTerminating(false);
     }
-  }, [id, terminateReason, contract.contractNumber, reload]);
+  }, [id, terminateReason, data?.contract?.contractNumber, reload]);
+
+  // SSE real-time refresh — when a PO is created from this contract, update balance & data
+  useEffect(() => {
+    if (!id) return;
+    const unsubPO = sseClient.on('po_created', (payload: unknown) => {
+      const event = payload as { contractId?: string; poNumber?: string; totalAmount?: number };
+      if (event?.contractId !== id) return;
+      // Refresh balance immediately
+      contractService.getContractBalance(id).then(setContractBalance).catch(() => {});
+      // Full contract reload after a brief moment to let DB settle
+      if (poTimeoutRef.current) clearTimeout(poTimeoutRef.current);
+      poTimeoutRef.current = setTimeout(() => reload(), 500);
+    });
+    // SSE real-time refresh — when PO status changes, refresh balance & contract data
+    const unsubStatus = sseClient.on('po_status_changed', (payload: unknown) => {
+      const event = payload as { contractId?: string; poId?: string; poNumber?: string; status?: string };
+      // Only refresh if the PO belongs to this contract
+      if (!event?.contractId || event.contractId !== id) return;
+      contractService.getContractBalance(id).then(setContractBalance).catch(() => {});
+      if (poTimeoutRef.current) clearTimeout(poTimeoutRef.current);
+      poTimeoutRef.current = setTimeout(() => reload(), 300);
+    });
+    return () => {
+      unsubPO();
+      unsubStatus();
+      if (poTimeoutRef.current) clearTimeout(poTimeoutRef.current);
+    };
+  }, [id, reload]);
 
   const handleDownload = useCallback(() => {
+    if (!data?.contract) return;
     downloadContractAsPdf(
-      contract.contentSnapshot,
-      contract.contractNumber,
-      contract.title,
+      data.contract.contentSnapshot,
+      data.contract.contractNumber,
+      data.contract.title,
     );
-  }, [contract.contentSnapshot, contract.contractNumber, contract.title]);
+  }, [data?.contract?.contentSnapshot, data?.contract?.contractNumber, data?.contract?.title]);
+
+  if (loading) return <DetailSkeleton />;
+  if (error) return (
+    <div className="ctr-detail">
+      <button className="ctr-detail__back" onClick={() => navigate('/contracts')}><ChevronLeft size={16} /> Back to Contracts</button>
+      <div className="ctr-detail__error">
+        <div className="ctr-detail__error-icon"><AlertCircle size={48} /></div>
+        <div className="ctr-detail__error-title">Failed to load contract</div>
+        <div className="ctr-detail__error-desc">{error}</div>
+        <button className="ctr-detail__action-btn" onClick={reload}>Retry</button>
+      </div>
+    </div>
+  );
+  if (!data) return null;
+
+  const { contract, activity } = data;
+
+  // ─── Computed values ─────────────────────────────────────
+
+  const formatDate = (d: string | null | undefined) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+
+  const pageTitle = `${contract.contractNumber} — ${contract.title}`;
+
+  // Match DocumentSignature entries to buyer/vendor by signedAt timestamp
+  // (signedAt and signedByCustomerAt/signedByVendorAt are set simultaneously in the same DB transaction)
+  const buyerSignatureUrl = (() => {
+    if (!contract.signedByCustomerAt || !contract.documentSignatures?.length) return null;
+    const targetMs = new Date(contract.signedByCustomerAt).getTime();
+    const match = contract.documentSignatures.find(ds => {
+      const diff = Math.abs(new Date(ds.signedAt).getTime() - targetMs);
+      return diff < 2000;
+    });
+    return match?.signature?.dataUrl || null;
+  })();
+
+  const vendorSignatureUrl = (() => {
+    if (!contract.signedByVendorAt || !contract.documentSignatures?.length) return null;
+    const targetMs = new Date(contract.signedByVendorAt).getTime();
+    const match = contract.documentSignatures.find(ds => {
+      const diff = Math.abs(new Date(ds.signedAt).getTime() - targetMs);
+      return diff < 2000;
+    });
+    return match?.signature?.dataUrl || null;
+  })();
+
+  const canSign = contract.status === 'DRAFT' || contract.status === 'AWAITING_CUSTOMER_SIGNATURE';
+  const canSendToVendor = contract.status === 'DRAFT';
+  const canComplete = contract.status === 'VENDOR_SIGNED' || contract.status === 'ACCEPTED' || contract.status === 'ACTIVE';
+  const canCreatePO = ['ACCEPTED', 'VENDOR_SIGNED', 'COMPLETED', 'ACTIVE'].includes(contract.status);
+  const canTerminate = ['ACCEPTED', 'VENDOR_SIGNED', 'COMPLETED', 'ACTIVE', 'EXPIRING_SOON'].includes(contract.status);
+  const canEdit = contract.status === 'DRAFT';
 
   const handlePrint = () => {
     const win = window.open('', '_blank');
@@ -385,17 +455,8 @@ export default function ContractDetailPage() {
 
   // ─── Render ──────────────────────────────────────────────
 
-  const subTotal = (contract.items || []).reduce((s, i) => s + (i.totalValue || 0), 0);
-  const totalTax = (contract.items || []).reduce((s, i) => s + (i.tax || 0), 0);
-  const totalValue = contract.contractValue || subTotal + totalTax;
-
-  const vendorSignature = contract.signedByVendorAt
-    ? contract.documentSignatures?.[contract.documentSignatures.length - 1]?.signature?.dataUrl
-    : null;
-
   const tabs = [
     { id: 'overview', label: 'Overview', icon: <FileText size={13} /> },
-    { id: 'items', label: 'Items & Pricing', icon: <Package size={13} />, count: contract.items?.length },
     { id: 'terms', label: 'Terms & Clauses', icon: <Shield size={13} />, count: (contract.clauses?.length || 0) + (contract.slaEntries?.length || 0) > 0 ? (contract.clauses?.length || 0) + (contract.slaEntries?.length || 0) : undefined },
     { id: 'signatures', label: 'Signatures', icon: <FileSignature size={13} /> },
     { id: 'documents', label: 'Documents', icon: <FileSpreadsheet size={13} /> },
@@ -453,8 +514,85 @@ export default function ContractDetailPage() {
                 <PenLine size={14} /> Edit
               </button>
             )}
+            {/* Create PO — only show for accepted/vendor-signed/active contracts */}
+            {canCreatePO && (
+              <button className="ctr-detail__action-btn ctr-detail__action-btn--primary" onClick={handleCreatePO} disabled={creatingPO}>
+                <Plus size={14} /> {creatingPO ? 'Creating PO…' : 'Create Purchase Order'}
+              </button>
+            )}
           </div>
         </div>
+        {/* Contract Balance Summary Card — shown when accepted */}
+        {isAccepted && (
+          <div className="ctr-detail__balance-cards">
+            <div className="ctr-detail__balance-card">
+              <div className="ctr-detail__balance-card-icon ctr-detail__balance-card-icon--total">
+                <IndianRupee size={20} />
+              </div>
+              <div className="ctr-detail__balance-card-info">
+                <span className="ctr-detail__balance-card-value">
+                  {formatAmount(
+                    contractBalance?.contractValue ?? contract.contractValue,
+                    contract.currency || companyDefaultCurrency
+                  )}
+                </span>
+                <span className="ctr-detail__balance-card-label">Contract Value</span>
+              </div>
+            </div>
+            <div className="ctr-detail__balance-card">
+              <div className="ctr-detail__balance-card-icon ctr-detail__balance-card-icon--consumed">
+                <DollarSign size={20} />
+              </div>
+              <div className="ctr-detail__balance-card-info">
+                <span className="ctr-detail__balance-card-value">
+                  {formatAmount(
+                    contractBalance?.consumedValue ?? 0,
+                    contract.currency || companyDefaultCurrency
+                  )}
+                </span>
+                <span className="ctr-detail__balance-card-label">Consumed by POs</span>
+              </div>
+            </div>
+            <div className="ctr-detail__balance-card">
+              <div className={`ctr-detail__balance-card-icon ${
+                (contractBalance?.remainingValue ?? contract.contractValue) > 0 
+                  ? 'ctr-detail__balance-card-icon--remaining' 
+                  : 'ctr-detail__balance-card-icon--exhausted'
+              }`}>
+                <PieChart size={20} />
+              </div>
+              <div className="ctr-detail__balance-card-info">
+                <span className="ctr-detail__balance-card-value">
+                  {formatAmount(
+                    contractBalance?.remainingValue ?? contract.contractValue,
+                    contract.currency || companyDefaultCurrency
+                  )}
+                </span>
+                <span className="ctr-detail__balance-card-label">Remaining Value</span>
+                {contractBalance && contract.contractValue > 0 && (
+                  <span className="ctr-detail__balance-card-pct">
+                    {Math.round((contractBalance.remainingValue / contract.contractValue) * 100)}% remaining
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="ctr-detail__balance-card">
+              <div className="ctr-detail__balance-card-icon ctr-detail__balance-card-icon--total">
+                <Package size={20} />
+              </div>
+              <div className="ctr-detail__balance-card-info">
+                <span className="ctr-detail__balance-card-value">{contractBalance?.totalPOs ?? contract._count?.purchaseOrders ?? 0}</span>
+                <span className="ctr-detail__balance-card-label">Purchase Orders</span>
+                {contractBalance && contractBalance.totalPOs > 0 && (
+                  <span className="ctr-detail__balance-card-pct">
+                    {contractBalance.totalPOs} PO{(contractBalance.totalPOs > 1 ? 's' : '')} created
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="ctr-detail__summary-meta">
           <div className="ctr-detail__summary-item">
             <span className="ctr-detail__summary-item-label">Supplier</span>
@@ -565,91 +703,6 @@ export default function ContractDetailPage() {
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── ITEMS & PRICING ── */}
-        {activeTab === 'items' && (
-          <div>
-            {(contract.items && contract.items.length > 0) ? (
-              <>
-                <table className="ctr-detail__items-table">
-                  <colgroup>
-                    <col style={{ width: '40px' }} />
-                    <col />
-                    <col style={{ width: '100px' }} />
-                    <col style={{ width: '80px' }} />
-                    <col style={{ width: '120px' }} />
-                    <col style={{ width: '80px' }} />
-                    <col style={{ width: '130px' }} />
-                  </colgroup>
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>Item / Service</th>
-                      <th>Qty</th>
-                      <th>Unit</th>
-                      <th>Unit Price</th>
-                      <th>Tax</th>
-                      <th>Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {contract.items.map((item, idx) => (
-                      <tr key={idx}>
-                        <td style={{ textAlign: 'center', color: 'var(--text-placeholder)' }}>{idx + 1}</td>
-                        <td>
-                          <div style={{ fontWeight: 600 }}>{item.itemName}</div>
-                          {item.description && <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{item.description}</div>}
-                        </td>
-                        <td>{item.quantity}</td>
-                        <td>{item.unit || '—'}</td>
-                        <td>{formatAmount(item.unitPrice, contract.currency || companyDefaultCurrency)}</td>
-                        <td>{item.tax ? formatAmount(item.tax, contract.currency || companyDefaultCurrency) : '—'}</td>
-                        <td style={{ fontWeight: 700 }}>{formatAmount(item.totalValue, contract.currency || companyDefaultCurrency)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-
-                <div className="ctr-detail__items-total">
-                  <div className="ctr-detail__items-total-item">
-                    <span className="ctr-detail__items-total-label">Subtotal</span>
-                    <span className="ctr-detail__items-total-value">{formatAmount(subTotal, contract.currency || companyDefaultCurrency)}</span>
-                  </div>
-                  <div className="ctr-detail__items-total-item">
-                    <span className="ctr-detail__items-total-label">Tax</span>
-                    <span className="ctr-detail__items-total-value">{formatAmount(totalTax, contract.currency || companyDefaultCurrency)}</span>
-                  </div>
-                  <div className="ctr-detail__items-total-item">
-                    <span className="ctr-detail__items-total-label">Total Contract Value</span>
-                    <span className="ctr-detail__items-total-value" style={{ color: 'var(--primary-500)', fontSize: 18 }}>{formatAmount(totalValue, contract.currency || companyDefaultCurrency)}</span>
-                  </div>
-                </div>
-
-                {/* Commitments */}
-                {contract.items.some(i => i.minOrderQty != null || i.maxOrderQty != null || i.committedQty != null) && (
-                  <div className="ctr-detail__commitments">
-                    <h3 className="ctr-detail__section-title" style={{ gridColumn: '1 / -1', marginBottom: 8 }}>Commitments</h3>
-                    {contract.items.filter(i => i.minOrderQty != null || i.maxOrderQty != null || i.committedQty != null).map((item, idx) => (
-                      <div key={idx} className="ctr-detail__commitment">
-                        <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 13 }}>{item.itemName}</div>
-                        {item.minOrderQty != null && <div><span className="ctr-detail__commitment-label">Min Qty: </span><span className="ctr-detail__commitment-value">{item.minOrderQty}</span></div>}
-                        {item.maxOrderQty != null && <div><span className="ctr-detail__commitment-label">Max Qty: </span><span className="ctr-detail__commitment-value">{item.maxOrderQty}</span></div>}
-                        {item.committedQty != null && <div><span className="ctr-detail__commitment-label">Committed: </span><span className="ctr-detail__commitment-value">{item.committedQty}</span></div>}
-                        {item.flexibleQtyPct != null && <div><span className="ctr-detail__commitment-label">Flexible: </span><span className="ctr-detail__commitment-value">±{item.flexibleQtyPct}%</span></div>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="ctr-detail__po-empty">
-                <div className="ctr-detail__po-empty-icon"><Package size={36} /></div>
-                <p style={{ fontWeight: 600 }}>No items found</p>
-                <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>No contracted items are associated with this contract.</p>
               </div>
             )}
           </div>
@@ -783,8 +836,8 @@ export default function ContractDetailPage() {
               <div className={`ctr-detail__sig-status ${contract.signedByCustomerAt ? 'ctr-detail__sig-status--signed' : 'ctr-detail__sig-status--pending'}`}>
                 {contract.signedByCustomerAt ? <><Check size={12} /> Signed {formatDate(contract.signedByCustomerAt)}</> : <><Clock size={12} /> Awaiting Signature</>}
               </div>
-              {contract.documentSignatures && contract.documentSignatures.length > 0 && contract.documentSignatures[0]?.signature?.dataUrl && (
-                <img src={contract.documentSignatures[0].signature.dataUrl} alt="Buyer signature" className="ctr-detail__sig-image" />
+              {buyerSignatureUrl && (
+                <img src={buyerSignatureUrl} alt="Buyer signature" className="ctr-detail__sig-image" />
               )}
             </div>
             <div className="ctr-detail__sig-card">
@@ -794,8 +847,8 @@ export default function ContractDetailPage() {
               <div className={`ctr-detail__sig-status ${contract.signedByVendorAt ? 'ctr-detail__sig-status--signed' : 'ctr-detail__sig-status--pending'}`}>
                 {contract.signedByVendorAt ? <><Check size={12} /> Signed {formatDate(contract.signedByVendorAt)}</> : <><Clock size={12} /> Awaiting Signature</>}
               </div>
-              {vendorSignature && (
-                <img src={vendorSignature} alt="Vendor signature" className="ctr-detail__sig-image" />
+              {vendorSignatureUrl && (
+                <img src={vendorSignatureUrl} alt="Vendor signature" className="ctr-detail__sig-image" />
               )}
             </div>
             {canSign && (
@@ -878,9 +931,13 @@ export default function ContractDetailPage() {
                         <td className="ctr-detail__po-number">{po.poNumber}</td>
                         <td>{formatDate(po.createdAt)}</td>
                         <td style={{ fontWeight: 700 }}>{formatAmount(po.totalAmount, contract.currency || companyDefaultCurrency)}</td>
-                        <td><span className="ctr-badge ctr-badge--ACTIVE">{po.status}</span></td>
                         <td>
-                          <button className="ctr-table__action-btn" title="View PO" onClick={() => navigate(`/accounts-payable?po=${po.id}`)}>
+                          <span className={`ctr-badge ctr-badge--${po.status === 'DRAFT' ? 'DRAFT' : po.status === 'SENT_TO_VENDOR' || po.status === 'APPROVED' ? 'ACTIVE' : po.status === 'CANCELLED' || po.status === 'REJECTED' ? 'TERMINATED' : 'ACTIVE'}`}>
+                            {po.status.replace(/_/g, ' ')}
+                          </span>
+                        </td>
+                        <td>
+                          <button className="ctr-table__action-btn" title="View PO" onClick={() => navigate(`/procurement/purchase-requisitions?highlight=${po.id}`)}>
                             <Eye size={15} />
                           </button>
                         </td>
@@ -888,9 +945,9 @@ export default function ContractDetailPage() {
                     ))}
                   </tbody>
                 </table>
-                <div style={{ marginTop: 16 }}>
-                  <button className="ctr-detail__action-btn ctr-detail__action-btn--primary" onClick={handleCreatePO} disabled={creatingPO}>
-                    <Plus size={14} /> {creatingPO ? 'Creating PO…' : 'Create Another Purchase Order'}
+                <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)' }}>
+                  <button className="ctr-detail__action-btn ctr-detail__action-btn--primary" onClick={handleCreatePO}>
+                    <Plus size={14} /> Create Another Purchase Order
                   </button>
                 </div>
               </>
@@ -899,11 +956,13 @@ export default function ContractDetailPage() {
                 <div className="ctr-detail__po-empty-icon"><Package size={36} /></div>
                 <p style={{ fontWeight: 600 }}>No Purchase Orders Yet</p>
                 <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20 }}>
-                  Purchase orders linked to this contract will appear here.
+                  {isAccepted 
+                    ? 'Create a purchase order from this contract to get started.'
+                    : 'Purchase orders linked to this contract will appear here once the contract is accepted.'}
                 </p>
                 {canCreatePO && (
-                  <button className="ctr-detail__action-btn ctr-detail__action-btn--primary" onClick={handleCreatePO} disabled={creatingPO}>
-                    <Plus size={14} /> {creatingPO ? 'Creating PO…' : 'Create Purchase Order'}
+                  <button className="ctr-detail__action-btn ctr-detail__action-btn--primary" onClick={handleCreatePO}>
+                    <Plus size={14} /> Create Purchase Order
                   </button>
                 )}
               </div>

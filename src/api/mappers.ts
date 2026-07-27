@@ -108,7 +108,21 @@ export function mapApiRfqToTableRow(rfq: Record<string, unknown>): RFQTableRow {
     }),    quotationCount: counts?.quotations ?? quotations.length,
     quotations,
     rfqType: (rfq.rfqType as 'RFQ' | 'TENDER') || 'RFQ',
-    customFields: rfq.customFields as Array<Record<string, unknown>> | undefined,
+    customFields: Array.isArray(rfq.customFields)
+      ? (rfq.customFields as Array<Record<string, unknown>>).map((cf: any) => {
+          let parsed: any = {};
+          if (typeof cf.value === 'string' && cf.value.trim().startsWith('{')) {
+            try { parsed = JSON.parse(cf.value); } catch {}
+          }
+          return {
+            id: parsed.id || cf.id,
+            fieldName: parsed.fieldName || cf.fieldName || cf.key,
+            fieldType: parsed.fieldType || cf.fieldType || 'text',
+            required: parsed.required ?? cf.required ?? false,
+            weightage: parsed.weightage ?? cf.weightage ?? 0,
+          };
+        })
+      : undefined,
     evaluationParameters: rfq.evaluationParameters as Array<Record<string, unknown>> | undefined,
     // Bid Security
     bidSecurityRequired: rfq.bidSecurityRequired as boolean | undefined,
@@ -179,6 +193,8 @@ export function mapApprovalToTableRow(a: Record<string, unknown>): ApprovalTable
     PurchaseOrder: 'Purchase Order',
     'Purchase Orders': 'Purchase Order',
     'PO Approval': 'Purchase Order',
+    Contract: 'Contract',
+    Contracts: 'Contract',
   };
   const level = a.level as { levelNumber?: number; requiredRole?: string } | undefined;
   const createdBy = a.createdBy as { fullName?: string } | undefined;

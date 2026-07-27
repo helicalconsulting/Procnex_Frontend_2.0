@@ -44,6 +44,14 @@ export interface VendorDocument {
   signedBy?: string | null;
   signedAt?: string | null;
   signatureUrl?: string | null;
+  // Company signer metadata (from VendorDocumentSignature)
+  companySignatoryName?: string | null;
+  companySignatureUrl?: string | null;
+  companySignedAt?: string | null;
+  // Vendor signer metadata
+  vendorSignatoryName?: string | null;
+  vendorSignatureUrl?: string | null;
+  vendorSignedAt?: string | null;
 }
 
 export interface PendingVendorDocument extends VendorDocument {
@@ -65,6 +73,7 @@ export interface VendorInvitationRow {
   companyName: string;
   contactEmail: string;
   contactPerson?: string;
+  contactPhone?: string;
   notes?: string;
   sentAt: string;
   expiresAt: string;
@@ -84,6 +93,10 @@ export interface SendInvitationPayload {
   items?: Array<{ itemCode: string; itemName: string }>;
   documentIds?: string[];
   ndaMndaRequired?: boolean;
+  ndaRequired?: boolean;
+  mndaRequired?: boolean;
+  ndaTemplateId?: string;
+  mndaTemplateId?: string;
 }
 
 const ONBOARDING_MOCK: OnboardingVendor[] = [
@@ -205,6 +218,7 @@ async function mockSendInvitation(payload: SendInvitationPayload): Promise<SendI
     companyName: payload.companyName,
     contactEmail: payload.contactEmail,
     contactPerson: payload.contactPerson,
+    contactPhone: payload.contactPhone,
     notes: payload.notes,
     sentAt: new Date().toISOString().slice(0, 10),
     expiresAt: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
@@ -230,6 +244,10 @@ async function apiSendInvitation(payload: SendInvitationPayload): Promise<SendIn
         items: payload.items,
         documentIds: payload.documentIds,
         ndaMndaRequired: payload.ndaMndaRequired,
+        ndaRequired: payload.ndaRequired,
+        mndaRequired: payload.mndaRequired,
+        ndaTemplateId: payload.ndaTemplateId,
+        mndaTemplateId: payload.mndaTemplateId,
       }),
     });
   } catch {
@@ -330,6 +348,8 @@ export interface VendorSearchResult {
   name: string;
   email: string;
   contactPerson: string | null;
+  phone?: string | null;
+  contactPhone?: string | null;
   status: string;
   isActive: boolean;
   score: number;

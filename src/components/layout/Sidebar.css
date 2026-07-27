@@ -241,62 +241,6 @@
   transform: translateY(-50%) translateX(0);
 }
 
-/* ─── Toggle Button ─────────────────────────────────────── */
-
-.sidebar__toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 14px 20px;
-  border: none;
-  border-top: 1px solid var(--shell-border);
-  background: transparent;
-  color: rgba(255, 255, 255, 0.45);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s, color 0.2s;
-  white-space: nowrap;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.sidebar__toggle:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.sidebar__toggle-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.sidebar--collapsed .sidebar__toggle-icon {
-  transform: rotate(180deg);
-}
-
-.sidebar__toggle-label {
-  opacity: 1;
-  transition: opacity 0.2s ease 0.1s;
-}
-
-.sidebar--collapsed .sidebar__toggle-label {
-  opacity: 0;
-  width: 0;
-  overflow: hidden;
-  transition: opacity 0.1s ease, width 0.2s ease;
-}
-
-.sidebar--collapsed .sidebar__toggle {
-  justify-content: center;
-  padding: 14px 0;
-  gap: 0;
-}
-
 /* ─── Mobile Overlay ────────────────────────────────────── */
 
 .sidebar__backdrop {
@@ -362,18 +306,6 @@
     transform: translateY(-50%) translateX(-4px) !important;
   }
 
-  /* Show toggle label, left-align toggle */
-  .sidebar--collapsed:hover .sidebar__toggle-label {
-    opacity: 1;
-    width: auto;
-    overflow: visible;
-  }
-
-  .sidebar--collapsed:hover .sidebar__toggle {
-    justify-content: flex-start;
-    padding: 14px 20px;
-    gap: 10px;
-  }
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -418,18 +350,6 @@
     transform: translateY(-50%) translateX(0);
   }
 
-  .sidebar__toggle {
-    justify-content: center;
-    padding: 14px 0;
-  }
-
-  .sidebar__toggle-label {
-    opacity: 0;
-  }
-
-  .sidebar__toggle-icon {
-    transform: rotate(180deg);
-  }
 }
 
 /* Mobile: off-canvas overlay */
@@ -452,8 +372,7 @@
 
   .sidebar--collapsed .sidebar__logo-text,
   .sidebar--collapsed .sidebar__section-label,
-  .sidebar--collapsed .sidebar__item-label,
-  .sidebar--collapsed .sidebar__toggle-label {
+  .sidebar--collapsed .sidebar__item-label {
     opacity: 1;
     width: auto;
     height: auto;
@@ -476,19 +395,5 @@
     padding: 0 12px;
     margin: 2px 8px;
     width: auto;
-  }
-
-  .sidebar--collapsed .sidebar__toggle {
-    justify-content: flex-start;
-    padding: 14px 20px;
-    gap: 10px;
-  }
-
-  .sidebar--collapsed .sidebar__toggle-icon {
-    transform: none;
-  }
-
-  .sidebar__toggle {
-    display: none;
   }
 }

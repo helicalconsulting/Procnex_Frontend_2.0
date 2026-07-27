@@ -8,6 +8,7 @@ import {
   LogIn, Edit3, Trash2, Plus, Download,
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
+import { TableSkeleton } from '../../components/shared/Skeleton';
 import './AuditTrailPage.css';
 
 type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'APPROVE' | 'REJECT' | 'LOGIN' | 'EXPORT';
@@ -97,7 +98,6 @@ export default function AuditTrailPage() {
   return (
     <div className="audit-page">
       {error && <MessageStrip type="error">{error}</MessageStrip>}
-      {loading && <div className="audit-page__loading">Loading audit trail…</div>}
       <div className="audit-page__header">
         <div className="audit-page__header-left"><h1>Audit Trail</h1><p>Complete activity log of all system actions and changes</p></div>
         <button className="audit-page__export-btn"><Download size={16} /> Export Log</button>
@@ -136,7 +136,9 @@ export default function AuditTrailPage() {
       </div>
 
       <div className="audit-timeline-card">
-        {paginated.length > 0 ? (
+        {loading ? (
+          <TableSkeleton rows={5} columns={4} />
+        ) : paginated.length > 0 ? (
           <div className="audit-timeline">
             {paginated.map(entry => (
               <div key={entry.id} className="audit-entry" onClick={() => setDetail(entry)}>

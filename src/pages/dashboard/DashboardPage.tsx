@@ -261,14 +261,12 @@ export default function DashboardPage() {
 
   return (
     <div className="dashboard">
-      {/* ── Header ─────────────────────────────────────────── */}
+      {/* ── SAP Fiori Enterprise Header ─────────────────────── */}
       <header className="dash-header">
         <div className="dash-header__text">
-          <h1>Welcome back, {user?.fullName?.split(' ')[0]} 👋</h1>
+          <h1>Procurement Overview</h1>
           <p>
-            {hasWidgets
-              ? "Here's what's happening in your procurement workflow today."
-              : 'Build your personalized command center by adding widgets.'}
+            {user?.fullName ? `${user.fullName} · ` : ''}Real-time purchasing metrics, requisition tracking & operational workflows
           </p>
         </div>
         <div className="dash-header__actions">

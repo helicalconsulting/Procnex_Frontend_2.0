@@ -9,12 +9,8 @@ import './AppLayout.css';
 
 export default function AppLayout() {
   const { companyName, supportEmail } = useBranding();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  const handleToggle = useCallback(() => {
-    setCollapsed((prev) => !prev);
-  }, []);
 
   const handleCollapse = useCallback(() => {
     setCollapsed(true);
@@ -43,20 +39,21 @@ export default function AppLayout() {
       <Sidebar
         collapsed={collapsed}
         mobileOpen={mobileOpen}
-        onToggle={handleToggle}
         onCollapse={handleCollapse}
         onMobileClose={handleMobileClose}
       />
 
       <div className="app-layout__main">
         <TopBar onMenuClick={handleMobileOpen} />
-        <main className="app-layout__content">
-          <Outlet />
-        </main>
-        <ToastContainer />
-        <footer className="app-layout__footer">
-          © {new Date().getFullYear()} {supportEmail ? `${companyName} · ${supportEmail}` : companyName}
-        </footer>
+        <div className="app-layout__body">
+          <main className="app-layout__content">
+            <Outlet />
+          </main>
+          <ToastContainer />
+          <footer className="app-layout__footer">
+            © {new Date().getFullYear()} {supportEmail ? `${companyName} · ${supportEmail}` : companyName}
+          </footer>
+        </div>
       </div>
     </div>
   );

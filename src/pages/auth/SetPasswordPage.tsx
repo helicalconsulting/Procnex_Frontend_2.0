@@ -1,8 +1,11 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Eye, EyeOff, AlertCircle, CheckCircle2, Shield } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, CheckCircle2, Shield, Sun, Moon } from 'lucide-react';
 import { API_BASE } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
+import { useBranding } from '../../context/BrandingContext';
+import { PORTAL_NAMES } from '../../config/portalNames';
 import heliflowLogo from '../../assets/heliflow.png';
 import './LoginPage.css';
 
@@ -41,6 +44,8 @@ export default function SetPasswordPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { isAuthenticated, roles } = useAuth();
+  const { isDark, toggleTheme } = useTheme();
+  const { companyName, logoUrl } = useBranding();
   const token = searchParams.get('token')?.trim() || '';
 
   const [validation, setValidation] = useState<SetupValidation | null>(null);
@@ -104,6 +109,11 @@ export default function SetPasswordPage() {
           align-items: center;
           padding: 40px 24px;
           background: #f5f6f7;
+          transition: background 0.3s;
+        }
+
+        [data-theme="dark"] .sp-form-panel {
+          background: #1a1d23;
         }
 
         .sp-card {
@@ -115,6 +125,13 @@ export default function SetPasswordPage() {
           max-width: 420px;
           overflow: hidden;
           font-family: 'SAP72', '72', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          transition: background 0.3s, border-color 0.3s, box-shadow 0.3s;
+        }
+
+        [data-theme="dark"] .sp-card {
+          background: #252830;
+          border-color: #3a3d44;
+          box-shadow: 0 1px 4px 0 rgba(0,0,0,.3), 0 2px 8px 0 rgba(0,0,0,.2);
         }
 
         .sp-card-header {
@@ -124,13 +141,25 @@ export default function SetPasswordPage() {
           display: flex;
           align-items: center;
           gap: 10px;
+          transition: background 0.3s, border-color 0.3s;
         }
+
+        [data-theme="dark"] .sp-card-header {
+          background: #252830;
+          border-color: #3a3d44;
+        }
+
         .sp-card-header-icon { color: #0064d9; flex-shrink: 0; }
         .sp-card-title {
           font-size: 16px;
           font-weight: 700;
           color: #1d2d3e;
           margin: 0;
+          transition: color 0.3s;
+        }
+
+        [data-theme="dark"] .sp-card-title {
+          color: #e4e6e8;
         }
 
         .sp-card-body { padding: 20px 20px 16px; }
@@ -140,6 +169,11 @@ export default function SetPasswordPage() {
           color: #556b82;
           margin: 0 0 18px;
           line-height: 1.55;
+          transition: color 0.3s;
+        }
+
+        [data-theme="dark"] .sp-card-subtitle {
+          color: #9ea4a9;
         }
 
         .sp-status {
@@ -158,10 +192,20 @@ export default function SetPasswordPage() {
           border-color: #188918;
           color: #188918;
         }
+        [data-theme="dark"] .sp-status--success {
+          background: #1a3a2a;
+          border-color: #2a5a3a;
+          color: #4caf50;
+        }
         .sp-status--error {
           background: #fff1f1;
           border-color: #bb0000;
           color: #bb0000;
+        }
+        [data-theme="dark"] .sp-status--error {
+          background: #3a1a1a;
+          border-color: #5a2a2a;
+          color: #ef5350;
         }
         .sp-status svg { flex-shrink: 0; margin-top: 1px; }
 
@@ -172,6 +216,10 @@ export default function SetPasswordPage() {
           font-weight: 600;
           color: #1d2d3e;
           margin-bottom: 5px;
+          transition: color 0.3s;
+        }
+        [data-theme="dark"] .sp-label {
+          color: #c8ccd0;
         }
         .sp-label--required::after { content: ' *'; color: #bb0000; }
 
@@ -188,11 +236,18 @@ export default function SetPasswordPage() {
           border-radius: 4px;
           outline: none;
           box-sizing: border-box;
-          transition: border-color .12s, box-shadow .12s;
+          transition: border-color .12s, box-shadow .12s, background 0.3s, color 0.3s;
+        }
+        [data-theme="dark"] .sp-input {
+          color: #c8ccd0;
+          background: #1a1d23;
+          border-color: #4a4d54;
         }
         .sp-input--plain { padding-right: 10px; }
         .sp-input::placeholder { color: #89919a; }
+        [data-theme="dark"] .sp-input::placeholder { color: #6a6d70; }
         .sp-input:hover { border-color: #8a9aa8; }
+        [data-theme="dark"] .sp-input:hover { border-color: #6a6d70; }
         .sp-input:focus {
           border-color: #0064d9;
           box-shadow: 0 0 0 2px rgba(0,100,217,.16);
@@ -212,6 +267,7 @@ export default function SetPasswordPage() {
           transition: color .12s, background .12s;
         }
         .sp-pw-toggle:hover { color: #0064d9; background: rgba(0,100,217,.07); }
+        [data-theme="dark"] .sp-pw-toggle:hover { color: #4795e8; background: rgba(71,149,232,.12); }
 
         .sp-btn {
           width: 100%;
@@ -238,31 +294,48 @@ export default function SetPasswordPage() {
           font-size: 13px;
           color: #556b82;
           font-family: inherit;
+          transition: border-color 0.3s, color 0.3s;
+        }
+        [data-theme="dark"] .sp-footer {
+          border-color: #3a3d44;
+          color: #9ea4a9;
         }
         .sp-footer a { color: #0064d9; text-decoration: none; font-weight: 600; }
+        [data-theme="dark"] .sp-footer a { color: #4795e8; }
         .sp-footer a:hover { text-decoration: underline; }
 
         .sp-validating { font-size: 13px; color: #556b82; padding: 8px 0 18px; }
+        [data-theme="dark"] .sp-validating { color: #9ea4a9; }
       `}</style>
 
       {/* ── Outer layout: reuse existing sap-login classes for left panel ── */}
       <div className="sap-login">
 
-        {/* LEFT PANEL — completely original, untouched */}
+        {/* LEFT PANEL — Company branding */}
         <div className="sap-login__brand-panel">
           <div className="sap-login__brand-content">
             <div className="sap-login__logo">
-              <img src={heliflowLogo} alt="Heliflow" className="sap-login__logo-icon" />
+              <img src={logoUrl || heliflowLogo} alt={companyName} className="sap-login__logo-icon" />
             </div>
-            <h1 className="sap-login__brand-title">Vendor Portal</h1>
+            <h1 className="sap-login__brand-title">{companyName} · {PORTAL_NAMES.secondary} Portal</h1>
             <p className="sap-login__brand-tagline">Create your secure portal password</p>
           </div>
         </div>
 
-        {/* RIGHT PANEL — SAP Fiori styled */}
-        <div className="sp-form-panel">
-          <div className="sp-card">
+        {/* RIGHT PANEL — SAP Fiori styled with theme toggle */}
+        <div className="sp-form-panel" style={{ position: 'relative' }}>
+          {/* Theme toggle */}
+          <button
+            className="sap-login__theme-toggle"
+            onClick={toggleTheme}
+            title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            aria-label="Toggle theme"
+            style={{ position: 'absolute', top: 16, right: 16, zIndex: 10 }}
+          >
+            {isDark ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
 
+          <div className="sp-card">
             <div className="sp-card-header">
               <Shield size={18} className="sp-card-header-icon" />
               <h2 className="sp-card-title">

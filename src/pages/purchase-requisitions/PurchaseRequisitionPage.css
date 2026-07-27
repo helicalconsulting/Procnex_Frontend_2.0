@@ -1,0 +1,1046 @@
+/* ═══════════════════════════════════════════════════════════
+   Heliflow — SAP Fiori Enterprise Level Purchase Requisition UI
+   ═══════════════════════════════════════════════════════════ */
+
+.pr-page {
+  padding: 24px 32px 100px;
+  max-width: 1380px;
+  margin: 0 auto;
+  color: var(--text-primary);
+}
+
+/* ── Loading / Error States ──────────────────────────────── */
+
+.pr-page__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 100px 0;
+  color: var(--text-secondary);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.pr-page__spinner {
+  animation: pr-spin 0.8s linear infinite;
+  color: var(--primary-500, #0a6ed1);
+}
+
+@keyframes pr-spin { to { transform: rotate(360deg); } }
+
+.pr-page__error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 80px 0;
+  color: var(--danger-500, #bb0000);
+}
+
+.pr-page__error p {
+  font-size: 15px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* ── SAP Fiori Object Header / Sticky Toolbar ─────────────── */
+
+.pr-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  background: var(--surface-card, #ffffff);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 12px);
+  margin-bottom: 24px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.pr-toolbar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--primary-500, #0a6ed1), #4db1ff, #0854a0);
+  border-radius: 12px 12px 0 0;
+}
+
+[data-theme="dark"] .pr-toolbar {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+}
+
+.pr-toolbar__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.pr-toolbar__back:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.pr-toolbar__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.pr-toolbar__title svg {
+  color: var(--primary-500, #0a6ed1);
+  flex-shrink: 0;
+}
+
+.pr-toolbar__po-num {
+  font-weight: 700;
+  color: var(--primary-500, #0a6ed1);
+  font-size: 13px;
+  font-family: var(--font-mono, monospace);
+  background: rgba(10, 110, 209, 0.08);
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(10, 110, 209, 0.15);
+  white-space: nowrap;
+}
+
+[data-theme="dark"] .pr-toolbar__po-num {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border-color: rgba(96, 165, 250, 0.3);
+}
+
+/* ── SAP Fiori Status Badges ──────────────────────────────── */
+
+.pr-badge {
+  padding: 5px 14px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.pr-badge--DRAFT {
+  background: rgba(107, 114, 128, 0.1);
+  color: #6b7280;
+  border: 1px solid rgba(107, 114, 128, 0.2);
+}
+
+[data-theme="dark"] .pr-badge--DRAFT {
+  background: rgba(148, 163, 184, 0.15);
+  color: #cbd5e1;
+  border-color: rgba(148, 163, 184, 0.3);
+}
+
+.pr-badge--PENDING_APPROVAL {
+  background: rgba(233, 115, 12, 0.1);
+  color: var(--warning-500, #e9730c);
+  border: 1px solid rgba(233, 115, 12, 0.2);
+}
+
+[data-theme="dark"] .pr-badge--PENDING_APPROVAL {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.3);
+}
+
+.pr-badge--APPROVED,
+.pr-badge--COMPLETED {
+  background: rgba(16, 126, 62, 0.1);
+  color: var(--success-500, #107e3e);
+  border: 1px solid rgba(16, 126, 62, 0.2);
+}
+
+[data-theme="dark"] .pr-badge--APPROVED,
+[data-theme="dark"] .pr-badge--COMPLETED {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.3);
+}
+
+.pr-badge--SENT_TO_VENDOR,
+.pr-badge--PO_CREATED {
+  background: rgba(10, 110, 209, 0.1);
+  color: var(--primary-500, #0a6ed1);
+  border: 1px solid rgba(10, 110, 209, 0.2);
+}
+
+[data-theme="dark"] .pr-badge--SENT_TO_VENDOR,
+[data-theme="dark"] .pr-badge--PO_CREATED {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border-color: rgba(96, 165, 250, 0.3);
+}
+
+.pr-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+/* ── SAP Fiori Buttons ────────────────────────────────────── */
+
+.pr-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  outline: none;
+}
+
+.pr-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pr-btn--primary {
+  background: linear-gradient(135deg, var(--primary-500, #0a6ed1) 0%, var(--primary-600, #0854a0) 100%);
+  color: #ffffff;
+  border-color: var(--primary-500, #0a6ed1);
+  box-shadow: 0 2px 8px rgba(10, 110, 209, 0.25);
+}
+
+.pr-btn--primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--primary-600, #0854a0) 0%, var(--primary-700, #074a8a) 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(10, 110, 209, 0.35);
+}
+
+.pr-btn--outline {
+  background: var(--surface-card);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+.pr-btn--outline:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  color: var(--primary-500, #0a6ed1);
+  transform: translateY(-1px);
+}
+
+.pr-btn--ghost {
+  background: transparent;
+  color: var(--primary-500, #0a6ed1);
+  border: none;
+  padding: 6px 12px;
+}
+
+.pr-btn--ghost:hover {
+  background: rgba(10, 110, 209, 0.08);
+  color: var(--primary-600, #0854a0);
+}
+
+.pr-btn--sm {
+  padding: 6px 14px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+/* ── SAP Fiori Key Performance Indicators (KPI Bar) ─────── */
+
+.pr-kpi-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.pr-kpi-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 12px);
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+}
+
+.pr-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-strong);
+}
+
+.pr-kpi-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: rgba(10, 110, 209, 0.08);
+  color: var(--primary-500, #0a6ed1);
+}
+
+.pr-kpi-icon--grand {
+  background: linear-gradient(135deg, #0a6ed1 0%, #0854a0 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(10, 110, 209, 0.3);
+}
+
+.pr-kpi-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pr-kpi-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pr-kpi-value {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-primary);
+  font-family: var(--font-mono, monospace);
+}
+
+.pr-kpi-value--grand {
+  color: var(--primary-500, #0a6ed1);
+}
+
+/* ── Content Layout ───────────────────────────────────────── */
+
+.pr-content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ── SAP Fiori Form Section ───────────────────────────────── */
+
+.pr-section {
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 12px);
+  padding: 24px 28px 24px;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  position: relative;
+}
+
+.pr-section:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-strong);
+}
+
+.pr-section__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  border-left: 4px solid var(--primary-500, #0a6ed1);
+  padding-left: 12px;
+  margin-left: -28px;
+}
+
+.pr-section__header svg {
+  color: var(--primary-500, #0a6ed1);
+  flex-shrink: 0;
+}
+
+.pr-section__header .pr-btn--ghost {
+  margin-left: auto;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.pr-section__grid {
+  display: grid;
+  gap: 18px;
+}
+
+.pr-section__grid--2col { grid-template-columns: 1fr 1fr; }
+.pr-section__grid--3col { grid-template-columns: 1fr 1fr 1fr; }
+
+/* ── SAP Fiori Form Inputs ────────────────────────────────── */
+
+.pr-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pr-field--wide { grid-column: 1 / -1; }
+
+.pr-field label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pr-field input,
+.pr-field select,
+.pr-field textarea {
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 13.5px;
+  font-family: inherit;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  outline: none;
+}
+
+.pr-field input::placeholder,
+.pr-field textarea::placeholder {
+  color: var(--text-placeholder);
+  font-size: 13px;
+}
+
+.pr-field--auto {
+  background: var(--surface-elevated) !important;
+  cursor: default;
+  font-weight: 700;
+  font-family: var(--font-mono, monospace);
+  color: var(--primary-500, #0a6ed1) !important;
+}
+
+.pr-field input:hover,
+.pr-field select:hover,
+.pr-field textarea:hover {
+  border-color: var(--border-strong);
+}
+
+.pr-field input:focus,
+.pr-field select:focus,
+.pr-field textarea:focus {
+  border-color: var(--primary-500, #0a6ed1);
+  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.12);
+  background: var(--surface-card);
+}
+
+.pr-field select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236a6d70' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+  cursor: pointer;
+}
+
+[data-theme="dark"] .pr-field select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238d9399' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+/* ── SAP Fiori Items Grid Table ───────────────────────────── */
+
+.pr-items-table-wrap {
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.pr-items-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+/* Column widths */
+.pr-col--no     { width: 48px; }
+.pr-col--desc   { width: auto; }
+.pr-col--num    { width: 90px; }
+.pr-col--unit   { width: 90px; }
+.pr-col--price  { width: 120px; }
+.pr-col--total  { width: 130px; }
+.pr-col--action { width: 44px; }
+
+/* Table Header */
+.pr-items-table thead th {
+  background: linear-gradient(180deg, var(--surface-elevated), var(--surface-card));
+  padding: 12px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  text-align: left;
+  border-bottom: 2px solid var(--border-strong);
+  white-space: nowrap;
+}
+
+.pr-th--no     { text-align: center !important; }
+.pr-th--num    { text-align: right !important; }
+.pr-th--price  { text-align: right !important; }
+.pr-th--total  { text-align: right !important; }
+.pr-th--action { text-align: center !important; }
+
+/* Table Body */
+.pr-items-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.pr-items-table tbody tr:last-child td { border-bottom: none; }
+
+.pr-items-table tbody tr {
+  transition: background 0.15s ease;
+}
+
+.pr-items-table tbody tr:hover {
+  background: rgba(10, 110, 209, 0.04);
+}
+
+/* Column alignment */
+.pr-td--no     { text-align: center; font-weight: 700; color: var(--text-secondary); }
+.pr-td--num    { text-align: right; }
+.pr-td--unit   { text-align: left; }
+.pr-td--total  { text-align: right; font-weight: 700; color: var(--primary-500, #0a6ed1); font-family: var(--font-mono, monospace); }
+.pr-td--action { text-align: center; }
+
+/* Form Controls Inside Table Cells */
+.pr-items-table input,
+.pr-items-table select {
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.pr-items-table input:focus,
+.pr-items-table select:focus {
+  border-color: var(--primary-500, #0a6ed1);
+  background: var(--surface-card);
+  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.12);
+}
+
+.pr-items-table input:hover,
+.pr-items-table select:hover {
+  border-color: var(--border-strong);
+}
+
+.pr-items-table input[type="number"] {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.pr-item__delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  color: var(--text-placeholder);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.pr-item__delete:hover:not(:disabled) {
+  color: var(--danger-500, #bb0000);
+  background: rgba(187, 0, 0, 0.08);
+}
+
+.pr-item__delete:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* ── SAP Fiori Totals Block ───────────────────────────────── */
+
+.pr-totals {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.pr-totals__grid {
+  width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pr-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  font-size: 13.5px;
+  border-radius: 8px;
+}
+
+.pr-total-row span:first-child {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.pr-total-row span:last-child {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: var(--font-mono, monospace);
+}
+
+.pr-total-row--charge {
+  background: var(--surface-elevated);
+  gap: 12px;
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+}
+
+.pr-total-row--charge span:first-child {
+  font-size: 12px;
+}
+
+.pr-total-row--charge input {
+  width: 140px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: var(--font-mono, monospace);
+  text-align: right;
+  transition: border-color 0.2s;
+  outline: none;
+}
+
+.pr-total-row--charge input:focus {
+  border-color: var(--primary-500, #0a6ed1);
+  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.12);
+}
+
+.pr-total-row--grand {
+  background: linear-gradient(135deg, rgba(10, 110, 209, 0.08) 0%, rgba(10, 110, 209, 0.03) 100%);
+  border: 1px solid rgba(10, 110, 209, 0.25);
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-top: 6px;
+}
+
+.pr-total-row--grand span:first-child {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.pr-total-row--grand span:last-child {
+  color: var(--primary-500, #0a6ed1);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+/* ── SAP Fiori Contract Balance Gauge / Banner ─────────────── */
+
+.pr-contract-balance {
+  background: linear-gradient(135deg, rgba(10, 110, 209, 0.06) 0%, rgba(10, 110, 209, 0.02) 100%);
+  border: 1px solid rgba(10, 110, 209, 0.2);
+  border-radius: var(--radius-lg, 12px);
+  padding: 20px 24px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-sm);
+  animation: prFadeIn 0.3s ease;
+}
+
+[data-theme="dark"] .pr-contract-balance {
+  background: linear-gradient(135deg, rgba(10, 110, 209, 0.12) 0%, rgba(10, 110, 209, 0.04) 100%);
+  border-color: rgba(77, 177, 255, 0.3);
+}
+
+.pr-contract-balance--exceeded {
+  background: linear-gradient(135deg, rgba(187, 0, 0, 0.08) 0%, rgba(187, 0, 0, 0.02) 100%);
+  border-color: rgba(187, 0, 0, 0.25);
+}
+
+.pr-contract-balance__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(10, 110, 209, 0.15);
+}
+
+.pr-contract-balance__progress-section {
+  margin-bottom: 18px;
+}
+
+.pr-contract-balance__progress-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.pr-contract-balance__progress-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.pr-contract-balance__progress-pct {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-primary);
+  font-family: var(--font-mono, monospace);
+}
+
+.pr-contract-balance__progress-track {
+  position: relative;
+  height: 10px;
+  background: var(--surface-elevated);
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.pr-contract-balance__progress-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 999px;
+  min-width: 4px;
+}
+
+.pr-contract-balance__items {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.pr-contract-balance__item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px;
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.pr-contract-balance__label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pr-contract-balance__value {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text-primary);
+  font-family: var(--font-mono, monospace);
+}
+
+.pr-contract-balance__value--consumed { color: var(--warning-500, #e9730c); }
+.pr-contract-balance__value--remaining { color: var(--success-500, #107e3e); }
+.pr-contract-balance__value--over { color: var(--danger-500, #bb0000) !important; }
+
+/* ── Validation Alerts ────────────────────────────────────── */
+
+.pr-validation-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, rgba(187, 0, 0, 0.08) 0%, rgba(187, 0, 0, 0.02) 100%);
+  border: 1px solid rgba(187, 0, 0, 0.25);
+  border-radius: var(--radius-lg, 12px);
+  color: var(--danger-500, #bb0000);
+  font-size: 13.5px;
+  margin-bottom: 24px;
+  position: relative;
+}
+
+.pr-validation-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: var(--danger-500, #bb0000);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+/* ── SAP Fiori Listing Table Page ─────────────────────────── */
+
+.pr-list-table-wrap {
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 12px);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.pr-list-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.pr-list-table thead th {
+  background: linear-gradient(180deg, var(--surface-elevated), var(--surface-card));
+  padding: 14px 18px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  text-align: left;
+  border-bottom: 2px solid var(--border-strong);
+  white-space: nowrap;
+}
+
+.pr-list-table thead th.pr-list__th--amount { text-align: right; }
+
+.pr-list-row {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.pr-list-row:hover {
+  background: rgba(10, 110, 209, 0.04);
+}
+
+.pr-list-row td {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.pr-list-row:last-child td { border-bottom: none; }
+
+.pr-list__po-num {
+  font-weight: 700;
+  color: var(--primary-500, #0a6ed1);
+  font-family: var(--font-mono, monospace);
+}
+
+.pr-list__vendor {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pr-list__total {
+  font-weight: 700;
+  font-family: var(--font-mono, monospace);
+  text-align: right;
+  color: var(--text-primary);
+}
+
+.pr-list__view-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pr-list__view-btn:hover {
+  background: rgba(10, 110, 209, 0.1);
+  color: var(--primary-500, #0a6ed1);
+}
+
+/* ── Modals (Send / Type Select) ───────────────────────────── */
+
+.pr-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay);
+  backdrop-filter: blur(6px);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: prFadeIn 0.2s ease;
+}
+
+@keyframes prFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.pr-send-modal,
+.po-type-modal {
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 16px);
+  box-shadow: var(--shadow-lg);
+  width: 100%;
+  max-width: 560px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.pr-send-modal__header,
+.po-type-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: linear-gradient(135deg, rgba(10, 110, 209, 0.04), transparent);
+}
+
+.pr-send-modal__body,
+.po-type-modal__body {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.pr-send-modal__footer,
+.po-type-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* ── Responsive ────────────────────────────────────────────── */
+
+@media (max-width: 1023px) {
+  .pr-page { padding: 16px; }
+  .pr-section__grid--2col,
+  .pr-section__grid--3col { grid-template-columns: 1fr; }
+  .pr-contract-balance__items { grid-template-columns: repeat(2, 1fr); }
+  .pr-toolbar { flex-wrap: wrap; }
+  .pr-toolbar__actions { width: 100%; justify-content: flex-end; }
+}
+
+@media (max-width: 768px) {
+  .pr-toolbar__title { font-size: 16px; flex-wrap: wrap; }
+  .pr-totals__grid { width: 100%; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Print Styles — Show ONLY the professional Purchase Order Document
+   ═══════════════════════════════════════════════════════════ */
+
+@media print {
+  /* Hide all regular web UI elements (Sidebar, TopBar, forms, buttons) */
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* Show only the PO print document area */
+  .po-print-area,
+  .po-print-area * {
+    visibility: visible !important;
+  }
+
+  .po-print-area {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    opacity: 1 !important;
+    z-index: 99999 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #ffffff !important;
+    pointer-events: auto !important;
+  }
+
+  /* Page setup */
+  @page {
+    size: A4 portrait;
+    margin: 12mm 15mm;
+  }
+
+  /* Ensure items table and boxes break properly on pages */
+  .po-doc__items-table tbody tr,
+  .po-doc__party-box,
+  .po-doc__info-grid,
+  .po-doc__notes-col {
+    break-inside: avoid;
+  }
+
+  .po-doc__items-table thead {
+    display: table-header-group;
+  }
+}

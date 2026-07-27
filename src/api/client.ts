@@ -106,6 +106,12 @@ export function invalidateApiCache(path: string): void {
   bustRelatedCache(path);
 }
 
+/** Clear ALL cached API responses — call on logout to prevent stale data across sessions */
+export function clearAllApiCache(): void {
+  apiCache.clear();
+  inFlightRequests.clear();
+}
+
 export async function apiRequest<T>(
   path: string,
   options: ApiRequestOptions = {}
@@ -158,6 +164,7 @@ async function fetchApi<T>(
   try {
     res = await fetch(`${API_BASE}${path}`, {
       ...fetchOptions,
+      cache: 'no-store',
       signal: controller.signal,
       headers: {
         ...authHeaders(),

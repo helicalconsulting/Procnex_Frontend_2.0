@@ -353,7 +353,7 @@
 
 .alvl-modal-backdrop {
   position: fixed; inset: 0; background: var(--overlay);
-  backdrop-filter: blur(4px); z-index: 500;
+  backdrop-filter: blur(4px); z-index: 2000;
   display: flex; align-items: center; justify-content: center; padding: 20px;
   animation: alvlFadeIn 0.2s ease;
 }
@@ -362,7 +362,7 @@
 .alvl-modal {
   background: var(--surface-card); border: 1px solid var(--border);
   border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
-  width: 100%; max-width: 480px; max-height: 90vh;
+  width: 100%; max-width: 560px; max-height: 90vh;
   display: flex; flex-direction: column;
   animation: alvlSlideIn 0.25s cubic-bezier(0.4,0,0.2,1);
 }
@@ -373,35 +373,35 @@
 
 .alvl-modal__header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 20px 24px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  padding: 22px 28px; border-bottom: 1px solid var(--border); flex-shrink: 0;
 }
 .alvl-modal__title {
-  font-size: 17px; font-weight: 700; color: var(--text-primary);
+  font-size: 19px; font-weight: 700; color: var(--text-primary);
   display: flex; align-items: center; gap: 10px;
 }
 .alvl-modal__title svg { opacity: 0.5; }
 
 .alvl-modal__close {
-  width: 32px; height: 32px; border-radius: var(--radius-sm);
+  width: 34px; height: 34px; border-radius: var(--radius-sm);
   border: none; background: transparent; color: var(--text-secondary);
   cursor: pointer; display: flex; align-items: center; justify-content: center;
   transition: background 0.15s, color 0.15s;
 }
 .alvl-modal__close:hover { background: var(--surface-hover); color: var(--text-primary); }
 
-.alvl-modal__body { padding: 24px; display: flex; flex-direction: column; gap: 18px; overflow-y: auto; flex: 1; }
+.alvl-modal__body { padding: 28px; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; flex: 1; }
 
-.alvl-modal__field { display: flex; flex-direction: column; gap: 6px; }
-.alvl-modal__label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.alvl-modal__field { display: flex; flex-direction: column; gap: 8px; }
+.alvl-modal__label { font-size: 14.5px; font-weight: 600; color: var(--text-primary); }
 .alvl-modal__label span { color: var(--danger-500); }
 
 .alvl-modal__select-wrap { position: relative; }
 
 .alvl-modal__select {
-  width: 100%; padding: 10px 36px 10px 14px;
+  width: 100%; padding: 12px 38px 12px 16px;
   border: 1px solid var(--border); border-radius: var(--radius-md);
   background: var(--surface); color: var(--text-primary);
-  font-size: 14px; font-family: inherit; appearance: none;
+  font-size: 15px; font-family: inherit; appearance: none;
   transition: border-color 0.2s, box-shadow 0.2s; outline: none; cursor: pointer;
 }
 .alvl-modal__select:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(10,110,209,0.1); }

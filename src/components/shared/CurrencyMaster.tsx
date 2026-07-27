@@ -607,7 +607,7 @@ export function CurrencySelector({
   const { currencies, loading, refresh } = useCurrency();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const [dropdownWidth, setDropdownWidth] = useState(300);
+  const [dropdownWidth, setDropdownWidth] = useState<number | undefined>(undefined);
   const inputRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -659,10 +659,10 @@ export function CurrencySelector({
           className={`cur-selector__trigger ${open ? 'cur-selector__trigger--open' : ''}`}
           onClick={() => {
             if (!disabled) {
-              // Measure trigger width BEFORE toggling open so FloatingMenu
-              // renders at the correct width from the very first frame.
+              // Measure the trigger button width so the dropdown matches
+              // the trigger width exactly — no min-width forcing 300px.
               if (!open && triggerRef.current) {
-                setDropdownWidth(Math.max(triggerRef.current.offsetWidth, 300));
+                setDropdownWidth(triggerRef.current.offsetWidth);
               }
               setOpen(!open);
               setSearch('');
@@ -697,17 +697,19 @@ export function CurrencySelector({
         </button>
       </div>
 
-      {/* FloatingMenu renders the dropdown via portal to document.body,
-          escaping any overflow:hidden ancestors. This is the same approach
-          used by CurrencyAmountInput in this file. */}
+      {/* FloatingMenu renders the dropdown via portal to document.body.
+          The dropdown is positioned manually using getBoundingClientRect
+          for reliable positioning without any flash. */}
       <FloatingMenu
         open={open}
         onClose={() => { setOpen(false); setSearch(''); }}
         anchorRef={triggerRef}
         className="cur-selector__dropdown"
-        options={{ placement: 'bottom-start', offset: 4, viewportPadding: 8 }}
         width={dropdownWidth}
-        minWidth={300}
+        minWidth={260}
+        offset={4}
+        placement="bottom-start"
+        preventFlip={true}
         animation="slide"
       >
         <div className="cur-selector__search">
@@ -878,8 +880,10 @@ export function CurrencyAmountInput({
         onClose={() => { setOpen(false); setSearch(''); }}
         anchorRef={triggerRef}
         className="cur-amount-input__dropdown"
-        options={{ placement: 'bottom-start', offset: 4, viewportPadding: 8 }}
         width={260}
+        offset={4}
+        placement="bottom-start"
+        preventFlip={true}
         animation="slide"
       >
         <div className="cur-selector__search">

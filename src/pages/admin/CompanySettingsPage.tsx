@@ -6,7 +6,7 @@ import { invalidateApiCache } from '../../api/client';
 import {
   Plus, X, Edit3, Building2, Tag, ChevronDown, ChevronRight, ChevronUp, Search,
   Save, Settings, DollarSign, Trash2, Ruler, Users, CreditCard, Mail, FileText, RotateCcw, Clock,
-  Palette, Image, FileSignature, Eye, Upload, Loader2,
+  Palette, Image, FileSignature, Eye, Upload, Loader2, ArrowRight, Sparkles,
 } from 'lucide-react';
 import ImageCropperModal from '../../components/shared/ImageCropperModal';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
@@ -20,6 +20,44 @@ import '../../components/shared/SignatureSection.css';
 import OcrPreview from '../../components/shared/OcrPreview';
 import '../../components/shared/OcrPreview.css';
 import ErrorBoundary from '../../components/shared/ErrorBoundary';
+import { TableSkeleton, CardSkeleton, PageSkeleton, Skeleton } from '../../components/shared/Skeleton';
+
+// ─── Utility: Convert structured plain text to HTML ─────────
+// Converts plain text with layout (indentation, spacing, line breaks)
+// to HTML suitable for the RichTextEditor, preserving the original
+// document structure from OCR layout reconstruction.
+function textToHtml(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => {
+      if (line.trim() === '') {
+        // Empty line → paragraph break
+        return '<p><br></p>';
+      }
+      // Escape HTML special characters first
+      let escaped = line
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+      // Count leading spaces for indentation
+      const leadingMatch = escaped.match(/^ +/);
+      const leadingCount = leadingMatch ? leadingMatch[0].length : 0;
+
+      // Replace leading spaces with &nbsp; entities
+      if (leadingCount > 0) {
+        const indent = '&nbsp;'.repeat(leadingCount);
+        escaped = indent + escaped.slice(leadingCount);
+      }
+
+      // Replace remaining runs of 2+ spaces with &nbsp; to preserve alignment
+      // Single spaces stay as-is (normal word separator)
+      escaped = escaped.replace(/  +/g, (match) => '&nbsp;'.repeat(match.length));
+
+      return '<p>' + escaped + '</p>';
+    })
+    .join('\n');
+}
 
 // ─── Tab Definitions ────────────────────────────────────────
 
@@ -239,6 +277,8 @@ export default function CompanySettingsPage() {
   const [brandingColor, setBrandingColor] = useState('#0a6ed1');
   const [brandingLoginText, setBrandingLoginText] = useState('');
   const [brandingSupportEmail, setBrandingSupportEmail] = useState('');
+  const [brandingCompanyPhone, setBrandingCompanyPhone] = useState('');
+  const [brandingCompanyEmail, setBrandingCompanyEmail] = useState('');
   const [brandingDirty, setBrandingDirty] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingFavicon, setUploadingFavicon] = useState(false);
@@ -257,6 +297,8 @@ export default function CompanySettingsPage() {
       setBrandingColor(profile.primaryColor || '#0a6ed1');
       setBrandingLoginText(profile.loginText || '');
       setBrandingSupportEmail(profile.supportEmail || '');
+      setBrandingCompanyPhone(profile.companyPhone || '');
+      setBrandingCompanyEmail(profile.companyEmail || '');
     }
   }, [profile]);
 
@@ -272,6 +314,8 @@ export default function CompanySettingsPage() {
       if (brandingColor !== (profile?.primaryColor || '#0a6ed1')) payload.primaryColor = brandingColor;
       if (brandingLoginText !== (profile?.loginText || '')) payload.loginText = brandingLoginText;
       if (brandingSupportEmail !== (profile?.supportEmail || '')) payload.supportEmail = brandingSupportEmail;
+      if (brandingCompanyPhone !== (profile?.companyPhone || '')) payload.companyPhone = brandingCompanyPhone;
+      if (brandingCompanyEmail !== (profile?.companyEmail || '')) payload.companyEmail = brandingCompanyEmail;
 
       if (Object.keys(payload).length === 0) {
         setPageMsg('No changes to save.');
@@ -288,7 +332,7 @@ export default function CompanySettingsPage() {
     } finally {
       setSavingBranding(false);
     }
-  }, [brandingDirty, brandingName, brandingLogoUrl, brandingFaviconUrl, brandingColor, brandingLoginText, brandingSupportEmail, profile, refreshBranding]);
+  }, [brandingDirty, brandingName, brandingLogoUrl, brandingFaviconUrl, brandingColor, brandingLoginText, brandingSupportEmail, brandingCompanyPhone, brandingCompanyEmail, profile, refreshBranding]);
 
   const markBrandingDirty = useCallback(() => {
     if (!brandingDirty) setBrandingDirty(true);
@@ -393,6 +437,24 @@ export default function CompanySettingsPage() {
   const [editedBodyHtml, setEditedBodyHtml] = useState('');
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [templateDirty, setTemplateDirty] = useState(false);
+  const [emailSearchQuery, setEmailSearchQuery] = useState('');
+  const [emailFilterType, setEmailFilterType] = useState('ALL');
+
+  const filteredEmailTemplateKeys = useMemo(() => {
+    return EMAIL_TEMPLATE_KEYS.filter(key => {
+      const label = EMAIL_TEMPLATE_LABELS[key] || key;
+      const matchesSearch = !emailSearchQuery.trim() ||
+        label.toLowerCase().includes(emailSearchQuery.toLowerCase()) ||
+        key.toLowerCase().includes(emailSearchQuery.toLowerCase());
+
+      const saved = emailTemplates.find(t => t.templateKey === key);
+      const isCustom = !!saved && saved.bodyHtml !== '' && saved.bodyHtml !== undefined;
+
+      if (emailFilterType === 'CUSTOMIZED') return matchesSearch && isCustom;
+      if (emailFilterType === 'DEFAULT') return matchesSearch && !isCustom;
+      return matchesSearch;
+    });
+  }, [emailTemplates, emailSearchQuery, emailFilterType, EMAIL_TEMPLATE_KEYS, EMAIL_TEMPLATE_LABELS]);
 
   const selectedTemplate = emailTemplates.find((t) => t.templateKey === selectedTemplateKey);
   const isDefaultTemplate = selectedTemplate && !emailTemplates.find(
@@ -487,7 +549,18 @@ export default function CompanySettingsPage() {
   const [renamingContractTypeName, setRenamingContractTypeName] = useState('');
   const [deleteContractTypeTarget, setDeleteContractTypeTarget] = useState<string | null>(null);
   const [contractFileUploading, setContractFileUploading] = useState(false);
+  const [contractSearchQuery, setContractSearchQuery] = useState('');
+  const [contractFilterType, setContractFilterType] = useState('ALL');
   const ocrPollActiveRef = useRef(false);
+
+  const filteredContractTemplates = useMemo(() => {
+    return contractTemplates.filter(t => {
+      const matchesSearch = !contractSearchQuery.trim() ||
+        t.name.toLowerCase().includes(contractSearchQuery.toLowerCase()) ||
+        t.type.toLowerCase().includes(contractSearchQuery.toLowerCase());
+      return matchesSearch;
+    });
+  }, [contractTemplates, contractSearchQuery]);
 
   const CONTRACT_PLACEHOLDERS: Record<string, string> = {
     '{{company_name}}': 'Company name',
@@ -606,23 +679,28 @@ export default function CompanySettingsPage() {
 
   const handleResetContractTemplate = useCallback(async () => {
     if (!selectedContractType) return;
-    const confirm = window.confirm(`Reset the ${selectedContractType} template to its default content? This cannot be undone.`);
+    const confirm = window.confirm('Reset this template content to its default state? Unsaved changes will be discarded.');
     if (!confirm) return;
     setSavingContractTemplate(true);
     setPageMsg(null);
     try {
-      await companySettingsService.deleteContractTemplate(selectedContractType);
-      setEditedContractContent('');
+      const tmpl = contractTemplates.find(t => t.type === selectedContractType);
+      const result = await companySettingsService.getContractTemplate(selectedContractType);
+      const defaultContent = result?.defaultContent || result?.template?.content || tmpl?.content || '';
+      setEditedContractContent(defaultContent);
+      if (tmpl) {
+        setEditedContractName(tmpl.name || selectedContractType);
+        setEditedContractDescription(tmpl.description || '');
+        setEditedContractIsActive(tmpl.isActive ?? true);
+      }
       setContractTemplateDirty(false);
-      setSelectedContractType(null);
-      await fetchContractTemplates();
-      setPageMsg(`${selectedContractType} template reset to default.`);
+      setPageMsg('Template content reset to default.');
     } catch (err) {
       setPageMsg(err instanceof Error ? err.message : 'Failed to reset template');
     } finally {
       setSavingContractTemplate(false);
     }
-  }, [selectedContractType, fetchContractTemplates]);
+  }, [selectedContractType, contractTemplates]);
 
   const handleCreateNewContractType = useCallback(async () => {
     const typeName = newContractTypeName.trim()
@@ -727,10 +805,11 @@ export default function CompanySettingsPage() {
     try {
       await companySettingsService.triggerContractOcr(selectedContractType);
 
-      // Poll for OCR status until COMPLETED, FAILED, or timeout (120s for scanned PDFs)
+      // Poll for OCR status until COMPLETED, FAILED, or extended timeout (5 min for scanned PDFs)
       const typeAtTrigger = selectedContractType;
-      const MAX_POLL_MS = 120000;
+      const MAX_POLL_MS = 300000; // 5 minutes for large scanned PDFs
       const INTERVAL_MS = 3000;
+      const LONG_INTERVAL_MS = 10000; // Poll less frequently after the initial timeout window
       const startTime = Date.now();
       ocrPollActiveRef.current = true;
 
@@ -741,10 +820,9 @@ export default function CompanySettingsPage() {
         const elapsed = Date.now() - startTime;
         if (elapsed >= MAX_POLL_MS) {
           ocrPollActiveRef.current = false;
-          // Bust cache and re-fetch to get the actual status from backend
-          invalidateApiCache('/company-settings/contract-templates');
-          fetchContractTemplates();
-          setPageMsg('OCR is taking longer than expected. Refreshing status from server...');
+          // Don't call fetchContractTemplates as it resets PROCESSING to null.
+          // Instead, update the message so user knows OCR is still running.
+          setPageMsg('OCR is still running on the server. Refresh the page later to check the result.');
           return;
         }
         try {
@@ -759,15 +837,22 @@ export default function CompanySettingsPage() {
                 : t
             ));
             if (status.ocrStatus === 'COMPLETED' && status.ocrText) {
-              setPageMsg('OCR completed! Text extracted from uploaded file.');
+              // Convert plain text with layout to HTML for the rich text editor
+              setEditedContractContent(textToHtml(status.ocrText));
+              setContractTemplateDirty(true);
+              setPageMsg('OCR completed! Text extracted and applied as template content.');
             } else if (status.ocrStatus === 'FAILED') {
               setPageMsg('OCR failed. The uploaded file may contain no readable text.');
             }
           } else {
-            setTimeout(poll, INTERVAL_MS);
+            // Use longer interval if we've already waited a while
+            const interval = elapsed >= 60000 ? LONG_INTERVAL_MS : INTERVAL_MS;
+            setTimeout(poll, interval);
           }
         } catch {
-          setTimeout(poll, INTERVAL_MS);
+          // On API error, retry with the appropriate interval
+          const interval = elapsed >= 60000 ? LONG_INTERVAL_MS : INTERVAL_MS;
+          setTimeout(poll, interval);
         }
       };
 
@@ -808,25 +893,38 @@ export default function CompanySettingsPage() {
   }, [selectedContractType]);
 
   // ── Document Templates (NDA / MNDA) state ──
-  // Per-template independent state so switching NDA/MNDA preserves unsaved changes
+  // Supports MULTIPLE templates per type (like Contract Templates)
   const [documentTemplates, setDocumentTemplates] = useState<DocumentTemplate[]>([]);
   const [docTemplatesLoading, setDocTemplatesLoading] = useState(false);
-  const [selectedDocType, setSelectedDocType] = useState<'NDA' | 'MNDA' | null>(null);
-  const [docDrafts, setDocDrafts] = useState<Record<string, { content: string; name: string }>>({});
-  const [docDirty, setDocDirty] = useState<Record<string, boolean>>({});
+  const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
+  const [editedDocContent, setEditedDocContent] = useState('');
+  const [editedDocName, setEditedDocName] = useState('');
+  const [docTemplateDirty, setDocTemplateDirty] = useState(false);
   const [savingDocTemplate, setSavingDocTemplate] = useState(false);
   const [docFileUploading, setDocFileUploading] = useState(false);
+  const [editingNewDoc, setEditingNewDoc] = useState<'NDA' | 'MNDA' | null>(null);
+  const [newDocName, setNewDocName] = useState('');
+  const [renamingDocId, setRenamingDocId] = useState<string | null>(null);
+  const [renamingDocName, setRenamingDocName] = useState('');
+  const [deleteDocIdTarget, setDeleteDocIdTarget] = useState<string | null>(null);
+  const [docSearchQuery, setDocSearchQuery] = useState('');
+  const [docTypeFilter, setDocTypeFilter] = useState<'ALL' | 'NDA' | 'MNDA'>('ALL');
   const docOcrPollActiveRef = useRef(false);
 
   // Derived values for the currently selected document template
   const selectedDocTemplate = useMemo(
-    () => documentTemplates.find(t => t.type === selectedDocType) || null,
-    [documentTemplates, selectedDocType]
+    () => documentTemplates.find(t => t.id === selectedDocId) || null,
+    [documentTemplates, selectedDocId]
   );
   const docTemplateIsDefault = !selectedDocTemplate || selectedDocTemplate.version <= 1;
-  const editedDocContent = (selectedDocType && docDrafts[selectedDocType]?.content) ?? '';
-  const editedDocName = (selectedDocType && docDrafts[selectedDocType]?.name) ?? '';
-  const docTemplateDirty = (selectedDocType && docDirty[selectedDocType]) ?? false;
+
+  const filteredDocTemplates = useMemo(() => {
+    return documentTemplates.filter(t => {
+      const matchesType = docTypeFilter === 'ALL' || t.type === docTypeFilter;
+      const matchesSearch = !docSearchQuery.trim() || t.name.toLowerCase().includes(docSearchQuery.toLowerCase()) || t.type.toLowerCase().includes(docSearchQuery.toLowerCase());
+      return matchesType && matchesSearch;
+    });
+  }, [documentTemplates, docTypeFilter, docSearchQuery]);
 
   const DOC_TEMPLATE_TYPES = ['NDA', 'MNDA'] as const;
   const DOC_TEMPLATE_LABELS: Record<string, string> = {
@@ -859,8 +957,6 @@ export default function CompanySettingsPage() {
     setDocTemplatesLoading(true);
     try {
       const templates = await companySettingsService.listDocumentTemplates();
-      // Reset any PROCESSING status from backend — OCR should only show as
-      // processing when the user explicitly clicks "Run OCR" in the preview.
       const cleaned = templates.map(t => ({
         ...t,
         ocrStatus: t.ocrStatus === 'PROCESSING' ? null : t.ocrStatus,
@@ -879,238 +975,259 @@ export default function CompanySettingsPage() {
     }
   }, [activeTab, fetchDocumentTemplates]);
 
-  const handleSelectDocType = useCallback(async (type: 'NDA' | 'MNDA') => {
+  const handleSelectDocTemplate = useCallback((id: string) => {
     if (docTemplateDirty) {
-      const confirm = window.confirm('You have unsaved changes. Discard them?');
-      if (!confirm) return;
+      if (!window.confirm('You have unsaved changes. Discard them?')) return;
     }
-    setSelectedDocType(type);
-    // Clear dirty state for this type when switching TO it
-    setDocDirty(prev => ({ ...prev, [type]: false }));
-    const tmpl = documentTemplates.find(t => t.type === type);
-    if (tmpl && tmpl.content) {
-      setDocDrafts(prev => ({ ...prev, [type]: { content: tmpl.content, name: tmpl.name || DOC_TEMPLATE_LABELS[type] } }));
-    } else {
-      // No saved template with content - fetch default content from backend
-      try {
-        const result = await companySettingsService.getDocumentTemplate(type);
-        if (result) {
-          setDocDrafts(prev => ({ ...prev, [type]: { content: result?.defaultContent || '', name: tmpl?.name || DOC_TEMPLATE_LABELS[type] } }));
-        } else {
-          setDocDrafts(prev => ({ ...prev, [type]: { content: '', name: tmpl?.name || DOC_TEMPLATE_LABELS[type] } }));
-        }
-      } catch {
-        setDocDrafts(prev => ({ ...prev, [type]: { content: '', name: tmpl?.name || DOC_TEMPLATE_LABELS[type] } }));
-      }
+    setSelectedDocId(id);
+    setDocTemplateDirty(false);
+    const tmpl = documentTemplates.find(t => t.id === id);
+    if (tmpl) {
+      setEditedDocContent(tmpl.content || '');
+      setEditedDocName(tmpl.name || '');
     }
-  }, [documentTemplates, docTemplateDirty, DOC_TEMPLATE_LABELS]);
+  }, [documentTemplates, docTemplateDirty]);
 
   const handleDocContentChange = useCallback((html: string) => {
-    if (!selectedDocType) return;
-    setDocDrafts(prev => ({
-      ...prev,
-      [selectedDocType]: { content: html, name: prev[selectedDocType]?.name || '' }
-    }));
-    setDocDirty(prev => ({ ...prev, [selectedDocType]: true }));
-  }, [selectedDocType]);
+    setEditedDocContent(html);
+    setDocTemplateDirty(true);
+  }, []);
 
   const handleDocNameChange = useCallback((name: string) => {
-    if (!selectedDocType) return;
-    setDocDrafts(prev => ({
-      ...prev,
-      [selectedDocType]: { content: prev[selectedDocType]?.content || '', name }
-    }));
-    setDocDirty(prev => ({ ...prev, [selectedDocType]: true }));
-  }, [selectedDocType]);
+    setEditedDocName(name);
+    setDocTemplateDirty(true);
+  }, []);
 
   const handleSaveDocTemplate = useCallback(async () => {
-    if (!selectedDocType || !editedDocContent) return;
+    if (!selectedDocId || !editedDocContent) return;
     setSavingDocTemplate(true);
     setPageMsg(null);
     try {
-      const updated = await companySettingsService.saveDocumentTemplate(selectedDocType, {
+      const updated = await companySettingsService.updateDocumentTemplateById(selectedDocId, {
         name: editedDocName.trim(),
         content: editedDocContent,
         isActive: true,
       });
-      setDocumentTemplates((prev) => {
-        const filtered = prev.filter(t => t.type !== selectedDocType);
-        return [...filtered, updated];
-      });
-      setDocDirty(prev => ({ ...prev, [selectedDocType]: false }));
-      setPageMsg(`${DOC_TEMPLATE_LABELS[selectedDocType] || selectedDocType} template saved successfully.`);
+      setDocumentTemplates(prev => prev.map(t => t.id === selectedDocId ? updated : t));
+      setDocTemplateDirty(false);
+      setPageMsg(`Template "${updated.name}" saved successfully.`);
     } catch (err) {
-      setPageMsg(err instanceof Error ? err.message : 'Failed to save document template');
+      setPageMsg(err instanceof Error ? err.message : 'Failed to save template');
     } finally {
       setSavingDocTemplate(false);
     }
-  }, [selectedDocType, editedDocContent, editedDocName, DOC_TEMPLATE_LABELS]);
+  }, [selectedDocId, editedDocContent, editedDocName]);
 
   const handleResetDocTemplate = useCallback(async () => {
-    if (!selectedDocType) return;
-    const type = selectedDocType;
-    const label = DOC_TEMPLATE_LABELS[type] || type;
-    if (!window.confirm(`Reset the ${label} template to its default content? This cannot be undone.`)) return;
+    if (!selectedDocId) return;
+    const confirm = window.confirm('Reset this document template content? Unsaved changes will be discarded.');
+    if (!confirm) return;
+    const tmpl = documentTemplates.find(t => t.id === selectedDocId);
+    if (tmpl) {
+      setEditedDocContent(tmpl.content);
+      setEditedDocName(tmpl.name);
+      setDocTemplateDirty(false);
+      setPageMsg('Document template reset to saved state.');
+    }
+  }, [selectedDocId, documentTemplates]);
+
+  const handleCreateNewDocTemplate = useCallback(async (type: 'NDA' | 'MNDA') => {
+    const name = newDocName.trim();
+    if (!name) return;
     setSavingDocTemplate(true);
     setPageMsg(null);
     try {
-      await companySettingsService.deleteDocumentTemplate(type);
-      // Re-fetch so auto-seed creates fresh default template in DB
-      await fetchDocumentTemplates();
-      // Re-select the same type to load default content into drafts
-      try {
-        const result = await companySettingsService.getDocumentTemplate(type);
-        if (result?.defaultContent) {
-          setDocDrafts(prev => ({ ...prev, [type]: { content: result.defaultContent, name: label } }));
-        } else {
-          setDocDrafts(prev => ({ ...prev, [type]: { content: '', name: label } }));
-        }
-      } catch {
-        setDocDrafts(prev => ({ ...prev, [type]: { content: '', name: label } }));
-      }
-      setDocDirty(prev => ({ ...prev, [type]: false }));
-      setPageMsg(`${label} template reset to default.`);
+      const created = await companySettingsService.createDocumentTemplate(type, {
+        name,
+        content: `<h1>${name}</h1><p>Template for ${DOC_TEMPLATE_LABELS[type]}.</p>`,
+        isActive: true,
+      });
+      setDocumentTemplates(prev => [...prev, created]);
+      setSelectedDocId(created.id);
+      setEditedDocContent(created.content);
+      setEditedDocName(created.name);
+      setEditingNewDoc(null);
+      setNewDocName('');
+      setPageMsg(`Document template "${name}" created.`);
     } catch (err) {
-      setPageMsg(err instanceof Error ? err.message : 'Failed to reset template');
+      setPageMsg(err instanceof Error ? err.message : 'Failed to create template');
     } finally {
       setSavingDocTemplate(false);
     }
-  }, [selectedDocType, DOC_TEMPLATE_LABELS, fetchDocumentTemplates]);
+  }, [newDocName, DOC_TEMPLATE_LABELS]);
+
+  const handleRenameDocTemplate = useCallback(async (id: string) => {
+    const newName = renamingDocName.trim();
+    if (!newName || newName === documentTemplates.find(t => t.id === id)?.name) {
+      setRenamingDocId(null);
+      return;
+    }
+    setSavingDocTemplate(true);
+    setPageMsg(null);
+    try {
+      const tmpl = documentTemplates.find(t => t.id === id);
+      if (!tmpl) return;
+      const updated = await companySettingsService.updateDocumentTemplateById(id, {
+        name: newName,
+        content: tmpl.content,
+        isActive: tmpl.isActive,
+      });
+      setDocumentTemplates(prev => prev.map(t => t.id === id ? updated : t));
+      if (selectedDocId === id) setEditedDocName(updated.name);
+      setRenamingDocId(null);
+      setPageMsg(`Template renamed to "${newName}".`);
+    } catch (err) {
+      setPageMsg(err instanceof Error ? err.message : 'Failed to rename template');
+    } finally {
+      setSavingDocTemplate(false);
+    }
+  }, [renamingDocName, documentTemplates, selectedDocId]);
+
+  const handleDeleteDocTemplate = useCallback(async (id: string) => {
+    setDeleteDocIdTarget(id);
+  }, []);
+
+  const confirmDeleteDocTemplate = useCallback(async () => {
+    const id = deleteDocIdTarget;
+    if (!id) return;
+    const tmpl = documentTemplates.find(t => t.id === id);
+    const label = tmpl?.name || 'Template';
+    setSavingDocTemplate(true);
+    setPageMsg(null);
+    setDeleteDocIdTarget(null);
+    try {
+      await companySettingsService.deleteDocumentTemplateById(id);
+      setDocumentTemplates(prev => prev.filter(t => t.id !== id));
+      if (selectedDocId === id) {
+        setSelectedDocId(null);
+        setEditedDocContent('');
+        setEditedDocName('');
+      }
+      setPageMsg(`Template "${label}" deleted.`);
+    } catch (err) {
+      setPageMsg(err instanceof Error ? err.message : 'Failed to delete template');
+    } finally {
+      setSavingDocTemplate(false);
+    }
+  }, [deleteDocIdTarget, documentTemplates, selectedDocId]);
+
+  const cancelDeleteDocTemplate = useCallback(() => {
+    setDeleteDocIdTarget(null);
+  }, []);
 
   // ── Document OCR Handlers ──
   const handleTriggerDocumentOcr = useCallback(async () => {
-    if (!selectedDocType) return;
-    // Cancel any previous OCR polling
+    if (!selectedDocTemplate) return;
+    const type = selectedDocTemplate.type;
     docOcrPollActiveRef.current = false;
 
-    // Show processing state inside the OCR Preview box immediately
     setDocumentTemplates(prev => prev.map(t =>
-      t.type === selectedDocType
+      t.id === selectedDocId
         ? { ...t, ocrStatus: 'PROCESSING' }
         : t
     ));
     try {
-      await companySettingsService.triggerDocumentOcr(selectedDocType);
-
-      const typeAtTrigger = selectedDocType;
-      const MAX_POLL_MS = 120000;
+      await companySettingsService.triggerDocumentOcr(type);
+      const idAtTrigger = selectedDocId;
+      const MAX_POLL_MS = 300000; // 5 minutes for large scanned PDFs
       const INTERVAL_MS = 3000;
+      const LONG_INTERVAL_MS = 10000; // Poll less frequently after the initial timeout window
       const startTime = Date.now();
       docOcrPollActiveRef.current = true;
 
       const poll = async () => {
         if (!docOcrPollActiveRef.current) return;
-
         const elapsed = Date.now() - startTime;
         if (elapsed >= MAX_POLL_MS) {
           docOcrPollActiveRef.current = false;
-          invalidateApiCache('/company-settings/document-templates');
-          fetchDocumentTemplates();
-          setPageMsg('OCR is taking longer than expected. Refreshing status from server...');
+          // Don't call fetchDocumentTemplates as it resets PROCESSING to null.
+          // Instead, update the message so user knows OCR is still running.
+          setPageMsg('OCR is still running on the server. Refresh the page later to check the result.');
           return;
         }
         try {
-          const status = await companySettingsService.getDocumentOcrStatus(typeAtTrigger);
+          const status = await companySettingsService.getDocumentOcrStatus(type);
           if (status.ocrStatus === 'COMPLETED' || status.ocrStatus === 'FAILED') {
             docOcrPollActiveRef.current = false;
             invalidateApiCache('/company-settings/document-templates');
             setDocumentTemplates(prev => prev.map(t =>
-              t.type === typeAtTrigger
+              t.id === idAtTrigger
                 ? { ...t, ocrText: status.ocrText, ocrStatus: status.ocrStatus, ocrProcessedAt: status.ocrProcessedAt }
                 : t
             ));
             if (status.ocrStatus === 'COMPLETED' && status.ocrText) {
-              setPageMsg('OCR completed! Text extracted from uploaded file.');
+              // Convert plain text with layout to HTML for the rich text editor
+              setEditedDocContent(textToHtml(status.ocrText));
+              setDocTemplateDirty(true);
+              setPageMsg('OCR completed! Text extracted and applied as template content.');
             } else if (status.ocrStatus === 'FAILED') {
               setPageMsg('OCR failed. The uploaded file may contain no readable text.');
             }
           } else {
-            setTimeout(poll, INTERVAL_MS);
+            // Use longer interval if we've already waited a while
+            const interval = elapsed >= 60000 ? LONG_INTERVAL_MS : INTERVAL_MS;
+            setTimeout(poll, interval);
           }
         } catch {
-          setTimeout(poll, INTERVAL_MS);
+          // On API error, retry with the appropriate interval
+          const interval = elapsed >= 60000 ? LONG_INTERVAL_MS : INTERVAL_MS;
+          setTimeout(poll, interval);
         }
       };
-
       setTimeout(poll, 3000);
     } catch (err) {
       docOcrPollActiveRef.current = false;
       setDocumentTemplates(prev => prev.map(t =>
-        t.type === selectedDocType
-          ? { ...t, ocrStatus: null }
-          : t
+        t.id === selectedDocId ? { ...t, ocrStatus: null } : t
       ));
       setPageMsg(err instanceof Error ? err.message : 'Failed to trigger OCR');
     }
-  }, [selectedDocType]);
+  }, [selectedDocTemplate, selectedDocId]);
 
   const handleSaveDocumentOcrText = useCallback(async (text: string) => {
-    if (!selectedDocType) return;
+    if (!selectedDocTemplate) return;
+    const type = selectedDocTemplate.type;
     try {
-      await companySettingsService.saveDocumentOcrText(selectedDocType, text);
+      await companySettingsService.saveDocumentOcrText(type, text);
       setDocumentTemplates(prev => prev.map(t =>
-        t.type === selectedDocType ? { ...t, ocrText: text } : t
+        t.id === selectedDocId ? { ...t, ocrText: text } : t
       ));
       setPageMsg('OCR text saved.');
     } catch (err) {
       setPageMsg(err instanceof Error ? err.message : 'Failed to save OCR text');
     }
-  }, [selectedDocType]);
+  }, [selectedDocTemplate, selectedDocId]);
 
   const handleUploadDocumentFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !selectedDocType) return;
+    if (!file || !selectedDocTemplate) return;
+    const type = selectedDocTemplate.type;
     setDocFileUploading(true);
     setPageMsg(null);
     try {
-      const result = await companySettingsService.uploadDocumentTemplateFile(selectedDocType, file);
-      // Update local state — handle BOTH cases:
-      // 1) Template already exists in array: update it with file info
-      // 2) Template NOT in array (e.g. DB has no seeded NDA/MNDA yet): add a new entry
-      setDocumentTemplates(prev => {
-        const idx = prev.findIndex(t => t.type === selectedDocType);
-        if (idx >= 0) {
-          const updated = [...prev];
-          updated[idx] = {
-            ...updated[idx],
-            fileUrl: result.fileUrl,
-            fileName: result.fileName,
-            fileType: result.fileType,
-          };
-          return updated;
-        }
-        // Template not in array — create a minimal entry so selectedDocTemplate exists
-        return [...prev, {
-          id: '',
-          companyCode: '',
-          type: selectedDocType,
-          name: DOC_TEMPLATE_LABELS[selectedDocType] || selectedDocType,
-          content: '',
-          fileUrl: result.fileUrl,
-          fileName: result.fileName,
-          fileType: result.fileType,
-          isActive: true,
-          version: 0,
-          createdAt: '',
-          updatedAt: '',
-        } as DocumentTemplate];
-      });
+      const result = await companySettingsService.uploadDocumentTemplateFile(type, file);
+      // Update local state — reset OCR so user can re-run on the new file
+      setDocumentTemplates(prev => prev.map(t =>
+        t.id === selectedDocId
+          ? { ...t, fileUrl: result.fileUrl, fileName: result.fileName, fileType: result.fileType, ocrStatus: null, ocrText: null, ocrProcessedAt: null }
+          : t
+      ));
       setPageMsg('File uploaded successfully!');
     } catch (err) {
       setPageMsg(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setDocFileUploading(false);
-      // Reset the input
       e.target.value = '';
     }
-  }, [selectedDocType]);
+  }, [selectedDocTemplate, selectedDocId]);
 
   const handleRemoveDocumentFile = useCallback(async () => {
-    if (!selectedDocType) return;
+    if (!selectedDocTemplate) return;
+    const type = selectedDocTemplate.type;
     setDocFileUploading(true);
     setPageMsg(null);
     try {
-      const updated = await companySettingsService.saveDocumentTemplate(selectedDocType, {
+      await companySettingsService.updateDocumentTemplateById(selectedDocId!, {
         name: editedDocName.trim(),
         content: editedDocContent,
         isActive: true,
@@ -1118,18 +1235,17 @@ export default function CompanySettingsPage() {
         fileName: null,
         fileType: null,
       });
+      // Reset OCR data when file is removed
       setDocumentTemplates(prev => prev.map(t =>
-        t.type === selectedDocType
-          ? { ...t, fileUrl: null, fileName: null, fileType: null }
-          : t
+        t.id === selectedDocId ? { ...t, fileUrl: null, fileName: null, fileType: null, ocrStatus: null, ocrText: null, ocrProcessedAt: null } : t
       ));
-      setPageMsg('Document file removed.');
+      setPageMsg('Uploaded file removed.');
     } catch (err) {
       setPageMsg(err instanceof Error ? err.message : 'Failed to remove file');
     } finally {
       setDocFileUploading(false);
     }
-  }, [selectedDocType, editedDocName, editedDocContent]);
+  }, [selectedDocTemplate, selectedDocId, editedDocName, editedDocContent]);
 
   const anyModalOpen = !!(showDeptModal || showCatModal || showUnitModal || showPositionModal || showPaymentTermModal || deleteTarget || cropFile);
   useBodyScrollLock(anyModalOpen);
@@ -1514,7 +1630,7 @@ export default function CompanySettingsPage() {
           {pageMsg}
         </MessageStrip>
       )}
-      {loading && <div className="company-settings-page__loading">Loading…</div>}
+      {loading && <div className="company-settings-page__loading" />}
 
       {/* ── Page Header ── */}
       <div className="cs-page-header">
@@ -1983,6 +2099,30 @@ export default function CompanySettingsPage() {
                   <span className="cs-field-hint">Shown in the app footer and login page footer</span>
                 </div>
 
+                {/* Company Phone */}
+                <div className="company-settings__field">
+                  <label>Company Phone</label>
+                  <input
+                    type="tel"
+                    value={brandingCompanyPhone}
+                    onChange={(e) => { setBrandingCompanyPhone(e.target.value); markBrandingDirty(); }}
+                    placeholder="+91 1234567890"
+                  />
+                  <span className="cs-field-hint">Shown on Purchase Order documents and contract templates</span>
+                </div>
+
+                {/* Company Email */}
+                <div className="company-settings__field">
+                  <label>Company Email</label>
+                  <input
+                    type="email"
+                    value={brandingCompanyEmail}
+                    onChange={(e) => { setBrandingCompanyEmail(e.target.value); markBrandingDirty(); }}
+                    placeholder="info@example.com"
+                  />
+                  <span className="cs-field-hint">Shown on Purchase Order documents and contract templates</span>
+                </div>
+
                 {/* Save Button */}
                 {brandingDirty && (
                   <div className="cs-branding-actions">
@@ -2336,100 +2476,199 @@ export default function CompanySettingsPage() {
                 <p>Customize the paragraph content of all emails sent by the system. The format and structure will remain the same.</p>
               </div>
             </div>
-            <div className="cs-section-body cs-email-templates">
+            <div className="cs-section-body" style={{ padding: 0 }}>
               {emailTemplatesLoading ? (
-                <div className="cs-empty">
-                  <p>Loading email templates...</p>
-                </div>
-              ) : emailTemplates.length === 0 ? (
-                <div className="cs-empty">
-                  <div className="cs-empty__icon"><Mail size={28} /></div>
-                  <p>No email templates configured. They will use system defaults.</p>
-                </div>
-              ) : (
-                <>
-                  {/* Sidebar - template selector */}
-                  <div className="cs-email-templates__sidebar">
-                    {EMAIL_TEMPLATE_KEYS.map((key) => {
-                      const saved = emailTemplates.find((t) => t.templateKey === key);
-                      const isCustom = !!saved && saved.bodyHtml !== '' && saved.bodyHtml !== undefined;
-                      return (
+                <TableSkeleton rows={4} />
+              ) : !selectedTemplateKey ? (
+                /* ─── LIST VIEW: ENTERPRISE DATA TABLE ─────────── */
+                <div className="cs-dt-table-wrapper">
+                  <div className="cs-dt-toolbar">
+                    <div className="cs-dt-toolbar__left">
+                      <div className="cs-dt-type-tabs">
                         <button
-                          key={key}
                           type="button"
-                          className={`cs-email-templates__sidebar-btn ${selectedTemplateKey === key ? 'cs-email-templates__sidebar-btn--active' : ''}`}
-                          onClick={() => handleSelectTemplate(key)}
+                          className={`cs-dt-type-tab ${emailFilterType === 'ALL' ? 'cs-dt-type-tab--active' : ''}`}
+                          onClick={() => setEmailFilterType('ALL')}
                         >
-                          <span className={`cs-email-sidebar-dot ${isCustom ? 'cs-email-sidebar-dot--custom' : 'cs-email-sidebar-dot--default'}`} />
-                          {EMAIL_TEMPLATE_LABELS[key] || key}
+                          All ({EMAIL_TEMPLATE_KEYS.length})
                         </button>
-                      );
-                    })}
+                        <button
+                          type="button"
+                          className={`cs-dt-type-tab ${emailFilterType === 'CUSTOMIZED' ? 'cs-dt-type-tab--active' : ''}`}
+                          onClick={() => setEmailFilterType('CUSTOMIZED')}
+                        >
+                          Customized
+                        </button>
+                        <button
+                          type="button"
+                          className={`cs-dt-type-tab ${emailFilterType === 'DEFAULT' ? 'cs-dt-type-tab--active' : ''}`}
+                          onClick={() => setEmailFilterType('DEFAULT')}
+                        >
+                          Default
+                        </button>
+                      </div>
+
+                      <div className="cs-dt-search-box">
+                        <Search size={14} className="cs-dt-search-icon" />
+                        <input
+                          type="text"
+                          placeholder="Search email templates…"
+                          value={emailSearchQuery}
+                          onChange={(e) => setEmailSearchQuery(e.target.value)}
+                          className="cs-dt-search-input"
+                        />
+                        {emailSearchQuery && (
+                          <button type="button" className="cs-dt-search-clear" onClick={() => setEmailSearchQuery('')}>
+                            <X size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Editor */}
-                  <div className="cs-email-templates__editor">
-                    {selectedTemplate ? (
-                      <>
-                        <div className="cs-email-templates__editor-header">
-                          <div>
-                            <h3 className="cs-email-templates__editor-title">
-                              {EMAIL_TEMPLATE_LABELS[selectedTemplate.templateKey] || selectedTemplate.templateKey}
-                            </h3>
-                            <span className={templateDirty ? 'cs-email-badge cs-email-badge--custom' : 'cs-email-badge cs-email-badge--default'}>
-                              {templateDirty ? 'Unsaved changes' : isDefaultTemplate ? 'Using default' : 'Customized'}
-                            </span>
+                  <div className="cs-dt-table-container">
+                    <table className="cs-dt-table">
+                      <thead>
+                        <tr>
+                          <th style={{ width: 100, textAlign: 'center' }}>Actions</th>
+                          <th>Template Name</th>
+                          <th>Template Key</th>
+                          <th className="cs-dt-th--right" style={{ width: 160 }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredEmailTemplateKeys.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="cs-dt-table-empty">
+                              <Mail size={28} className="cs-dt-table-empty__icon" />
+                              <p>No email templates found</p>
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredEmailTemplateKeys.map(key => {
+                            const saved = emailTemplates.find(t => t.templateKey === key);
+                            const isCustom = !!saved && saved.bodyHtml !== '' && saved.bodyHtml !== undefined;
+                            const label = EMAIL_TEMPLATE_LABELS[key] || key;
+
+                            return (
+                              <tr key={key} className="cs-dt-table-row">
+                                <td className="cs-dt-table-cell cs-dt-table-cell--actions">
+                                  <div className="cs-dt-action-btns">
+                                    <button
+                                      type="button"
+                                      className="cs-dt-action-btn cs-dt-action-btn--edit"
+                                      onClick={() => handleSelectTemplate(key)}
+                                      title="Edit Email Template"
+                                    >
+                                      <Edit3 size={13} />
+                                    </button>
+                                  </div>
+                                </td>
+
+                                <td className="cs-dt-table-cell">
+                                  <div
+                                    className="cs-dt-name-wrapper"
+                                    onClick={() => handleSelectTemplate(key)}
+                                  >
+                                    <Mail size={16} className="cs-dt-doc-icon" />
+                                    <span className="cs-dt-template-title">{label}</span>
+                                  </div>
+                                </td>
+
+                                <td className="cs-dt-table-cell">
+                                  <span className="cs-dt-pill-badge">{key}</span>
+                                </td>
+
+                                <td className="cs-dt-table-cell cs-dt-td--right">
+                                  <span className={`cs-dt-status-badge ${isCustom ? 'cs-dt-status-badge--custom' : 'cs-dt-status-badge--default'}`}>
+                                    {isCustom ? 'Customized' : 'Default'}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                /* ─── DETAIL VIEW: EDITOR ───────────────────────── */
+                <ErrorBoundary>
+                  <div className="cs-dt-detail">
+                    <div className="cs-dt-detail__topbar">
+                      <button
+                        type="button"
+                        className="cs-dt-detail__back"
+                        onClick={() => {
+                          if (templateDirty && !window.confirm('Discard unsaved changes?')) return;
+                          setSelectedTemplateKey(null);
+                          setEditedBodyHtml('');
+                          setTemplateDirty(false);
+                        }}
+                      >
+                        <ArrowRight size={15} style={{ transform: 'rotate(180deg)' }} />
+                        Back to Templates
+                      </button>
+                      <div className="cs-dt-detail__breadcrumb">
+                        <span className="cs-dt-detail__breadcrumb-type">Email Template</span>
+                        <span className="cs-dt-detail__breadcrumb-sep">›</span>
+                        <span className="cs-dt-detail__breadcrumb-name">{EMAIL_TEMPLATE_LABELS[selectedTemplateKey] || selectedTemplateKey}</span>
+                      </div>
+                      <span className={templateDirty ? 'cs-doc-badge cs-doc-badge--dirty' : 'cs-doc-badge cs-doc-badge--default'}>
+                        {templateDirty ? 'Unsaved changes' : isDefaultTemplate ? 'Using default' : 'Customized'}
+                      </span>
+                      <div className="cs-dt-detail__actions">
+                        <button
+                          type="button"
+                          className="cs-dt-detail__sec-btn"
+                          onClick={handleResetTemplate}
+                          disabled={savingTemplate}
+                        >
+                          <RotateCcw size={14} /> Reset
+                        </button>
+                        <button
+                          type="button"
+                          className="cs-dt-detail__save-btn"
+                          onClick={handleSaveTemplate}
+                          disabled={savingTemplate || !templateDirty}
+                        >
+                          <Save size={15} />
+                          {savingTemplate ? 'Saving…' : 'Save'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="cs-dt-detail__body">
+                      <div className="cs-dt-detail__editor-col">
+                        <div className="cs-dt-detail__editor-wrap">
+                          <div className="cs-dt-detail__editor-label">
+                            <Mail size={14} /> Email Body Content
                           </div>
-                          <div className="cs-email-templates__editor-actions">
-                            <button
-                              type="button"
-                              className="cs-email-templates__editor-reset"
-                              onClick={handleResetTemplate}
-                              disabled={savingTemplate || (!isDefaultTemplate && !templateDirty)}
-                            >
-                              <RotateCcw size={14} /> Reset
-                            </button>
-                            <button
-                              type="button"
-                              className="cs-email-templates__editor-save"
-                              onClick={handleSaveTemplate}
-                              disabled={savingTemplate || !templateDirty}
-                            >
-                              <Save size={15} /> {savingTemplate ? 'Saving…' : 'Save'}
-                            </button>
-                          </div>
+                          <RichTextEditor
+                            key={selectedTemplateKey}
+                            value={editedBodyHtml}
+                            onChange={handleBodyChange}
+                            placeholder="Write email template content here..."
+                            minHeight={320}
+                          />
                         </div>
 
-                        <RichTextEditor
-                          value={editedBodyHtml}
-                          onChange={handleBodyChange}
-                          placeholder="Write the email content here..."
-                        />
-
-                        {/* Placeholders Info */}
-                        <div className="cs-email-placeholders">
-                          <div className="cs-email-placeholders__title">Available Placeholders</div>
-                          <div className="cs-email-placeholders__list">
+                        <div className="cs-doc-placeholders">
+                          <div className="cs-doc-placeholders__title">Available Placeholders</div>
+                          <div className="cs-doc-placeholders__list">
                             {Object.entries(EMAIL_PLACEHOLDERS).map(([code, desc]) => (
-                              <span key={code} className="cs-email-placeholders__item">
-                                <code className="cs-email-placeholders__code">{code}</code>
+                              <span key={code} className="cs-doc-placeholders__item">
+                                <code className="cs-doc-placeholders__code">{code}</code>
                                 {' - '}{desc}
                               </span>
                             ))}
                           </div>
                         </div>
-                      </>
-                    ) : (
-                      <div className="cs-email-templates__placeholder">
-                        <Mail size={40} className="cs-email-templates__placeholder-icon" />
-                        <div className="cs-email-templates__placeholder-title">Select a template</div>
-                        <div className="cs-email-templates__placeholder-text">
-                          Choose an email template from the list above to customize its content.
-                        </div>
                       </div>
-                    )}
+                    </div>
                   </div>
-                </>
+                </ErrorBoundary>
               )}
             </div>
           </div>
@@ -2449,220 +2688,282 @@ export default function CompanySettingsPage() {
                 <p>Manage contract templates used when generating vendor contracts after RFQ final approval. Templates are selected by the final approver - not created per contract.</p>
               </div>
             </div>
-            <div className="cs-section-body cs-doc-templates">
+            <div className="cs-section-body">
               {contractTemplatesLoading ? (
-                <div className="cs-empty">
-                  <p>Loading contract templates...</p>
-                </div>
-              ) : (
-                <>
-                  {/* Sidebar - template type selector */}
-                  <div className="cs-doc-templates__sidebar">
-                    {contractTemplates.map((t) => (
-                      <div
-                        key={t.type}
-                        className={'cs-doc-templates__sidebar-item ' + (selectedContractType === t.type ? 'cs-doc-templates__sidebar-item--active' : '')}
-                      >
-                        {renamingContractType === t.type ? (
-                          <div className="cs-doc-rename-form">
-                            <input
-                              type="text"
-                              value={renamingContractTypeName}
-                              onChange={(e) => setRenamingContractTypeName(e.target.value)}
-                              className="cs-doc-rename-input"
-                              autoFocus
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleRenameContractType(t.type, renamingContractTypeName);
-                                if (e.key === 'Escape') setRenamingContractType(null);
-                              }}
-                            />
-                            <div className="cs-doc-rename-actions">
-                              <button
-                                type="button"
-                                className="company-settings__btn company-settings__btn--primary"
-                                onClick={() => handleRenameContractType(t.type, renamingContractTypeName)}
-                                disabled={!renamingContractTypeName.trim() || savingContractTemplate}
-                                style={{ padding: '4px 8px', fontSize: 11 }}
-                              >
-                                Save
-                              </button>
-                              <button
-                                type="button"
-                                className="company-settings__btn company-settings__btn--secondary"
-                                onClick={() => setRenamingContractType(null)}
-                                style={{ padding: '4px 8px', fontSize: 11 }}
-                              >
-                                <X size={12} />
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            <button
-                              type="button"
-                              className={'cs-doc-templates__sidebar-btn ' + (selectedContractType === t.type ? 'cs-doc-templates__sidebar-btn--active' : '')}
-                              onClick={() => handleSelectContractType(t.type)}
-                            >
-                              <span className={'cs-doc-sidebar-dot ' + (t.version > 1 ? 'cs-doc-sidebar-dot--custom' : 'cs-doc-sidebar-dot--default')} />
-                              <span className="cs-doc-sidebar-name">{t.name}</span>
-                            </button>
-                            <div className="cs-doc-sidebar-item-actions">
-                              <button
-                                type="button"
-                                className="company-settings__icon-btn"
-                                onClick={(e) => { e.stopPropagation(); setRenamingContractType(t.type); setRenamingContractTypeName(t.name); }}
-                                title="Rename"
-                              >
-                                <Edit3 size={12} />
-                              </button>
-                              <button
-                                type="button"
-                                className="company-settings__icon-btn company-settings__icon-btn--danger"
-                                onClick={(e) => { e.stopPropagation(); handleDeleteContractType(t.type); }}
-                                title="Delete contract type"
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            </div>
-                          </>
-                        )}
+                <TableSkeleton rows={3} />
+              ) : !selectedContractType ? (
+                /* ─── LIST VIEW: ENTERPRISE DATA TABLE ─────────── */
+                <div className="cs-dt-table-wrapper">
+                  <div className="cs-dt-toolbar">
+                    <div className="cs-dt-toolbar__left">
+                      <div className="cs-dt-type-tabs">
+                        <button
+                          type="button"
+                          className={`cs-dt-type-tab ${contractFilterType === 'ALL' ? 'cs-dt-type-tab--active' : ''}`}
+                          onClick={() => setContractFilterType('ALL')}
+                        >
+                          All ({contractTemplates.length})
+                        </button>
                       </div>
-                    ))}
-                    {editingNewContractType ? (
-                      <div className="cs-doc-new-type-form">
+
+                      <div className="cs-dt-search-box">
+                        <Search size={14} className="cs-dt-search-icon" />
                         <input
                           type="text"
-                          value={newContractTypeName}
-                          onChange={(e) => setNewContractTypeName(e.target.value)}
-                          placeholder="e.g. Lease Contract"
-                          className="cs-doc-new-type-input"
-                          autoFocus
+                          placeholder="Search contract templates…"
+                          value={contractSearchQuery}
+                          onChange={(e) => setContractSearchQuery(e.target.value)}
+                          className="cs-dt-search-input"
                         />
-                        <div className="cs-doc-new-type-actions">
+                        {contractSearchQuery && (
+                          <button type="button" className="cs-dt-search-clear" onClick={() => setContractSearchQuery('')}>
+                            <X size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="cs-dt-toolbar__right">
+                      {editingNewContractType ? (
+                        <div className="cs-dt-new-inline-form">
+                          <input
+                            type="text"
+                            placeholder="Contract Type Name (e.g. Lease Contract)"
+                            value={newContractTypeName}
+                            onChange={(e) => setNewContractTypeName(e.target.value)}
+                            className="cs-dt-new-input"
+                            autoFocus
+                          />
                           <button
                             type="button"
                             className="company-settings__btn company-settings__btn--primary"
                             onClick={handleCreateNewContractType}
                             disabled={!newContractTypeName.trim() || savingContractTemplate}
-                            style={{ padding: '4px 10px', fontSize: 12 }}
+                            style={{ padding: '5px 10px', fontSize: 12 }}
                           >
-                            <Plus size={12} /> {savingContractTemplate ? 'Adding...' : 'Add'}
+                            {savingContractTemplate ? 'Adding…' : 'Add'}
                           </button>
                           <button
                             type="button"
                             className="company-settings__btn company-settings__btn--secondary"
                             onClick={() => { setEditingNewContractType(false); setNewContractTypeName(''); }}
-                            style={{ padding: '4px 10px', fontSize: 12 }}
+                            style={{ padding: '5px 8px', fontSize: 12 }}
                           >
-                            Cancel
+                            <X size={13} />
                           </button>
                         </div>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        className="cs-doc-templates__sidebar-btn cs-doc-templates__sidebar-btn--add"
-                        onClick={() => setEditingNewContractType(true)}
-                      >
-                        <Plus size={14} /> New Type
-                      </button>
-                    )}
+                      ) : (
+                        <button
+                          type="button"
+                          className="company-settings__btn company-settings__btn--primary"
+                          onClick={() => setEditingNewContractType(true)}
+                          style={{ gap: 6 }}
+                        >
+                          <Plus size={14} /> New Contract Template
+                        </button>
+                      )}
+                    </div>
                   </div>
 
-                  {/* Editor */}
-                  <div className="cs-doc-templates__main">
-                    {/* Editor */}
-                    <div className="cs-doc-templates__editor">
-                    {selectedContractType ? (
-                      <>
-                        <div className="cs-doc-templates__editor-header">
-                          <div className="cs-doc-templates__editor-title-row">
-                            <div className="company-settings__field cs-doc-templates__name-field">
-                              <input
-                                value={editedContractName}
-                                onChange={(e) => handleContractNameChange(e.target.value)}
-                                placeholder="Template Name"
-                                className="cs-doc-templates__name-input"
-                              />
-                            </div>
-                            <label className="cs-doc-templates__active-toggle">
-                              <input
-                                type="checkbox"
-                                checked={editedContractIsActive}
-                                onChange={(e) => { setEditedContractIsActive(e.target.checked); setContractTemplateDirty(true); }}
-                              />
-                              {editedContractIsActive ? 'Active' : 'Inactive'}
-                            </label>
-                            <span className={contractTemplateDirty ? 'cs-doc-badge cs-doc-badge--dirty' : 'cs-doc-badge cs-doc-badge--default'}>
-                              {contractTemplateDirty ? 'Unsaved changes' : contractTemplateIsDefault ? 'Default template' : 'Customized'}
-                            </span>
-                          </div>
+                  <div className="cs-dt-table-container">
+                    <table className="cs-dt-table">
+                      <thead>
+                        <tr>
+                          <th style={{ width: 100, textAlign: 'center' }}>Actions</th>
+                          <th>Template Name</th>
+                          <th className="cs-dt-th--right" style={{ width: 140 }}>Status</th>
+                          <th className="cs-dt-th--right" style={{ width: 160 }}>Source Format</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredContractTemplates.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="cs-dt-table-empty">
+                              <FileText size={28} className="cs-dt-table-empty__icon" />
+                              <p>No contract templates found</p>
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredContractTemplates.map(t => (
+                            <tr key={t.type} className="cs-dt-table-row">
+                              <td className="cs-dt-table-cell cs-dt-table-cell--actions">
+                                <div className="cs-dt-action-btns">
+                                  <button
+                                    type="button"
+                                    className="cs-dt-action-btn cs-dt-action-btn--edit"
+                                    onClick={() => handleSelectContractType(t.type)}
+                                    title="Edit Template"
+                                  >
+                                    <Edit3 size={13} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="cs-dt-action-btn"
+                                    onClick={() => { setRenamingContractType(t.type); setRenamingContractTypeName(t.name); }}
+                                    title="Rename"
+                                  >
+                                    <FileText size={13} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="cs-dt-action-btn cs-dt-action-btn--delete"
+                                    onClick={() => handleDeleteContractType(t.type)}
+                                    title="Delete"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              </td>
 
-                          <div className="cs-doc-templates__editor-actions">
-                            <button
-                              type="button"
-                              className="cs-doc-templates__editor-reset"
-                              onClick={() => setContractPreviewOpen(true)}
-                              disabled={!editedContractContent}
-                            >
-                              <Eye size={14} /> Preview
-                            </button>
-                            <button
-                              type="button"
-                              className="cs-doc-templates__editor-reset"
-                              onClick={handleResetContractTemplate}
-                              disabled={savingContractTemplate || contractTemplateIsDefault}
-                            >
-                              <RotateCcw size={14} /> Reset
-                            </button>
-                            <button
-                              type="button"
-                              className="cs-doc-templates__editor-save"
-                              onClick={handleSaveContractTemplate}
-                              disabled={savingContractTemplate || !contractTemplateDirty}
-                            >
-                              <Save size={15} /> {savingContractTemplate ? 'Saving…' : 'Save'}
-                            </button>
-                          </div>
-                        </div>
+                              <td className="cs-dt-table-cell">
+                                {renamingContractType === t.type ? (
+                                  <div className="cs-dt-inline-rename">
+                                    <input
+                                      type="text"
+                                      value={renamingContractTypeName}
+                                      onChange={(e) => setRenamingContractTypeName(e.target.value)}
+                                      className="cs-dt-inline-rename-input"
+                                      autoFocus
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') handleRenameContractType(t.type, renamingContractTypeName);
+                                        if (e.key === 'Escape') setRenamingContractType(null);
+                                      }}
+                                    />
+                                    <button
+                                      type="button"
+                                      className="company-settings__btn company-settings__btn--primary"
+                                      onClick={() => handleRenameContractType(t.type, renamingContractTypeName)}
+                                      style={{ padding: '3px 8px', fontSize: 11 }}
+                                    >
+                                      Save
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="company-settings__btn company-settings__btn--secondary"
+                                      onClick={() => setRenamingContractType(null)}
+                                      style={{ padding: '3px 6px', fontSize: 11 }}
+                                    >
+                                      <X size={11} />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div
+                                    className="cs-dt-name-wrapper"
+                                    onClick={() => handleSelectContractType(t.type)}
+                                  >
+                                    <FileText size={16} className="cs-dt-doc-icon" />
+                                    <span className="cs-dt-template-title">{t.name}</span>
+                                  </div>
+                                )}
+                              </td>
 
-                        {/* Template Content Editor */}
-                        <div className="cs-doc-templates__editor-body">
-                          <RichTextEditor
-                            value={editedContractContent}
-                            onChange={handleContractContentChange}
-                            placeholder="Write the contract template content here... Use HTML with placeholders like {{contractNumber}}, {{vendorName}}, {{awardValue}}, etc."
+                              <td className="cs-dt-table-cell cs-dt-td--right">
+                                <span className={`cs-dt-status-badge ${t.version > 1 ? 'cs-dt-status-badge--custom' : 'cs-dt-status-badge--default'}`}>
+                                  {t.version > 1 ? `Custom (v${t.version})` : 'Default'}
+                                </span>
+                              </td>
+
+                              <td className="cs-dt-table-cell cs-dt-td--right">
+                                {t.fileUrl ? (
+                                  <span className="cs-dt-source-badge cs-dt-source-badge--pdf">
+                                    <FileText size={13} /> {t.fileName || 'PDF/DOC'}
+                                  </span>
+                                ) : (
+                                  <span className="cs-dt-source-badge">HTML Editor</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                /* ─── DETAIL VIEW: EDITOR ───────────────────────── */
+                <ErrorBoundary>
+                  <div className="cs-dt-detail">
+                    <div className="cs-dt-detail__topbar">
+                      <button
+                        type="button"
+                        className="cs-dt-detail__back"
+                        onClick={() => {
+                          if (contractTemplateDirty && !window.confirm('Discard unsaved changes?')) return;
+                          setSelectedContractType(null);
+                          setEditedContractContent('');
+                          setEditedContractName('');
+                          setContractTemplateDirty(false);
+                        }}
+                      >
+                        <ArrowRight size={15} style={{ transform: 'rotate(180deg)' }} />
+                        Back to Templates
+                      </button>
+                      <div className="cs-dt-detail__breadcrumb">
+                        <span className="cs-dt-detail__breadcrumb-type">{selectedContractTemplate?.name || selectedContractTemplate?.type}</span>
+                        <span className="cs-dt-detail__breadcrumb-sep">›</span>
+                        <span className="cs-dt-detail__breadcrumb-name">{editedContractName || selectedContractTemplate?.name}</span>
+                      </div>
+                      <label className="cs-dt-detail__toggle">
+                        <input
+                          type="checkbox"
+                          checked={editedContractIsActive}
+                          onChange={(e) => { setEditedContractIsActive(e.target.checked); setContractTemplateDirty(true); }}
+                        />
+                        {editedContractIsActive ? 'Active' : 'Inactive'}
+                      </label>
+                      <span className={contractTemplateDirty ? 'cs-doc-badge cs-doc-badge--dirty' : 'cs-doc-badge cs-doc-badge--default'}>
+                        {contractTemplateDirty ? 'Unsaved changes' : contractTemplateIsDefault ? 'Default' : 'Customized'}
+                      </span>
+                      <div className="cs-dt-detail__actions">
+                        <button
+                          type="button"
+                          className="cs-dt-detail__sec-btn"
+                          onClick={handleResetContractTemplate}
+                          disabled={savingContractTemplate || contractTemplateIsDefault}
+                        >
+                          <RotateCcw size={14} /> Reset
+                        </button>
+                        <button
+                          type="button"
+                          className="cs-dt-detail__save-btn"
+                          onClick={handleSaveContractTemplate}
+                          disabled={savingContractTemplate || !contractTemplateDirty}
+                        >
+                          <Save size={15} />
+                          {savingContractTemplate ? 'Saving…' : 'Save'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="cs-dt-detail__body">
+                      <div className="cs-dt-detail__editor-col">
+                        <div className="cs-dt-detail__name-row">
+                          <label className="cs-dt-detail__name-label">Template Name</label>
+                          <input
+                            value={editedContractName || ''}
+                            onChange={(e) => handleContractNameChange(e.target.value)}
+                            placeholder="Template Name"
+                            className="cs-dt-detail__name-input"
                           />
                         </div>
 
-                        {/* ── Upload Contract Document ── */}
-                        <div className="cs-contract-upload">
-                          <div className="cs-contract-upload__row">
-                            <FileText size={18} className="cs-contract-upload__icon" />
-                            <div className="cs-contract-upload__info">
-                              <div className="cs-contract-upload__label">Contract Document (PDF/DOC)</div>
-                              <div className="cs-contract-upload__desc">
-                                Upload a pre-signed contract document instead of using the HTML editor above.
-                                When generating a contract, the uploaded file will be used.
-                              </div>
+                        <div className="cs-dt-upload-strip">
+                          <div className="cs-dt-upload-strip__left">
+                            <FileText size={16} className="cs-dt-upload-strip__icon" />
+                            <div>
+                              <div className="cs-dt-upload-strip__label">Contract Document (PDF/DOC) (optional)</div>
+                              <div className="cs-dt-upload-strip__desc">Upload a document file or extract text into the rich editor below</div>
                             </div>
+                          </div>
+                          <div className="cs-dt-upload-strip__right">
                             {selectedContractTemplate?.fileUrl ? (
-                              <div className="cs-contract-upload__file">
-                                <FileText size={14} className="cs-contract-upload__file-icon" />
-                                <span className="cs-contract-upload__file-name">
-                                  {selectedContractTemplate.fileName || 'Uploaded document'}
-                                </span>
-                                <a
-                                  href={selectedContractTemplate.fileUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="cs-contract-upload__view-link"
-                                >
-                                  View
-                                </a>
+                              <div className="cs-dt-upload-strip__file">
+                                <FileText size={13} />
+                                <span>{selectedContractTemplate.fileName || 'Uploaded document'}</span>
+                                <a href={selectedContractTemplate.fileUrl} target="_blank" rel="noopener noreferrer" className="cs-dt-upload-strip__view">View</a>
                                 <button
                                   type="button"
-                                  className="cs-contract-upload__remove-btn"
+                                  className="cs-dt-upload-strip__remove"
                                   onClick={async () => {
                                     if (!selectedContractType) return;
                                     try {
@@ -2682,13 +2983,14 @@ export default function CompanySettingsPage() {
                                       setPageMsg(err instanceof Error ? err.message : 'Failed to remove document');
                                     }
                                   }}
-                                  title="Remove uploaded document"
+                                  disabled={contractFileUploading}
+                                  title="Remove"
                                 >
                                   <Trash2 size={12} />
                                 </button>
                               </div>
                             ) : (
-                              <label className="cs-contract-upload__btn">
+                              <label className="cs-dt-upload-strip__btn">
                                 <input
                                   type="file"
                                   accept={ALLOWED_CONTRACT_UPLOAD_EXTENSIONS}
@@ -2710,6 +3012,9 @@ export default function CompanySettingsPage() {
                                       });
                                       setContractTemplateDirty(false);
                                       await fetchContractTemplates();
+                                      setContractTemplates(prev => prev.map(t =>
+                                        t.type === selectedContractType ? { ...t, ocrStatus: null, ocrText: null, ocrProcessedAt: null } : t
+                                      ));
                                       setPageMsg(`Document "${file.name}" uploaded and attached to template.`);
                                     } catch (err) {
                                       setPageMsg(err instanceof Error ? err.message : 'Upload failed');
@@ -2719,21 +3024,51 @@ export default function CompanySettingsPage() {
                                     e.target.value = '';
                                   }}
                                 />
-                                {contractFileUploading ? (
-                                  <><Loader2 size={14} className="cs-spin" /> Uploading…</>
-                                ) : (
-                                  <><Upload size={14} /> Choose File</>
-                                )}
+                                {contractFileUploading ? <><Loader2 size={13} className="cs-spin" /> Uploading…</> : <><Upload size={13} /> Choose File</>}
                               </label>
                             )}
+
+                            <button
+                              type="button"
+                              className="cs-dt-ocr-btn"
+                              onClick={() => {
+                                if (!selectedContractTemplate?.fileUrl) {
+                                  setPageMsg('Please upload a PDF/DOC file first before running OCR.');
+                                  return;
+                                }
+                                if (selectedContractTemplate?.ocrStatus === 'COMPLETED' && selectedContractTemplate?.ocrText) {
+                                  setEditedContractContent(textToHtml(selectedContractTemplate.ocrText));
+                                  setContractTemplateDirty(true);
+                                  setPageMsg('Extracted OCR text applied to rich editor!');
+                                } else {
+                                  handleTriggerContractOcr();
+                                }
+                              }}
+                              disabled={selectedContractTemplate?.ocrStatus === 'PROCESSING' || contractFileUploading}
+                              title="Run OCR on document and insert text into editor"
+                            >
+                              {selectedContractTemplate?.ocrStatus === 'PROCESSING' ? (
+                                <><Loader2 size={13} className="cs-spin" /> Processing OCR…</>
+                              ) : (
+                                <><Sparkles size={13} /> Run OCR & Insert Text</>
+                              )}
+                            </button>
                           </div>
                         </div>
-                        
 
-                        {/* OCR Preview */}                        {selectedContractTemplate && (
-                          <OcrPreview
-                            ocrText={selectedContractTemplate.ocrText}                            ocrStatus={selectedContractTemplate.ocrStatus as any}                            ocrProcessedAt={selectedContractTemplate.ocrProcessedAt}                            onTriggerOcr={handleTriggerContractOcr}                            onSaveOcrText={handleSaveContractOcrText}                            hasFile={!!selectedContractTemplate.fileUrl}                          />
-                        )}{/* Placeholders Info */}
+                        <div className="cs-dt-detail__editor-wrap">
+                          <div className="cs-dt-detail__editor-label">
+                            <FileSignature size={14} /> Contract Template Content
+                          </div>
+                          <RichTextEditor
+                            key={selectedContractType ?? 'none'}
+                            value={editedContractContent}
+                            onChange={handleContractContentChange}
+                            placeholder="Write contract template content here... Use {{contract_number}}, {{vendor_name}}, {{contract_value}}, etc."
+                            minHeight={320}
+                          />
+                        </div>
+
                         <div className="cs-doc-placeholders">
                           <div className="cs-doc-placeholders__title">Available Placeholders</div>
                           <div className="cs-doc-placeholders__list">
@@ -2746,27 +3081,22 @@ export default function CompanySettingsPage() {
                           </div>
                         </div>
 
-                        {/* Preview Note */}
-                        <div className="cs-doc-preview-note">
-                          <FileText size={14} />
-                          <span>When a contract is generated after RFQ finalization, the template content is rendered with the RFQ, supplier, and commercial details filled in. Each generated contract saves an immutable content snapshot - editing this template later will not modify already-generated contracts.</span>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="cs-doc-templates__placeholder">
-                        <FileText size={40} className="cs-doc-templates__placeholder-icon" />
-                        <div className="cs-doc-templates__placeholder-title">Select a contract type</div>
-                        <div className="cs-doc-templates__placeholder-text">
-                          Choose a contract type from the sidebar to edit its template content. Supported types: Purchase Contract, Service Contract, AMC, and Binding Contract.
+                        <div className="cs-dt-signature-block">
+                          <div className="cs-dt-signature-block__header">
+                            <FileSignature size={16} />
+                            <h3>Company Signature Configuration</h3>
+                          </div>
+                          <p className="cs-dt-signature-block__desc">
+                            Draw or upload your official company signature below. It will automatically embed in generated contract agreements.
+                          </p>
+                          <div className="cs-dt-signature-block__content">
+                            <SignatureSection />
+                          </div>
                         </div>
                       </div>
-                    )}
+                    </div>
                   </div>
-                  <div className="cs-doc-templates__signature">
-                    <SignatureSection />
-                  </div>
-                </div>
-                </>
+                </ErrorBoundary>
               )}
             </div>
           </div>
@@ -2781,182 +3111,383 @@ export default function CompanySettingsPage() {
       {/* -------------------------------------------------------
           TAB: Documents - NDA/MNDA Templates
           ------------------------------------------------------- */}
-      {activeTab === 'documents' && <div className="cs-tab-panel" role="tabpanel">
+      {activeTab === 'documents' && (
+        <div className="cs-tab-panel" role="tabpanel">
           <div className="cs-section-card">
             <div className="cs-section-header">
               <div className="cs-section-header__left">
                 <h2><FileSignature size={17} /> Document Templates</h2>
-                <p>Manage NDA (Non-Disclosure Agreement) and MNDA (Mutual Non-Disclosure Agreement) templates used during vendor onboarding. Use placeholders to dynamically insert company and vendor details.</p>
+                <p>Manage NDA and MNDA templates used during vendor onboarding. Create multiple templates per type, add, rename, and delete them as needed.</p>
               </div>
             </div>
-            <div className="cs-section-body cs-doc-templates">
+            <div className="cs-section-body">
               {docTemplatesLoading ? (
-                <div className="cs-empty">
-                  <p>Loading document templates...</p>
-                </div>
-              ) : (
-                <>
-                  {/* Sidebar - template type selector */}
-                  <div className="cs-doc-templates__sidebar">
-                    {DOC_TEMPLATE_TYPES.map((type) => {
-                      const saved = documentTemplates.find((t) => t.type === type);
-                      const isCustom = !!saved && saved.version > 1;
-                      return (
+                <TableSkeleton rows={3} />
+              ) : selectedDocId ? (
+                /* ─── DETAIL VIEW ───────────────────────────────── */
+                <ErrorBoundary>
+                  <div className="cs-dt-detail">
+                    <div className="cs-dt-detail__topbar">
+                      <button
+                        type="button"
+                        className="cs-dt-detail__back"
+                        onClick={() => {
+                          if (docTemplateDirty && !window.confirm('Discard unsaved changes?')) return;
+                          setSelectedDocId(null);
+                          setEditedDocContent('');
+                          setEditedDocName('');
+                          setDocTemplateDirty(false);
+                        }}
+                      >
+                        <ArrowRight size={15} style={{ transform: 'rotate(180deg)' }} />
+                        Back to Templates
+                      </button>
+                      <div className="cs-dt-detail__breadcrumb">
+                        <span className="cs-dt-detail__breadcrumb-type">{selectedDocTemplate?.type}</span>
+                        <span className="cs-dt-detail__breadcrumb-sep">›</span>
+                        <span className="cs-dt-detail__breadcrumb-name">{editedDocName || selectedDocTemplate?.name}</span>
+                      </div>
+                      <span className={docTemplateDirty ? 'cs-doc-badge cs-doc-badge--dirty' : 'cs-doc-badge cs-doc-badge--default'}>
+                        {docTemplateDirty ? 'Unsaved changes' : docTemplateIsDefault ? 'Default' : 'Customized'}
+                      </span>
+                      <div className="cs-dt-detail__actions">
                         <button
-                          key={type}
                           type="button"
-                          className={'cs-doc-templates__sidebar-btn ' + (selectedDocType === type ? 'cs-doc-templates__sidebar-btn--active' : '')}
-                          onClick={() => handleSelectDocType(type)}
+                          className="cs-dt-detail__sec-btn"
+                          onClick={handleResetDocTemplate}
+                          disabled={savingDocTemplate}
                         >
-                          <span className={'cs-doc-sidebar-dot ' + (isCustom ? 'cs-doc-sidebar-dot--custom' : 'cs-doc-sidebar-dot--default')} />
-                          {DOC_TEMPLATE_LABELS[type]}
+                          <RotateCcw size={14} /> Reset
                         </button>
-                      );
-                    })}
-                  </div>
-                  <div className="cs-doc-templates__main">
-                    {/* Editor */}
-                    <div className="cs-doc-templates__editor">
-                    {selectedDocType ? (
-                      <ErrorBoundary>
-                        <div className="cs-doc-templates__editor-header">
-                          <div className="cs-doc-templates__editor-title-row">
-                            <div className="company-settings__field cs-doc-templates__name-field">
-                              <input
-                                value={editedDocName || ''}
-                                onChange={(e) => handleDocNameChange(e.target.value)}
-                                placeholder="Template Name"
-                                className="cs-doc-templates__name-input"
-                              />
-                            </div>
-                            <span className={docTemplateDirty ? 'cs-doc-badge cs-doc-badge--dirty' : 'cs-doc-badge cs-doc-badge--default'}>
-                              {docTemplateDirty ? 'Unsaved changes' : docTemplateIsDefault ? 'Default template' : 'Customized'}
-                            </span>
-                          </div>
-                          <div className="cs-doc-templates__editor-actions">
-                            <button
-                              type="button"
-                              className="cs-doc-templates__editor-reset"
-                              onClick={handleResetDocTemplate}
-                              disabled={savingDocTemplate}
-                            >
-                              <RotateCcw size={14} /> Reset
-                            </button>
-                            <button
-                              type="button"
-                              className="cs-doc-templates__editor-save"
-                              onClick={handleSaveDocTemplate}
-                              disabled={savingDocTemplate || !docTemplateDirty}
-                            >
-                              <Save size={15} /> {savingDocTemplate ? 'Saving…' : 'Save'}
-                            </button>
-                          </div>
+                        <button
+                          type="button"
+                          className="cs-dt-detail__save-btn"
+                          onClick={handleSaveDocTemplate}
+                          disabled={savingDocTemplate || !docTemplateDirty}
+                        >
+                          <Save size={15} />
+                          {savingDocTemplate ? 'Saving…' : 'Save'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="cs-dt-detail__body">
+                      <div className="cs-dt-detail__editor-col">
+                        <div className="cs-dt-detail__name-row">
+                          <label className="cs-dt-detail__name-label">Template Name</label>
+                          <input
+                            value={editedDocName || ''}
+                            onChange={(e) => handleDocNameChange(e.target.value)}
+                            placeholder="Template Name"
+                            className="cs-dt-detail__name-input"
+                          />
                         </div>
 
-                        {/* ── Upload Area ── */}
-                        <div className="cs-contract-upload">
-                          <div className="cs-contract-upload__row">
-                            <FileText size={18} className="cs-contract-upload__icon" />
-                            <div className="cs-contract-upload__info">
-                              <div className="cs-contract-upload__label">Upload Document File (PDF/DOC)</div>
-                              <div className="cs-contract-upload__desc">
-                                Upload a signed PDF/DOC/Image version of this document instead of using the HTML editor.
-                              </div>
+                        <div className="cs-dt-upload-strip">
+                          <div className="cs-dt-upload-strip__left">
+                            <FileText size={16} className="cs-dt-upload-strip__icon" />
+                            <div>
+                              <div className="cs-dt-upload-strip__label">Upload PDF/DOC (optional)</div>
+                              <div className="cs-dt-upload-strip__desc">Upload a document file or extract text into the rich editor below</div>
                             </div>
+                          </div>
+                          <div className="cs-dt-upload-strip__right">
                             {selectedDocTemplate?.fileUrl ? (
-                              <div className="cs-contract-upload__file">
-                                <FileText size={14} className="cs-contract-upload__file-icon" />
-                                <span className="cs-contract-upload__file-name">
-                                  {selectedDocTemplate.fileName || 'Uploaded document'}
-                                </span>
-                                <a
-                                  href={selectedDocTemplate.fileUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="cs-contract-upload__view-link"
-                                >
-                                  View
-                                </a>
-                                <button
-                                  type="button"
-                                  className="cs-contract-upload__remove-btn"
-                                  onClick={handleRemoveDocumentFile}
-                                  disabled={docFileUploading}
-                                  title="Remove uploaded file"
-                                >
+                              <div className="cs-dt-upload-strip__file">
+                                <FileText size={13} />
+                                <span>{selectedDocTemplate.fileName || 'Uploaded document'}</span>
+                                <a href={selectedDocTemplate.fileUrl} target="_blank" rel="noopener noreferrer" className="cs-dt-upload-strip__view">View</a>
+                                <button type="button" className="cs-dt-upload-strip__remove" onClick={handleRemoveDocumentFile} disabled={docFileUploading} title="Remove">
                                   <Trash2 size={12} />
                                 </button>
                               </div>
                             ) : (
-                              <label className="cs-contract-upload__btn">
-                                <input
-                                  type="file"
-                                  accept={ALLOWED_CONTRACT_UPLOAD_EXTENSIONS}
-                                  style={{ display: 'none' }}
-                                  onChange={handleUploadDocumentFile}
-                                />
-                                {docFileUploading ? (
-                                  <><Loader2 size={14} className="cs-spin" /> Uploading…</>
-                                ) : (
-                                  <><Upload size={14} /> Choose File</>
-                                )}
+                              <label className="cs-dt-upload-strip__btn">
+                                <input type="file" accept={ALLOWED_CONTRACT_UPLOAD_EXTENSIONS} style={{ display: 'none' }} onChange={handleUploadDocumentFile} />
+                                {docFileUploading ? <><Loader2 size={13} className="cs-spin" /> Uploading…</> : <><Upload size={13} /> Choose File</>}
                               </label>
                             )}
+
+                            <button
+                              type="button"
+                              className="cs-dt-ocr-btn"
+                              onClick={() => {
+                                if (!selectedDocTemplate?.fileUrl) {
+                                  setPageMsg('Please upload a PDF/DOC file first before running OCR.');
+                                  return;
+                                }
+                                if (selectedDocTemplate?.ocrStatus === 'COMPLETED' && selectedDocTemplate?.ocrText) {
+                                  setEditedDocContent(textToHtml(selectedDocTemplate.ocrText));
+                                  setDocTemplateDirty(true);
+                                  setPageMsg('Extracted OCR text applied to rich editor!');
+                                } else {
+                                  handleTriggerDocumentOcr();
+                                }
+                              }}
+                              disabled={selectedDocTemplate?.ocrStatus === 'PROCESSING' || docFileUploading}
+                              title="Run OCR on document and insert text into editor"
+                            >
+                              {selectedDocTemplate?.ocrStatus === 'PROCESSING' ? (
+                                <><Loader2 size={13} className="cs-spin" /> Processing OCR…</>
+                              ) : (
+                                <><Sparkles size={13} /> Run OCR & Insert Text</>
+                              )}
+                            </button>
                           </div>
                         </div>
 
-                        {/* ── OCR Preview ── */}
-                        <OcrPreview
-                          ocrText={selectedDocTemplate?.ocrText}
-                          ocrStatus={selectedDocTemplate?.ocrStatus as any}
-                          ocrProcessedAt={selectedDocTemplate?.ocrProcessedAt}
-                          onTriggerOcr={handleTriggerDocumentOcr}
-                          onSaveOcrText={handleSaveDocumentOcrText}
-                          hasFile={!!selectedDocTemplate?.fileUrl}
-                        />
-
-                        {/* Template Content Editor */}
-                        <div className="cs-doc-templates__editor-body">
+                        <div className="cs-dt-detail__editor-wrap">
+                          <div className="cs-dt-detail__editor-label">
+                            <FileSignature size={14} /> Template Content
+                          </div>
                           <RichTextEditor
+                            key={selectedDocId ?? 'none'}
                             value={editedDocContent}
                             onChange={handleDocContentChange}
-                            placeholder="Write the document template content here... Use placeholders like {{companyName}}, {{vendorName}}, {{currentDate}}, etc."
+                            placeholder="Write template content here… use {{companyName}}, {{vendorName}}, {{currentDate}}, etc."
+                            minHeight={320}
                           />
                         </div>
 
-                        {/* Placeholders Info */}
-                        <div className="cs-email-placeholders">
-                          <div className="cs-email-placeholders__title">Available Placeholders</div>
-                          <div className="cs-email-placeholders__list">
-                            {Object.entries(DOC_TEMPLATE_PLACEHOLDERS).map(([code, desc]) => (
-                              <span key={code} className="cs-email-placeholders__item">
-                                <code className="cs-email-placeholders__code">{code}</code>
-                                {' \u2014 '}{desc}
-                              </span>
-                            ))}
+                        {/* Signature Configuration Block inside Editor */}
+                        <div className="cs-dt-signature-block">
+                          <div className="cs-dt-signature-block__header">
+                            <FileSignature size={16} />
+                            <h3>Company Signature Configuration</h3>
+                          </div>
+                          <p className="cs-dt-signature-block__desc">
+                            Draw or upload your official company signature below. It will automatically embed in generated agreements.
+                          </p>
+                          <div className="cs-dt-signature-block__content">
+                            <SignatureSection />
                           </div>
                         </div>
-                      </ErrorBoundary>
-                    ) : (
-                      <div className="cs-doc-templates__placeholder">
-                        <FileText size={40} className="cs-doc-templates__placeholder-icon" />
-                        <div className="cs-doc-templates__placeholder-title">Select a document type</div>
-                        <div className="cs-doc-templates__placeholder-text">
-                          Choose NDA or MNDA from the sidebar to edit its template content.
-                        </div>
                       </div>
-                    )}
+                    </div>
                   </div>
-                  <div className="cs-doc-templates__signature">
-                    <SignatureSection />
+                </ErrorBoundary>
+              ) : (
+                /* ─── LIST VIEW (Enterprise Data Table matching Image 2) ─── */
+                <div className="cs-dt-table-wrapper">
+                  {/* ── Toolbar / Controls Bar ── */}
+                  <div className="cs-dt-toolbar">
+                    <div className="cs-dt-toolbar__left">
+                      <div className="cs-dt-type-tabs">
+                        <button
+                          type="button"
+                          className={`cs-dt-type-tab ${docTypeFilter === 'ALL' ? 'cs-dt-type-tab--active' : ''}`}
+                          onClick={() => setDocTypeFilter('ALL')}
+                        >
+                          All ({documentTemplates.length})
+                        </button>
+                        {DOC_TEMPLATE_TYPES.map(type => {
+                          const count = documentTemplates.filter(t => t.type === type).length;
+                          return (
+                            <button
+                              key={type}
+                              type="button"
+                              className={`cs-dt-type-tab ${docTypeFilter === type ? 'cs-dt-type-tab--active' : ''}`}
+                              onClick={() => setDocTypeFilter(type)}
+                            >
+                              {type} ({count})
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="cs-dt-search-box">
+                        <Search size={14} className="cs-dt-search-icon" />
+                        <input
+                          type="text"
+                          value={docSearchQuery}
+                          onChange={(e) => setDocSearchQuery(e.target.value)}
+                          placeholder="Search templates by name..."
+                          className="cs-dt-search-input"
+                        />
+                        {docSearchQuery && (
+                          <button type="button" className="cs-dt-search-clear" onClick={() => setDocSearchQuery('')}>
+                            <X size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="cs-dt-toolbar__right">
+                      {editingNewDoc ? (
+                        <div className="cs-dt-new-inline-form">
+                          <select
+                            value={editingNewDoc}
+                            onChange={(e) => setEditingNewDoc(e.target.value as 'NDA' | 'MNDA')}
+                            className="cs-dt-new-select"
+                          >
+                            <option value="NDA">NDA</option>
+                            <option value="MNDA">MNDA</option>
+                          </select>
+                          <input
+                            type="text"
+                            value={newDocName}
+                            onChange={(e) => setNewDocName(e.target.value)}
+                            placeholder={`New ${editingNewDoc} template name...`}
+                            className="cs-dt-new-input"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleCreateNewDocTemplate(editingNewDoc);
+                              if (e.key === 'Escape') { setEditingNewDoc(null); setNewDocName(''); }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="company-settings__btn company-settings__btn--primary"
+                            onClick={() => handleCreateNewDocTemplate(editingNewDoc)}
+                            disabled={!newDocName.trim() || savingDocTemplate}
+                            style={{ padding: '6px 12px', fontSize: 12 }}
+                          >
+                            <Plus size={13} /> {savingDocTemplate ? 'Creating…' : 'Create'}
+                          </button>
+                          <button
+                            type="button"
+                            className="company-settings__btn company-settings__btn--secondary"
+                            onClick={() => { setEditingNewDoc(null); setNewDocName(''); }}
+                            style={{ padding: '6px 10px', fontSize: 12 }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="company-settings__btn company-settings__btn--primary"
+                          onClick={() => { setEditingNewDoc('NDA'); setNewDocName(''); }}
+                        >
+                          <Plus size={15} /> Add Template
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* ── Data Table ── */}
+                  <div className="cs-dt-table-container">
+                    <table className="cs-dt-table">
+                      <thead>
+                        <tr>
+                          <th style={{ width: '130px', textAlign: 'center' }}>Actions</th>
+                          <th>Template Name</th>
+                          <th style={{ width: '120px' }}>Type</th>
+                          <th className="cs-dt-th--right" style={{ width: '150px' }}>Version / Status</th>
+                          <th className="cs-dt-th--right" style={{ width: '150px' }}>Source Format</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredDocTemplates.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="cs-dt-table-empty">
+                              <FileSignature size={32} className="cs-dt-table-empty__icon" />
+                              <p>No document templates found.</p>
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredDocTemplates.map((tmpl) => (
+                            <tr key={tmpl.id} className="cs-dt-table-row">
+                              <td className="cs-dt-table-cell cs-dt-table-cell--actions">
+                                <div className="cs-dt-action-btns">
+                                  <button
+                                    type="button"
+                                    className="cs-dt-action-btn cs-dt-action-btn--edit"
+                                    onClick={() => handleSelectDocTemplate(tmpl.id)}
+                                    title="Edit Template & Signature"
+                                  >
+                                    <Edit3 size={14} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="cs-dt-action-btn cs-dt-action-btn--rename"
+                                    onClick={() => { setRenamingDocId(tmpl.id); setRenamingDocName(tmpl.name); }}
+                                    title="Rename Template"
+                                  >
+                                    <FileText size={14} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="cs-dt-action-btn cs-dt-action-btn--delete"
+                                    onClick={() => handleDeleteDocTemplate(tmpl.id)}
+                                    title="Delete Template"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </td>
+                              <td className="cs-dt-table-cell cs-dt-table-cell--name">
+                                {renamingDocId === tmpl.id ? (
+                                  <div className="cs-dt-inline-rename" onClick={(e) => e.stopPropagation()}>
+                                    <input
+                                      type="text"
+                                      value={renamingDocName}
+                                      onChange={(e) => setRenamingDocName(e.target.value)}
+                                      className="cs-dt-inline-rename-input"
+                                      autoFocus
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') handleRenameDocTemplate(tmpl.id);
+                                        if (e.key === 'Escape') setRenamingDocId(null);
+                                      }}
+                                    />
+                                    <button
+                                      type="button"
+                                      className="company-settings__btn company-settings__btn--primary"
+                                      onClick={() => handleRenameDocTemplate(tmpl.id)}
+                                      disabled={!renamingDocName.trim() || savingDocTemplate}
+                                      style={{ padding: '3px 8px', fontSize: 11 }}
+                                    >
+                                      Save
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="company-settings__btn company-settings__btn--secondary"
+                                      onClick={() => setRenamingDocId(null)}
+                                      style={{ padding: '3px 8px', fontSize: 11 }}
+                                    >
+                                      <X size={12} />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="cs-dt-name-wrapper" onClick={() => handleSelectDocTemplate(tmpl.id)}>
+                                    <FileSignature size={16} className="cs-dt-doc-icon" />
+                                    <span className="cs-dt-template-title">{tmpl.name}</span>
+                                  </div>
+                                )}
+                              </td>
+                              <td className="cs-dt-table-cell">
+                                <span className={`cs-dt-pill-badge cs-dt-pill-badge--${tmpl.type.toLowerCase()}`}>
+                                  {tmpl.type}
+                                </span>
+                              </td>
+                              <td className="cs-dt-table-cell cs-dt-td--right">
+                                <span className={`cs-dt-status-badge ${tmpl.version > 1 ? 'cs-dt-status-badge--custom' : 'cs-dt-status-badge--default'}`}>
+                                  {tmpl.version > 1 ? `v${tmpl.version} Customized` : 'Default'}
+                                </span>
+                              </td>
+                              <td className="cs-dt-table-cell cs-dt-td--right">
+                                {tmpl.fileUrl ? (
+                                  <span className="cs-dt-source-badge cs-dt-source-badge--pdf">
+                                    <FileText size={12} /> PDF Document
+                                  </span>
+                                ) : (
+                                  <span className="cs-dt-source-badge cs-dt-source-badge--html">
+                                    <FileSignature size={12} /> Rich HTML
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
-                </>
               )}
             </div>
           </div>
-      </div>
-      }
+        </div>
+      )}
       {/* ---- MODALS (unchanged logic) ------ */}
 
       {/* ── Contract Template Preview ── */}
@@ -3030,6 +3561,35 @@ export default function CompanySettingsPage() {
                 onClick={handleDeleteContractTypeConfirm}
               >
                 <Trash2 size={16} /> {savingContractTemplate ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteDocIdTarget && (
+        <div className="company-settings__backdrop" onClick={cancelDeleteDocTemplate}>
+          <div className="company-settings__modal" onClick={(e) => e.stopPropagation()}>
+            <div className="company-settings__modal-header">
+              <span><Trash2 size={18} style={{ color: 'var(--danger-500)' }} /> Delete Document Template?</span>
+              <button className="company-settings__icon-btn" onClick={cancelDeleteDocTemplate}><X size={18} /></button>
+            </div>
+            <div className="company-settings__modal-body">
+              <p style={{ margin: 0, fontSize: '0.95rem' }}>
+                Permanently delete <strong>{documentTemplates.find(t => t.id === deleteDocIdTarget)?.name || 'this template'}</strong>?
+              </p>
+              <p style={{ margin: '12px 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                This template will be permanently removed. Existing onboarding documents using this template will not be affected. This action cannot be undone.
+              </p>
+            </div>
+            <div className="company-settings__modal-footer">
+              <button className="company-settings__btn company-settings__btn--secondary" onClick={cancelDeleteDocTemplate}>Cancel</button>
+              <button
+                className="company-settings__btn company-settings__btn--danger"
+                disabled={savingDocTemplate}
+                onClick={confirmDeleteDocTemplate}
+              >
+                <Trash2 size={16} /> {savingDocTemplate ? 'Deleting…' : 'Delete'}
               </button>
             </div>
           </div>

@@ -513,21 +513,54 @@ async function apiTerminateContract(id: string, reason?: string): Promise<void> 
   }
 }
 
-async function mockCreatePOFromContract(id: string): Promise<{ poNumber: string }> {
-  await new Promise(r => setTimeout(r, 400));
-  return { poNumber: `PO-${Date.now()}` };
+export interface ContractBalance {
+  contractValue: number;
+  currency: string;
+  consumedValue: number;
+  remainingValue: number;
+  totalPOs: number;
 }
 
-async function apiCreatePOFromContract(id: string): Promise<{ poNumber: string }> {
+async function mockGetContractBalance(id: string): Promise<ContractBalance> {
+  await new Promise(r => setTimeout(r, 300));
+  return {
+    contractValue: 100000,
+    currency: 'KES',
+    consumedValue: 50000,
+    remainingValue: 50000,
+    totalPOs: 1,
+  };
+}
+
+async function apiGetContractBalance(id: string): Promise<ContractBalance> {
   try {
-    const result = await apiRequest<{ poNumber: string }>(`/contracts/${id}/create-po`, {
+    const data = await apiRequest<ContractBalance>(`/contracts/${id}/balance`);
+    return data;
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) {
+      console.warn('[ContractService] Auth required for getContractBalance — falling back to local');
+      return mockGetContractBalance(id);
+    }
+    throw err;
+  }
+}
+
+async function mockCreatePOFromContract(id: string, amount?: number): Promise<{ poNumber: string; consumedValue?: number; remainingValue?: number }> {
+  await new Promise(r => setTimeout(r, 400));
+  return { poNumber: `PO-${Date.now()}`, consumedValue: amount || 0, remainingValue: amount ? 100000 - amount : 100000 };
+}
+
+async function apiCreatePOFromContract(id: string, amount?: number): Promise<{ poNumber: string; consumedValue?: number; remainingValue?: number }> {
+  try {
+    const result = await apiRequest<{ poNumber: string; consumedValue?: number; remainingValue?: number }>(`/contracts/${id}/create-po`, {
       method: 'POST',
+      body: JSON.stringify({ amount }),
     });
     return result;
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
       console.warn('[ContractService] Auth required for createPOFromContract — falling back to local creation');
-      return mockCreatePOFromContract(id);
+      return mockCreatePOFromContract(id, amount);
     }
     throw err;
   }
@@ -552,27 +585,29 @@ async function apiUpdatePostAwardDecision(rfqId: string, decision: string): Prom
   }
 }
 
-async function apiGenerateFromTemplate(rfqId: string, templateType: string): Promise<Contract> {
+async function apiGenerateFromTemplate(rfqId: string, templateType: string, contractValue?: number, currency?: string): Promise<Contract> {
   try {
     const data = await apiRequest<Contract>('/contracts/generate', {
       method: 'POST',
-      body: JSON.stringify({ rfqId, templateType }),
+      body: JSON.stringify({ rfqId, templateType, contractValue, currency }),
     });
     return data;
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
       console.warn('[ContractService] Auth required for generate — falling back to local generation');
-      return mockGenerateFromTemplate(rfqId, templateType);
+      return mockGenerateFromTemplate(rfqId, templateType, contractValue, currency);
     }
     throw err;
   }
 }
 
-async function mockGenerateFromTemplate(rfqId: string, templateType: string): Promise<Contract> {
+async function mockGenerateFromTemplate(rfqId: string, templateType: string, contractValue?: number, currency?: string): Promise<Contract> {
   return mockCreateContract({
     rfqId,
     title: `Contract from ${templateType}`,
     contractType: templateType,
+    contractValue: contractValue || 0,
+    currency: currency || 'KES',
     effectiveDate: new Date().toISOString().slice(0, 10),
   });
 }
@@ -627,6 +662,7 @@ export const contractService = {
   signContractVendor: USE_MOCK ? mockSignContractVendor : apiSignContractVendor,
   terminateContract: USE_MOCK ? mockTerminateContract : apiTerminateContract,
   createPOFromContract: USE_MOCK ? mockCreatePOFromContract : apiCreatePOFromContract,
+  getContractBalance: USE_MOCK ? mockGetContractBalance : apiGetContractBalance,
   updatePostAwardDecision: USE_MOCK ? mockUpdatePostAwardDecision : apiUpdatePostAwardDecision,
   generateFromTemplate: USE_MOCK ? mockGenerateFromTemplate : apiGenerateFromTemplate,
   sendToVendor: USE_MOCK ? mockSendToVendor : apiSendToVendor,

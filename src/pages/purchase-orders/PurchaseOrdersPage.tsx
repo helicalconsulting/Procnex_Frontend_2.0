@@ -64,7 +64,7 @@ function mapPO(po: PurchaseOrder): MockPO {
 }
 
 const STATUS_LABELS: Record<POStatus, string> = {
-  DRAFT: 'Draft', PENDING_APPROVAL: 'Pending Approval', APPROVED: 'Approved',
+  DRAFT: 'Draft', PENDING_APPROVAL: 'Pending Approval', APPROVED: 'Completed',
   DISPATCHED: 'Dispatched', DELIVERED: 'Delivered', CANCELLED: 'Cancelled',
 };
 

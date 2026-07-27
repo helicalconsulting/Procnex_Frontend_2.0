@@ -1,6 +1,6 @@
 import { USE_MOCK } from '../config/mock';
 import { ALL_MOCK_USERS, MOCK_TOKEN } from '../config/mockData';
-import { apiRequest, API_BASE, authHeaders, ApiError } from '../api/client';
+import { apiRequest, API_BASE, authHeaders, ApiError, clearAllApiCache } from '../api/client';
 import type { AuthResponse, LoginPayload, UserModulePermission } from '../types';
 import { PERMISSION_MODULE_NAMES } from '../config/modulePermissions';
 
@@ -142,12 +142,51 @@ async function apiVendorLogin(payload: LoginPayload): Promise<AuthResponse> {
 }
 
 async function apiGetCurrentUser(): Promise<AuthResponse | null> {
-  const token = localStorage.getItem(TOKEN_KEY);
+  // Detect vendor session from cached roles
+  const cachedRoles = getCachedSession()?.roles;
+  const isVendorSession = cachedRoles?.includes('Vendor');
+
+  const tokenKey = isVendorSession ? VENDOR_TOKEN_KEY : TOKEN_KEY;
+  const token = localStorage.getItem(tokenKey);
   if (!token) return null;
 
-  // Pehle /auth/me call karo token validate karne ke liye
-  // (taaki stale/expired token turant detect ho aur session clear ho)
+  // For vendor sessions, call the vendor profile endpoint (uses VENDOR_JWT_SECRET)
+  // For admin sessions, call /auth/me (uses JWT_SECRET)
+  // This prevents vendor tokens from being rejected by the admin auth middleware
   try {
+    if (isVendorSession) {
+      // Save the vendor token as the active token so authHeaders() sends the right one
+      localStorage.setItem(TOKEN_KEY, token);
+      const res = await fetch(`${API_BASE}/vendors/profile`, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!res.ok) {
+        if (res.status === 401) {
+          clearSession();
+          throw new ApiError('Session expired', 'UNAUTHORIZED', 401);
+        }
+        throw new ApiError('Failed to validate session', 'VALIDATION_ERROR', res.status);
+      }
+      const json = await res.json();
+      // Vendor profile endpoint returns { success: true, data: { company: {...}, ... } }
+      // Reconstruct AuthResponse from cached session data since we just validated the token
+      const userStr = localStorage.getItem(USER_KEY);
+      const rolesStr = localStorage.getItem(ROLES_KEY);
+      if (userStr && rolesStr) {
+        return {
+          user: JSON.parse(userStr),
+          token,
+          roles: JSON.parse(rolesStr),
+          permissions: [],
+        };
+      }
+      return null;
+    }
+
+    // Admin session: call /auth/me
     const data = await apiRequest<AuthResponse>('/auth/me');
     if (data) saveSession(data);
     return data;
@@ -276,6 +315,10 @@ export const authService = {
     // Clear local session instantly so the UI redirects immediately
     const token = getToken();
     clearSession();
+
+    // Clear in-memory API response cache to prevent stale data showing
+    // when the next user logs in from the same browser tab.
+    clearAllApiCache();
 
     // Fire-and-forget: notify backend in background (don't block the user)
     if (!USE_MOCK && token) {

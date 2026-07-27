@@ -29,6 +29,7 @@ export const ROUTE_PERMISSION_RULES: Array<{ prefix: string; rule: RoutePermissi
   { prefix: '/signature', rule: { module: 'Documents', action: 'canView' } },
   { prefix: '/reports', rule: { module: 'Reports', action: 'canView' } },
   { prefix: '/audit', rule: { module: 'Audit Trail', action: 'canView' } },
+  { prefix: '/procurement/purchase-requisition', rule: { module: 'Purchase Orders', action: 'canCreate' } },
   { prefix: '/contracts', rule: { module: 'Contracts', action: 'canView' } },
   { prefix: '/documents', rule: { module: 'Documents', action: 'canView' } },
   { prefix: '/notifications', rule: { module: 'Notifications', action: 'canView' } },

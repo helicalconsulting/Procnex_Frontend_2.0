@@ -5,7 +5,10 @@ export interface UseServiceDataResult<T> {
   data: T;
   loading: boolean;
   error: string | null;
+  /** Invalidates the query and triggers a background refetch */
   reload: () => void;
+  /** Invalidates + immediately refetches and returns a promise that resolves when done */
+  forceRefresh: () => Promise<void>;
 }
 
 interface UseServiceDataOptions {
@@ -92,10 +95,16 @@ export function useServiceData<T>(
     queryClient.invalidateQueries({ queryKey });
   }, [queryKey, queryClient]);
 
+  const forceRefresh = useCallback(async () => {
+    queryClient.invalidateQueries({ queryKey });
+    await queryClient.refetchQueries({ queryKey });
+  }, [queryKey, queryClient]);
+
   return {
     data,
     loading,
     error: error ? (error instanceof Error ? error.message : 'Failed to load data') : null,
     reload,
+    forceRefresh,
   };
 }

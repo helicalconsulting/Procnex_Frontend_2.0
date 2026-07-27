@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
+import { TableSkeleton } from '../../components/shared/Skeleton';
 import '../../components/shared/ColumnCustomizer.css';
 import './UsersPage.css';
 
@@ -623,7 +624,6 @@ export default function UsersPage() {
           {pageMsg}
         </MessageStrip>
       )}
-      {loading && <div className="users-page__loading">Loading users…</div>}
 
       {/* ── Header ─────────────────────────────────────────── */}
       <div className="users-page__header">
@@ -699,7 +699,11 @@ export default function UsersPage() {
       </div>
 
       {/* ── Content ────────────────────────────────────────── */}
-      {paginated.length > 0 ? (
+      {loading ? (
+        <div className="users-table-card">
+          <TableSkeleton rows={4} columns={5} />
+        </div>
+      ) : paginated.length > 0 ? (
         view === 'table' ? (
           <div className="users-table-card">
             <div className="users-table-wrap">

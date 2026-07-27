@@ -306,6 +306,13 @@
   background: rgba(10, 110, 209, 0.06);
 }
 
+.sap-doc-item__actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
 .sap-doc-empty {
   padding: 32px 20px;
   text-align: center;

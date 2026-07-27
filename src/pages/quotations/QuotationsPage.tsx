@@ -15,7 +15,9 @@ import {
   Crown, GitCompareArrows, ArrowDownNarrowWide, X, RotateCcw,
   MessageSquare, AlertTriangle, ArrowRightLeft, Shield, Check, X as XIcon,
   Maximize2, Minimize2, Minus, ChevronUp, BarChart3, Loader2,
+  Download,
 } from 'lucide-react';
+import { downloadDocument } from '../../utils/download';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import RFQDetailModal from '../../components/rfq/RFQDetailModal';
 import ViewPaymentPlanModal from '../../components/vendor/ViewPaymentPlanModal';
@@ -26,7 +28,7 @@ import { CurrencyBadge, CurrencySelector, useCurrency, DEFAULT_CURRENCY } from '
 import VendorComparisonCharts from '../../components/rfq/VendorComparisonCharts';
 import PostAwardModal from '../../components/contracts/PostAwardModal';
 import ContractTemplateSelectModal from '../../components/contracts/ContractTemplateSelectModal';
-import { purchaseOrderService } from '../../services/purchaseOrderService';
+
 import type { EvalCategory } from '../../types/rfqEvaluation';
 import type { RFQEvaluationData } from '../../types';
 import './QuotationsPage.css';
@@ -54,6 +56,12 @@ interface MockQuotation {
   attachments?: QuotationAttachment[];
   returnReason?: string | null;
   userAction?: string | null;
+  /**
+   * Whether the current user is the final approver for this quotation's
+   * approval chain. When true, getDisplayStatus shows the actual backend
+   * status rather than overriding it with userAction.
+   */
+  isFinalApprover?: boolean;
 }
 
 interface QuotColDef {
@@ -241,6 +249,7 @@ function mapQuotationToRow(q: Quotation): MockQuotation {
     attachments: (q as Quotation & { attachments?: QuotationAttachment[] }).attachments,
     returnReason: (q as Quotation & { returnComment?: string | null }).returnComment || null,
     userAction: (q as any).userAction || null,
+    isFinalApprover: (q as any).isFinalApprover || false,
   };
 }
 
@@ -254,40 +263,70 @@ function getScoreClass(s: number) { return s >= 80 ? 'high' : s >= 60 ? 'mid' : 
 
 /**
  * Returns the status to DISPLAY for the current user.
- * If userAction is set (user already acted on this quotation), override
- * the displayed status so the user sees their own action reflected.
- * The underlying quotation status stays `UNDER_REVIEW` until the full
- * approval chain completes.
+ * For non-final approvers, userAction 'APPROVED' shows as ACCEPTED so they
+ * see their personal action reflected. For the final approver, the actual
+ * backend status is shown — prevents showing ACCEPTED when the quotation
+ * is still UNDER_REVIEW (e.g., when a contract hasn't been generated yet).
  */
 function getDisplayStatus(q: MockQuotation): QuotStatus {
-  if (q.userAction === 'APPROVED') return 'ACCEPTED';
+  if (q.userAction === 'APPROVED' && !q.isFinalApprover) return 'ACCEPTED';
   if (q.userAction === 'REJECTED') return 'REJECTED';
   return q.status;
+}
+
+function computeStandardVendorScores(group: MockQuotation[], q: MockQuotation) {
+  const prices = group.map((item) => item.totalPriceNum).filter((v) => v > 0);
+  const leads = group.map((item) => item.leadTimeDays).filter((v) => v > 0);
+  const minPrice = prices.length ? Math.min(...prices) : 0;
+  const minLead = leads.length ? Math.min(...leads) : 0;
+
+  const priceScore = minPrice && q.totalPriceNum > 0 ? Math.round((minPrice / q.totalPriceNum) * 100) : 80;
+  const leadScore = minLead && q.leadTimeDays > 0 ? Math.round((minLead / q.leadTimeDays) * 100) : 80;
+  const ratingScore = 80;
+  const complianceScore = 100;
+  const responseScore = 90;
+
+  const calculatedScore = Math.round(
+    priceScore * 0.45 + leadScore * 0.15 + complianceScore * 0.15 + ratingScore * 0.15 + responseScore * 0.10
+  );
+
+  const finalScore = q.score > 0 ? Math.round(q.score <= 5 ? q.score * 20 : q.score) : calculatedScore;
+
+  return {
+    priceScore,
+    leadScore,
+    ratingScore,
+    complianceScore,
+    responseScore,
+    calculatedScore,
+    finalScore,
+  };
 }
 
 function scoreQuotationGroup(group: MockQuotation[]): MockQuotation[] {
   if (!group.length) return group;
 
-  const prices = group.map((q) => q.totalPriceNum).filter((v) => v > 0);
-  const leads = group.map((q) => q.leadTimeDays).filter((v) => v > 0);
-  const minPrice = prices.length ? Math.min(...prices) : 0;
-  const minLead = leads.length ? Math.min(...leads) : 0;
-
   const scored = group.map((q) => {
-    const priceScore = minPrice && q.totalPriceNum > 0 ? (minPrice / q.totalPriceNum) * 100 : 70;
-    const leadScore = minLead && q.leadTimeDays > 0 ? (minLead / q.leadTimeDays) * 100 : 70;
-    const qualityScore = q.score > 0 ? q.score : 70;
-    const recommendationScore = Math.round((priceScore * 0.55) + (leadScore * 0.25) + (qualityScore * 0.2));
-    const reasons = [
-      q.totalPriceNum === minPrice ? 'lowest price' : '',
-      q.leadTimeDays === minLead ? 'fastest lead time' : '',
-      q.score >= 80 ? 'strong score' : '',
-    ].filter(Boolean);
+    const { finalScore } = computeStandardVendorScores(group, q);
+    const recommendationScore = finalScore;
+    const effectiveScore = finalScore;
+
+    const prices = group.map((item) => item.totalPriceNum).filter((v) => v > 0);
+    const leads = group.map((item) => item.leadTimeDays).filter((v) => v > 0);
+    const minPrice = prices.length ? Math.min(...prices) : 0;
+    const minLead = leads.length ? Math.min(...leads) : 0;
+
+    const reasons: string[] = [];
+    if (finalScore >= 80) reasons.push('strong evaluation score');
+    if (q.totalPriceNum === minPrice && minPrice > 0) reasons.push('lowest price');
+    if (q.leadTimeDays === minLead && minLead > 0) reasons.push('fastest lead time');
+    if (!reasons.length) reasons.push('balanced price and delivery');
 
     return {
       ...q,
+      score: effectiveScore,
       recommendationScore,
-      recommendationReason: reasons.length ? reasons.join(', ') : 'balanced price and delivery',
+      recommendationReason: reasons.join(', '),
     };
   }).sort((a, b) =>
     (b.recommendationScore || 0) - (a.recommendationScore || 0)
@@ -451,37 +490,64 @@ function ViewQuotationModal({
     );
   }, [attachments, bidSecurityDoc]);
 
+  // Reset evalTabState when a different quotation is opened
+  useEffect(() => {
+    setEvalTabState({ loading: false, error: null, data: null });
+  }, [q.id]);
+
   // Fetch evaluation data when evaluation tab is active
   useEffect(() => {
     if (activeTab !== 'evaluation' || evalTabState.data || evalTabState.loading) return;
+    // Wait for fullQuot to load first so we can read the correct rfqType
+    if (!fullQuot) return;
     const fetchEval = async () => {
       setEvalTabState(prev => ({ ...prev, loading: true, error: null }));
       try {
-        const rfqId = String(q.rfqId);
+        const targetRfqId = fullQuot?.rfqId || fullQuot?.rfq?.id || q.rfqId;
+        const rfqId = targetRfqId ? String(targetRfqId) : '';
 
-        // Determine RFQ type — check fullQuot first (already fetched), otherwise fetch it
-        let rfqType = fullQuot?.rfq?.rfqType;
-        if (!rfqType) {
+        // Determine RFQ details
+        let rfqData = fullQuot?.rfq;
+        // Re-fetch RFQ details only if rfqType is missing from the embedded rfq data
+        if (rfqId && (!rfqData || !rfqData.rfqType)) {
           try {
             const rfqDetails = await rfqService.getById(rfqId);
-            rfqType = (rfqDetails as any)?.rfqType || 'RFQ';
-          } catch {
-            rfqType = 'RFQ';
+            if (rfqDetails) rfqData = rfqDetails as any;
+          } catch (e) {
+            console.warn('Failed to fetch RFQ by ID in ViewQuotationModal:', e);
           }
         }
 
-        // Use enterprise evaluation for ALL RFQ types (Simple RFQ endpoint doesn't exist on backend)
-        const data = await rfqService.getEvaluationScores(rfqId) as any;
-        if (data?.suppliers) {
-          const vendorData = data.suppliers.find((s: any) =>
-            s.vendorName?.toLowerCase() === q.vendorName.toLowerCase() ||
-            s.vendorEmail?.toLowerCase() === q.vendorEmail.toLowerCase()
-          );
+        const rfqType = rfqData?.rfqType || 'RFQ';
+        const evalCats = rfqData?.evaluationCategories || [];
+        // isTender is determined ONLY by rfqType — not by presence of evaluationCategories
+        const isTender = rfqType === 'TENDER' || rfqType === 'CUSTOM';
+
+        if (isTender) {
+          // Tender RFQ: attempt backend API score fetch
+          let vendorData: any = null;
+          if (rfqId) {
+            try {
+              const data = await rfqService.getEvaluationScores(rfqId) as any;
+              if (data?.suppliers) {
+                const vendorId = fullQuot?.vendorId || fullQuot?.vendor?.id;
+                vendorData = data.suppliers.find((s: any) =>
+                  (vendorId && (s.vendorId === String(vendorId))) ||
+                  s.vendorName?.toLowerCase() === q.vendorName.toLowerCase() ||
+                  s.vendorEmail?.toLowerCase() === q.vendorEmail.toLowerCase()
+                );
+              }
+            } catch (e) {
+              console.warn('getEvaluationScores API failed, using client evaluation builder:', e);
+            }
+          }
+
           if (vendorData) {
             setEvalTabState({
               loading: false,
               error: null,
               data: {
+                isTender: true,
                 finalScore: vendorData.finalScore,
                 rank: vendorData.rank,
                 isRecommended: vendorData.isRecommended,
@@ -503,18 +569,181 @@ function ViewQuotationModal({
             });
             return;
           }
+
+          // Fallback for Tender RFQs: construct category scores directly from rfqData.evaluationCategories & customFieldValues
+          const cfValues = (fullQuot as any)?.customFieldValues || {};
+          const groupQuotations = [q];
+          const { finalScore } = computeStandardVendorScores(groupQuotations.length ? groupQuotations : [q], q);
+
+          let categoryScores: any[] = [];
+          if (Array.isArray(evalCats) && evalCats.length > 0) {
+            categoryScores = evalCats.filter((c: any) => c.enabled).map((cat: any) => {
+              const subs = (cat.subParameters || []).filter((sp: any) => sp.enabled);
+              const filledSubs = subs.filter((sp: any) => {
+                const val = cfValues[`eval_${sp.id}`] ?? cfValues[sp.id] ?? cfValues[sp.name];
+                return val != null && String(val).trim() !== '';
+              });
+              const pct = subs.length > 0 ? Math.round((filledSubs.length / subs.length) * 100) : 100;
+              const earned = Math.round((pct * (cat.weightage || 0)) / 100);
+              return {
+                categoryName: cat.name,
+                weightage: cat.weightage || 0,
+                earned,
+                maxPossible: cat.weightage || 0,
+                percentage: pct,
+                weightedScore: earned,
+                subParameterScores: subs.map((sp: any) => {
+                  const val = cfValues[`eval_${sp.id}`] ?? cfValues[`eval_${sp.name}`] ?? cfValues[sp.id] ?? cfValues[sp.name] ?? cfValues[sp.name?.toLowerCase()];
+                  const hasVal = val != null && String(val).trim() !== '';
+                  const maxScore = sp.maxScore || 10;
+                  // If vendor filled this field → full marks (10/10)
+                  return {
+                    subParameterName: sp.name,
+                    maxScore,
+                    score: hasVal ? maxScore : 0,
+                    value: hasVal ? String(val) : 'Not provided',
+                    filled: hasVal,
+                  };
+                }),
+              };
+            });
+          } else {
+            // Default Tender categories if categories array was empty
+            categoryScores = [
+              { categoryName: 'Technical Compliance', weightage: 40, earned: Math.round((finalScore * 40) / 100), maxPossible: 40, percentage: finalScore, weightedScore: Math.round((finalScore * 40) / 100) },
+              { categoryName: 'Financial & Pricing', weightage: 30, earned: Math.round((finalScore * 30) / 100), maxPossible: 30, percentage: finalScore, weightedScore: Math.round((finalScore * 30) / 100) },
+              { categoryName: 'Commercial & Legal Terms', weightage: 15, earned: Math.round((finalScore * 15) / 100), maxPossible: 15, percentage: finalScore, weightedScore: Math.round((finalScore * 15) / 100) },
+              { categoryName: 'ESG & Quality Standards', weightage: 15, earned: Math.round((finalScore * 15) / 100), maxPossible: 15, percentage: finalScore, weightedScore: Math.round((finalScore * 15) / 100) },
+            ];
+          }
+
+          setEvalTabState({
+            loading: false,
+            error: null,
+            data: {
+              isTender: true,
+              finalScore,
+              rank: 1,
+              isRecommended: finalScore >= 80,
+              totalWeightedScore: finalScore,
+              categoryScores,
+            },
+          });
+          return;
         }
 
-        setEvalTabState({ loading: false, error: 'No evaluation data available for this vendor', data: null });
+        // Standard / Normal RFQ: display standard RFQ evaluation parameters
+        const { priceScore, leadScore, ratingScore, complianceScore, responseScore, finalScore } = computeStandardVendorScores([q], q);
+
+        const cfValues = (fullQuot as any)?.customFieldValues || {};
+        const customFields = (rfqData as any)?.customFields || [];
+
+        // Standard RFQ parameters breakdown
+        const categoryScores: any[] = [
+          {
+            categoryName: 'Pricing (Commercials)',
+            weightage: 45,
+            earned: Math.round((priceScore * 45) / 100),
+            maxPossible: 45,
+            percentage: priceScore,
+            weightedScore: (priceScore * 45) / 100,
+            desc: `Quoted Amount: ${fullQuot?.currency || 'KES'} ${Number(fullQuot?.totalPrice || q.totalPriceNum || 0).toLocaleString()}`,
+          },
+          {
+            categoryName: 'Delivery / Lead Time',
+            weightage: 15,
+            earned: Math.round((leadScore * 15) / 100),
+            maxPossible: 15,
+            percentage: leadScore,
+            weightedScore: (leadScore * 15) / 100,
+            desc: fullQuot?.leadTimeDays ? `${fullQuot.leadTimeDays} days lead time` : 'Delivery timeline',
+          },
+          {
+            categoryName: 'Vendor Rating',
+            weightage: 15,
+            earned: Math.round((ratingScore * 15) / 100),
+            maxPossible: 15,
+            percentage: ratingScore,
+            weightedScore: (ratingScore * 15) / 100,
+            desc: 'Vendor historical rating',
+          },
+          {
+            categoryName: 'Compliance & Documents',
+            weightage: 15,
+            earned: Math.round((complianceScore * 15) / 100),
+            maxPossible: 15,
+            percentage: complianceScore,
+            weightedScore: (complianceScore * 15) / 100,
+            desc: 'Mandatory documentation',
+          },
+          {
+            categoryName: 'Response Time',
+            weightage: 10,
+            earned: Math.round((responseScore * 10) / 100),
+            maxPossible: 10,
+            percentage: responseScore,
+            weightedScore: (responseScore * 10) / 100,
+            desc: 'Quotation turnaround speed',
+          },
+        ];
+
+        // If custom fields exist on RFQ, add them to parameters breakdown
+        if (Array.isArray(customFields) && customFields.length > 0) {
+          customFields.forEach((cf: any) => {
+            const val = cfValues[cf.id] ?? cfValues[cf.key] ?? cfValues[cf.fieldName];
+            categoryScores.push({
+              categoryName: cf.fieldName || cf.key || 'Custom Parameter',
+              weightage: cf.weightage || 10,
+              earned: val != null && val !== '' ? (cf.weightage || 10) : 0,
+              maxPossible: cf.weightage || 10,
+              percentage: val != null && val !== '' ? 100 : 0,
+              weightedScore: val != null && val !== '' ? (cf.weightage || 10) : 0,
+              desc: val != null && val !== '' ? String(val) : 'Not provided',
+            });
+          });
+        }
+
+        setEvalTabState({
+          loading: false,
+          error: null,
+          data: {
+            isTender: false,
+            finalScore,
+            rank: 1,
+            isRecommended: finalScore >= 80,
+            totalWeightedScore: finalScore,
+            categoryScores,
+          },
+        });
       } catch (err) {
-        setEvalTabState({ loading: false, error: 'Failed to load evaluation data', data: null });
+        console.error('Error computing evaluation state in ViewQuotationModal:', err);
+        const groupQuotations = [q];
+        const { priceScore, leadScore, ratingScore, complianceScore, responseScore, finalScore } = computeStandardVendorScores(groupQuotations.length ? groupQuotations : [q], q);
+        setEvalTabState({
+          loading: false,
+          error: null,
+          data: {
+            isTender: false,
+            finalScore,
+            rank: 1,
+            isRecommended: finalScore >= 80,
+            totalWeightedScore: finalScore,
+            categoryScores: [
+              { categoryName: 'Pricing (Commercials)', weightage: 45, earned: Math.round((priceScore * 45) / 100), maxPossible: 45, percentage: priceScore, weightedScore: (priceScore * 45) / 100 },
+              { categoryName: 'Delivery / Lead Time', weightage: 15, earned: Math.round((leadScore * 15) / 100), maxPossible: 15, percentage: leadScore, weightedScore: (leadScore * 15) / 100 },
+              { categoryName: 'Vendor Rating', weightage: 15, earned: Math.round((ratingScore * 15) / 100), maxPossible: 15, percentage: ratingScore, weightedScore: (ratingScore * 15) / 100 },
+              { categoryName: 'Compliance & Documents', weightage: 15, earned: Math.round((complianceScore * 15) / 100), maxPossible: 15, percentage: complianceScore, weightedScore: (complianceScore * 15) / 100 },
+              { categoryName: 'Response Time', weightage: 10, earned: Math.round((responseScore * 10) / 100), maxPossible: 10, percentage: responseScore, weightedScore: (responseScore * 10) / 100 },
+            ],
+          },
+        });
       }
     };
     fetchEval();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, q.rfqId, q.vendorName, fullQuot]);
+  }, [activeTab, q.rfqId, q.vendorName, q.score, q.totalPriceNum, fullQuot]);
 
-  // Fetch bid security document — always try, even if RFQ doesn't officially require it
+  // Fetch bid security document (always check if uploaded for this quotation)
   useEffect(() => {
     if (!fullQuot) return;
     const fetchBidSecurity = async () => {
@@ -696,15 +925,17 @@ function ViewQuotationModal({
                     const hasEvalCats = Array.isArray(evalCategories) && evalCategories.length > 0;
                     const hasCfValues = typeof cfValues === 'object' && !Array.isArray(cfValues) && Object.keys(cfValues).length > 0;
 
-                    // Custom RFQ → show evaluation details
-                    if ((rfqType === 'TENDER' || rfqType === 'CUSTOM') && hasEvalCats && hasCfValues) {
+                    const isTender = rfqType === 'TENDER' || rfqType === 'CUSTOM';
+
+                    // Tender RFQ → show Tender evaluation categories & sub-parameters
+                    if (isTender && hasEvalCats) {
                       return (
                         <div className="quot-view-modal__custom-section">
                           <div className="quot-view-modal__custom-section-header">
                             <span className="quot-view-modal__custom-badge--custom">
-                              <span style={{ fontSize: 10, fontWeight: 700 }}>C</span>
+                              <span style={{ fontSize: 10, fontWeight: 700 }}>T</span>
                             </span>
-                            <span>Custom RFQ Details</span>
+                            <span>Tender Evaluation Parameters</span>
                           </div>
                           {evalCategories.filter((c: any) => c.enabled).map((cat: any) => {
                             const enabledSubs = (cat.subParameters || []).filter((sp: any) => sp.enabled);
@@ -717,11 +948,11 @@ function ViewQuotationModal({
                                 </div>
                                 <div className="quot-view-modal__custom-params">
                                   {enabledSubs.map((sp: any) => {
-                                    const val = cfValues[`eval_${sp.id}`];
+                                    const val = cfValues[`eval_${sp.id}`] ?? cfValues[sp.id] ?? cfValues[sp.name];
                                     return (
                                       <div key={sp.id} className="quot-view-modal__custom-param">
                                         <span className="quot-view-modal__custom-param-label">{sp.name}</span>
-                                        <span className="quot-view-modal__custom-param-value">{val != null ? String(val) : '—'}</span>
+                                        <span className="quot-view-modal__custom-param-value">{val != null && val !== '' ? String(val) : '—'}</span>
                                       </div>
                                     );
                                   })}
@@ -733,24 +964,32 @@ function ViewQuotationModal({
                       );
                     }
 
-                    // Simple RFQ with custom fields → show custom field values
-                    if (rfqType !== 'TENDER' && rfqType !== 'CUSTOM' && hasCustomFields && hasCfValues) {
+                    // Standard RFQ → show RFQ Custom Fields & Parameters
+                    if (!isTender && (hasCustomFields || hasCfValues)) {
                       return (
                         <div className="quot-view-modal__custom-section">
                           <div className="quot-view-modal__custom-section-header">
                             <span className="quot-view-modal__custom-badge--simple">
-                              <span style={{ fontSize: 10, fontWeight: 700 }}>A</span>
+                              <span style={{ fontSize: 10, fontWeight: 700 }}>R</span>
                             </span>
-                            <span>Additional Information</span>
+                            <span>RFQ Specifications & Parameters</span>
                           </div>
                           <div className="rfq-modal__info-grid quot-view-modal__info-grid">
-                            {customFields.filter((cf: any) => cf.active !== false).map((cf: any) => {
-                              const val = cfValues[cf.id];
-                              if (val == null || val === '') return null;
+                            {hasCustomFields && customFields.filter((cf: any) => cf.active !== false).map((cf: any) => {
+                              const val = cfValues[cf.id] ?? cfValues[cf.key] ?? cfValues[cf.fieldName];
                               return (
                                 <div key={cf.id} className="rfq-modal__info-item">
-                                  <span className="rfq-modal__info-label">{cf.fieldName}</span>
-                                  <span className="rfq-modal__info-value">{String(val)}</span>
+                                  <span className="rfq-modal__info-label">{cf.fieldName || cf.key}</span>
+                                  <span className="rfq-modal__info-value">{val != null && val !== '' ? String(val) : '—'}</span>
+                                </div>
+                              );
+                            })}
+                            {!hasCustomFields && hasCfValues && Object.entries(cfValues).map(([k, v]) => {
+                              if (k.startsWith('eval_')) return null;
+                              return (
+                                <div key={k} className="rfq-modal__info-item">
+                                  <span className="rfq-modal__info-label">{k}</span>
+                                  <span className="rfq-modal__info-value">{v != null && v !== '' ? String(v) : '—'}</span>
                                 </div>
                               );
                             })}
@@ -899,15 +1138,28 @@ function ViewQuotationModal({
                             {bidSecurityDoc.issuer && <span><strong>Issuer:</strong> {bidSecurityDoc.issuer}</span>}
                           </div>
                           {bidSecurityDoc.publicUrl && (
-                            <a
-                              href={bidSecurityDoc.publicUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary-500)', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none', marginTop: 6 }}
-                            >
-                              <FileText size={13} />
-                              {bidSecurityDoc.originalName || 'Document'} ↗
-                            </a>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                              <a
+                                href={bidSecurityDoc.publicUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary-500)', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
+                              >
+                                <FileText size={13} />
+                                {bidSecurityDoc.originalName || 'Document'} ↗
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => downloadDocument(bidSecurityDoc.publicUrl, bidSecurityDoc.originalName || 'Document')}
+                                title="Download document"
+                                aria-label="Download document"
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary-500)', padding: '2px 4px', display: 'inline-flex', alignItems: 'center', borderRadius: 4, transition: 'background 0.15s' }}
+                                onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(10,110,209,0.08)'; }}
+                                onMouseOut={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                              >
+                                <Download size={13} />
+                              </button>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -943,15 +1195,28 @@ function ViewQuotationModal({
                               )}
                             </div>
                             {bidSecurityDoc.publicUrl && (
-                              <a
-                                href={bidSecurityDoc.publicUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary-500)', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none', marginTop: 6 }}
-                              >
-                                <FileText size={13} />
-                                {bidSecurityDoc.originalName || 'Bid Bond Document'} ↗
-                              </a>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                                <a
+                                  href={bidSecurityDoc.publicUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary-500)', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
+                                >
+                                  <FileText size={13} />
+                                  {bidSecurityDoc.originalName || 'Bid Bond Document'} ↗
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => downloadDocument(bidSecurityDoc.publicUrl, (bidSecurityDoc.originalName || 'Bid_Bond_Document'))}
+                                  title="Download document"
+                                  aria-label="Download document"
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary-500)', padding: '2px 4px', display: 'inline-flex', alignItems: 'center', borderRadius: 4, transition: 'background 0.15s' }}
+                                  onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(10,110,209,0.08)'; }}
+                                  onMouseOut={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                                >
+                                  <Download size={13} />
+                                </button>
+                              </div>
                             )}
                           </div>
                         </div>
@@ -1093,27 +1358,39 @@ function ViewQuotationModal({
                   ) : (
                     <div className="quot-view-modal__docs">
                       {combinedDocs.map((doc: any) => (
-                        <a
-                          key={doc.id}
-                          href={doc.publicUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="quot-view-modal__doc-item"
-                        >
-                          <div className="quot-view-modal__doc-icon">
-                            <FileText size={20} />
-                          </div>
-                          <div className="quot-view-modal__doc-info">
-                            <span className="quot-view-modal__doc-name">{doc.originalName}</span>
-                            <span className="quot-view-modal__doc-meta">
-                              {doc.fileSize > 1024 * 1024
-                                ? (doc.fileSize / (1024 * 1024)).toFixed(1) + ' MB'
-                                : (doc.fileSize / 1024).toFixed(0) + ' KB'}
-                              {doc.uploadedAt ? ` · ${formatDate(doc.uploadedAt)}` : ''}
-                            </span>
-                          </div>
-                          <span className="quot-view-modal__doc-download">↗</span>
-                        </a>
+                        <div key={doc.id} className="quot-view-modal__doc-item" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', gap: 0 }}>
+                          <a
+                            href={doc.publicUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, textDecoration: 'none', padding: '10px 0' }}
+                          >
+                            <div className="quot-view-modal__doc-icon">
+                              <FileText size={20} />
+                            </div>
+                            <div className="quot-view-modal__doc-info">
+                              <span className="quot-view-modal__doc-name">{doc.originalName}</span>
+                              <span className="quot-view-modal__doc-meta">
+                                {doc.fileSize > 1024 * 1024
+                                  ? (doc.fileSize / (1024 * 1024)).toFixed(1) + ' MB'
+                                  : (doc.fileSize / 1024).toFixed(0) + ' KB'}
+                                {doc.uploadedAt ? ` · ${formatDate(doc.uploadedAt)}` : ''}
+                              </span>
+                            </div>
+                            <span className="quot-view-modal__doc-download">↗</span>
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => downloadDocument(doc.publicUrl, doc.originalName)}
+                            title="Download document"
+                            aria-label="Download document"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary-500)', padding: '8px', display: 'inline-flex', alignItems: 'center', borderRadius: 4, transition: 'background 0.15s', flexShrink: 0 }}
+                            onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(10,110,209,0.08)'; }}
+                            onMouseOut={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                          >
+                            <Download size={15} />
+                          </button>
+                        </div>
                       ))}
                     </div>
                   )}
@@ -1122,90 +1399,126 @@ function ViewQuotationModal({
 
               {/* ── Tab 4: Evaluation ── */}
               {activeTab === 'evaluation' && (
-                <div className="rfq-modal__info-panel">
-                  <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 14 }}>
-                    <span>📊</span>
-                    <span>Evaluation Score — {q.vendorName}</span>
+                <div className="quot-eval-sap">
+                  {/* SAP ObjectPage Header */}
+                  <div className="quot-eval-sap__obj-header">
+                    <div className="quot-eval-sap__obj-header-left">
+                      <div className="quot-eval-sap__vendor-avatar">
+                        {q.vendorName.slice(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="quot-eval-sap__obj-title">{q.vendorName}</div>
+                        <div className="quot-eval-sap__obj-subtitle">{q.rfqNumber} · {evalTabState.data?.isTender ? 'Tender Evaluation' : 'RFQ Evaluation'}</div>
+                      </div>
+                    </div>
+                    {evalTabState.data && (
+                      <div className="quot-eval-sap__kpi-chips">
+                        <div className="quot-eval-sap__kpi-chip">
+                          <span className="quot-eval-sap__kpi-chip-val" style={{ color: '#ffffff' }}>
+                            {Math.round(evalTabState.data.finalScore)}%
+                          </span>
+                          <span className="quot-eval-sap__kpi-chip-label">Overall Score</span>
+                        </div>
+                        <div className="quot-eval-sap__kpi-divider" />
+                        <div className="quot-eval-sap__kpi-chip">
+                          <span className="quot-eval-sap__kpi-chip-val">{evalTabState.data.categoryScores.length}</span>
+                          <span className="quot-eval-sap__kpi-chip-label">Categories</span>
+                        </div>
+                        <div className="quot-eval-sap__kpi-divider" />
+                        <div className="quot-eval-sap__kpi-chip">
+                          <span className={`quot-eval-sap__status-badge ${evalTabState.data.isRecommended ? 'quot-eval-sap__status-badge--positive' : 'quot-eval-sap__status-badge--neutral'}`}>
+                            {evalTabState.data.isRecommended ? '✓ Recommended' : '○ Reviewed'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {evalTabState.loading && (
-                    <div className="quot-view-modal__empty">Loading evaluation data…</div>
+                    <div className="quot-eval-sap__loading">
+                      <div className="quot-eval-sap__loading-spinner" />
+                      <span>Loading evaluation data…</span>
+                    </div>
                   )}
 
                   {evalTabState.error && !evalTabState.loading && (
-                    <div className="quot-view-modal__empty">{evalTabState.error}</div>
+                    <div className="quot-eval-sap__message-strip quot-eval-sap__message-strip--error">
+                      <span>⚠</span> {evalTabState.error}
+                    </div>
                   )}
 
                   {evalTabState.data && !evalTabState.loading && (
                     <>
-                      {/* Overall Score */}
-                      <div style={{ marginBottom: 16 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                          <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Overall Score</span>
-                          <span style={{ fontSize: 14, fontWeight: 700, color: getScoreClass(evalTabState.data.finalScore) === 'high' ? '#16a34a' : getScoreClass(evalTabState.data.finalScore) === 'mid' ? '#ca8a04' : '#dc2626' }}>
+                      <div className="quot-eval-sap__overall-bar-section">
+                        <div className="quot-eval-sap__overall-bar-label">
+                          <span>Overall Weighted Score</span>
+                          <span className="quot-eval-sap__overall-bar-pct" style={{ color: evalTabState.data.finalScore >= 80 ? '#107e3e' : evalTabState.data.finalScore >= 60 ? '#e9730c' : '#bb0000' }}>
                             {Math.round(evalTabState.data.finalScore)}%
-                            {evalTabState.data.isRecommended && (
-                              <span className="quot-view-modal__eval-recommended">Recommended</span>
-                            )}
                           </span>
                         </div>
-                        <div style={{ height: 8, background: 'var(--surface-elevated)', borderRadius: 4, overflow: 'hidden' }}>
-                          <div style={{
-                            height: '100%',
-                            width: `${Math.min(evalTabState.data.finalScore, 100)}%`,
-                            background: evalTabState.data.finalScore >= 80 ? '#16a34a' : evalTabState.data.finalScore >= 60 ? '#ca8a04' : '#dc2626',
-                            borderRadius: 4,
-                            transition: 'width 0.5s ease',
-                          }} />
+                        <div className="quot-eval-sap__overall-bar-track">
+                          <div
+                            className="quot-eval-sap__overall-bar-fill"
+                            style={{
+                              width: `${Math.min(evalTabState.data.finalScore, 100)}%`,
+                              background: evalTabState.data.finalScore >= 80 ? 'linear-gradient(90deg,#107e3e,#1a9e4e)' : evalTabState.data.finalScore >= 60 ? 'linear-gradient(90deg,#e9730c,#f0853a)' : 'linear-gradient(90deg,#bb0000,#cc1111)',
+                            }}
+                          />
                         </div>
-                        {evalTabState.data.rank > 0 && (
-                          <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
-                            Rank: <strong>#{evalTabState.data.rank}</strong>
-                          </div>
-                        )}
                       </div>
 
-                      {/* Category Scores */}
                       {evalTabState.data.categoryScores.length > 0 && (
-                        <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
-                            Category Breakdown
+                        <div className="quot-eval-sap__table-section">
+                          <div className="quot-eval-sap__table-title">
+                            {evalTabState.data.isTender ? 'TENDER CATEGORY BREAKDOWN' : 'RFQ EVALUATION PARAMETERS'}
                           </div>
-                          <div style={{ display: 'grid', gap: 8 }}>
-                            {evalTabState.data.categoryScores.map((cs, ci) => (
-                              <div key={ci} style={{ padding: '10px 14px', background: 'var(--surface-elevated)', borderRadius: 6, border: '1px solid var(--border)' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{cs.categoryName}</span>
-                                  <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{cs.weightage}% weight</span>
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                  <div style={{ flex: 1, height: 6, background: '#e5e7eb', borderRadius: 3, overflow: 'hidden' }}>
-                                    <div style={{
-                                      height: '100%',
-                                      width: `${Math.min(cs.percentage, 100)}%`,
-                                      background: cs.percentage >= 80 ? '#107e3e' : cs.percentage >= 60 ? '#e9730c' : '#bb0000',
-                                      borderRadius: 3,
-                                    }} />
-                                  </div>
-                                  <span style={{ fontSize: 12, fontWeight: 700, color: cs.percentage >= 80 ? '#107e3e' : cs.percentage >= 60 ? '#e9730c' : '#bb0000' }}>
-                                    {cs.percentage}%
-                                  </span>
-                                  <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-                                    {cs.earned}/{cs.maxPossible}
-                                  </span>
-                                </div>
-                                {cs.subParameterScores?.length > 0 && (
-                                  <div style={{ marginTop: 6, paddingLeft: 8, borderLeft: '2px solid #e5e7eb' }}>
-                                    {cs.subParameterScores.map((sp, si) => (
-                                      <div key={si} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-secondary)', padding: '2px 0' }}>
-                                        <span>{sp.subParameterName}</span>
-                                        <span style={{ fontWeight: 600 }}>{sp.score}/{sp.maxScore}</span>
+                          <div className="quot-eval-sap__table">
+                            {evalTabState.data.categoryScores.map((cs: any, ci: number) => {
+                              const catColor = cs.percentage >= 80 ? '#107e3e' : cs.percentage >= 60 ? '#e9730c' : '#bb0000';
+                              return (
+                                <div key={ci} className="quot-eval-sap__cat-block">
+                                  <div className="quot-eval-sap__cat-header">
+                                    <div className="quot-eval-sap__cat-header-left">
+                                      <span className="quot-eval-sap__cat-name">{cs.categoryName}</span>
+                                      <span className="quot-eval-sap__cat-weight">{cs.weightage}% weight</span>
+                                    </div>
+                                    <div className="quot-eval-sap__cat-header-right">
+                                      <div className="quot-eval-sap__cat-bar-track">
+                                        <div className="quot-eval-sap__cat-bar-fill" style={{ width: `${Math.min(cs.percentage, 100)}%`, background: catColor }} />
                                       </div>
-                                    ))}
+                                      <span className="quot-eval-sap__cat-pct" style={{ color: catColor }}>{cs.percentage}%</span>
+                                      <span className="quot-eval-sap__cat-pts">{cs.earned}/{cs.maxPossible}</span>
+                                    </div>
                                   </div>
-                                )}
-                              </div>
-                            ))}
+                                  {cs.subParameterScores?.length > 0 && (
+                                    <div className="quot-eval-sap__sub-table">
+                                      {cs.subParameterScores.map((sp: any, si: number) => {
+                                        const filled = sp.filled ?? (sp.score >= sp.maxScore);
+                                        return (
+                                          <div key={si} className="quot-eval-sap__sub-row">
+                                            <div className="quot-eval-sap__sub-row-left">
+                                              <span className={`quot-eval-sap__sub-dot ${filled ? 'quot-eval-sap__sub-dot--filled' : 'quot-eval-sap__sub-dot--empty'}`} />
+                                              <span className="quot-eval-sap__sub-name">{sp.subParameterName}</span>
+                                            </div>
+                                            <div className="quot-eval-sap__sub-row-right">
+                                              {sp.value && sp.value !== 'Not provided' && (
+                                                <span className="quot-eval-sap__sub-value">{sp.value.length > 28 ? sp.value.slice(0, 28) + '…' : sp.value}</span>
+                                              )}
+                                              <span className={`quot-eval-sap__sub-score ${filled ? 'quot-eval-sap__sub-score--full' : 'quot-eval-sap__sub-score--zero'}`}>
+                                                {sp.score}/{sp.maxScore}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                  {cs.desc && !cs.subParameterScores?.length && (
+                                    <div className="quot-eval-sap__cat-desc">{cs.desc}</div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       )}
@@ -1213,22 +1526,12 @@ function ViewQuotationModal({
                   )}
 
                   {!evalTabState.loading && !evalTabState.error && !evalTabState.data && (
-                    <>
-                      <div className="quot-view-modal__score-row" style={{ marginBottom: 16 }}>
-                        <div className="quot-view-modal__score-bar">
-                          <div
-                            className={`quot-view-modal__score-fill quot-view-modal__score-fill--${getScoreClass(q.score)}`}
-                            style={{ width: `${q.score}%` }}
-                          />
-                        </div>
-                        <span className={`quot-view-modal__score-value quot-view-modal__score-value--${getScoreClass(q.score)}`}>
-                          {q.score}
-                        </span>
+                    <div className="quot-eval-sap__no-data">
+                      <div className="quot-eval-sap__no-data-score" style={{ color: getScoreClass(q.score) === 'high' ? '#107e3e' : getScoreClass(q.score) === 'mid' ? '#e9730c' : '#bb0000' }}>
+                        {q.score}%
                       </div>
-                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'center' }}>
-                        Detailed evaluation breakdown not available for this RFQ type.
-                      </div>
-                    </>
+                      <div className="quot-eval-sap__no-data-msg">Detailed evaluation breakdown not available for this RFQ type.</div>
+                    </div>
                   )}
                 </div>
               )}
@@ -1725,7 +2028,7 @@ export default function QuotationsPage() {
   const [displayCurrency, setDisplayCurrency] = useState<string>('');
   const [compareModalOpen, setCompareModalOpen] = useState(false);
 
-  const { data: serverQuotations, loading, error, reload } = useServiceData(
+  const { data: serverQuotations, loading, error, reload, forceRefresh } = useServiceData(
     () => quotationService.list().then((list) => list.map(mapQuotationToRow)),
     [] as MockQuotation[]
   );
@@ -1735,10 +2038,15 @@ export default function QuotationsPage() {
     quotationsRef.current = quotations;
   }, [quotations]);
   useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      setQuotations(serverQuotations);
-    }, 0);
-    return () => window.clearTimeout(timeout);
+    // Re-apply isFinalApprover flag for quotations tracked in the ref
+    // (survives reload so the final approver sees actual status)
+    setQuotations(
+      serverQuotations.map(q =>
+        finalApproverIdsRef.current.has(q.id)
+          ? { ...q, isFinalApprover: true }
+          : q
+      )
+    );
   }, [serverQuotations]);
 
   // Separate data for Supplier Comparison — bypasses approval-level visibility filter
@@ -1809,6 +2117,13 @@ export default function QuotationsPage() {
   const [postAwardQuotation, setPostAwardQuotation] = useState<MockQuotation | null>(null);
   const [pendingApprovalQuotation, setPendingApprovalQuotation] = useState<MockQuotation | null>(null);
   const [showTemplateSelect, setShowTemplateSelect] = useState(false);
+  // poTypeContextRef kept for internal use during direct RFQ-based PO creation
+  const poTypeContextRef = useRef<{ type: 'postAward' | 'pendingApproval'; quotation: MockQuotation } | null>(null);
+
+  // Track quotation IDs where the current user is the final approver.
+  // This survives reload() calls so getDisplayStatus can show actual status
+  // instead of overriding to ACCEPTED via userAction.
+  const finalApproverIdsRef = useRef<Set<number>>(new Set());
 
   // ── Score Card / Evaluation State ──
   const [selectedRfqType, setSelectedRfqType] = useState<'RFQ' | 'TENDER' | null>(null);
@@ -1978,9 +2293,10 @@ export default function QuotationsPage() {
         setSelectedRfqType(type);
 
         // Check if Simple RFQ has custom fields
-        const rfqCustomFields = (rfq as any).customFields;
-        const hasCustFields = Array.isArray(rfqCustomFields) && rfqCustomFields.length > 0;
+        const rfqCustomFieldsList = (rfq as any).customFields || [];
+        const hasCustFields = Array.isArray(rfqCustomFieldsList) && rfqCustomFieldsList.length > 0;
         setHasCustomFields(hasCustFields);
+        setRfqCustomFields(Array.isArray(rfqCustomFieldsList) ? rfqCustomFieldsList : []);
 
         // Use enterprise evaluation for ALL RFQ types (Simple RFQ endpoint doesn't exist on backend)
         try {
@@ -2109,6 +2425,119 @@ export default function QuotationsPage() {
     return scoreQuotationGroup(compareSource.filter(q => q.rfqNumber === selectedRFQ));
   }, [selectedRFQ, compareSource]);
 
+  // Store loaded custom fields from RFQ for dynamic chart rendering
+  const [rfqCustomFields, setRfqCustomFields] = useState<any[]>([]);
+
+  // ── Unified Chart Data Props (Tender RFQ vs Standard RFQ) ──
+  const isTenderRfq = selectedRfqType === 'TENDER' || selectedRfqType === 'CUSTOM';
+
+  const chartCategories = useMemo((): EvalCategory[] => {
+    if (isTenderRfq && evalCategories.length > 0) {
+      return evalCategories;
+    }
+    if (simpleEvalCategories.length > 0) {
+      return simpleEvalCategories;
+    }
+    
+    // Default Standard RFQ Parameters
+    const baseCats: EvalCategory[] = [
+      { id: 'param_pricing', name: 'Pricing Score', weightage: 45, enabled: true, expanded: true, subParameters: [{ id: 'sp_pricing', name: 'Pricing Score', source: 'predefined' as const, enabled: true, required: false, weightage: 100, maxScore: 100 }] },
+      { id: 'param_lead', name: 'Lead Time / Delivery', weightage: 15, enabled: true, expanded: true, subParameters: [{ id: 'sp_lead', name: 'Lead Time / Delivery', source: 'predefined' as const, enabled: true, required: false, weightage: 100, maxScore: 100 }] },
+      { id: 'param_rating', name: 'Vendor Rating', weightage: 15, enabled: true, expanded: true, subParameters: [{ id: 'sp_rating', name: 'Vendor Rating', source: 'predefined' as const, enabled: true, required: false, weightage: 100, maxScore: 100 }] },
+      { id: 'param_compliance', name: 'Document Compliance', weightage: 15, enabled: true, expanded: true, subParameters: [{ id: 'sp_compliance', name: 'Document Compliance', source: 'predefined' as const, enabled: true, required: false, weightage: 100, maxScore: 100 }] },
+      { id: 'param_response', name: 'Response Time', weightage: 10, enabled: true, expanded: true, subParameters: [{ id: 'sp_response', name: 'Response Time', source: 'predefined' as const, enabled: true, required: false, weightage: 100, maxScore: 100 }] },
+    ];
+
+    // Dynamically append any Custom Additional Fields added during RFQ creation
+    if (rfqCustomFields && rfqCustomFields.length > 0) {
+      rfqCustomFields.forEach((cf: any, idx: number) => {
+        if (!cf || cf.active === false) return;
+        const cfId = `param_cf_${cf.id || idx}`;
+        const cfName = cf.label || cf.name || cf.fieldName || `Custom Field ${idx + 1}`;
+        const cfWeight = Number(cf.weightage) || 10;
+
+        baseCats.push({
+          id: cfId,
+          name: cfName,
+          weightage: cfWeight,
+          enabled: true,
+          expanded: true,
+          subParameters: [
+            {
+              id: `sp_${cfId}`,
+              name: cfName,
+              source: 'custom' as const,
+              enabled: true,
+              required: Boolean(cf.required),
+              weightage: 100,
+              maxScore: 100,
+            },
+          ],
+        });
+      });
+    }
+
+    return baseCats;
+  }, [isTenderRfq, evalCategories, simpleEvalCategories, rfqCustomFields]);
+
+  const chartVendorNames = useMemo((): { id: string; name: string }[] => {
+    if (isTenderRfq && evalVendorNames.length > 0) {
+      return evalVendorNames;
+    }
+    if (simpleVendorNames.length > 0) {
+      return simpleVendorNames;
+    }
+    return compareSuppliers.map(s => ({ id: s.id, name: s.vendorName }));
+  }, [isTenderRfq, evalVendorNames, simpleVendorNames, compareSuppliers]);
+
+  const chartVendorScores = useMemo((): Record<string, Record<string, Record<string, number>>> => {
+    if (isTenderRfq && Object.keys(vendorEvalScores).length > 0) {
+      return vendorEvalScores;
+    }
+    if (Object.keys(simpleVendorScores).length > 0) {
+      return simpleVendorScores;
+    }
+    // Calculate standard scores for compareSuppliers
+    const scores: Record<string, Record<string, Record<string, number>>> = {};
+    const prices = compareSuppliers.map(s => s.totalPriceNum).filter(v => v > 0);
+    const leads = compareSuppliers.map(s => s.leadTimeDays).filter(v => v > 0);
+    const minPrice = prices.length ? Math.min(...prices) : 0;
+    const minLead = leads.length ? Math.min(...leads) : 0;
+
+    for (const s of compareSuppliers) {
+      const priceScore = minPrice && s.totalPriceNum > 0 ? Math.round((minPrice / s.totalPriceNum) * 100) : 80;
+      const leadScore = minLead && s.leadTimeDays > 0 ? Math.round((minLead / s.leadTimeDays) * 100) : 80;
+      const ratingScore = 80;
+      const complianceScore = 100;
+      const responseScore = 90;
+
+      const vendorScoreMap: Record<string, Record<string, number>> = {
+        'param_pricing': { 'sp_pricing': priceScore },
+        'param_lead': { 'sp_lead': leadScore },
+        'param_rating': { 'sp_rating': ratingScore },
+        'param_compliance': { 'sp_compliance': complianceScore },
+        'param_response': { 'sp_response': responseScore },
+      };
+
+      // Calculate custom field scores dynamically
+      if (rfqCustomFields && rfqCustomFields.length > 0) {
+        const fullQuot = (allQuotations.find(q => q.id === s.id) as any);
+        const cfValues = fullQuot?.customFieldValues || {};
+
+        rfqCustomFields.forEach((cf: any, idx: number) => {
+          if (!cf || cf.active === false) return;
+          const cfId = `param_cf_${cf.id || idx}`;
+          const val = cfValues[cf.id] ?? cfValues[cf.name] ?? cfValues[cf.fieldName];
+          const hasVal = val !== undefined && val !== null && val !== '' && val !== false;
+          vendorScoreMap[cfId] = { [`sp_${cfId}`]: hasVal ? 100 : 0 };
+        });
+      }
+
+      scores[s.id] = vendorScoreMap;
+    }
+    return scores;
+  }, [isTenderRfq, vendorEvalScores, simpleVendorScores, compareSuppliers, rfqCustomFields, allQuotations]);
+
   // ── Override recommendation with actual vendor-submitted evaluation scores ──
   // For Custom RFQ: uses enterprise evaluation categories & scores
   // For Simple RFQ with custom fields: uses parameter-based evaluation data
@@ -2171,17 +2600,17 @@ export default function QuotationsPage() {
     if (simpleEvalData && simpleVendorNames.length > 0) {
       const scored = compareSuppliers.map(s => {
         const evalVendor = simpleVendorNames.find(ev => ev.name === s.vendorName);
-        if (!evalVendor) return s;
-
-        const supplierData = simpleEvalData.suppliers.find(sp => sp.vendorId === evalVendor.id);
-        const normalizedScore = supplierData?.calculatedScore?.normalizedScore ?? 0;
+        const supplierData = evalVendor ? simpleEvalData.suppliers.find(sp => sp.vendorId === evalVendor.id) : null;
+        const normalizedScore = supplierData?.calculatedScore?.normalizedScore ?? s.score ?? s.recommendationScore ?? 0;
+        const finalCalculatedScore = Math.round((normalizedScore || s.score || s.recommendationScore || 0) * 10) / 10;
 
         return {
           ...s,
-          recommendationScore: Math.round(normalizedScore * 10) / 10,
+          score: finalCalculatedScore > 0 ? finalCalculatedScore : s.score,
+          recommendationScore: finalCalculatedScore,
           recommendationReason:
-            normalizedScore >= 80 ? 'strong evaluation score' :
-            normalizedScore >= 60 ? 'balanced evaluation score' :
+            finalCalculatedScore >= 80 ? 'strong evaluation score' :
+            finalCalculatedScore >= 60 ? 'balanced evaluation score' :
             'needs improvement',
         };
       }).sort((a, b) =>
@@ -2337,7 +2766,15 @@ export default function QuotationsPage() {
 
         // Only show PostAwardModal if this is the final level
         if (chain.currentLevel >= chain.totalLevels) {
-          setPendingApprovalQuotation(modal.quotation);
+          // Mark quotation as final-approver so getDisplayStatus shows the
+          // actual backend status instead of overriding to ACCEPTED.
+          finalApproverIdsRef.current.add(modal.quotation.id);
+          const finalApproverQuotation = { ...modal.quotation, isFinalApprover: true };
+          setPendingApprovalQuotation(finalApproverQuotation);
+          // Also sync the quotations list so the status badge stays accurate
+          setQuotations(prev => prev.map(q =>
+            q.id === modal.quotation.id ? { ...q, isFinalApprover: true } : q
+          ));
           confirmCallbackRef.current = { type, comment };
           closeModal();
           return;
@@ -2551,17 +2988,11 @@ export default function QuotationsPage() {
         </div>
 
         {/* Content: Table or Chart */}
-        {viewMode === 'chart' && selectedRFQ && evalCategories.length > 0 && evalVendorNames.length > 0 ? (
+        {viewMode === 'chart' && selectedRFQ && chartCategories.length > 0 && chartVendorNames.length > 0 ? (
           <VendorComparisonCharts
-            categories={evalCategories}
-            vendorScores={vendorEvalScores}
-            vendorNames={evalVendorNames}
-          />
-        ) : viewMode === 'chart' && selectedRFQ && simpleEvalData !== null && simpleEvalCategories.length > 0 && simpleVendorNames.length > 0 ? (
-          <VendorComparisonCharts
-            categories={simpleEvalCategories}
-            vendorScores={simpleVendorScores}
-            vendorNames={simpleVendorNames}
+            categories={chartCategories}
+            vendorScores={chartVendorScores}
+            vendorNames={chartVendorNames}
           />
         ) : selectedRFQ && evaluatedSuppliers.length > 0 ? (
           <div className="quot-compare__matrix-wrap">
@@ -2652,7 +3083,7 @@ export default function QuotationsPage() {
                 <span className="quot-compare__supplier-email">{s.vendorEmail}</span>
                 {s.isRecommended && (
                   <span className="quot-compare__recommended-chip" title={s.recommendationReason}>
-                    <Crown size={10} /> Best overall
+                    <Crown size={10} /> Recommended ({s.recommendationScore || s.score}%)
                   </span>
                 )}
               </div>
@@ -2721,11 +3152,11 @@ export default function QuotationsPage() {
             <div className="quot-compare__score-cell">
               <div className="quot-score">
                 <div className="quot-score__bar">
-                  <div className={`quot-score__fill quot-score__fill--${getScoreClass(s.recommendationScore || 0)}`} style={{ width: `${s.recommendationScore || 0}%` }} />
+                  <div className={`quot-score__fill quot-score__fill--${getScoreClass(s.recommendationScore || s.score || 0)}`} style={{ width: `${s.recommendationScore || s.score || 0}%` }} />
                 </div>
-                <span className="quot-score__value">{s.recommendationScore || 0}</span>
+                <span className="quot-score__value">{s.recommendationScore || s.score || 0}%</span>
               </div>
-              {s.isRecommended && <span className="quot-compare__best-chip"><Crown size={10}/> Best</span>}
+              {s.isRecommended && <span className="quot-compare__best-chip"><Crown size={10}/> Recommended ({s.recommendationScore || s.score}%)</span>}
             </div>
           </td>
         );
@@ -3009,6 +3440,7 @@ export default function QuotationsPage() {
       {/* Action Modal — Use enhanced ViewQuotationModal for 'view' type */}
       {activeModal && activeModal.type === 'view' && (
         <ViewQuotationModal
+          key={activeModal.quotation.id}
           quotation={activeModal.quotation}
           onClose={closeModal}
           onSelectionSaved={reload}
@@ -3105,9 +3537,6 @@ export default function QuotationsPage() {
             </div>
 
             <div className="quot-compare-modal__body">
-            {/* Inline Charts — at the top between hero and body */}
-            // Chart view rendered below controls - see Matrix section
-
               {renderComparisonPanel(true)}
             </div>
           </div>
@@ -3123,13 +3552,17 @@ export default function QuotationsPage() {
           currency={postAwardQuotation.currency || companyDefaultCurrency || 'KES'}
           onClose={() => setPostAwardQuotation(null)}
           onNavigatePO={async () => {
+            // Directly execute RFQ-based PO flow: accept quotation and navigate to PO creation
+            const quotation = postAwardQuotation;
             try {
-              const po = await purchaseOrderService.create(String(postAwardQuotation.rfqId));
-              setPostAwardQuotation(null);
-              setToast({ message: `Purchase Order ${po.poNumber} created successfully.`, type: 'success' });
+              await quotationService.updateStatus(quotation.id, 'ACCEPTED');
             } catch (err) {
-              setToast({ message: err instanceof Error ? err.message : 'Failed to create purchase order', type: 'error' });
+              console.error('Failed to accept quotation:', err);
+            } finally {
+              setPostAwardQuotation(null);
+              reload();
             }
+            navigate(`/procurement/purchase-requisition/${quotation.rfqId}`);
           }}
           onNavigateContract={() => handleNavigateContract(postAwardQuotation)}
         />
@@ -3141,10 +3574,16 @@ export default function QuotationsPage() {
           rfqNumber={postAwardQuotation.rfqNumber}
           vendorName={postAwardQuotation.vendorName}
           onClose={() => { setShowTemplateSelect(false); setPostAwardQuotation(null); }}
-          onGenerated={(contractId) => {
+          onGenerated={(_contractId) => {
+            const targetId = postAwardQuotation.id;
             setShowTemplateSelect(false);
             setPostAwardQuotation(null);
-            navigate(`/contracts/${contractId}`);
+            setPendingApprovalQuotation(null);
+            confirmCallbackRef.current = null;
+            closeModal();
+            setQuotations(prev => prev.map(q => q.id === targetId ? { ...q, status: 'ACCEPTED' } : q));
+            setToast({ message: 'Contract generated and quotation accepted successfully!', type: 'success' });
+            reload();
           }}
         />
       )}
@@ -3168,21 +3607,37 @@ export default function QuotationsPage() {
               'ACCEPTED',
               saved.comment
             );
-            // Also refresh quotations list to show updated status
-            reload();
+            // Reload happens in onNavigatePO's finally after modal closes (to avoid blank screen)
           }}
           onClose={() => { setPendingApprovalQuotation(null); confirmCallbackRef.current = null; }}
           onNavigatePO={async () => {
+            // Directly execute RFQ-based PO flow: accept quotation and navigate to PO creation
+            const quotation = pendingApprovalQuotation;
             try {
-              const po = await purchaseOrderService.create(String(pendingApprovalQuotation.rfqId));
+              if (confirmCallbackRef.current) {
+                await quotationService.updateStatus(
+                  quotation.id,
+                  'ACCEPTED',
+                  confirmCallbackRef.current.comment
+                );
+              } else {
+                await quotationService.updateStatus(quotation.id, 'ACCEPTED');
+              }
+            } catch (err) {
+              console.error('Failed to accept quotation:', err);
+            } finally {
               setPendingApprovalQuotation(null);
               confirmCallbackRef.current = null;
-              setToast({ message: `Purchase Order ${po.poNumber} created successfully.`, type: 'success' });
-            } catch (err) {
-              setToast({ message: err instanceof Error ? err.message : 'Failed to create purchase order', type: 'error' });
+              reload();
             }
+            navigate(`/procurement/purchase-requisition/${quotation.rfqId}`);
           }}
-          onNavigateContract={() => handleNavigateContract(pendingApprovalQuotation)}
+          onNavigateContract={async () => {
+            // In pre-award mode, skip selectedQuotationId validation since
+            // approval hasn't happened yet — go straight to template selection.
+            // Approval will be deferred to when the user clicks Generate.
+            setShowTemplateSelect(true);
+          }}
         />
       )}
 
@@ -3192,15 +3647,31 @@ export default function QuotationsPage() {
           rfqId={String(pendingApprovalQuotation.rfqId)}
           rfqNumber={pendingApprovalQuotation.rfqNumber}
           vendorName={pendingApprovalQuotation.vendorName}
+          onApproveFirst={async () => {
+            const saved = confirmCallbackRef.current;
+            if (!saved || !pendingApprovalQuotation) return;
+            await quotationService.updateStatus(
+              pendingApprovalQuotation.id,
+              'ACCEPTED',
+              saved.comment
+            );
+          }}
           onClose={() => { setShowTemplateSelect(false); setPendingApprovalQuotation(null); confirmCallbackRef.current = null; }}
-          onGenerated={(contractId) => {
+          onGenerated={(_contractId) => {
+            const targetId = pendingApprovalQuotation.id;
             setShowTemplateSelect(false);
             setPendingApprovalQuotation(null);
+            setPostAwardQuotation(null);
             confirmCallbackRef.current = null;
-            navigate(`/contracts/${contractId}`);
+            closeModal();
+            setQuotations(prev => prev.map(q => q.id === targetId ? { ...q, status: 'ACCEPTED' } : q));
+            setToast({ message: 'Contract generated and quotation accepted successfully!', type: 'success' });
+            reload();
           }}
         />
       )}
+
+
 
     </div>
   );

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { procurementService, type VendorInvitationRow, type VendorSearchResult } from '../../services/procurementService';
-import { companySettingsService, type RequiredDocument } from '../../services/companySettingsService';
+import { companySettingsService, type RequiredDocument, type DocumentTemplate } from '../../services/companySettingsService';
 import PhoneInput from '../../components/shared/PhoneInput';
 import VendorSuggestDropdown from '../../components/shared/VendorSuggestDropdown';
 import VendorDetailModal from '../../components/shared/VendorDetailModal';
@@ -31,11 +31,16 @@ import {
   ExternalLink,
   List,
   FileText,
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  AlertTriangle,
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import DesktopWindow from '../../components/shared/DesktopWindow';
 import './NewOnboardingPage.css';
 
+// Heliflow — New Onboarding Page (Exact Phone Match)
 type InviteStatus = VendorInvitationRow['status'];
 
 const statusConfig: Record<InviteStatus, { label: string; cls: string; icon: React.ReactNode }> = {
@@ -108,8 +113,20 @@ export default function NewOnboardingPage() {
   const docsBarBtnRef = useRef<HTMLButtonElement>(null);
   const [docsLoading, setDocsLoading] = useState(false);
 
-  // ── NDA/MNDA Required ──
-  const [ndaMndaRequired, setNdaMndaRequired] = useState(false);
+  // ── Separate NDA & MNDA Required ──
+  const [ndaRequired, setNdaRequired] = useState(false);
+  const [mndaRequired, setMndaRequired] = useState(false);
+  const [ndaTemplateId, setNdaTemplateId] = useState<string | null>(null);
+  const [mndaTemplateId, setMndaTemplateId] = useState<string | null>(null);
+  const [showNdaTemplateModal, setShowNdaTemplateModal] = useState(false);
+  const [showMndaTemplateModal, setShowMndaTemplateModal] = useState(false);
+  const [ndaTemplates, setNdaTemplates] = useState<DocumentTemplate[]>([]);
+  const [mndaTemplates, setMndaTemplates] = useState<DocumentTemplate[]>([]);
+  const [ndaTemplatesLoading, setNdaTemplatesLoading] = useState(false);
+
+  // ── Template Preview ──
+  const [previewTemplate, setPreviewTemplate] = useState<DocumentTemplate | null>(null);
+  const [showTemplatePreview, setShowTemplatePreview] = useState(false);
 
   // ── Vendor Search / Duplicate Detection ──
   const [searchResults, setSearchResults] = useState<VendorSearchResult[]>([]);
@@ -122,6 +139,7 @@ export default function NewOnboardingPage() {
   const companyNameRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasShownDuplicateRef = useRef(false);
+  const continuedAsNewRef = useRef(false);
 
   // Debounced vendor search
   useEffect(() => {
@@ -133,6 +151,11 @@ export default function NewOnboardingPage() {
       return;
     }
 
+    if (continuedAsNewRef.current) {
+      setShowSuggestions(false);
+      return;
+    }
+
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
     }
@@ -141,13 +164,17 @@ export default function NewOnboardingPage() {
       setSearchLoading(true);
       try {
         const results = await procurementService.searchVendors(q);
-        setSearchResults(results);
-        setShowSuggestions(true); // Always show dropdown (results or empty state)
-        setHasSearched(true);
+        if (!continuedAsNewRef.current) {
+          setSearchResults(results);
+          setShowSuggestions(true); // Always show dropdown (results or empty state)
+          setHasSearched(true);
+        }
       } catch {
-        setSearchResults([]);
-        setShowSuggestions(true);
-        setHasSearched(true);
+        if (!continuedAsNewRef.current) {
+          setSearchResults([]);
+          setShowSuggestions(true);
+          setHasSearched(true);
+        }
       } finally {
         setSearchLoading(false);
       }
@@ -160,6 +187,39 @@ export default function NewOnboardingPage() {
 
   // ── Invitation Detail Popup ──
   const [detailInvitation, setDetailInvitation] = useState<VendorInvitationRow | null>(null);
+
+  // ── Dedicated Eye View Popup Modal ──
+  const [eyeViewModal, setEyeViewModal] = useState<{
+    type: 'items' | 'documents';
+    companyName: string;
+    items?: Array<{ itemCode: string; itemName: string }>;
+    docNames?: string[];
+  } | null>(null);
+
+  // ── Pre-Send Predictive Match Confidence Modal ──
+  const [showPreSendConfidenceModal, setShowPreSendConfidenceModal] = useState(false);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditResult, setAuditResult] = useState<{
+    score: number;
+    duplicationRisk: 'LOW' | 'MEDIUM' | 'HIGH';
+    matchedVendor: { name: string; email: string; score: number } | null;
+    breakdown?: {
+      nameScore: number;
+      emailScore: number;
+      personScore: number;
+      phoneScore: number;
+    };
+  } | null>(null);
+
+  // ── SAP Style Invitation Sent Success Modal ──
+  const [sentSuccessModal, setSentSuccessModal] = useState<{
+    companyName: string;
+    contactEmail: string;
+    inviteCode: string;
+    expiresAt: string;
+    itemsCount: number;
+    documentsCount: number;
+  } | null>(null);
 
   // Load available documents from Company Settings
   useEffect(() => {
@@ -176,16 +236,64 @@ export default function NewOnboardingPage() {
     })();
   }, []);
 
-  // Pre-populate selectedDocIds from the latest invitation's document IDs (persisted in DB)
-  // so that the document selection carries over between invitations
+  // Load NDA/MNDA document templates from Company Settings
   useEffect(() => {
-    if (!invitations || invitations.length === 0) return;
-    if (selectedDocIds.length > 0) return; // Don't override user's manual selection during auto-refresh
-    const latestWithDocs = invitations.find(inv => inv.documentIds && inv.documentIds.length > 0);
-    if (latestWithDocs && latestWithDocs.documentIds) {
-      setSelectedDocIds(latestWithDocs.documentIds);
-    }
-  }, [invitations, selectedDocIds]);
+    (async () => {
+      setNdaTemplatesLoading(true);
+      try {
+        const templates = await companySettingsService.listDocumentTemplates();
+        setNdaTemplates(templates.filter(t => t.type === 'NDA'));
+        setMndaTemplates(templates.filter(t => t.type === 'MNDA'));
+      } catch {
+        // ignore
+      } finally {
+        setNdaTemplatesLoading(false);
+      }
+    })();
+  }, []);
+
+  // Handle template preview
+  const handlePreviewTemplate = useCallback((template: DocumentTemplate) => {
+    setPreviewTemplate(template);
+    setShowTemplatePreview(true);
+  }, []);
+
+  // Handle NDA/MNDA template selection
+  const handleOpenNdaTemplateModal = useCallback(() => {
+    // Refresh templates from Company Settings
+    setNdaTemplatesLoading(true);
+    companySettingsService.listDocumentTemplates().then(templates => {
+      setNdaTemplates(templates.filter(t => t.type === 'NDA'));
+      setMndaTemplates(templates.filter(t => t.type === 'MNDA'));
+    }).catch(() => {
+      // If API fails, keep whatever was loaded before
+    }).finally(() => {
+      setNdaTemplatesLoading(false);
+    });
+    setShowNdaTemplateModal(true);
+  }, []);
+
+  const handleOpenMndaTemplateModal = useCallback(() => {
+    // Refresh templates from Company Settings
+    setNdaTemplatesLoading(true);
+    companySettingsService.listDocumentTemplates().then(templates => {
+      setNdaTemplates(templates.filter(t => t.type === 'NDA'));
+      setMndaTemplates(templates.filter(t => t.type === 'MNDA'));
+    }).catch(() => {
+      // If API fails, keep whatever was loaded before
+    }).finally(() => {
+      setNdaTemplatesLoading(false);
+    });
+    setShowMndaTemplateModal(true);
+  }, []);
+
+  const handleSelectNdaTemplate = useCallback((templateId: string) => {
+    setNdaTemplateId(templateId);
+  }, []);
+
+  const handleSelectMndaTemplate = useCallback((templateId: string) => {
+    setMndaTemplateId(templateId);
+  }, []);
 
   const handleOpenDocsPopup = useCallback(async () => {
     // Refresh documents list from Company Settings so newly added docs appear
@@ -217,26 +325,49 @@ export default function NewOnboardingPage() {
       .map(d => d.name);
   }, [availableDocs, selectedDocIds]);
 
+  // Resolve document names from IDs for the detail modal
+  const detailDocNames = useMemo(() => {
+    if (!detailInvitation?.documentIds || detailInvitation.documentIds.length === 0) return [];
+    return detailInvitation.documentIds.map(id => {
+      const doc = availableDocs.find(d => d.id === id);
+      return doc?.name || id;
+    });
+  }, [detailInvitation, availableDocs]);
+
   const pendingCount = useMemo(() => invitations.filter((i) => i.status === 'pending').length, [invitations]);
   const inQueueCount = useMemo(() => invitations.filter((i) => i.status === 'in_queue').length, [invitations]);
+
+  const isPhoneInvalid = useMemo(() => {
+    if (!contactPhone.trim()) return false;
+    const digits = contactPhone.replace(/\D/g, '');
+    return digits.length < 7 || digits.length > 15;
+  }, [contactPhone]);
 
   useBodyScrollLock(isInviteExpanded);
   useBodyScrollLock(isSentExpanded);
   useBodyScrollLock(!!showVendorDetail);
   useBodyScrollLock(!!showDuplicateAlert);
+  useBodyScrollLock(showTemplatePreview);
+  useBodyScrollLock(!!sentSuccessModal);
+  useBodyScrollLock(!!eyeViewModal);
+  useBodyScrollLock(showPreSendConfidenceModal);
 
-  // Escape key closes expanded modals
+  // Escape key closes expanded modals, template preview, success modal, eye view modal, and pre-send modal
   useEffect(() => {
-    if (!isInviteExpanded && !isSentExpanded) return;
+    if (!isInviteExpanded && !isSentExpanded && !showTemplatePreview && !sentSuccessModal && !eyeViewModal && !showPreSendConfidenceModal) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsInviteExpanded(false);
         setIsSentExpanded(false);
+        setShowTemplatePreview(false);
+        setSentSuccessModal(null);
+        setEyeViewModal(null);
+        setShowPreSendConfidenceModal(false);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isInviteExpanded, isSentExpanded]);
+  }, [isInviteExpanded, isSentExpanded, showTemplatePreview, sentSuccessModal, eyeViewModal, showPreSendConfidenceModal]);
 
 
 
@@ -279,6 +410,10 @@ export default function NewOnboardingPage() {
     setShowVendorDetail(false);
     setSelectedSearchVendor(null);
     setShowDuplicateAlert(false);
+    hasShownDuplicateRef.current = true;
+    continuedAsNewRef.current = true;
+    setShowSuggestions(false);
+    setSearchResults([]);
   }, []);
 
   const handleViewExistingVendor = useCallback(() => {
@@ -296,11 +431,15 @@ export default function NewOnboardingPage() {
 
   const handleDuplicateCreateAnyway = useCallback(() => {
     setShowDuplicateAlert(false);
-    // User confirmed they want to create a new vendor despite the duplicate
+    setSelectedSearchVendor(null);
+    setShowVendorDetail(false);
     hasShownDuplicateRef.current = true; // Prevent showing again
+    continuedAsNewRef.current = true;
+    setShowSuggestions(false);
+    setSearchResults([]);
   }, []);
 
-  // When company name changes, reset the duplicate flag and check for high-confidence matches
+  // When company name changes, keep predictive analysis disabled if user already clicked Continue with New Vendor
   const handleCompanyNameChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newVal = e.target.value;
     setCompanyName(newVal);
@@ -316,6 +455,7 @@ export default function NewOnboardingPage() {
         companyName.trim().length >= 2 &&
         hasHighMatch &&
         !hasShownDuplicateRef.current &&
+        !continuedAsNewRef.current &&
         !showVendorDetail
       ) {
         const bestMatch = searchResults.find((v) => v.score >= 80);
@@ -328,9 +468,139 @@ export default function NewOnboardingPage() {
     }, 200);
   }, [companyName, searchResults, showVendorDetail]);
 
-  const handleSendInvite = useCallback(async (e: React.FormEvent) => {
+  const handleSendInviteClick = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!companyName.trim() || !contactEmail.trim()) return;
+    if (!companyName.trim() || !contactEmail.trim()) {
+      setFormError('Please fill in both Company Name and Contact Email');
+      return;
+    }
+    if (contactPhone.trim()) {
+      const digits = contactPhone.replace(/\D/g, '');
+      if (digits.length < 7 || digits.length > 15) {
+        setFormError('Please enter a valid phone number (7 to 15 digits)');
+        return;
+      }
+    }
+    setFormError(null);
+    setShowPreSendConfidenceModal(true);
+    setAuditLoading(true);
+
+    try {
+      // Search DB by company name, email, and phone
+      const [byName, byEmail, byPhone] = await Promise.all([
+        procurementService.searchVendors(companyName.trim()).catch(() => []),
+        contactEmail.trim() ? procurementService.searchVendors(contactEmail.trim()).catch(() => []) : Promise.resolve([]),
+        contactPhone.trim() ? procurementService.searchVendors(contactPhone.trim()).catch(() => []) : Promise.resolve([]),
+      ]);
+
+      const dbResults = [...byName, ...byEmail, ...byPhone];
+
+      // Combine DB results with local invitations to find candidate matches
+      const candidates: Array<{ companyName: string; contactEmail: string; contactPerson?: string; contactPhone?: string }> = [
+        ...invitations.map(i => ({ companyName: i.companyName, contactEmail: i.contactEmail, contactPerson: i.contactPerson || undefined, contactPhone: i.contactPhone || undefined })),
+        ...dbResults.map(v => ({ companyName: v.name, contactEmail: v.email, contactPerson: v.contactPerson || undefined, contactPhone: v.phone || v.contactPhone || undefined })),
+      ];
+
+      const currentInput = {
+        companyName: companyName.trim(),
+        contactEmail: contactEmail.trim(),
+        contactPerson: contactPerson.trim(),
+        contactPhone: contactPhone.trim() ? `${contactCountryCode}${contactPhone.trim()}` : '',
+      };
+
+      const norm = (str?: string) => (str || '').trim().toLowerCase();
+      
+      const cleanPhoneDigits = (raw?: string) => {
+        if (!raw) return '';
+        let d = raw.replace(/\D/g, '').replace(/^0+/, '');
+        if (d.length > 10) {
+          return d.slice(-10);
+        }
+        return d;
+      };
+
+      let bestScore = 0;
+      let bestMatchedVendor: { name: string; email: string; score: number } | null = null;
+      let bestBreakdown = { nameScore: 0, emailScore: 0, personScore: 0, phoneScore: 0 };
+
+      candidates.forEach((cand) => {
+        // 1. Company Name Match (25% weight)
+        const inName = norm(currentInput.companyName);
+        const exName = norm(cand.companyName);
+        let nameScore = 0;
+        if (inName && exName) {
+          if (inName === exName) nameScore = 100;
+          else if (inName.includes(exName) || exName.includes(inName)) nameScore = 80;
+        }
+
+        // 2. Email Match (25% weight)
+        const inEmail = norm(currentInput.contactEmail);
+        const exEmail = norm(cand.contactEmail);
+        let emailScore = 0;
+        if (inEmail && exEmail) {
+          if (inEmail === exEmail) emailScore = 100;
+          else if (inEmail.split('@')[1] && inEmail.split('@')[1] === exEmail.split('@')[1] && !['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com'].includes(inEmail.split('@')[1])) {
+            emailScore = 60;
+          }
+        }
+
+        // 3. Contact Person Match (25% weight)
+        const inPerson = norm(currentInput.contactPerson);
+        const exPerson = norm(cand.contactPerson);
+        let personScore = 0;
+        if (inPerson && exPerson) {
+          if (inPerson === exPerson) personScore = 100;
+          else if (inPerson.includes(exPerson) || exPerson.includes(inPerson)) personScore = 75;
+          else {
+            const inWords = inPerson.split(/\s+/);
+            const exWords = exPerson.split(/\s+/);
+            if (inWords.some(w => exWords.includes(w) && w.length >= 3)) personScore = 50;
+          }
+        }
+
+        // 4. Phone Match (25% weight) - Strict Binary Match (100% if same, 0% if different/missing)
+        const inPhoneDigits = cleanPhoneDigits(currentInput.contactPhone);
+        const exPhoneDigits = cleanPhoneDigits(cand.contactPhone);
+        let phoneScore = 0;
+        if (inPhoneDigits && exPhoneDigits && inPhoneDigits === exPhoneDigits) {
+          phoneScore = 100;
+        } else {
+          phoneScore = 0;
+        }
+
+        // Equal 25% weightage calculation
+        const total = Math.round(nameScore * 0.25 + emailScore * 0.25 + personScore * 0.25 + phoneScore * 0.25);
+
+        if (total > bestScore) {
+          bestScore = total;
+          bestMatchedVendor = { name: cand.companyName, email: cand.contactEmail, score: total };
+          bestBreakdown = { nameScore, emailScore, personScore, phoneScore };
+        }
+      });
+
+      let risk: 'LOW' | 'MEDIUM' | 'HIGH' = 'LOW';
+      if (bestScore >= 60) risk = 'HIGH';
+      else if (bestScore >= 25) risk = 'MEDIUM';
+
+      setAuditResult({
+        score: bestScore,
+        duplicationRisk: risk,
+        matchedVendor: bestMatchedVendor,
+        breakdown: bestBreakdown,
+      });
+    } catch {
+      setAuditResult({
+        score: 0,
+        duplicationRisk: 'LOW',
+        matchedVendor: null,
+      });
+    } finally {
+      setAuditLoading(false);
+    }
+  }, [companyName, contactEmail, contactPerson, contactPhone, contactCountryCode, invitations]);
+
+  const executeSendInvite = useCallback(async () => {
+    setShowPreSendConfidenceModal(false);
     setSending(true);
     setFormError(null);
     setSentSuccess('');
@@ -346,7 +616,11 @@ export default function NewOnboardingPage() {
         notes: notes.trim() || undefined,
         items: validItems.length > 0 ? validItems : undefined,
         documentIds: selectedDocIds.length > 0 ? selectedDocIds : undefined,
-        ndaMndaRequired,
+        ndaMndaRequired: (ndaRequired && mndaRequired) || undefined,
+        ndaRequired: ndaRequired || undefined,
+        mndaRequired: mndaRequired || undefined,
+        ndaTemplateId: ndaTemplateId || undefined,
+        mndaTemplateId: mndaTemplateId || undefined,
       });
       setCompanyName('');
       setContactEmail('');
@@ -355,9 +629,13 @@ export default function NewOnboardingPage() {
       setNotes('');
       setItems([]);
       setSelectedDocIds([]);
-      setNdaMndaRequired(false);
+      setNdaRequired(false);
+      setMndaRequired(false);
+      setNdaTemplateId(null);
+      setMndaTemplateId(null);
       setSelectedSearchVendor(null);
       hasShownDuplicateRef.current = false;
+      continuedAsNewRef.current = false;
       reload();
       if (!emailSent) {
         setFormError(
@@ -368,6 +646,14 @@ export default function NewOnboardingPage() {
       } else {
         setFormError(null);
         setSentSuccess(message || `Invitation email sent to ${inv.contactEmail} (Accept / Decline).`);
+        setSentSuccessModal({
+          companyName: inv.companyName,
+          contactEmail: inv.contactEmail,
+          inviteCode: inv.inviteCode,
+          expiresAt: inv.expiresAt,
+          itemsCount: validItems.length,
+          documentsCount: selectedDocIds.length,
+        });
       }
       setTimeout(() => setSentSuccess(''), 6000);
     } catch (err) {
@@ -375,7 +661,7 @@ export default function NewOnboardingPage() {
     } finally {
       setSending(false);
     }
-  }, [companyName, contactEmail, contactPerson, contactPhone, contactCountryCode, notes, items, selectedDocIds, ndaMndaRequired, reload]);
+  }, [companyName, contactEmail, contactPerson, contactPhone, contactCountryCode, notes, items, selectedDocIds, ndaRequired, mndaRequired, ndaTemplateId, mndaTemplateId, reload]);
 
   const handleCopyCode = useCallback((code: string) => {
     navigator.clipboard.writeText(code).catch(() => {});
@@ -590,7 +876,7 @@ export default function NewOnboardingPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSendInvite} className="onb-form-card__body">
+            <form onSubmit={handleSendInviteClick} className="onb-form-card__body">
               {sentSuccess && (
                 <MessageStrip type="success" compact onClose={() => setSentSuccess('')} autoHideMs={4000}>
                   {sentSuccess}
@@ -610,7 +896,7 @@ export default function NewOnboardingPage() {
                     value={companyName}
                     onChange={handleCompanyNameChange}
                     onFocus={() => {
-                      if (searchResults.length > 0 && companyName.trim().length >= 2) {
+                      if (searchResults.length > 0 && companyName.trim().length >= 2 && !continuedAsNewRef.current) {
                         setShowSuggestions(true);
                       }
                     }}
@@ -671,8 +957,14 @@ export default function NewOnboardingPage() {
                   onCountryCodeChange={setContactCountryCode}
                   value={contactPhone}
                   onChange={setContactPhone}
+                  hasError={isPhoneInvalid}
                   placeholder="Type your mobile number"
                 />
+                {isPhoneInvalid && (
+                  <span style={{ fontSize: '12px', color: '#ef4444', marginTop: '4px', display: 'block' }}>
+                    Please enter a valid phone number (7 to 15 digits)
+                  </span>
+                )}
               </div>
 
               <div className="onb-form-field">
@@ -720,30 +1012,80 @@ export default function NewOnboardingPage() {
                 </div>
               )}
 
-              {/* NDA/MNDA Required Checkbox */}
-              <div className="onb-items-bar">
-                <div className="onb-items-bar__left">
-                  <FileText size={15} />
-                  <span className="onb-items-bar__label">NDA/MNDA Required</span>
+              {/* ── Separate NDA & MNDA Required ── */}
+              <div className="onb-nda-section">
+                <div className="onb-nda-row">
+                  <div className="onb-items-bar__left">
+                    <FileText size={15} />
+                    <span className="onb-items-bar__label">NDA Agreement</span>
+                  </div>
+                  <label className="onb-nda-toggle">
+                    <input
+                      type="checkbox"
+                      checked={ndaRequired}
+                      onChange={(e) => {
+                        setNdaRequired(e.target.checked);
+                        if (e.target.checked) {
+                          setNdaTemplateId(null);
+                          handleOpenNdaTemplateModal();
+                        } else {
+                          setNdaTemplateId(null);
+                        }
+                      }}
+                      className="onb-nda-checkbox"
+                    />
+                    <span className="onb-nda-toggle__label">
+                      {ndaRequired ? (ndaTemplateId ? 'NDA template selected' : 'Select NDA template') : 'Required'}
+                    </span>
+                  </label>
                 </div>
-                <label className="onb-nda-toggle">
-                  <input
-                    type="checkbox"
-                    checked={ndaMndaRequired}
-                    onChange={(e) => setNdaMndaRequired(e.target.checked)}
-                    className="onb-nda-checkbox"
-                  />
-                  <span className="onb-nda-toggle__label">
-                    {ndaMndaRequired ? 'NDA/MNDA required for this vendor' : 'Not required'}
-                  </span>
-                </label>
+                {ndaRequired && ndaTemplateId && (
+                  <div className="onb-nda-selected">
+                    <FileText size={12} />
+                    <span>Template: {ndaTemplates.find(t => t.id === ndaTemplateId)?.name || 'Selected'}</span>
+                    <button type="button" className="onb-nda-change-btn" onClick={handleOpenNdaTemplateModal}>Change</button>
+                  </div>
+                )}
+
+                <div className="onb-nda-row">
+                  <div className="onb-items-bar__left">
+                    <FileText size={15} />
+                    <span className="onb-items-bar__label">MNDA Agreement</span>
+                  </div>
+                  <label className="onb-nda-toggle">
+                    <input
+                      type="checkbox"
+                      checked={mndaRequired}
+                      onChange={(e) => {
+                        setMndaRequired(e.target.checked);
+                        if (e.target.checked) {
+                          setMndaTemplateId(null);
+                          handleOpenMndaTemplateModal();
+                        } else {
+                          setMndaTemplateId(null);
+                        }
+                      }}
+                      className="onb-nda-checkbox"
+                    />
+                    <span className="onb-nda-toggle__label">
+                      {mndaRequired ? (mndaTemplateId ? 'MNDA template selected' : 'Select MNDA template') : 'Required'}
+                    </span>
+                  </label>
+                </div>
+                {mndaRequired && mndaTemplateId && (
+                  <div className="onb-nda-selected">
+                    <FileText size={12} />
+                    <span>Template: {mndaTemplates.find(t => t.id === mndaTemplateId)?.name || 'Selected'}</span>
+                    <button type="button" className="onb-nda-change-btn" onClick={handleOpenMndaTemplateModal}>Change</button>
+                  </div>
+                )}
               </div>
 
               {/* Documents — Compact Summary + Popup Trigger */}
               <div className="onb-items-bar">
                 <div className="onb-items-bar__left">
                   <FileText size={15} />
-                  <span className="onb-items-bar__label">Upload Documents</span>
+                  <span className="onb-items-bar__label">Required Documents</span>
                   {selectedDocIds.length > 0 && (
                     <span className="onb-items-bar__count">{selectedDocIds.length}</span>
                   )}
@@ -902,7 +1244,7 @@ export default function NewOnboardingPage() {
             onMinimize={() => setDocsMinimized(true)}
             minimized={docsMinimized}
             onRestore={() => setDocsMinimized(false)}
-            title="Select Upload Documents"
+            title="Select Required Documents"
             icon={<FileText size={16} />}
             defaultWidth={640}
             defaultHeight={520}
@@ -1001,6 +1343,205 @@ export default function NewOnboardingPage() {
               </div>
             )}
           </DesktopWindow>
+
+          {/* ── Desktop-style NDA Template Selection Window ── */}
+          <DesktopWindow
+            open={showNdaTemplateModal}
+            onClose={() => { setShowNdaTemplateModal(false); if (!ndaTemplateId) setNdaRequired(false); }}
+            title="Select NDA Template"
+            icon={<FileText size={16} />}
+            defaultWidth={540}
+            defaultHeight={420}
+            minWidth={380}
+            minHeight={280}
+            footer={
+              <button
+                type="button"
+                className="onb-popup-done-btn"
+                onClick={() => { setShowNdaTemplateModal(false); if (!ndaTemplateId) setNdaRequired(false); }}
+              >
+                {ndaTemplateId ? 'Done' : 'Cancel'}
+              </button>
+            }
+          >
+            {ndaTemplatesLoading ? (
+              <div className="onb-popup-empty">
+                <p className="onb-popup-empty__desc">Loading templates...</p>
+              </div>
+            ) : ndaTemplates.length === 0 ? (
+              <div className="onb-popup-empty">
+                <FileText size={28} />
+                <p className="onb-popup-empty__title">No NDA templates configured</p>
+                <p className="onb-popup-empty__desc">Add NDA templates in Company Settings first.</p>
+              </div>
+            ) : (
+              <div className="onb-doc-select">
+                {ndaTemplates.map(template => {
+                  const isSelected = ndaTemplateId === template.id;
+                  return (
+                    <label
+                      key={template.id}
+                      className={`onb-doc-select__item ${isSelected ? 'onb-doc-select__item--selected' : ''}`}
+                      onClick={() => handleSelectNdaTemplate(template.id)}
+                    >
+                      <input
+                        type="radio"
+                        name="ndaTemplate"
+                        checked={isSelected}
+                        onChange={() => handleSelectNdaTemplate(template.id)}
+                        className="onb-doc-select__checkbox"
+                      />
+                      <FileText size={15} className="onb-doc-select__icon" />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="onb-doc-select__name">{template.name}</div>
+                        {template.fileUrl && (
+                          <div style={{ fontSize: 11, color: '#9ea4a9', marginTop: 2 }}>
+                            Uploaded document available
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="onb-template-preview-btn"
+                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); handlePreviewTemplate(template); }}
+                        title="Preview template content"
+                      >
+                        Preview
+                      </button>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </DesktopWindow>
+
+          {/* ── Desktop-style MNDA Template Selection Window ── */}
+          <DesktopWindow
+            open={showMndaTemplateModal}
+            onClose={() => { setShowMndaTemplateModal(false); if (!mndaTemplateId) setMndaRequired(false); }}
+            title="Select MNDA Template"
+            icon={<FileText size={16} />}
+            defaultWidth={540}
+            defaultHeight={420}
+            minWidth={380}
+            minHeight={280}
+            footer={
+              <button
+                type="button"
+                className="onb-popup-done-btn"
+                onClick={() => { setShowMndaTemplateModal(false); if (!mndaTemplateId) setMndaRequired(false); }}
+              >
+                {mndaTemplateId ? 'Done' : 'Cancel'}
+              </button>
+            }
+          >
+            {ndaTemplatesLoading ? (
+              <div className="onb-popup-empty">
+                <p className="onb-popup-empty__desc">Loading templates...</p>
+              </div>
+            ) : mndaTemplates.length === 0 ? (
+              <div className="onb-popup-empty">
+                <FileText size={28} />
+                <p className="onb-popup-empty__title">No MNDA templates configured</p>
+                <p className="onb-popup-empty__desc">Add MNDA templates in Company Settings first.</p>
+              </div>
+            ) : (
+              <div className="onb-doc-select">
+                {mndaTemplates.map(template => {
+                  const isSelected = mndaTemplateId === template.id;
+                  return (
+                    <label
+                      key={template.id}
+                      className={`onb-doc-select__item ${isSelected ? 'onb-doc-select__item--selected' : ''}`}
+                      onClick={() => handleSelectMndaTemplate(template.id)}
+                    >
+                      <input
+                        type="radio"
+                        name="mndaTemplate"
+                        checked={isSelected}
+                        onChange={() => handleSelectMndaTemplate(template.id)}
+                        className="onb-doc-select__checkbox"
+                      />
+                      <FileText size={15} className="onb-doc-select__icon" />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="onb-doc-select__name">{template.name}</div>
+                        {template.fileUrl && (
+                          <div style={{ fontSize: 11, color: '#9ea4a9', marginTop: 2 }}>
+                            Uploaded document available
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="onb-template-preview-btn"
+                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); handlePreviewTemplate(template); }}
+                        title="Preview template content"
+                      >
+                        Preview
+                      </button>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </DesktopWindow>
+
+          {/* ── Template Preview Overlay ── */}
+          {showTemplatePreview && previewTemplate && (
+            <div
+              className="onb-template-preview-overlay"
+              onClick={() => setShowTemplatePreview(false)}
+            >
+              <div
+                className="onb-template-preview-card"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="onb-template-preview-header">
+                  <div className="onb-template-preview-header__left">
+                    <FileText size={18} />
+                    <div>
+                      <div className="onb-template-preview-header__title">{previewTemplate.name}</div>
+                      <div className="onb-template-preview-header__sub">
+                        {previewTemplate.type} Template · v{previewTemplate.version}
+                        {previewTemplate.fileName && ` · ${previewTemplate.fileName}`}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="onb-template-preview-close"
+                    onClick={() => setShowTemplatePreview(false)}
+                    aria-label="Close preview"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+                <div className="onb-template-preview-body">
+                  {previewTemplate.content ? (
+                    <div
+                      className="onb-template-preview-content"
+                      dangerouslySetInnerHTML={{ __html: previewTemplate.content }}
+                    />
+                  ) : (
+                    <div className="onb-popup-empty">
+                      <FileText size={28} />
+                      <p className="onb-popup-empty__title">No content available</p>
+                      <p className="onb-popup-empty__desc">This template has no content defined.</p>
+                    </div>
+                  )}
+                </div>
+                <div className="onb-template-preview-footer">
+                  <button
+                    type="button"
+                    className="onb-popup-done-btn"
+                    onClick={() => setShowTemplatePreview(false)}
+                  >
+                    Close Preview
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
       {/* ── Invitation Detail Popup ── */}
@@ -1077,37 +1618,77 @@ export default function NewOnboardingPage() {
               {/* Items */}
               {detailInvitation.items && detailInvitation.items.length > 0 && (
                 <div className="onb-detail-section">
-                  <div className="onb-detail-items-header">
-                    <Package size={14} />
-                    <span className="onb-detail-items-header__title">
-                      Items ({detailInvitation.items.length})
-                    </span>
-                  </div>
-                  <div className="onb-detail-chips">
-                    {detailInvitation.items.map((it, idx) => (
-                      <span key={idx} className="onb-detail-chip">
-                        <span className="onb-detail-chip__name">{it.itemName}</span>
+                  <div className="onb-detail-items-header" style={{ justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Package size={14} />
+                      <span className="onb-detail-items-header__title">
+                        Items ({detailInvitation.items.length})
                       </span>
-                    ))}
+                    </div>
+                    <button
+                      type="button"
+                      className="onb-eye-view-btn"
+                      onClick={() => setEyeViewModal({
+                        type: 'items',
+                        companyName: detailInvitation.companyName,
+                        items: detailInvitation.items || [],
+                      })}
+                      title="Open preview popup window"
+                    >
+                      <Eye size={13} />
+                      <span>Eye View</span>
+                    </button>
+                  </div>
+
+                  <div
+                    className="onb-eye-view-placeholder"
+                    onClick={() => setEyeViewModal({
+                      type: 'items',
+                      companyName: detailInvitation.companyName,
+                      items: detailInvitation.items || [],
+                    })}
+                  >
+                    <Eye size={14} />
+                    <span>Click Eye View to open {detailInvitation.items.length} item(s) in preview popup</span>
                   </div>
                 </div>
               )}
 
               {/* Documents */}
-              {detailInvitation.selectedDocuments && detailInvitation.selectedDocuments.length > 0 && (
+              {detailInvitation.documentIds && detailInvitation.documentIds.length > 0 && (
                 <div className="onb-detail-section">
-                  <div className="onb-detail-items-header">
-                    <FileText size={14} />
-                    <span className="onb-detail-items-header__title">
-                      Documents ({detailInvitation.selectedDocuments.length})
-                    </span>
-                  </div>
-                  <div className="onb-detail-chips">
-                    {detailInvitation.selectedDocuments.map((doc, idx) => (
-                      <span key={idx} className="onb-detail-chip">
-                        <span className="onb-detail-chip__doc-name">{doc.name}</span>
+                  <div className="onb-detail-items-header" style={{ justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <FileText size={14} />
+                      <span className="onb-detail-items-header__title">
+                        Required Documents ({detailInvitation.documentIds.length})
                       </span>
-                    ))}
+                    </div>
+                    <button
+                      type="button"
+                      className="onb-eye-view-btn"
+                      onClick={() => setEyeViewModal({
+                        type: 'documents',
+                        companyName: detailInvitation.companyName,
+                        docNames: detailDocNames,
+                      })}
+                      title="Open preview popup window"
+                    >
+                      <Eye size={13} />
+                      <span>Eye View</span>
+                    </button>
+                  </div>
+
+                  <div
+                    className="onb-eye-view-placeholder"
+                    onClick={() => setEyeViewModal({
+                      type: 'documents',
+                      companyName: detailInvitation.companyName,
+                      docNames: detailDocNames,
+                    })}
+                  >
+                    <Eye size={14} />
+                    <span>Click Eye View to open {detailInvitation.documentIds.length} document(s) in preview popup</span>
                   </div>
                 </div>
               )}
@@ -1122,7 +1703,7 @@ export default function NewOnboardingPage() {
                 </div>
               )}
 
-              {!detailInvitation.items?.length && !detailInvitation.selectedDocuments?.length && !detailInvitation.notes && (
+              {!detailInvitation.items?.length && (!detailInvitation.documentIds || detailInvitation.documentIds.length === 0) && !detailInvitation.notes && (
                 <div className="onb-detail-empty">
                   <FileText size={36} />
                   <p>No items, documents, or notes were added to this invitation.</p>
@@ -1206,6 +1787,397 @@ export default function NewOnboardingPage() {
           onCreateNew={handleDuplicateCreateAnyway}
           onCancel={handleDuplicateCancel}
         />
+      )}
+
+      {/* ── SAP Style Invitation Sent Success Modal ── */}
+      {sentSuccessModal && (
+        <div className="onb-modal-backdrop" onClick={() => setSentSuccessModal(null)}>
+          <div className="onb-modal onb-modal--sap-success" onClick={(e) => e.stopPropagation()}>
+            <div className="onb-modal__header onb-modal__header--blue">
+              <div className="onb-modal__title">
+                <CheckCircle2 size={20} />
+                <span>Vendor Invitation Sent</span>
+              </div>
+              <button
+                type="button"
+                className="onb-modal__close-btn"
+                onClick={() => setSentSuccessModal(null)}
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="onb-modal__body">
+              <div className="onb-modal__success-banner">
+                <CheckCircle2 size={24} className="onb-modal__success-icon" />
+                <div>
+                  <h4 className="onb-modal__success-title">Invitation Dispatched!</h4>
+                  <p className="onb-modal__success-text">
+                    An onboarding invitation email has been sent to <strong>{sentSuccessModal.contactEmail}</strong>.
+                  </p>
+                </div>
+              </div>
+
+              <div className="onb-modal__summary">
+                <div className="onb-modal__summary-row">
+                  <span className="onb-modal__summary-label">Company Name</span>
+                  <span className="onb-modal__summary-value">{sentSuccessModal.companyName}</span>
+                </div>
+                <div className="onb-modal__summary-row">
+                  <span className="onb-modal__summary-label">Invite Code</span>
+                  <span className="onb-modal__summary-value onb-modal__summary-value--code">{sentSuccessModal.inviteCode}</span>
+                </div>
+                <div className="onb-modal__summary-row">
+                  <span className="onb-modal__summary-label">Expires At</span>
+                  <span className="onb-modal__summary-value">{sentSuccessModal.expiresAt}</span>
+                </div>
+                {sentSuccessModal.itemsCount > 0 && (
+                  <div className="onb-modal__summary-row">
+                    <span className="onb-modal__summary-label">Items Attached</span>
+                    <span className="onb-modal__summary-value">{sentSuccessModal.itemsCount} item(s)</span>
+                  </div>
+                )}
+                {sentSuccessModal.documentsCount > 0 && (
+                  <div className="onb-modal__summary-row">
+                    <span className="onb-modal__summary-label">Required Documents</span>
+                    <span className="onb-modal__summary-value">{sentSuccessModal.documentsCount} doc(s)</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="onb-modal__question-box">
+                <p className="onb-modal__question-text">
+                  Do you want to add another vendor?
+                </p>
+              </div>
+            </div>
+
+            <div className="onb-modal__footer">
+              <button
+                type="button"
+                className="onb-modal__btn onb-modal__btn--secondary"
+                onClick={() => {
+                  setSentSuccessModal(null);
+                  navigate('/onboarding/queue');
+                }}
+              >
+                View Onboarding Queue
+              </button>
+              <button
+                type="button"
+                className="onb-modal__btn onb-modal__btn--primary"
+                onClick={() => {
+                  setSentSuccessModal(null);
+                  setTimeout(() => companyNameRef.current?.focus(), 100);
+                }}
+              >
+                <Plus size={15} /> Add Another Vendor
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Eye View Popup Modal (Dedicated Preview Window) ── */}
+      {eyeViewModal && (
+        <div className="onb-detail-backdrop" style={{ zIndex: 11000 }} onClick={() => setEyeViewModal(null)}>
+          <div className="onb-modal onb-modal--sap-success" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540 }}>
+            {/* Header */}
+            <div className="onb-modal__header onb-modal__header--blue">
+              <div className="onb-modal__title">
+                {eyeViewModal.type === 'items' ? <Package size={20} /> : <FileText size={20} />}
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 700 }}>
+                    {eyeViewModal.type === 'items' ? 'Attached Required Items' : 'Configured Required Documents'}
+                  </div>
+                  <div style={{ fontSize: 11, fontWeight: 500, opacity: 0.85 }}>
+                    {eyeViewModal.companyName}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="onb-modal__close-btn"
+                onClick={() => setEyeViewModal(null)}
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="onb-modal__body" style={{ maxHeight: '60vh', overflowY: 'auto', padding: '20px 24px' }}>
+              {eyeViewModal.type === 'items' && eyeViewModal.items && (
+                <div className="onb-popup-table">
+                  <div className="onb-popup-table__head" style={{ gridTemplateColumns: '120px 1fr' }}>
+                    <span>Item Code</span>
+                    <span>Item Name</span>
+                  </div>
+                  {eyeViewModal.items.map((it, idx) => (
+                    <div key={idx} className="onb-popup-table__row" style={{ gridTemplateColumns: '120px 1fr', padding: '10px 12px' }}>
+                      <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--primary-500)' }}>
+                        {it.itemCode || '—'}
+                      </span>
+                      <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                        {it.itemName}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {eyeViewModal.type === 'documents' && eyeViewModal.docNames && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {eyeViewModal.docNames.map((name, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        padding: '12px 14px',
+                        borderRadius: 'var(--radius-md)',
+                        background: 'var(--surface-elevated)',
+                        border: '1px solid var(--border)',
+                      }}
+                    >
+                      <FileText size={16} style={{ color: 'var(--primary-500)', flexShrink: 0 }} />
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="onb-modal__footer">
+              <button
+                type="button"
+                className="onb-modal__btn onb-modal__btn--primary"
+                style={{ marginLeft: 'auto' }}
+                onClick={() => setEyeViewModal(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Pre-Send Predictive Match Confidence Modal ── */}
+      {showPreSendConfidenceModal && (
+        <div className="onb-modal-backdrop" style={{ zIndex: 10500 }} onClick={() => setShowPreSendConfidenceModal(false)}>
+          <div className="onb-modal onb-modal--sap-success" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540 }}>
+            {/* Header */}
+            <div className="onb-modal__header onb-modal__header--blue">
+              <div className="onb-modal__title">
+                <ShieldCheck size={20} />
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 700 }}>Predictive Match Confidence Audit</div>
+                  <div style={{ fontSize: 11, fontWeight: 500, opacity: 0.85 }}>Live Database Vendor Duplication Scan</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="onb-modal__close-btn"
+                onClick={() => setShowPreSendConfidenceModal(false)}
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="onb-modal__body" style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {auditLoading ? (
+                <div style={{ padding: '32px 16px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                  <div className="onb-search-spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Scanning database for vendor duplication...</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Comparing company name, email, and contact credentials</div>
+                </div>
+              ) : (
+                <>
+                  {/* Score Badge Card */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '16px 20px',
+                    borderRadius: 'var(--radius-lg)',
+                    background: auditResult?.matchedVendor
+                      ? auditResult.duplicationRisk === 'HIGH'
+                        ? 'rgba(239, 68, 68, 0.08)'
+                        : 'rgba(245, 158, 11, 0.08)'
+                      : 'linear-gradient(135deg, rgba(10, 110, 209, 0.12), rgba(99, 102, 241, 0.08))',
+                    border: auditResult?.matchedVendor
+                      ? auditResult.duplicationRisk === 'HIGH'
+                        ? '1px solid rgba(239, 68, 68, 0.25)'
+                        : '1px solid rgba(245, 158, 11, 0.25)'
+                      : '1px solid rgba(10, 110, 209, 0.25)',
+                  }}>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        {auditResult?.matchedVendor ? 'Vendor Duplication Match' : 'Duplication Risk Rating'}
+                      </div>
+                      <div style={{
+                        fontSize: 26,
+                        fontWeight: 800,
+                        color: auditResult?.matchedVendor
+                          ? auditResult.duplicationRisk === 'HIGH'
+                            ? '#ef4444'
+                            : '#f59e0b'
+                          : '#10b981',
+                        marginTop: 2,
+                      }}>
+                        {auditResult?.score}%
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>
+                        {auditResult?.matchedVendor
+                          ? `Duplicate Vendor Record: ${auditResult.matchedVendor.name}`
+                          : '0% Duplication Risk · Unique Vendor Entry'}
+                      </div>
+                    </div>
+                    <div style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: '50%',
+                      background: auditResult?.matchedVendor ? 'rgba(239, 68, 68, 0.12)' : 'rgba(16, 185, 129, 0.15)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: auditResult?.matchedVendor ? (auditResult.duplicationRisk === 'HIGH' ? '#ef4444' : '#f59e0b') : '#10b981',
+                    }}>
+                      {auditResult?.matchedVendor ? <AlertTriangle size={24} /> : <ShieldCheck size={26} />}
+                    </div>
+                  </div>
+
+                  {/* Matched DB Vendor Warning (if any) */}
+                  {auditResult?.matchedVendor && (
+                    <div style={{
+                      display: 'flex',
+                      gap: 12,
+                      padding: '12px 16px',
+                      borderRadius: 'var(--radius-md)',
+                      background: 'rgba(239, 68, 68, 0.08)',
+                      border: '1px solid rgba(239, 68, 68, 0.2)',
+                    }}>
+                      <AlertTriangle size={18} style={{ color: '#ef4444', flexShrink: 0, marginTop: 1 }} />
+                      <div style={{ fontSize: 12, color: 'var(--text-primary)' }}>
+                        <strong>Database Duplication Warning:</strong> Vendor <strong>{auditResult.matchedVendor.name}</strong> ({auditResult.matchedVendor.email}) matches your input with a <strong>{auditResult.matchedVendor.score}% similarity score</strong>.
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Audit Summary Details & Equal 25% Weightage Breakdown */}
+                  <div className="onb-modal__summary">
+                    <div className="onb-modal__summary-row" style={{ borderBottom: '1px solid var(--border)', paddingBottom: 8, marginBottom: 4 }}>
+                      <span className="onb-modal__summary-label" style={{ fontWeight: 700 }}>Weighted Duplication Risk:</span>
+                      <span className="onb-modal__summary-value" style={{
+                        fontWeight: 800,
+                        color: auditResult?.duplicationRisk === 'HIGH' ? '#ef4444' : auditResult?.duplicationRisk === 'MEDIUM' ? '#f59e0b' : '#10b981'
+                      }}>
+                        {auditResult?.matchedVendor
+                          ? `${auditResult.duplicationRisk} RISK (${auditResult.matchedVendor.score}% match in DB)`
+                          : 'LOW RISK (0 Matches in Database)'}
+                      </span>
+                    </div>
+
+                    {/* Equal Weightage 25% Breakdown Grid */}
+                    {auditResult?.breakdown && (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 14px', padding: '4px 0 8px', borderBottom: '1px dashed var(--border)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                          <span style={{ color: 'var(--text-secondary)' }}>Company Name (25%):</span>
+                          <span style={{ fontWeight: 700, color: auditResult.breakdown.nameScore > 0 ? '#f59e0b' : '#10b981' }}>
+                            {auditResult.breakdown.nameScore}%
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                          <span style={{ color: 'var(--text-secondary)' }}>Vendor Email (25%):</span>
+                          <span style={{ fontWeight: 700, color: auditResult.breakdown.emailScore > 0 ? '#f59e0b' : '#10b981' }}>
+                            {auditResult.breakdown.emailScore}%
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                          <span style={{ color: 'var(--text-secondary)' }}>Contact Person (25%):</span>
+                          <span style={{ fontWeight: 700, color: auditResult.breakdown.personScore > 0 ? '#f59e0b' : '#10b981' }}>
+                            {auditResult.breakdown.personScore}%
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                          <span style={{ color: 'var(--text-secondary)' }}>Phone Number (25%):</span>
+                          <span style={{ fontWeight: 700, color: auditResult.breakdown.phoneScore > 0 ? '#f59e0b' : '#10b981' }}>
+                            {auditResult.breakdown.phoneScore}%
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="onb-modal__summary-row" style={{ paddingTop: 4 }}>
+                      <span className="onb-modal__summary-label">Data Validation:</span>
+                      <span className="onb-modal__summary-value" style={{ color: '#10b981' }}>
+                        ✓ Email & Phone Format Verified
+                      </span>
+                    </div>
+                    <div className="onb-modal__summary-row">
+                      <span className="onb-modal__summary-label">Items Attached:</span>
+                      <span className="onb-modal__summary-value">
+                        {items.filter((it) => it.itemCode.trim() && it.itemName.trim()).length} item(s)
+                      </span>
+                    </div>
+                    <div className="onb-modal__summary-row">
+                      <span className="onb-modal__summary-label">Required Documents:</span>
+                      <span className="onb-modal__summary-value">
+                        {selectedDocIds.length} document(s)
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Vendor Briefing Box */}
+                  <div style={{
+                    padding: '12px 16px',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--surface-elevated)',
+                    border: '1px solid var(--border)',
+                  }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-placeholder)', textTransform: 'uppercase', marginBottom: 4 }}>
+                      Target Vendor
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {companyName}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                      {contactEmail} {contactPerson ? `· ${contactPerson}` : ''} {contactPhone ? `· ${contactCountryCode}${contactPhone}` : ''}
+                    </div>
+                  </div>
+
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0, textAlign: 'center' }}>
+                    Send the onboarding invitation email to <strong>{contactEmail}</strong>?
+                  </p>
+                </>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="onb-modal__footer">
+              <button
+                type="button"
+                className="onb-modal__btn onb-modal__btn--secondary"
+                onClick={() => setShowPreSendConfidenceModal(false)}
+              >
+                Back to Edit
+              </button>
+              <button
+                type="button"
+                className="onb-modal__btn onb-modal__btn--primary"
+                onClick={executeSendInvite}
+                disabled={sending || auditLoading}
+              >
+                {sending ? 'Sending...' : 'Confirm & Send Invitation'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

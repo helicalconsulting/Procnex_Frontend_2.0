@@ -12,6 +12,7 @@ import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import '../../components/shared/ColumnCustomizer.css';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
+import { TableSkeleton } from '../../components/shared/Skeleton';
 import './AccountsPayablePage.css';
 
 // ─── Types ──────────────────────────────────────────────────
@@ -293,7 +294,6 @@ export default function AccountsPayablePage() {
   return (
     <div className="fin-page">
       {error && <MessageStrip type="error">{error}</MessageStrip>}
-      {loading && <div className="fin-page__loading">Loading invoices…</div>}
 
       {/* ── Header ── */}
       <div className="fin-page__header">
@@ -321,7 +321,11 @@ export default function AccountsPayablePage() {
 
       {/* ── Table ── */}
       <div className="fin-table-card">
-        <div style={{ overflowX: 'auto' }}>
+        {loading ? (
+          <TableSkeleton rows={4} columns={6} />
+        ) : (
+          <>
+            <div style={{ overflowX: 'auto' }}>
           <table className="fin-table" style={{ tableLayout: 'fixed', minWidth: '700px' }}>
             <colgroup>
               {visibleColumns.map((col) => (
@@ -425,6 +429,8 @@ export default function AccountsPayablePage() {
         </div>
         {filtered.length === 0 && (
           <div className="fin-empty"><span>💰</span><p>No invoices found</p></div>
+        )}
+          </>
         )}
       </div>
 

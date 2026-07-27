@@ -53,6 +53,8 @@
 .rte-editor {
   padding: 12px 16px;
   overflow-y: auto;
+  width: 100%;
+  max-width: 100%;
 }
 
 .rte-editor__content {
@@ -62,6 +64,22 @@
   line-height: 1.7;
   color: #1d2d3e;
   font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+  width: 100%;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.rte-editor__content table {
+  width: 100%;
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.rte-editor__content img {
+  max-width: 100%;
+  height: auto;
 }
 
 .rte-editor__content:empty::before {

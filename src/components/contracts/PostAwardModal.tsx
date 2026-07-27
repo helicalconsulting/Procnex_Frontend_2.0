@@ -15,7 +15,7 @@ export interface PostAwardModalProps {
   rfqId: string;
   onClose: () => void;
   onNavigatePO: () => void;
-  onNavigateContract: () => void;
+  onNavigateContract: () => Promise<void>;
   /**
    * When set, the modal operates in pre-approval mode:
    * - The decision is NOT persisted via updatePostAwardDecision.
@@ -48,8 +48,11 @@ export default function PostAwardModal({
     setSaving(decision);
     setError(null);
     try {
-      if (preAwardMode && onApproveFirst && decision !== 'DISMISSED') {
-        // First approve the quotation before creating PO/contract
+      if (preAwardMode && onApproveFirst && decision === 'PO_CREATED') {
+        // Approve quotation before creating PO.
+        // For CONTRACT_CREATED, approval is deferred to when the user actually
+        // clicks "Generate" in the ContractTemplateSelectModal — this prevents
+        // the quotation from showing as ACCEPTED before the contract is generated.
         await onApproveFirst();
       }
 
@@ -61,9 +64,11 @@ export default function PostAwardModal({
       }
       
       if (decision === 'PO_CREATED') {
-        onNavigatePO();
+        await onNavigatePO();
+        // Parent closes the modal — return early to avoid finally's setSaving(null) on unmounted component
+        return;
       } else if (decision === 'CONTRACT_CREATED') {
-        onNavigateContract();
+        await onNavigateContract();
       } else {
         onClose();
       }
@@ -83,7 +88,6 @@ export default function PostAwardModal({
       <div className="ctr-award-modal" onClick={e => e.stopPropagation()}>
         <div className="ctr-award-modal__header">
           <span className="ctr-award-modal__title"><FileText size={20} /> Purchase Order or Contract</span>
-          <button className="ctr-modal__close" onClick={onClose} disabled={!!saving}><X size={18} /></button>
         </div>
 
         <div className="ctr-award-modal__body">

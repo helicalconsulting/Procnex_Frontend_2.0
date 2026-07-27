@@ -113,7 +113,6 @@
 /* ─── Vendor Portal Layout ─────────────────────────────────────────────────── */
 
 .vendor-portal {
-  min-height: 100vh;
   background: var(--surface);
   color: var(--text-primary);
   font-family: var(--font-sans);
@@ -122,7 +121,6 @@
 .vendor-portal__container {
   max-width: 1400px;
   margin: 0 auto;
-  padding: var(--vendor-space-8);
 }
 
 /* ─── Vendor Header Section ───────────────────────────────────────────────── */
@@ -2343,52 +2341,35 @@ input[type="date"].vquot-modal__input {
 /* ─── Perf KPI Row ───────────────────────────────────────────────────────── */
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   Evaluation Parameters (Custom RFQ) in Vendor Quotation Modal
+   Evaluation Parameters (Custom RFQ) in Vendor Quotation Modal — SAP Fiori Design
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .vquot-eval-section {
-  --eval-purple-50: #faf5ff;
-  --eval-purple-100: #f3e8ff;
-  --eval-purple-200: #e9d5ff;
-  --eval-purple-300: #d8b4fe;
-  --eval-purple-400: #c4b5fd;
-  --eval-purple-500: #a78bfa;
-  --eval-purple-600: #8b5cf6;
-  --eval-purple-700: #7c3aed;
-  --eval-purple-800: #6d28d9;
+  --eval-theme-bg: var(--surface-card);
+  --eval-theme-border: var(--border);
+  --eval-theme-primary: var(--vendor-primary, #0a6ed1);
   border-top: 1px solid var(--border);
   padding-top: 16px;
   margin-bottom: 4px;
 }
 
-[data-theme="dark"] .vquot-eval-section {
-  --eval-purple-50: rgba(124,58,237,0.12);
-  --eval-purple-100: rgba(124,58,237,0.08);
-  --eval-purple-200: rgba(124,58,237,0.25);
-  --eval-purple-300: rgba(124,58,237,0.35);
-  --eval-purple-400: rgba(196,181,253,0.3);
-  --eval-purple-500: #a78bfa;
-  --eval-purple-600: #c4b5fd;
-  --eval-purple-700: #a78bfa;
-  --eval-purple-800: #c4b5fd;
-}
-
 .vquot-eval-category {
   padding: 0;
-  border-radius: 8px;
-  background: linear-gradient(135deg, var(--eval-purple-50), var(--eval-purple-100));
-  border: 1px solid var(--eval-purple-200);
+  border-radius: var(--vendor-radius-md, 8px);
+  background: var(--surface-card);
+  border: 1px solid var(--border);
   overflow: hidden;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .vquot-eval-category:hover {
-  border-color: var(--eval-purple-400);
+  border-color: var(--border-strong, var(--primary-300));
+  box-shadow: var(--shadow-sm);
 }
 
 .vquot-eval-category--expanded {
-  border-color: var(--eval-purple-400);
-  box-shadow: 0 2px 8px rgba(124,58,237,0.1);
+  border-color: var(--primary-500, #0a6ed1);
+  box-shadow: 0 2px 10px rgba(10, 110, 209, 0.08);
 }
 
 .vquot-eval-category__head {
@@ -2396,8 +2377,8 @@ input[type="date"].vquot-modal__input {
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  padding: 12px 14px;
-  background: none;
+  padding: 12px 16px;
+  background: var(--surface-elevated);
   border: none;
   cursor: pointer;
   font-family: inherit;
@@ -2406,13 +2387,13 @@ input[type="date"].vquot-modal__input {
 }
 
 .vquot-eval-category__head:hover {
-  background: rgba(124,58,237,0.06);
+  background: var(--surface-hover);
 }
 
 .vquot-eval-category__head-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
 }
 
@@ -2426,9 +2407,13 @@ input[type="date"].vquot-modal__input {
 .vquot-eval-category__chevron {
   display: flex;
   align-items: center;
-  color: var(--eval-purple-500);
-  transition: transform 0.22s ease;
+  color: var(--text-secondary);
+  transition: transform 0.22s ease, color 0.15s;
   flex-shrink: 0;
+}
+
+.vquot-eval-category--expanded .vquot-eval-category__chevron {
+  color: var(--primary-500, #0a6ed1);
 }
 
 .vquot-eval-category__chevron--open {
@@ -2436,18 +2421,18 @@ input[type="date"].vquot-modal__input {
 }
 
 .vquot-eval-category__name {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
-  color: var(--eval-purple-800);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
 }
 
 .vquot-eval-category__weight {
   font-size: 11px;
   font-weight: 700;
-  color: var(--eval-purple-700);
-  background: rgba(124,58,237,0.1);
+  color: var(--primary-600, #0a6ed1);
+  background: rgba(10, 110, 209, 0.08);
+  border: 1px solid rgba(10, 110, 209, 0.18);
   padding: 2px 10px;
   border-radius: 100px;
 }
@@ -2455,19 +2440,22 @@ input[type="date"].vquot-modal__input {
 .vquot-eval-category__count {
   font-size: 11px;
   font-weight: 600;
-  color: var(--eval-purple-600);
-  background: rgba(124,58,237,0.08);
+  color: var(--text-secondary);
+  background: var(--surface-card);
+  border: 1px solid var(--border);
   padding: 2px 8px;
   border-radius: 100px;
 }
 
 [data-theme="dark"] .vquot-eval-category__weight {
-  background: rgba(167,139,250,0.15);
+  background: rgba(10, 110, 209, 0.18);
+  color: #4db1ff;
+  border-color: rgba(77, 177, 255, 0.25);
 }
 
 [data-theme="dark"] .vquot-eval-category__count {
-  background: rgba(167,139,250,0.12);
-  color: var(--eval-purple-400);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
 }
 
 .vquot-eval-params {
@@ -2481,7 +2469,7 @@ input[type="date"].vquot-modal__input {
 .vquot-eval-params--open {
   grid-template-rows: 1fr;
   opacity: 1;
-  padding: 0 14px 14px;
+  padding: 8px 14px 14px;
 }
 
 .vquot-eval-params__inner {
@@ -2502,14 +2490,9 @@ input[type="date"].vquot-modal__input {
 .vquot-eval-params--open .vquot-eval-param-row:nth-child(3) { animation-delay: 60ms; }
 .vquot-eval-params--open .vquot-eval-param-row:nth-child(4) { animation-delay: 80ms; }
 .vquot-eval-params--open .vquot-eval-param-row:nth-child(5) { animation-delay: 100ms; }
-.vquot-eval-params--open .vquot-eval-param-row:nth-child(6) { animation-delay: 120ms; }
-.vquot-eval-params--open .vquot-eval-param-row:nth-child(7) { animation-delay: 140ms; }
-.vquot-eval-params--open .vquot-eval-param-row:nth-child(8) { animation-delay: 160ms; }
-.vquot-eval-params--open .vquot-eval-param-row:nth-child(9) { animation-delay: 180ms; }
-.vquot-eval-params--open .vquot-eval-param-row:nth-child(10) { animation-delay: 200ms; }
 
 @keyframes evalParamFadeIn {
-  from { opacity: 0; transform: translateY(-6px); }
+  from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
@@ -2517,67 +2500,53 @@ input[type="date"].vquot-modal__input {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
-  margin-top: 6px;
-  background: rgba(255,255,255,0.65);
-  border: 1px solid var(--eval-purple-300);
-  border-radius: 6px;
+  padding: 10px 12px;
+  margin-top: 8px;
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+  transition: border-color 0.15s;
 }
 
-[data-theme="dark"] .vquot-eval-param-row {
-  background: rgba(20,20,40,0.45);
-  border-color: rgba(124,58,237,0.35);
+.vquot-eval-param-row:focus-within {
+  border-color: var(--primary-500, #0a6ed1);
 }
 
 .vquot-eval-param-name {
   font-size: 13px;
   font-weight: 600;
-  color: var(--eval-purple-800);
+  color: var(--text-primary);
 }
 
 .vquot-eval-param-required {
-  color: #d97706;
+  color: var(--danger-500, #dc2626);
   font-size: 13px;
+  font-weight: 700;
 }
 
 .vquot-eval-param-hint {
-  font-size: 11px;
-  color: var(--eval-purple-500);
+  font-size: 12px;
+  color: var(--text-secondary);
   cursor: help;
   margin-left: 2px;
 }
 
-.vquot-eval-maxscore {
-  font-size: 10px;
-  color: var(--eval-purple-500);
-  font-weight: 500;
-}
-
-.vquot-eval-input-wrap {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
 .vquot-eval-input {
-  width: 64px;
-  padding: 6px 8px;
-  border: 1px solid var(--eval-purple-300);
-  border-radius: 6px;
-  background: #fff;
-  color: var(--eval-purple-800);
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--surface);
+  color: var(--text-primary);
   font-size: 13px;
-  font-weight: 700;
   font-family: inherit;
-  text-align: center;
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .vquot-eval-input:focus {
-  border-color: var(--eval-purple-700);
-  box-shadow: 0 0 0 2px rgba(124,58,237,0.15);
+  border-color: var(--primary-500, #0a6ed1);
+  box-shadow: 0 0 0 2px rgba(10, 110, 209, 0.12);
 }
 
 [data-theme="dark"] .vquot-eval-input {

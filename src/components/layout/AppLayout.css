@@ -5,6 +5,7 @@
 .app-layout {
   display: flex;
   min-height: 100vh;
+  width: 100%;
   background: var(--surface);
 }
 
@@ -16,6 +17,8 @@
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  min-width: 0;
+  overflow: hidden;
   transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -23,11 +26,22 @@
   margin-left: 72px;
 }
 
+.app-layout__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+  padding-top: 56px; /* height of fixed TopBar */
+  /* This is the scrolling container — TopBar lives above it so sticky works */
+}
+
 /* ─── Content Area ───────────────────────────────────────── */
 
 .app-layout__content {
-  flex: 1;
-  padding: 28px 32px;
+  flex: 1 0 auto;
+  padding: 28px 32px 120px;
   max-width: 1400px;
   width: 100%;
   margin: 0 auto;
@@ -37,10 +51,11 @@
   width: 100%;
   max-width: 1400px;
   margin: 0 auto;
-  padding: 0 32px 18px;
+  padding: 0 32px 60px;
   color: var(--text-secondary);
   font-size: 12px;
   text-align: center;
+  flex-shrink: 0;
 }
 
 /* ─── Sidebar Hover Expand (Desktop & Tablet) ─────────── */

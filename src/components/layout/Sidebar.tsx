@@ -11,7 +11,6 @@ import {
   History,
   UserCog,
   Shield,
-  PanelLeftClose,
   Package,
   Wallet,
   CreditCard,
@@ -48,7 +47,7 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   Dashboard: <LayoutDashboard size={19} />,
   'RFQ Management': <FileText size={19} />,
   Quotations: <ClipboardList size={19} />,
-
+  'PO Creation': <ShoppingCart size={19} />,
   'PO Approval': <ShoppingCart size={19} />,
   'Accounts Payable': <Wallet size={19} />,
   'Payments': <CreditCard size={19} />,
@@ -79,7 +78,6 @@ const ICON_MAP: Record<string, React.ReactNode> = {
 interface SidebarProps {
   collapsed: boolean;
   mobileOpen: boolean;
-  onToggle: () => void;
   onCollapse: () => void;
   onMobileClose: () => void;
 }
@@ -87,7 +85,6 @@ interface SidebarProps {
 export default function Sidebar({
   collapsed,
   mobileOpen,
-  onToggle,
   onCollapse,
   onMobileClose,
 }: SidebarProps) {
@@ -110,13 +107,15 @@ export default function Sidebar({
     },
     {
       title: 'Procurement',
-      items: menuItems
-        .filter((item) => ['rfq', 'quotations', 'contracts', 'vendor-rfqs', 'vendor-quotations'].includes(item.id))
-        .map((item) => ({
-          label: item.label,
-          icon: ICON_MAP[item.label] || <FileText size={19} />,
-          path: item.path,
-        })),
+      items: [
+        ...menuItems
+          .filter((item) => ['rfq', 'quotations', 'contracts', 'vendor-rfqs', 'vendor-quotations', 'purchase-requisitions'].includes(item.id))
+          .map((item) => ({
+            label: item.label,
+            icon: ICON_MAP[item.label] || <FileText size={19} />,
+            path: item.path,
+          })),
+      ],
     },
     {
       title: 'Approvals',
@@ -273,13 +272,7 @@ export default function Sidebar({
           ))}
         </nav>
 
-        {/* Toggle collapse */}
-        <button className="sidebar__toggle" onClick={onToggle}>
-          <span className="sidebar__toggle-icon">
-            <PanelLeftClose size={18} />
-          </span>
-          <span className="sidebar__toggle-label">Collapse</span>
-        </button>
+
       </aside>
     </>
   );

@@ -1,0 +1,1113 @@
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
+import { rfqService } from '../../services/rfqService';
+import { contractService } from '../../services/contractService';
+import { purchaseRequisitionService, type PurchaseRequisition, type PurchaseRequisitionItem } from '../../services/purchaseRequisitionService';
+import { companySettingsService } from '../../services/companySettingsService';
+import { apiRequest } from '../../api/client';
+import { MessageStrip } from '../../components/shared/MessageStrip';
+import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyMaster';
+import { sseClient } from '../../services/sseClient';
+import {
+  Save, Eye, FileText, Printer, Send, ArrowLeft, Plus, Trash2,
+  ShoppingCart, Building2, Truck, ClipboardList, Hash, DollarSign,
+  Percent, Calculator, X, Loader2, AlertTriangle, Settings,
+  AlertCircle, Download,
+} from 'lucide-react';
+import { useBranding } from '../../context/BrandingContext';
+import PurchaseOrderDocument from '../../components/purchase-orders/PurchaseOrderDocument';
+import { toCanvas } from 'html-to-image';
+import { jsPDF } from 'jspdf';
+import './PurchaseRequisitionPage.css';
+
+// ─── Helper ─────────────────────────────────────────────────
+
+function generatePONumber(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const seq = String(Math.floor(Math.random() * 9000) + 1000);
+  return `PO-${year}${month}${day}-${seq}`;
+}
+
+function calcItemTotal(item: Partial<PurchaseRequisitionItem>): number {
+  const qty = item.quantity || 0;
+  const price = item.unitPrice || 0;
+  const disc = item.discount || 0;
+  const tax = item.taxPercent || 0;
+  const netPrice = price * qty;
+  const discAmt = netPrice * (disc / 100);
+  const taxAmt = (netPrice - discAmt) * (tax / 100);
+  return netPrice - discAmt + taxAmt;
+}
+
+function formatCurrency(amount: number, currency: string = 'INR'): string {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 2,
+  }).format(amount);
+}
+
+function getStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    DRAFT: 'Draft',
+    PENDING_APPROVAL: 'Pending Approval',
+    APPROVED: 'Completed',
+    SENT_TO_VENDOR: 'Sent to Vendor',
+  };
+  return labels[status] || status.replace(/_/g, ' ');
+}
+
+// ─── Component ──────────────────────────────────────────────
+
+export default function PurchaseRequisitionPage() {
+  const { rfqId } = useParams<{ rfqId: string }>();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const contractId = searchParams.get('contractId');
+  const { formatAmount, companyDefaultCurrency } = useCurrency();
+  const branding = useBranding();
+
+  const [pr, setPr] = useState<PurchaseRequisition | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [contractData, setContractData] = useState<any>(null);
+  const [contractBalance, setContractBalance] = useState<{ contractValue: number; consumedValue: number; remainingValue: number; currency: string } | null>(null);
+  const [poCreated, setPoCreated] = useState(false);
+
+  // Print / PDF state
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const printAreaRef = useRef<HTMLDivElement>(null);
+
+  // Send to Vendor modal
+  const [showSendModal, setShowSendModal] = useState(false);
+  const [sendTo, setSendTo] = useState('');
+  const [sendCc, setSendCc] = useState('');
+  const [sendSubject, setSendSubject] = useState('');
+  const [sendMessage, setSendMessage] = useState('');
+  const [sending, setSending] = useState(false);
+
+  // Validation
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [itemValidationErrors, setItemValidationErrors] = useState<Record<number, Record<string, string>>>({});
+
+  // Company settings for auto-fill
+  const [companyProfile, setCompanyProfile] = useState<Record<string, any> | null>(null);
+
+  // Fetch RFQ data on mount
+  useEffect(() => {
+    if (!rfqId) return;
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        // Try fetching existing PR first
+        const existing = await purchaseRequisitionService.getByRfqId(rfqId);
+        if (existing) {
+          setPr(existing);
+          setLoading(false);
+          // If this is a contract-based PO, still fetch contract balance for the banner
+          if (contractId) {
+            contractService.getContractBalance(contractId)
+              .then(balance => {
+                setContractBalance(balance);
+                // Also fetch contract data for the header
+                contractService.getContract(contractId).then(cr => setContractData(cr.contract)).catch(() => {});
+              })
+              .catch(() => {});
+          }
+          return;
+        }
+
+        // Fetch contract data if contractId provided (from Post-Contract PO flow)
+        let contract: any = null;
+        if (contractId) {
+          try {
+            const contractResp = await contractService.getContract(contractId);
+            contract = contractResp.contract;
+            setContractData(contract);
+            // Fetch contract balance for validation
+            try {
+              const balance = await contractService.getContractBalance(contractId);
+              setContractBalance(balance);
+            } catch {}
+          } catch {}
+        }
+
+        // Fetch RFQ details to pre-fill
+        const rfq = await rfqService.getById(rfqId);
+        const rfqData = rfq as Record<string, any>;
+
+        // Fetch company profile
+        let profile: Record<string, any> = {};
+        try {
+          profile = await companySettingsService.getProfile();
+          setCompanyProfile(profile);
+        } catch {}
+
+        // Build items from RFQ items + quotation items
+        // Fetch the full quotation separately — RFQQuotationSummary doesn't include line items
+        // Prefer the accepted/shortlisted quotation, fall back to first in array
+        const quotationSummary = rfqData.quotations?.find(
+          (q: any) => q.status === 'ACCEPTED' || q.status === 'SHORTLISTED'
+        ) || rfqData.quotations?.[0];
+        let quotation: Record<string, any> | null = quotationSummary || null;
+        let quotItems: Array<Record<string, any>> = [];
+        if (quotation?.id) {
+          try {
+            // Fetch full quotation with items — use apiRequest directly since
+            // quotation IDs are MongoDB strings, not numbers
+            const quot = await apiRequest<any>(`/quotations/${quotation.id}`);
+            if (quot) {
+              quotation = quot;
+              quotItems = quot.items || [];
+            }
+          } catch {
+            // Fallback: use whatever items we have from the summary
+            quotItems = (quotation as any)?.items || [];
+          }
+        }
+        const rfqItems = rfqData.lineItems || [];
+
+        // Prefer contract items if available
+        const useContractItems = contract?.items && contract.items.length > 0;
+        const items: PurchaseRequisitionItem[] = useContractItems 
+          ? contract.items.map((ci: any, idx: number) => ({
+              itemNo: idx + 1,
+              description: ci.itemName || `Item ${idx + 1}`,
+              quantity: ci.quantity || 1,
+              unit: ci.unit || 'Pcs',
+              unitPrice: Number(ci.unitPrice) || 0,
+              taxPercent: Number(ci.tax) > 0 ? Math.round((Number(ci.tax) / (Number(ci.unitPrice) * Number(ci.quantity))) * 100) : 18,
+              discount: 0,
+              total: 0,
+            }))
+          : rfqItems.map((ri: any, idx: number) => {
+              const qi = quotItems.find((i: any) => i.rfqItemId === ri.id);
+              return {
+                itemNo: idx + 1,
+                description: ri.itemName || ri.description || `Item ${idx + 1}`,
+                quantity: ri.quantity || 0,
+                unit: ri.unit || 'Pcs',
+                unitPrice: qi ? Number(qi.unitPrice) : 0,
+                taxPercent: 18,
+                discount: 0,
+                total: 0,
+              };
+            });
+        // Recalc totals
+        items.forEach(i => { i.total = calcItemTotal(i); });
+
+        const vendor = quotation?.vendor || rfqData.vendors?.[0] || {};
+        const subtotal = items.reduce((s, i) => s + (i.quantity * i.unitPrice), 0);
+        const taxTotal = items.reduce((s, i) => {
+          const net = i.quantity * i.unitPrice;
+          const disc = net * (i.discount || 0) / 100;
+          return s + ((net - disc) * (i.taxPercent || 0) / 100);
+        }, 0);
+        const discountTotal = items.reduce((s, i) => s + ((i.quantity * i.unitPrice) * (i.discount || 0) / 100), 0);
+
+        // Build internal notes with contract reference
+        const internalNotes = contract 
+          ? `Purchase Order from Contract: ${contract.contractNumber}\nContract Value: ${contract.contractValue} ${contract.currency || ''}`
+          : '';
+
+        setPr({
+          rfqId,
+          poNumber: generatePONumber(),
+          status: 'DRAFT',
+          companyName: branding.companyName,
+          companyAddress: profile?.address || '',
+          companyPhone: branding.companyPhone || profile?.phone || '',
+          companyEmail: branding.companyEmail || profile?.email || '',
+          companyWebsite: profile?.website || '',
+          vendorName: vendor?.name || vendor?.companyName || '',
+          vendorAddress: vendor?.address || vendor?.registeredAddress || '',
+          vendorContactPerson: vendor?.contactPerson || vendor?.name || '',
+          vendorPhone: vendor?.phone || vendor?.contactPhone || '',
+          vendorEmail: vendor?.email || '',
+          vendorGstVat: vendor?.gstVat || vendor?.gstNumber || '',
+          shipToCompany: branding.companyName,
+          shipToWarehouse: '',
+          shipToAddress: profile?.address || '',
+          shipToContact: '',
+          shipToPhone: '',
+          poDate: new Date().toISOString().slice(0, 10),
+          currency: contract?.currency || rfqData.currency || 'INR',
+          requisitioner: '',
+          shipVia: 'Surface',
+          fob: 'Destination',
+          paymentTerms: contract?.paymentTerms || quotation?.paymentTerms || rfqData.paymentTerms || 'Net 30',
+          deliveryDate: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+          shippingTerms: contract?.deliveryTerms || contract?.freightTerms || 'FOB Destination',
+          items: items.length > 0 ? items : [
+            { itemNo: 1, description: '', quantity: 1, unit: 'Pcs', unitPrice: 0, taxPercent: 18, discount: 0, total: 0 },
+          ],
+          shippingCharges: 0,
+          otherCharges: 0,
+          internalNotes,
+          specialInstructions: '',
+          subtotal,
+          taxTotal,
+          discountTotal,
+          grandTotal: subtotal + taxTotal - discountTotal,
+        });
+      } catch (err: any) {
+        setError(err?.message || 'Failed to load RFQ data');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [rfqId, contractId]);
+
+  // SSE real-time status updates — when PO is approved/rejected, refresh PR status
+  useEffect(() => {
+    if (!rfqId) return;
+
+    const unsubStatus = sseClient.on('po_status_changed', () => {
+      // Re-fetch the PR to get latest status from backend
+      purchaseRequisitionService.getByRfqId(rfqId).then(existing => {
+        if (existing) setPr(existing);
+      }).catch(() => {});
+    });
+
+    const unsubPO = sseClient.on('po_created', (payload: unknown) => {
+      const event = payload as { poNumber?: string; rfqId?: string };
+      // Only refresh if the PO's rfqId matches our PR's rfqId
+      if (event?.rfqId && event.rfqId !== rfqId) return;
+      purchaseRequisitionService.getByRfqId(rfqId).then(existing => {
+        if (existing) setPr(existing);
+      }).catch(() => {});
+    });
+
+    return () => {
+      unsubStatus();
+      unsubPO();
+    };
+  }, [rfqId]);
+
+  // Recalculate totals whenever items or charges change
+  const recalc = useCallback((draft: PurchaseRequisition): PurchaseRequisition => {
+    const items = draft.items.map(i => ({ ...i, total: calcItemTotal(i) }));
+    const subtotal = items.reduce((s, i) => s + (i.quantity * i.unitPrice), 0);
+    const discountTotal = items.reduce((s, i) => s + ((i.quantity * i.unitPrice) * (i.discount || 0) / 100), 0);
+    const taxTotal = items.reduce((s, i) => {
+      const net = i.quantity * i.unitPrice;
+      const disc = net * (i.discount || 0) / 100;
+      return s + ((net - disc) * (i.taxPercent || 0) / 100);
+    }, 0);
+    const grandTotal = subtotal - discountTotal + taxTotal + (draft.shippingCharges || 0) + (draft.otherCharges || 0);
+    return { ...draft, items, subtotal, taxTotal, discountTotal, grandTotal };
+  }, []);
+
+  // Update a field
+  const updateField = useCallback(<K extends keyof PurchaseRequisition>(key: K, value: PurchaseRequisition[K]) => {
+    if (!pr) return;
+    const draft = { ...pr, [key]: value };
+    if (key === 'shippingCharges' || key === 'otherCharges') {
+      setPr(recalc(draft));
+    } else {
+      setPr(draft);
+    }
+  }, [pr, recalc]);
+
+  // Update an item field
+  const updateItem = useCallback((index: number, key: keyof PurchaseRequisitionItem, value: any) => {
+    if (!pr) return;
+    const items = [...pr.items];
+    items[index] = { ...items[index], [key]: value };
+    setPr(recalc({ ...pr, items }));
+  }, [pr, recalc]);
+
+  // Add item
+  const addItem = useCallback(() => {
+    if (!pr) return;
+    const items = [...pr.items, {
+      itemNo: pr.items.length + 1,
+      description: '',
+      quantity: 1,
+      unit: 'Pcs',
+      unitPrice: 0,
+      taxPercent: 18,
+      discount: 0,
+      total: 0,
+    }];
+    setPr(recalc({ ...pr, items }));
+  }, [pr, recalc]);
+
+  // Delete item
+  const deleteItem = useCallback((index: number) => {
+    if (!pr || pr.items.length <= 1) return;
+    const items = pr.items.filter((_, i) => i !== index).map((item, i) => ({ ...item, itemNo: i + 1 }));
+    setPr(recalc({ ...pr, items }));
+  }, [pr, recalc]);
+
+  // ── Validation ──────────────────────────────────────────────
+
+  const validate = useCallback((): boolean => {
+    if (!pr) return false;
+    const errors: Record<string, string> = {};
+    const itemErrors: Record<number, Record<string, string>> = {};
+
+    if (!pr.vendorName.trim()) errors.vendorName = 'Vendor name is required';
+    if (!pr.poDate) errors.poDate = 'PO date is required';
+
+    if (pr.items.length === 0) {
+      errors.items = 'At least one item is required';
+    } else {
+      pr.items.forEach((item, idx) => {
+        const iErr: Record<string, string> = {};
+        if (item.quantity <= 0) iErr.quantity = 'Must be > 0';
+        if (item.unitPrice <= 0) iErr.unitPrice = 'Must be > 0';
+        if (Object.keys(iErr).length > 0) itemErrors[idx] = iErr;
+      });
+      if (Object.keys(itemErrors).length > 0) {
+        errors.items = 'Some items have invalid values';
+      }
+    }
+
+    // Contract balance validation: grand total cannot exceed remaining value
+    if (contractBalance && pr.grandTotal > contractBalance.remainingValue) {
+      errors.contractBalance = `Purchase Order amount (${formatCurrency(pr.grandTotal, pr.currency)}) exceeds the remaining contract value of ${formatCurrency(contractBalance.remainingValue, contractBalance.currency || pr.currency)}. Reduce item quantities or amounts.`;
+    }
+
+    setValidationErrors(errors);
+    setItemValidationErrors(itemErrors);
+    return Object.keys(errors).length === 0;
+  }, [pr, contractBalance]);
+
+  // Scroll to first error
+  useEffect(() => {
+    if (Object.keys(validationErrors).length > 0) {
+      const firstErrEl = document.querySelector('.pr-field--error');
+      firstErrEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [validationErrors]);
+
+  // Clear errors when user edits fields
+  const clearFieldError = useCallback((field: string) => {
+    setValidationErrors(prev => {
+      const copy = { ...prev };
+      delete copy[field];
+      return copy;
+    });
+  }, []);
+
+  const clearItemError = useCallback((idx: number, field: string) => {
+    setItemValidationErrors(prev => {
+      const copy = { ...prev };
+      if (copy[idx]) {
+        const iCopy = { ...copy[idx] };
+        delete iCopy[field];
+        if (Object.keys(iCopy).length === 0) delete copy[idx];
+        else copy[idx] = iCopy;
+      }
+      return copy;
+    });
+  }, []);
+
+  // Save Draft
+  const handleSave = async () => {
+    if (!pr) return;
+    if (!validate()) {
+      setToast({ message: 'Please fix the validation errors before saving.', type: 'error' });
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      // Include contractId in save payload so backend auto-creates a PurchaseOrder
+      const payload = contractId ? { ...pr, contractId } : pr;
+      const result = await purchaseRequisitionService.save(payload) as PurchaseRequisition & { createdPO?: { poNumber: string } };
+      
+      // Update PR state with returned data (includes the new id)
+      if (result) {
+        setPr(result);
+      }
+
+      // Check if a PO was auto-created (backend returns createdPO)
+      if (result?.createdPO?.poNumber) {
+        setPoCreated(true);
+        setToast({ 
+          message: `✅ Purchase Order ${result.createdPO.poNumber} created from contract. You can create another PO or send this one to the vendor.`,
+          type: 'success' 
+        });
+      } else {
+        setToast({ message: 'Purchase Requisition saved as draft.', type: 'success' });
+      }
+      setValidationErrors({});
+      setItemValidationErrors({});
+    } catch (err: any) {
+      setToast({ message: err?.message || 'Failed to save', type: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Print — uses the professional PO document
+  const handlePrint = () => {
+    if (!pr) return;
+    if (!validate()) {
+      setToast({ message: 'Please fix the validation errors before printing.', type: 'error' });
+      return;
+    }
+    window.print();
+  };
+
+  // Download PDF — capture the React-rendered PO document as a PDF without flashing on screen
+  const handleDownloadPdf = async () => {
+    if (!pr) return;
+    if (!validate()) {
+      setToast({ message: 'Please fix the validation errors before downloading PDF.', type: 'error' });
+      return;
+    }
+    setDownloadingPdf(true);
+    try {
+      await new Promise(r => setTimeout(r, 150));
+      await document.fonts?.ready;
+
+      const element = printAreaRef.current;
+      if (!element) throw new Error('Print area not available');
+
+      const canvas = await toCanvas(element, {
+        quality: 1,
+        pixelRatio: 2,
+        cacheBust: true,
+        backgroundColor: '#ffffff',
+      });
+
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const margin = 15; // mm
+      const pageWidth = 210; // A4 width mm
+      const pageHeight = 297; // A4 height mm
+      const contentWidth = pageWidth - margin * 2;
+
+      const imgData = canvas.toDataURL('image/png');
+      const imgWidth = contentWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const usablePageHeight = pageHeight - margin * 2;
+
+      let remainingHeight = imgHeight;
+      let pageNum = 0;
+
+      while (remainingHeight > 0) {
+        if (pageNum > 0) pdf.addPage();
+        const yOffset = margin - pageNum * usablePageHeight;
+        pdf.addImage(imgData, 'PNG', margin, yOffset, imgWidth, imgHeight, undefined, 'FAST');
+        remainingHeight -= usablePageHeight;
+        pageNum++;
+      }
+
+      const fileName = pr.poNumber || `PO-${Date.now()}`;
+      pdf.save(`${fileName}.pdf`);
+      setToast({ message: `PDF downloaded: ${fileName}.pdf`, type: 'success' });
+    } catch (err: any) {
+      setToast({ message: err?.message || 'Failed to download PDF', type: 'error' });
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
+  // Submit for Approval (saves + triggers approval workflow + redirects to approvals page)
+  const handleSubmitForApproval = async () => {
+    if (!pr) return;
+    if (!validate()) {
+      setToast({ message: 'Please fix the validation errors before submitting for approval.', type: 'error' });
+      return;
+    }
+    // Save first (backend auto-creates PO with PENDING_APPROVAL + initiates approval workflow)
+    setSaving(true);
+    setError(null);
+    try {
+      // Send status as PENDING_APPROVAL so backend saves it correctly
+      const payload = {
+        ...(contractId ? { ...pr, contractId } : pr),
+        status: 'PENDING_APPROVAL' as const,
+      };
+      const result = await purchaseRequisitionService.save(payload) as PurchaseRequisition & { createdPO?: { poNumber: string } };
+      
+      // Update local state: set status to PENDING_APPROVAL regardless of backend response
+      const updatedPr = result 
+        ? { ...result, status: 'PENDING_APPROVAL' as const } 
+        : { ...pr, status: 'PENDING_APPROVAL' as const };
+      setPr(updatedPr);
+      setValidationErrors({});
+      setItemValidationErrors({});
+
+      if (result?.createdPO?.poNumber) {
+        setPoCreated(true);
+        setToast({
+          message: `✅ Purchase Order ${result.createdPO.poNumber} submitted for approval. Redirecting to approvals…`,
+          type: 'success'
+        });
+      } else {
+        setToast({ message: 'Purchase Requisition submitted for approval. Redirecting to approvals…', type: 'success' });
+      }
+
+      // Navigate to approvals page after a brief delay so user can see the toast
+      setTimeout(() => navigate('/approvals'), 1500);
+    } catch (err: any) {
+      setToast({ message: err?.message || 'Failed to submit for approval', type: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSend = async () => {
+    if (!pr?.id) return;
+    setSending(true);
+    try {
+      await purchaseRequisitionService.sendToVendor(pr.id);
+      setToast({ message: `Purchase Order sent to ${sendTo}`, type: 'success' });
+      setShowSendModal(false);
+    } catch (err: any) {
+      setToast({ message: err?.message || 'Failed to send', type: 'error' });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  // ── Render ────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <div className="pr-page">
+        <div className="pr-page__loading"><Loader2 size={32} className="pr-page__spinner" /> Loading RFQ data…</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="pr-page">
+        <div className="pr-page__error">
+          <AlertTriangle size={32} />
+          <p>{error}</p>
+          <button className="pr-btn" onClick={() => navigate(-1)}>Go Back</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!pr) return null;
+
+  return (
+    <div className="pr-page">
+      {toast && (
+        <MessageStrip type={toast.type} compact autoHideMs={toast.type === 'error' ? 8000 : 5000} onClose={() => setToast(null)}>
+          {toast.message}
+        </MessageStrip>
+      )}
+
+      {/* ── Validation Summary ── */}
+      {Object.keys(validationErrors).length > 0 && (
+        <div className="pr-validation-summary">
+          <AlertTriangle size={16} />
+          <span>Please fix the following errors before proceeding:</span>
+          <ul>
+            {validationErrors.vendorName && <li>Vendor name is required</li>}
+            {validationErrors.poDate && <li>PO date is required</li>}
+            {validationErrors.items && (
+              <li>
+                {validationErrors.items === 'Some items have invalid values'
+                  ? 'Some items have quantity or unit price with invalid values'
+                  : 'At least one item is required'}
+              </li>
+            )}
+            {validationErrors.contractBalance && <li style={{ color: '#dc2626', fontWeight: 600 }}>{validationErrors.contractBalance}</li>}
+          </ul>
+          <button className="pr-validation-close" onClick={() => { setValidationErrors({}); setItemValidationErrors({}); }}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* ── Contract Balance Banner ── */}
+      {contractBalance && (() => {
+        const consumedAfterPo = contractBalance.consumedValue + pr.grandTotal;
+        const consumedPct = Math.min(100, (consumedAfterPo / contractBalance.contractValue) * 100);
+        const isOver = pr.grandTotal > contractBalance.remainingValue;
+        const barColor = consumedPct >= 100 ? '#dc2626' : consumedPct >= 80 ? '#d97706' : consumedPct >= 60 ? '#ca8a04' : '#059669';
+
+        const maxPOAmount = Math.max(0, contractBalance.remainingValue);
+
+        return (
+          <div className={`pr-contract-balance ${isOver ? 'pr-contract-balance--exceeded' : ''}`}>
+            <div className="pr-contract-balance__header">
+              <FileText size={16} />
+              <span>Contract: {contractData?.contractNumber || 'N/A'}</span>
+              <span className="pr-contract-balance__max-po" style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 600, color: isOver ? '#dc2626' : '#059669' }}>
+                Max PO Amount: {formatAmount(maxPOAmount, contractBalance.currency || companyDefaultCurrency)}
+              </span>
+            </div>
+
+            {/* ── Progress Bar ── */}
+            <div className="pr-contract-balance__progress-section">
+              <div className="pr-contract-balance__progress-labels">
+                <span className="pr-contract-balance__progress-label">
+                  Consumed: {formatAmount(consumedAfterPo, contractBalance.currency || companyDefaultCurrency)}
+                </span>
+                <span className="pr-contract-balance__progress-pct">
+                  {Math.round(consumedPct)}%
+                </span>
+              </div>
+              <div
+                  className="pr-contract-balance__progress-track"
+                  role="progressbar"
+                  aria-valuenow={Math.round(consumedPct)}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label={`${Math.round(consumedPct)}% of contract value consumed`}
+                >
+                <div
+                  className="pr-contract-balance__progress-fill"
+                  style={{
+                    width: `${Math.min(100, consumedPct)}%`,
+                    background: barColor,
+                    transition: 'width 0.4s cubic-bezier(0.4,0,0.2,1), background 0.3s ease',
+                  }}
+                />
+                {!isOver && consumedPct < 100 && (
+                  <div
+                    className="pr-contract-balance__progress-this-po"
+                    style={{
+                      left: `${Math.min(95, consumedPct)}%`,
+                      width: `${Math.min(5, 100 - consumedPct)}%`,
+                    }}
+                    title="This PO"
+                  />
+                )}
+              </div>
+              <div className="pr-contract-balance__progress-labels pr-contract-balance__progress-labels--sub">
+                <span>
+                  Contract: {formatAmount(contractBalance.contractValue, contractBalance.currency || companyDefaultCurrency)}
+                </span>
+                <span>
+                  Remaining: {formatAmount(Math.max(0, contractBalance.remainingValue - (isOver ? 0 : pr.grandTotal)), contractBalance.currency || companyDefaultCurrency)}
+                </span>
+              </div>
+            </div>
+
+            <div className="pr-contract-balance__items">
+              <div className="pr-contract-balance__item">
+                <span className="pr-contract-balance__label">Contract Value</span>
+                <span className="pr-contract-balance__value">
+                  {formatAmount(contractBalance.contractValue, contractBalance.currency || companyDefaultCurrency)}
+                </span>
+              </div>
+              <div className="pr-contract-balance__item">
+                <span className="pr-contract-balance__label">Already Consumed</span>
+                <span className="pr-contract-balance__value pr-contract-balance__value--consumed">
+                  {formatAmount(contractBalance.consumedValue, contractBalance.currency || companyDefaultCurrency)}
+                </span>
+              </div>
+              <div className="pr-contract-balance__item">
+                <span className="pr-contract-balance__label">This PO</span>
+                <span className={`pr-contract-balance__value pr-contract-balance__value--po ${isOver ? 'pr-contract-balance__value--over' : ''}`}>
+                  {formatAmount(pr.grandTotal, contractBalance.currency || companyDefaultCurrency)}
+                </span>
+              </div>
+              <div className="pr-contract-balance__item">
+                <span className="pr-contract-balance__label">Remaining</span>
+                <span className={`pr-contract-balance__value pr-contract-balance__value--remaining ${contractBalance.remainingValue <= 0 ? 'pr-contract-balance__value--exhausted' : ''}`}>
+                  {formatAmount(Math.max(0, contractBalance.remainingValue - (isOver ? 0 : pr.grandTotal)), contractBalance.currency || companyDefaultCurrency)}
+                </span>
+              </div>
+            </div>
+
+            {isOver && (
+              <div className="pr-contract-balance__warning">
+                <AlertCircle size={14} />
+                <span>PO amount exceeds remaining contract value by {formatAmount(pr.grandTotal - contractBalance.remainingValue, contractBalance.currency || companyDefaultCurrency)}</span>
+              </div>
+            )}
+            {!isOver && consumedPct >= 80 && consumedPct < 100 && (
+              <div className="pr-contract-balance__warning pr-contract-balance__warning--caution">
+                <AlertCircle size={14} />
+                <span>Warning: This PO will consume {Math.round(consumedPct)}% of the contract value. Only {formatAmount(Math.max(0, contractBalance.remainingValue - pr.grandTotal), contractBalance.currency || companyDefaultCurrency)} will remain.</span>
+              </div>
+            )}
+            {contractBalance.remainingValue <= 0 && (
+              <div className="pr-contract-balance__warning pr-contract-balance__warning--exhausted">
+                <AlertCircle size={14} />
+                <span>Contract value is fully consumed. No further purchase orders can be created from this contract.</span>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* ── Top Toolbar ── */}
+      <div className="pr-toolbar">
+        <button className="pr-toolbar__back" onClick={() => navigate(-1)}>
+          <ArrowLeft size={18} /> Back
+        </button>
+        <div className="pr-toolbar__title">
+          <ShoppingCart size={20} />
+          <span className="pr-toolbar__title-text">PO Creation</span>
+          {pr.poNumber && <span className="pr-toolbar__po-num">#{pr.poNumber}</span>}
+          <span className={`pr-badge pr-badge--${pr.status}`}>{getStatusLabel(pr.status)}</span>
+        </div>
+        <div className="pr-toolbar__actions">
+          <button className="pr-btn pr-btn--outline" onClick={handleSave} disabled={saving || (contractBalance ? pr.grandTotal > contractBalance.remainingValue : false)}>
+            {contractBalance && pr.grandTotal > contractBalance.remainingValue ? 'Amount Exceeds Limit' : <><Save size={16} /> {saving ? 'Saving…' : 'Save Draft'}</>}
+          </button>
+          <button className="pr-btn pr-btn--outline" onClick={handlePrint}>
+            <Printer size={16} /> Print
+          </button>
+          <button className="pr-btn pr-btn--outline" onClick={handleDownloadPdf} disabled={downloadingPdf}>
+            <Download size={16} /> {downloadingPdf ? 'Downloading…' : 'Download PDF'}
+          </button>
+          <button className="pr-btn pr-btn--primary" onClick={handleSubmitForApproval} disabled={saving || (contractBalance && pr.grandTotal > contractBalance.remainingValue)}>
+            {contractBalance && pr.grandTotal > contractBalance.remainingValue
+              ? 'PO Exceeds Contract Limit'
+              : <><Send size={16} /> {saving ? 'Submitting…' : 'Send for Approval'}</>}
+          </button>
+          {poCreated && (
+            <button
+              className="pr-btn pr-btn--outline"
+              onClick={() => {
+                // Re-fetch balance and reset for another PO
+                setPoCreated(false);
+                if (contractId) {
+                  contractService.getContractBalance(contractId).then(setContractBalance).catch(() => {});
+                }
+                setPr(prev => prev ? {
+                  ...prev,
+                  poNumber: generatePONumber(),
+                  status: 'DRAFT',
+                  // Reset items to one blank row — don't replicate previous PO items
+                  items: [
+                    { itemNo: 1, description: '', quantity: 1, unit: 'Pcs', unitPrice: 0, taxPercent: 18, discount: 0, total: 0 },
+                  ],
+                  subtotal: 0,
+                  taxTotal: 0,
+                  discountTotal: 0,
+                  grandTotal: 0,
+                  shippingCharges: 0,
+                  otherCharges: 0,
+                  internalNotes: `Previous PO ${prev.poNumber} already created. Creating another PO from remaining contract value.`,
+                } : prev);
+                setToast({ message: 'Ready to create another PO. Items are empty — add items as needed. Contract balance shown above.', type: 'success' });
+              }}
+            >
+              <Plus size={16} /> Create Another PO
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── SAP Fiori Key Metrics (KPI Bar) ── */}
+      <div className="pr-kpi-summary">
+        <div className="pr-kpi-card">
+          <div className="pr-kpi-icon"><Hash size={20} /></div>
+          <div className="pr-kpi-info">
+            <span className="pr-kpi-label">Line Items</span>
+            <span className="pr-kpi-value">{pr.items.length} Item{pr.items.length > 1 ? 's' : ''}</span>
+          </div>
+        </div>
+
+        <div className="pr-kpi-card">
+          <div className="pr-kpi-icon"><DollarSign size={20} /></div>
+          <div className="pr-kpi-info">
+            <span className="pr-kpi-label">Subtotal (Net)</span>
+            <span className="pr-kpi-value">{formatAmount(pr.subtotal, pr.currency || companyDefaultCurrency)}</span>
+          </div>
+        </div>
+
+        <div className="pr-kpi-card">
+          <div className="pr-kpi-icon"><Percent size={20} /></div>
+          <div className="pr-kpi-info">
+            <span className="pr-kpi-label">Tax & Charges</span>
+            <span className="pr-kpi-value">
+              {formatAmount(pr.taxTotal + (pr.shippingCharges || 0) + (pr.otherCharges || 0), pr.currency || companyDefaultCurrency)}
+            </span>
+          </div>
+        </div>
+
+        <div className="pr-kpi-card">
+          <div className="pr-kpi-icon pr-kpi-icon--grand"><Calculator size={20} /></div>
+          <div className="pr-kpi-info">
+            <span className="pr-kpi-label">Grand Total</span>
+            <span className="pr-kpi-value pr-kpi-value--grand">{formatAmount(pr.grandTotal, pr.currency || companyDefaultCurrency)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="pr-content">
+        {/* ── Company Details ── */}
+        <section className="pr-section">
+          <div className="pr-section__header"><Building2 size={16} /> Company Details</div>
+          <div className="pr-section__grid pr-section__grid--2col">
+            <div className="pr-field"><label>Company Name</label><input value={pr.companyName} onChange={e => updateField('companyName', e.target.value)} /></div>
+            <div className="pr-field"><label>Website</label><input value={pr.companyWebsite} onChange={e => updateField('companyWebsite', e.target.value)} /></div>
+            <div className="pr-field pr-field--wide"><label>Address</label><input value={pr.companyAddress} onChange={e => updateField('companyAddress', e.target.value)} /></div>
+            <div className="pr-field"><label>Phone</label><input value={pr.companyPhone} onChange={e => updateField('companyPhone', e.target.value)} /></div>
+            <div className="pr-field"><label>Email</label><input value={pr.companyEmail} onChange={e => updateField('companyEmail', e.target.value)} /></div>
+          </div>
+        </section>
+
+        {/* ── Vendor Details ── */}
+        <section className="pr-section">
+          <div className="pr-section__header"><Building2 size={16} /> Vendor Details</div>
+          <div className="pr-section__grid pr-section__grid--2col">
+            <div className={`pr-field ${validationErrors.vendorName ? 'pr-field--error' : ''}`}>
+              <label>Company Name <span className="pr-required">*</span></label>
+              <input value={pr.vendorName} onChange={e => { updateField('vendorName', e.target.value); clearFieldError('vendorName'); }} />
+              {validationErrors.vendorName && <span className="pr-field__error-msg">{validationErrors.vendorName}</span>}
+            </div>
+            <div className="pr-field"><label>Contact Person</label><input value={pr.vendorContactPerson} onChange={e => updateField('vendorContactPerson', e.target.value)} /></div>
+            <div className="pr-field pr-field--wide"><label>Address</label><input value={pr.vendorAddress} onChange={e => updateField('vendorAddress', e.target.value)} /></div>
+            <div className="pr-field"><label>Phone</label><input value={pr.vendorPhone} onChange={e => updateField('vendorPhone', e.target.value)} /></div>
+            <div className="pr-field"><label>Email</label><input value={pr.vendorEmail} onChange={e => updateField('vendorEmail', e.target.value)} /></div>
+            <div className="pr-field"><label>GST/VAT</label><input value={pr.vendorGstVat} onChange={e => updateField('vendorGstVat', e.target.value)} /></div>
+          </div>
+        </section>
+
+        {/* ── Ship To ── */}
+        <section className="pr-section">
+          <div className="pr-section__header"><Truck size={16} /> Ship To</div>
+          <div className="pr-section__grid pr-section__grid--2col">
+            <div className="pr-field"><label>Company</label><input value={pr.shipToCompany} onChange={e => updateField('shipToCompany', e.target.value)} /></div>
+            <div className="pr-field"><label>Warehouse</label><input value={pr.shipToWarehouse} onChange={e => updateField('shipToWarehouse', e.target.value)} /></div>
+            <div className="pr-field pr-field--wide"><label>Address</label><input value={pr.shipToAddress} onChange={e => updateField('shipToAddress', e.target.value)} /></div>
+            <div className="pr-field"><label>Contact</label><input value={pr.shipToContact} onChange={e => updateField('shipToContact', e.target.value)} /></div>
+            <div className="pr-field"><label>Phone</label><input value={pr.shipToPhone} onChange={e => updateField('shipToPhone', e.target.value)} /></div>
+          </div>
+        </section>
+
+        {/* ── PO Details ── */}
+        <section className="pr-section">
+          <div className="pr-section__header"><ClipboardList size={16} /> Purchase Order Details</div>
+          <div className="pr-section__grid pr-section__grid--3col">
+            <div className="pr-field"><label>PO Number</label><input value={pr.poNumber || ''} onChange={e => updateField('poNumber', e.target.value)} className="pr-field--auto" title="Auto-generated. You can edit if needed." /></div>
+            <div className={`pr-field ${validationErrors.poDate ? 'pr-field--error' : ''}`}>
+              <label>PO Date <span className="pr-required">*</span></label>
+              <input type="date" value={pr.poDate} onChange={e => { updateField('poDate', e.target.value); clearFieldError('poDate'); }} />
+              {validationErrors.poDate && <span className="pr-field__error-msg">{validationErrors.poDate}</span>}
+            </div>
+            <div className="pr-field">
+              <label>Currency</label>
+              <CurrencySelector
+                value={pr.currency}
+                onChange={(code) => updateField('currency', code)}
+              />
+            </div>
+            <div className="pr-field"><label>Requisitioner</label><input value={pr.requisitioner} onChange={e => updateField('requisitioner', e.target.value)} /></div>
+            <div className="pr-field"><label>Ship Via</label>
+              <select value={pr.shipVia} onChange={e => updateField('shipVia', e.target.value)}>
+                <option>Surface</option>
+                <option>Air</option>
+                <option>Sea</option>
+                <option>Courier</option>
+              </select>
+            </div>
+            <div className="pr-field"><label>FOB</label>
+              <select value={pr.fob} onChange={e => updateField('fob', e.target.value)}>
+                <option>Origin</option>
+                <option>Destination</option>
+              </select>
+            </div>
+            <div className="pr-field"><label>Payment Terms</label>
+              <select value={pr.paymentTerms} onChange={e => updateField('paymentTerms', e.target.value)}>
+                <option>Net 15</option>
+                <option>Net 30</option>
+                <option>Net 45</option>
+                <option>Net 60</option>
+                <option>Cash on Delivery</option>
+                <option>Advance Payment</option>
+              </select>
+            </div>
+            <div className="pr-field"><label>Delivery Date</label><input type="date" value={pr.deliveryDate} onChange={e => updateField('deliveryDate', e.target.value)} /></div>
+            <div className="pr-field"><label>Shipping Terms</label>
+              <select value={pr.shippingTerms} onChange={e => updateField('shippingTerms', e.target.value)}>
+                <option>FOB Origin</option>
+                <option>FOB Destination</option>
+                <option>CIF</option>
+                <option>CIP</option>
+                <option>DDP</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Items Table ── */}
+        <section className="pr-section">
+          <div className="pr-section__header">
+            <Hash size={16} /> Items
+            <button className="pr-btn pr-btn--sm pr-btn--ghost" onClick={addItem}>
+              <Plus size={14} /> Add Item
+            </button>
+          </div>
+          <div className="pr-items-table-wrap">
+            <table className="pr-items-table">
+              <colgroup>
+                <col className="pr-col--no" />
+                <col className="pr-col--desc" />
+                <col className="pr-col--num" />
+                <col className="pr-col--unit" />
+                <col className="pr-col--price" />
+                <col className="pr-col--num" />
+                <col className="pr-col--num" />
+                <col className="pr-col--total" />
+                <col className="pr-col--action" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className="pr-th--no">#</th>
+                  <th className="pr-th--desc">Description</th>
+                  <th className="pr-th--num">Qty <span className="pr-required">*</span></th>
+                  <th className="pr-th--unit">Unit</th>
+                  <th className="pr-th--price">Unit Price <span className="pr-required">*</span></th>
+                  <th className="pr-th--num">Tax %</th>
+                  <th className="pr-th--num">Disc %</th>
+                  <th className="pr-th--total">Total</th>
+                  <th className="pr-th--action"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {pr.items.map((item, idx) => (
+                  <tr key={idx} className={itemValidationErrors[idx] ? 'pr-item--error-row' : ''}>
+                    <td className="pr-td--no">{item.itemNo}</td>
+                    <td className="pr-td--desc"><input value={item.description} onChange={e => updateItem(idx, 'description', e.target.value)} placeholder="Item description" /></td>
+                    <td className={`pr-td--num ${itemValidationErrors[idx]?.quantity ? 'pr-item__cell--error' : ''}`}>
+                      <input type="number" min="1" value={item.quantity}
+                        onChange={e => { updateItem(idx, 'quantity', Math.max(1, Number(e.target.value))); clearItemError(idx, 'quantity'); }}
+                      />
+                      {itemValidationErrors[idx]?.quantity && <span className="pr-field__error-msg">{itemValidationErrors[idx].quantity}</span>}
+                    </td>
+                    <td className="pr-td--unit">
+                      <select value={item.unit} onChange={e => updateItem(idx, 'unit', e.target.value)}>
+                        <option>Pcs</option><option>Kg</option><option>Ltr</option><option>Mtr</option><option>Box</option><option>Set</option>
+                      </select>
+                    </td>
+                    <td className={`pr-td--num ${itemValidationErrors[idx]?.unitPrice ? 'pr-item__cell--error' : ''}`}>
+                      <input type="number" min="0" step="0.01" value={item.unitPrice}
+                        onChange={e => { updateItem(idx, 'unitPrice', Math.max(0, Number(e.target.value))); clearItemError(idx, 'unitPrice'); }}
+                      />
+                      {itemValidationErrors[idx]?.unitPrice && <span className="pr-field__error-msg">{itemValidationErrors[idx].unitPrice}</span>}
+                    </td>
+                    <td className="pr-td--num"><input type="number" min="0" max="100" value={item.taxPercent} onChange={e => updateItem(idx, 'taxPercent', Math.max(0, Math.min(100, Number(e.target.value))))} /></td>
+                    <td className="pr-td--num"><input type="number" min="0" max="100" value={item.discount} onChange={e => updateItem(idx, 'discount', Math.max(0, Math.min(100, Number(e.target.value))))} /></td>
+                    <td className="pr-td--total">{formatCurrency(item.total, pr.currency)}</td>
+                    <td className="pr-td--action">
+                      <button className="pr-item__delete" onClick={() => deleteItem(idx)} disabled={pr.items.length <= 1}>
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {/* ── Totals ── */}
+        <section className="pr-section">
+          <div className="pr-section__header"><Calculator size={16} /> Totals</div>
+          <div className="pr-totals">
+            <div className="pr-totals__grid">
+              <div className="pr-total-row"><span>Subtotal</span><span>{formatCurrency(pr.subtotal, pr.currency)}</span></div>
+              <div className="pr-total-row"><span>Discount</span><span>-{formatCurrency(pr.discountTotal, pr.currency)}</span></div>
+              <div className="pr-total-row"><span>Tax</span><span>{formatCurrency(pr.taxTotal, pr.currency)}</span></div>
+              <div className="pr-total-row pr-total-row--charge">
+                <span>Shipping Charges</span>
+                <input type="number" min="0" value={pr.shippingCharges} onChange={e => updateField('shippingCharges', Math.max(0, Number(e.target.value)))} />
+              </div>
+              <div className="pr-total-row pr-total-row--charge">
+                <span>Other Charges</span>
+                <input type="number" min="0" value={pr.otherCharges} onChange={e => updateField('otherCharges', Math.max(0, Number(e.target.value)))} />
+              </div>
+              <div className={`pr-total-row pr-total-row--grand ${contractBalance && pr.grandTotal > contractBalance.remainingValue ? 'pr-total-row--exceeded' : ''}`}>
+                <span>
+                  Grand Total
+                  {contractBalance && pr.grandTotal > contractBalance.remainingValue && (
+                    <span className="pr-total-row__limit-warning" style={{ display: 'block', fontSize: 11, fontWeight: 400, color: '#dc2626', marginTop: 2 }}>
+                      Exceeds remaining value by {formatCurrency(pr.grandTotal - contractBalance.remainingValue, contractBalance.currency || pr.currency)}
+                    </span>
+                  )}
+                </span>
+                <span>
+                  {formatCurrency(pr.grandTotal, pr.currency)}
+                  {contractBalance && (
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 400, color: contractBalance.remainingValue >= pr.grandTotal ? '#059669' : '#dc2626', marginTop: 2 }}>
+                      Remaining: {formatCurrency(Math.max(0, contractBalance.remainingValue), contractBalance.currency || pr.currency)}
+                    </span>
+                  )}
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Notes ── */}
+        <section className="pr-section">
+          <div className="pr-section__header"><FileText size={16} /> Notes</div>
+          <div className="pr-section__grid pr-section__grid--2col">
+            <div className="pr-field pr-field--wide">
+              <label>Internal Notes</label>
+              <textarea rows={3} value={pr.internalNotes} onChange={e => updateField('internalNotes', e.target.value)} placeholder="Internal notes for procurement team..." />
+            </div>
+            <div className="pr-field pr-field--wide">
+              <label>Special Instructions</label>
+              <textarea rows={3} value={pr.specialInstructions} onChange={e => updateField('specialInstructions', e.target.value)} placeholder="Special instructions for vendor..." />
+            </div>
+          </div>
+        </section>
+      </div>
+
+      {/* ── Send to Vendor Modal ── */}
+      {/* ── Hidden Background Print / PDF Area ── */}
+      <div
+        ref={printAreaRef}
+        className="po-print-area"
+        style={{
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          width: '794px',
+          background: '#ffffff',
+          zIndex: -10,
+          opacity: 1,
+          pointerEvents: 'none',
+          padding: '40px 48px',
+        }}
+      >
+        {pr && <PurchaseOrderDocument pr={pr} />}
+      </div>
+
+      {/* ── Send to Vendor Modal (only after approval) ── */}
+      {showSendModal && (
+        <div className="pr-modal-backdrop" onClick={() => !sending && setShowSendModal(false)}>
+          <div className="pr-send-modal" onClick={e => e.stopPropagation()}>
+            <div className="pr-send-modal__header">
+              <span><Send size={18} /> Send to Vendor</span>
+              <button className="pr-send-modal__close" onClick={() => setShowSendModal(false)} disabled={sending}><X size={18} /></button>
+            </div>
+            <div className="pr-send-modal__body">
+              <div className="pr-field"><label>To</label><input value={sendTo} onChange={e => setSendTo(e.target.value)} /></div>
+              <div className="pr-field"><label>CC</label><input value={sendCc} onChange={e => setSendCc(e.target.value)} placeholder="Optional" /></div>
+              <div className="pr-field"><label>Subject</label><input value={sendSubject} onChange={e => setSendSubject(e.target.value)} /></div>
+              <div className="pr-field pr-field--wide"><label>Message</label><textarea rows={5} value={sendMessage} onChange={e => setSendMessage(e.target.value)} /></div>
+              <p className="pr-send-modal__note">
+                The professional Purchase Order PDF will be automatically attached when sent. Make sure to save your changes first.
+              </p>
+            </div>
+            <div className="pr-send-modal__footer">
+              <button className="pr-btn pr-btn--outline" onClick={() => setShowSendModal(false)} disabled={sending}>Cancel</button>
+              <button className="pr-btn pr-btn--primary" onClick={handleSend} disabled={sending || !sendTo.trim()}>
+                {sending ? 'Sending…' : 'Send'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

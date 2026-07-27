@@ -28,7 +28,6 @@ import type { DashboardPipelineItem, DashboardRecentRfq, KpiItem } from '../../.
 import '../../rfq/RFQPage.css';
 
 type ModalState = 'open' | 'expanded' | 'minimized';
-type DetailTab = 'summary' | 'breakdown' | 'related';
 
 interface DashboardOverview {
   rfqs: { total: number; draft: number; sent: number; pendingApproval: number };
@@ -216,7 +215,6 @@ function getRelatedRfqs(kpi: KpiItem, recentRfqs: DashboardRecentRfq[]) {
 export default function KpiStatsWidget() {
   const navigate = useNavigate();
   const [selectedKpi, setSelectedKpi] = useState<KpiItem | null>(null);
-  const [activeTab, setActiveTab] = useState<DetailTab>('summary');
   const [modalState, setModalState] = useState<ModalState>('open');
 
   const { data: kpis, loading, error } = useServiceData(
@@ -306,7 +304,6 @@ export default function KpiStatsWidget() {
 
   const openKpi = (kpi: KpiItem) => {
     setSelectedKpi(kpi);
-    setActiveTab('summary');
     setModalState('open');
   };
 
@@ -339,17 +336,11 @@ export default function KpiStatsWidget() {
               aria-label={`Open ${kpi.label} details`}
             >
               <div className="dash-kpi__icon">
-                <Icon size={20} />
+                <Icon size={16} />
               </div>
               <div className="dash-kpi__body">
                 <span className="dash-kpi__label">{kpi.label}</span>
                 <span className="dash-kpi__value">{kpi.value}</span>
-                {kpi.trend && (
-                  <span className={`dash-kpi__trend dash-kpi__trend--${kpi.direction}`}>
-                    <TrendIcon direction={kpi.direction} />
-                    {kpi.trend}
-                  </span>
-                )}
               </div>
             </button>
           );
@@ -461,31 +452,16 @@ export default function KpiStatsWidget() {
                   </div>
                 </div>
 
-                <div className="rfq-modal__tabs">
-                  {([
-                    ['summary', 'Summary', BarChart3, summaryRows.length],
-                    ['breakdown', 'Breakdown', ListChecks, breakdownRows.length],
-                    ['related', 'Related', CalendarDays, relatedRfqs.length],
-                  ] as const).map(([tab, label, Icon, count]) => (
-                    <button
-                      key={tab}
-                      type="button"
-                      className={`rfq-modal__tab ${activeTab === tab ? 'rfq-modal__tab--active' : ''}`}
-                      onClick={() => setActiveTab(tab)}
-                    >
-                      <Icon size={13} />
-                      {label}
-                      <span className="rfq-modal__tab-count">{count}</span>
-                    </button>
-                  ))}
-                </div>
-
-                <div className="rfq-modal__body">
-                  {activeTab === 'summary' && (
-                    <div className="rfq-modal__info-panel">
+                <div className="rfq-modal__body sap-kpi-modal-body">
+                  {/* Summary Metrics Section */}
+                  {summaryRows.length > 0 && (
+                    <div className="sap-kpi-section">
+                      <div className="sap-kpi-section__title">
+                        <BarChart3 size={13} /> Key Overview Metrics
+                      </div>
                       <div className="rfq-modal__info-grid dash-kpi-modal__info-grid">
                         {summaryRows.map((row) => (
-                          <div key={row.label} className="rfq-modal__info-item">
+                          <div key={row.label} className="rfq-modal__info-item sap-kpi-card">
                             <span className="rfq-modal__info-label">
                               <BarChart3 size={12} /> {row.label}
                             </span>
@@ -497,54 +473,61 @@ export default function KpiStatsWidget() {
                     </div>
                   )}
 
-                  {activeTab === 'breakdown' && (
-                    <div className="rfq-modal__quotations-panel">
-                      {breakdownRows.map((row) => (
-                        <div
-                          key={`${row.label}-${row.value}`}
-                          className={`rfq-modal__quotation-row ${row.link ? 'dash-kpi-modal__task-row' : ''}`}
-                          onClick={row.link ? () => handleTaskClick(row.link!) : undefined}
-                          role={row.link ? 'button' : undefined}
-                          tabIndex={row.link ? 0 : undefined}
-                          onKeyDown={row.link ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleTaskClick(row.link!); } } : undefined}
-                        >
-                          <div className="rfq-modal__quotation-info">
-                            <span className="rfq-modal__vendor-name">{row.label}</span>
-                            {row.helper && <span className="rfq-modal__quotation-meta">{row.helper}</span>}
+                  {/* Distribution & Breakdown Section */}
+                  {breakdownRows.length > 0 && (
+                    <div className="sap-kpi-section" style={{ marginTop: 18 }}>
+                      <div className="sap-kpi-section__title">
+                        <ListChecks size={13} /> Distribution & Breakdown
+                      </div>
+                      <div className="rfq-modal__quotations-panel sap-kpi-panel">
+                        {breakdownRows.map((row) => (
+                          <div
+                            key={`${row.label}-${row.value}`}
+                            className={`rfq-modal__quotation-row ${row.link ? 'dash-kpi-modal__task-row' : ''}`}
+                            onClick={row.link ? () => handleTaskClick(row.link!) : undefined}
+                            role={row.link ? 'button' : undefined}
+                            tabIndex={row.link ? 0 : undefined}
+                            onKeyDown={row.link ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleTaskClick(row.link!); } } : undefined}
+                          >
+                            <div className="rfq-modal__quotation-info">
+                              <span className="rfq-modal__vendor-name">{row.label}</span>
+                              {row.helper && <span className="rfq-modal__quotation-meta">{row.helper}</span>}
+                            </div>
+                            <div className="rfq-modal__quotation-right">
+                              <span className="rfq-modal__quotation-price">{row.value}</span>
+                            </div>
                           </div>
-                          <div className="rfq-modal__quotation-right">
-                            <span className="rfq-modal__quotation-price">{row.value}</span>
-                          </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   )}
 
-                  {activeTab === 'related' && (
-                    <div className="rfq-modal__quotations-panel">
-                      {relatedRfqs.length > 0 ? relatedRfqs.map((rfq) => (
-                        <div key={rfq.id} className="rfq-modal__quotation-row">
-                          <div className="rfq-modal__quotation-info">
-                            <span className="rfq-modal__vendor-name">{rfq.rfqNumber} · {rfq.title}</span>
-                            <span className="rfq-modal__quotation-meta">
-                              {rfq.creator} · {new Date(rfq.createdAt).toLocaleDateString('en-IN', {
-                                day: '2-digit',
-                                month: 'short',
-                                year: 'numeric',
-                              })}
-                            </span>
+                  {/* Related Activity Section */}
+                  {relatedRfqs.length > 0 && (
+                    <div className="sap-kpi-section" style={{ marginTop: 18 }}>
+                      <div className="sap-kpi-section__title">
+                        <CalendarDays size={13} /> Recent Related Activity
+                      </div>
+                      <div className="rfq-modal__quotations-panel sap-kpi-panel">
+                        {relatedRfqs.slice(0, 5).map((rfq) => (
+                          <div key={rfq.id} className="rfq-modal__quotation-row">
+                            <div className="rfq-modal__quotation-info">
+                              <span className="rfq-modal__vendor-name">{rfq.rfqNumber} · {rfq.title}</span>
+                              <span className="rfq-modal__quotation-meta">
+                                {rfq.creator} · {new Date(rfq.createdAt).toLocaleDateString('en-IN', {
+                                  day: '2-digit',
+                                  month: 'short',
+                                  year: 'numeric',
+                                })}
+                              </span>
+                            </div>
+                            <div className="rfq-modal__quotation-right">
+                              <span className="rfq-modal__quotation-status">{rfq.status}</span>
+                              <span className="rfq-modal__quotation-meta">{rfq.quotations} quotes</span>
+                            </div>
                           </div>
-                          <div className="rfq-modal__quotation-right">
-                            <span className="rfq-modal__quotation-status">{rfq.status}</span>
-                            <span className="rfq-modal__quotation-meta">{rfq.quotations} quotes</span>
-                          </div>
-                        </div>
-                      )) : (
-                        <div className="rfq-modal__no-vendors">
-                          <Building2 size={22} />
-                          <p>No related records available for this KPI yet.</p>
-                        </div>
-                      )}
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>

@@ -27,6 +27,8 @@ export function useBodyScrollLock(active: boolean): void {
       if (lockCount === 1) {
         savedOverflow = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
+        document.body.classList.add('modal-open');
+        document.documentElement.classList.add('modal-open');
       }
     }
 
@@ -35,6 +37,8 @@ export function useBodyScrollLock(active: boolean): void {
         lockCount--;
         if (lockCount === 0) {
           document.body.style.overflow = savedOverflow;
+          document.body.classList.remove('modal-open');
+          document.documentElement.classList.remove('modal-open');
         }
       }
     };

@@ -11,7 +11,6 @@ import {
   FileText,
   ChevronDown,
   X,
-  ExternalLink,
   CheckCircle2,
 } from 'lucide-react';
 import '../../styles/vendor-portal.css';
@@ -213,53 +212,27 @@ export default function VendorAgreementsPage() {
 
                   {isExpanded && (
                     <div className="va-card__body">
-                      <div className="va-card__grid">
-                        <div className="va-card__info-section">
-                          <div className="va-card__info-title">Agreement Details</div>
-                          <div className="va-card__row">
-                            <span className="va-card__row-label">Type</span>
-                            <span className="va-card__row-value">
-                              {getDocTypeLabel(agreement.selectedDocType || agreement.documentType)}
-                            </span>
-                          </div>
-                          <div className="va-card__row">
-                            <span className="va-card__row-label">Company</span>
-                            <span className="va-card__row-value">{agreement.companyName}</span>
-                          </div>
-                          <div className="va-card__row">
-                            <span className="va-card__row-label">Signed On</span>
-                            <span className="va-card__row-value">{formatDateTime(agreement.signedAt)}</span>
-                          </div>
-                          <div className="va-card__row">
-                            <span className="va-card__row-label">Status</span>
-                            <span className="va-card__row-value va-status--signed">
-                              <CheckCircle2 size={13} /> Signed
-                            </span>
-                          </div>
+                      <div className="va-card__section">
+                        <div className="va-card__info-title">Agreement Details</div>
+                        <div className="va-card__row">
+                          <span className="va-card__row-label">Type</span>
+                          <span className="va-card__row-value">
+                            {getDocTypeLabel(agreement.selectedDocType || agreement.documentType)}
+                          </span>
                         </div>
-                        <div className="va-card__info-section">
-                          <div className="va-card__info-title">Signature</div>
-                          {agreement.signatures && agreement.signatures.length > 0 ? (
-                            agreement.signatures.map((sig) => (
-                              <div key={sig.id} className="va-card__sig-block">
-                                <div className="va-card__row">
-                                  <span className="va-card__row-label">Signed By</span>
-                                  <span className="va-card__row-value">{sig.signerName}</span>
-                                </div>
-                                {sig.signatureUrl && (
-                                  <div className="va-card__sig-preview">
-                                    <img src={sig.signatureUrl} alt="Signature" />
-                                  </div>
-                                )}
-                              </div>
-                            ))
-                          ) : (
-                            <div className="va-card__row">
-                              <span className="va-card__row-value" style={{ color: 'var(--text-secondary)' }}>
-                                Signature data not available
-                              </span>
-                            </div>
-                          )}
+                        <div className="va-card__row">
+                          <span className="va-card__row-label">Company</span>
+                          <span className="va-card__row-value">{agreement.companyName}</span>
+                        </div>
+                        <div className="va-card__row">
+                          <span className="va-card__row-label">Signed On</span>
+                          <span className="va-card__row-value">{formatDateTime(agreement.signedAt)}</span>
+                        </div>
+                        <div className="va-card__row">
+                          <span className="va-card__row-label">Status</span>
+                          <span className="va-card__row-value va-status--signed">
+                            <CheckCircle2 size={13} /> Signed
+                          </span>
                         </div>
                       </div>
 
@@ -335,21 +308,7 @@ export default function VendorAgreementsPage() {
                   Signed on {formatDateTime(previewDoc.signedAt)} by{' '}
                   {previewDoc.signatures?.[0]?.signerName || 'You'}
                 </span>
-                <button
-                  className="vendor-btn vendor-btn--primary"
-                  onClick={() => {
-                    window.open(
-                      `data:text/html,${encodeURIComponent(
-                        `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${previewDoc.selectedDocType} Agreement</title><style>body{font-family:Arial,sans-serif;padding:40px;line-height:1.6;color:#333;max-width:800px;margin:0 auto}img{max-width:100%}</style></head><body>${previewDoc.contentSnapshot}</body></html>`
-                      )}`,
-                      '_blank',
-                      'noopener,noreferrer'
-                    );
-                  }}
-                  style={{ padding: '6px 14px', fontSize: 12 }}
-                >
-                  <ExternalLink size={13} /> Open in New Tab
-                </button>
+
               </div>
             </div>
           </div>

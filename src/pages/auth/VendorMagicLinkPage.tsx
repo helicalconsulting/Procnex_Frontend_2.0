@@ -3,12 +3,15 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertCircle } from 'lucide-react';
 import { API_BASE } from '../../api/client';
 import { authService } from '../../services/authService';
+import { useBranding } from '../../context/BrandingContext';
+import { PORTAL_NAMES } from '../../config/portalNames';
 import heliflowLogo from '../../assets/heliflow.png';
 import './LoginPage.css';
 
 export default function VendorMagicLinkPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { companyName, logoUrl } = useBranding();
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -70,8 +73,8 @@ export default function VendorMagicLinkPage() {
       <div className="sap-login__form-panel" style={{ flex: 1 }}>
         <div className="sap-login__form-container">
           <div className="sap-login__mobile-logo">
-            <img src={heliflowLogo} alt="Heliflow" className="sap-login__mobile-logo-icon" />
-            <span className="sap-login__mobile-title">Vendor Portal</span>
+            <img src={logoUrl || heliflowLogo} alt={companyName} className="sap-login__mobile-logo-icon" />
+            <span className="sap-login__mobile-title">{companyName} · {PORTAL_NAMES.secondary} Portal</span>
           </div>
           <h2 className="sap-login__form-title">Opening your RFQ…</h2>
           <p className="sap-login__form-subtitle">Signing you in securely from your invitation email.</p>

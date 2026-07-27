@@ -177,15 +177,17 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
-  overflow: hidden;
 }
 
 .cur-selector__search {
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
   padding: 8px 10px;
   border-bottom: 1px solid var(--border);
+  background: var(--surface-card);
 }
 
 .cur-selector__search-icon {

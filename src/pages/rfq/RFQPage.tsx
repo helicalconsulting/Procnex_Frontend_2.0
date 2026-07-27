@@ -16,6 +16,7 @@ import type { RFQStatus } from '../../types';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import RFQDetailModal from '../../components/rfq/RFQDetailModal';
 import { MessageStrip } from '../../components/shared/MessageStrip';
+import { TableSkeleton } from '../../components/shared/Skeleton';
 import '../../components/shared/ColumnCustomizer.css';
 import './RFQPage.css';
 
@@ -228,6 +229,7 @@ export default function RFQPage() {
   const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<MockRFQ | null>(null);
+  const [deleteForceRequired, setDeleteForceRequired] = useState(false);
 
   const anyModalOpen = !!(detailRFQ || deleteTarget);
   useBodyScrollLock(anyModalOpen);
@@ -286,6 +288,7 @@ export default function RFQPage() {
     setDeleteError(null);
     setDeleteSuccess(null);
     setDeleteTarget(rfq);
+    setDeleteForceRequired(false);
   }, []);
 
   const cancelDeleteRFQ = useCallback(() => {
@@ -298,8 +301,35 @@ export default function RFQPage() {
     setDeletingId(rfq.id);
     setDeleteError(null);
     setDeleteSuccess(null);
+    setDeleteForceRequired(false);
     try {
       await rfqService.delete(rfq.id);
+      if (detailRFQ?.id === rfq.id) setDetailRFQ(null);
+      setDeleteSuccess(`${rfq.rfqNumber} deleted successfully.`);
+      setDeleteTarget(null);
+      reload();
+    } catch (err) {
+      const isRelatedRecordsError =
+        err instanceof Error &&
+        'code' in err &&
+        (err as { code?: string }).code === 'RFQ_HAS_RELATED_RECORDS';
+      if (isRelatedRecordsError) {
+        setDeleteForceRequired(true);
+      }
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete RFQ');
+    } finally {
+      setDeletingId(null);
+    }
+  }, [deleteTarget, detailRFQ?.id, reload]);
+
+  const confirmForceDeleteRFQ = useCallback(async () => {
+    if (!deleteTarget) return;
+    const rfq = deleteTarget;
+    setDeletingId(rfq.id);
+    setDeleteError(null);
+    setDeleteSuccess(null);
+    try {
+      await rfqService.delete(rfq.id, { force: true });
       if (detailRFQ?.id === rfq.id) setDetailRFQ(null);
       setDeleteSuccess(`${rfq.rfqNumber} deleted successfully.`);
       setDeleteTarget(null);
@@ -397,7 +427,6 @@ export default function RFQPage() {
       {error && <MessageStrip type="error">{error}</MessageStrip>}
       {deleteError && <MessageStrip type="error" onClose={() => setDeleteError(null)} autoHideMs={5000}>{deleteError}</MessageStrip>}
       {deleteSuccess && <MessageStrip type="success" onClose={() => setDeleteSuccess(null)} autoHideMs={2000}>{deleteSuccess}</MessageStrip>}
-      {loading && <div className="rfq-page__loading">Loading RFQs…</div>}
 
       {/* ── Header ─────────────────────────────────────────── */}
       <div className="rfq-page__header">
@@ -455,7 +484,9 @@ export default function RFQPage() {
 
       {/* ── Table Card ─────────────────────────────────────── */}
       <div className="rfq-table-card">
-        {paginated.length > 0 ? (
+        {loading ? (
+          <TableSkeleton rows={5} columns={6} />
+        ) : paginated.length > 0 ? (
           <>
             {/* Desktop Table */}
             <div className="rfq-table-wrap">
@@ -648,7 +679,15 @@ export default function RFQPage() {
                 This will permanently delete <strong>{deleteTarget.rfqNumber}</strong> with its line items,
                 vendor invites, quotations, and approval records.
               </p>
-              {deleteError && <MessageStrip type="error" onClose={() => setDeleteError(null)} autoHideMs={5000}>{deleteError}</MessageStrip>}
+              {deleteForceRequired ? (
+                <div className="rfq-confirm__warning-box">
+                  <p className="rfq-confirm__warning-text">
+                    {deleteError || 'Related purchase orders and/or contracts will also be deleted or disassociated.'}
+                  </p>
+                </div>
+              ) : (
+                deleteError && <MessageStrip type="error" onClose={() => setDeleteError(null)} autoHideMs={5000}>{deleteError}</MessageStrip>
+              )}
             </div>
             <div className="rfq-confirm__actions">
               <button
@@ -658,14 +697,25 @@ export default function RFQPage() {
               >
                 Cancel
               </button>
-              <button
-                className="rfq-confirm__btn rfq-confirm__btn--danger"
-                onClick={confirmDeleteRFQ}
-                disabled={deletingId === deleteTarget.id}
-              >
-                <Trash2 size={15} />
-                {deletingId === deleteTarget.id ? 'Deleting...' : 'Delete RFQ'}
-              </button>
+              {deleteForceRequired ? (
+                <button
+                  className="rfq-confirm__btn rfq-confirm__btn--danger rfq-confirm__btn--force"
+                  onClick={confirmForceDeleteRFQ}
+                  disabled={deletingId === deleteTarget.id}
+                >
+                  <Trash2 size={15} />
+                  {deletingId === deleteTarget.id ? 'Deleting...' : 'Delete Anyway'}
+                </button>
+              ) : (
+                <button
+                  className="rfq-confirm__btn rfq-confirm__btn--danger"
+                  onClick={confirmDeleteRFQ}
+                  disabled={deletingId === deleteTarget.id}
+                >
+                  <Trash2 size={15} />
+                  {deletingId === deleteTarget.id ? 'Deleting...' : 'Delete RFQ'}
+                </button>
+              )}
             </div>
           </div>
         </div>

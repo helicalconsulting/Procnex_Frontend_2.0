@@ -10,10 +10,37 @@
   padding: 0 24px;
   background: var(--surface-card);
   border-bottom: 1px solid var(--border);
-  position: sticky;
+  position: fixed;
   top: 0;
-  z-index: 50;
+  left: 72px;   /* default: collapsed sidebar */
+  right: 0;
+  z-index: 1000;
   flex-shrink: 0;
+  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* When sidebar is expanded */
+.app-layout:not(.app-layout--collapsed) .topbar {
+  left: 260px;
+}
+
+/* When collapsed sidebar is hovered (desktop) */
+@media (min-width: 769px) {
+  .app-layout--collapsed:has(.sidebar:hover) .topbar {
+    left: 260px;
+  }
+}
+
+/* Mobile: topbar spans full width */
+@media (max-width: 768px) {
+  .topbar {
+    left: 0 !important;
+  }
+}
+
+[data-theme="dark"] .topbar {
+  background: #1a222c !important;
+  border-bottom-color: #2d3640 !important;
 }
 
 /* ─── Left Side — Breadcrumbs ─────────────────────────────── */

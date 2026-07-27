@@ -7,6 +7,7 @@ import {
   useCallback,
   type ReactNode,
 } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { authService } from '../services/authService';
 import type { User, LoginPayload, UserModulePermission } from '../types';
 import type { PermissionField } from '../config/modulePermissions';
@@ -93,12 +94,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     applySession(data);
   }, [applySession]);
 
+  const queryClient = useQueryClient();
+
   const logout = useCallback(async () => {
     await authService.logout();
+    // Clear ALL React Query cache to prevent stale vendor data from
+    // showing when a different vendor logs in from the same browser session.
+    queryClient.clear();
     setUser(null);
     setRoles([]);
     setPermissions({});
-  }, []);
+  }, [queryClient]);
 
   const hasPermission = useCallback(
     (module: string, action: PermissionField = 'canView') =>

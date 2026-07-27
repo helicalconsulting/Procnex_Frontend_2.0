@@ -1,0 +1,169 @@
+/* ═══════════════════════════════════════════════════════════
+   Heliflow SAP Enterprise Shimmer Skeleton Design System
+   ═══════════════════════════════════════════════════════════ */
+
+@keyframes csShimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.cs-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(226, 232, 240, 0.6) 25%,
+    rgba(241, 245, 249, 0.95) 37%,
+    rgba(226, 232, 240, 0.6) 63%
+  );
+  background-size: 200% 100%;
+  animation: csShimmer 1.5s infinite ease-in-out;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+[data-theme="dark"] .cs-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 25%,
+    rgba(255, 255, 255, 0.14) 37%,
+    rgba(255, 255, 255, 0.05) 63%
+  );
+  background-size: 200% 100%;
+}
+
+/* ── Specific Primitive Shapes ── */
+.cs-skeleton--text {
+  height: 14px;
+  width: 100%;
+  border-radius: 3px;
+}
+
+.cs-skeleton--title {
+  height: 22px;
+  width: 60%;
+  border-radius: 4px;
+}
+
+.cs-skeleton--badge {
+  height: 22px;
+  width: 70px;
+  border-radius: 4px;
+}
+
+.cs-skeleton--btn {
+  height: 34px;
+  width: 100px;
+  border-radius: 4px;
+}
+
+.cs-skeleton--input {
+  height: 38px;
+  width: 100%;
+  border-radius: 4px;
+}
+
+.cs-skeleton--avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+}
+
+/* ── Component Skeleton Wrappers ── */
+
+/* 1. Table Skeleton */
+.cs-table-skeleton-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  width: 100%;
+  background: var(--surface-card, #ffffff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 4px;
+}
+
+.cs-table-skeleton-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.cs-table-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border, #e2e8f0);
+}
+
+[data-theme="dark"] .cs-table-skeleton-row {
+  border-bottom-color: var(--border, #2a2a3e);
+}
+
+/* 2. Card Skeleton */
+.cs-card-skeleton-wrap {
+  padding: 20px;
+  background: var(--surface-card, #ffffff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 3. Form Skeleton */
+.cs-form-skeleton-wrap {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+  padding: 20px;
+  background: var(--surface-card, #ffffff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 4px;
+}
+
+.cs-form-skeleton-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 4. Stat Cards Skeleton */
+.cs-stats-skeleton-wrap {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+  width: 100%;
+}
+
+.cs-stat-skeleton-card {
+  padding: 16px;
+  background: var(--surface-card, #ffffff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 5. Detail View Skeleton */
+.cs-detail-skeleton-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.cs-detail-skeleton-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  background: var(--surface-card, #ffffff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 4px;
+}

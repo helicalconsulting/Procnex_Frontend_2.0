@@ -40,6 +40,7 @@ import {
   type ModulePermissionRow,
 } from '../../config/modulePermissions';
 import { MessageStrip } from '../../components/shared/MessageStrip';
+import { CardSkeleton } from '../../components/shared/Skeleton';
 import './RolesPermissionsPage.css';
 
 // ─── Types ──────────────────────────────────────────────────
@@ -380,7 +381,6 @@ export default function RolesPermissionsPage() {
   return (
     <div className="roles-page">
       {error && <MessageStrip type="error">{error}</MessageStrip>}
-      {loading && <div className="roles-page__loading">Loading roles…</div>}
       {/* ── Header ─────────────────────────────────────────── */}
       <div className="roles-page__header">
         <div className="roles-page__header-left">
@@ -515,7 +515,10 @@ export default function RolesPermissionsPage() {
 
       {/* ── Role Cards ─────────────────────────────────────── */}
       <div className="roles-cards">
-        {filtered.map((role) => {
+        {loading ? (
+          <CardSkeleton count={3} />
+        ) : (
+          filtered.map((role) => {
           const isExpanded = expandedRole === role.id;
           const { granted: permCount, applicable: permTotal } = countGrantedPermissions(role.permissions);
           const permPercent = permTotal > 0 ? Math.round((permCount / permTotal) * 100) : 0;
@@ -650,7 +653,8 @@ export default function RolesPermissionsPage() {
               )}
             </div>
           );
-        })}
+        })
+        )}
       </div>
 
       {filtered.length === 0 && (

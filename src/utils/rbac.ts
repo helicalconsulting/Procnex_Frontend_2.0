@@ -49,6 +49,7 @@ const MODULE_PERMISSIONS: Record<string, Record<string, ModulePermission>> = {
   [RoleName.PROCUREMENT_MANAGER]: {
     RFQ: { canView: true, canCreate: true, canApprove: true, canEdit: true, canDelete: false },
     Quotation: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
+    Contracts: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     PurchaseOrder: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     Vendor: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     ApprovalManagement: { canView: false, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
@@ -59,6 +60,7 @@ const MODULE_PERMISSIONS: Record<string, Record<string, ModulePermission>> = {
   [RoleName.FINANCE_MANAGER]: {
     RFQ: { canView: true, canCreate: false, canApprove: true, canEdit: false, canDelete: false },
     Quotation: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
+    Contracts: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     PurchaseOrder: { canView: true, canCreate: true, canApprove: true, canEdit: true, canDelete: false },
     Vendor: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     ApprovalManagement: { canView: false, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
@@ -69,6 +71,7 @@ const MODULE_PERMISSIONS: Record<string, Record<string, ModulePermission>> = {
   [RoleName.FINANCE_APPROVER]: {
     RFQ: { canView: true, canCreate: false, canApprove: true, canEdit: false, canDelete: false },
     Quotation: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
+    Contracts: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     PurchaseOrder: { canView: true, canCreate: false, canApprove: true, canEdit: false, canDelete: false },
     Vendor: { canView: true, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
     ApprovalManagement: { canView: false, canCreate: false, canApprove: false, canEdit: false, canDelete: false },
@@ -116,18 +119,24 @@ export const NAVIGATION_MENU: MenuItem[] = [
       { id: 'rfq-list', label: 'RFQ List', path: '/rfq', roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.FINANCE_MANAGER, RoleName.FINANCE_APPROVER] },
       { id: 'rfq-create', label: 'Create RFQ', path: '/rfq/create', roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER] },
     ],
-  },
-  {
-    id: 'quotations',
-    label: 'Quotations',
-    path: '/quotations',
-    roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.FINANCE_MANAGER],
-  },
+  },    {
+      id: 'quotations',
+      label: 'Quotations',
+      path: '/quotations',
+      roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.FINANCE_MANAGER],
+    },
+    {
+      id: 'purchase-requisitions',
+      label: 'PO Creation',
+      path: '/procurement/purchase-requisitions',
+      roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER],
+    },
+
   {
     id: 'contracts',
     label: 'Contracts',
     path: '/contracts',
-    roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER],
+    roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.FINANCE_MANAGER, RoleName.FINANCE_APPROVER],
   },
 
   {
@@ -294,16 +303,18 @@ export function canApprove(roles: string[], module: string): boolean {
 
 function filterMenuByPermissions(
   items: MenuItem[],
-  permissions: UserPermissionsMap
+  permissions: UserPermissionsMap,
+  roles: string[]
 ): MenuItem[] {
   return items
     .map((item): MenuItem | null => {
       const children = item.children
-        ? filterMenuByPermissions(item.children, permissions)
+        ? filterMenuByPermissions(item.children, permissions, roles)
         : undefined;
 
       if (item.id === 'admin') {
-        if (!children?.length) return null;
+        const hasAdminRole = item.roles.some((r) => roles.includes(r));
+        if (!children?.length && !hasAdminRole) return null;
         return { ...item, children };
       }
 
@@ -312,7 +323,10 @@ function filterMenuByPermissions(
         return { ...item, children: children ?? [] };
       }
 
-      if (!checkMenuItemPermission(permissions, item.id)) return null;
+      // Check permission-based access, fall back to role-based if not explicitly set
+      const hasPerm = checkMenuItemPermission(permissions, item.id);
+      const hasRole = item.roles.some((r) => roles.includes(r));
+      if (!hasPerm && !hasRole) return null;
       return { ...item, children };
     })
     .filter((item): item is MenuItem => item !== null);
@@ -323,7 +337,7 @@ export function getAccessibleMenuItems(
   permissions?: UserPermissionsMap | null
 ): MenuItem[] {
   if (permissions && Object.keys(permissions).length > 0) {
-    return filterMenuByPermissions(NAVIGATION_MENU, permissions);
+    return filterMenuByPermissions(NAVIGATION_MENU, permissions, roles);
   }
 
   return NAVIGATION_MENU.filter((item) => item.roles.some((r) => roles.includes(r))).map((item) => ({

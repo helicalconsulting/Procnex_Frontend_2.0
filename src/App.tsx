@@ -71,6 +71,8 @@ const CompanySettingsPage = lazy(
 const ContractsPage = lazy(() => import("./pages/contracts/ContractsPage"));
 const ContractDetailPage = lazy(() => import("./pages/contracts/ContractDetailPage"));
 const CreateContractPage = lazy(() => import("./pages/contracts/CreateContractPage"));
+const PurchaseRequisitionPage = lazy(() => import("./pages/purchase-requisitions/PurchaseRequisitionPage"));
+const PurchaseRequisitionsListPage = lazy(() => import("./pages/purchase-requisitions/PurchaseRequisitionsListPage"));
 
 function CurrencyProviderWithAuth({ children }: { children: React.ReactNode }) {
   return <CurrencyProvider>{children}</CurrencyProvider>;
@@ -200,6 +202,8 @@ export default function App() {
                   <Route path="/contracts/:id" element={page(ContractDetailPage)} />
                   <Route path="/contracts/new" element={page(CreateContractPage)} />
                   <Route path="/contracts/:id/edit" element={page(ContractDetailPage)} />
+                  <Route path="/procurement/purchase-requisitions" element={page(PurchaseRequisitionsListPage)} />
+                  <Route path="/procurement/purchase-requisition/:rfqId" element={page(PurchaseRequisitionPage)} />
                   <Route path="/audit" element={page(AuditTrailPage)} />
                 </Route>
               </Route>

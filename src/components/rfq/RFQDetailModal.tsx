@@ -5,12 +5,11 @@ import type { RFQTableRow } from '../../types/viewModels';
 import ColumnCustomizer from '../shared/ColumnCustomizer';
 import { MessageStrip } from '../shared/MessageStrip';
 import { rfqService } from '../../services/rfqService';
-import VendorComparisonCharts from './VendorComparisonCharts';
 import { sseClient } from '../../services/sseClient';
 import {
   X, CalendarDays, Building2, Tag, Banknote, ClipboardList, Users,
   Package, FileText, Minus, Maximize2, Minimize2, ChevronUp,
-  Percent, Trophy, BarChart3, Eye, ArrowRightLeft, Shield,
+  Trophy, Eye, ArrowRightLeft, Shield, TrendingUp,
 } from 'lucide-react';
 import { useCurrency, CurrencySelector, CurrencyBadge, DEFAULT_CURRENCY } from '../../components/shared/CurrencyMaster';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
@@ -175,7 +174,7 @@ export default function RFQDetailModal({
   onCompareQuotations,
 }: RFQDetailModalProps) {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'info' | 'items' | 'vendors' | 'quotations' | 'evaluation'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'items' | 'vendors' | 'quotations'>('info');
   const [modalState, setModalState] = useState<ModalState>('open');
   const [viewPlanQuotation, setViewPlanQuotation] = useState<{ name: string; milestones: Array<{ id: string; title: string; percentage: number }> } | null>(null);
   const [viewDisplayCurrency, setViewDisplayCurrency] = useState('');
@@ -192,45 +191,148 @@ export default function RFQDetailModal({
     setEvalLoading(true);
     setEvalError(null);
     try {
-      // Use enterprise evaluation for ALL RFQ types (Simple RFQ endpoint doesn't exist on backend)
-      const data = await rfqService.getEvaluationScores(rfq.id);
-      const raw = data as Record<string, unknown>;
-      const suppliers: EvalSupplierResult[] = (raw.suppliers as unknown[])?.map((s: unknown) => {
-        const sup = s as Record<string, unknown>;
-        return {
-          vendorId: sup.vendorId as string,
-          vendorName: sup.vendorName as string,
-          vendorEmail: sup.vendorEmail as string,
-          categoryScores: (sup.categoryScores as unknown[])?.map((cs: unknown) => {
-            const catScore = cs as Record<string, unknown>;
+      const isTender = rfq.rfqType === 'TENDER' || rfq.rfqType === 'CUSTOM';
+
+      if (isTender) {
+        // Tender RFQ: fetch enterprise evaluation scores
+        const data = await rfqService.getEvaluationScores(rfq.id);
+        const raw = data as Record<string, unknown>;
+        const suppliers: EvalSupplierResult[] = (raw.suppliers as unknown[])?.map((s: unknown) => {
+          const sup = s as Record<string, unknown>;
+          return {
+            vendorId: sup.vendorId as string,
+            vendorName: sup.vendorName as string,
+            vendorEmail: sup.vendorEmail as string,
+            categoryScores: (sup.categoryScores as unknown[])?.map((cs: unknown) => {
+              const catScore = cs as Record<string, unknown>;
+              return {
+                categoryId: catScore.categoryId as string,
+                categoryName: catScore.categoryName as string,
+                weightage: catScore.weightage as number,
+                enabled: catScore.enabled as boolean,
+                earned: catScore.earned as number,
+                maxPossible: catScore.maxPossible as number,
+                percentage: catScore.percentage as number,
+                weightedScore: catScore.weightedScore as number,
+                subParameterScores: (catScore.subParameterScores as unknown[]) || [],
+              } as EvalCategoryScore;
+            }) || [],
+            totalWeightedScore: sup.totalWeightedScore as number,
+            finalScore: sup.finalScore as number,
+            rank: sup.rank as number,
+            isRecommended: sup.isRecommended as boolean,
+          } as EvalSupplierResult;
+        }) || [];
+        const sortedSuppliers = [...suppliers].sort((a, b) => (a.rank && b.rank ? a.rank - b.rank : b.finalScore - a.finalScore));
+        const recommendedVendor = sortedSuppliers.find((s: EvalSupplierResult) => s.isRecommended) || sortedSuppliers[0] || null;
+        setEvalData({
+          rfq: raw.rfq as EvalData['rfq'],
+          categories: (raw.categories as unknown[])?.map((c: unknown) => c as EvalData['categories'][0]) || [],
+          suppliers: sortedSuppliers,
+          summary: {
+            totalSuppliers: (raw.summary as Record<string, unknown>)?.totalSuppliers as number || sortedSuppliers.length,
+            recommendedVendor,
+            averageScore: (raw.summary as Record<string, unknown>)?.averageScore as number || (sortedSuppliers.length ? Math.round(sortedSuppliers.reduce((a, b) => a + b.finalScore, 0) / sortedSuppliers.length) : 0),
+          },
+        });
+      } else {
+        // Standard / Normal RFQ: build evaluation scores from submitted quotations
+        const quotations = rfq.quotations || [];
+        if (quotations.length > 0) {
+          const prices = quotations.map((q) => q.totalPrice).filter((v) => v > 0);
+          const leads = quotations.map((q) => q.leadTimeDays).filter((v) => v != null && v > 0) as number[];
+          const minPrice = prices.length ? Math.min(...prices) : 0;
+          const minLead = leads.length ? Math.min(...leads) : 0;
+
+          const scoredSuppliers = quotations.map((q) => {
+            const priceScore = minPrice && q.totalPrice > 0 ? Math.round((minPrice / q.totalPrice) * 100) : 80;
+            const leadScore = minLead && q.leadTimeDays ? Math.round((minLead / q.leadTimeDays) * 100) : 80;
+            const ratingScore = 80;
+            const complianceScore = 100;
+            const responseScore = 90;
+
+            const calcScore = Math.round(
+              priceScore * 0.45 + leadScore * 0.15 + complianceScore * 0.15 + ratingScore * 0.15 + responseScore * 0.10
+            );
+
+            const finalScore = q.score != null && q.score > 0 ? Math.round(q.score <= 5 ? q.score * 20 : q.score) : calcScore;
+
             return {
-              categoryId: catScore.categoryId as string,
-              categoryName: catScore.categoryName as string,
-              weightage: catScore.weightage as number,
-              enabled: catScore.enabled as boolean,
-              earned: catScore.earned as number,
-              maxPossible: catScore.maxPossible as number,
-              percentage: catScore.percentage as number,
-              weightedScore: catScore.weightedScore as number,
-              subParameterScores: (catScore.subParameterScores as unknown[]) || [],
-            } as EvalCategoryScore;
-          }) || [],
-          totalWeightedScore: sup.totalWeightedScore as number,
-          finalScore: sup.finalScore as number,
-          rank: sup.rank as number,
-          isRecommended: sup.isRecommended as boolean,
-        } as EvalSupplierResult;
-      }) || [];
-      setEvalData({
-        rfq: raw.rfq as EvalData['rfq'],
-        categories: (raw.categories as unknown[])?.map((c: unknown) => c as EvalData['categories'][0]) || [],
-        suppliers,
-        summary: {
-          totalSuppliers: (raw.summary as Record<string, unknown>)?.totalSuppliers as number || 0,
-          recommendedVendor: suppliers.find((s: EvalSupplierResult) => s.isRecommended) || null,
-          averageScore: (raw.summary as Record<string, unknown>)?.averageScore as number || 0,
-        },
-      });
+              q,
+              priceScore,
+              leadScore,
+              ratingScore,
+              complianceScore,
+              responseScore,
+              finalScore,
+            };
+          }).sort((a, b) => b.finalScore - a.finalScore || a.q.totalPrice - b.q.totalPrice);
+
+          const suppliers: EvalSupplierResult[] = scoredSuppliers.map(({ q, priceScore, leadScore, ratingScore, complianceScore, responseScore, finalScore }, idx) => ({
+            vendorId: String(q.vendorId),
+            vendorName: q.vendorName,
+            vendorEmail: q.vendorEmail,
+            categoryScores: [
+              {
+                categoryId: 'pricing', categoryName: 'Pricing (Commercials)', weightage: 45,
+                enabled: true, earned: Math.round((priceScore * 45) / 100), maxPossible: 45,
+                percentage: priceScore, weightedScore: (priceScore * 45) / 100, subParameterScores: [],
+              },
+              {
+                categoryId: 'leadTime', categoryName: 'Delivery / Lead Time', weightage: 15,
+                enabled: true, earned: Math.round((leadScore * 15) / 100), maxPossible: 15,
+                percentage: leadScore, weightedScore: (leadScore * 15) / 100, subParameterScores: [],
+              },
+              {
+                categoryId: 'rating', categoryName: 'Vendor Rating', weightage: 15,
+                enabled: true, earned: Math.round((ratingScore * 15) / 100), maxPossible: 15,
+                percentage: ratingScore, weightedScore: (ratingScore * 15) / 100, subParameterScores: [],
+              },
+              {
+                categoryId: 'compliance', categoryName: 'Compliance & Documents', weightage: 15,
+                enabled: true, earned: Math.round((complianceScore * 15) / 100), maxPossible: 15,
+                percentage: complianceScore, weightedScore: (complianceScore * 15) / 100, subParameterScores: [],
+              },
+              {
+                categoryId: 'responseTime', categoryName: 'Response Time', weightage: 10,
+                enabled: true, earned: Math.round((responseScore * 10) / 100), maxPossible: 10,
+                percentage: responseScore, weightedScore: (responseScore * 10) / 100, subParameterScores: [],
+              },
+            ],
+            totalWeightedScore: finalScore,
+            finalScore,
+            rank: idx + 1,
+            isRecommended: idx === 0,
+          }));
+
+          const totalSuppliers = suppliers.length;
+          const averageScore = Math.round(suppliers.reduce((sum, s) => sum + s.finalScore, 0) / totalSuppliers);
+
+          setEvalData({
+            rfq: { id: rfq.id, rfqNumber: rfq.rfqNumber, title: rfq.title, rfqType: rfq.rfqType, status: rfq.status },
+            categories: [
+              { id: 'pricing', name: 'Pricing (Commercials)', weightage: 45, enabled: true },
+              { id: 'leadTime', name: 'Delivery / Lead Time', weightage: 15, enabled: true },
+              { id: 'rating', name: 'Vendor Rating', weightage: 15, enabled: true },
+              { id: 'compliance', name: 'Compliance & Documents', weightage: 15, enabled: true },
+              { id: 'responseTime', name: 'Response Time', weightage: 10, enabled: true },
+            ],
+            suppliers,
+            summary: {
+              totalSuppliers,
+              recommendedVendor: suppliers[0] || null,
+              averageScore,
+            },
+          });
+        } else {
+          setEvalData({
+            rfq: { id: rfq.id, rfqNumber: rfq.rfqNumber, title: rfq.title, rfqType: rfq.rfqType, status: rfq.status },
+            categories: [],
+            suppliers: [],
+            summary: { totalSuppliers: 0, recommendedVendor: null, averageScore: 0 },
+          });
+        }
+      }
     } catch (err) {
       setEvalError(err instanceof Error ? err.message : 'Failed to load evaluation scores');
     } finally {
@@ -238,9 +340,9 @@ export default function RFQDetailModal({
     }
   }, [rfq]);
 
-  // Fetch evaluation data when tab switches to evaluation or vendors tab
+  // Fetch evaluation data when tab switches to vendors or quotations tab
   useEffect(() => {
-    if ((activeTab !== 'evaluation' && activeTab !== 'vendors') || !rfq || evalData) return;
+    if ((activeTab !== 'vendors' && activeTab !== 'quotations') || !rfq || evalData) return;
     loadEvalData();
   }, [activeTab, rfq?.id, rfq?.rfqType, loadEvalData, evalData]);
 
@@ -418,7 +520,7 @@ export default function RFQDetailModal({
             </div>
 
             <div className="rfq-modal__tabs">
-              {(['info', 'items', 'vendors', 'quotations', 'evaluation'] as const).map((tab) => (
+              {(['info', 'items', 'vendors', 'quotations'] as const).map((tab) => (
                 <button
                   key={tab}
                   type="button"
@@ -436,7 +538,6 @@ export default function RFQDetailModal({
                       </span>
                     </>
                   )}
-                  {tab === 'evaluation' && <><Percent size={13} /> Evaluation</>}
                 </button>
               ))}
             </div>
@@ -630,11 +731,35 @@ export default function RFQDetailModal({
                 <div className="rfq-modal__quotations-panel">
                   {(rfq.quotations?.length ?? 0) > 0 ? (
                     <div className="rfq-modal__quotations-list">
-                      {(rfq.quotations ?? []).map((q) => {
+                      {(() => {
+                        // Sort quotations by score descending for ranking
+                        const sortedQuotes = [...(rfq.quotations ?? [])].sort((a, b) => {
+                          const scoreA = a.score ?? -1;
+                          const scoreB = b.score ?? -1;
+                          if (scoreB !== scoreA) return scoreB - scoreA;
+                          return a.totalPrice - b.totalPrice; // tie-break by lower price
+                        });
+                        return sortedQuotes.map((q, rankIdx) => {
                         const initials = q.vendorName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
                         const avatarMod = String((q.vendorId % 6) + 1);
+                        const isTopScorer = rankIdx === 0 && q.score != null;
                         return (
-                          <div key={q.id} className="rfq-modal__quotation-row">
+                          <div key={q.id} className="rfq-modal__quotation-row" style={isTopScorer ? {
+                            background: 'rgba(245,158,11,0.04)',
+                            border: '1px solid rgba(245,158,11,0.2)',
+                            borderRadius: 'var(--radius-md)',
+                          } : undefined}>
+                            {/* Rank badge */}
+                            <span style={{
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
+                              fontSize: 11, fontWeight: 800,
+                              color: rankIdx === 0 ? '#92400e' : rankIdx === 1 ? '#4b5563' : rankIdx === 2 ? '#92400e' : '#6a6d70',
+                              background: rankIdx === 0 ? 'rgba(245,158,11,0.15)' : rankIdx === 1 ? 'rgba(156,163,175,0.15)' : rankIdx === 2 ? 'rgba(217,119,6,0.12)' : 'transparent',
+                              border: rankIdx <= 2 ? 'none' : '1px solid var(--border)',
+                            }}>
+                              {rankIdx === 0 ? <Trophy size={12} style={{ color: '#f59e0b' }} /> : `#${rankIdx + 1}`}
+                            </span>
                             <span className={`rfq-modal__vendor-avatar rfq-modal__vendor-avatar--${avatarMod}`}>
                               {initials}
                             </span>
@@ -682,6 +807,34 @@ export default function RFQDetailModal({
                               </span>
                             </div>
                             <div className="rfq-modal__quotation-right">
+                              {/* Score badge */}
+                              {(() => {
+                                const scoreVal = (q.score != null && q.score > 0)
+                                  ? Math.round(q.score <= 5 ? q.score * 20 : q.score)
+                                  : evalData?.suppliers.find(s => s.vendorId === String(q.vendorId) || s.vendorName === q.vendorName)?.finalScore;
+                                if (scoreVal == null) return null;
+                                const rounded = Math.round(scoreVal);
+                                const color = rounded >= 80 ? '#107e3e' : rounded >= 60 ? '#b45309' : '#dc2626';
+                                const label = rounded >= 80 ? 'Excellent' : rounded >= 60 ? 'Good' : 'Needs improvement';
+                                return (
+                                  <span
+                                    title={`Score: ${rounded}% — ${label}`}
+                                    style={{
+                                      display: 'inline-flex', alignItems: 'center', gap: 3,
+                                      fontSize: 11, fontWeight: 700, cursor: 'help',
+                                      color,
+                                      background: rounded >= 80 ? 'rgba(16,126,62,0.08)' : rounded >= 60 ? 'rgba(180,83,9,0.08)' : 'rgba(220,38,38,0.08)',
+                                      padding: '2px 8px', borderRadius: 4, marginBottom: 4,
+                                      border: `1px solid ${rounded >= 80 ? 'rgba(16,126,62,0.2)' : rounded >= 60 ? 'rgba(180,83,9,0.2)' : 'rgba(220,38,38,0.2)'}`,
+                                      whiteSpace: 'nowrap',
+                                      transition: 'transform 0.15s, box-shadow 0.15s',
+                                    }}
+                                  >
+                                    <TrendingUp size={11} />
+                                    Score: {rounded}%
+                                  </span>
+                                );
+                              })()}
                               <span className="rfq-modal__quotation-price">
                                 {formatAmount(convert(q.totalPrice, q.currency || rfq.currency, activeViewDisplayCurrency), activeViewDisplayCurrency)}
                                 {activeViewDisplayCurrency !== (q.currency || rfq.currency) && (
@@ -699,7 +852,8 @@ export default function RFQDetailModal({
                             </div>
                           </div>
                         );
-                      })}
+                      });
+                      })()}
                     </div>
                   ) : (
                     <div className="rfq-modal__no-vendors">
@@ -716,299 +870,9 @@ export default function RFQDetailModal({
                 </div>
               )}
 
-              {activeTab === 'evaluation' && (
-                <div className="rfq-eval-tab">
-                  {/* ── Header ─────────────────────────────── */}
-                  <div className="rfq-eval-tab__header">
-                    <div>
-                      <h3 className="rfq-eval-tab__title">Vendor Evaluation Scores</h3>
-                      <p className="rfq-eval-tab__subtitle">
-                        Weighted scores calculated from category evaluations. Business Requirements is informational and excluded from scoring.
-                      </p>
-                    </div>
-                    <div className="rfq-eval-tab__header-actions">
-                      {evalData && evalData.suppliers.length > 0 && (
-                        <button
-                          type="button"
-                          className={`rfq-eval-tab__btn ${showCharts ? 'rfq-eval-tab__btn--active' : 'rfq-eval-tab__btn--secondary'}`}
-                          onClick={() => setShowCharts(!showCharts)}
-                        >
-                          <BarChart3 size={14} />
-                          {showCharts ? 'Hide Charts' : 'Show Charts'}
-                        </button>
-                      )}
-                    </div>
-                  </div>
 
-                  {evalError && (
-                    <MessageStrip type="error" compact style={{ marginBottom: 12 }} onClose={() => setEvalError(null)}>
-                      {evalError}
-                    </MessageStrip>
-                  )}
 
-                  {evalLoading && (
-                    <div className="rfq-eval-tab__loading">
-                      <div className="rfq-eval-tab__spinner" />
-                      <span>Loading evaluation data…</span>
-                    </div>
-                  )}
 
-                  {/* ── Summary Bar ──────────────────────────── */}
-                  {evalData && evalData.suppliers.length > 0 && (
-                    <>
-                      <div className="rfq-eval-tab__summary">
-                        <div className="rfq-eval-tab__summary-stat">
-                          <span className="rfq-eval-tab__summary-value">{evalData.suppliers.length}</span>
-                          <span className="rfq-eval-tab__summary-label">Suppliers Evaluated</span>
-                        </div>
-                        <div className="rfq-eval-tab__summary-stat">
-                          <span className="rfq-eval-tab__summary-value">{evalData.summary.averageScore}%</span>
-                          <span className="rfq-eval-tab__summary-label">Average Score</span>
-                        </div>
-                        <div className="rfq-eval-tab__summary-stat rfq-eval-tab__summary-stat--recommended">
-                          <span className="rfq-eval-tab__summary-value">
-                            {evalData.summary.recommendedVendor ? evalData.summary.recommendedVendor.vendorName : '—'}
-                          </span>
-                          <span className="rfq-eval-tab__summary-label">
-                            <Trophy size={12} /> Recommended
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* ── Score Ranking ─────────────────────── */}
-                      <div className="rfq-eval-tab__ranking">
-                        <h4 className="rfq-eval-tab__section-title">Rankings</h4>
-                        {evalData.suppliers.map((s, idx) => {
-                          const grade = getScoreGrade(s.finalScore);
-                          const isSelected = selectedVendorId === s.vendorId;
-                          return (
-                            <Fragment key={s.vendorId}>
-                              <div
-                                className={`rfq-eval-tab__rank-row ${s.isRecommended ? 'rfq-eval-tab__rank-row--recommended' : ''} ${isSelected ? 'rfq-eval-tab__rank-row--selected' : ''}`}
-                                onClick={() => setSelectedVendorId(isSelected ? null : s.vendorId)}
-                                role="button"
-                                tabIndex={0}
-                                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedVendorId(isSelected ? null : s.vendorId); } }}
-                              >
-                                <span className="rfq-eval-tab__rank-num">
-                                  <span
-                                    className={`rfq-eval-tab__rank-badge ${idx === 0 ? 'rfq-eval-tab__rank-badge--gold' : idx === 1 ? 'rfq-eval-tab__rank-badge--silver' : idx === 2 ? 'rfq-eval-tab__rank-badge--bronze' : ''}`}
-                                  >
-                                    {s.rank}
-                                  </span>
-                                </span>
-                                <div className="rfq-eval-tab__rank-info">
-                                  <span className="rfq-eval-tab__rank-name">{s.vendorName}</span>
-                                  <span className="rfq-eval-tab__rank-email">{s.vendorEmail}</span>
-                                </div>
-                                <div className="rfq-eval-tab__rank-bar-track">
-                                  <div
-                                    className="rfq-eval-tab__rank-bar-fill"
-                                    style={{
-                                      width: `${Math.min(s.finalScore, 100)}%`,
-                                      backgroundColor: VENDOR_BAR_COLORS[idx % VENDOR_BAR_COLORS.length],
-                                    }}
-                                  />
-                                </div>
-                                <div className="rfq-eval-tab__rank-score-wrap">
-                                  <span className="rfq-eval-tab__rank-score" style={{ color: grade.color }}>
-                                    {s.finalScore}%
-                                  </span>
-                                  <span className="rfq-eval-tab__rank-grade" style={{ color: grade.color }}>
-                                    {grade.label}
-                                  </span>
-                                </div>
-                                {s.isRecommended && (
-                                  <span className="rfq-eval-tab__recommended-badge">
-                                    <Trophy size={12} /> Recommended
-                                  </span>
-                                )}
-                                <span className={`rfq-eval-tab__rank-expand-icon ${isSelected ? 'rfq-eval-tab__rank-expand-icon--open' : ''}`}>
-                                  <ChevronUp size={14} />
-                                </span>
-                              </div>
-                              {isSelected && (
-                                <div className="rfq-eval-tab__vendor-detail">
-                                  {(() => {
-                                    const vendor = s;
-                                    const vGrade = getScoreGrade(vendor.finalScore);
-                                    return (
-                                      <>
-                                        {/* Detail Header */}
-                                        <div className="rfq-eval-tab__detail-header">
-                                          <div className="rfq-eval-tab__detail-header-left">
-                                            <span
-                                              className={`rfq-eval-tab__rank-badge ${vendor.rank === 1 ? 'rfq-eval-tab__rank-badge--gold' : vendor.rank === 2 ? 'rfq-eval-tab__rank-badge--silver' : vendor.rank === 3 ? 'rfq-eval-tab__rank-badge--bronze' : ''}`}
-                                            >
-                                              {vendor.rank}
-                                            </span>
-                                            <div className="rfq-eval-tab__detail-vendor-info">
-                                              <span className="rfq-eval-tab__detail-vendor-name">
-                                                {vendor.vendorName}
-                                                {vendor.isRecommended && (
-                                                  <span className="rfq-eval-tab__recommended-badge" style={{ marginLeft: 8, fontSize: 10, padding: '2px 8px' }}>
-                                                    <Trophy size={10} /> Recommended
-                                                  </span>
-                                                )}
-                                              </span>
-                                              <span className="rfq-eval-tab__detail-vendor-email">{vendor.vendorEmail}</span>
-                                              <span className="rfq-eval-tab__detail-total-score" style={{ color: vGrade.color }}>
-                                                <strong>{vendor.finalScore}%</strong> — {vGrade.label}
-                                              </span>
-                                            </div>
-                                          </div>
-                                          <button
-                                            type="button"
-                                            className="rfq-eval-tab__detail-close"
-                                            onClick={() => setSelectedVendorId(null)}
-                                            title="Close vendor detail"
-                                          >
-                                            <X size={14} />
-                                          </button>
-                                        </div>
-
-                                        {/* Parameter / Category Score Cards */}
-                                        <div className="rfq-eval-tab__detail-cards">
-                                          {vendor.categoryScores.map((cs, csIdx) => {
-                                            const barColor = cs.percentage >= 80 ? '#16a34a' : cs.percentage >= 60 ? '#ca8a04' : '#dc2626';
-                                            return (
-                                              <div
-                                                key={cs.categoryId}
-                                                className="rfq-eval-tab__detail-card"
-                                                style={{ animationDelay: `${csIdx * 50}ms` }}
-                                              >
-                                                <div className="rfq-eval-tab__detail-card-top">
-                                                  <div className="rfq-eval-tab__detail-card-header">
-                                                    <span className="rfq-eval-tab__detail-card-name">{cs.categoryName}</span>
-                                                    <span className="rfq-eval-tab__detail-card-weight">{cs.weightage}% weightage</span>
-                                                  </div>
-                                                  <div className="rfq-eval-tab__detail-card-score">
-                                                    <span className="rfq-eval-tab__detail-card-percent" style={{ color: barColor }}>
-                                                      {cs.percentage}%
-                                                    </span>
-                                                    <span className="rfq-eval-tab__detail-card-earned">
-                                                      {cs.earned}/{cs.maxPossible}
-                                                    </span>
-                                                  </div>
-                                                </div>
-
-                                                <div className="rfq-eval-tab__detail-card-bar-track">
-                                                  <div
-                                                    className="rfq-eval-tab__detail-card-bar-fill"
-                                                    style={{
-                                                      width: `${Math.min(cs.percentage, 100)}%`,
-                                                      backgroundColor: barColor,
-                                                    }}
-                                                  />
-                                                </div>
-
-                                                {/* Weighted Score Contribution */}
-                                                <div className="rfq-eval-tab__detail-card-contribution">
-                                                  <span>Weighted contribution</span>
-                                                  <span className="rfq-eval-tab__detail-card-weighted">
-                                                    +{cs.weightedScore.toFixed(1)} pts
-                                                  </span>
-                                                </div>
-
-                                                {/* Sub-parameters (if any) */}
-                                                {cs.subParameterScores.length > 0 && (
-                                                  <div className="rfq-eval-tab__detail-card-subs">
-                                                    {cs.subParameterScores.map((sp) => {
-                                                      const spPct = sp.maxScore > 0 ? Math.round((sp.score / sp.maxScore) * 100) : 0;
-                                                      const spColor = spPct >= 80 ? '#16a34a' : spPct >= 60 ? '#ca8a04' : '#dc2626';
-                                                      return (
-                                                        <div key={sp.subParameterId} className="rfq-eval-tab__detail-sub">
-                                                          <div className="rfq-eval-tab__detail-sub-info">
-                                                            <span className="rfq-eval-tab__detail-sub-name">{sp.subParameterName}</span>
-                                                            <span className="rfq-eval-tab__detail-sub-score" style={{ color: spColor }}>
-                                                              {sp.score}/{sp.maxScore}
-                                                            </span>
-                                                          </div>
-                                                          <div className="rfq-eval-tab__detail-sub-track">
-                                                            <div
-                                                              className="rfq-eval-tab__detail-sub-fill"
-                                                              style={{
-                                                                width: `${spPct}%`,
-                                                                backgroundColor: spColor,
-                                                              }}
-                                                            />
-                                                          </div>
-                                                        </div>
-                                                      );
-                                                    })}
-                                                  </div>
-                                                )}
-                                              </div>
-                                            );
-                                          })}
-                                        </div>
-
-                                        {/* Summary Row */}
-                                        <div className="rfq-eval-tab__detail-summary">
-                                          <span className="rfq-eval-tab__detail-summary-label">Total Weighted Score</span>
-                                          <div className="rfq-eval-tab__detail-summary-bar">
-                                            <div
-                                              className="rfq-eval-tab__detail-summary-fill"
-                                              style={{ width: `${Math.min(vendor.totalWeightedScore, 100)}%` }}
-                                            />
-                                          </div>
-                                          <span className="rfq-eval-tab__detail-summary-value">
-                                            {vendor.totalWeightedScore.toFixed(1)}
-                                          </span>
-                                        </div>
-                                      </>
-                                    );
-                                  })()}
-                                </div>
-                              )}
-                            </Fragment>
-                          );
-                        })}
-                      </div>
-
-                      {/* ── Charts (toggled) ────────────────── */}
-                      {showCharts && evalData && (
-                        <div style={{ marginTop: 20 }}>
-                          <VendorComparisonCharts
-                            categories={evalData.categories.map((c) => ({
-                              id: c.id,
-                              name: c.name,
-                              weightage: c.weightage,
-                              enabled: c.enabled,
-                              subParameters: [],
-                              expanded: false,
-                            }))}
-                            vendorScores={Object.fromEntries(
-                              evalData.suppliers.map((s) => [
-                                s.vendorId,
-                                Object.fromEntries(
-                                  s.categoryScores.map((cs) => [
-                                    cs.categoryId,
-                                    Object.fromEntries(
-                                      cs.subParameterScores.map((sp) => [sp.subParameterId, sp.score])
-                                    ),
-                                  ])
-                                ),
-                              ])
-                            )}
-                            vendorNames={evalData.suppliers.map((s) => ({ id: s.vendorId, name: s.vendorName }))}
-                          />
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  {!evalLoading && evalData && evalData.suppliers.length === 0 && (
-                    <div className="rfq-eval-tab__empty">
-                      <Percent size={32} />
-                      <p>No evaluation scores yet.</p>
-                      <p className="rfq-modal__hint-text">
-                        'Vendor scores are calculated automatically by the system when quotations are submitted. Scores will appear here once vendors submit their quotations.'
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
 
             <div className="rfq-modal__footer">

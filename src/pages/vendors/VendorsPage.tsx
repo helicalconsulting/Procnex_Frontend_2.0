@@ -394,8 +394,8 @@ export default function VendorsPage() {
           'Backend is running old code (no delete route). Stop it (Ctrl+C) and run: cd Heliflow_Client_Backend && npm run dev';
       } else if (msg.includes('Transaction already closed') || msg.includes('timeout')) {
         msg = 'Delete timed out (slow database). Please try again — it usually works on the second attempt.';
-      } else if (msg.includes('purchase orders or invoices')) {
-        msg = 'This vendor has purchase orders or invoices. Turn off Active instead of deleting.';
+      } else if (msg.includes('purchase orders') || msg.includes('invoices') || msg.includes('contracts')) {
+        msg = 'This vendor has purchase orders, invoices, or contracts. Turn off Active instead of deleting.';
       }
       setDeleteError(msg);
       setPageMsg(msg);

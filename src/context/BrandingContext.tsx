@@ -51,6 +51,10 @@ function writeCachedTitle(title: string): void {
 interface BrandingContextType {
   /** Company display name (defaults to "Heliflow") */
   companyName: string;
+  /** Company phone number from branding settings */
+  companyPhone: string | null;
+  /** Company email from branding settings */
+  companyEmail: string | null;
   /** Logo URL (defaults to built-in logo) */
   logoUrl: string | null;
   /** Favicon URL */
@@ -76,7 +80,7 @@ const BrandingContext = createContext<BrandingContextType | undefined>(undefined
 // ─── Defaults ───────────────────────────────────────────────
 
 const DEFAULT_PRIMARY = '#0a6ed1';
-const DEFAULT_NAME = 'Heliflow';
+const DEFAULT_NAME = 'Procnex';
 
 // ─── Color shade generation ─────────────────────────────────
 
@@ -220,6 +224,8 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
 
   const value: BrandingContextType = {
     companyName: profile?.companyName || DEFAULT_NAME,
+    companyPhone: profile?.companyPhone || null,
+    companyEmail: profile?.companyEmail || null,
     logoUrl: profile?.logoUrl || null,
     faviconUrl: profile?.faviconUrl || null,
     primaryColor: profile?.primaryColor || DEFAULT_PRIMARY,

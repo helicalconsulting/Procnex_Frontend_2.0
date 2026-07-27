@@ -100,14 +100,17 @@ export default function DesktopWindow({
     setSize({ w: defaultWidth, h: defaultHeight });
   }, [open, defaultWidth, defaultHeight]);
 
-  // ── Focus first focusable element on open ──
+  // ── Focus element inside body on open (preventing focus on top bar header buttons) ──
   useEffect(() => {
     if (!open || minimized) return;
     const id = setTimeout(() => {
       const el = windowRef.current;
       if (!el) return;
-      const first = el.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
-      first?.focus();
+      const bodyEl = el.querySelector<HTMLElement>('.dw-body');
+      const firstInBody = bodyEl?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
+      if (firstInBody) {
+        firstInBody.focus();
+      }
     }, 50);
     return () => clearTimeout(id);
   }, [open, minimized]);

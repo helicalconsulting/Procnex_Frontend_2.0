@@ -27,9 +27,12 @@ import {
   Landmark,
   FilePenLine,
   Download,
-  ExternalLink,
+  ShieldCheck,
+  Calendar,
+  Check,
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
+import { downloadDocument as _downloadDocument } from '../../utils/download';
 import './OnboardingQueuePage.css';
 
 type QueueStatus = 'pending' | 'approved' | 'rejected';
@@ -100,6 +103,35 @@ const STATUS_LABEL: Record<QueueStatus, string> = {
 function documentUrl(url: string): string {
   if (url.startsWith('http')) return url;
   return `${API_BASE.replace(/\/api$/, '')}${url}`;
+}
+
+const SIGNED_DOC_CSS = `body{font-family:Inter,'Segoe UI',Arial,sans-serif;padding:40px;line-height:1.7;color:#1a2332;max-width:800px;margin:0 auto}img{max-width:100%}h1,h2,h3{color:#0a1e3a}.signature-block{margin-top:32px;padding-top:20px;border-top:2px solid #e1e5eb}.parties{background:#f8fafc;padding:16px 20px;border-radius:8px;border:1px solid #e1e5eb;margin:16px 0}`;
+
+function buildSignedDocHtml(docType: string, content: string): string {
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>${docType} — Signed Agreement</title><style>${SIGNED_DOC_CSS}</style></head><body>${content}</body></html>`;
+}
+
+async function downloadDocument(docUrl: string, filename: string): Promise<void> {
+  return _downloadDocument(documentUrl(docUrl), filename);
+}
+
+function downloadSignedDocument(doc: VendorDocument): void {
+  const content = doc.contentSnapshot;
+  if (content) {
+    const fullHtml = buildSignedDocHtml(doc.documentType, content);
+    const blob = new Blob([fullHtml], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${doc.documentType.replace(/\s+/g, '_')}_Signed_Agreement.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } else {
+    // Fallback: download from API URL
+    downloadDocument(doc.publicUrl, doc.documentType + '_' + doc.originalName);
+  }
 }
 
 export default function OnboardingQueuePage() {
@@ -662,6 +694,9 @@ export default function OnboardingQueuePage() {
                           <button type="button" className="oq-icon-btn" onClick={() => window.open(documentUrl(doc.publicUrl), '_blank', 'noopener,noreferrer')} title="View document">
                             <Eye size={15} />
                           </button>
+                          <button type="button" className="oq-icon-btn" onClick={() => downloadDocument(doc.publicUrl, doc.originalName)} title="Download document" aria-label="Download document">
+                            <Download size={15} />
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -692,6 +727,9 @@ export default function OnboardingQueuePage() {
                               <Eye size={15} />
                             </button>
                           )}
+                          <button type="button" className="oq-icon-btn" onClick={() => downloadSignedDocument(doc)} title="Download signed agreement" aria-label="Download signed agreement">
+                            <Download size={15} />
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -703,65 +741,99 @@ export default function OnboardingQueuePage() {
         </div>
       )}
 
-      {/* ─── Signed Agreement Preview Modal ─── */}
+      {/* ═══════════════════════════════════════════════════════════
+          Signed Agreement Preview Modal — Enterprise Redesign
+          ═══════════════════════════════════════════════════════════ */}
       {signedPreviewDoc && (
-        <div className="oq-modal-backdrop" onClick={() => setSignedPreviewDoc(null)}>
-          <div className="oq-modal oq-modal--docs" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 800 }}>
-            <div className="oq-modal__header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#107e3e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
-                    {signedPreviewDoc.documentType} — Signed Agreement
-                  </h3>
-                  <p style={{ margin: '2px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>
-                    Signed on {new Date(signedPreviewDoc.signedAt || signedPreviewDoc.uploadedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                    {signedPreviewDoc.signedBy ? ` by ${signedPreviewDoc.signedBy}` : ''}
-                  </p>
+        <div className="oq-signed-modal-backdrop" onClick={() => setSignedPreviewDoc(null)}>
+          <div className="oq-signed-modal" onClick={(e) => e.stopPropagation()}>
+            {/* ── Sticky Header ── */}
+            <div className="oq-signed-modal__header">
+              <div className="oq-signed-modal__header-left">
+                <div className="oq-signed-modal__header-icon">
+                  <ShieldCheck size={22} />
+                </div>
+                <div className="oq-signed-modal__header-info">
+                  <div className="oq-signed-modal__header-top">
+                    <h3 className="oq-signed-modal__title">
+                      {signedPreviewDoc.documentType === 'MNDA' ? 'Mutual Non-Disclosure Agreement' : 'Non-Disclosure Agreement'}
+                    </h3>
+                    <span className="oq-signed-modal__status-badge">
+                      <Check size={12} />
+                      Signed
+                    </span>
+                  </div>
+                  <div className="oq-signed-modal__meta">
+                    <Calendar size={12} />
+                    <div className="oq-signed-modal__meta-signers">
+                      <span className="oq-signed-modal__meta-signer">
+                        <span className="oq-signed-modal__meta-signer-party">Company</span>
+                        <span>{signedPreviewDoc.companySignatoryName || 'Company Representative'}</span>
+                        {signedPreviewDoc.companySignedAt && (
+                          <span className="oq-signed-modal__meta-signer-date">
+                            {new Date(signedPreviewDoc.companySignedAt).toLocaleDateString('en-IN', {
+                              day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                            })}
+                          </span>
+                        )}
+                      </span>
+                      <span className="oq-signed-modal__meta-sep">|</span>
+                      <span className="oq-signed-modal__meta-signer">
+                        <span className="oq-signed-modal__meta-signer-party">Vendor</span>
+                        <span>{signedPreviewDoc.vendorSignatoryName || signedPreviewDoc.signedBy || 'Vendor Representative'}</span>
+                        {(signedPreviewDoc.vendorSignedAt || signedPreviewDoc.signedAt) && (
+                          <span className="oq-signed-modal__meta-signer-date">
+                            {new Date(signedPreviewDoc.vendorSignedAt || signedPreviewDoc.signedAt!).toLocaleDateString('en-IN', {
+                              day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                            })}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div className="oq-signed-modal__header-actions">
                 <button
                   type="button"
-                  className="oq-modal__btn oq-modal__btn--secondary"
+                  className="oq-signed-modal__btn-download"
                   onClick={() => {
-                    const fullHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${signedPreviewDoc.documentType}</title><style>body{font-family:Arial,sans-serif;padding:40px;line-height:1.6;color:#333;max-width:800px;margin:0 auto}img{max-width:100%}</style></head><body>${signedPreviewDoc.contentSnapshot}</body></html>`;
-                    const blob = new Blob([fullHtml], { type: 'text/html' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `${signedPreviewDoc.documentType.replace(/\s+/g, '_')}_Agreement.html`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }}
-                  style={{ padding: '6px 12px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                >
-                  <Download size={13} /> Download
-                </button>
-                <button
-                  type="button"
-                  className="oq-modal__btn oq-modal__btn--primary"
-                  onClick={() => {
-                    const win = window.open('', '_blank', 'noopener,noreferrer');
-                    if (win) {
-                      win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${signedPreviewDoc.documentType}</title><style>body{font-family:Arial,sans-serif;padding:40px;line-height:1.6;color:#333;max-width:800px;margin:0 auto}img{max-width:100%}</style></head><body>${signedPreviewDoc.contentSnapshot}</body></html>`);
-                      win.document.close();
+                    if (signedPreviewDoc.contentSnapshot) {
+                      const fullHtml = buildSignedDocHtml(signedPreviewDoc.documentType, signedPreviewDoc.contentSnapshot);
+                      const blob = new Blob([fullHtml], { type: 'text/html' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `${signedPreviewDoc.documentType.replace(/\s+/g, '_')}_Signed_Agreement.html`;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
                     }
                   }}
-                  style={{ padding: '6px 12px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}
                 >
-                  <ExternalLink size={13} /> Open in New Tab
+                  <Download size={14} />
+                  Download
                 </button>
-                <button type="button" className="oq-modal__close" onClick={() => setSignedPreviewDoc(null)} aria-label="Close">
-                  <X size={18} />
+                <button
+                  type="button"
+                  className="oq-signed-modal__btn-close"
+                  onClick={() => setSignedPreviewDoc(null)}
+                  aria-label="Close"
+                >
+                  <X size={20} />
                 </button>
               </div>
             </div>
-            <div className="oq-modal__body" style={{ padding: 0, background: '#fff' }}>
-              <div
-                style={{ padding: '32px 40px', maxWidth: 780, margin: '0 auto', fontFamily: 'Arial,sans-serif', fontSize: 14, lineHeight: 1.7, color: '#333', overflowY: 'auto', maxHeight: '60vh' }}
-                dangerouslySetInnerHTML={{ __html: signedPreviewDoc.contentSnapshot || '' }}
-              />
+
+            {/* ── Document Canvas ── */}
+            <div className="oq-signed-modal__body">
+              <div className="oq-signed-modal__canvas">
+                <div
+                  className="oq-signed-modal__content"
+                  dangerouslySetInnerHTML={{ __html: signedPreviewDoc.contentSnapshot || '' }}
+                />
+              </div>
             </div>
           </div>
         </div>

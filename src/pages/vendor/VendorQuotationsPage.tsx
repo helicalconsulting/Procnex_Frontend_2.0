@@ -14,7 +14,9 @@ import {
   ClipboardList, Search, ChevronDown, CheckCircle2,
   Clock, XCircle, TrendingUp, FileSpreadsheet, Shield, FileText,
   Eye, X, Minus, Maximize2, Minimize2, ChevronUp, ArrowRightLeft,
+  Download,
 } from 'lucide-react';
+import { downloadDocument } from '../../utils/download';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { CurrencyBadge, CurrencySelector, useCurrency } from '../../components/shared/CurrencyMaster';
@@ -46,6 +48,7 @@ interface VendorQuotation {
   leadTimeDays: number;
   paymentTerms: string;
   paymentPlanSnapshot?: Array<{ title: string; percentage: number }> | null;
+  customFieldValues?: Record<string, string | number>;
   status: QuotStatus;
   submittedAt: string;
   score?: number;
@@ -126,6 +129,7 @@ function mapRow(q: VendorQuotationRow): VendorQuotation {
     leadTimeDays: q.leadTimeDays ?? 0,
     paymentTerms: q.paymentTerms || '—',
     paymentPlanSnapshot: q.paymentPlanSnapshot ?? null,
+    customFieldValues: q.customFieldValues ?? undefined,
     status: statusMap[q.status] || 'PENDING',
     submittedAt: q.submittedAt.slice(0, 10),
     score: q.score ?? undefined,
@@ -172,23 +176,17 @@ export default function VendorQuotationsPage() {
   const [bidSecurityDocs, setBidSecurityDocs] = useState<Record<string, QuotationBidSecurity | null>>({});
   const [bidSecurityLoading, setBidSecurityLoading] = useState(false);
 
-  // Fetch bid security documents for quotations that require bid security
+  // Fetch bid security documents for all quotations
   useEffect(() => {
     if (quotations.length === 0) {
       setBidSecurityLoading(false);
       return;
     }
-    const quotWithBidSec = quotations.filter(q => q.bidSecurityRequired);
-    if (quotWithBidSec.length === 0) {
-      setBidSecurityLoading(false);
-      return;
-    }
-
     setBidSecurityLoading(true);
     const fetchDocs = async () => {
       const results: Record<string, QuotationBidSecurity | null> = {};
       await Promise.all(
-        quotWithBidSec.map(async (q) => {
+        quotations.map(async (q) => {
           try {
             const doc = await vendorPortalService.getBidSecurity(String(q.id));
             results[String(q.id)] = doc;
@@ -458,6 +456,8 @@ export default function VendorQuotationsPage() {
                         <Eye size={15} />
                       </button>
 
+
+
                       {/* Bid Bond indicator in collapsed header */}
                       {quot.bidSecurityRequired && (
                         <span style={{
@@ -616,6 +616,15 @@ export default function VendorQuotationsPage() {
                                 >
                                   {bidSecurityDocs[String(quot.id)]!.originalName}
                                 </a>
+                                <button
+                                  type="button"
+                                  onClick={() => downloadDocument(bidSecurityDocs[String(quot.id)]!.publicUrl, bidSecurityDocs[String(quot.id)]!.originalName)}
+                                  title="Download"
+                                  aria-label="Download bid bond document"
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--vendor-primary)', padding: '2px', display: 'inline-flex', alignItems: 'center', borderRadius: 3 }}
+                                >
+                                  <Download size={12} />
+                                </button>
                               </div>
                             ) : (
                               <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
@@ -698,7 +707,7 @@ function formatFileSize(bytes: number): string {
 function ViewVendorQuotationModal({
   quotation: q,
   rfqData,
-  bidSecurityDoc,
+  bidSecurityDoc: initialBidSecurityDoc,
   attachments,
   onClose,
 }: {
@@ -710,8 +719,27 @@ function ViewVendorQuotationModal({
 }) {
   const [modalState, setModalState] = useState<'open' | 'expanded' | 'minimized'>('open');
   const [activeTab, setActiveTab] = useState<VendorViewTab>('vendor');
+  const [bidSecurityDoc, setBidSecurityDoc] = useState<QuotationBidSecurity | null>(initialBidSecurityDoc);
   const { formatAmount, convert, companyDefaultCurrency } = useCurrency();
   const defCur = q.currency || companyDefaultCurrency || 'KES';
+
+  useEffect(() => {
+    setBidSecurityDoc(initialBidSecurityDoc);
+  }, [initialBidSecurityDoc]);
+
+  useEffect(() => {
+    if (bidSecurityDoc) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const doc = await vendorPortalService.getBidSecurity(String(q.id));
+        if (!cancelled && doc) setBidSecurityDoc(doc);
+      } catch {
+        // Ignored
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [q.id, bidSecurityDoc]);
 
   const isOpen = modalState === 'open';
   const isExpanded = modalState === 'expanded';
@@ -846,11 +874,42 @@ function ViewVendorQuotationModal({
                         </span>
                       </span>
                     </div>
-
-
-
-
                   </div>
+
+                  {/* ── Custom Field Values Section ── */}
+                  {(() => {
+                    const rfqDataCustomFields = (rfqData as any)?.customFields;
+                    const customFields = Array.isArray(rfqDataCustomFields) ? rfqDataCustomFields : [];
+                    const cfValues = q.customFieldValues || {};
+                    const hasCustomFields = customFields.length > 0;
+                    const hasCfValues = typeof cfValues === 'object' && !Array.isArray(cfValues) && Object.keys(cfValues).length > 0;
+
+                    if (!hasCustomFields || !hasCfValues) return null;
+
+                    return (
+                      <div className="quot-view-modal__custom-section">
+                        <div className="quot-view-modal__custom-section-header">
+                          <span className="quot-view-modal__custom-badge--simple">
+                            <span style={{ fontSize: 10, fontWeight: 700 }}>A</span>
+                          </span>
+                          <span>Additional Information</span>
+                        </div>
+                        <div className="rfq-modal__info-grid quot-view-modal__info-grid">
+                          {customFields.filter((cf: any) => cf.active !== false).map((cf: any) => {
+                            const val = cfValues[cf.id];
+                            if (val == null || val === '') return null;
+                            return (
+                              <div key={cf.id} className="rfq-modal__info-item">
+                                <span className="rfq-modal__info-label">{cf.fieldName}</span>
+                                <span className="rfq-modal__info-value">{String(val)}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                 </div>
               )}
 
@@ -999,15 +1058,28 @@ function ViewVendorQuotationModal({
                             </div>
                           )}
                           {bidSecurityDoc.publicUrl && (
-                            <a
-                              href={bidSecurityDoc.publicUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary-500)', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
-                            >
-                              <FileText size={13} />
-                              {bidSecurityDoc.originalName || 'Document'} ↗
-                            </a>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                              <a
+                                href={bidSecurityDoc.publicUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary-500)', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
+                              >
+                                <FileText size={13} />
+                                {bidSecurityDoc.originalName || 'Document'} ↗
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => downloadDocument(bidSecurityDoc.publicUrl, bidSecurityDoc.originalName || 'Document')}
+                                title="Download document"
+                                aria-label="Download document"
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary-500)', padding: '2px 4px', display: 'inline-flex', alignItems: 'center', borderRadius: 4, transition: 'background 0.15s' }}
+                                onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(10,110,209,0.08)'; }}
+                                onMouseOut={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                              >
+                                <Download size={13} />
+                              </button>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -1042,15 +1114,28 @@ function ViewVendorQuotationModal({
                               )}
                             </div>
                             {bidSecurityDoc.publicUrl && (
-                              <a
-                                href={bidSecurityDoc.publicUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary-500)', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none', marginTop: 6 }}
-                              >
-                                <FileText size={13} />
-                                {bidSecurityDoc.originalName || 'Bid Bond Document'} ↗
-                              </a>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                                <a
+                                  href={bidSecurityDoc.publicUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary-500)', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
+                                >
+                                  <FileText size={13} />
+                                  {bidSecurityDoc.originalName || 'Bid Bond Document'} ↗
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => downloadDocument(bidSecurityDoc.publicUrl, (bidSecurityDoc.originalName || 'Bid_Bond_Document'))}
+                                  title="Download document"
+                                  aria-label="Download document"
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary-500)', padding: '2px 4px', display: 'inline-flex', alignItems: 'center', borderRadius: 4, transition: 'background 0.15s' }}
+                                  onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(10,110,209,0.08)'; }}
+                                  onMouseOut={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                                >
+                                  <Download size={13} />
+                                </button>
+                              </div>
                             )}
                           </div>
                         </div>
@@ -1147,11 +1232,8 @@ function ViewVendorQuotationModal({
                       {attachments.map((att, idx) => {
                         const fileIcon = getFileIcon(att.originalName);
                         return (
-                          <a
+                          <div
                             key={att.id || idx}
-                            href={att.publicUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
                             style={{
                               display: 'flex',
                               alignItems: 'center',
@@ -1161,50 +1243,72 @@ function ViewVendorQuotationModal({
                               border: '1px solid var(--border)',
                               borderRadius: 'var(--radius-md)',
                               textDecoration: 'none',
-                              transition: 'box-shadow 0.15s, border-color 0.15s',
-                              cursor: 'pointer',
+                              cursor: 'default',
                             }}
-                            onMouseOver={e => { e.currentTarget.style.borderColor = 'var(--primary-300)'; e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.06)'; }}
-                            onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'none'; }}
                           >
-                            <span style={{ fontSize: 22, lineHeight: 1 }}>{fileIcon.icon}</span>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{
-                                fontSize: 13,
+                            <a
+                              href={att.publicUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 12,
+                                flex: 1,
+                                textDecoration: 'none',
+                                color: 'inherit',
+                              }}
+                            >
+                              <span style={{ fontSize: 22, lineHeight: 1 }}>{fileIcon.icon}</span>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{
+                                  fontSize: 13,
+                                  fontWeight: 600,
+                                  color: 'var(--text-primary)',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}>
+                                  {att.originalName}
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                                  <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                                    {formatFileSize(att.fileSize)}
+                                  </span>
+                                  {att.uploadedAt && (
+                                    <>
+                                      <span style={{ fontSize: 10, color: 'var(--text-placeholder)' }}>•</span>
+                                      <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                                        {new Date(att.uploadedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                      </span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                              <span style={{
+                                fontSize: 11,
                                 fontWeight: 600,
-                                color: 'var(--text-primary)',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
+                                color: 'var(--primary-500)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 2,
+                                flexShrink: 0,
                               }}>
-                                {att.originalName}
-                              </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
-                                <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-                                  {formatFileSize(att.fileSize)}
-                                </span>
-                                {att.uploadedAt && (
-                                  <>
-                                    <span style={{ fontSize: 10, color: 'var(--text-placeholder)' }}>•</span>
-                                    <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-                                      {new Date(att.uploadedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                                    </span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                            <span style={{
-                              fontSize: 11,
-                              fontWeight: 600,
-                              color: 'var(--primary-500)',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 2,
-                              flexShrink: 0,
-                            }}>
-                              Open ↗
-                            </span>
-                          </a>
+                                Open ↗
+                              </span>
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => downloadDocument(att.publicUrl, att.originalName)}
+                              title="Download document"
+                              aria-label="Download document"
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary-500)', padding: '6px', display: 'inline-flex', alignItems: 'center', borderRadius: 4, transition: 'background 0.15s', flexShrink: 0 }}
+                              onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(10,110,209,0.08)'; }}
+                              onMouseOut={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                            >
+                              <Download size={15} />
+                            </button>
+                          </div>
                         );
                       })}
                     </div>

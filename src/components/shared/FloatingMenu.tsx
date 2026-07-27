@@ -1,221 +1,209 @@
-import { useRef, useState, useEffect, useLayoutEffect, useCallback, type ReactNode, type RefObject } from 'react';
+import { useRef, useState, useLayoutEffect, useEffect, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
-import { useFloatingMenu, type UseFloatingMenuOptions } from './useFloatingMenu';
 
-// ─── Types ─────────────────────────────────────────────────
+type Placement = 'bottom-start' | 'bottom-end' | 'bottom' | 'top-start' | 'top-end' | 'top';
 
-export interface FloatingMenuProps {
-  /** Whether the menu is open */
-  open: boolean;
-  /** Callback to close the menu */
-  onClose: () => void;
-  /** Anchor element ref */
-  anchorRef: RefObject<HTMLElement | null>;
-  /** Menu content */
-  children: ReactNode;
-  /** Floating UI options */
-  options?: UseFloatingMenuOptions;
-  /**
-   * CSS class name(s) for the floating element.
-   * Default: 'floating-menu'
-   */
-  className?: string;
-  /**
-   * Additional inline styles for the floating element.
-   * Applied on top of default positioning styles.
-   */
-  style?: React.CSSProperties;
-  /**
-   * Whether to close on outside click. Default: true
-   */
-  closeOnOutsideClick?: boolean;
-  /**
-   * Whether to close on Escape key. Default: true
-   */
-  closeOnEscape?: boolean;
-  /**
-   * Optional aria-label for accessibility
-   */
-  ariaLabel?: string;
-  /**
-   * Optional role attribute. Default: 'dialog'
-   */
-  role?: string;
-  /**
-   * Z-index override. Default: 9999
-   */
-  zIndex?: number;
-  /**
-   * Animation style. 'fade' | 'slide' | 'none'. Default: 'slide'
-   */
-  animation?: 'fade' | 'slide' | 'none';
-  /**
-   * Minimum width of the floating element.
-   * Can be a CSS value like '240px' or a number.
-   */
-  minWidth?: string | number;
-  /**
-   * Width of the floating element.
-   * If not provided, inherits from content.
-   */
-  width?: string | number;
+export interface FloatingMenuOptions {
+  placement?: Placement;
+  offset?: number;
+  viewportPadding?: number;
+  preventFlip?: boolean;
 }
 
-// ─── Component ─────────────────────────────────────────────
+export interface FloatingMenuProps {
+  open: boolean;
+  onClose: () => void;
+  anchorRef: RefObject<HTMLElement | null>;
+  children: ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
+  closeOnOutsideClick?: boolean;
+  closeOnEscape?: boolean;
+  ariaLabel?: string;
+  role?: string;
+  zIndex?: number;
+  animation?: 'fade' | 'slide' | 'none';
+  width?: string | number;
+  minWidth?: string | number;
+  placement?: Placement;
+  offset?: number;
+  preventFlip?: boolean;
+  options?: FloatingMenuOptions;
+}
+
+function parsePlacement(p: Placement) {
+  const parts = p.split('-');
+  return { side: parts[0] as 'bottom' | 'top', align: parts[1] as 'start' | 'end' | undefined };
+}
 
 export default function FloatingMenu({
-  open,
-  onClose,
-  anchorRef,
-  children,
-  options = {},
-  className = 'floating-menu',
-  style: extraStyle,
-  closeOnOutsideClick = true,
-  closeOnEscape = true,
-  ariaLabel,
-  role = 'dialog',
-  zIndex,
-  animation = 'slide',
-  minWidth,
-  width,
+  open, onClose, anchorRef, children,
+  className = 'floating-menu', style: extraStyle,
+  closeOnOutsideClick = true, closeOnEscape = true,
+  ariaLabel, role = 'dialog', zIndex,
+  animation = 'slide', width, minWidth,
+  placement: directPlacement, offset: directOffset, preventFlip: directPreventFlip, options,
 }: FloatingMenuProps) {
   const panelRef = useRef<HTMLDivElement>(null);
-  const [refReady, setRefReady] = useState(false);
+  const posKeyRef = useRef('');
 
-  const { refs, floatingStyles, isPositioned, placement } = useFloatingMenu<HTMLElement>(
-    open,
-    {
-      ...options,
-      autoUpdate: true,
-    },
-    anchorRef.current,
-  );
+  const effectivePlacement: Placement = options?.placement ?? directPlacement ?? 'bottom-start';
+  const effectiveOffset: number = options?.offset ?? directOffset ?? 4;
+  const preventFlip: boolean = options?.preventFlip ?? directPreventFlip ?? false;
+  const { side, align } = parsePlacement(effectivePlacement);
 
-  // Sync the external anchorRef with Floating UI's reference.
-  // IMPORTANT: The reference is synced on EVERY render, NOT just when open.
-  // This ensures Floating UI ALWAYS has the correct reference element
-  // internally, so when open flips to true, the very first position
-  // computation uses the real trigger coordinates — not {top:0, left:0}.
-  //
-  // Without this, useFloating computes position during the first render
-  // with open=true using a null reference → returns {top:0, left:0} →
-  // the portal briefly appears at (0,0) before the layout effect syncs
-  // the reference and repositions it.
-  //
-  // refReady gates visibility: the portal stays hidden until both
-  // isPositioned AND refReady are true.
-  // Run when `open` changes: sync the reference (if not yet set) and flip refReady.
-  // The reference is synced on EVERY layout effect run (not just when `open=true`)
-  // so Floating UI always has the real trigger element internally. This prevents
-  // the initial render from computing position with a null reference → {top:0, left:0}.
+  const [pos, setPos] = useState<{ top: number; left: number; maxHeight?: number } | null>(null);
+  const ready = pos !== null;
+
+  // ── SYNCHRONOUS positioning before browser paint ────────
   useLayoutEffect(() => {
-    if (anchorRef.current) {
-      refs.setReference(anchorRef.current);
+    if (!open) {
+      setPos(null);
+      posKeyRef.current = '';
+      return;
     }
-    setRefReady(open);
-  }, [open, anchorRef]);
 
-  // Close on outside click
+    const anchor = anchorRef.current;
+    const panel = panelRef.current;
+    if (!anchor || !panel) return;
+
+    const ar = anchor.getBoundingClientRect();
+    const pw = panel.offsetWidth || 0;
+    const ph = panel.offsetHeight || 0;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const pad = options?.viewportPadding ?? 8;
+
+    const spaceBelow = vh - ar.bottom;
+    const spaceAbove = ar.top;
+
+    let chosenSide: 'bottom' | 'top' = side;
+    if (!preventFlip) {
+      if (side === 'bottom' && spaceBelow < 140 && spaceAbove > spaceBelow) {
+        chosenSide = 'top';
+      } else if (side === 'top' && spaceAbove < 140 && spaceBelow > spaceAbove) {
+        chosenSide = 'bottom';
+      }
+    }
+
+    let top: number;
+    let computedMaxHeight: number | undefined = undefined;
+
+    if (chosenSide === 'bottom') {
+      top = ar.bottom + effectiveOffset;
+      const avail = vh - top - pad;
+      if (ph > avail || avail < 280) {
+        computedMaxHeight = Math.max(100, avail);
+      }
+    } else {
+      top = ar.top - ph - effectiveOffset;
+      if (top < pad) {
+        top = pad;
+        computedMaxHeight = Math.max(100, ar.top - effectiveOffset - pad);
+      }
+    }
+
+    let left: number;
+    if (align === 'end') left = ar.right - pw;
+    else if (align === undefined) left = ar.left + ar.width / 2 - pw / 2;
+    else left = ar.left;
+    left = Math.max(pad, Math.min(left, vw - pw - pad));
+
+    const key = `${Math.round(top)}_${Math.round(left)}_${computedMaxHeight ? Math.round(computedMaxHeight) : 'auto'}`;
+    if (key !== posKeyRef.current) {
+      posKeyRef.current = key;
+      setPos({ top, left, maxHeight: computedMaxHeight });
+    }
+  }, [open, anchorRef, effectivePlacement, effectiveOffset, preventFlip, side, align, options?.viewportPadding]);
+
+  // ── Recompute on scroll / resize ─────────────────────────
+  useEffect(() => {
+    if (!open) return;
+    let raf: number;
+    const tick = () => {
+      setPos(null);
+      posKeyRef.current = '';
+    };
+    const onMove = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(tick); };
+    window.addEventListener('scroll', onMove, { capture: true, passive: true });
+    window.addEventListener('resize', onMove, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('scroll', onMove, { capture: true });
+      window.removeEventListener('resize', onMove);
+    };
+  }, [open]);
+
+  // ── Close on outside click ───────────────────────────────
   useEffect(() => {
     if (!open || !closeOnOutsideClick) return;
     const handler = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (
-        panelRef.current && !panelRef.current.contains(target) &&
-        anchorRef.current && !anchorRef.current.contains(target)
-      ) {
-        onClose();
-      }
+      const t = e.target as Node;
+      if (panelRef.current && !panelRef.current.contains(t) && anchorRef.current && !anchorRef.current.contains(t)) onClose();
     };
-    // Use mousedown for faster response
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [open, onClose, closeOnOutsideClick, anchorRef]);
 
-  // Close on Escape
+  // ── Close on Escape ──────────────────────────────────────
   useEffect(() => {
     if (!open || !closeOnEscape) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [open, onClose, closeOnEscape]);
 
-  // Set the floating element ref for Floating UI positioning
-  // Using the callback ref setter from Floating UI to avoid bypassing internal state
-  const setFloatingRef = useCallback((node: HTMLDivElement | null) => {
-    refs.setFloating(node);
-    (panelRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-  }, [refs.setFloating]);
+  if (!open) return null;
 
-  // Build animation style — placement-aware direction
-  const animationStyle: React.CSSProperties =
-    animation !== 'none' && isPositioned
-      ? {
-          animation: `floatingMenuIn 0.18s cubic-bezier(0.32, 0.72, 0, 1)`,
-          transformOrigin: placement.includes('top') ? 'bottom' : placement.includes('bottom') ? 'top' : 'center',
-        }
-      : {};
-
-  // Merge styles
-  const mergedStyle: React.CSSProperties = {
-    ...floatingStyles,
-    ...animationStyle,
-    ...extraStyle,
-    ...(zIndex ? { zIndex } : {}),
-    ...(minWidth ? { minWidth: typeof minWidth === 'number' ? `${minWidth}px` : minWidth } : {}),
-    ...(width ? { width: typeof width === 'number' ? `${width}px` : width } : {}),
-    // Hide until both Floating UI has positioned AND the reference is synced
-    // Prevents initial flash at {top:0, left:0} when Floating UI computes
-    // position before the reference is available.
-    visibility: isPositioned && refReady ? 'visible' : 'hidden',
-    // Apply border-radius and shadow from theme variables
+  // ── Build styles ─────────────────────────────────────────
+  const s: React.CSSProperties = {
+    position: 'fixed',
+    zIndex: zIndex ?? 9999,
+    maxHeight: '80vh',
+    opacity: ready ? 1 : 0,
+    pointerEvents: ready ? 'auto' : 'none',
     border: '1px solid var(--border)',
     borderRadius: 'var(--radius-lg)',
     boxShadow: 'var(--shadow-lg)',
     background: 'var(--surface-card)',
   };
 
-  if (!open) return null;
+  if (width !== undefined) s.width = typeof width === 'number' ? `${width}px` : width;
+  if (minWidth !== undefined) s.minWidth = typeof minWidth === 'number' ? `${minWidth}px` : minWidth;
+
+  if (pos) {
+    s.top = pos.top;
+    s.left = pos.left;
+    if (pos.maxHeight !== undefined) {
+      s.maxHeight = `${pos.maxHeight}px`;
+      s.overflowY = 'auto';
+    }
+  }
+
+  if (animation !== 'none' && ready) {
+    s.animation = `fi 0.15s cubic-bezier(0.32, 0.72, 0, 1)`;
+    s.transformOrigin = side === 'top' ? 'bottom' : 'top';
+  }
+
+  if (extraStyle) Object.assign(s, extraStyle);
 
   return createPortal(
-    <div
-      ref={setFloatingRef}
-      className={className}
-      style={mergedStyle}
-      role={role}
-      aria-label={ariaLabel}
-      onMouseDown={(e) => e.stopPropagation()}
-    >
+    <div ref={panelRef} className={className} style={s} role={role} aria-label={ariaLabel}
+      onMouseDown={(e) => e.stopPropagation()}>
       {children}
     </div>,
     document.body,
   );
 }
 
-// ─── Inject keyframe styles once ───────────────────────────
-
+// ─── Keyframes ─────────────────────────────────────────────
 let injected = false;
-function injectKeyframes() {
+function injectKF() {
   if (injected || typeof document === 'undefined') return;
   injected = true;
-  const style = document.createElement('style');
-  style.textContent = `
-    @keyframes floatingMenuIn {
-      from {
-        opacity: 0;
-        transform: translateY(-6px) scale(0.97);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-      }
-    }
-  `;
-  document.head.appendChild(style);
+  const st = document.createElement('style');
+  st.textContent = `@keyframes fi{from{opacity:0;transform:translateY(-4px) scale(0.97)}to{opacity:1;transform:translateY(0) scale(1)}}`;
+  document.head.appendChild(st);
 }
+injectKF();
 
-// Inject on module load
-injectKeyframes();

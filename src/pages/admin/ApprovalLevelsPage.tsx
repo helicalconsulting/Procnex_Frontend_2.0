@@ -31,6 +31,7 @@ import {
   Banknote,
 } from 'lucide-react';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
+import { CardSkeleton } from '../../components/shared/Skeleton';
 import { CurrencySelector, useCurrency, CurrencyBadge, formatCurrency } from '../../components/shared/CurrencyMaster';
 import '../../components/shared/CurrencyMaster.css';
 import './ApprovalLevelsPage.css';
@@ -113,7 +114,7 @@ const DEFAULT_ROLES = [
 
 const SYSTEM_LABELS: Record<SystemType, string> = {
   rfq: 'RFQ System',
-  heliflow: 'Heliflow System',
+  heliflow: 'Procnex System',
 };
 
 // ─── Mock Data ──────────────────────────────────────────────
@@ -299,7 +300,6 @@ export default function ApprovalLevelsPage() {
           {pageMsg}
         </MessageStrip>
       )}
-      {loading && <div className="alvl-page__loading">Loading approval levels…</div>}
       {/* Header */}
       <div className="alvl-page__header">
         <div className="alvl-page__header-left">
@@ -367,14 +367,17 @@ export default function ApprovalLevelsPage() {
           onClick={() => setActiveSystem('heliflow')}
         >
           <Zap size={15} />
-          Heliflow System
+          Procnex System
           <span className="alvl-system-toggle__sub">PO, AP, Payments & Sales</span>
         </button>
       </div>
 
       {/* Approval Chains */}
       <div className="alvl-chains">
-        {displayModules.map((mod) => {
+        {loading ? (
+          <CardSkeleton count={3} />
+        ) : (
+          displayModules.map((mod) => {
           const chain = grouped[mod] || [];
           const moduleDef = MODULE_BY_KEY[mod];
           const modSystem = moduleDef.system;
@@ -399,7 +402,7 @@ export default function ApprovalLevelsPage() {
                 {isDisabled ? (
                   <div className="alvl-chain-card__locked-badge">
                     <Lock size={13} />
-                    <span>{activeSystem === 'rfq' ? 'Heliflow Only' : 'RFQ Only'}</span>
+                    <span>{activeSystem === 'rfq' ? 'Procnex Only' : 'RFQ Only'}</span>
                   </div>
                 ) : (
                   <button className="alvl-chain-card__add-btn" onClick={() => openAddModal(mod)}>
@@ -490,7 +493,8 @@ export default function ApprovalLevelsPage() {
               )}
             </div>
           );
-        })}
+        })
+        )}
       </div>
 
       {/* Add/Edit Modal */}

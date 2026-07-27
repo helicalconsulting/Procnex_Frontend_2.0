@@ -1,0 +1,543 @@
+/* ═══════════════════════════════════════════════════════════
+   Purchase Order Document — Professional A4 Template
+   Used for: Print, PDF Download, Email Attachment
+   ═══════════════════════════════════════════════════════════ */
+
+.po-document {
+  background: #ffffff;
+  color: #1a1a2e;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 0;
+  max-width: 794px;  /* A4 width at 96dpi */
+  margin: 0 auto;
+}
+
+/* ── Header ──────────────────────────────────────────────── */
+
+.po-doc__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.po-doc__header-left {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.po-doc__logo {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+.po-doc__logo-placeholder {
+  width: 64px;
+  height: 64px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #059669, #047857);
+  color: #fff;
+  font-size: 28px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.po-doc__company-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0a2342;
+  margin: 0 0 4px 0;
+  line-height: 1.3;
+}
+
+.po-doc__company-detail {
+  font-size: 11px;
+  color: #475569;
+  margin: 1px 0;
+  line-height: 1.5;
+}
+
+.po-doc__header-right {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.po-doc__title-block {
+  margin-bottom: 10px;
+}
+
+.po-doc__title-label {
+  display: block;
+  font-size: 20px;
+  font-weight: 800;
+  color: #0a2342;
+  letter-spacing: 2px;
+  margin-bottom: 2px;
+}
+
+.po-doc__title-po-num {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #059669;
+  letter-spacing: 0.5px;
+}
+
+.po-doc__meta-table {
+  border-collapse: collapse;
+  margin-left: auto;
+}
+
+.po-doc__meta-table td {
+  padding: 2px 0 2px 16px;
+  font-size: 11px;
+}
+
+.po-doc__meta-label {
+  font-weight: 600;
+  color: #64748b;
+  text-align: right;
+}
+
+.po-doc__meta-value {
+  font-weight: 600;
+  color: #1a1a2e;
+  text-align: left;
+}
+
+/* ── Divider ─────────────────────────────────────────────── */
+
+.po-doc__divider {
+  height: 2px;
+  background: linear-gradient(90deg, #059669 0%, #d1d5db 100%);
+  margin: 16px 0;
+}
+
+/* ── Vendor & Ship To ────────────────────────────────────── */
+
+.po-doc__parties {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 18px;
+}
+
+.po-doc__party-box {
+  padding: 14px 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+
+.po-doc__party-heading {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #059669;
+  margin: 0 0 8px 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.po-doc__party-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0a2342;
+  margin: 0 0 4px 0;
+}
+
+.po-doc__party-detail {
+  font-size: 11px;
+  color: #475569;
+  margin: 1px 0;
+  line-height: 1.5;
+}
+
+/* ── PO Info Grid ────────────────────────────────────────── */
+
+.po-doc__info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+
+.po-doc__info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.po-doc__info-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #64748b;
+}
+
+.po-doc__info-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+/* ── Items Table ─────────────────────────────────────────── */
+
+.po-doc__table-wrap {
+  margin-bottom: 20px;
+  border: 1px solid #d1d5db;
+}
+
+.po-doc__items-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 10px;
+}
+
+/* ── Column widths set via colgroup (%) ──────────────────── */
+
+/* Header */
+.po-doc__items-table thead th {
+  background: #0a2342;
+  color: #ffffff;
+  padding: 11px 14px;
+  height: 46px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  text-align: left;
+  border-bottom: none;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+/* Body cells — ERP style: consistent height, equal padding */
+.po-doc__items-table tbody td {
+  padding: 11px 14px;
+  height: 46px;
+  border-bottom: 1px solid #e5e7eb;
+  vertical-align: middle;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  box-sizing: border-box;
+}
+
+.po-doc__items-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Light alternating rows (ERP standard) */
+.po-doc__items-table tbody tr:nth-child(even) td {
+  background: #f9fafb;
+}
+
+.po-doc__items-table tbody tr:hover td {
+  background: #f0fdf4;
+}
+
+/* ── Column Alignments ───────────────────────────────────── */
+
+/* # — center */
+.po-doc__th--no,
+.po-doc__td--no {
+  text-align: center;
+  font-weight: 600;
+  color: #6b7280;
+  font-size: 10px;
+}
+
+/* Description — left aligned, wraps */
+.po-doc__th--desc,
+.po-doc__td--desc {
+  text-align: left;
+  font-weight: 500;
+  color: #111827;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+/* Quantity — center */
+.po-doc__th--qty,
+.po-doc__td--qty {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: #111827;
+  font-size: 10px;
+}
+
+/* Unit — center */
+.po-doc__th--unit,
+.po-doc__td--unit {
+  text-align: center;
+  font-weight: 500;
+  color: #6b7280;
+  font-size: 10px;
+}
+
+/* Unit Price — right aligned (currency) */
+.po-doc__th--price,
+.po-doc__td--price {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: #111827;
+  font-size: 10px;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+/* Tax % — center */
+.po-doc__th--tax,
+.po-doc__td--tax {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  color: #6b7280;
+  font-size: 10px;
+}
+
+/* Disc % — center */
+.po-doc__th--disc,
+.po-doc__td--disc {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  color: #6b7280;
+  font-size: 10px;
+}
+
+/* Total — right aligned (currency, bold) */
+.po-doc__th--total,
+.po-doc__td--total {
+  text-align: right;
+  font-weight: 700;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  color: #0a2342;
+  font-size: 11px;
+}
+
+/* ── Totals ──────────────────────────────────────────────── */
+
+.po-doc__totals {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 18px;
+}
+
+.po-doc__totals-table {
+  width: 340px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.po-doc__total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  font-size: 11px;
+}
+
+.po-doc__total-row:nth-child(even) {
+  background: #f8fafc;
+}
+
+.po-doc__total-label {
+  font-weight: 600;
+  color: #475569;
+}
+
+.po-doc__total-value {
+  font-weight: 700;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  color: #1a1a2e;
+}
+
+.po-doc__total-value--negative {
+  color: #dc2626;
+}
+
+.po-doc__total-divider {
+  height: 1px;
+  background: #e2e8f0;
+  margin: 0 16px;
+}
+
+.po-doc__total-row--grand {
+  background: #0a2342;
+  padding: 12px 16px;
+  border-radius: 0 0 6px 6px;
+}
+
+.po-doc__total-label--grand {
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.po-doc__total-value--grand {
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+/* ── Notes ───────────────────────────────────────────────── */
+
+.po-doc__notes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.po-doc__notes-col {
+  padding: 12px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+
+.po-doc__notes-heading {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #059669;
+  margin: 0 0 6px 0;
+}
+
+.po-doc__notes-text {
+  font-size: 11px;
+  color: #475569;
+  margin: 0;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+/* ── Footer ──────────────────────────────────────────────── */
+
+.po-doc__footer {
+  margin-top: 24px;
+  text-align: center;
+}
+
+.po-doc__footer-divider {
+  height: 1px;
+  background: #e2e8f0;
+  margin-bottom: 10px;
+}
+
+.po-doc__footer-text {
+  font-size: 10px;
+  color: #64748b;
+  margin: 0 0 4px 0;
+  line-height: 1.5;
+}
+
+.po-doc__footer-generated {
+  font-size: 9px;
+  color: #94a3b8;
+  margin: 0;
+}
+
+/* ── Print Styles ────────────────────────────────────────── */
+
+@media print {
+  .po-document {
+    padding: 0;
+    max-width: 100%;
+    margin: 0;
+    font-size: 11px;
+  }
+
+  .po-doc__header {
+    margin-bottom: 14px;
+  }
+
+  .po-doc__logo {
+    width: 52px;
+    height: 52px;
+  }
+
+  .po-doc__logo-placeholder {
+    width: 52px;
+    height: 52px;
+    font-size: 22px;
+  }
+
+  .po-doc__company-name {
+    font-size: 16px;
+  }
+
+  .po-doc__title-label {
+    font-size: 18px;
+  }
+
+  .po-doc__items-table {
+    font-size: 10px;
+  }
+
+  .po-doc__items-table thead th {
+    padding: 8px 14px;
+    height: 40px;
+    font-size: 8px;
+  }
+
+  .po-doc__items-table tbody td {
+    padding: 8px 14px;
+    height: 40px;
+    font-size: 9px;
+  }
+
+  .po-doc__totals-table {
+    width: 300px;
+  }
+
+  .po-doc__total-value--grand {
+    font-size: 14px;
+  }
+
+  .po-doc__party-box,
+  .po-doc__info-grid,
+  .po-doc__notes-col {
+    break-inside: avoid;
+  }
+
+  .po-doc__table-wrap {
+    break-inside: auto;
+  }
+
+  .po-doc__items-table thead {
+    display: table-header-group;
+  }
+
+  .po-doc__items-table tbody tr {
+    break-inside: avoid;
+  }
+
+  .po-doc__footer {
+    position: running(footer);
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 15mm 20mm;
+  }
+}

@@ -22,12 +22,14 @@ import {
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyMaster';
+import { PageSkeleton, CardSkeleton } from '../../components/shared/Skeleton';
 import './CreateRFQPage.css';
 
 // ─── Types ──────────────────────────────────────────────────
 
 interface LineItem {
   id: number;
+  itemCode?: string;
   itemName: string;
   description: string;
   quantity: string;
@@ -226,7 +228,8 @@ export default function CreateRFQPage() {
       }
       if (rfq.lineItems.length > 0) {
         setItems(rfq.lineItems.map((item) => ({
-          id: item.id,
+          id: Number(item.id) || Date.now(),
+          itemCode: (item as any).itemCode || '',
           itemName: item.itemName,
           description: item.description,
           quantity: item.quantity,
@@ -427,13 +430,13 @@ export default function CreateRFQPage() {
 
   // Form state — Line Items
   const [items, setItems] = useState<LineItem[]>([
-    { id: 1, itemName: '', description: '', quantity: '', unit: '', expectedDate: '' },
+    { id: 1, itemCode: '', itemName: '', description: '', quantity: '', unit: '', expectedDate: '' },
   ]);
 
   const addItem = useCallback(() => {
     setItems((prev) => [
       ...prev,
-      { id: Date.now(), itemName: '', description: '', quantity: '', unit: '', expectedDate: '' },
+      { id: Date.now(), itemCode: '', itemName: '', description: '', quantity: '', unit: '', expectedDate: '' },
     ]);
   }, []);
 
@@ -534,6 +537,7 @@ export default function CreateRFQPage() {
       currency: companyDefaultCurrency,
       rfqType: rfqMode === 'TENDER' ? 'TENDER' : 'RFQ',
       items: validItems.map((i) => ({
+        itemCode: i.itemCode?.trim() || undefined,
         itemName: i.itemName.trim(),
         description: i.description.trim() || undefined,
         quantity: parseInt(i.quantity, 10) || 1,
@@ -713,21 +717,7 @@ export default function CreateRFQPage() {
   };
 
   if (loadingRfq) {
-    return (
-      <div className="create-rfq">
-        <div className="create-rfq__header">
-          <button className="create-rfq__back" onClick={() => navigate('/rfq')}>
-            <ArrowLeft size={18} />
-          </button>
-          <div className="create-rfq__header-text">
-            <h1>Loading RFQ…</h1>
-          </div>
-        </div>
-        <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-          Loading RFQ details…
-        </div>
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   return (
@@ -1243,10 +1233,11 @@ export default function CreateRFQPage() {
                 <thead>
                   <tr>
                     <th style={{ width: 44 }}>#</th>
-                    <th>Item Name *</th>
-                    <th>Description</th>
-                    <th style={{ width: 90 }}>Qty *</th>
-                    <th style={{ width: 100 }}>Unit</th>
+                    <th style={{ width: 120 }}>Item Code</th>
+                    <th style={{ width: 200 }}>Item Name *</th>
+                    <th style={{ width: 180 }}>Description</th>
+                    <th style={{ width: 130 }}>Qty *</th>
+                    <th style={{ width: 140 }}>Unit</th>
                     <th style={{ width: 150 }}>
                       <CalendarDays size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />
                       Expected Date
@@ -1259,6 +1250,14 @@ export default function CreateRFQPage() {
                     <tr key={item.id}>
                       <td>
                         <span className="create-rfq__row-num">{idx + 1}</span>
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          placeholder="e.g. ITM-001"
+                          value={item.itemCode || ''}
+                          onChange={(e) => updateItem(item.id, 'itemCode', e.target.value)}
+                        />
                       </td>
                       <td>
                         <input
@@ -1413,9 +1412,8 @@ export default function CreateRFQPage() {
                 <div style={{
                   marginTop: 12,
                   display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
+                  gridTemplateColumns: '2fr 1fr',
                   gap: 12,
-                  maxWidth: 500,
                 }}>
                   <div className="create-rfq__field">
                     <label className="create-rfq__label">Min Bid Security Value</label>
@@ -1427,7 +1425,7 @@ export default function CreateRFQPage() {
                         placeholder="e.g. 100000"
                         value={bidSecurityMinValue}
                         onChange={(e) => setBidSecurityMinValue(e.target.value)}
-                        style={{ flex: 1 }}
+                        style={{ flex: 1, minWidth: 0 }}
                       />
                       <CurrencySelector
                         value={bidSecurityMinCurrency}
@@ -1447,7 +1445,7 @@ export default function CreateRFQPage() {
                         placeholder="e.g. 90"
                         value={bidSecurityMinValidity}
                         onChange={(e) => setBidSecurityMinValidity(e.target.value)}
-                        style={{ flex: 1 }}
+                        style={{ flex: 1, minWidth: 0 }}
                       />
                       <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', flexShrink: 0 }}>Days</span>
                     </div>
@@ -1460,9 +1458,8 @@ export default function CreateRFQPage() {
                 <div style={{
                   marginTop: 12,
                   display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
+                  gridTemplateColumns: '2fr 1fr',
                   gap: 12,
-                  maxWidth: 500,
                 }}>
                   <div className="create-rfq__field">
                     <label className="create-rfq__label">Min Bid Bond Value</label>
@@ -1474,7 +1471,7 @@ export default function CreateRFQPage() {
                         placeholder="e.g. 500000"
                         value={bidBondMinValue}
                         onChange={(e) => setBidBondMinValue(e.target.value)}
-                        style={{ flex: 1 }}
+                        style={{ flex: 1, minWidth: 0 }}
                       />
                       <CurrencySelector
                         value={bidBondMinCurrency}
@@ -1494,7 +1491,7 @@ export default function CreateRFQPage() {
                         placeholder="e.g. 120"
                         value={bidBondMinValidity}
                         onChange={(e) => setBidBondMinValidity(e.target.value)}
-                        style={{ flex: 1 }}
+                        style={{ flex: 1, minWidth: 0 }}
                       />
                       <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', flexShrink: 0 }}>Days</span>
                     </div>
@@ -1541,9 +1538,7 @@ export default function CreateRFQPage() {
             <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 20 }}>
               Select the vendors you want to invite for this RFQ. They will receive a notification to submit their quotation.
             </p>
-            {vendorsLoading && (
-              <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Loading vendors…</p>
-            )}
+            {vendorsLoading && <CardSkeleton count={2} />}
             {!vendorsLoading && !department && (
               <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
                 Select a department in RFQ Details to see matching vendors.

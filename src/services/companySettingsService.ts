@@ -221,6 +221,8 @@ export interface CompanyProfile {
   updatedAt: string;
   // White Label / Branding fields
   companyName?: string | null;
+  companyPhone?: string | null;
+  companyEmail?: string | null;
   logoUrl?: string | null;
   faviconUrl?: string | null;
   primaryColor?: string | null;
@@ -232,6 +234,8 @@ export interface CompanyProfile {
 
 export interface UpdateBrandingPayload {
   companyName?: string;
+  companyPhone?: string;
+  companyEmail?: string;
   logoUrl?: string;
   faviconUrl?: string;
   primaryColor?: string;
@@ -876,6 +880,62 @@ async function apiDeleteDocumentTemplate(type: 'NDA' | 'MNDA'): Promise<void> {
   await apiRequest(`/company-settings/document-templates/${type}`, { method: 'DELETE' });
 }
 
+// ─── New Document Template API (ID-based, supports multiple per type) ──
+
+async function mockCreateDocumentTemplate(type: 'NDA' | 'MNDA', input: DocumentTemplateInput): Promise<DocumentTemplate> {
+  await new Promise(r => setTimeout(r, 200));
+  const newTemplate: DocumentTemplate = {
+    id: String(Date.now()), companyCode: 'HFL', type,
+    name: input.name,
+    content: input.content,
+    isActive: input.isActive ?? true, version: 1,
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+  };
+  MOCK_DOCUMENT_TEMPLATES.push(newTemplate);
+  return newTemplate;
+}
+
+async function apiCreateDocumentTemplate(type: 'NDA' | 'MNDA', input: DocumentTemplateInput): Promise<DocumentTemplate> {
+  const data = await apiRequest<{ template: DocumentTemplate }>('/company-settings/document-templates', {
+    method: 'POST',
+    body: JSON.stringify({ type, ...input }),
+  });
+  return data.template;
+}
+
+async function mockUpdateDocumentTemplateById(id: string, input: DocumentTemplateInput & { fileUrl?: string | null; fileName?: string | null; fileType?: string | null }): Promise<DocumentTemplate> {
+  await new Promise(r => setTimeout(r, 200));
+  const idx = MOCK_DOCUMENT_TEMPLATES.findIndex(t => t.id === id);
+  if (idx >= 0) {
+    MOCK_DOCUMENT_TEMPLATES[idx] = {
+      ...MOCK_DOCUMENT_TEMPLATES[idx],
+      ...input,
+      version: MOCK_DOCUMENT_TEMPLATES[idx].version + 1,
+      updatedAt: new Date().toISOString(),
+    };
+    return MOCK_DOCUMENT_TEMPLATES[idx];
+  }
+  throw new Error('Template not found');
+}
+
+async function apiUpdateDocumentTemplateById(id: string, input: DocumentTemplateInput & { fileUrl?: string | null; fileName?: string | null; fileType?: string | null }): Promise<DocumentTemplate> {
+  const data = await apiRequest<{ template: DocumentTemplate }>(`/company-settings/document-templates/by-id/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+  return data.template;
+}
+
+async function mockDeleteDocumentTemplateById(id: string): Promise<void> {
+  await new Promise(r => setTimeout(r, 150));
+  const idx = MOCK_DOCUMENT_TEMPLATES.findIndex(t => t.id === id);
+  if (idx >= 0) MOCK_DOCUMENT_TEMPLATES.splice(idx, 1);
+}
+
+async function apiDeleteDocumentTemplateById(id: string): Promise<void> {
+  await apiRequest(`/company-settings/document-templates/by-id/${id}`, { method: 'DELETE' });
+}
+
 // ─── Document Template File Upload ────────────────────────────
 
 async function mockUploadDocumentTemplateFile(type: string, file: File): Promise<{ fileUrl: string; fileName: string; fileType: string }> {
@@ -1256,6 +1316,9 @@ export const companySettingsService = {
   getDocumentTemplate: USE_MOCK ? mockGetDocumentTemplate : apiGetDocumentTemplate,
   saveDocumentTemplate: USE_MOCK ? mockSaveDocumentTemplate : apiSaveDocumentTemplate,
   deleteDocumentTemplate: USE_MOCK ? mockDeleteDocumentTemplate : apiDeleteDocumentTemplate,
+  createDocumentTemplate: USE_MOCK ? mockCreateDocumentTemplate : apiCreateDocumentTemplate,
+  updateDocumentTemplateById: USE_MOCK ? mockUpdateDocumentTemplateById : apiUpdateDocumentTemplateById,
+  deleteDocumentTemplateById: USE_MOCK ? mockDeleteDocumentTemplateById : apiDeleteDocumentTemplateById,
   uploadDocumentTemplateFile: USE_MOCK ? mockUploadDocumentTemplateFile : apiUploadDocumentTemplateFile,
   triggerDocumentOcr: USE_MOCK ? mockTriggerDocumentOcr : apiTriggerDocumentOcr,
   getDocumentOcrStatus: USE_MOCK ? mockGetDocumentOcrStatus : apiGetDocumentOcrStatus,
