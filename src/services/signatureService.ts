@@ -1,5 +1,5 @@
 import { USE_MOCK } from '../config/mock';
-import { apiRequest, authHeaders } from '../api/client';
+import { API_BASE, apiRequest, authHeaders } from '../api/client';
 
 export interface SavedSignature {
   id: number | string;
@@ -116,14 +116,14 @@ async function apiCreate(data: { name: string; dataUrl: string; type: 'drawn' | 
 }
 
 async function apiDelete(id: string | number): Promise<void> {
-  await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/signatures/${id}`, {
+  await fetch(`${API_BASE}/signatures/${id}`, {
     method: 'DELETE',
     headers: authHeaders(),
   });
 }
 
 async function apiSetDefault(id: string | number): Promise<void> {
-  await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/signatures/${id}/default`, {
+  await fetch(`${API_BASE}/signatures/${id}/default`, {
     method: 'PUT',
     headers: authHeaders(),
   });
