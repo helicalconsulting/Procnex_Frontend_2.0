@@ -741,104 +741,6 @@ export default function OnboardingQueuePage() {
         </div>
       )}
 
-      {/* ═══════════════════════════════════════════════════════════
-          Signed Agreement Preview Modal — Enterprise Redesign
-          ═══════════════════════════════════════════════════════════ */}
-      {signedPreviewDoc && (
-        <div className="oq-signed-modal-backdrop" onClick={() => setSignedPreviewDoc(null)}>
-          <div className="oq-signed-modal" onClick={(e) => e.stopPropagation()}>
-            {/* ── Sticky Header ── */}
-            <div className="oq-signed-modal__header">
-              <div className="oq-signed-modal__header-left">
-                <div className="oq-signed-modal__header-icon">
-                  <ShieldCheck size={22} />
-                </div>
-                <div className="oq-signed-modal__header-info">
-                  <div className="oq-signed-modal__header-top">
-                    <h3 className="oq-signed-modal__title">
-                      {signedPreviewDoc.documentType === 'MNDA' ? 'Mutual Non-Disclosure Agreement' : 'Non-Disclosure Agreement'}
-                    </h3>
-                    <span className="oq-signed-modal__status-badge">
-                      <Check size={12} />
-                      Signed
-                    </span>
-                  </div>
-                  <div className="oq-signed-modal__meta">
-                    <Calendar size={12} />
-                    <div className="oq-signed-modal__meta-signers">
-                      <span className="oq-signed-modal__meta-signer">
-                        <span className="oq-signed-modal__meta-signer-party">Company</span>
-                        <span>{signedPreviewDoc.companySignatoryName || 'Company Representative'}</span>
-                        {signedPreviewDoc.companySignedAt && (
-                          <span className="oq-signed-modal__meta-signer-date">
-                            {new Date(signedPreviewDoc.companySignedAt).toLocaleDateString('en-IN', {
-                              day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                            })}
-                          </span>
-                        )}
-                      </span>
-                      <span className="oq-signed-modal__meta-sep">|</span>
-                      <span className="oq-signed-modal__meta-signer">
-                        <span className="oq-signed-modal__meta-signer-party">Vendor</span>
-                        <span>{signedPreviewDoc.vendorSignatoryName || signedPreviewDoc.signedBy || 'Vendor Representative'}</span>
-                        {(signedPreviewDoc.vendorSignedAt || signedPreviewDoc.signedAt) && (
-                          <span className="oq-signed-modal__meta-signer-date">
-                            {new Date(signedPreviewDoc.vendorSignedAt || signedPreviewDoc.signedAt!).toLocaleDateString('en-IN', {
-                              day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                            })}
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="oq-signed-modal__header-actions">
-                <button
-                  type="button"
-                  className="oq-signed-modal__btn-download"
-                  onClick={() => {
-                    if (signedPreviewDoc.contentSnapshot) {
-                      const fullHtml = buildSignedDocHtml(signedPreviewDoc.documentType, signedPreviewDoc.contentSnapshot);
-                      const blob = new Blob([fullHtml], { type: 'text/html' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `${signedPreviewDoc.documentType.replace(/\s+/g, '_')}_Signed_Agreement.html`;
-                      document.body.appendChild(a);
-                      a.click();
-                      document.body.removeChild(a);
-                      URL.revokeObjectURL(url);
-                    }
-                  }}
-                >
-                  <Download size={14} />
-                  Download
-                </button>
-                <button
-                  type="button"
-                  className="oq-signed-modal__btn-close"
-                  onClick={() => setSignedPreviewDoc(null)}
-                  aria-label="Close"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-            </div>
-
-            {/* ── Document Canvas ── */}
-            <div className="oq-signed-modal__body">
-              <div className="oq-signed-modal__canvas">
-                <div
-                  className="oq-signed-modal__content"
-                  dangerouslySetInnerHTML={{ __html: signedPreviewDoc.contentSnapshot || '' }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {snapshotTarget && (
         <div className="oq-modal-backdrop" onClick={() => { setSnapshotTarget(null); setSnapshotData(null); }}>
           <div className="oq-modal oq-modal--docs" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 680 }}>
@@ -1009,10 +911,34 @@ export default function OnboardingQueuePage() {
                             <button
                               type="button"
                               className="oq-btn oq-btn--review"
-                              onClick={() => viewUrl && window.open(viewUrl, '_blank', 'noopener,noreferrer')}
+                              onClick={() => {
+                                const contentSnap = String(nda.contentSnapshot || '');
+                                if (contentSnap) {
+                                  setSignedPreviewDoc({
+                                    id: String(nda.id || ''),
+                                    vendorId: snapshotTarget?.id || '',
+                                    documentType: docType === 'MNDA' ? 'MNDA' : 'NDA',
+                                    originalName: `${docType === 'MNDA' ? 'MNDA' : 'NDA'} Signed Agreement`,
+                                    fileName: '',
+                                    publicUrl: viewUrl || '',
+                                    mimeType: 'text/html',
+                                    fileSize: 0,
+                                    status: 'VERIFIED',
+                                    uploadedAt: String(nda.signedAt || ''),
+                                    verifiedById: null,
+                                    verifiedAt: null,
+                                    rejectionReason: null,
+                                    contentSnapshot: contentSnap,
+                                    signedBy: signedBy || 'Vendor Representative',
+                                    signedAt: String(nda.signedAt || ''),
+                                  });
+                                } else if (viewUrl) {
+                                  window.open(documentUrl(viewUrl), '_blank', 'noopener,noreferrer');
+                                }
+                              }}
                               style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 20px', background: 'linear-gradient(180deg,#0a6ed1,#095cb0)', color: '#fff', border: 0, borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
                             >
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                              <Eye size={15} />
                               View Signed Agreement
                             </button>
                           </div>
@@ -1041,6 +967,104 @@ export default function OnboardingQueuePage() {
                   <p>No profile data available for this vendor.</p>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════
+          Signed Agreement Preview Modal — Enterprise Redesign
+          ═══════════════════════════════════════════════════════════ */}
+      {signedPreviewDoc && (
+        <div className="oq-signed-modal-backdrop" onClick={() => setSignedPreviewDoc(null)}>
+          <div className="oq-signed-modal" onClick={(e) => e.stopPropagation()}>
+            {/* ── Sticky Header ── */}
+            <div className="oq-signed-modal__header">
+              <div className="oq-signed-modal__header-left">
+                <div className="oq-signed-modal__header-icon">
+                  <ShieldCheck size={22} />
+                </div>
+                <div className="oq-signed-modal__header-info">
+                  <div className="oq-signed-modal__header-top">
+                    <h3 className="oq-signed-modal__title">
+                      {signedPreviewDoc.documentType === 'MNDA' ? 'Mutual Non-Disclosure Agreement' : 'Non-Disclosure Agreement'}
+                    </h3>
+                    <span className="oq-signed-modal__status-badge">
+                      <Check size={12} />
+                      Signed
+                    </span>
+                  </div>
+                  <div className="oq-signed-modal__meta">
+                    <Calendar size={12} />
+                    <div className="oq-signed-modal__meta-signers">
+                      <span className="oq-signed-modal__meta-signer">
+                        <span className="oq-signed-modal__meta-signer-party">Company</span>
+                        <span>{signedPreviewDoc.companySignatoryName || 'Company Representative'}</span>
+                        {signedPreviewDoc.companySignedAt && (
+                          <span className="oq-signed-modal__meta-signer-date">
+                            {new Date(signedPreviewDoc.companySignedAt).toLocaleDateString('en-IN', {
+                              day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                            })}
+                          </span>
+                        )}
+                      </span>
+                      <span className="oq-signed-modal__meta-sep">|</span>
+                      <span className="oq-signed-modal__meta-signer">
+                        <span className="oq-signed-modal__meta-signer-party">Vendor</span>
+                        <span>{signedPreviewDoc.vendorSignatoryName || signedPreviewDoc.signedBy || 'Vendor Representative'}</span>
+                        {(signedPreviewDoc.vendorSignedAt || signedPreviewDoc.signedAt) && (
+                          <span className="oq-signed-modal__meta-signer-date">
+                            {new Date(signedPreviewDoc.vendorSignedAt || signedPreviewDoc.signedAt!).toLocaleDateString('en-IN', {
+                              day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                            })}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="oq-signed-modal__header-actions">
+                <button
+                  type="button"
+                  className="oq-signed-modal__btn-download"
+                  onClick={() => {
+                    if (signedPreviewDoc.contentSnapshot) {
+                      const fullHtml = buildSignedDocHtml(signedPreviewDoc.documentType, signedPreviewDoc.contentSnapshot);
+                      const blob = new Blob([fullHtml], { type: 'text/html' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `${signedPreviewDoc.documentType.replace(/\s+/g, '_')}_Signed_Agreement.html`;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                    }
+                  }}
+                >
+                  <Download size={14} />
+                  Download
+                </button>
+                <button
+                  type="button"
+                  className="oq-signed-modal__btn-close"
+                  onClick={() => setSignedPreviewDoc(null)}
+                  aria-label="Close"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* ── Document Canvas ── */}
+            <div className="oq-signed-modal__body">
+              <div className="oq-signed-modal__canvas">
+                <div
+                  className="oq-signed-modal__content"
+                  dangerouslySetInnerHTML={{ __html: signedPreviewDoc.contentSnapshot || '' }}
+                />
+              </div>
             </div>
           </div>
         </div>

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { procurementService, type VendorInvitationRow, type VendorSearchResult } from '../../services/procurementService';
-import { companySettingsService, type RequiredDocument, type DocumentTemplate } from '../../services/companySettingsService';
+import { companySettingsService, type RequiredDocument, type DocumentTemplate, type Category } from '../../services/companySettingsService';
 import PhoneInput from '../../components/shared/PhoneInput';
 import VendorSuggestDropdown from '../../components/shared/VendorSuggestDropdown';
 import VendorDetailModal from '../../components/shared/VendorDetailModal';
@@ -35,6 +35,7 @@ import {
   EyeOff,
   ShieldCheck,
   AlertTriangle,
+  Tag,
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import DesktopWindow from '../../components/shared/DesktopWindow';
@@ -89,6 +90,21 @@ export default function NewOnboardingPage() {
   const [contactPerson, setContactPerson] = useState('');
   const [contactCountryCode, setContactCountryCode] = useState('+254');
   const [contactPhone, setContactPhone] = useState('');
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+
+  // Load vendor categories from Company Settings
+  useEffect(() => {
+    (async () => {
+      try {
+        const cats = await companySettingsService.listCategories();
+        setCategories(cats.filter((c) => c.isActive !== false));
+      } catch {
+        // ignore
+      }
+    })();
+  }, []);
 
   const [notes, setNotes] = useState('');
   const [items, setItems] = useState<Array<{ itemCode: string; itemName: string }>>([]);
@@ -613,6 +629,8 @@ export default function NewOnboardingPage() {
         contactEmail: contactEmail.trim(),
         contactPerson: contactPerson.trim() || undefined,
         contactPhone: contactPhone.trim() ? `${contactCountryCode}${contactPhone.trim()}` : undefined,
+        category: selectedCategory.trim() || undefined,
+        categoryId: selectedCategoryId || undefined,
         notes: notes.trim() || undefined,
         items: validItems.length > 0 ? validItems : undefined,
         documentIds: selectedDocIds.length > 0 ? selectedDocIds : undefined,
@@ -626,6 +644,8 @@ export default function NewOnboardingPage() {
       setContactEmail('');
       setContactPerson('');
       setContactPhone('');
+      setSelectedCategory('');
+      setSelectedCategoryId(null);
       setNotes('');
       setItems([]);
       setSelectedDocIds([]);
@@ -728,6 +748,12 @@ export default function NewOnboardingPage() {
                 <span className="onb-invite-item__contact">
                   <Users size={11} />
                   {inv.contactPerson}
+                </span>
+              )}
+              {inv.category && (
+                <span className="onb-invite-item__contact" style={{ color: 'var(--primary-500)', fontWeight: 600 }}>
+                  <Tag size={11} />
+                  {inv.category}
                 </span>
               )}
             </div>
@@ -965,6 +991,36 @@ export default function NewOnboardingPage() {
                     Please enter a valid phone number (7 to 15 digits)
                   </span>
                 )}
+              </div>
+
+              <div className="onb-form-field">
+                <label className="onb-form-field__label">Vendor Category</label>
+                <div className="onb-form-field__input-wrap">
+                  <Tag size={16} className="onb-form-field__icon" />
+                  <select
+                    value={selectedCategoryId || (categories.some((c) => c.name === selectedCategory) ? categories.find((c) => c.name === selectedCategory)?.id : '')}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const catObj = categories.find((c) => c.id === val);
+                      if (catObj) {
+                        setSelectedCategory(catObj.name);
+                        setSelectedCategoryId(catObj.id);
+                      } else {
+                        setSelectedCategory('');
+                        setSelectedCategoryId(null);
+                      }
+                    }}
+                    className="onb-form-field__input"
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <option value="">Select Vendor Category (optional)</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div className="onb-form-field">
@@ -1606,6 +1662,12 @@ export default function NewOnboardingPage() {
                     <div>
                       <div className="onb-detail-info-grid__label">Contact Person</div>
                       <div className="onb-detail-info-grid__value">{detailInvitation.contactPerson}</div>
+                    </div>
+                  )}
+                  {detailInvitation.category && (
+                    <div>
+                      <div className="onb-detail-info-grid__label">Vendor Category</div>
+                      <div className="onb-detail-info-grid__value">{detailInvitation.category}</div>
                     </div>
                   )}
                   <div>

@@ -74,6 +74,8 @@ export interface VendorInvitationRow {
   contactEmail: string;
   contactPerson?: string;
   contactPhone?: string;
+  category?: string | null;
+  categoryId?: string | null;
   notes?: string;
   sentAt: string;
   expiresAt: string;
@@ -89,6 +91,8 @@ export interface SendInvitationPayload {
   contactEmail: string;
   contactPerson?: string;
   contactPhone?: string;
+  category?: string;
+  categoryId?: string;
   notes?: string;
   items?: Array<{ itemCode: string; itemName: string }>;
   documentIds?: string[];
@@ -240,6 +244,8 @@ async function apiSendInvitation(payload: SendInvitationPayload): Promise<SendIn
         contactEmail: payload.contactEmail,
         contactPerson: payload.contactPerson,
         contactPhone: payload.contactPhone,
+        category: payload.category,
+        categoryId: payload.categoryId,
         notes: payload.notes,
         items: payload.items,
         documentIds: payload.documentIds,
