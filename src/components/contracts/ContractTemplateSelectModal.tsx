@@ -4,9 +4,10 @@ import { companySettingsService, type ContractTemplate } from '../../services/co
 import { contractService } from '../../services/contractService';
 import { MessageStrip } from '../shared/MessageStrip';
 import { CurrencySelector } from '../shared/CurrencyMaster';
-import { FileText, Clock, Check, AlertTriangle, Eye, Maximize2, Minimize2, X } from 'lucide-react';
+import { FileText, Clock, Check, AlertTriangle, Eye, Maximize2, Minimize2, X, FileCheck2, Sparkles } from 'lucide-react';
 import { downloadContractAsPdf } from '../../utils/pdfDownload';
 import '../../pages/contracts/ContractDetailPage.css';
+import './ContractTemplateSelectModal.css';
 
 const CONTRACT_TYPE_LABELS: Record<string, string> = {
   PURCHASE_CONTRACT: 'Purchase Contract',
@@ -14,6 +15,14 @@ const CONTRACT_TYPE_LABELS: Record<string, string> = {
   AMC: 'AMC',
   BINDING_CONTRACT: 'Binding Contract',
   CUSTOM: 'Custom',
+};
+
+const CONTRACT_TYPE_COLORS: Record<string, { bg: string; color: string }> = {
+  PURCHASE_CONTRACT: { bg: 'rgba(10,110,209,0.12)', color: '#0a6ed1' },
+  SERVICE_CONTRACT: { bg: 'rgba(16,126,62,0.12)', color: '#107e3e' },
+  AMC:              { bg: 'rgba(139,92,246,0.12)', color: '#8b5cf6' },
+  BINDING_CONTRACT: { bg: 'rgba(217,119,6,0.12)',  color: '#d97706' },
+  CUSTOM:           { bg: 'rgba(100,116,139,0.12)', color: '#64748b' },
 };
 
 export interface ContractTemplateSelectModalProps {
@@ -97,34 +106,37 @@ export default function ContractTemplateSelectModal({
   };
 
   const formatType = (type: string) => CONTRACT_TYPE_LABELS[type] || type.replace(/_/g, ' ');
+  const getTypeStyle = (type: string) => CONTRACT_TYPE_COLORS[type] || CONTRACT_TYPE_COLORS['CUSTOM'];
 
   return (
-    <div className="ctr-modal-backdrop" onClick={() => !generating && onClose()}>
-      <div className="sap-dialog" onClick={e => e.stopPropagation()} style={{ maxWidth: 540 }}>
-        <div className="sap-dialog__header">
-          <div className="sap-dialog__title-wrap">
-            <div className="sap-dialog__icon-badge sap-dialog__icon-badge--primary">
-              <FileText size={18} />
-            </div>
-            <div className="sap-dialog__title-group">
-              <h3 className="sap-dialog__title">Select Contract Template</h3>
-              <span className="sap-dialog__subtitle">Contract Generation</span>
-            </div>
+    <div className="ctsm-backdrop" onClick={() => !generating && onClose()}>
+      <div className="ctsm-dialog" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="ctsm-header">
+          <div className="ctsm-header__icon">
+            <FileCheck2 size={20} />
+          </div>
+          <div className="ctsm-header__text">
+            <h3 className="ctsm-header__title">Select Contract Template</h3>
+            <p className="ctsm-header__subtitle">Contract Generation</p>
           </div>
           <button
             type="button"
-            className="sap-dialog__close-btn"
+            className="ctsm-close-btn"
             onClick={onClose}
             disabled={generating}
             aria-label="Close"
           >
-            <X size={15} />
+            <X size={16} />
           </button>
         </div>
 
-        <div className="sap-dialog__body">
-          <p style={{ margin: 0, fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-            Choose an active contract template to generate a vendor contract for <strong>{vendorName}</strong> ({rfqNumber}).
+        {/* Body */}
+        <div className="ctsm-body">
+          <p className="ctsm-desc">
+            Choose an active template to generate a vendor contract for{' '}
+            <strong>{vendorName}</strong>{' '}
+            <span className="ctsm-desc__rfq">({rfqNumber})</span>
           </p>
 
           {winningQuotationMissing && (
@@ -139,62 +151,86 @@ export default function ContractTemplateSelectModal({
             </MessageStrip>
           )}
 
+          {/* Template List */}
           {winningQuotationMissing ? (
-            <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-secondary)' }}>
-              <AlertTriangle size={24} style={{ marginBottom: 8, color: 'var(--warning-500, #d97706)' }} />
-              <p style={{ margin: 0, fontSize: 14 }}>
+            <div className="ctsm-empty">
+              <AlertTriangle size={28} className="ctsm-empty__icon ctsm-empty__icon--warn" />
+              <p className="ctsm-empty__text">
                 Please accept a quotation first and ensure a winning vendor is selected before generating a contract.
               </p>
             </div>
           ) : loading ? (
-            <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-secondary)' }}>
-              <Clock size={20} /> Loading templates…
+            <div className="ctsm-empty">
+              <Clock size={22} className="ctsm-empty__icon" />
+              <p className="ctsm-empty__text">Loading templates…</p>
             </div>
           ) : templates.length === 0 ? (
-            <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-secondary)' }}>
-              No active contract templates found. Ask an admin to create templates in Company Settings → Contracts.
+            <div className="ctsm-empty">
+              <FileText size={28} className="ctsm-empty__icon" />
+              <p className="ctsm-empty__text">No active contract templates found.<br />Ask an admin to create templates in <strong>Company Settings → Contracts</strong>.</p>
             </div>
           ) : (
-            <div className="ctr-template-select-list">
-              {templates.map(t => (
-                <div
-                  key={t.type}
-                  className={`ctr-template-select-item${selectedType === t.type ? ' ctr-template-select-item--selected' : ''}`}
-                >
-                  <button
-                    type="button"
-                    className="ctr-template-select-item__clickable"
-                    onClick={() => setSelectedType(t.type)}
-                    disabled={generating}
+            <div className="ctsm-template-list">
+              {templates.map(t => {
+                const isSelected = selectedType === t.type;
+                const typeStyle = getTypeStyle(t.type);
+                return (
+                  <div
+                    key={t.type}
+                    className={`ctsm-template-card${isSelected ? ' ctsm-template-card--selected' : ''}`}
+                    onClick={() => !generating && setSelectedType(t.type)}
+                    role="radio"
+                    aria-checked={isSelected}
+                    tabIndex={0}
+                    onKeyDown={e => e.key === 'Enter' && !generating && setSelectedType(t.type)}
                   >
-                    <div className="ctr-template-select-item__main">
-                      <span className="ctr-template-select-item__name">{t.name}</span>
-                      <span className="ctr-template-select-item__type">{formatType(t.type)}</span>
+                    {/* Radio dot */}
+                    <div className={`ctsm-radio${isSelected ? ' ctsm-radio--checked' : ''}`}>
+                      {isSelected && <div className="ctsm-radio__dot" />}
+                    </div>
+
+                    {/* Type badge icon */}
+                    <div className="ctsm-template-card__icon" style={{ background: typeStyle.bg, color: typeStyle.color }}>
+                      <FileText size={16} />
+                    </div>
+
+                    {/* Text */}
+                    <div className="ctsm-template-card__info">
+                      <span className="ctsm-template-card__name">{t.name}</span>
+                      <span className="ctsm-template-card__type" style={{ color: typeStyle.color }}>
+                        {formatType(t.type)}
+                      </span>
                       {t.description && (
-                        <span className="ctr-template-select-item__desc">{t.description}</span>
+                        <span className="ctsm-template-card__desc">{t.description}</span>
                       )}
                     </div>
-                    {selectedType === t.type && <Check size={18} />}
-                  </button>
-                  <button
-                    type="button"
-                    className="ctr-template-preview-btn"
-                    onClick={() => setPreviewTemplate(t)}
-                    title={`Preview ${t.name}`}
-                    disabled={generating}
-                  >
-                    <Eye size={16} />
-                  </button>
-                </div>
-              ))}
+
+                    {/* Check / Preview */}
+                    <div className="ctsm-template-card__actions">
+                      {isSelected && <Check size={16} className="ctsm-template-card__check" />}
+                      <button
+                        type="button"
+                        className="ctsm-preview-btn"
+                        onClick={e => { e.stopPropagation(); setPreviewTemplate(t); }}
+                        title={`Preview ${t.name}`}
+                        disabled={generating}
+                      >
+                        <Eye size={15} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
 
-          {/* Contract Value & Currency Inputs */}
+          {/* Contract Value & Currency */}
           {!loading && templates.length > 0 && !winningQuotationMissing && (
-            <div className="pr-field" style={{ marginTop: 12 }}>
-              <label>Contract Value *</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div className="ctsm-value-section">
+              <label className="ctsm-label">
+                Contract Value <span className="ctsm-label__required">*</span>
+              </label>
+              <div className="ctsm-value-row">
                 <input
                   type="number"
                   placeholder="Enter contract value"
@@ -203,9 +239,9 @@ export default function ContractTemplateSelectModal({
                   disabled={generating}
                   min={0}
                   step={0.01}
-                  style={{ flex: 1 }}
+                  className="ctsm-input"
                 />
-                <div style={{ width: 140 }}>
+                <div className="ctsm-currency">
                   <CurrencySelector
                     value={currency}
                     onChange={setCurrency}
@@ -213,49 +249,64 @@ export default function ContractTemplateSelectModal({
                   />
                 </div>
               </div>
-              <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2, display: 'block' }}>
-                This value will determine the maximum PO amount that can be created against this contract.
+              <span className="ctsm-hint">
+                This value determines the maximum PO amount that can be created against this contract.
               </span>
             </div>
           )}
         </div>
 
-        <div className="sap-dialog__footer">
-          <button className="pr-btn pr-btn--outline" onClick={onClose} disabled={generating}>Cancel</button>
+        {/* Footer */}
+        <div className="ctsm-footer">
+          <button className="ctsm-btn ctsm-btn--ghost" onClick={onClose} disabled={generating}>
+            Cancel
+          </button>
           <button
-            className="pr-btn pr-btn--primary"
+            className="ctsm-btn ctsm-btn--primary"
             onClick={handleGenerate}
             disabled={generating || !selectedType || templates.length === 0 || winningQuotationMissing || !contractValue || Number(contractValue) <= 0}
-            title={winningQuotationMissing ? 'Select a winning quotation first' : !contractValue || Number(contractValue) <= 0 ? 'Enter a valid contract value' : undefined}
-            style={winningQuotationMissing ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
+            title={
+              winningQuotationMissing ? 'Select a winning quotation first'
+              : !contractValue || Number(contractValue) <= 0 ? 'Enter a valid contract value'
+              : undefined
+            }
           >
-            {generating ? 'Generating…' : winningQuotationMissing ? 'Select Winning Quotation First' : 'Generate Contract'}
+            {generating ? (
+              <>
+                <span className="ctsm-spinner" />
+                Generating…
+              </>
+            ) : winningQuotationMissing ? (
+              'Select Winning Quotation First'
+            ) : (
+              <>
+                <Sparkles size={15} />
+                Generate Contract
+              </>
+            )}
           </button>
         </div>
       </div>
 
       {/* Preview Modal */}
       {previewTemplate && (
-        <div className="ctr-modal-backdrop" onClick={() => { setPreviewTemplate(null); setPreviewFullscreen(false); }}>
+        <div className="ctsm-backdrop ctsm-backdrop--preview" onClick={() => { setPreviewTemplate(null); setPreviewFullscreen(false); }}>
           <div
-            className={`sap-dialog${previewFullscreen ? ' ctr-award-modal--preview-fullscreen' : ''}`}
+            className={`ctsm-dialog ctsm-dialog--preview${previewFullscreen ? ' ctsm-dialog--fullscreen' : ''}`}
             onClick={e => e.stopPropagation()}
-            style={{ maxWidth: previewFullscreen ? '96vw' : 720 }}
           >
-            <div className="sap-dialog__header">
-              <div className="sap-dialog__title-wrap">
-                <div className="sap-dialog__icon-badge sap-dialog__icon-badge--primary">
-                  <FileText size={18} />
-                </div>
-                <div className="sap-dialog__title-group">
-                  <h3 className="sap-dialog__title">{previewTemplate.name}</h3>
-                  <span className="sap-dialog__subtitle">Template Preview</span>
-                </div>
+            <div className="ctsm-header">
+              <div className="ctsm-header__icon">
+                <FileText size={20} />
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div className="ctsm-header__text">
+                <h3 className="ctsm-header__title">{previewTemplate.name}</h3>
+                <p className="ctsm-header__subtitle">Template Preview</p>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
                 <button
                   type="button"
-                  className="sap-dialog__close-btn"
+                  className="ctsm-close-btn"
                   onClick={() => setPreviewFullscreen(!previewFullscreen)}
                   title={previewFullscreen ? 'Minimize' : 'Full Screen'}
                 >
@@ -263,7 +314,7 @@ export default function ContractTemplateSelectModal({
                 </button>
                 <button
                   type="button"
-                  className="sap-dialog__close-btn"
+                  className="ctsm-close-btn"
                   onClick={() => { setPreviewTemplate(null); setPreviewFullscreen(false); }}
                   title="Close"
                 >
@@ -271,28 +322,32 @@ export default function ContractTemplateSelectModal({
                 </button>
               </div>
             </div>
-            <div className="sap-dialog__body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+            <div className="ctsm-body" style={{ maxHeight: '65vh', overflowY: 'auto' }}>
               {previewTemplate.content ? (
                 <div
                   className="ctr-template-preview-content"
                   dangerouslySetInnerHTML={{ __html: previewTemplate.content }}
                 />
               ) : (
-                <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                  No content available for this template.
+                <div className="ctsm-empty">
+                  <FileText size={28} className="ctsm-empty__icon" />
+                  <p className="ctsm-empty__text">No content available for this template.</p>
                 </div>
               )}
             </div>
-            <div className="sap-dialog__footer">
-              <button className="pr-btn pr-btn--outline" onClick={() => { setPreviewTemplate(null); setPreviewFullscreen(false); }}>Close</button>
+            <div className="ctsm-footer">
+              <button className="ctsm-btn ctsm-btn--ghost" onClick={() => { setPreviewTemplate(null); setPreviewFullscreen(false); }}>
+                Close
+              </button>
               <button
-                className="pr-btn pr-btn--primary"
+                className="ctsm-btn ctsm-btn--primary"
                 onClick={() => {
                   setSelectedType(previewTemplate.type);
                   setPreviewTemplate(null);
                   setPreviewFullscreen(false);
                 }}
               >
+                <Check size={15} />
                 Select This Template
               </button>
             </div>

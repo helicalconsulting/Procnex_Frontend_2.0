@@ -272,6 +272,10 @@ export default function ContractDetailPage() {
     if (searchParams.get('action') === 'sign' && data && !showSignModal) {
       setShowSignModal(true);
     }
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'orders') {
+      setActiveTab('purchase-orders');
+    }
   }, [searchParams, data]);
 
   // ─── Handlers (moved BEFORE early returns to obey Rules of Hooks) ─

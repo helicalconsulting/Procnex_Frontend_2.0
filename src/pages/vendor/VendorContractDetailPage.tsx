@@ -456,17 +456,11 @@ export default function VendorContractDetailPage() {
                 <span>Executed Contract Document</span>
               </div>
               <div className="vcd-doc-preview__toolbar-right">
-                <button
-                  className="vcd-doc-preview__toggle"
-                  onClick={() => setFullPreview(!fullPreview)}
-                >
-                  {fullPreview ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-                  <span>{fullPreview ? 'Collapse' : 'Full View'}</span>
-                </button>
                 <button className="vcd-doc-preview__toggle" onClick={handleDownload}>
                   <Download size={15} /> <span>Download</span>
                 </button>
               </div>
+
             </div>
             <div className="vcd-doc-preview__body">
               {contract.contentSnapshot ? (

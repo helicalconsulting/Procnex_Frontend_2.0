@@ -695,8 +695,7 @@ export default function ContractsPage() {
                             <button
                               className="ctr-table__action-btn"
                               title="Create Purchase Order"
-                              onClick={() => handleCreatePO(r.id)}
-                              disabled={operating === r.id}
+                              onClick={() => navigate(`/contracts/${r.id}?tab=orders`)}
                             ><Plus size={15} /></button>
                           )}
 
