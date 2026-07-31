@@ -68,6 +68,13 @@ const ReportsPage = lazy(() => import("./pages/reports/ReportsPage"));
 const CompanySettingsPage = lazy(
   () => import("./pages/admin/CompanySettingsPage"),
 );
+const CustomFormBuilderPage = lazy(
+  () => import("./pages/admin/CustomFormBuilderPage"),
+);
+const FormResponsesPage = lazy(
+  () => import("./pages/admin/FormResponsesPage"),
+);
+const FormsPage = lazy(() => import("./pages/forms/FormsPage"));
 const ContractsPage = lazy(() => import("./pages/contracts/ContractsPage"));
 const ContractDetailPage = lazy(() => import("./pages/contracts/ContractDetailPage"));
 const CreateContractPage = lazy(() => import("./pages/contracts/CreateContractPage"));
@@ -193,6 +200,17 @@ export default function App() {
                     path="/admin/company-settings"
                     element={page(CompanySettingsPage)}
                   />
+                  <Route element={<ProtectedRoute allowedRoles={[...ADMIN_ACCESS_ROLES]} />}>
+                    <Route
+                      path="/admin/custom-form-builder"
+                      element={page(CustomFormBuilderPage)}
+                    />
+                    <Route
+                      path="/admin/form-responses"
+                      element={page(FormResponsesPage)}
+                    />
+                  </Route>
+                  <Route path="/forms" element={page(FormsPage)} />
                   <Route path="/documents" element={page(DocumentsPage)} />
                   <Route
                     path="/notifications"

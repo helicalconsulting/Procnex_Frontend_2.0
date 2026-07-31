@@ -22,6 +22,9 @@ import {
   Receipt,
   UserCircle,
   FileSignature,
+  ChevronLeft,
+  ChevronRight,
+  FormInput,
 } from 'lucide-react';
 import { useBranding } from '../../context/BrandingContext';
 import heliflowLogo from '../../assets/heliflow.png';
@@ -71,6 +74,9 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   'My Invoices': <Receipt size={19} />,
   'Agreements': <FileSignature size={19} />,
   'My Profile': <UserCircle size={19} />,
+  'Custom Form Builder': <FormInput size={19} />,
+  Forms: <ClipboardList size={19} />,
+  'Form Responses': <BarChart3 size={19} />,
 };
 
 // ─── Component ──────────────────────────────────────────────
@@ -78,14 +84,14 @@ const ICON_MAP: Record<string, React.ReactNode> = {
 interface SidebarProps {
   collapsed: boolean;
   mobileOpen: boolean;
-  onCollapse: () => void;
+  onToggle: () => void;
   onMobileClose: () => void;
 }
 
 export default function Sidebar({
   collapsed,
   mobileOpen,
-  onCollapse,
+  onToggle,
   onMobileClose,
 }: SidebarProps) {
   const location = useLocation();
@@ -109,7 +115,7 @@ export default function Sidebar({
       title: 'Procurement',
       items: [
         ...menuItems
-          .filter((item) => ['rfq', 'quotations', 'contracts', 'vendor-rfqs', 'vendor-quotations', 'purchase-requisitions'].includes(item.id))
+          .filter((item) => ['rfq', 'quotations', 'contracts', 'vendor-rfqs', 'vendor-quotations', 'purchase-requisitions', 'forms'].includes(item.id))
           .map((item) => ({
             label: item.label,
             icon: ICON_MAP[item.label] || <FileText size={19} />,
@@ -257,7 +263,6 @@ export default function Sidebar({
                     to={item.path}
                     className={`sidebar__item ${isActive ? 'sidebar__item--active' : ''}`}
                     onClick={() => {
-                      if (!collapsed) onCollapse();
                       onMobileClose();
                     }}
                     onMouseEnter={prefetch(item.path)}
@@ -271,8 +276,6 @@ export default function Sidebar({
             </div>
           ))}
         </nav>
-
-
       </aside>
     </>
   );

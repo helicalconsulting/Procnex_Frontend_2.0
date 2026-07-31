@@ -141,7 +141,7 @@ export const NAVIGATION_MENU: MenuItem[] = [
 
   {
     id: 'approvals',
-    label: 'PO Approval',
+    label: 'Purchase Order Approval',
     path: '/approvals',
     roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.FINANCE_MANAGER, RoleName.FINANCE_APPROVER],
   },
@@ -201,6 +201,22 @@ export const NAVIGATION_MENU: MenuItem[] = [
     roles: [RoleName.SUPER_ADMIN, RoleName.FINANCE_MANAGER],
   },
   {
+    id: 'forms',
+    label: 'Forms',
+    path: '/forms',
+    roles: [
+      RoleName.PROCUREMENT_MANAGER,
+      RoleName.FINANCE_MANAGER,
+      RoleName.FINANCE_APPROVER,
+      'User',
+      'Employee',
+      'Participant',
+      'Approver',
+      'RFQ Creator',
+      'Standard User',
+    ],
+  },
+  {
     id: 'admin',
     label: 'Administration',
     path: '/admin',
@@ -210,6 +226,8 @@ export const NAVIGATION_MENU: MenuItem[] = [
       { id: 'roles', label: 'Roles & Permissions', path: '/admin/roles-permissions', roles: [...ADMIN_ACCESS_ROLES] },
       { id: 'approval-levels', label: 'Approval Levels', path: '/admin/approval-levels', roles: [...ADMIN_ACCESS_ROLES] },
       { id: 'company-settings', label: 'Company Settings', path: '/admin/company-settings', roles: [...ADMIN_ACCESS_ROLES, RoleName.PROCUREMENT_MANAGER] },
+      { id: 'custom-form-builder', label: 'Custom Form Builder', path: '/admin/custom-form-builder', roles: [...ADMIN_ACCESS_ROLES] },
+      { id: 'form-responses', label: 'Form Responses', path: '/admin/form-responses', roles: [...ADMIN_ACCESS_ROLES] },
     ],
   },
 ];
@@ -312,6 +330,13 @@ function filterMenuByPermissions(
         ? filterMenuByPermissions(item.children, permissions, roles)
         : undefined;
 
+      if (item.id === 'forms') {
+        const isAdminUser = isAdmin(roles);
+        const isVendorUser = isVendor(roles);
+        if (isAdminUser || isVendorUser) return null;
+        return { ...item, children };
+      }
+
       if (item.id === 'admin') {
         const hasAdminRole = item.roles.some((r) => roles.includes(r));
         if (!children?.length && !hasAdminRole) return null;
@@ -336,11 +361,20 @@ export function getAccessibleMenuItems(
   roles: string[],
   permissions?: UserPermissionsMap | null
 ): MenuItem[] {
+  const isAdminUser = isAdmin(roles);
+  const isVendorUser = isVendor(roles);
+
   if (permissions && Object.keys(permissions).length > 0) {
     return filterMenuByPermissions(NAVIGATION_MENU, permissions, roles);
   }
 
-  return NAVIGATION_MENU.filter((item) => item.roles.some((r) => roles.includes(r))).map((item) => ({
+  return NAVIGATION_MENU.filter((item) => {
+    if (item.id === 'forms') {
+      if (isAdminUser || isVendorUser) return false;
+      return true;
+    }
+    return item.roles.some((r) => roles.includes(r));
+  }).map((item) => ({
     ...item,
     children: item.children?.filter((child) => child.roles.some((r) => roles.includes(r))),
   }));

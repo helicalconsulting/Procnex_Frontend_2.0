@@ -1,0 +1,224 @@
+/* Form Publish Success Modal - SAP Fiori Style */
+
+.fpsm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100010;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fpsmFadeIn 0.25s ease-out forwards;
+}
+
+@keyframes fpsmFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.fpsm-modal {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 8px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+  padding: 28px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  animation: fpsmPopIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fpsmPopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.fpsm-close-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.fpsm-close-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+/* Success Header */
+.fpsm-success-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+}
+
+.fpsm-icon-ring {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(16, 185, 129, 0.12);
+  border: 2px solid rgba(16, 185, 129, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.fpsm-check-icon {
+  color: var(--success-500, #10b981);
+}
+
+.fpsm-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.fpsm-form-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary-500, #0a6ed1);
+  margin: 0;
+}
+
+/* Details Card */
+.fpsm-details-card {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 16px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 6px);
+}
+
+.fpsm-detail-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.fpsm-detail-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  background: rgba(10, 110, 209, 0.1);
+  color: var(--primary-500, #0a6ed1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.fpsm-detail-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.fpsm-detail-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.fpsm-detail-val {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Prompt Box */
+.fpsm-prompt-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(139, 92, 246, 0.08);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: var(--radius-md, 6px);
+  color: #8b5cf6;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.fpsm-sparkle {
+  color: #8b5cf6;
+}
+
+/* Action Buttons */
+.fpsm-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.fpsm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: var(--radius-md, 6px);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.fpsm-btn--primary {
+  background: var(--primary-500, #0a6ed1);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(10, 110, 209, 0.25);
+  white-space: nowrap;
+}
+
+.fpsm-btn--primary:hover {
+  background: var(--primary-600, #0854a0);
+}
+
+.fpsm-btn--secondary {
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.fpsm-btn--secondary:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+}

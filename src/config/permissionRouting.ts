@@ -16,6 +16,8 @@ export const ROUTE_PERMISSION_RULES: Array<{ prefix: string; rule: RoutePermissi
   { prefix: '/admin/roles-permissions', rule: { module: 'Roles & Permissions', action: 'canView' } },
   { prefix: '/admin/company-settings', rule: { module: 'User Management', action: 'canView' } },
   { prefix: '/admin/approval-levels', rule: { module: 'Approval Levels', action: 'canView' } },
+  { prefix: '/admin/custom-form-builder', rule: { module: 'User Management', action: 'canView' } },
+  { prefix: '/admin/form-responses', rule: { module: 'User Management', action: 'canView' } },
   { prefix: '/dashboard', rule: { module: 'Dashboard', action: 'canView' } },
   { prefix: '/rfq', rule: { module: 'RFQ', action: 'canView' } },
   { prefix: '/quotations', rule: { module: 'Quotations', action: 'canView' } },
@@ -57,6 +59,8 @@ export const MENU_ITEM_PERMISSIONS: Record<string, RoutePermissionRule> = {
   roles: { module: 'Roles & Permissions', action: 'canView' },
   'approval-levels': { module: 'Approval Levels', action: 'canView' },
   'company-settings': { module: 'User Management', action: 'canView' },
+  'custom-form-builder': { module: 'User Management', action: 'canView' },
+  'form-responses': { module: 'User Management', action: 'canView' },
 };
 
 export function getRoutePermissionRule(pathname: string): RoutePermissionRule | null {

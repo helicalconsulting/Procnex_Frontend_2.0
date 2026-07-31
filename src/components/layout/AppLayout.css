@@ -59,12 +59,14 @@
 }
 
 /* ─── Sidebar Hover Expand (Desktop & Tablet) ─────────── */
-/* Shift main content when collapsed sidebar is hover-expanded */
+/* Shrink main content when collapsed sidebar is hovered */
 @media (min-width: 769px) {
   .app-layout--collapsed:has(.sidebar:hover) .app-layout__main {
     margin-left: 260px;
   }
 }
+
+
 
 /* ═══════════════════════════════════════════════════════════
    Responsive

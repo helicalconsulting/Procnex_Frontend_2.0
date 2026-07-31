@@ -9,6 +9,7 @@ import { isVendor, NAVIGATION_MENU } from '../utils/rbac';
  * Used as fallback when permissions don't explicitly grant access.
  */
 function hasRoleRouteAccess(pathname: string, roles: string[]): boolean {
+  if (pathname === '/forms' || pathname.startsWith('/forms/')) return true;
   for (const item of NAVIGATION_MENU) {
     // Check the item's path
     if (pathname.startsWith(item.path) && item.roles.some((r) => roles.includes(r))) {

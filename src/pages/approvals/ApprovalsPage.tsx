@@ -511,8 +511,8 @@ export default function ApprovalsPage() {
       {/* Header */}
       <div className="approvals-page__header">
         <div className="approvals-page__header-left">
-          <h1>Approvals</h1>
-          <p>Review, approve, or reject pending requests across modules</p>
+          <h1>Purchase Order Approval</h1>
+          <p>Review, approve, or reject pending purchase order requests across modules</p>
         </div>
       </div>
 

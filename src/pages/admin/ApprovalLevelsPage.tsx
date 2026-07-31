@@ -171,6 +171,7 @@ export default function ApprovalLevelsPage() {
 
   // Add/Edit form
   const [formModule, setFormModule] = useState('');
+  const [formLevelNumber, setFormLevelNumber] = useState<number>(1);
   const [formTimeLimit, setFormTimeLimit] = useState(24);
   const [formRole, setFormRole] = useState('');
   const [formMinValue, setFormMinValue] = useState<number | ''>('');
@@ -208,28 +209,40 @@ export default function ApprovalLevelsPage() {
 
   // Open add modal
   const openAddModal = useCallback((preselectedModule?: string) => {
-    setFormModule(preselectedModule || '');
+    const mod = preselectedModule || '';
+    setFormModule(mod);
     setFormRole('');
     setFormTimeLimit(24);
     setFormMinValue('');
     setFormMaxValue('');
     setFormCurrency(companyDefaultCurrency);
+    const count = mod ? (grouped[mod]?.length || 0) : 0;
+    setFormLevelNumber(count + 1);
     setEditingLevel(null);
     setFormError(null);
     setShowAddModal(true);
-  }, []);
+  }, [companyDefaultCurrency, grouped]);
+
+  const handleModuleSelect = (modKey: string) => {
+    setFormModule(modKey);
+    if (!editingLevel) {
+      const count = modKey ? (grouped[modKey]?.length || 0) : 0;
+      setFormLevelNumber(count + 1);
+    }
+  };
 
   // Open edit modal
   const openEditModal = useCallback((level: ApprovalLevelData) => {
     setEditingLevel(level);
     setFormModule(level.module);
     setFormRole(level.requiredRole);
+    setFormLevelNumber(level.levelNumber);
     setFormTimeLimit(level.timeLimitHours);
     setFormMinValue(level.minValue ?? '');
     setFormMaxValue(level.maxValue ?? '');
     setFormCurrency(level.currency || companyDefaultCurrency);
     setShowAddModal(true);
-  }, []);
+  }, [companyDefaultCurrency]);
 
   const handleSave = useCallback(async () => {
     if (!formModule || !formRole) return;
@@ -239,6 +252,7 @@ export default function ApprovalLevelsPage() {
     try {
       const payload = {
         requiredRole: formRole,
+        levelNumber: formLevelNumber,
         timeLimitHours: formTimeLimit,
         minValue: formMinValue !== '' ? Number(formMinValue) : null,
         maxValue: formMaxValue !== '' ? Number(formMaxValue) : null,
@@ -247,13 +261,13 @@ export default function ApprovalLevelsPage() {
 
       if (editingLevel) {
         await adminService.updateApprovalLevel(editingLevel.id, payload);
-        setPageMsg('Approval level updated.');
+        setPageMsg(`Approval level updated to Level ${formLevelNumber}.`);
       } else {
         await adminService.createApprovalLevel({
           module: formModule,
           ...payload,
         });
-        setPageMsg('Approval level added.');
+        setPageMsg(`Approval level added as Level ${formLevelNumber}.`);
       }
       setShowAddModal(false);
       await reload();
@@ -264,7 +278,7 @@ export default function ApprovalLevelsPage() {
     } finally {
       setSaveLoading(false);
     }
-  }, [formModule, formRole, formTimeLimit, formMinValue, formMaxValue, formCurrency, editingLevel, reload]);
+  }, [formModule, formRole, formLevelNumber, formTimeLimit, formMinValue, formMaxValue, formCurrency, editingLevel, reload]);
 
   const handleDelete = useCallback(async (levelId: number) => {
     if (!window.confirm('Remove this approval level from the chain?')) return;
@@ -520,7 +534,7 @@ export default function ApprovalLevelsPage() {
                     <select
                       className="alvl-modal__select"
                       value={formModule}
-                      onChange={(e) => setFormModule(e.target.value)}
+                      onChange={(e) => handleModuleSelect(e.target.value)}
                       disabled={!!editingLevel}
                     >
                       <option value="">Select module</option>
@@ -540,6 +554,8 @@ export default function ApprovalLevelsPage() {
                   </div>
                 </div>
               )}
+
+
               <div className="alvl-modal__field">
                 <label className="alvl-modal__label">
                   Required Role <span>*</span>

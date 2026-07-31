@@ -9,11 +9,19 @@ import './AppLayout.css';
 
 export default function AppLayout() {
   const { companyName, supportEmail } = useBranding();
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed, setCollapsed] = useState(() => {
+    const saved = localStorage.getItem('heliflow_sidebar_collapsed');
+    if (saved !== null) return saved === 'true';
+    return window.innerWidth < 1200;
+  });
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const handleCollapse = useCallback(() => {
-    setCollapsed(true);
+  const handleToggle = useCallback(() => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem('heliflow_sidebar_collapsed', String(next));
+      return next;
+    });
   }, []);
 
   const handleMobileOpen = useCallback(() => {
@@ -39,7 +47,6 @@ export default function AppLayout() {
       <Sidebar
         collapsed={collapsed}
         mobileOpen={mobileOpen}
-        onCollapse={handleCollapse}
         onMobileClose={handleMobileClose}
       />
 
