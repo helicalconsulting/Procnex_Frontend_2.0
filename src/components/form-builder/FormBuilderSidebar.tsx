@@ -23,10 +23,10 @@ import {
   UserCheck,
   Building,
   Layers,
-  Sparkles,
   CheckCircle2,
   Trash2,
-  Copy,
+  AlertTriangle,
+  X,
 } from 'lucide-react';
 import { FIELD_PALETTE } from './paletteData';
 import type { FormDefinition, FormField, FieldType } from '../../types/formBuilder';
@@ -77,6 +77,7 @@ export default function FormBuilderSidebar({
 }: FormBuilderSidebarProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [paletteSearch, setPaletteSearch] = useState('');
+  const [deletingForm, setDeletingForm] = useState<{ id: string; title: string } | null>(null);
 
   // Filter palette items based on search
   const filteredPalette = useMemo(() => {
@@ -240,9 +241,7 @@ export default function FormBuilderSidebar({
                       title="Delete Form"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (confirm(`Delete "${form.title}"?`)) {
-                          onDeleteForm(form.id);
-                        }
+                        setDeletingForm({ id: form.id, title: form.title || 'Untitled Form' });
                       }}
                     >
                       <Trash2 size={14} />
@@ -251,6 +250,43 @@ export default function FormBuilderSidebar({
                 );
               })
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Delete Form Custom Modal Box */}
+      {deletingForm && (
+        <div className="fbs-modal-backdrop" onClick={() => setDeletingForm(null)}>
+          <div className="fbs-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="fbs-modal-header">
+              <div className="fbs-modal-icon-wrap">
+                <AlertTriangle size={22} />
+              </div>
+              <button type="button" className="fbs-modal-close" onClick={() => setDeletingForm(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="fbs-modal-body">
+              <h3>Delete Custom Form?</h3>
+              <p>
+                Are you sure you want to delete <strong>"{deletingForm.title}"</strong>? This action will permanently remove this form definition from your saved custom forms list.
+              </p>
+            </div>
+            <div className="fbs-modal-footer">
+              <button type="button" className="fbs-modal-btn fbs-modal-btn--secondary" onClick={() => setDeletingForm(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="fbs-modal-btn fbs-modal-btn--danger"
+                onClick={() => {
+                  onDeleteForm(deletingForm.id);
+                  setDeletingForm(null);
+                }}
+              >
+                <Trash2 size={15} /> Delete Form
+              </button>
+            </div>
           </div>
         </div>
       )}

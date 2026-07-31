@@ -5,7 +5,7 @@ import { mapNotificationToRow, MOCK_NOTIFICATIONS } from '../api/mappers';
 import { NOTIFICATIONS_PAGE_MOCK } from '../mocks/notificationsPage.mock';
 import type { NotificationRow } from '../types/viewModels';
 import type { Notification } from '../types';
-import type { FormSubmissionInstance } from './formWorkflowService';
+import { isRoleMatching, type FormSubmissionInstance } from './formWorkflowService';
 import { adminService } from './adminService';
 
 // ─── Direct SMTP System Email Dispatcher ───────────────────────────────────────
@@ -177,10 +177,8 @@ export async function dispatchFormSubmissionEmail(sub: FormSubmissionInstance, a
     const level1Approvers = allUsers.filter(
       (u) =>
         u.isActive !== false &&
-        (u.role === level1Role ||
-          (u as any).roles?.includes(level1Role) ||
-          u.role === 'Super Admin' ||
-          u.role === 'Administrator')
+        (isRoleMatching(level1Role, u.role, String(u.id)) ||
+          ((u as any).roles && (u as any).roles.some((r: string) => isRoleMatching(level1Role, r, String(u.id)))))
     );
 
     for (const app of level1Approvers) {
@@ -239,10 +237,8 @@ export async function dispatchLevelApprovalEmail(
     const nextApprovers = allUsers.filter(
       (u) =>
         u.isActive !== false &&
-        (u.role === nextRole ||
-          (u as any).roles?.includes(nextRole) ||
-          u.role === 'Super Admin' ||
-          u.role === 'Administrator')
+        (isRoleMatching(nextRole, u.role, String(u.id)) ||
+          ((u as any).roles && (u as any).roles.some((r: string) => isRoleMatching(nextRole, r, String(u.id)))))
     );
 
     for (const app of nextApprovers) {

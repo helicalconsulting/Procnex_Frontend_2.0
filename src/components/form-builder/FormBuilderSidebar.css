@@ -320,3 +320,133 @@
   font-weight: 600;
   cursor: pointer;
 }
+
+/* Custom Form Delete Modal Box */
+.fbs-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(4px);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fbsFadeIn 0.2s ease-out forwards;
+}
+
+.fbs-modal-card {
+  background: var(--cfb-bg-sidebar, #1e293b);
+  border: 1px solid var(--cfb-border-strong, #334155);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 440px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  animation: fbsPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.fbs-modal-header {
+  padding: 18px 20px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.fbs-modal-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(220, 38, 38, 0.15);
+  color: #f87171;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fbs-modal-close {
+  background: transparent;
+  border: none;
+  color: var(--cfb-text-sub, #94a3b8);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.fbs-modal-close:hover {
+  color: var(--cfb-text-main, #f8fafc);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.fbs-modal-body {
+  padding: 0 20px 18px;
+}
+
+.fbs-modal-body h3 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--cfb-text-main, #f8fafc);
+  margin: 0 0 8px 0;
+}
+
+.fbs-modal-body p {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--cfb-text-sub, #94a3b8);
+  margin: 0;
+}
+
+.fbs-modal-footer {
+  padding: 14px 20px;
+  background: rgba(15, 23, 42, 0.4);
+  border-top: 1px solid var(--cfb-border-strong, #334155);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.fbs-modal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+}
+
+.fbs-modal-btn--secondary {
+  background: transparent;
+  border-color: var(--cfb-border-strong, #334155);
+  color: var(--cfb-text-main, #f8fafc);
+}
+
+.fbs-modal-btn--secondary:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.fbs-modal-btn--danger {
+  background: #dc2626;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
+}
+
+.fbs-modal-btn--danger:hover {
+  background: #b91c1c;
+}
+
+@keyframes fbsFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fbsPopIn {
+  from { opacity: 0; transform: scale(0.95) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}

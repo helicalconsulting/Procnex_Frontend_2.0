@@ -77,12 +77,53 @@ const STORAGE_NOTIFICATIONS_KEY = 'heliflow_inapp_notifications_v1';
 
 export function isRoleMatching(requiredRole: string, userRole: string, userId?: string): boolean {
   if (!requiredRole || !userRole) return false;
-  const req = requiredRole.toLowerCase().replace(/[\s_-]+/g, '');
-  const usr = userRole.toLowerCase().replace(/[\s_-]+/g, '');
 
-  if (req === usr) return true;
-  if (usr === 'superadmin' || usr === 'administrator' || String(userId) === '1') return true;
-  if (req.includes(usr) || usr.includes(req)) return true;
+  const req = requiredRole.toLowerCase().trim();
+  const usr = userRole.toLowerCase().trim();
+
+  // 1. Super Admin, Administrator, Admin or User ID 1 matches all levels
+  if (
+    usr.includes('superadmin') ||
+    usr.includes('administrator') ||
+    usr === 'admin' ||
+    String(userId) === '1'
+  ) {
+    return true;
+  }
+
+  const reqClean = req.replace(/[\s_-]+/g, '');
+  const usrClean = usr.replace(/[\s_-]+/g, '');
+
+  if (reqClean === usrClean) return true;
+
+  // 2. Level number matching (e.g. 'Level 2' / 'Level 2 Approver' matching 'Level 2' or 'Approver')
+  const reqLevelMatch = req.match(/level\s*(\d+)/i);
+  const usrLevelMatch = usr.match(/level\s*(\d+)/i);
+  if (reqLevelMatch && usrLevelMatch && reqLevelMatch[1] === usrLevelMatch[1]) {
+    return true;
+  }
+
+  // 3. Level-specific aliases & generic approver aliases
+  const aliases: Record<string, string[]> = {
+    level1: ['level1', 'level1approver', 'purchaseclerk', 'purchase_clerk', 'procurementclerk', 'clerk', 'buyer', 'approver'],
+    level2: ['level2', 'level2approver', 'procurementmanager', 'financeapprover', 'financemanager', 'manager', 'approver'],
+    level3: ['level3', 'level3approver', 'generalmanager', 'director', 'vp', 'executive', 'approver'],
+    procurementmanager: ['procurementmanager', 'procurement_manager', 'procurement', 'purchasemanager', 'manager', 'approver'],
+    financeapprover: ['financeapprover', 'financemanager', 'finance_approver', 'finance_manager', 'finance', 'approver'],
+    purchaseclerk: ['purchaseclerk', 'purchase_clerk', 'procurementclerk', 'buyer', 'clerk', 'approver'],
+    generalmanager: ['generalmanager', 'general_manager', 'manager', 'director', 'executive', 'approver'],
+  };
+
+  if (aliases[reqClean]) {
+    if (aliases[reqClean].some((a) => usrClean.includes(a) || a.includes(usrClean))) return true;
+  }
+  if (aliases[usrClean]) {
+    if (aliases[usrClean].some((a) => reqClean.includes(a) || a.includes(reqClean))) return true;
+  }
+
+  // 4. Substring inclusion fallback
+  if (reqClean.includes(usrClean) || usrClean.includes(reqClean)) return true;
+
   return false;
 }
 
@@ -96,7 +137,9 @@ function getStoredSubmissions(): FormSubmissionInstance[] {
         const currentUserEmail = session?.user?.email?.toLowerCase();
         const currentUserId = String(session?.user?.id || (session?.user as any)?._id || '');
 
-        return parsed
+        let hasMigrated = false;
+
+        const migrated = parsed
           .filter((s: FormSubmissionInstance) => {
             // Exclude whole_org submission instances assigned to the publisher admin user who sent it
             if (s.audienceType === 'whole_org' && (currentUserEmail || currentUserId)) {
@@ -121,8 +164,23 @@ function getStoredSubmissions(): FormSubmissionInstance[] {
                 status: s.status === 'submitted' ? 'completed' : s.status,
               };
             }
+
+            // Auto-migrate existing stored workflow instances stuck at level 0
+            if (s.workflowAttached && s.currentLevelNumber === 0 && s.approvalLevels && s.approvalLevels.length > 0) {
+              hasMigrated = true;
+              return {
+                ...s,
+                currentLevelNumber: 1,
+              };
+            }
             return s;
           });
+
+        if (hasMigrated) {
+          saveSubmissions(migrated);
+        }
+
+        return migrated;
       }
     }
   } catch (e) {
@@ -242,7 +300,46 @@ export const formWorkflowService = {
       }
     }
 
-    const createdInstances: FormSubmissionInstance[] = targetUsers.map((u) => ({
+    let assignedUsers = targetUsers;
+
+    // ─── If Approval Workflow is Attached: Route ONLY to Level 1 Users Initially! ───
+    if (attachWorkflow && levelSteps.length > 0) {
+      const level1Role = levelSteps[0].requiredRole;
+
+      // Filter active users who match Level 1 required role
+      let level1Matched = allUsers.filter(
+        (u) =>
+          u.isActive !== false &&
+          (isRoleMatching(level1Role, u.role, String(u.id)) ||
+            ((u as any).roles && (u as any).roles.some((r: string) => isRoleMatching(level1Role, r, String(u.id)))))
+      );
+
+      // If specific users were selected, prioritize selected users who are eligible or level 1 users
+      if (audienceType === 'specific_users' && selectedUserIds.length > 0) {
+        const selectedLevel1 = level1Matched.filter((u) => {
+          const uId = String(u.id || (u as any)._id || u.email);
+          return selectedUserIds.some(
+            (sel) =>
+              String(sel) === uId ||
+              String(sel) === String(u.id) ||
+              String(sel) === String((u as any)._id) ||
+              (u.email && String(sel).toLowerCase() === u.email.toLowerCase())
+          );
+        });
+
+        if (selectedLevel1.length > 0) {
+          level1Matched = selectedLevel1;
+        } else if (targetUsers.length > 0) {
+          level1Matched = targetUsers;
+        }
+      }
+
+      if (level1Matched.length > 0) {
+        assignedUsers = level1Matched;
+      }
+    }
+
+    const createdInstances: FormSubmissionInstance[] = assignedUsers.map((u) => ({
       id: `sub-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       formId: form.id,
       formTitle: form.title,
@@ -252,7 +349,7 @@ export const formWorkflowService = {
       assignedUserId: String(u.id || (u as any)._id || u.email),
       assignedUserName: u.fullName,
       assignedUserEmail: u.email,
-      currentLevelNumber: 0, // 0 = Awaiting user fill out
+      currentLevelNumber: attachWorkflow ? 1 : 0, // 1 = Level 1 Approval Step, 0 = Direct fill out
       totalLevels: attachWorkflow ? levelSteps.length : 0,
       workflowAttached: attachWorkflow,
       approvalLevels: attachWorkflow ? levelSteps : [],
@@ -265,13 +362,15 @@ export const formWorkflowService = {
       timeline: [
         {
           id: `tl-${Date.now()}`,
-          stepName: `Form Distributed (${audienceType === 'whole_org' ? 'Whole Organization' : 'Specific Users'})`,
+          stepName: attachWorkflow
+            ? `Level 1 Approval Initiated (${levelSteps[0]?.requiredRole || 'Level 1'})`
+            : `Form Distributed (${audienceType === 'whole_org' ? 'Whole Organization' : 'Specific Users'})`,
           actorName: 'Admin',
           actorRole: 'Super Admin',
           action: 'Assigned',
           timestamp: new Date().toISOString(),
           comments: attachWorkflow
-            ? `Form published with ${levelSteps.length}-level sequential approval workflow.`
+            ? `Form published with ${levelSteps.length}-level sequential workflow. Sent to Level 1 (${levelSteps[0]?.requiredRole || 'Level 1'}) first.`
             : 'Form published directly without workflow.',
         },
       ],
@@ -280,12 +379,16 @@ export const formWorkflowService = {
     // Save submissions
     saveSubmissions([...createdInstances, ...subs]);
 
-    // Send In-App Notifications
-    for (const u of targetUsers) {
+    // Send In-App Notifications for assigned users only
+    for (const u of assignedUsers) {
       sendNotification(
         String(u.id || (u as any)._id || u.email),
-        '🔔 New Form Assigned',
-        `You have received a new form: "${form.title}". Please complete it before the due date.`
+        attachWorkflow
+          ? `🔔 Level 1 Approval Required (${levelSteps[0]?.requiredRole || 'Level 1'})`
+          : '🔔 New Form Assigned',
+        attachWorkflow
+          ? `New form "${form.title}" requires your Level 1 (${levelSteps[0]?.requiredRole}) action.`
+          : `You have received a new form: "${form.title}". Please complete it before the due date.`
       );
     }
 
@@ -317,7 +420,7 @@ export const formWorkflowService = {
       if (isAssignedRecipient) return true;
 
       // 2. Pending Approval at current level for current user's role
-      if (s.workflowAttached && s.status === 'submitted' && s.currentLevelNumber > 0 && s.approvalLevels) {
+      if (s.workflowAttached && (s.status === 'submitted' || s.status === 'pending') && s.currentLevelNumber > 0 && s.approvalLevels) {
         const currentStep = s.approvalLevels.find((lvl) => lvl.levelNumber === s.currentLevelNumber);
         if (currentStep) {
           if (isRoleMatching(currentStep.requiredRole, currentRole, userId)) return true;
@@ -504,18 +607,22 @@ export const formWorkflowService = {
     const currentStep = approvalLevels.find((l) => l.levelNumber === currentLvlNum);
     const stepRole = currentStep ? currentStep.requiredRole : actorRole;
 
-    // Mark current level as approved
+    // Mark current level and all prior levels as approved
     const levelIdx = approvalLevels.findIndex((l) => l.levelNumber === currentLvlNum);
     if (levelIdx !== -1) {
-      approvalLevels[levelIdx] = {
-        ...approvalLevels[levelIdx],
-        status: 'approved',
-        approvedBy: actorName,
-        approvedByRole: stepRole,
-        approvedByEmail: actorEmail,
-        approvedAt: new Date().toISOString(),
-        comments,
-      };
+      for (let i = 0; i <= levelIdx; i++) {
+        if (approvalLevels[i]) {
+          approvalLevels[i] = {
+            ...approvalLevels[i],
+            status: 'approved',
+            approvedBy: i === levelIdx ? actorName : (approvalLevels[i].approvedBy || actorName),
+            approvedByRole: i === levelIdx ? stepRole : (approvalLevels[i].approvedByRole || stepRole),
+            approvedByEmail: i === levelIdx ? actorEmail : (approvalLevels[i].approvedByEmail || actorEmail),
+            approvedAt: approvalLevels[i].approvedAt || new Date().toISOString(),
+            comments: i === levelIdx ? comments : (approvalLevels[i].comments || ''),
+          };
+        }
+      }
     }
 
     const isFinalStep = currentLvlNum >= current.totalLevels;

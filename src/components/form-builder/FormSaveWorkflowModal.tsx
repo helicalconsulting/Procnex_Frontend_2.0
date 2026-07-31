@@ -506,8 +506,7 @@ export default function FormSaveWorkflowModal({
                   <div>
                     <h4>Attach Approval Workflow</h4>
                     <p>
-                      Connect existing enterprise Approval Levels matrix (Procurement Manager, Finance, etc.) so every
-                      form submission moves through manager sign-offs.
+                      Connect Approval Levels matrix (Level 1 → Level 2 → Level 3) so form submissions progress sequentially through each level before final completion.
                     </p>
                   </div>
                 </div>
@@ -560,7 +559,9 @@ export default function FormSaveWorkflowModal({
                       ? 'Whole Organization (All Active Employees)'
                       : `${selectedUserIds.length} Selected Users`}
                   </strong>
-                  {attachWorkflow ? ' with Approval Workflow attached.' : ' directly without workflow.'}
+                  {attachWorkflow
+                    ? ` with ${matrixLevels.length}-level sequential approval workflow attached.`
+                    : ' directly (no approval levels attached).'}
                 </span>
               </div>
             </div>

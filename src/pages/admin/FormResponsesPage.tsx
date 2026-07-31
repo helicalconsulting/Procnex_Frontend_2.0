@@ -624,11 +624,11 @@ export default function FormResponsesPage() {
                             ? 'No Workflow (Direct Submission)'
                             : sub.status === 'completed'
                             ? 'Completed (All Levels)'
-                            : sub.status === 'pending'
+                            : sub.status === 'pending' && sub.currentLevelNumber === 0
                             ? 'Awaiting Employee Fill Out'
-                            : `Level ${sub.currentLevelNumber} of ${sub.totalLevels}${
-                                sub.approvalLevels?.find((l) => l.levelNumber === sub.currentLevelNumber)?.requiredRole
-                                  ? ` (${sub.approvalLevels.find((l) => l.levelNumber === sub.currentLevelNumber)?.requiredRole})`
+                            : `Level ${sub.currentLevelNumber || 1} of ${sub.totalLevels}${
+                                sub.approvalLevels?.find((l) => l.levelNumber === (sub.currentLevelNumber || 1))?.requiredRole
+                                  ? ` (${sub.approvalLevels.find((l) => l.levelNumber === (sub.currentLevelNumber || 1))?.requiredRole})`
                                   : ''
                               }`}
                         </span>
@@ -643,7 +643,14 @@ export default function FormResponsesPage() {
                                     : 0
                                   : sub.status === 'completed'
                                   ? 100
-                                  : Math.min(100, (sub.currentLevelNumber / (sub.totalLevels || 1)) * 100)
+                                  : (() => {
+                                      const total = sub.totalLevels || 1;
+                                      const approvedByStatus = (sub.approvalLevels || []).filter((l) => l.status === 'approved').length;
+                                      const approvedByNum = (sub.currentLevelNumber || 1) - 1;
+                                      const approvedCount = Math.max(approvedByStatus, approvedByNum);
+                                      const pct = (approvedCount / total) * 100;
+                                      return Math.max(5, Math.min(100, pct));
+                                    })()
                               }%`,
                             }}
                           />
@@ -724,6 +731,35 @@ export default function FormResponsesPage() {
                 <button className="frp-btn frp-btn--secondary" onClick={() => setSelectedResponse(null)}>
                   Close
                 </button>
+                {selectedResponse.workflowAttached && selectedResponse.status !== 'completed' && (
+                  <button
+                    className="frp-btn frp-btn--primary"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#0a6ed1', color: '#ffffff', padding: '8px 16px', borderRadius: '6px', border: 'none', fontWeight: 600, cursor: 'pointer' }}
+                    onClick={async () => {
+                      try {
+                        const res = await formWorkflowService.approveFormLevel(
+                          selectedResponse.id,
+                          'Approved by Admin in Dashboard',
+                          'Admin',
+                          'Super Admin',
+                          'admin@heliflow.com'
+                        );
+                        setSelectedResponse(null);
+                        loadData();
+                        if (res.isFinalCompletion) {
+                          alert('🎉 Final approval level completed! Form workflow is finished.');
+                        } else {
+                          alert(`✅ Level ${selectedResponse.currentLevelNumber || 1} approved! Advanced to next level.`);
+                        }
+                      } catch (err) {
+                        console.error('Approve error:', err);
+                        alert('Error approving level: ' + (err as any)?.message);
+                      }
+                    }}
+                  >
+                    <Check size={16} /> Approve Level {selectedResponse.currentLevelNumber || 1}
+                  </button>
+                )}
               </div>
             </div>
           </div>

@@ -33,7 +33,7 @@ import { adminService } from '../../services/adminService';
 import type { User as UserType } from '../../types';
 import './FormsPage.css';
 
-type ActiveTab = 'pending' | 'approval_pending' | 'draft' | 'submitted' | 'completed' | 'returned';
+type ActiveTab = 'pending' | 'approval_pending' | 'draft' | 'completed' | 'returned';
 
 export default function FormsPage() {
   const { user } = useAuth();
@@ -81,9 +81,20 @@ export default function FormsPage() {
   // Helper to check if current user is an approver for submission's current level
   const isUserApproverForCurrentLevel = useCallback(
     (sub: FormSubmissionInstance) => {
-      if (!sub.workflowAttached || sub.status !== 'submitted' || !sub.currentLevelNumber || !sub.approvalLevels) {
+      if (!sub.workflowAttached || !sub.currentLevelNumber || sub.currentLevelNumber === 0 || !sub.approvalLevels) {
         return false;
       }
+      if (sub.status === 'completed') return false;
+
+      // Super Admin, Administrator, Admin, or User ID 1 can always approve active level steps
+      const isUserAdmin =
+        currentUserRole?.toLowerCase().includes('admin') ||
+        currentUserRole === 'Super Admin' ||
+        currentUserRole === 'Administrator' ||
+        currentUserId === '1';
+
+      if (isUserAdmin) return true;
+
       const currentStep = sub.approvalLevels.find((l) => l.levelNumber === sub.currentLevelNumber);
       if (!currentStep) return false;
 
@@ -103,13 +114,10 @@ export default function FormsPage() {
         return isMine && s.status === 'pending';
       }
       if (activeTab === 'approval_pending') {
-        return s.status === 'submitted' && isUserApproverForCurrentLevel(s);
+        return (s.status === 'submitted' || s.status === 'pending') && isUserApproverForCurrentLevel(s);
       }
       if (activeTab === 'draft') {
         return isMine && s.status === 'draft';
-      }
-      if (activeTab === 'submitted') {
-        return isMine && s.status === 'submitted';
       }
       if (activeTab === 'completed') {
         return s.status === 'completed' && (isMine || isUserApproverForCurrentLevel(s));
@@ -126,7 +134,6 @@ export default function FormsPage() {
     let pending = 0;
     let approvalPending = 0;
     let draft = 0;
-    let submitted = 0;
     let completed = 0;
     let returned = 0;
 
@@ -136,15 +143,21 @@ export default function FormsPage() {
         (currentUserEmail && s.assignedUserEmail?.toLowerCase() === currentUserEmail.toLowerCase());
 
       if (isMine && s.status === 'pending') pending++;
-      if (s.status === 'submitted' && isUserApproverForCurrentLevel(s)) approvalPending++;
+      if ((s.status === 'submitted' || s.status === 'pending') && isUserApproverForCurrentLevel(s)) approvalPending++;
       if (isMine && s.status === 'draft') draft++;
-      if (isMine && s.status === 'submitted') submitted++;
       if (s.status === 'completed' && (isMine || isUserApproverForCurrentLevel(s))) completed++;
       if (isMine && s.status === 'returned') returned++;
     });
 
-    return { pending, approvalPending, draft, submitted, completed, returned };
+    return { pending, approvalPending, draft, completed, returned };
   }, [submissions, currentUserId, currentUserEmail, isUserApproverForCurrentLevel]);
+
+  // Auto-switch to Pending My Approval tab if user has approval tasks but no personal pending forms to fill out
+  useEffect(() => {
+    if (counts.approvalPending > 0 && counts.pending === 0 && activeTab === 'pending') {
+      setActiveTab('approval_pending');
+    }
+  }, [counts.approvalPending, counts.pending, activeTab]);
 
   // Open Form Filler Modal
   const openFormFiller = (sub: FormSubmissionInstance) => {
@@ -292,14 +305,7 @@ export default function FormsPage() {
           <span className="fp-tab-badge fp-tab-badge--highlight">{counts.approvalPending}</span>
         </button>
 
-        <button
-          className={`fp-tab-btn ${activeTab === 'submitted' ? 'fp-tab-btn--active' : ''}`}
-          onClick={() => setActiveTab('submitted')}
-        >
-          <Send size={16} />
-          <span>My Submissions</span>
-          <span className="fp-tab-badge">{counts.submitted}</span>
-        </button>
+
 
         <button
           className={`fp-tab-btn ${activeTab === 'draft' ? 'fp-tab-btn--active' : ''}`}
@@ -358,12 +364,45 @@ export default function FormsPage() {
                 <h3 className="fp-card__title">{sub.formTitle}</h3>
                 {sub.formDescription && <p className="fp-card__desc">{sub.formDescription}</p>}
 
-                {sub.workflowAttached && sub.status === 'submitted' && (
-                  <div className="fp-card__level-badge">
-                    <ShieldCheck size={14} />
-                    <span>
-                      Level {sub.currentLevelNumber} of {sub.totalLevels}: <strong>{currentRoleNeeded}</strong>
-                    </span>
+                {sub.workflowAttached && (
+                  <div className="fp-card__level-box" style={{ marginBottom: '12px' }}>
+                    <div className="fp-card__level-badge">
+                      <ShieldCheck size={14} />
+                      <span>
+                        {sub.status === 'completed'
+                          ? 'Completed (All Levels)'
+                          : `Level ${sub.currentLevelNumber || 1} of ${sub.totalLevels}: ${currentRoleNeeded}`}
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        marginTop: '6px',
+                        height: '5px',
+                        background: 'rgba(255,255,255,0.08)',
+                        borderRadius: '3px',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <div
+                        style={{
+                          height: '100%',
+                          background: 'linear-gradient(90deg, #0a6ed1, #107e3e)',
+                          transition: 'width 0.3s ease',
+                          width: `${
+                            sub.status === 'completed'
+                              ? 100
+                              : (() => {
+                                  const total = sub.totalLevels || 1;
+                                  const approvedByStatus = (sub.approvalLevels || []).filter((l) => l.status === 'approved').length;
+                                  const approvedByNum = (sub.currentLevelNumber || 1) - 1;
+                                  const approvedCount = Math.max(approvedByStatus, approvedByNum);
+                                  const pct = (approvedCount / total) * 100;
+                                  return Math.max(5, Math.min(100, pct));
+                                })()
+                          }%`,
+                        }}
+                      />
+                    </div>
                   </div>
                 )}
 
