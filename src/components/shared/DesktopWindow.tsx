@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, type ReactNode, type MouseEvent as ReactMouseEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { Minus, Square, X, Maximize, Minimize2 } from 'lucide-react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import './DesktopWindow.css';
@@ -293,7 +294,7 @@ export default function DesktopWindow({
 
   // ── Minimized bar ──
   if (minimized) {
-    return (
+    return createPortal(
       <div className="dw-minimized-bar dw-minimized-bar--visible" onClick={onRestore} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') onRestore?.(); }}>
         <div className="dw-minimized-bar__left">
           {icon && <span className="dw-minimized-bar__icon">{icon}</span>}
@@ -319,11 +320,12 @@ export default function DesktopWindow({
             <X size={12} />
           </button>
         </div>
-      </div>
+      </div>,
+      document.body
     );
   }
 
-  return (
+  return createPortal(
     <>
       {/* Backdrop */}
       <div className="dw-backdrop" />
@@ -406,7 +408,8 @@ export default function DesktopWindow({
           </>
         )}
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 

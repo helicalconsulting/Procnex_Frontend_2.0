@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { companySettingsService, type ContractTemplate } from '../../services/companySettingsService';
 import { contractService } from '../../services/contractService';
@@ -108,7 +109,7 @@ export default function ContractTemplateSelectModal({
   const formatType = (type: string) => CONTRACT_TYPE_LABELS[type] || type.replace(/_/g, ' ');
   const getTypeStyle = (type: string) => CONTRACT_TYPE_COLORS[type] || CONTRACT_TYPE_COLORS['CUSTOM'];
 
-  return (
+  return createPortal(
     <div className="ctsm-backdrop" onClick={() => !generating && onClose()}>
       <div className="ctsm-dialog" onClick={e => e.stopPropagation()}>
         {/* Header */}
@@ -354,6 +355,7 @@ export default function ContractTemplateSelectModal({
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }

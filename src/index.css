@@ -153,7 +153,7 @@ body,
 
 html {
   font-size: 16px;
-  zoom: 1.15;
+  zoom: 1.1;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -472,6 +472,201 @@ body.modal-open [class*="-container"] {
 }
 
 .sap-btn--danger:hover:not(:disabled) {
+}
+
+/* ─── Modal Open State — Freeze Background Scroll ─────────── */
+
+body.modal-open,
+html.modal-open {
+  overflow: hidden !important;
+}
+
+body.modal-open .app-layout__main,
+html.modal-open .app-layout__main,
+body.modal-open main,
+body.modal-open .app-content,
+body.modal-open .app-layout__content,
+body.modal-open [class*="-page"],
+body.modal-open [class*="-container"] {
+  overflow: hidden !important;
+  touch-action: none !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SAP Fiori Enterprise Dialog Design System
+   ═══════════════════════════════════════════════════════════ */
+
+.sap-dialog {
+  background: var(--surface-card, #ffffff);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: sapDialogPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+
+@keyframes sapDialogPop {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* ── Header ── */
+.sap-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--surface-elevated, #1e293b), var(--surface-card, #0f172a));
+}
+
+.sap-dialog__title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sap-dialog__icon-badge {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sap-dialog__icon-badge--danger {
+  background: rgba(239, 68, 68, 0.14);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.sap-dialog__title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sap-dialog__title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+  letter-spacing: -0.2px;
+}
+
+.sap-dialog__subtitle {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.sap-dialog__close-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sap-dialog__close-btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+/* ── Body & Callout Box ── */
+.sap-dialog__body {
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sap-dialog__callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: 10px;
+}
+
+.sap-dialog__callout--danger {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-left: 4px solid #ef4444;
+}
+
+.sap-dialog__callout-icon {
+  color: #ef4444;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.sap-dialog__callout-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sap-dialog__message {
+  font-size: 14px;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.sap-dialog__message strong {
+  font-weight: 700;
+  color: #ef4444;
+}
+
+.sap-dialog__submessage {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ── Footer & Action Buttons ── */
+.sap-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-elevated, #1e293b);
+}
+
+.sap-btn--danger {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  color: #ffffff !important;
+  border: 1px solid #dc2626 !important;
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+}
+
+.sap-btn--danger:hover:not(:disabled) {
   background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
   box-shadow: 0 6px 16px rgba(220, 38, 38, 0.4);
   transform: translateY(-1px);
@@ -500,7 +695,7 @@ body.modal-open [class*="-container"] {
   box-shadow: none !important;
 }
 
-/* ─── Global Modal Backdrop & Window Elevation (Cover TopBar & Sidebar) ─── */
+/* ─── Global Modal Backdrop Elevation (Cover TopBar & Sidebar) ─── */
 .dw-backdrop,
 .rfq-modal-backdrop,
 .quot-compare-modal-backdrop,
@@ -516,13 +711,21 @@ body.modal-open [class*="-container"] {
 .oq-modal-backdrop,
 .vquot-modal-backdrop,
 .sap-dialog-backdrop,
+.fp-filler-backdrop,
+.fp-success-backdrop,
+.rfq-confirm-backdrop,
+.col-modal-backdrop,
 [class*="-modal-backdrop"],
-[class*="__modal-backdrop"] {
+[class*="__modal-backdrop"],
+[class*="-backdrop"],
+[class*="__backdrop"] {
   z-index: 10000 !important;
-  backdrop-filter: blur(6px) !important;
-  -webkit-backdrop-filter: blur(6px) !important;
+  background: rgba(15, 23, 42, 0.65) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
 }
 
+/* ─── Global Modal Window Elevation (Always Above Backdrops & Fully Crisp) ─── */
 .dw-window,
 .rfq-modal,
 .quot-compare-modal,
@@ -537,12 +740,30 @@ body.modal-open [class*="-container"] {
 .onb-modal,
 .oq-modal,
 .vquot-modal,
+.sap-dialog,
+.fp-filler-modal,
+.fp-success-card,
+.fp-return-card,
+.rfq-confirm,
+.col-modal,
+.vcd-modal,
+[class*="-modal"]:not([class*="-backdrop"]):not([class*="__backdrop"]),
+[class*="__modal"]:not([class*="-backdrop"]):not([class*="__backdrop"]),
+[class*="-dialog"]:not([class*="-backdrop"]):not([class*="__backdrop"]),
+[class*="__dialog"]:not([class*="-backdrop"]):not([class*="__backdrop"]) {
+  z-index: 10005 !important;
+  isolation: isolate;
+  filter: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  opacity: 1 !important;
+}
 
 /* ─── SAP Fiori Global Sharp Edges Enforcement (4px Radius Standard) ─── */
 [class*="-card"],
 [class*="__card"],
-[class*="-modal"],
-[class*="__modal"],
+[class*="-modal"]:not([class*="-backdrop"]):not([class*="__backdrop"]),
+[class*="__modal"]:not([class*="-backdrop"]):not([class*="__backdrop"]),
 [class*="-drawer"],
 [class*="__drawer"],
 [class*="-toolbar"],
