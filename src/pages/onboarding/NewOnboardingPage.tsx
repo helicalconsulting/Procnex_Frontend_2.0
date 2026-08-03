@@ -36,6 +36,7 @@ import {
   ShieldCheck,
   AlertTriangle,
   Tag,
+  ChevronDown,
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import DesktopWindow from '../../components/shared/DesktopWindow';
@@ -129,20 +130,28 @@ export default function NewOnboardingPage() {
   const docsBarBtnRef = useRef<HTMLButtonElement>(null);
   const [docsLoading, setDocsLoading] = useState(false);
 
-  // ── Separate NDA & MNDA Required ──
+  // ── Separate NDA, MNDA & Any Other Legal Docs Required ──
   const [ndaRequired, setNdaRequired] = useState(false);
   const [mndaRequired, setMndaRequired] = useState(false);
+  const [anyOtherRequired, setAnyOtherRequired] = useState(false);
   const [ndaTemplateId, setNdaTemplateId] = useState<string | null>(null);
   const [mndaTemplateId, setMndaTemplateId] = useState<string | null>(null);
+  const [anyOtherTemplateId, setAnyOtherTemplateId] = useState<string | null>(null);
   const [showNdaTemplateModal, setShowNdaTemplateModal] = useState(false);
   const [showMndaTemplateModal, setShowMndaTemplateModal] = useState(false);
+  const [showAnyOtherTemplateModal, setShowAnyOtherTemplateModal] = useState(false);
+  const [legalDocsOpen, setLegalDocsOpen] = useState(false);
   const [ndaTemplates, setNdaTemplates] = useState<DocumentTemplate[]>([]);
   const [mndaTemplates, setMndaTemplates] = useState<DocumentTemplate[]>([]);
+  const [anyOtherTemplates, setAnyOtherTemplates] = useState<DocumentTemplate[]>([]);
   const [ndaTemplatesLoading, setNdaTemplatesLoading] = useState(false);
 
   // ── Template Preview ──
   const [previewTemplate, setPreviewTemplate] = useState<DocumentTemplate | null>(null);
   const [showTemplatePreview, setShowTemplatePreview] = useState(false);
+
+  // ── Required Document Preview ──
+  const [previewDoc, setPreviewDoc] = useState<RequiredDocument | null>(null);
 
   // ── Vendor Search / Duplicate Detection ──
   const [searchResults, setSearchResults] = useState<VendorSearchResult[]>([]);
@@ -276,31 +285,33 @@ export default function NewOnboardingPage() {
 
   // Handle NDA/MNDA template selection
   const handleOpenNdaTemplateModal = useCallback(() => {
-    // Refresh templates from Company Settings
     setNdaTemplatesLoading(true);
     companySettingsService.listDocumentTemplates().then(templates => {
       setNdaTemplates(templates.filter(t => t.type === 'NDA'));
       setMndaTemplates(templates.filter(t => t.type === 'MNDA'));
-    }).catch(() => {
-      // If API fails, keep whatever was loaded before
-    }).finally(() => {
-      setNdaTemplatesLoading(false);
-    });
+      setAnyOtherTemplates(templates.filter(t => t.type === 'ANY_OTHER'));
+    }).catch(() => {}).finally(() => { setNdaTemplatesLoading(false); });
     setShowNdaTemplateModal(true);
   }, []);
 
   const handleOpenMndaTemplateModal = useCallback(() => {
-    // Refresh templates from Company Settings
     setNdaTemplatesLoading(true);
     companySettingsService.listDocumentTemplates().then(templates => {
       setNdaTemplates(templates.filter(t => t.type === 'NDA'));
       setMndaTemplates(templates.filter(t => t.type === 'MNDA'));
-    }).catch(() => {
-      // If API fails, keep whatever was loaded before
-    }).finally(() => {
-      setNdaTemplatesLoading(false);
-    });
+      setAnyOtherTemplates(templates.filter(t => t.type === 'ANY_OTHER'));
+    }).catch(() => {}).finally(() => { setNdaTemplatesLoading(false); });
     setShowMndaTemplateModal(true);
+  }, []);
+
+  const handleOpenAnyOtherTemplateModal = useCallback(() => {
+    setNdaTemplatesLoading(true);
+    companySettingsService.listDocumentTemplates().then(templates => {
+      setNdaTemplates(templates.filter(t => t.type === 'NDA'));
+      setMndaTemplates(templates.filter(t => t.type === 'MNDA'));
+      setAnyOtherTemplates(templates.filter(t => t.type === 'ANY_OTHER'));
+    }).catch(() => {}).finally(() => { setNdaTemplatesLoading(false); });
+    setShowAnyOtherTemplateModal(true);
   }, []);
 
   const handleSelectNdaTemplate = useCallback((templateId: string) => {
@@ -309,6 +320,10 @@ export default function NewOnboardingPage() {
 
   const handleSelectMndaTemplate = useCallback((templateId: string) => {
     setMndaTemplateId(templateId);
+  }, []);
+
+  const handleSelectAnyOtherTemplate = useCallback((templateId: string) => {
+    setAnyOtherTemplateId(templateId);
   }, []);
 
   const handleOpenDocsPopup = useCallback(async () => {
@@ -367,10 +382,11 @@ export default function NewOnboardingPage() {
   useBodyScrollLock(!!sentSuccessModal);
   useBodyScrollLock(!!eyeViewModal);
   useBodyScrollLock(showPreSendConfidenceModal);
+  useBodyScrollLock(!!previewDoc);
 
-  // Escape key closes expanded modals, template preview, success modal, eye view modal, and pre-send modal
+  // Escape key closes expanded modals, template preview, success modal, eye view modal, pre-send modal and doc preview
   useEffect(() => {
-    if (!isInviteExpanded && !isSentExpanded && !showTemplatePreview && !sentSuccessModal && !eyeViewModal && !showPreSendConfidenceModal) return;
+    if (!isInviteExpanded && !isSentExpanded && !showTemplatePreview && !sentSuccessModal && !eyeViewModal && !showPreSendConfidenceModal && !previewDoc) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsInviteExpanded(false);
@@ -379,11 +395,12 @@ export default function NewOnboardingPage() {
         setSentSuccessModal(null);
         setEyeViewModal(null);
         setShowPreSendConfidenceModal(false);
+        setPreviewDoc(null);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isInviteExpanded, isSentExpanded, showTemplatePreview, sentSuccessModal, eyeViewModal, showPreSendConfidenceModal]);
+  }, [isInviteExpanded, isSentExpanded, showTemplatePreview, sentSuccessModal, eyeViewModal, showPreSendConfidenceModal, previewDoc]);
 
 
 
@@ -637,8 +654,10 @@ export default function NewOnboardingPage() {
         ndaMndaRequired: (ndaRequired && mndaRequired) || undefined,
         ndaRequired: ndaRequired || undefined,
         mndaRequired: mndaRequired || undefined,
+        anyOtherRequired: anyOtherRequired || undefined,
         ndaTemplateId: ndaTemplateId || undefined,
         mndaTemplateId: mndaTemplateId || undefined,
+        anyOtherTemplateId: anyOtherTemplateId || undefined,
       });
       setCompanyName('');
       setContactEmail('');
@@ -651,8 +670,10 @@ export default function NewOnboardingPage() {
       setSelectedDocIds([]);
       setNdaRequired(false);
       setMndaRequired(false);
+      setAnyOtherRequired(false);
       setNdaTemplateId(null);
       setMndaTemplateId(null);
+      setAnyOtherTemplateId(null);
       setSelectedSearchVendor(null);
       hasShownDuplicateRef.current = false;
       continuedAsNewRef.current = false;
@@ -1068,74 +1089,176 @@ export default function NewOnboardingPage() {
                 </div>
               )}
 
-              {/* ── Separate NDA & MNDA Required ── */}
-              <div className="onb-nda-section">
-                <div className="onb-nda-row">
-                  <div className="onb-items-bar__left">
-                    <FileText size={15} />
-                    <span className="onb-items-bar__label">NDA Agreement</span>
-                  </div>
-                  <label className="onb-nda-toggle">
-                    <input
-                      type="checkbox"
-                      checked={ndaRequired}
-                      onChange={(e) => {
-                        setNdaRequired(e.target.checked);
-                        if (e.target.checked) {
-                          setNdaTemplateId(null);
-                          handleOpenNdaTemplateModal();
-                        } else {
-                          setNdaTemplateId(null);
-                        }
-                      }}
-                      className="onb-nda-checkbox"
-                    />
-                    <span className="onb-nda-toggle__label">
-                      {ndaRequired ? (ndaTemplateId ? 'NDA template selected' : 'Select NDA template') : 'Required'}
-                    </span>
-                  </label>
-                </div>
-                {ndaRequired && ndaTemplateId && (
-                  <div className="onb-nda-selected">
-                    <FileText size={12} />
-                    <span>Template: {ndaTemplates.find(t => t.id === ndaTemplateId)?.name || 'Selected'}</span>
-                    <button type="button" className="onb-nda-change-btn" onClick={handleOpenNdaTemplateModal}>Change</button>
-                  </div>
-                )}
+              {/* ── Legal Documents Section (NDA & MNDA) — Dropdown Style ── */}
+              {(() => {
+                const legalOpen = [ndaRequired, mndaRequired, anyOtherRequired];
+                const selectedCount = legalOpen.filter(Boolean).length;
+                return (
+                  <div className="onb-legal-docs-section">
+                    <button
+                      type="button"
+                      className="onb-legal-docs-section__header onb-legal-docs-section__header--btn"
+                      onClick={() => setLegalDocsOpen(o => !o)}
+                      aria-expanded={legalDocsOpen}
+                    >
+                      <ShieldCheck size={15} className="onb-legal-docs-section__header-icon" />
+                      <span className="onb-legal-docs-section__header-title">Legal Documents</span>
+                      {selectedCount > 0 && (
+                        <span className="onb-legal-docs-section__count-badge">{selectedCount} selected</span>
+                      )}
+                      <ChevronDown
+                        size={15}
+                        className={`onb-legal-docs-section__chevron ${legalDocsOpen ? 'onb-legal-docs-section__chevron--open' : ''}`}
+                      />
+                    </button>
 
-                <div className="onb-nda-row">
-                  <div className="onb-items-bar__left">
-                    <FileText size={15} />
-                    <span className="onb-items-bar__label">MNDA Agreement</span>
+                    {legalDocsOpen && (
+                      <div className="onb-legal-docs-dropdown">
+                        {/* NDA Row */}
+                        <div className={`onb-legal-doc-row ${ndaRequired ? 'onb-legal-doc-row--active' : ''}`}>
+                          <div className="onb-legal-doc-row__left">
+                            <label className="onb-legal-doc-row__toggle">
+                              <input
+                                type="checkbox"
+                                checked={ndaRequired}
+                                onChange={(e) => {
+                                  setNdaRequired(e.target.checked);
+                                  if (e.target.checked) {
+                                    setNdaTemplateId(null);
+                                    handleOpenNdaTemplateModal();
+                                  } else {
+                                    setNdaTemplateId(null);
+                                  }
+                                }}
+                                className="onb-nda-checkbox"
+                              />
+                              <div className="onb-legal-doc-row__info">
+                                <span className="onb-legal-doc-row__name">NDA Agreement</span>
+                                <span className="onb-legal-doc-row__desc">Non-Disclosure Agreement</span>
+                              </div>
+                            </label>
+                          </div>
+                          <div className="onb-legal-doc-row__right">
+                            {ndaRequired && (
+                              <>
+                                {ndaTemplateId ? (
+                                  <span className="onb-legal-doc-row__selected-badge">
+                                    <FileText size={11} />
+                                    {ndaTemplates.find(t => t.id === ndaTemplateId)?.name || 'Template Selected'}
+                                  </span>
+                                ) : (
+                                  <span className="onb-legal-doc-row__warn">No template selected</span>
+                                )}
+                                <button
+                                  type="button"
+                                  className="onb-legal-doc-row__choose-btn"
+                                  onClick={handleOpenNdaTemplateModal}
+                                >
+                                  {ndaTemplateId ? 'Change' : 'Choose Template'}
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* MNDA Row */}
+                        <div className={`onb-legal-doc-row ${mndaRequired ? 'onb-legal-doc-row--active' : ''}`}>
+                          <div className="onb-legal-doc-row__left">
+                            <label className="onb-legal-doc-row__toggle">
+                              <input
+                                type="checkbox"
+                                checked={mndaRequired}
+                                onChange={(e) => {
+                                  setMndaRequired(e.target.checked);
+                                  if (e.target.checked) {
+                                    setMndaTemplateId(null);
+                                    handleOpenMndaTemplateModal();
+                                  } else {
+                                    setMndaTemplateId(null);
+                                  }
+                                }}
+                                className="onb-nda-checkbox"
+                              />
+                              <div className="onb-legal-doc-row__info">
+                                <span className="onb-legal-doc-row__name">MNDA Agreement</span>
+                                <span className="onb-legal-doc-row__desc">Mutual Non-Disclosure Agreement</span>
+                              </div>
+                            </label>
+                          </div>
+                          <div className="onb-legal-doc-row__right">
+                            {mndaRequired && (
+                              <>
+                                {mndaTemplateId ? (
+                                  <span className="onb-legal-doc-row__selected-badge">
+                                    <FileText size={11} />
+                                    {mndaTemplates.find(t => t.id === mndaTemplateId)?.name || 'Template Selected'}
+                                  </span>
+                                ) : (
+                                  <span className="onb-legal-doc-row__warn">No template selected</span>
+                                )}
+                                <button
+                                  type="button"
+                                  className="onb-legal-doc-row__choose-btn"
+                                  onClick={handleOpenMndaTemplateModal}
+                                >
+                                  {mndaTemplateId ? 'Change' : 'Choose Template'}
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Any Other Row */}
+                        <div className={`onb-legal-doc-row ${anyOtherRequired ? 'onb-legal-doc-row--active' : ''}`}>
+                          <div className="onb-legal-doc-row__left">
+                            <label className="onb-legal-doc-row__toggle">
+                              <input
+                                type="checkbox"
+                                checked={anyOtherRequired}
+                                onChange={(e) => {
+                                  setAnyOtherRequired(e.target.checked);
+                                  if (e.target.checked) {
+                                    setAnyOtherTemplateId(null);
+                                    handleOpenAnyOtherTemplateModal();
+                                  } else {
+                                    setAnyOtherTemplateId(null);
+                                  }
+                                }}
+                                className="onb-nda-checkbox"
+                              />
+                              <div className="onb-legal-doc-row__info">
+                                <span className="onb-legal-doc-row__name">Any Other Agreement</span>
+                                <span className="onb-legal-doc-row__desc">Other legal / compliance document</span>
+                              </div>
+                            </label>
+                          </div>
+                          <div className="onb-legal-doc-row__right">
+                            {anyOtherRequired && (
+                              <>
+                                {anyOtherTemplateId ? (
+                                  <span className="onb-legal-doc-row__selected-badge">
+                                    <FileText size={11} />
+                                    {anyOtherTemplates.find(t => t.id === anyOtherTemplateId)?.name || 'Template Selected'}
+                                  </span>
+                                ) : (
+                                  <span className="onb-legal-doc-row__warn">No template selected</span>
+                                )}
+                                <button
+                                  type="button"
+                                  className="onb-legal-doc-row__choose-btn"
+                                  onClick={handleOpenAnyOtherTemplateModal}
+                                >
+                                  {anyOtherTemplateId ? 'Change' : 'Choose Template'}
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <label className="onb-nda-toggle">
-                    <input
-                      type="checkbox"
-                      checked={mndaRequired}
-                      onChange={(e) => {
-                        setMndaRequired(e.target.checked);
-                        if (e.target.checked) {
-                          setMndaTemplateId(null);
-                          handleOpenMndaTemplateModal();
-                        } else {
-                          setMndaTemplateId(null);
-                        }
-                      }}
-                      className="onb-nda-checkbox"
-                    />
-                    <span className="onb-nda-toggle__label">
-                      {mndaRequired ? (mndaTemplateId ? 'MNDA template selected' : 'Select MNDA template') : 'Required'}
-                    </span>
-                  </label>
-                </div>
-                {mndaRequired && mndaTemplateId && (
-                  <div className="onb-nda-selected">
-                    <FileText size={12} />
-                    <span>Template: {mndaTemplates.find(t => t.id === mndaTemplateId)?.name || 'Selected'}</span>
-                    <button type="button" className="onb-nda-change-btn" onClick={handleOpenMndaTemplateModal}>Change</button>
-                  </div>
-                )}
-              </div>
+                );
+              })()}
 
               {/* Documents — Compact Summary + Popup Trigger */}
               <div className="onb-items-bar">
@@ -1339,16 +1462,35 @@ export default function NewOnboardingPage() {
                       {mandatoryDocs.length} document{mandatoryDocs.length !== 1 ? 's' : ''}
                     </div>
                     {mandatoryDocs.map(doc => (
-                      <label key={doc.id} className={`onb-doc-select__item ${selectedDocIds.includes(doc.id) ? 'onb-doc-select__item--selected' : ''}`}>
-                        <input
-                          type="checkbox"
-                          checked={selectedDocIds.includes(doc.id)}
-                          onChange={() => toggleDocSelection(doc.id)}
-                          className="onb-doc-select__checkbox"
-                        />
-                        <FileText size={15} className="onb-doc-select__icon" />
-                        <span className="onb-doc-select__name">{doc.name}</span>
-                      </label>
+                      <div key={doc.id} className={`onb-doc-select__item ${selectedDocIds.includes(doc.id) ? 'onb-doc-select__item--selected' : ''}`}>
+                        <label className="onb-doc-select__item-label" onClick={() => toggleDocSelection(doc.id)}>
+                          <input
+                            type="checkbox"
+                            checked={selectedDocIds.includes(doc.id)}
+                            onChange={() => toggleDocSelection(doc.id)}
+                            className="onb-doc-select__checkbox"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <FileText size={15} className="onb-doc-select__icon" />
+                          <div className="onb-doc-select__name-wrap">
+                            <span className="onb-doc-select__name">{doc.name}</span>
+                            {doc.description && (
+                              <span className="onb-doc-select__desc">{doc.description}</span>
+                            )}
+                            {doc.acceptedFileTypes && (
+                              <span className="onb-doc-select__filetypes">{doc.acceptedFileTypes}</span>
+                            )}
+                          </div>
+                        </label>
+                        <button
+                          type="button"
+                          className="onb-template-preview-btn"
+                          onClick={(e) => { e.stopPropagation(); setPreviewDoc(doc); }}
+                          title="Preview document info"
+                        >
+                          <Eye size={12} /> Preview
+                        </button>
+                      </div>
                     ))}
                   </>
                 )}
@@ -1361,16 +1503,35 @@ export default function NewOnboardingPage() {
                       {optionalDocs.length} document{optionalDocs.length !== 1 ? 's' : ''}
                     </div>
                     {optionalDocs.map(doc => (
-                      <label key={doc.id} className={`onb-doc-select__item ${selectedDocIds.includes(doc.id) ? 'onb-doc-select__item--selected' : ''}`}>
-                        <input
-                          type="checkbox"
-                          checked={selectedDocIds.includes(doc.id)}
-                          onChange={() => toggleDocSelection(doc.id)}
-                          className="onb-doc-select__checkbox"
-                        />
-                        <FileText size={15} className="onb-doc-select__icon" />
-                        <span className="onb-doc-select__name">{doc.name}</span>
-                      </label>
+                      <div key={doc.id} className={`onb-doc-select__item ${selectedDocIds.includes(doc.id) ? 'onb-doc-select__item--selected' : ''}`}>
+                        <label className="onb-doc-select__item-label" onClick={() => toggleDocSelection(doc.id)}>
+                          <input
+                            type="checkbox"
+                            checked={selectedDocIds.includes(doc.id)}
+                            onChange={() => toggleDocSelection(doc.id)}
+                            className="onb-doc-select__checkbox"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <FileText size={15} className="onb-doc-select__icon" />
+                          <div className="onb-doc-select__name-wrap">
+                            <span className="onb-doc-select__name">{doc.name}</span>
+                            {doc.description && (
+                              <span className="onb-doc-select__desc">{doc.description}</span>
+                            )}
+                            {doc.acceptedFileTypes && (
+                              <span className="onb-doc-select__filetypes">{doc.acceptedFileTypes}</span>
+                            )}
+                          </div>
+                        </label>
+                        <button
+                          type="button"
+                          className="onb-template-preview-btn"
+                          onClick={(e) => { e.stopPropagation(); setPreviewDoc(doc); }}
+                          title="Preview document info"
+                        >
+                          <Eye size={12} /> Preview
+                        </button>
+                      </div>
                     ))}
                   </>
                 )}
@@ -1383,16 +1544,35 @@ export default function NewOnboardingPage() {
                       {anyOtherDocs.length} document{anyOtherDocs.length !== 1 ? 's' : ''}
                     </div>
                     {anyOtherDocs.map(doc => (
-                      <label key={doc.id} className={`onb-doc-select__item ${selectedDocIds.includes(doc.id) ? 'onb-doc-select__item--selected' : ''}`}>
-                        <input
-                          type="checkbox"
-                          checked={selectedDocIds.includes(doc.id)}
-                          onChange={() => toggleDocSelection(doc.id)}
-                          className="onb-doc-select__checkbox"
-                        />
-                        <FileText size={15} className="onb-doc-select__icon" />
-                        <span className="onb-doc-select__name">{doc.name}</span>
-                      </label>
+                      <div key={doc.id} className={`onb-doc-select__item ${selectedDocIds.includes(doc.id) ? 'onb-doc-select__item--selected' : ''}`}>
+                        <label className="onb-doc-select__item-label" onClick={() => toggleDocSelection(doc.id)}>
+                          <input
+                            type="checkbox"
+                            checked={selectedDocIds.includes(doc.id)}
+                            onChange={() => toggleDocSelection(doc.id)}
+                            className="onb-doc-select__checkbox"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <FileText size={15} className="onb-doc-select__icon" />
+                          <div className="onb-doc-select__name-wrap">
+                            <span className="onb-doc-select__name">{doc.name}</span>
+                            {doc.description && (
+                              <span className="onb-doc-select__desc">{doc.description}</span>
+                            )}
+                            {doc.acceptedFileTypes && (
+                              <span className="onb-doc-select__filetypes">{doc.acceptedFileTypes}</span>
+                            )}
+                          </div>
+                        </label>
+                        <button
+                          type="button"
+                          className="onb-template-preview-btn"
+                          onClick={(e) => { e.stopPropagation(); setPreviewDoc(doc); }}
+                          title="Preview document info"
+                        >
+                          <Eye size={12} /> Preview
+                        </button>
+                      </div>
                     ))}
                   </>
                 )}
@@ -1542,8 +1722,80 @@ export default function NewOnboardingPage() {
             )}
           </DesktopWindow>
 
+          {/* ── Desktop-style Any Other Template Selection Window ── */}
+          <DesktopWindow
+            open={showAnyOtherTemplateModal}
+            onClose={() => { setShowAnyOtherTemplateModal(false); if (!anyOtherTemplateId) setAnyOtherRequired(false); }}
+            title="Select Any Other Agreement Template"
+            icon={<FileText size={16} />}
+            defaultWidth={540}
+            defaultHeight={420}
+            minWidth={380}
+            minHeight={280}
+            footer={
+              <button
+                type="button"
+                className="onb-popup-done-btn"
+                onClick={() => { setShowAnyOtherTemplateModal(false); if (!anyOtherTemplateId) setAnyOtherRequired(false); }}
+              >
+                {anyOtherTemplateId ? 'Done' : 'Cancel'}
+              </button>
+            }
+          >
+            {ndaTemplatesLoading ? (
+              <div className="onb-popup-empty">
+                <p className="onb-popup-empty__desc">Loading templates...</p>
+              </div>
+            ) : anyOtherTemplates.length === 0 ? (
+              <div className="onb-popup-empty">
+                <FileText size={28} />
+                <p className="onb-popup-empty__title">No "Any Other" templates configured</p>
+                <p className="onb-popup-empty__desc">Add Any Other templates in Company Settings first.</p>
+              </div>
+            ) : (
+              <div className="onb-doc-select">
+                {anyOtherTemplates.map(template => {
+                  const isSelected = anyOtherTemplateId === template.id;
+                  return (
+                    <label
+                      key={template.id}
+                      className={`onb-doc-select__item ${isSelected ? 'onb-doc-select__item--selected' : ''}`}
+                      onClick={() => handleSelectAnyOtherTemplate(template.id)}
+                    >
+                      <input
+                        type="radio"
+                        name="anyOtherTemplate"
+                        checked={isSelected}
+                        onChange={() => handleSelectAnyOtherTemplate(template.id)}
+                        className="onb-doc-select__checkbox"
+                      />
+                      <FileText size={15} className="onb-doc-select__icon" />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="onb-doc-select__name">{template.name}</div>
+                        {template.fileUrl && (
+                          <div style={{ fontSize: 11, color: '#9ea4a9', marginTop: 2 }}>
+                            Uploaded document available
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="onb-template-preview-btn"
+                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); handlePreviewTemplate(template); }}
+                        title="Preview template content"
+                      >
+                        Preview
+                      </button>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </DesktopWindow>
+
           {/* ── Template Preview Overlay ── */}
           {showTemplatePreview && previewTemplate && (
+
             <div
               className="onb-template-preview-overlay"
               onClick={() => setShowTemplatePreview(false)}
@@ -1599,6 +1851,110 @@ export default function NewOnboardingPage() {
             </div>
           )}
         </div>
+
+      {/* ── Required Document Preview Modal ── */}
+      {previewDoc && (
+        <div
+          className="onb-template-preview-overlay"
+          onClick={() => setPreviewDoc(null)}
+          style={{ zIndex: 12000 }}
+        >
+          <div
+            className="onb-template-preview-card"
+            style={{ maxWidth: 520 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="onb-template-preview-header">
+              <div className="onb-template-preview-header__left">
+                <FileText size={18} />
+                <div>
+                  <div className="onb-template-preview-header__title">{previewDoc.name}</div>
+                  <div className="onb-template-preview-header__sub">
+                    {previewDoc.documentCategory === 'mandatory' ? 'Mandatory' : previewDoc.documentCategory === 'optional' ? 'Optional' : 'Any Other'} Document
+                    {previewDoc.fieldType && ` · ${previewDoc.fieldType}`}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="onb-template-preview-close"
+                onClick={() => setPreviewDoc(null)}
+                aria-label="Close preview"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="onb-template-preview-body" style={{ minHeight: 180 }}>
+              {previewDoc.description ? (
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-placeholder)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Description</div>
+                  <p style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.6, margin: 0 }}>{previewDoc.description}</p>
+                </div>
+              ) : (
+                <div style={{ marginBottom: 20 }}>
+                  <p style={{ fontSize: 13, color: 'var(--text-placeholder)', fontStyle: 'italic', margin: 0 }}>No description provided for this document.</p>
+                </div>
+              )}
+              {previewDoc.acceptedFileTypes && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-placeholder)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>Accepted File Types</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {previewDoc.acceptedFileTypes.split(',').map((ft, i) => (
+                      <span
+                        key={i}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center',
+                          padding: '3px 10px', borderRadius: 20,
+                          background: 'rgba(10,110,209,0.08)',
+                          border: '1px solid rgba(10,110,209,0.2)',
+                          color: 'var(--primary-500)',
+                          fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono)',
+                        }}
+                      >
+                        .{ft.trim()}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '10px 14px', borderRadius: 'var(--radius-md)',
+                background: selectedDocIds.includes(previewDoc.id)
+                  ? 'rgba(16,185,129,0.08)' : 'var(--surface-elevated)',
+                border: `1px solid ${
+                  selectedDocIds.includes(previewDoc.id) ? 'rgba(16,185,129,0.25)' : 'var(--border)'
+                }`,
+                marginTop: 8,
+              }}>
+                <input
+                  type="checkbox"
+                  checked={selectedDocIds.includes(previewDoc.id)}
+                  onChange={() => toggleDocSelection(previewDoc.id)}
+                  style={{ width: 16, height: 16, accentColor: 'var(--primary-500)', cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                  {selectedDocIds.includes(previewDoc.id) ? '✓ Selected for this invitation' : 'Select this document for the invitation'}
+                </span>
+              </div>
+            </div>
+            <div className="onb-template-preview-footer" style={{ justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-placeholder)' }}>
+                Category: <strong style={{ color: 'var(--text-secondary)' }}>
+                  {previewDoc.documentCategory === 'mandatory' ? 'Mandatory' : previewDoc.documentCategory === 'optional' ? 'Optional' : 'Any Other'}
+                </strong>
+              </span>
+              <button
+                type="button"
+                className="onb-popup-done-btn"
+                onClick={() => setPreviewDoc(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Invitation Detail Popup ── */}
       {detailInvitation && (

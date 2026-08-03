@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Trash2, X } from 'lucide-react';
 import FormBuilderSidebar from '../../components/form-builder/FormBuilderSidebar';
 import FormBuilderCanvas from '../../components/form-builder/FormBuilderCanvas';
 import FormBuilderPropertiesPanel from '../../components/form-builder/FormBuilderPropertiesPanel';
@@ -7,6 +8,7 @@ import FormSaveWorkflowModal from '../../components/form-builder/FormSaveWorkflo
 import FormPublishSuccessModal from '../../components/form-builder/FormPublishSuccessModal';
 import { formWorkflowService, type AudienceType } from '../../services/formWorkflowService';
 import type { FormDefinition, FormField, FieldType } from '../../types/formBuilder';
+import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
 import './CustomFormBuilderPage.css';
 
 const STORAGE_KEY = 'heliflow_custom_forms';
@@ -40,6 +42,8 @@ export default function CustomFormBuilderPage() {
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const [sidebarTab, setSidebarTab] = useState<'palette' | 'forms'>('palette');
   const [isWorkflowModalOpen, setIsWorkflowModalOpen] = useState(false);
+  const [showClearCanvasModal, setShowClearCanvasModal] = useState(false);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [successModalData, setSuccessModalData] = useState<{
     isOpen: boolean;
     formTitle: string;
@@ -270,7 +274,11 @@ export default function CustomFormBuilderPage() {
   };
 
   const handleClearCanvas = () => {
-    if (!confirm('Clear all fields from the canvas?')) return;
+    setShowClearCanvasModal(true);
+  };
+
+  const confirmClearCanvas = () => {
+    setShowClearCanvasModal(false);
     const updated = {
       ...activeForm,
       fields: [],
@@ -303,7 +311,7 @@ export default function CustomFormBuilderPage() {
       updatedAt: new Date().toISOString(),
     };
     pushHistory(updated);
-    alert(`Form "${activeForm.title}" saved as draft!`);
+    setToastMsg(`Form "${activeForm.title}" saved as draft!`);
   };
 
   const handleConfigureWorkflow = (audience: AudienceType, _selectedUserIds: string[]) => {
@@ -358,6 +366,16 @@ export default function CustomFormBuilderPage() {
 
   return (
     <div className="cfb-builder-layout">
+      {toastMsg && (
+        <MessageStrip
+          type={inferMessageType(toastMsg)}
+          onClose={() => setToastMsg(null)}
+          autoHideMs={5000}
+          className="sap-message-strip--toast"
+        >
+          {toastMsg}
+        </MessageStrip>
+      )}
       {/* Left Sidebar: Components Palette & Form List Switcher */}
       <FormBuilderSidebar
         forms={forms}
@@ -428,6 +446,34 @@ export default function CustomFormBuilderPage() {
           navigate('/admin/form-responses');
         }}
       />
+
+      {/* Clear Canvas Confirmation Modal */}
+      {showClearCanvasModal && (
+        <div className="fbs-modal-backdrop" onClick={() => setShowClearCanvasModal(false)}>
+          <div className="fbs-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="fbs-modal-header">
+              <div className="fbs-modal-icon-wrap">
+                <Trash2 size={22} style={{ color: 'var(--danger-500)' }} />
+              </div>
+              <button type="button" className="fbs-modal-close" onClick={() => setShowClearCanvasModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="fbs-modal-body">
+              <h3>Clear All Fields?</h3>
+              <p>Are you sure you want to clear all fields from the canvas? This action will empty your form layout.</p>
+            </div>
+            <div className="fbs-modal-footer">
+              <button type="button" className="fbs-modal-btn fbs-modal-btn--secondary" onClick={() => setShowClearCanvasModal(false)}>
+                Cancel
+              </button>
+              <button type="button" className="fbs-modal-btn fbs-modal-btn--danger" onClick={confirmClearCanvas}>
+                <Trash2 size={15} /> Clear Canvas
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1210,83 +1210,88 @@ export default function VendorDashboard() {
       )}
 
       {/* ── Widget gallery drawer ───────────────────────────── */}
-      <div
-        className={`vnd-gallery-backdrop ${isGalleryOpen ? 'vnd-gallery-backdrop--visible' : ''}`}
-        onClick={closeGallery}
-      />
-      <aside
-        className={`vnd-gallery ${isGalleryOpen ? 'vnd-gallery--open' : ''}`}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="vnd-gallery-title"
-      >
-        <div className="vnd-gallery__header">
-          <div className="vnd-gallery__header-text">
-            <Sparkles size={20} />
-            <div>
-              <h2 id="vnd-gallery-title">Widget Gallery</h2>
-              <p>Toggle widgets on or off</p>
-            </div>
-          </div>
-          <button className="vnd-gallery__close" onClick={closeGallery} aria-label="Close gallery">
-            <X size={20} />
-          </button>
-        </div>
-
-        <div className="vnd-gallery__body">
-          {groupedWidgets.map((group) => (
-            <div key={group.category} className="vnd-gallery__section">
-              <h3 className="vnd-gallery__section-title">{group.label}</h3>
-              <div className="vnd-gallery__cards">
-                {group.widgets.map((widget, idx) => {
-                  const active = isWidgetActive(widget.id);
-                  return (
-                    <button
-                      key={widget.id}
-                      className={`vnd-gallery-card ${active ? 'vnd-gallery-card--active' : ''}`}
-                      onClick={() => toggleWidget(widget.id)}
-                      style={{
-                        animationDelay: `${idx * 0.05}s`,
-                        '--widget-accent': widget.accentColor,
-                      } as React.CSSProperties}
-                    >
-                      <div className="vnd-gallery-card__top">
-                        <div
-                          className="vnd-gallery-card__icon"
-                          style={{ background: `${widget.accentColor}18`, color: widget.accentColor }}
-                        >
-                          {widget.icon}
-                        </div>
-                        <div className={`vnd-gallery-card__toggle ${active ? 'vnd-gallery-card__toggle--on' : ''}`}>
-                          <div className="vnd-gallery-card__toggle-knob">
-                            {active && <Check size={10} />}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="vnd-gallery-card__info">
-                        <span className="vnd-gallery-card__name">{widget.name}</span>
-                        <span className="vnd-gallery-card__desc">{widget.description}</span>
-                      </div>
-                      {widget.fullWidth && (
-                        <span className="vnd-gallery-card__badge">Full Width</span>
-                      )}
-                    </button>
-                  );
-                })}
+      {createPortal(
+        <>
+          <div
+            className={`vnd-gallery-backdrop ${isGalleryOpen ? 'vnd-gallery-backdrop--visible' : ''}`}
+            onClick={closeGallery}
+          />
+          <aside
+            className={`vnd-gallery ${isGalleryOpen ? 'vnd-gallery--open' : ''}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="vnd-gallery-title"
+          >
+            <div className="vnd-gallery__header">
+              <div className="vnd-gallery__header-text">
+                <Sparkles size={20} />
+                <div>
+                  <h2 id="vnd-gallery-title">Widget Gallery</h2>
+                  <p>Toggle widgets on or off</p>
+                </div>
               </div>
+              <button className="vnd-gallery__close" onClick={closeGallery} aria-label="Close gallery">
+                <X size={20} />
+              </button>
             </div>
-          ))}
-        </div>
 
-        <div className="vnd-gallery__footer">
-          <span className="vnd-gallery__footer-count">
-            {activeWidgets.length} of {availableWidgets.length} widgets active
-          </span>
-          <button className="vnd-gallery__footer-btn" onClick={closeGallery}>
-            Done
-          </button>
-        </div>
-      </aside>
+            <div className="vnd-gallery__body">
+              {groupedWidgets.map((group) => (
+                <div key={group.category} className="vnd-gallery__section">
+                  <h3 className="vnd-gallery__section-title">{group.label}</h3>
+                  <div className="vnd-gallery__cards">
+                    {group.widgets.map((widget, idx) => {
+                      const active = isWidgetActive(widget.id);
+                      return (
+                        <button
+                          key={widget.id}
+                          className={`vnd-gallery-card ${active ? 'vnd-gallery-card--active' : ''}`}
+                          onClick={() => toggleWidget(widget.id)}
+                          style={{
+                            animationDelay: `${idx * 0.05}s`,
+                            '--widget-accent': widget.accentColor,
+                          } as React.CSSProperties}
+                        >
+                          <div className="vnd-gallery-card__top">
+                            <div
+                              className="vnd-gallery-card__icon"
+                              style={{ background: `${widget.accentColor}18`, color: widget.accentColor }}
+                            >
+                              {widget.icon}
+                            </div>
+                            <div className={`vnd-gallery-card__toggle ${active ? 'vnd-gallery-card__toggle--on' : ''}`}>
+                              <div className="vnd-gallery-card__toggle-knob">
+                                {active && <Check size={10} />}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="vnd-gallery-card__info">
+                            <span className="vnd-gallery-card__name">{widget.name}</span>
+                            <span className="vnd-gallery-card__desc">{widget.description}</span>
+                          </div>
+                          {widget.fullWidth && (
+                            <span className="vnd-gallery-card__badge">Full Width</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="vnd-gallery__footer">
+              <span className="vnd-gallery__footer-count">
+                {activeWidgets.length} of {availableWidgets.length} widgets active
+              </span>
+              <button className="vnd-gallery__footer-btn" onClick={closeGallery}>
+                Done
+              </button>
+            </div>
+          </aside>
+        </>,
+        document.body
+      )}
     </div>
   );
 }

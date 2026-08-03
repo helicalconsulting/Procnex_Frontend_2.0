@@ -423,93 +423,98 @@ export default function DashboardPage() {
         )}
 
       {/* ── Widget Gallery Drawer ──────────────────────────── */}
-      <div
-        className={`gallery-backdrop ${isGalleryOpen ? 'gallery-backdrop--visible' : ''}`}
-        onClick={closeGallery}
-      />
-      <aside
-        className={`gallery ${isGalleryOpen ? 'gallery--open' : ''}`}
-        id="widget-gallery"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="widget-gallery-title"
-      >
-        <div className="gallery__header">
-          <div className="gallery__header-text">
-            <Sparkles size={20} />
-            <div>
-              <h2 id="widget-gallery-title">Widget Gallery</h2>
-              <p>Toggle widgets on or off</p>
-            </div>
-          </div>
-          <button
-            className="gallery__close"
+      {createPortal(
+        <>
+          <div
+            className={`gallery-backdrop ${isGalleryOpen ? 'gallery-backdrop--visible' : ''}`}
             onClick={closeGallery}
-            aria-label="Close gallery"
+          />
+          <aside
+            className={`gallery ${isGalleryOpen ? 'gallery--open' : ''}`}
+            id="widget-gallery"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="widget-gallery-title"
           >
-            <X size={20} />
-          </button>
-        </div>
-
-        <div className="gallery__body">
-          {groupedWidgets.map((group) => (
-            <div key={group.category} className="gallery__section">
-              <h3 className="gallery__section-title">{group.label}</h3>
-              <div className="gallery__cards">
-                {group.widgets.map((widget, idx) => {
-                  const isActive = isWidgetActive(widget.id);
-                  const IconComponent = WIDGET_ICONS[widget.icon] || BarChart3;
-
-                  return (
-                    <button
-                      key={widget.id}
-                      className={`gallery-card ${isActive ? 'gallery-card--active' : ''}`}
-                      onClick={() => toggleWidget(widget.id)}
-                      style={{
-                        animationDelay: `${idx * 0.05}s`,
-                        '--widget-accent': widget.accentColor,
-                      } as React.CSSProperties}
-                    >
-                      <div className="gallery-card__top">
-                        <div
-                          className="gallery-card__icon"
-                          style={{
-                            background: `${widget.accentColor}15`,
-                            color: widget.accentColor,
-                          }}
-                        >
-                          <IconComponent size={20} />
-                        </div>
-                        <div className={`gallery-card__toggle ${isActive ? 'gallery-card__toggle--on' : ''}`}>
-                          <div className="gallery-card__toggle-knob">
-                            {isActive && <Check size={10} />}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="gallery-card__info">
-                        <span className="gallery-card__name">{widget.name}</span>
-                        <span className="gallery-card__desc">{widget.description}</span>
-                      </div>
-                      {widget.fullWidth && (
-                        <span className="gallery-card__badge">Full Width</span>
-                      )}
-                    </button>
-                  );
-                })}
+            <div className="gallery__header">
+              <div className="gallery__header-text">
+                <Sparkles size={20} />
+                <div>
+                  <h2 id="widget-gallery-title">Widget Gallery</h2>
+                  <p>Toggle widgets on or off</p>
+                </div>
               </div>
+              <button
+                className="gallery__close"
+                onClick={closeGallery}
+                aria-label="Close gallery"
+              >
+                <X size={20} />
+              </button>
             </div>
-          ))}
-        </div>
 
-        <div className="gallery__footer">
-          <span className="gallery__footer-count">
-            {activeWidgets.length} of {availableWidgets.length} widgets active
-          </span>
-          <button className="gallery__footer-btn" onClick={closeGallery}>
-            Done
-          </button>
-        </div>
-      </aside>
+            <div className="gallery__body">
+              {groupedWidgets.map((group) => (
+                <div key={group.category} className="gallery__section">
+                  <h3 className="gallery__section-title">{group.label}</h3>
+                  <div className="gallery__cards">
+                    {group.widgets.map((widget, idx) => {
+                      const isActive = isWidgetActive(widget.id);
+                      const IconComponent = WIDGET_ICONS[widget.icon] || BarChart3;
+
+                      return (
+                        <button
+                          key={widget.id}
+                          className={`gallery-card ${isActive ? 'gallery-card--active' : ''}`}
+                          onClick={() => toggleWidget(widget.id)}
+                          style={{
+                            animationDelay: `${idx * 0.05}s`,
+                            '--widget-accent': widget.accentColor,
+                          } as React.CSSProperties}
+                        >
+                          <div className="gallery-card__top">
+                            <div
+                              className="gallery-card__icon"
+                              style={{
+                                background: `${widget.accentColor}15`,
+                                color: widget.accentColor,
+                              }}
+                            >
+                              <IconComponent size={20} />
+                            </div>
+                            <div className={`gallery-card__toggle ${isActive ? 'gallery-card__toggle--on' : ''}`}>
+                              <div className="gallery-card__toggle-knob">
+                                {isActive && <Check size={10} />}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="gallery-card__info">
+                            <span className="gallery-card__name">{widget.name}</span>
+                            <span className="gallery-card__desc">{widget.description}</span>
+                          </div>
+                          {widget.fullWidth && (
+                            <span className="gallery-card__badge">Full Width</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="gallery__footer">
+              <span className="gallery__footer-count">
+                {activeWidgets.length} of {availableWidgets.length} widgets active
+              </span>
+              <button className="gallery__footer-btn" onClick={closeGallery}>
+                Done
+              </button>
+            </div>
+          </aside>
+        </>,
+        document.body
+      )}
     </div>
   );
 }

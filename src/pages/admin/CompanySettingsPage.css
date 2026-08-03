@@ -794,6 +794,13 @@
   box-shadow: 0 0 0 2px rgba(10, 110, 209, 0.12);
 }
 
+.company-settings__field input.cs-input--error,
+.company-settings__field select.cs-input--error,
+.company-settings__field textarea.cs-input--error {
+  border-color: var(--danger-500, #dc2626) !important;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15) !important;
+}
+
 .company-settings__field textarea {
   resize: vertical;
   min-height: 60px;
@@ -1724,6 +1731,140 @@
 [data-theme="dark"] .cs-doc-category-select:focus {
   border-color: var(--border-focus);
   box-shadow: 0 0 0 2px rgba(77, 177, 255, 0.15);
+}
+
+/* ── Required Documents Table Header & Item Rows (Light & Dark Mode) ── */
+.cs-doc-grid-header {
+  display: grid;
+  grid-template-columns: 130px 1.4fr 110px 120px 130px 140px 130px 110px 40px;
+  gap: 10px;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--text-secondary, #64748b);
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border, #e2e8f0);
+}
+
+[data-theme="dark"] .cs-doc-grid-header {
+  color: var(--text-secondary, #94a3b8);
+  border-bottom-color: var(--border, #334155);
+}
+
+.cs-mandatory-custom-item--doc-row {
+  display: grid;
+  grid-template-columns: 130px 1.4fr 110px 120px 130px 140px 130px 110px 40px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--surface-card, #ffffff);
+  border: 1px solid var(--border, #e2e8f0);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: all 0.15s ease;
+}
+
+.cs-mandatory-custom-item--doc-row:hover {
+  border-color: var(--primary-300, #93c5fd);
+  box-shadow: 0 2px 6px rgba(10, 110, 209, 0.08);
+}
+
+[data-theme="dark"] .cs-mandatory-custom-item--doc-row {
+  background: var(--surface-elevated, #1e293b);
+  border-color: var(--border, #334155);
+  box-shadow: none;
+}
+
+[data-theme="dark"] .cs-mandatory-custom-item--doc-row:hover {
+  border-color: var(--border-strong, #475569);
+}
+
+/* ── Document Alert Days Input & Toggle Pill (Light & Dark Mode) ── */
+.cs-doc-number-input {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--text-primary, #1e293b);
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border, #cbd5e1);
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  outline: none;
+}
+
+.cs-doc-number-input:hover {
+  border-color: var(--primary-500, #0a6ed1);
+}
+
+.cs-doc-number-input:focus {
+  border-color: var(--primary-500, #0a6ed1);
+  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.12);
+  background: #ffffff;
+}
+
+[data-theme="dark"] .cs-doc-number-input {
+  color: var(--text-primary, #f8fafc);
+  background: var(--surface, #0f172a);
+  border-color: var(--border, #334155);
+}
+
+[data-theme="dark"] .cs-doc-number-input:focus {
+  background: var(--surface-card, #1e293b);
+  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.2);
+}
+
+.cs-doc-toggle-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+  border: 1px solid var(--border, #cbd5e1);
+  background: var(--surface-elevated, #f1f5f9);
+  color: var(--text-secondary, #64748b);
+}
+
+.cs-doc-toggle-pill:hover {
+  border-color: var(--border-strong, #94a3b8);
+  background: #e2e8f0;
+}
+
+.cs-doc-toggle-pill--active {
+  background: #e0f2fe;
+  border-color: #7dd3fc;
+  color: #0284c7;
+}
+
+.cs-doc-toggle-pill--active:hover {
+  background: #bae6fd;
+}
+
+[data-theme="dark"] .cs-doc-toggle-pill {
+  border-color: var(--border, #334155);
+  background: rgba(15, 23, 42, 0.5);
+  color: var(--text-secondary, #94a3b8);
+}
+
+[data-theme="dark"] .cs-doc-toggle-pill:hover {
+  background: rgba(30, 41, 59, 0.8);
+}
+
+[data-theme="dark"] .cs-doc-toggle-pill--active {
+  background: rgba(10, 110, 209, 0.2);
+  border-color: rgba(10, 110, 209, 0.5);
+  color: #38bdf8;
+}
+
+.cs-doc-toggle-pill input {
+  display: none;
 }
 
 /* ── Document Item (with expanded fields) ── */
@@ -4084,6 +4225,124 @@
   gap: 16px;
   padding: 14px 16px;
   border-bottom: 1px solid var(--border, #e2e8f0);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Predictive Match Analysis Cards (Live Typeahead Feedback)
+   ═══════════════════════════════════════════════════════════ */
+
+.cs-predictive-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  margin-top: 5px;
+  animation: csPredictiveFade 0.2s ease;
+}
+
+@keyframes csPredictiveFade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.cs-predictive-card .cs-predictive-icon {
+  flex-shrink: 0;
+}
+
+.cs-predictive-card--unique {
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: #047857;
+}
+
+.cs-predictive-card--unique .cs-predictive-icon {
+  color: #10b981;
+}
+
+.cs-predictive-card--similar {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  color: #b45309;
+}
+
+.cs-predictive-card--similar .cs-predictive-icon {
+  color: #f59e0b;
+}
+
+.cs-predictive-card--exact {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #b91c1c;
+}
+
+.cs-predictive-card--exact .cs-predictive-icon {
+  color: #ef4444;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Documents & Contracts Unified Sub-Navigation Pill Bar
+   ═══════════════════════════════════════════════════════════ */
+
+.cs-subtab-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  background: var(--surface-card, #f8fafc);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 10px;
+  margin-bottom: 20px;
+  width: fit-content;
+}
+
+.cs-subtab-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary, #64748b);
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.cs-subtab-btn:hover {
+  color: var(--text-primary, #1e293b);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.cs-subtab-btn--active {
+  color: var(--primary-500, #0a6ed1);
+  background: var(--surface, #ffffff);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="dark"] .cs-subtab-bar {
+  background: var(--surface-card, #1e1e2d);
+  border-color: var(--border, #2a2a3e);
+}
+
+[data-theme="dark"] .cs-subtab-btn {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .cs-subtab-btn:hover {
+  color: #f1f5f9;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .cs-subtab-btn--active {
+  background: var(--surface-elevated, #2b2b40);
+  color: var(--primary-400, #3892ec);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
 
 [data-theme="dark"] .cs-table-skeleton-row {

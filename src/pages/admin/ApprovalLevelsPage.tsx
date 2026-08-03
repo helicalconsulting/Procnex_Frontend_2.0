@@ -163,7 +163,8 @@ export default function ApprovalLevelsPage() {
   const [activeSystem, setActiveSystem] = useState<SystemType>('heliflow');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingLevel, setEditingLevel] = useState<ApprovalLevelData | null>(null);
-  const anyModalOpen = !!(showAddModal || editingLevel);
+  const [deleteConfirmLevelId, setDeleteConfirmLevelId] = useState<number | null>(null);
+  const anyModalOpen = !!(showAddModal || editingLevel || deleteConfirmLevelId);
   useBodyScrollLock(anyModalOpen);
   const [pageMsg, setPageMsg] = useState<string | null>(null);
   const [saveLoading, setSaveLoading] = useState(false);
@@ -280,17 +281,9 @@ export default function ApprovalLevelsPage() {
     }
   }, [formModule, formRole, formLevelNumber, formTimeLimit, formMinValue, formMaxValue, formCurrency, editingLevel, reload]);
 
-  const handleDelete = useCallback(async (levelId: number) => {
-    if (!window.confirm('Remove this approval level from the chain?')) return;
-    setPageMsg(null);
-    try {
-      await adminService.deleteApprovalLevel(levelId);
-      setPageMsg('Approval level removed.');
-      await reload();
-    } catch (err) {
-      setPageMsg(err instanceof Error ? err.message : 'Delete failed');
-    }
-  }, [reload]);
+  const handleDelete = useCallback((levelId: number) => {
+    setDeleteConfirmLevelId(levelId);
+  }, []);
 
   const moveLevel = useCallback(async (levelId: number, direction: 'up' | 'down') => {
     setPageMsg(null);
@@ -310,6 +303,7 @@ export default function ApprovalLevelsPage() {
           type={inferMessageType(pageMsg)}
           onClose={() => setPageMsg(null)}
           autoHideMs={5000}
+          className="sap-message-strip--toast"
         >
           {pageMsg}
         </MessageStrip>
@@ -679,6 +673,52 @@ export default function ApprovalLevelsPage() {
               >
                 <Check size={16} />
                 {saveLoading ? 'Saving…' : editingLevel ? 'Update Level' : 'Add Level'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmLevelId !== null && (
+        <div className="alvl-modal-backdrop" onClick={() => setDeleteConfirmLevelId(null)}>
+          <div className="alvl-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460 }}>
+            <div className="alvl-modal__header">
+              <div className="alvl-modal__title">
+                <Trash2 size={20} style={{ color: 'var(--danger-500)' }} />
+                <span>Remove Approval Level?</span>
+              </div>
+              <button className="alvl-modal__close" onClick={() => setDeleteConfirmLevelId(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="alvl-modal__body">
+              <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                Are you sure you want to remove this approval level from the chain?
+              </p>
+            </div>
+            <div className="alvl-modal__footer">
+              <button type="button" className="alvl-modal__btn alvl-modal__btn--secondary" onClick={() => setDeleteConfirmLevelId(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="alvl-modal__btn alvl-modal__btn--primary"
+                style={{ background: 'var(--danger-500)', borderColor: 'var(--danger-500)' }}
+                onClick={async () => {
+                  const id = deleteConfirmLevelId;
+                  setDeleteConfirmLevelId(null);
+                  setPageMsg(null);
+                  try {
+                    await adminService.deleteApprovalLevel(id);
+                    setPageMsg('Approval level removed.');
+                    await reload();
+                  } catch (err) {
+                    setPageMsg(err instanceof Error ? err.message : 'Delete failed');
+                  }
+                }}
+              >
+                Remove Level
               </button>
             </div>
           </div>

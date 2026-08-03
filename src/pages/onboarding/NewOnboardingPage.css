@@ -1223,8 +1223,198 @@
   border-color: var(--border-strong);
 }
 
-/* ─── NDA/MNDA Required Toggle ─────────────────────────── */
+/* ─── Legal Documents Section (NDA / MNDA) ─────────────────────────── */
 
+.onb-legal-docs-section {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--surface-elevated);
+}
+
+.onb-legal-docs-section__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, rgba(10,110,209,0.07), rgba(99,102,241,0.05));
+  border-bottom: 1px solid var(--border);
+}
+
+/* Dropdown trigger button variant */
+.onb-legal-docs-section__header--btn {
+  width: 100%;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: background 0.15s;
+  border-radius: 0;
+}
+.onb-legal-docs-section__header--btn:hover {
+  background: linear-gradient(135deg, rgba(10,110,209,0.13), rgba(99,102,241,0.09));
+}
+
+.onb-legal-docs-section__header-icon {
+  color: var(--primary-500);
+  flex-shrink: 0;
+}
+
+.onb-legal-docs-section__header-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.onb-legal-docs-section__count-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 10px;
+  background: rgba(10,110,209,0.13);
+  color: var(--primary-500);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+[data-theme="dark"] .onb-legal-docs-section__count-badge {
+  background: rgba(77,177,255,0.18);
+  color: #4db1ff;
+}
+
+.onb-legal-docs-section__chevron {
+  margin-left: auto;
+  color: var(--text-placeholder);
+  flex-shrink: 0;
+  transition: transform 0.22s cubic-bezier(0.4,0,0.2,1);
+}
+.onb-legal-docs-section__chevron--open {
+  transform: rotate(180deg);
+}
+
+.onb-legal-docs-dropdown {
+  animation: onbDropdownOpen 0.2s cubic-bezier(0.4,0,0.2,1);
+}
+
+@keyframes onbDropdownOpen {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+[data-theme="dark"] .onb-legal-docs-section {
+  background: rgba(255,255,255,0.03);
+}
+
+[data-theme="dark"] .onb-legal-docs-section__header {
+  background: rgba(77,177,255,0.06);
+}
+
+.onb-legal-doc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+}
+
+.onb-legal-doc-row:last-child { border-bottom: none; }
+.onb-legal-doc-row:hover { background: var(--surface-hover); }
+.onb-legal-doc-row--active {
+  background: rgba(10,110,209,0.04);
+}
+[data-theme="dark"] .onb-legal-doc-row--active {
+  background: rgba(77,177,255,0.05);
+}
+
+.onb-legal-doc-row__left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.onb-legal-doc-row__toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  min-width: 0;
+}
+
+.onb-legal-doc-row__info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.onb-legal-doc-row__name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.onb-legal-doc-row__desc {
+  font-size: 11px;
+  color: var(--text-placeholder);
+}
+
+.onb-legal-doc-row__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.onb-legal-doc-row__selected-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: rgba(10,110,209,0.10);
+  color: var(--primary-500);
+  font-size: 11px;
+  font-weight: 600;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.onb-legal-doc-row__warn {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--warning-500, #e9730c);
+  background: rgba(233,115,12,0.08);
+  padding: 3px 10px;
+  border-radius: 12px;
+}
+
+.onb-legal-doc-row__choose-btn {
+  padding: 4px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--primary-500);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, border-color 0.15s, transform 0.12s;
+  white-space: nowrap;
+}
+.onb-legal-doc-row__choose-btn:hover {
+  background: rgba(10,110,209,0.08);
+  border-color: var(--primary-300);
+  transform: translateY(-1px);
+}
+
+/* Keep old styles for compatibility */
 .onb-nda-toggle {
   display: inline-flex;
   align-items: center;
@@ -1241,45 +1431,62 @@
   flex-shrink: 0;
 }
 
-.onb-nda-toggle__label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-primary);
-  transition: color 0.15s;
+/* ─── Document Selection Item (with preview support) ─────────── */
+
+.onb-doc-select__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  transition: background 0.12s;
+}
+.onb-doc-select__item:hover { background: var(--surface-hover); }
+.onb-doc-select__item--selected {
+  background: rgba(10,110,209,0.06);
+}
+[data-theme="dark"] .onb-doc-select__item--selected {
+  background: rgba(77,177,255,0.08);
 }
 
-.onb-nda-toggle input:checked + .onb-nda-toggle__label {
+.onb-doc-select__item-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  flex: 1;
+  min-width: 0;
+}
+
+.onb-doc-select__name-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.onb-doc-select__desc {
+  font-size: 11px;
+  color: var(--text-placeholder);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.onb-doc-select__filetypes {
+  font-size: 10px;
   color: var(--primary-500);
+  font-family: var(--font-mono);
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* ── Separate NDA / MNDA Sections ────────────────────────── */
-.onb-nda-section {
-  display: flex; flex-direction: column; gap: 8px;
-}
-.onb-nda-row {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 14px; border-radius: var(--radius-lg);
-  background: var(--surface-elevated); border: 1px solid var(--border);
-  transition: border-color 0.2s;
-}
-.onb-nda-row:hover { border-color: var(--border-strong); }
-.onb-nda-selected {
-  display: flex; align-items: center; gap: 8px;
-  padding: 6px 14px; margin-left: 4px;
-  font-size: 12px; color: var(--text-secondary);
-  background: var(--surface); border-radius: var(--radius-md);
-}
-.onb-nda-selected svg { color: var(--primary-500); flex-shrink: 0; }
-.onb-nda-change-btn {
-  margin-left: auto; padding: 2px 8px;
-  border: 1px solid var(--border); border-radius: var(--radius-sm);
-  background: var(--surface); color: var(--primary-500);
-  font-size: 11px; font-weight: 600; cursor: pointer;
-  font-family: inherit; transition: background 0.15s;
-}
-.onb-nda-change-btn:hover {
-  background: var(--surface-hover);
-}
+
 
 /* ─── Template Preview Overlay ─────────────────────────── */
 

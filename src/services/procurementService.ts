@@ -99,8 +99,10 @@ export interface SendInvitationPayload {
   ndaMndaRequired?: boolean;
   ndaRequired?: boolean;
   mndaRequired?: boolean;
+  anyOtherRequired?: boolean;
   ndaTemplateId?: string;
   mndaTemplateId?: string;
+  anyOtherTemplateId?: string;
 }
 
 const ONBOARDING_MOCK: OnboardingVendor[] = [
@@ -252,8 +254,10 @@ async function apiSendInvitation(payload: SendInvitationPayload): Promise<SendIn
         ndaMndaRequired: payload.ndaMndaRequired,
         ndaRequired: payload.ndaRequired,
         mndaRequired: payload.mndaRequired,
+        anyOtherRequired: payload.anyOtherRequired,
         ndaTemplateId: payload.ndaTemplateId,
         mndaTemplateId: payload.mndaTemplateId,
+        anyOtherTemplateId: payload.anyOtherTemplateId,
       }),
     });
   } catch {

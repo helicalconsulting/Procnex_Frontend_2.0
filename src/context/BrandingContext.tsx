@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from 'react';
 import { companySettingsService, type CompanyProfile } from '../services/companySettingsService';
+import heliflowLogo from '../assets/heliflow.png';
 
 // ─── Local Storage Keys ────────────────────────────────────
 const BRANDING_CACHE_KEY = 'heliflow_branding_cache';
@@ -131,15 +132,21 @@ function applyPrimaryColor(hex: string) {
   }
 }
 
-/** Apply favicon */
-function applyFavicon(url: string | null) {
+/** Apply favicon — defaults to explicit faviconUrl -> logoUrl -> default logo */
+function applyFavicon(faviconUrl: string | null, logoUrl: string | null = null) {
   let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
   if (!link) {
     link = document.createElement('link');
     link.rel = 'icon';
     document.head.appendChild(link);
   }
-  link.href = url || '/favicon.svg';
+  const targetUrl = faviconUrl || logoUrl || heliflowLogo || '/favicon.png';
+  if (targetUrl.endsWith('.svg')) {
+    link.type = 'image/svg+xml';
+  } else {
+    link.type = 'image/png';
+  }
+  link.href = targetUrl;
 }
 
 /** Apply document title — persists to localStorage so it survives refreshes */
@@ -178,7 +185,7 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
       const color = p.primaryColor || DEFAULT_PRIMARY;
 
       applyPrimaryColor(color);
-      applyFavicon(p.faviconUrl || null);
+      applyFavicon(p.faviconUrl || null, p.logoUrl || null);
 
       // Tab title = company name (from branding settings), falls back to "Heliflow"
       const name = p.companyName || DEFAULT_NAME;
@@ -209,7 +216,7 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
     if (cached) {
       const color = cached.primaryColor || DEFAULT_PRIMARY;
       applyPrimaryColor(color);
-      applyFavicon(cached.faviconUrl || null);
+      applyFavicon(cached.faviconUrl || null, cached.logoUrl || null);
 
       // Apply title from cached company name if not already restored from dedicated cache
       if (!savedTitle) {

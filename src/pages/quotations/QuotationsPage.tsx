@@ -14,7 +14,7 @@ import {
   TrendingDown, TrendingUp,
   Crown, GitCompareArrows, ArrowDownNarrowWide, X, RotateCcw,
   MessageSquare, AlertTriangle, ArrowRightLeft, Shield, Check, X as XIcon,
-  Maximize2, Minimize2, Minus, ChevronUp, BarChart3, Loader2,
+  Maximize2, Minimize2, Minus, ChevronUp, BarChart3, Loader2, LayoutGrid, LayoutList,
   Download,
 } from 'lucide-react';
 import { downloadDocument } from '../../utils/download';

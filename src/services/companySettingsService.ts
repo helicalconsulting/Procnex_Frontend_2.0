@@ -479,6 +479,11 @@ export interface RequiredDocument {
   acceptedFileTypes?: string;
   documentCategory: 'mandatory' | 'optional' | 'any_other';
   isActive: boolean;
+  expirationAlertDays?: number;
+  expirationAlertFrequency?: 'DAILY' | 'WEEKLY' | 'MONTHLY';
+  trackIssueDate?: boolean;
+  trackExpirationDate?: boolean;
+  trackIssuingAuthority?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -556,7 +561,18 @@ async function apiListRequiredDocumentsByCategory(category: 'mandatory' | 'optio
   return data.documents || [];
 }
 
-async function mockCreateRequiredDocument(name: string, documentCategory?: string, description?: string, acceptedFileTypes?: string, fieldType?: string): Promise<RequiredDocument> {
+async function mockCreateRequiredDocument(
+  name: string,
+  documentCategory?: string,
+  description?: string,
+  acceptedFileTypes?: string,
+  fieldType?: string,
+  expirationAlertDays?: number,
+  expirationAlertFrequency?: 'DAILY' | 'WEEKLY' | 'MONTHLY',
+  trackIssueDate?: boolean,
+  trackExpirationDate?: boolean,
+  trackIssuingAuthority?: boolean
+): Promise<RequiredDocument> {
   await new Promise((r) => setTimeout(r, 200));
   const category = (documentCategory || 'mandatory') as 'mandatory' | 'optional' | 'any_other';
   return {
@@ -568,19 +584,60 @@ async function mockCreateRequiredDocument(name: string, documentCategory?: strin
     acceptedFileTypes: acceptedFileTypes || 'pdf,jpg,jpeg,png,doc,docx,xls,xlsx',
     documentCategory: category,
     isActive: true,
+    expirationAlertDays: expirationAlertDays ?? 30,
+    expirationAlertFrequency: expirationAlertFrequency || 'DAILY',
+    trackIssueDate: trackIssueDate ?? true,
+    trackExpirationDate: trackExpirationDate ?? true,
+    trackIssuingAuthority: trackIssuingAuthority ?? true,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
 }
 
-async function apiCreateRequiredDocument(name: string, documentCategory?: string, description?: string, acceptedFileTypes?: string, fieldType?: string): Promise<RequiredDocument> {
+async function apiCreateRequiredDocument(
+  name: string,
+  documentCategory?: string,
+  description?: string,
+  acceptedFileTypes?: string,
+  fieldType?: string,
+  expirationAlertDays?: number,
+  expirationAlertFrequency?: 'DAILY' | 'WEEKLY' | 'MONTHLY',
+  trackIssueDate?: boolean,
+  trackExpirationDate?: boolean,
+  trackIssuingAuthority?: boolean
+): Promise<RequiredDocument> {
   return apiRequest<RequiredDocument>('/company-settings/required-documents', {
     method: 'POST',
-    body: JSON.stringify({ name, documentCategory, description, acceptedFileTypes, fieldType }),
+    body: JSON.stringify({
+      name,
+      documentCategory,
+      description,
+      acceptedFileTypes,
+      fieldType,
+      expirationAlertDays,
+      expirationAlertFrequency,
+      trackIssueDate,
+      trackExpirationDate,
+      trackIssuingAuthority,
+    }),
   });
 }
 
-async function mockUpdateRequiredDocument(id: string, data: { name?: string; documentCategory?: string; description?: string | null; acceptedFileTypes?: string; fieldType?: string }): Promise<RequiredDocument> {
+async function mockUpdateRequiredDocument(
+  id: string,
+  data: {
+    name?: string;
+    documentCategory?: string;
+    description?: string | null;
+    acceptedFileTypes?: string;
+    fieldType?: string;
+    expirationAlertDays?: number;
+    expirationAlertFrequency?: 'DAILY' | 'WEEKLY' | 'MONTHLY';
+    trackIssueDate?: boolean;
+    trackExpirationDate?: boolean;
+    trackIssuingAuthority?: boolean;
+  }
+): Promise<RequiredDocument> {
   await new Promise((r) => setTimeout(r, 150));
   const category = (data.documentCategory || 'mandatory') as 'mandatory' | 'optional' | 'any_other';
   return {
@@ -592,12 +649,31 @@ async function mockUpdateRequiredDocument(id: string, data: { name?: string; doc
     acceptedFileTypes: data.acceptedFileTypes !== undefined ? data.acceptedFileTypes : 'pdf,jpg,jpeg,png,doc,docx,xls,xlsx',
     documentCategory: category,
     isActive: true,
+    expirationAlertDays: data.expirationAlertDays ?? 30,
+    expirationAlertFrequency: data.expirationAlertFrequency || 'DAILY',
+    trackIssueDate: data.trackIssueDate ?? true,
+    trackExpirationDate: data.trackExpirationDate ?? true,
+    trackIssuingAuthority: data.trackIssuingAuthority ?? true,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
 }
 
-async function apiUpdateRequiredDocument(id: string, data: { name?: string; documentCategory?: string; description?: string | null; acceptedFileTypes?: string; fieldType?: string }): Promise<RequiredDocument> {
+async function apiUpdateRequiredDocument(
+  id: string,
+  data: {
+    name?: string;
+    documentCategory?: string;
+    description?: string | null;
+    acceptedFileTypes?: string;
+    fieldType?: string;
+    expirationAlertDays?: number;
+    expirationAlertFrequency?: 'DAILY' | 'WEEKLY' | 'MONTHLY';
+    trackIssueDate?: boolean;
+    trackExpirationDate?: boolean;
+    trackIssuingAuthority?: boolean;
+  }
+): Promise<RequiredDocument> {
   return apiRequest<RequiredDocument>(`/company-settings/required-documents/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),
@@ -776,7 +852,7 @@ async function apiUploadBrandingImage(type: 'logo' | 'favicon', file: File): Pro
 export interface DocumentTemplate {
   id: string;
   companyCode: string;
-  type: 'NDA' | 'MNDA';
+  type: 'NDA' | 'MNDA' | 'ANY_OTHER';
   name: string;
   content: string;
   fileUrl?: string | null;
@@ -809,6 +885,13 @@ const MOCK_DOCUMENT_TEMPLATES: DocumentTemplate[] = [
     id: '2', companyCode: 'HFL', type: 'MNDA',
     name: 'Mutual Non-Disclosure Agreement',
     content: '<h1>MNDA Template</h1><p>Default MNDA content for {{companyName}} and {{vendorName}}.</p>',
+    isActive: true, version: 1,
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+  },
+  {
+    id: '3', companyCode: 'HFL', type: 'ANY_OTHER',
+    name: 'General Agreement',
+    content: '<h1>General Agreement</h1><p>This agreement is between {{companyName}} and {{vendorName}}.</p>',
     isActive: true, version: 1,
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
   },
@@ -882,7 +965,7 @@ async function apiDeleteDocumentTemplate(type: 'NDA' | 'MNDA'): Promise<void> {
 
 // ─── New Document Template API (ID-based, supports multiple per type) ──
 
-async function mockCreateDocumentTemplate(type: 'NDA' | 'MNDA', input: DocumentTemplateInput): Promise<DocumentTemplate> {
+async function mockCreateDocumentTemplate(type: 'NDA' | 'MNDA' | 'ANY_OTHER', input: DocumentTemplateInput): Promise<DocumentTemplate> {
   await new Promise(r => setTimeout(r, 200));
   const newTemplate: DocumentTemplate = {
     id: String(Date.now()), companyCode: 'HFL', type,
@@ -895,7 +978,7 @@ async function mockCreateDocumentTemplate(type: 'NDA' | 'MNDA', input: DocumentT
   return newTemplate;
 }
 
-async function apiCreateDocumentTemplate(type: 'NDA' | 'MNDA', input: DocumentTemplateInput): Promise<DocumentTemplate> {
+async function apiCreateDocumentTemplate(type: 'NDA' | 'MNDA' | 'ANY_OTHER', input: DocumentTemplateInput): Promise<DocumentTemplate> {
   const data = await apiRequest<{ template: DocumentTemplate }>('/company-settings/document-templates', {
     method: 'POST',
     body: JSON.stringify({ type, ...input }),

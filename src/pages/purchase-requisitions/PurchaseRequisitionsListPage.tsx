@@ -1,15 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { purchaseRequisitionService, type PurchaseRequisition } from '../../services/purchaseRequisitionService';
-import { ShoppingCart, Eye, Trash2, Loader2, AlertTriangle, FileText, X } from 'lucide-react';
+import { ShoppingCart, Eye, Trash2, Loader2, AlertTriangle, FileText, Search, X, CheckCircle, Clock } from 'lucide-react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import '../purchase-requisitions/PurchaseRequisitionPage.css';
 
-function formatCurrency(amount: number, currency: string = 'INR'): string {
-  return new Intl.NumberFormat('en-IN', {
+function formatCurrency(amount: number, currency: string = 'KES'): string {
+  return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency,
+    currency: currency || 'KES',
     minimumFractionDigits: 2,
   }).format(amount);
 }
@@ -18,7 +18,8 @@ function getStatusLabel(status: string): string {
   const labels: Record<string, string> = {
     DRAFT: 'Draft',
     PENDING_APPROVAL: 'Pending Approval',
-    APPROVED: 'Completed',
+    APPROVED: 'Approved & Released',
+    COMPLETED: 'Approved & Released',
     SENT_TO_VENDOR: 'Sent to Vendor',
   };
   return labels[status] || status.replace(/_/g, ' ');
@@ -27,7 +28,7 @@ function getStatusLabel(status: string): string {
 function formatDate(dateStr: string): string {
   if (!dateStr) return '-';
   const d = new Date(dateStr);
-  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 export default function PurchaseRequisitionsListPage() {
@@ -38,6 +39,10 @@ export default function PurchaseRequisitionsListPage() {
   const [deleteTarget, setDeleteTarget] = useState<PurchaseRequisition | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // Search & Filter State
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
 
   useBodyScrollLock(!!deleteTarget);
 
@@ -74,6 +79,35 @@ export default function PurchaseRequisitionsListPage() {
     }
   };
 
+  // Metrics calculation
+  const draftCount = requisitions.filter(r => r.status === 'DRAFT').length;
+  const pendingCount = requisitions.filter(r => r.status === 'PENDING_APPROVAL').length;
+  const draftAndPendingCount = draftCount + pendingCount;
+  const activeCount = requisitions.filter(r => ['APPROVED', 'COMPLETED', 'SENT_TO_VENDOR', 'PO_CREATED'].includes(r.status)).length;
+  const totalValue = requisitions.reduce((acc, r) => acc + (r.grandTotal || 0), 0);
+
+  // Filtered List
+  const filteredRequisitions = useMemo(() => {
+    return requisitions.filter((r) => {
+      // Metric filter
+      if (statusFilter === 'DRAFT_PENDING') {
+        if (r.status !== 'DRAFT' && r.status !== 'PENDING_APPROVAL') return false;
+      } else if (statusFilter === 'APPROVED') {
+        if (!['APPROVED', 'COMPLETED', 'SENT_TO_VENDOR', 'PO_CREATED'].includes(r.status)) return false;
+      }
+
+      // Search term filter
+      if (!searchTerm.trim()) return true;
+      const term = searchTerm.toLowerCase();
+      return (
+        (r.poNumber || '').toLowerCase().includes(term) ||
+        (r.vendorName || '').toLowerCase().includes(term) ||
+        (r.status || '').toLowerCase().includes(term) ||
+        (r.currency || '').toLowerCase().includes(term)
+      );
+    });
+  }, [requisitions, searchTerm, statusFilter]);
+
   if (loading) {
     return (
       <div className="pr-page">
@@ -94,11 +128,6 @@ export default function PurchaseRequisitionsListPage() {
     );
   }
 
-  const draftCount = requisitions.filter(r => r.status === 'DRAFT').length;
-  const pendingCount = requisitions.filter(r => r.status === 'PENDING_APPROVAL').length;
-  const activeCount = requisitions.filter(r => ['APPROVED', 'COMPLETED', 'SENT_TO_VENDOR', 'PO_CREATED'].includes(r.status)).length;
-  const totalValue = requisitions.reduce((acc, r) => acc + (r.grandTotal || 0), 0);
-
   return (
     <div className="pr-page">
       {toast && (
@@ -106,80 +135,177 @@ export default function PurchaseRequisitionsListPage() {
           {toast.message}
         </MessageStrip>
       )}
-
-      <div className="pr-toolbar">
-        <div className="pr-toolbar__title">
-          <ShoppingCart size={22} />
-          <span>PO Creation & Orders</span>
-          {requisitions.length > 0 && (
-            <span className="pr-toolbar__po-num">{requisitions.length} Document{requisitions.length > 1 ? 's' : ''}</span>
-          )}
-        </div>
+      {/* Clean Page Title Header */}
+      <div className="pr-page__header" style={{ marginBottom: 20 }}>
+        <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+          PO Creation & Orders
+        </h1>
+        <p style={{ margin: '4px 0 0', fontSize: 13.5, color: 'var(--text-secondary, #64748b)' }}>
+          Manage purchase orders, requisitions and vendor release documents
+        </p>
       </div>
 
+      {/* KPI Metric Summary Cards */}
       {requisitions.length > 0 && (
         <div className="pr-kpi-summary">
-          <div className="pr-kpi-card">
-            <div className="pr-kpi-icon"><FileText size={20} /></div>
+          {/* Card 1: Total Documents */}
+          <div
+            className={`pr-kpi-card ${statusFilter === null ? 'pr-kpi-card--active' : ''}`}
+            onClick={() => setStatusFilter(null)}
+            style={{ cursor: 'pointer' }}
+          >
+            <div className="pr-kpi-icon" style={{ background: 'rgba(10,110,209,0.08)', color: '#0a6ed1' }}>
+              <FileText size={20} />
+            </div>
             <div className="pr-kpi-info">
-              <span className="pr-kpi-label">Total Documents</span>
+              <span className="pr-kpi-label">TOTAL DOCUMENTS</span>
               <span className="pr-kpi-value">{requisitions.length}</span>
             </div>
           </div>
 
-          <div className="pr-kpi-card">
-            <div className="pr-kpi-icon" style={{ background: 'rgba(233,115,12,0.1)', color: '#e9730c' }}><ShoppingCart size={20} /></div>
+          {/* Card 2: Draft & Pending */}
+          <div
+            className={`pr-kpi-card ${statusFilter === 'DRAFT_PENDING' ? 'pr-kpi-card--active' : ''}`}
+            onClick={() => setStatusFilter(prev => prev === 'DRAFT_PENDING' ? null : 'DRAFT_PENDING')}
+            style={{ cursor: 'pointer' }}
+          >
+            <div className="pr-kpi-icon" style={{ background: 'rgba(233,115,12,0.1)', color: '#e9730c' }}>
+              <Clock size={20} />
+            </div>
             <div className="pr-kpi-info">
-              <span className="pr-kpi-label">Draft & Pending</span>
-              <span className="pr-kpi-value">{draftCount + pendingCount}</span>
+              <span className="pr-kpi-label">DRAFT & PENDING</span>
+              <span className="pr-kpi-value">{draftAndPendingCount}</span>
             </div>
           </div>
 
-          <div className="pr-kpi-card">
-            <div className="pr-kpi-icon" style={{ background: 'rgba(16,126,62,0.1)', color: '#107e3e' }}><FileText size={20} /></div>
+          {/* Card 3: Approved & Released */}
+          <div
+            className={`pr-kpi-card ${statusFilter === 'APPROVED' ? 'pr-kpi-card--active' : ''}`}
+            onClick={() => setStatusFilter(prev => prev === 'APPROVED' ? null : 'APPROVED')}
+            style={{ cursor: 'pointer' }}
+          >
+            <div className="pr-kpi-icon" style={{ background: 'rgba(16,126,62,0.1)', color: '#107e3e' }}>
+              <CheckCircle size={20} />
+            </div>
             <div className="pr-kpi-info">
-              <span className="pr-kpi-label">Approved & Released</span>
+              <span className="pr-kpi-label">APPROVED & RELEASED</span>
               <span className="pr-kpi-value">{activeCount}</span>
             </div>
           </div>
 
+          {/* Card 4: Total Volume */}
           <div className="pr-kpi-card">
-            <div className="pr-kpi-icon pr-kpi-icon--grand"><FileText size={20} /></div>
-            <div className="pr-kpi-info">
-              <span className="pr-kpi-label">Total Volume</span>
-              <span className="pr-kpi-value pr-kpi-value--grand">{formatCurrency(totalValue, requisitions[0]?.currency || 'INR')}</span>
+            <div className="pr-kpi-icon pr-kpi-icon--grand">
+              <FileText size={20} />
             </div>
+            <div className="pr-kpi-info">
+              <span className="pr-kpi-label">TOTAL VOLUME</span>
+              <span className="pr-kpi-value pr-kpi-value--grand">
+                {formatCurrency(totalValue, requisitions[0]?.currency || 'KES')}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Search Input Bar */}
+      {requisitions.length > 0 && (
+        <div className="pr-search-bar-wrap" style={{ marginBottom: 16 }}>
+          <div style={{ position: 'relative', width: '100%' }}>
+            <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-placeholder, #94a3b8)' }} />
+            <input
+              type="text"
+              className="pr-search-input"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search PO, vendor, status..."
+              style={{
+                width: '100%',
+                padding: '10px 38px 10px 40px',
+                fontSize: 13.5,
+                border: '1px solid var(--border, #e2e8f0)',
+                borderRadius: 8,
+                background: 'var(--surface-card, #ffffff)',
+                color: 'var(--text-primary)',
+                outline: 'none',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+              }}
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                style={{
+                  position: 'absolute',
+                  right: 12,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-placeholder)',
+                  cursor: 'pointer',
+                  padding: 2,
+                }}
+              >
+                <X size={15} />
+              </button>
+            )}
           </div>
         </div>
       )}
 
       {requisitions.length === 0 ? (
         <div className="pr-empty">
-          <FileText size={48} className="pr-empty__icon" />
+          <div className="pr-empty__icon-wrapper">
+            <FileText size={26} />
+          </div>
           <h3>No PO Creations Yet</h3>
           <p>PO Creations are created when you select "RFQ Based PO" from the award modal after quotation approval.</p>
+        </div>
+      ) : filteredRequisitions.length === 0 ? (
+        <div className="pr-empty">
+          <div className="pr-empty__icon-wrapper">
+            <Search size={26} />
+          </div>
+          <h3>No matching documents found</h3>
+          <p>We couldn't find any documents matching your current search or filter criteria. Try clearing your filters to view all records.</p>
+          <button
+            className="pr-btn pr-btn--outline"
+            onClick={() => { setSearchTerm(''); setStatusFilter(null); }}
+            style={{ borderRadius: 20, padding: '8px 20px' }}
+          >
+            <X size={14} /> Clear Filters
+          </button>
         </div>
       ) : (
         <div className="pr-list-table-wrap">
           <table className="pr-list-table">
             <thead>
               <tr>
-                <th>PO / PR Number</th>
-                <th>Vendor</th>
-                <th>PO Date</th>
-                <th>Currency</th>
-                <th className="pr-list__th--amount">Grand Total</th>
-                <th>Status</th>
-                <th style={{ width: 100, textAlign: 'center' }}>Actions</th>
+                <th>PO / PR NUMBER</th>
+                <th>VENDOR</th>
+                <th>PO DATE</th>
+                <th>CURRENCY</th>
+                <th className="pr-list__th--amount">GRAND TOTAL</th>
+                <th>STATUS</th>
+                <th style={{ width: 100, textAlign: 'center' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
-              {requisitions.map((pr) => (
-                <tr key={pr.id || pr.rfqId} className="pr-list-row" onClick={() => pr.rfqId && navigate(`/procurement/purchase-requisition/${pr.rfqId}`)}>
-                  <td className="pr-list__po-num">{pr.poNumber || '-'}</td>
+              {filteredRequisitions.map((pr) => (
+                <tr
+                  key={pr.id || pr.rfqId}
+                  className="pr-list-row"
+                  onClick={() => pr.rfqId && navigate(`/procurement/purchase-requisition/${pr.rfqId}`)}
+                >
+                  <td className="pr-list__po-num">
+                    <span className="pr-po-link">
+                      {pr.poNumber || '-'}
+                    </span>
+                  </td>
                   <td className="pr-list__vendor">{pr.vendorName || '-'}</td>
                   <td>{pr.poDate ? formatDate(pr.poDate) : '-'}</td>
-                  <td>{pr.currency || '-'}</td>
+                  <td>{pr.currency || 'KES'}</td>
                   <td className="pr-list__total">{formatCurrency(pr.grandTotal, pr.currency)}</td>
                   <td>
                     <span className={`pr-badge pr-badge--${pr.status}`}>
@@ -187,18 +313,18 @@ export default function PurchaseRequisitionsListPage() {
                     </span>
                   </td>
                   <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
                       <button
                         className="pr-list__view-btn"
                         onClick={(e) => { e.stopPropagation(); pr.rfqId && navigate(`/procurement/purchase-requisition/${pr.rfqId}`); }}
-                        title="View / Edit"
+                        title="View / Edit PO Document"
                       >
                         <Eye size={16} />
                       </button>
                       <button
                         className="pr-list__view-btn pr-list__delete-btn"
                         onClick={(e) => { e.stopPropagation(); setDeleteTarget(pr); }}
-                        title="Delete document"
+                        title="Delete PO document"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -245,7 +371,7 @@ export default function PurchaseRequisitionsListPage() {
                     <strong>{deleteTarget.poNumber || deleteTarget.vendorName}</strong>?
                   </p>
                   <p className="sap-dialog__submessage">
-                    This action will permanently remove the PO record from the SAP system and cannot be undone.
+                    This action will permanently remove the PO record from the system and cannot be undone.
                   </p>
                 </div>
               </div>

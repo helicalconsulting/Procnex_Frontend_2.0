@@ -886,6 +886,30 @@
   font-family: var(--font-mono, monospace);
 }
 
+.pr-po-link {
+  color: var(--primary-500, #0a6ed1);
+  font-weight: 700;
+  text-decoration: underline dotted;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.pr-po-link:hover {
+  color: var(--primary-600, #0854a0);
+  text-decoration: underline;
+}
+
+.pr-kpi-card--active {
+  border-color: var(--primary-500, #0a6ed1) !important;
+  box-shadow: 0 0 0 2px rgba(10, 110, 209, 0.18), var(--shadow-md) !important;
+  background: var(--surface-card, #ffffff);
+}
+
+.pr-search-input:focus {
+  border-color: var(--primary-500, #0a6ed1) !important;
+  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.12) !important;
+}
+
 .pr-list__vendor {
   font-weight: 600;
   color: var(--text-primary);
@@ -907,7 +931,7 @@
   border-radius: 6px;
   border: none;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--text-secondary, #64748b);
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -915,6 +939,61 @@
 .pr-list__view-btn:hover {
   background: rgba(10, 110, 209, 0.1);
   color: var(--primary-500, #0a6ed1);
+}
+
+.pr-list__delete-btn:hover {
+  background: rgba(220, 38, 38, 0.1) !important;
+  color: #dc2626 !important;
+}
+
+/* ── Centered Empty State Card Container ── */
+.pr-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 64px 24px;
+  background: var(--surface-card, #ffffff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  margin-top: 8px;
+}
+
+[data-theme="dark"] .pr-empty {
+  background: var(--surface-elevated, #1e293b);
+  border-color: var(--border, #334155);
+}
+
+.pr-empty__icon-wrapper {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: rgba(10, 110, 209, 0.08);
+  border: 1px solid rgba(10, 110, 209, 0.18);
+  color: var(--primary-500, #0a6ed1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 12px rgba(10, 110, 209, 0.1);
+}
+
+.pr-empty h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary, #1e293b);
+  margin: 0 0 6px;
+  letter-spacing: -0.01em;
+}
+
+.pr-empty p {
+  font-size: 13.5px;
+  color: var(--text-secondary, #64748b);
+  margin: 0 0 20px;
+  max-width: 420px;
+  line-height: 1.5;
 }
 
 /* ── Modals (Send / Type Select) ───────────────────────────── */

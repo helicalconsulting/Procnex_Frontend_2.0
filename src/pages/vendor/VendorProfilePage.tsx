@@ -52,10 +52,13 @@ export default function VendorProfilePage() {
   const [bankSaving, setBankSaving] = useState(false);
   const [bankMsg, setBankMsg] = useState('');
 
-  // Doc upload — added selectedFile state for feedback
+  // Doc upload — added selectedFile state & metadata fields
   const fileRef = useRef<HTMLInputElement>(null);
   const [docType, setDocType] = useState(DOC_TYPES[0]);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null); // ← NEW
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [issueDate, setIssueDate] = useState('');
+  const [expirationDate, setExpirationDate] = useState('');
+  const [issuingAuthority, setIssuingAuthority] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState('');
 
@@ -268,10 +271,11 @@ export default function VendorProfilePage() {
 
               {/* ── Upload area ── */}
               <div className="vprof-upload">
-                <div className="vprof-upload__row">
-                  <select value={docType} onChange={e => setDocType(e.target.value)} className="vprof-upload__select">
+                <div className="vprof-upload__row" style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                  <select value={docType} onChange={e => setDocType(e.target.value)} className="vprof-upload__select" style={{ flex: '1 1 200px' }}>
                     {DOC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
+
                   <label className="vprof-upload__file-btn">
                     <Paperclip size={14} /> Choose File
                     <input
@@ -282,6 +286,7 @@ export default function VendorProfilePage() {
                       onChange={e => setSelectedFile(e.target.files?.[0] ?? null)}
                     />
                   </label>
+
                   <button
                     className="vprof-upload__submit"
                     onClick={handleUploadDoc}
@@ -293,9 +298,41 @@ export default function VendorProfilePage() {
                   </button>
                 </div>
 
-                {/* ── File preview chip — shown once a file is selected ── */}
+                {/* ── Document Metadata Fields (Date of Issue, Expiration, Issuing Authority) ── */}
+                <div className="vprof-upload__metadata-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 12, padding: 12, background: 'var(--surface-hover, rgba(255, 255, 255, 0.03))', borderRadius: 8, border: '1px solid var(--border)' }}>
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Date of Issue</label>
+                    <input
+                      type="date"
+                      value={issueDate}
+                      onChange={e => setIssueDate(e.target.value)}
+                      style={{ width: '100%', padding: '6px 10px', fontSize: 12, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Date of Expiration</label>
+                    <input
+                      type="date"
+                      value={expirationDate}
+                      onChange={e => setExpirationDate(e.target.value)}
+                      style={{ width: '100%', padding: '6px 10px', fontSize: 12, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Issuing Authority</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Govt of UAE / Income Tax Dept"
+                      value={issuingAuthority}
+                      onChange={e => setIssuingAuthority(e.target.value)}
+                      style={{ width: '100%', padding: '6px 10px', fontSize: 12, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)' }}
+                    />
+                  </div>
+                </div>
+
+                {/* ── File preview chip ── */}
                 {selectedFile && !uploading && (
-                  <div className="vprof-upload__file-preview">
+                  <div className="vprof-upload__file-preview" style={{ marginTop: 8 }}>
                     <FileText size={14} className="vprof-upload__file-preview-icon" />
                     <span className="vprof-upload__file-preview-name">{selectedFile.name}</span>
                     <span className="vprof-upload__file-preview-size">{formatBytes(selectedFile.size)}</span>
@@ -319,20 +356,44 @@ export default function VendorProfilePage() {
                 )}
               </div>
 
-              {/* Document list */}
-              {documents.length > 0 ? documents.map(doc => (
-                <div key={doc.id} className="vprof-doc">
-                  <div className="vprof-doc__left">
-                    <FileText size={18} className="vprof-doc__icon" />
-                    <div>
-                      <div className="vprof-doc__name">{doc.name}</div>
-                      <div className="vprof-doc__date">
-                        {doc.type} · Uploaded: {new Date(doc.uploadedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+              {/* Document list with Expiration Alert Badges */}
+              {documents.length > 0 ? documents.map(doc => {
+                const expDays = (doc as any).expirationDate ? Math.ceil((new Date((doc as any).expirationDate).getTime() - Date.now()) / (1000 * 3600 * 24)) : null;
+                const isExpiringSoon = expDays !== null && expDays > 0 && expDays <= 30;
+                const isExpired = expDays !== null && expDays <= 0;
+
+                return (
+                  <div key={doc.id} className="vprof-doc" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', borderRadius: 8, border: '1px solid var(--border)', marginBottom: 8 }}>
+                    <div className="vprof-doc__left" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <FileText size={18} className="vprof-doc__icon" style={{ color: isExpired ? '#ef4444' : isExpiringSoon ? '#f59e0b' : 'var(--vendor-primary)' }} />
+                      <div>
+                        <div className="vprof-doc__name" style={{ fontWeight: 600 }}>{doc.name}</div>
+                        <div className="vprof-doc__date" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                          {doc.type} · Uploaded: {new Date(doc.uploadedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          {(doc as any).issuingAuthority && ` · Authority: ${(doc as any).issuingAuthority}`}
+                        </div>
                       </div>
                     </div>
+
+                    {/* Expiration Alert Badge */}
+                    <div>
+                      {isExpired ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444' }}>
+                          <AlertTriangle size={12} /> Expired ({Math.abs(expDays!)}d ago)
+                        </span>
+                      ) : isExpiringSoon ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
+                          <AlertTriangle size={12} /> Alert: Expires in {expDays}d
+                        </span>
+                      ) : (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
+                          <CheckCircle2 size={12} /> Valid
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )) : (
+                );
+              }) : (
                 <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-placeholder)', fontSize: 13 }}>
                   No documents uploaded yet. Upload your first document above.
                 </div>
