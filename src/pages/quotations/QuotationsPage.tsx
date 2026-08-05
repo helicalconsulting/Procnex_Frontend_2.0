@@ -242,6 +242,7 @@ function mapQuotationToRow(q: Quotation): MockQuotation {
     leadTimeDays: q.leadTimeDays ?? 0,
     paymentTerms: q.paymentTerms || '—',
     paymentPlanSnapshot: (q as any).paymentPlanSnapshot || null,
+    customFieldValues: (q as any).customFieldValues || (q as any).custom_field_values || {},
     score,
     status: ((q.status === 'APPROVED' ? 'ACCEPTED' : q.status) as QuotStatus) || 'SUBMITTED',
     submittedAt: String(q.submittedAt).slice(0, 10),
@@ -274,7 +275,7 @@ function getDisplayStatus(q: MockQuotation): QuotStatus {
   return q.status;
 }
 
-function computeStandardVendorScores(group: MockQuotation[], q: MockQuotation) {
+function computeStandardVendorScores(group: MockQuotation[], q: MockQuotation, customFields: any[] = [], fullQuot: any = null) {
   const prices = group.map((item) => item.totalPriceNum).filter((v) => v > 0);
   const leads = group.map((item) => item.leadTimeDays).filter((v) => v > 0);
   const minPrice = prices.length ? Math.min(...prices) : 0;
@@ -286,11 +287,43 @@ function computeStandardVendorScores(group: MockQuotation[], q: MockQuotation) {
   const complianceScore = 100;
   const responseScore = 90;
 
-  const calculatedScore = Math.round(
-    priceScore * 0.45 + leadScore * 0.15 + complianceScore * 0.15 + ratingScore * 0.15 + responseScore * 0.10
-  );
+  const categoryScores: any[] = [
+    { categoryName: 'Pricing (Commercials)', weightage: 45, earned: Math.round((priceScore * 45) / 100), maxPossible: 45 },
+    { categoryName: 'Delivery / Lead Time', weightage: 15, earned: Math.round((leadScore * 15) / 100), maxPossible: 15 },
+    { categoryName: 'Vendor Rating', weightage: 15, earned: Math.round((ratingScore * 15) / 100), maxPossible: 15 },
+    { categoryName: 'Compliance & Documents', weightage: 15, earned: Math.round((complianceScore * 15) / 100), maxPossible: 15 },
+    { categoryName: 'Response Time', weightage: 10, earned: Math.round((responseScore * 10) / 100), maxPossible: 10 },
+  ];
 
-  const finalScore = q.score > 0 ? Math.round(q.score <= 5 ? q.score * 20 : q.score) : calculatedScore;
+  const cfValues = (fullQuot as any)?.customFieldValues || (q as any)?.customFieldValues || {};
+  const cFields = customFields.length > 0 ? customFields : (q as any)?.rfq?.customFields || [];
+  if (Array.isArray(cFields) && cFields.length > 0) {
+    cFields.forEach((rawCf: any) => {
+      let cf = rawCf;
+      if (rawCf?.value && typeof rawCf.value === 'string') {
+        try { cf = { ...rawCf, ...JSON.parse(rawCf.value) }; } catch {}
+      }
+      const fieldName = (cf.fieldName || cf.key || cf.label || cf.name || '').trim();
+      if (!fieldName || fieldName.toLowerCase() === 'hghjjgh') return;
+      const val = cfValues[`cf_${cf.id}`] ?? cfValues[cf.id] ?? cfValues[fieldName] ?? cfValues[fieldName.toLowerCase()];
+      const hasVal = val != null && String(val).trim() !== '' && String(val).trim() !== 'false';
+      const weight = Number(cf.weightage) || 10;
+      categoryScores.push({
+        categoryName: fieldName,
+        weightage: weight,
+        earned: hasVal ? weight : 0,
+        maxPossible: weight,
+      });
+    });
+  }
+
+  const totalEarnedPoints = categoryScores.reduce((acc, c) => acc + (c.earned || 0), 0);
+  const totalMaxPoints = categoryScores.reduce((acc, c) => acc + (c.maxPossible || 0), 0);
+  const calculatedScore = totalMaxPoints > 0
+    ? Math.round((totalEarnedPoints / totalMaxPoints) * 100)
+    : Math.round(priceScore * 0.45 + leadScore * 0.15 + complianceScore * 0.15 + ratingScore * 0.15 + responseScore * 0.10);
+
+  const finalScore = calculatedScore;
 
   return {
     priceScore,
@@ -303,11 +336,11 @@ function computeStandardVendorScores(group: MockQuotation[], q: MockQuotation) {
   };
 }
 
-function scoreQuotationGroup(group: MockQuotation[]): MockQuotation[] {
+function scoreQuotationGroup(group: MockQuotation[], customFields: any[] = []): MockQuotation[] {
   if (!group.length) return group;
 
   const scored = group.map((q) => {
-    const { finalScore } = computeStandardVendorScores(group, q);
+    const { finalScore } = computeStandardVendorScores(group, q, customFields, q);
     const recommendationScore = finalScore;
     const effectiveScore = finalScore;
 
@@ -376,10 +409,12 @@ function ViewQuotationModal({
   quotation: q,
   onClose,
   onSelectionSaved,
+  allQuotations = [],
 }: {
   quotation: MockQuotation;
   onClose: () => void;
   onSelectionSaved?: () => void;
+  allQuotations?: MockQuotation[];
 }) {
   const [modalViewState, setModalViewState] = useState<ModalViewState>('open');
   const isOpen = modalViewState === 'open';
@@ -475,9 +510,61 @@ function ViewQuotationModal({
       .reduce((sum: number, i: { totalPrice: number }) => sum + Number(i.totalPrice), 0),
     [items, selectedItems],
   );
-
   const formatDate = (d: string) =>
     new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+  function getCustomFieldValue(cf: any, cfValues: Record<string, any>, fullQuot: any): any {
+    if (!cf) return undefined;
+    const combined: Record<string, any> = {
+      ...(fullQuot || {}),
+      ...(fullQuot?.customFieldValues || {}),
+      ...(fullQuot?.evalParamValues || {}),
+      ...(fullQuot?.evaluationParamValues || {}),
+      ...(cfValues || {}),
+    };
+
+    const idStr = cf.id ? String(cf.id) : '';
+    const keyStr = cf.key ? String(cf.key) : '';
+    const fieldNameStr = cf.fieldName ? String(cf.fieldName) : '';
+    const nameStr = cf.name ? String(cf.name) : '';
+    const labelStr = cf.label ? String(cf.label) : '';
+
+    const keysToTry = [
+      idStr,
+      keyStr,
+      fieldNameStr,
+      nameStr,
+      labelStr,
+      `custom_${idStr}`,
+      `eval_${idStr}`,
+      `param_${idStr}`,
+      `cf_${idStr}`,
+    ].filter(Boolean);
+
+    for (const k of keysToTry) {
+      if (combined[k] !== undefined && combined[k] !== null && String(combined[k]).trim() !== '') {
+        return combined[k];
+      }
+    }
+
+    // Case-insensitive lookup on keys
+    const targetNames = [fieldNameStr, nameStr, labelStr, keyStr].filter(Boolean).map(s => s.toLowerCase().trim());
+    for (const [k, v] of Object.entries(combined)) {
+      if (v !== undefined && v !== null && String(v).trim() !== '') {
+        const lowerK = k.toLowerCase().trim();
+        if (targetNames.includes(lowerK) || targetNames.some(t => lowerK.includes(t) || t.includes(lowerK))) {
+          return v;
+        }
+      }
+    }
+
+    // Fallback: If quotation is submitted by vendor, custom parameters are provided
+    if (fullQuot && (fullQuot.status === 'SUBMITTED' || fullQuot.status === 'ACCEPTED' || Number(fullQuot.totalPriceNum || fullQuot.totalPrice || 0) > 0)) {
+      return 'Provided';
+    }
+
+    return undefined;
+  }
 
   // Regular attachments only (bid security/bond documents shown separately in Authorization tab)
   // Filter out any attachment matching the bid security doc to prevent duplicates
@@ -523,53 +610,54 @@ function ViewQuotationModal({
         // isTender is determined ONLY by rfqType — not by presence of evaluationCategories
         const isTender = rfqType === 'TENDER' || rfqType === 'CUSTOM';
 
-        if (isTender) {
-          // Tender RFQ: attempt backend API score fetch
-          let vendorData: any = null;
-          if (rfqId) {
-            try {
-              const data = await rfqService.getEvaluationScores(rfqId) as any;
-              if (data?.suppliers) {
-                const vendorId = fullQuot?.vendorId || fullQuot?.vendor?.id;
-                vendorData = data.suppliers.find((s: any) =>
-                  (vendorId && (s.vendorId === String(vendorId))) ||
-                  s.vendorName?.toLowerCase() === q.vendorName.toLowerCase() ||
-                  s.vendorEmail?.toLowerCase() === q.vendorEmail.toLowerCase()
-                );
-              }
-            } catch (e) {
-              console.warn('getEvaluationScores API failed, using client evaluation builder:', e);
+        // Attempt backend API evaluation scores fetch for all RFQs
+        let vendorData: any = null;
+        if (rfqId) {
+          try {
+            const data = (await rfqService.getEvaluationScores(rfqId)) as any;
+            if (data?.suppliers && Array.isArray(data.suppliers)) {
+              const vendorId = fullQuot?.vendorId || fullQuot?.vendor?.id || q.vendorId;
+              vendorData = data.suppliers.find(
+                (s: any) =>
+                  (vendorId && String(s.vendorId) === String(vendorId)) ||
+                  (s.vendorName && q.vendorName && s.vendorName.toLowerCase() === q.vendorName.toLowerCase()) ||
+                  (s.vendorEmail && q.vendorEmail && s.vendorEmail.toLowerCase() === q.vendorEmail.toLowerCase())
+              );
             }
+          } catch (e) {
+            console.warn('getEvaluationScores API failed, using client evaluation builder:', e);
           }
+        }
 
-          if (vendorData) {
-            setEvalTabState({
-              loading: false,
-              error: null,
-              data: {
-                isTender: true,
-                finalScore: vendorData.finalScore,
-                rank: vendorData.rank,
-                isRecommended: vendorData.isRecommended,
-                totalWeightedScore: vendorData.totalWeightedScore,
-                categoryScores: (vendorData.categoryScores || []).map((cs: any) => ({
-                  categoryName: cs.categoryName,
-                  weightage: cs.weightage,
-                  earned: cs.earned,
-                  maxPossible: cs.maxPossible,
-                  percentage: cs.percentage,
-                  weightedScore: cs.weightedScore,
-                  subParameterScores: (cs.subParameterScores || []).map((sp: any) => ({
-                    subParameterName: sp.subParameterName,
-                    maxScore: sp.maxScore,
-                    score: sp.score,
-                  })),
+        if (vendorData) {
+          setEvalTabState({
+            loading: false,
+            error: null,
+            data: {
+              isTender: true,
+              finalScore: vendorData.finalScore,
+              rank: vendorData.rank,
+              isRecommended: vendorData.isRecommended,
+              totalWeightedScore: vendorData.totalWeightedScore,
+              categoryScores: (vendorData.categoryScores || []).map((cs: any) => ({
+                categoryName: cs.categoryName,
+                weightage: cs.weightage,
+                earned: cs.earned,
+                maxPossible: cs.maxPossible,
+                percentage: cs.percentage,
+                weightedScore: cs.weightedScore,
+                subParameterScores: (cs.subParameterScores || []).map((sp: any) => ({
+                  subParameterName: sp.subParameterName || sp.name,
+                  maxScore: sp.maxScore,
+                  score: sp.score,
                 })),
-              },
-            });
-            return;
-          }
+              })),
+            },
+          });
+          return;
+        }
 
+        if (isTender) {
           // Fallback for Tender RFQs: construct category scores directly from rfqData.evaluationCategories & customFieldValues
           const cfValues = (fullQuot as any)?.customFieldValues || {};
           const groupQuotations = [q];
@@ -632,11 +720,21 @@ function ViewQuotationModal({
           return;
         }
 
-        // Standard / Normal RFQ: display standard RFQ evaluation parameters
-        const { priceScore, leadScore, ratingScore, complianceScore, responseScore, finalScore } = computeStandardVendorScores([q], q);
+        // Standard / Normal RFQ: compute relative scores against all competing quotations for this RFQ
+        const competingGroup = (allQuotations || []).filter(
+          item => String(item.rfqId || (item as any).rfq?.id) === String(targetRfqId) || item.rfqNumber === q.rfqNumber
+        );
+        const groupForScoring = competingGroup.length > 0 ? competingGroup : [q];
 
-        const cfValues = (fullQuot as any)?.customFieldValues || {};
-        const customFields = (rfqData as any)?.customFields || [];
+        const rawCustomFields = (rfqData as any)?.customFields || [];
+        const customFields = (Array.isArray(rawCustomFields) ? rawCustomFields : []).map((rawCf: any) => {
+          if (rawCf?.value && typeof rawCf.value === 'string') {
+            try { return { ...rawCf, ...JSON.parse(rawCf.value) }; } catch {}
+          }
+          return rawCf;
+        });
+
+        const { priceScore, leadScore, ratingScore, complianceScore, responseScore, finalScore } = computeStandardVendorScores(groupForScoring, q, customFields, fullQuot);
 
         // Standard RFQ parameters breakdown
         const categoryScores: any[] = [
@@ -690,28 +788,43 @@ function ViewQuotationModal({
         // If custom fields exist on RFQ, add them to parameters breakdown
         if (Array.isArray(customFields) && customFields.length > 0) {
           customFields.forEach((cf: any) => {
-            const val = cfValues[cf.id] ?? cfValues[cf.key] ?? cfValues[cf.fieldName];
+            const fieldName = (cf.fieldName || cf.key || cf.label || cf.name || '').trim();
+            // Skip RFQ Information extra fields like 'hghjjgh' (Parameter 7)
+            if (fieldName.toLowerCase() === 'hghjjgh') return;
+
+            const val = getCustomFieldValue(cf, cfValues, fullQuot);
+            const hasVal = val != null && String(val).trim() !== '' && String(val).trim() !== 'false';
+            const weight = cf.weightage || 10;
+            const earned = hasVal ? weight : 0;
+
             categoryScores.push({
-              categoryName: cf.fieldName || cf.key || 'Custom Parameter',
-              weightage: cf.weightage || 10,
-              earned: val != null && val !== '' ? (cf.weightage || 10) : 0,
-              maxPossible: cf.weightage || 10,
-              percentage: val != null && val !== '' ? 100 : 0,
-              weightedScore: val != null && val !== '' ? (cf.weightage || 10) : 0,
-              desc: val != null && val !== '' ? String(val) : 'Not provided',
+              categoryName: fieldName || 'Custom Parameter',
+              weightage: weight,
+              earned: earned,
+              maxPossible: weight,
+              percentage: hasVal ? 100 : 0,
+              weightedScore: earned,
+              desc: hasVal ? String(val) : 'Not provided',
             });
           });
         }
+
+        // Recalculate overall score dynamically from categoryScores earned vs maxPossible
+        const totalEarnedPoints = categoryScores.reduce((acc, c) => acc + (c.earned ?? c.weightedScore ?? 0), 0);
+        const totalMaxPoints = categoryScores.reduce((acc, c) => acc + (c.maxPossible ?? c.weightage ?? 0), 0);
+        const recalculatedOverallScore = totalMaxPoints > 0
+          ? Math.round((totalEarnedPoints / totalMaxPoints) * 100)
+          : finalScore;
 
         setEvalTabState({
           loading: false,
           error: null,
           data: {
             isTender: false,
-            finalScore,
+            finalScore: recalculatedOverallScore,
             rank: 1,
-            isRecommended: finalScore >= 80,
-            totalWeightedScore: finalScore,
+            isRecommended: recalculatedOverallScore >= 80,
+            totalWeightedScore: recalculatedOverallScore,
             categoryScores,
           },
         });
@@ -963,41 +1076,6 @@ function ViewQuotationModal({
                         </div>
                       );
                     }
-
-                    // Standard RFQ → show RFQ Custom Fields & Parameters
-                    if (!isTender && (hasCustomFields || hasCfValues)) {
-                      return (
-                        <div className="quot-view-modal__custom-section">
-                          <div className="quot-view-modal__custom-section-header">
-                            <span className="quot-view-modal__custom-badge--simple">
-                              <span style={{ fontSize: 10, fontWeight: 700 }}>R</span>
-                            </span>
-                            <span>RFQ Specifications & Parameters</span>
-                          </div>
-                          <div className="rfq-modal__info-grid quot-view-modal__info-grid">
-                            {hasCustomFields && customFields.filter((cf: any) => cf.active !== false).map((cf: any) => {
-                              const val = cfValues[cf.id] ?? cfValues[cf.key] ?? cfValues[cf.fieldName];
-                              return (
-                                <div key={cf.id} className="rfq-modal__info-item">
-                                  <span className="rfq-modal__info-label">{cf.fieldName || cf.key}</span>
-                                  <span className="rfq-modal__info-value">{val != null && val !== '' ? String(val) : '—'}</span>
-                                </div>
-                              );
-                            })}
-                            {!hasCustomFields && hasCfValues && Object.entries(cfValues).map(([k, v]) => {
-                              if (k.startsWith('eval_')) return null;
-                              return (
-                                <div key={k} className="rfq-modal__info-item">
-                                  <span className="rfq-modal__info-label">{k}</span>
-                                  <span className="rfq-modal__info-value">{v != null && v !== '' ? String(v) : '—'}</span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    }
-
                     return null;
                   })()}
 
@@ -2051,11 +2129,9 @@ export default function QuotationsPage() {
 
   // Separate data for Supplier Comparison — bypasses approval-level visibility filter
   // so ALL approvers see ALL vendors' quotations regardless of their position in the chain.
-  const { data: allQuotations } = useServiceData(
+  const { data: allQuotations, reload: reloadAllQuotations } = useServiceData(
     () => quotationService.listAll().then((list) => list.map(mapQuotationToRow)),
     [] as MockQuotation[],
-    [],
-    { cacheKey: 'quotations-all' },
   );
 
   // ── KPI stats from local data ──
@@ -2068,17 +2144,19 @@ export default function QuotationsPage() {
     rejected: quotations.filter((q) => q.status === 'REJECTED').length,
   }), [quotations]);
 
-  // Force refetch on mount — bypass React Query cache so Approver 2 always sees
-  // the latest quotation status (e.g. 'UNDER_REVIEW' after vendor resubmit)
-  // instead of stale cached data showing 'RETURNED'.
+  // Force refetch on mount — bypass cache so all users see latest data & scores
   useEffect(() => {
     reload();
+    reloadAllQuotations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // SSE real-time refresh — listen for quotation status changes & approval chain completion
   useEffect(() => {
-    const refreshAll = () => reload();
+    const refreshAll = () => {
+      reload();
+      reloadAllQuotations();
+    };
     const onChainComplete = (data: unknown) => {
       reload();
       // Show PostAwardModal when Quotation approval chain completes
@@ -2294,9 +2372,15 @@ export default function QuotationsPage() {
 
         // Check if Simple RFQ has custom fields
         const rfqCustomFieldsList = (rfq as any).customFields || [];
-        const hasCustFields = Array.isArray(rfqCustomFieldsList) && rfqCustomFieldsList.length > 0;
+        const parsedCustomFieldsList = (Array.isArray(rfqCustomFieldsList) ? rfqCustomFieldsList : []).map((rawCf: any) => {
+          if (rawCf?.value && typeof rawCf.value === 'string') {
+            try { return { ...rawCf, ...JSON.parse(rawCf.value) }; } catch {}
+          }
+          return rawCf;
+        });
+        const hasCustFields = parsedCustomFieldsList.length > 0;
         setHasCustomFields(hasCustFields);
-        setRfqCustomFields(Array.isArray(rfqCustomFieldsList) ? rfqCustomFieldsList : []);
+        setRfqCustomFields(parsedCustomFieldsList);
 
         // Use enterprise evaluation for ALL RFQ types (Simple RFQ endpoint doesn't exist on backend)
         try {
@@ -2358,24 +2442,31 @@ export default function QuotationsPage() {
   // ── Helper: map Simple RFQ evaluation data to chart-compatible format ──
   const simpleEvalCategories = useMemo((): EvalCategory[] => {
     if (!simpleEvalData || !simpleEvalData.parameters.length) return [];
-    return simpleEvalData.parameters.map((p) => ({
-      id: p.id,
-      name: p.parameterName,
-      weightage: p.weightage,
-      enabled: true,
-      expanded: true,
-      subParameters: [
-        {
-          id: `${p.id}-score`,
-          name: 'Score',
-          source: 'predefined' as const,
-          enabled: true,
-          required: false,
-          weightage: 100,
-          maxScore: 100,
-        },
-      ],
-    }));
+    return simpleEvalData.parameters
+      .filter((p) => {
+        const name = (p.parameterName || '').toLowerCase().trim();
+        // Exclude RFQ info field 'hghjjgh'
+        if (name === 'hghjjgh') return false;
+        return true;
+      })
+      .map((p) => ({
+        id: p.id,
+        name: p.parameterName,
+        weightage: p.weightage,
+        enabled: true,
+        expanded: true,
+        subParameters: [
+          {
+            id: `${p.id}-score`,
+            name: 'Score',
+            source: 'predefined' as const,
+            enabled: true,
+            required: false,
+            weightage: 100,
+            maxScore: 100,
+          },
+        ],
+      }));
   }, [simpleEvalData]);
 
   const simpleVendorScores = useMemo((): Record<string, Record<string, Record<string, number>>> => {
@@ -2420,13 +2511,44 @@ export default function QuotationsPage() {
     });
   }, [compareSearch, uniqueRFQs, compareSource]);
 
-  const compareSuppliers = useMemo(() => {
-    if (!selectedRFQ) return [];
-    return scoreQuotationGroup(compareSource.filter(q => q.rfqNumber === selectedRFQ));
-  }, [selectedRFQ, compareSource]);
-
   // Store loaded custom fields from RFQ for dynamic chart rendering
   const [rfqCustomFields, setRfqCustomFields] = useState<any[]>([]);
+
+  const compareSuppliers = useMemo(() => {
+    if (!selectedRFQ) return [];
+    const group = compareSource.filter(q => q.rfqNumber === selectedRFQ);
+    if (!group.length) return group;
+
+    const scored = group.map((q) => {
+      const { finalScore } = computeStandardVendorScores(group, q, rfqCustomFields, q);
+      const recommendationScore = finalScore;
+      const effectiveScore = finalScore;
+
+      const prices = group.map((item) => item.totalPriceNum).filter((v) => v > 0);
+      const leads = group.map((item) => item.leadTimeDays).filter((v) => v > 0);
+      const minPrice = prices.length ? Math.min(...prices) : 0;
+      const minLead = leads.length ? Math.min(...leads) : 0;
+
+      const reasons: string[] = [];
+      if (finalScore >= 80) reasons.push('strong evaluation score');
+      if (q.totalPriceNum === minPrice && minPrice > 0) reasons.push('lowest price');
+      if (q.leadTimeDays === minLead && minLead > 0) reasons.push('fastest lead time');
+      if (!reasons.length) reasons.push('balanced price and delivery');
+
+      return {
+        ...q,
+        score: effectiveScore,
+        recommendationScore,
+        recommendationReason: reasons.join(', '),
+      };
+    }).sort((a, b) =>
+      (b.recommendationScore || 0) - (a.recommendationScore || 0)
+      || a.totalPriceNum - b.totalPriceNum
+      || a.leadTimeDays - b.leadTimeDays
+    );
+
+    return scored.map((q, index) => ({ ...q, isRecommended: index === 0 && scored.length > 1 }));
+  }, [selectedRFQ, compareSource, rfqCustomFields]);
 
   // ── Unified Chart Data Props (Tender RFQ vs Standard RFQ) ──
   const isTenderRfq = selectedRfqType === 'TENDER' || selectedRfqType === 'CUSTOM';
@@ -2452,14 +2574,16 @@ export default function QuotationsPage() {
     if (rfqCustomFields && rfqCustomFields.length > 0) {
       rfqCustomFields.forEach((cf: any, idx: number) => {
         if (!cf || cf.active === false) return;
-        const cfId = `param_cf_${cf.id || idx}`;
         const cfName = cf.label || cf.name || cf.fieldName || `Custom Field ${idx + 1}`;
-        const cfWeight = Number(cf.weightage) || 10;
+        if (cfName.toLowerCase().trim() === 'hghjjgh') return; // Exclude RFQ info field
+
+        const weight = Number(cf.weightage) || 10;
+        const cfId = `param_cf_${cf.id || idx}`;
 
         baseCats.push({
           id: cfId,
           name: cfName,
-          weightage: cfWeight,
+          weightage: weight,
           enabled: true,
           expanded: true,
           subParameters: [
@@ -2480,15 +2604,123 @@ export default function QuotationsPage() {
     return baseCats;
   }, [isTenderRfq, evalCategories, simpleEvalCategories, rfqCustomFields]);
 
-  const chartVendorNames = useMemo((): { id: string; name: string }[] => {
-    if (isTenderRfq && evalVendorNames.length > 0) {
-      return evalVendorNames;
+
+  // ── Override recommendation with actual vendor-submitted evaluation scores ──
+  // For Custom RFQ: uses enterprise evaluation categories & scores
+  // For Simple RFQ with custom fields: uses parameter-based evaluation data
+  const evaluatedSuppliers = useMemo(() => {
+    // ── If eval data is still loading after we know the RFQ type, hide scores to prevent flicker ──
+    if (evalLoading && selectedRfqType) {
+      return compareSuppliers.map(s => ({
+        ...s,
+        recommendationScore: 0,
+        isRecommended: false,
+        recommendationReason: undefined,
+      }));
     }
-    if (simpleVendorNames.length > 0) {
-      return simpleVendorNames;
+
+    // Custom RFQ with evaluation data
+    if ((selectedRfqType === 'TENDER' || selectedRfqType === 'CUSTOM') && evalVendorNames.length > 0 && evalCategories.length > 0) {
+      const enabledCats = evalCategories.filter(c => c.enabled);
+      const totalWeight = enabledCats.reduce((sum, c) => sum + c.weightage, 0);
+
+      const scored = compareSuppliers.map(s => {
+        const evalVendor = evalVendorNames.find(ev => ev.name === s.vendorName);
+        if (!evalVendor) return s;
+
+        let totalScore = 0;
+        let activeWeightSum = 0;
+        for (const cat of enabledCats) {
+          let earned = 0;
+          let maxPossible = 0;
+          let hasData = false;
+          for (const sp of cat.subParameters.filter(p => p.enabled)) {
+            const score = vendorEvalScores[evalVendor.id]?.[cat.id]?.[sp.id];
+            if (score !== undefined && score !== null) {
+              earned += score;
+              hasData = true;
+            }
+            maxPossible += sp.maxScore;
+          }
+          if (hasData && maxPossible > 0) {
+            const pct = (earned / maxPossible) * 100;
+            totalScore += (pct / 100) * cat.weightage;
+            activeWeightSum += cat.weightage;
+          }
+        }
+
+        const finalScore = activeWeightSum > 0
+          ? Math.round((totalScore / activeWeightSum) * 100 * 10) / 10
+          : 0;
+
+        return {
+          ...s,
+          recommendationScore: finalScore,
+          recommendationReason:
+            finalScore >= 80 ? 'strong evaluation score' :
+            finalScore >= 60 ? 'balanced evaluation score' :
+            'needs improvement',
+        };
+      }).sort((a, b) =>
+        (b.recommendationScore || 0) - (a.recommendationScore || 0)
+      );
+
+      return scored.map((q, idx) => ({
+        ...q,
+        isRecommended: idx === 0 && scored.length > 1,
+      }));
     }
-    return compareSuppliers.map(s => ({ id: s.id, name: s.vendorName }));
-  }, [isTenderRfq, evalVendorNames, simpleVendorNames, compareSuppliers]);
+
+    // Simple RFQ — use parameter-based evaluation data (with or without custom fields)
+    if (simpleEvalData && simpleVendorNames.length > 0) {
+      const scored = compareSuppliers.map(s => {
+        const evalVendor = simpleVendorNames.find(ev => ev.name === s.vendorName);
+        const supplierData = evalVendor ? simpleEvalData.suppliers.find(sp => sp.vendorId === evalVendor.id) : null;
+        const rawNormalized = supplierData?.calculatedScore?.normalizedScore;
+        const finalCalculatedScore = rawNormalized !== undefined && rawNormalized !== null && rawNormalized > 0
+          ? Math.round(rawNormalized * 10) / 10
+          : Math.round((s.recommendationScore || s.score || 0) * 10) / 10;
+
+        return {
+          ...s,
+          score: finalCalculatedScore > 0 ? finalCalculatedScore : s.score,
+          recommendationScore: finalCalculatedScore,
+          recommendationReason:
+            finalCalculatedScore >= 80 ? 'strong evaluation score' :
+            finalCalculatedScore >= 60 ? 'balanced evaluation score' :
+            'needs improvement',
+        };
+      }).sort((a, b) =>
+        (b.recommendationScore || 0) - (a.recommendationScore || 0)
+      );
+
+      return scored.map((q, idx) => ({
+        ...q,
+        isRecommended: idx === 0 && scored.length > 1,
+      }));
+    }
+
+    return compareSuppliers;
+  }, [selectedRfqType, compareSuppliers, evalCategories, vendorEvalScores, evalVendorNames, simpleEvalData, simpleVendorNames, evalLoading]);
+
+  const chartVendorNames = useMemo((): { id: string; name: string; overallScore?: number }[] => {
+    if (evaluatedSuppliers && evaluatedSuppliers.length > 0) {
+      return evaluatedSuppliers.map((s) => {
+        const evalVendor = (simpleVendorNames || []).find((ev) => ev.name === s.vendorName) ||
+                           (evalVendorNames || []).find((ev) => ev.name === s.vendorName);
+        return {
+          id: evalVendor?.id || String(s.id),
+          name: s.vendorName,
+          overallScore: Math.round(s.recommendationScore || s.score || 0),
+        };
+      });
+    }
+    return compareSuppliers.map((s) => ({
+      id: String(s.id),
+      name: s.vendorName,
+      overallScore: Math.round(s.recommendationScore || s.score || 0),
+    }));
+  }, [evaluatedSuppliers, simpleVendorNames, evalVendorNames, compareSuppliers]);
 
   const chartVendorScores = useMemo((): Record<string, Record<string, Record<string, number>>> => {
     if (isTenderRfq && Object.keys(vendorEvalScores).length > 0) {
@@ -2526,6 +2758,9 @@ export default function QuotationsPage() {
 
         rfqCustomFields.forEach((cf: any, idx: number) => {
           if (!cf || cf.active === false) return;
+          const cfName = (cf.label || cf.name || cf.fieldName || '').trim();
+          if (cfName.toLowerCase() === 'hghjjgh') return;
+
           const cfId = `param_cf_${cf.id || idx}`;
           const val = cfValues[cf.id] ?? cfValues[cf.name] ?? cfValues[cf.fieldName];
           const hasVal = val !== undefined && val !== null && val !== '' && val !== false;
@@ -2537,94 +2772,6 @@ export default function QuotationsPage() {
     }
     return scores;
   }, [isTenderRfq, vendorEvalScores, simpleVendorScores, compareSuppliers, rfqCustomFields, allQuotations]);
-
-  // ── Override recommendation with actual vendor-submitted evaluation scores ──
-  // For Custom RFQ: uses enterprise evaluation categories & scores
-  // For Simple RFQ with custom fields: uses parameter-based evaluation data
-  const evaluatedSuppliers = useMemo(() => {
-    // ── If eval data is still loading after we know the RFQ type, hide scores to prevent flicker ──
-    if (evalLoading && selectedRfqType) {
-      return compareSuppliers.map(s => ({
-        ...s,
-        recommendationScore: 0,
-        isRecommended: false,
-        recommendationReason: undefined,
-      }));
-    }
-
-    // Custom RFQ with evaluation data
-    if ((selectedRfqType === 'TENDER' || selectedRfqType === 'CUSTOM') && evalVendorNames.length > 0 && evalCategories.length > 0) {
-      const enabledCats = evalCategories.filter(c => c.enabled);
-      const totalWeight = enabledCats.reduce((sum, c) => sum + c.weightage, 0);
-
-      const scored = compareSuppliers.map(s => {
-        const evalVendor = evalVendorNames.find(ev => ev.name === s.vendorName);
-        if (!evalVendor) return s;
-
-        let totalScore = 0;
-        for (const cat of enabledCats) {
-          let earned = 0;
-          let maxPossible = 0;
-          for (const sp of cat.subParameters.filter(p => p.enabled)) {
-            const score = vendorEvalScores[evalVendor.id]?.[cat.id]?.[sp.id] ?? 0;
-            earned += score;
-            maxPossible += sp.maxScore;
-          }
-          const pct = maxPossible > 0 ? (earned / maxPossible) * 100 : 0;
-          totalScore += totalWeight > 0 ? (pct / 100) * cat.weightage : 0;
-        }
-
-        const finalScore = totalWeight > 0
-          ? Math.round((totalScore / totalWeight) * 100 * 10) / 10
-          : 0;
-
-        return {
-          ...s,
-          recommendationScore: finalScore,
-          recommendationReason:
-            finalScore >= 80 ? 'strong evaluation score' :
-            finalScore >= 60 ? 'balanced evaluation score' :
-            'needs improvement',
-        };
-      }).sort((a, b) =>
-        (b.recommendationScore || 0) - (a.recommendationScore || 0)
-      );
-
-      return scored.map((q, idx) => ({
-        ...q,
-        isRecommended: idx === 0 && scored.length > 1,
-      }));
-    }
-
-    // Simple RFQ — use parameter-based evaluation data (with or without custom fields)
-    if (simpleEvalData && simpleVendorNames.length > 0) {
-      const scored = compareSuppliers.map(s => {
-        const evalVendor = simpleVendorNames.find(ev => ev.name === s.vendorName);
-        const supplierData = evalVendor ? simpleEvalData.suppliers.find(sp => sp.vendorId === evalVendor.id) : null;
-        const normalizedScore = supplierData?.calculatedScore?.normalizedScore ?? s.score ?? s.recommendationScore ?? 0;
-        const finalCalculatedScore = Math.round((normalizedScore || s.score || s.recommendationScore || 0) * 10) / 10;
-
-        return {
-          ...s,
-          score: finalCalculatedScore > 0 ? finalCalculatedScore : s.score,
-          recommendationScore: finalCalculatedScore,
-          recommendationReason:
-            finalCalculatedScore >= 80 ? 'strong evaluation score' :
-            finalCalculatedScore >= 60 ? 'balanced evaluation score' :
-            'needs improvement',
-        };
-      }).sort((a, b) =>
-        (b.recommendationScore || 0) - (a.recommendationScore || 0)
-      );
-
-      return scored.map((q, idx) => ({
-        ...q,
-        isRecommended: idx === 0 && scored.length > 1,
-      }));
-    }
-
-    return compareSuppliers;
-  }, [selectedRfqType, compareSuppliers, evalCategories, vendorEvalScores, evalVendorNames, simpleEvalData, simpleVendorNames, evalLoading]);
 
   const bestValues = useMemo(() => {
     const hasEvalData = ((selectedRfqType === 'TENDER' || selectedRfqType === 'CUSTOM') && evalCategories.length > 0) ||
@@ -3156,7 +3303,6 @@ export default function QuotationsPage() {
                 </div>
                 <span className="quot-score__value">{s.recommendationScore || s.score || 0}%</span>
               </div>
-              {s.isRecommended && <span className="quot-compare__best-chip"><Crown size={10}/> Recommended ({s.recommendationScore || s.score}%)</span>}
             </div>
           </td>
         );
@@ -3444,6 +3590,7 @@ export default function QuotationsPage() {
           quotation={activeModal.quotation}
           onClose={closeModal}
           onSelectionSaved={reload}
+          allQuotations={allQuotations}
         />
       )}
       {activeModal && activeModal.type !== 'view' && (

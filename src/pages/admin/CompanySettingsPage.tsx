@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo, createElement } from 'react';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
-import { companySettingsService, ALLOWED_CONTRACT_UPLOAD_EXTENSIONS, type Department, type Category, type Unit, type Position, type PaymentTerm, type CompanyProfile, type EmailTemplate, type RequiredDocument, type DocumentTemplate, type DocumentTemplateInput, type ContractTemplate, type ContractTemplateInput } from '../../services/companySettingsService';
+import { companySettingsService, ALLOWED_CONTRACT_UPLOAD_EXTENSIONS, type Department, type Category, type Unit, type Position, type PaymentTerm, type CompanyProfile, type EmailTemplate, type RequiredDocument, type DocumentTemplate, type DocumentTemplateInput, type ContractTemplate, type ContractTemplateInput, type FormFieldConfig } from '../../services/companySettingsService';
 import { invalidateApiCache } from '../../api/client';
 import {
   Plus, X, Edit3, Building2, Tag, ChevronDown, ChevronRight, ChevronUp, Search,
@@ -1433,16 +1433,83 @@ export default function CompanySettingsPage() {
   const [docsDirty, setDocsDirty] = useState(false);
   const [savingDocs, setSavingDocs] = useState(false);
 
-  // ── Form selection state ──
+  // ── Form selection & Custom Flexi Fields state ──
   const [selectedFormKey, setSelectedFormKey] = useState<string | null>(null);
+  const [formCustomFields, setFormCustomFields] = useState<FormFieldConfig[]>([]);
+  const [formFieldsLoading, setFormFieldsLoading] = useState(false);
+  const [newFieldName, setNewFieldName] = useState('');
+  const [newFieldType, setNewFieldType] = useState('alphabetical');
+  const [addingFormField, setAddingFormField] = useState(false);
 
   const AVAILABLE_FORMS = [
     { key: 'vendor_onboarding', label: 'Vendor Onboarding Form' },
+    { key: 'rfq_information', label: 'RFQ Information Form' },
   ];
+
+  const fetchFormFields = useCallback(async (formKey: string) => {
+    setFormFieldsLoading(true);
+    try {
+      const fields = await companySettingsService.listFormFieldConfigs(formKey);
+      const customOnly = fields.filter((f) => f.sectionKey === 'custom_fields' || f.fieldKey.startsWith('cf_'));
+      setFormCustomFields(customOnly);
+    } catch {
+      setFormCustomFields([]);
+    } finally {
+      setFormFieldsLoading(false);
+    }
+  }, []);
 
   const handleSelectForm = useCallback((formKey: string) => {
     setSelectedFormKey(formKey);
-  }, []);
+    fetchFormFields(formKey);
+  }, [fetchFormFields]);
+
+  const handleAddCustomField = useCallback(async () => {
+    if (!selectedFormKey || !newFieldName.trim()) return;
+    setAddingFormField(true);
+    try {
+      const fieldKey = `cf_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      await companySettingsService.createFormFieldConfig({
+        formKey: selectedFormKey,
+        fieldKey,
+        label: newFieldName.trim(),
+        fieldType: newFieldType,
+        sectionKey: 'custom_fields',
+        sectionLabel: 'Custom Fields',
+        sortOrder: formCustomFields.length,
+        isVisible: true,
+      });
+      setNewFieldName('');
+      setNewFieldType('alphabetical');
+      await fetchFormFields(selectedFormKey);
+      setPageMsg('Flexi field created successfully!');
+    } catch (err) {
+      setPageMsg(err instanceof Error ? err.message : 'Failed to create flexi field');
+    } finally {
+      setAddingFormField(false);
+    }
+  }, [selectedFormKey, newFieldName, newFieldType, formCustomFields.length, fetchFormFields]);
+
+  const handleDeleteFormField = useCallback(async (id: string) => {
+    if (!selectedFormKey) return;
+    try {
+      await companySettingsService.deleteFormFieldConfig(id);
+      await fetchFormFields(selectedFormKey);
+      setPageMsg('Flexi field deleted.');
+    } catch (err) {
+      setPageMsg(err instanceof Error ? err.message : 'Failed to delete field');
+    }
+  }, [selectedFormKey, fetchFormFields]);
+
+  const handleToggleFormFieldVisibility = useCallback(async (id: string, currentVisible: boolean) => {
+    if (!selectedFormKey) return;
+    try {
+      await companySettingsService.updateFormFieldConfig(id, { isVisible: !currentVisible });
+      await fetchFormFields(selectedFormKey);
+    } catch (err) {
+      setPageMsg(err instanceof Error ? err.message : 'Failed to update field');
+    }
+  }, [selectedFormKey, fetchFormFields]);
 
   // Sync editable docs from API data when it loads
   useEffect(() => {
@@ -2648,11 +2715,11 @@ export default function CompanySettingsPage() {
             <div className="cs-section-header">
               <div className="cs-section-header__left">
                 <h2><FileText size={17} /> Forms Settings</h2>
-                <p>Select a form below to configure its settings and mandatory fields.</p>
+                <p>Select a form below to configure its custom flexi fields and settings.</p>
               </div>
             </div>
             <div className="cs-section-body">
-              <div className="cs-form-selector">
+              <div className="cs-form-selector" style={{ marginBottom: 24 }}>
                 <select
                   className="cs-form-select"
                   value={selectedFormKey || ''}
@@ -2671,22 +2738,137 @@ export default function CompanySettingsPage() {
               {!selectedFormKey ? (
                 <div className="cs-empty">
                   <div className="cs-empty__icon"><FileText size={28} /></div>
-                  <p>Select a form above to configure it.</p>
+                  <p>Select a form above to configure its flexi fields.</p>
                 </div>
-              ) : selectedFormKey === 'vendor_onboarding' && (
-                <div className="cs-empty" style={{ paddingTop: 24, paddingBottom: 24 }}>
-                  <div className="cs-empty__icon"><FileCheck size={28} /></div>
-                  <p style={{ fontSize: 14, color: 'var(--cs-text-secondary, #64748b)' }}>
-                    Vendor Onboarding Documents configuration is now managed in the standalone <strong>Required Documents</strong> tab.
-                  </p>
-                  <button
-                    type="button"
-                    className="company-settings__btn company-settings__btn--primary"
-                    style={{ marginTop: 16 }}
-                    onClick={() => setActiveTab('form-documents')}
-                  >
-                    Go to Required Documents
-                  </button>
+              ) : (
+                <div className="cs-flexi-fields-section" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  <div style={{ padding: 16, border: '1px solid var(--border, #e2e8f0)', borderRadius: 8, background: 'var(--surface-elevated, #f8fafc)' }}>
+                    <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary, #1e293b)' }}>
+                      Add New Custom Flexi Field for {AVAILABLE_FORMS.find(f => f.key === selectedFormKey)?.label}
+                    </h3>
+                    <p style={{ fontSize: 13, color: 'var(--text-secondary, #64748b)', marginBottom: 14 }}>
+                      Pre-define new custom fields here so users on transaction screens can select and add them on demand.
+                    </p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+                      <div className="company-settings__field" style={{ flex: '1 1 200px' }}>
+                        <label>Field Name</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Emergency Contact / Project Code"
+                          value={newFieldName}
+                          onChange={(e) => setNewFieldName(e.target.value)}
+                        />
+                      </div>
+                      <div className="company-settings__field" style={{ width: 180 }}>
+                        <label>Type</label>
+                        <select
+                          value={newFieldType}
+                          onChange={(e) => setNewFieldType(e.target.value)}
+                        >
+                          <option value="alphabetical">Alphabetic</option>
+                          <option value="alphanumeric">Alphanumeric</option>
+                          <option value="number">Number</option>
+                          <option value="date">Date</option>
+                          <option value="dropdown">Dropdown</option>
+                          <option value="attachment">Attachment</option>
+                        </select>
+                      </div>
+                      <div style={{ alignSelf: 'flex-end' }}>
+                        <button
+                          type="button"
+                          className="company-settings__btn company-settings__btn--primary"
+                          onClick={handleAddCustomField}
+                          disabled={addingFormField || !newFieldName.trim()}
+                        >
+                          <Plus size={14} /> {addingFormField ? 'Adding...' : 'Add Field'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ── Flexi Fields List ── */}
+                  <div style={{ border: '1px solid var(--border, #e2e8f0)', borderRadius: 8, overflow: 'hidden', background: 'var(--surface-card, #fff)' }}>
+                    <div style={{ padding: '12px 16px', background: 'var(--surface-elevated, #f1f5f9)', borderBottom: '1px solid var(--border, #e2e8f0)', fontWeight: 600, fontSize: 13, color: 'var(--text-primary, #1e293b)', display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 12, alignItems: 'center' }}>
+                      <div>Field Name</div>
+                      <div>Type</div>
+                      <div>Status</div>
+                      <div style={{ width: 80, textAlign: 'right' }}>Actions</div>
+                    </div>
+
+                    {formFieldsLoading ? (
+                      <TableSkeleton rows={3} />
+                    ) : formCustomFields.length === 0 ? (
+                      <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-secondary, #64748b)', fontSize: 14 }}>
+                        No flexi fields configured for this form yet. Add one above.
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        {formCustomFields.map((field) => (
+                          <div
+                            key={field.id}
+                            style={{
+                              padding: '12px 16px',
+                              borderBottom: '1px solid var(--border, #e2e8f0)',
+                              display: 'grid',
+                              gridTemplateColumns: '2fr 1fr 1fr auto',
+                              gap: 12,
+                              alignItems: 'center',
+                              fontSize: 14,
+                              background: 'var(--surface-card, #fff)',
+                              color: 'var(--text-primary, #1e293b)'
+                            }}
+                          >
+                            <div style={{ fontWeight: 500, color: 'var(--text-primary, #1e293b)' }}>
+                              {field.label}
+                              <span style={{ display: 'block', fontSize: 11, color: 'var(--text-secondary, #64748b)' }}>Key: {field.fieldKey}</span>
+                            </div>
+                            <div>
+                              <span style={{
+                                textTransform: 'capitalize',
+                                padding: '3px 10px',
+                                borderRadius: 12,
+                                background: 'rgba(10, 110, 209, 0.15)',
+                                color: 'var(--primary-500, #0a6ed1)',
+                                fontSize: 12,
+                                fontWeight: 600,
+                                display: 'inline-block'
+                              }}>
+                                {field.fieldType}
+                              </span>
+                            </div>
+                            <div>
+                              <button
+                                type="button"
+                                style={{
+                                  padding: '3px 10px',
+                                  borderRadius: 12,
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  background: field.isVisible ? 'rgba(34, 197, 94, 0.15)' : 'var(--surface-elevated, #f1f5f9)',
+                                  color: field.isVisible ? '#22c55e' : 'var(--text-secondary, #64748b)',
+                                }}
+                                onClick={() => field.id && handleToggleFormFieldVisibility(field.id, field.isVisible)}
+                              >
+                                {field.isVisible ? 'Active' : 'Hidden'}
+                              </button>
+                            </div>
+                            <div style={{ width: 80, textAlign: 'right' }}>
+                              <button
+                                type="button"
+                                className="company-settings__icon-btn company-settings__icon-btn--danger"
+                                onClick={() => field.id && handleDeleteFormField(field.id)}
+                                title="Delete field"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

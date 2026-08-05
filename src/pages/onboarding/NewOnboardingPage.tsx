@@ -1,9 +1,9 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { procurementService, type VendorInvitationRow, type VendorSearchResult } from '../../services/procurementService';
-import { companySettingsService, type RequiredDocument, type DocumentTemplate, type Category } from '../../services/companySettingsService';
+import { companySettingsService, type RequiredDocument, type DocumentTemplate, type Category, type FormFieldConfig } from '../../services/companySettingsService';
 import PhoneInput from '../../components/shared/PhoneInput';
 import VendorSuggestDropdown from '../../components/shared/VendorSuggestDropdown';
 import VendorDetailModal from '../../components/shared/VendorDetailModal';
@@ -109,6 +109,56 @@ export default function NewOnboardingPage() {
 
   const [notes, setNotes] = useState('');
   const [items, setItems] = useState<Array<{ itemCode: string; itemName: string }>>([]);
+
+  // ── Flexi Fields state for Vendor Onboarding ──
+  const [onboardingFlexiFields, setOnboardingFlexiFields] = useState<Array<{ id: string; fieldKey?: string; label: string; fieldType: string; value: string }>>([]);
+  const [showInfoFieldMenu, setShowInfoFieldMenu] = useState(false);
+
+  const { data: preconfiguredOnboardingFields } = useServiceData(
+    () => companySettingsService.listFormFieldConfigs('vendor_onboarding'),
+    [] as FormFieldConfig[],
+    [],
+    { cacheTtlMs: 0 }
+  );
+
+  const addOnboardingFlexiField = useCallback((fieldConfig?: FormFieldConfig) => {
+    setOnboardingFlexiFields((prev) => [
+      ...prev,
+      {
+        id: `ff_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        fieldKey: fieldConfig ? fieldConfig.fieldKey : '',
+        label: fieldConfig ? fieldConfig.label : '',
+        fieldType: fieldConfig ? fieldConfig.fieldType : 'alphabetical',
+        value: '',
+      },
+    ]);
+  }, []);
+
+  // Close the Add Field menu when clicking outside
+  useEffect(() => {
+    if (!showInfoFieldMenu) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.onb-add-field-container')) {
+        setShowInfoFieldMenu(false);
+      }
+    };
+    const timer = setTimeout(() => {
+      document.addEventListener('click', handler);
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('click', handler);
+    };
+  }, [showInfoFieldMenu]);
+
+  const removeOnboardingFlexiField = useCallback((id: string) => {
+    setOnboardingFlexiFields((prev) => prev.filter((f) => f.id !== id));
+  }, []);
+
+  const updateOnboardingFlexiField = useCallback((id: string, key: 'label' | 'value', val: string) => {
+    setOnboardingFlexiFields((prev) => prev.map((f) => f.id === id ? { ...f, [key]: val } : f));
+  }, []);
   const [sending, setSending] = useState(false);
   const [sentSuccess, setSentSuccess] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
@@ -215,10 +265,12 @@ export default function NewOnboardingPage() {
 
   // ── Dedicated Eye View Popup Modal ──
   const [eyeViewModal, setEyeViewModal] = useState<{
-    type: 'items' | 'documents';
+    type: 'items' | 'documents' | 'flexiFields';
     companyName: string;
     items?: Array<{ itemCode: string; itemName: string }>;
     docNames?: string[];
+    flexiFields?: Array<{ fieldKey?: string; label: string; fieldType: string }>;
+    flexiFieldValues?: Record<string, any>;
   } | null>(null);
 
   // ── Pre-Send Predictive Match Confidence Modal ──
@@ -649,8 +701,10 @@ export default function NewOnboardingPage() {
         category: selectedCategory.trim() || undefined,
         categoryId: selectedCategoryId || undefined,
         notes: notes.trim() || undefined,
-        items: validItems.length > 0 ? validItems : undefined,
         documentIds: selectedDocIds.length > 0 ? selectedDocIds : undefined,
+        flexiFields: onboardingFlexiFields.length > 0
+          ? onboardingFlexiFields.map((f) => ({ fieldKey: f.fieldKey || '', label: f.label, fieldType: f.fieldType }))
+          : undefined,
         ndaMndaRequired: (ndaRequired && mndaRequired) || undefined,
         ndaRequired: ndaRequired || undefined,
         mndaRequired: mndaRequired || undefined,
@@ -668,6 +722,7 @@ export default function NewOnboardingPage() {
       setNotes('');
       setItems([]);
       setSelectedDocIds([]);
+      setOnboardingFlexiFields([]);
       setNdaRequired(false);
       setMndaRequired(false);
       setAnyOtherRequired(false);
@@ -912,15 +967,6 @@ export default function NewOnboardingPage() {
                 <h2 className="onb-form-card__header-title">Send Invitation</h2>
                 <p className="onb-form-card__header-sub">Invite a supplier to register</p>
               </div>
-              <button
-                type="button"
-                className="onb-form-card__expand-btn"
-                onClick={() => setIsInviteExpanded((expanded) => !expanded)}
-                title={isInviteExpanded ? 'Restore' : 'Expand'}
-                aria-label={isInviteExpanded ? 'Restore invitation form' : 'Expand invitation form'}
-              >
-                {isInviteExpanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-              </button>
             </div>
 
             <form onSubmit={handleSendInviteClick} className="onb-form-card__body">
@@ -1053,6 +1099,223 @@ export default function NewOnboardingPage() {
                   placeholder="e.g. Preferred IT hardware supplier..."
                   className="onb-form-field__textarea"
                 />
+              </div>
+
+              {/* Flexi / Custom Fields Section */}
+              <div className="onb-form-field" style={{ marginTop: 8 }}>
+                <label className="onb-form-field__label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Custom Flexi Fields</span>
+                </label>
+
+                {onboardingFlexiFields.map((field) => (
+                  <div
+                    key={field.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justify: 'space-between',
+                      gap: 12,
+                      padding: '8px 12px',
+                      marginBottom: 6,
+                      background: 'var(--surface-card, #1e2530)',
+                      border: '1px solid var(--border, #2d3748)',
+                      borderRadius: 'var(--radius-md, 6px)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary, #fff)' }}>
+                        {field.label}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 600,
+                          color: 'var(--primary-500, #0a6ed1)',
+                          background: 'rgba(10,110,209,0.12)',
+                          padding: '2px 8px',
+                          borderRadius: 10,
+                          textTransform: 'capitalize',
+                        }}
+                      >
+                        {field.fieldType}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}
+                      onClick={() => removeOnboardingFlexiField(field.id)}
+                      title="Remove field"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+
+                <div style={{ marginTop: 8 }}>
+                  <div className="onb-add-field-container" style={{ position: 'relative', display: 'inline-block' }}>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowInfoFieldMenu((v) => !v);
+                      }}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '6px 0',
+                        border: 'none',
+                        background: 'transparent',
+                        color: 'var(--primary-500, #0a6ed1)',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                        outline: 'none',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.75')}
+                      onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
+                    >
+                      <Plus size={14} />
+                      Add Field
+                    </button>
+
+                    {showInfoFieldMenu && (
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          position: 'absolute',
+                          top: 'calc(100% + 6px)',
+                          left: 0,
+                          zIndex: 1000,
+                          background: 'var(--surface-card, #1e2530)',
+                          border: '1px solid var(--border, #2d3748)',
+                          borderRadius: 'var(--radius-md, 8px)',
+                          boxShadow: '0 12px 36px rgba(0,0,0,0.4)',
+                          minWidth: 280,
+                          maxHeight: 320,
+                          overflowY: 'auto',
+                        }}
+                      >
+                        {preconfiguredOnboardingFields.length === 0 ? (
+                          <div
+                            style={{
+                              padding: '24px 18px',
+                              textAlign: 'center',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              gap: 10,
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: 40,
+                                height: 40,
+                                borderRadius: '50%',
+                                background: 'var(--surface-elevated, #1a2029)',
+                                border: '1px solid var(--border, #2d3748)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              <Plus size={18} style={{ color: 'var(--text-placeholder, #64748b)' }} />
+                            </div>
+                            <div>
+                              <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: 'var(--text-primary, #fff)' }}>
+                                No field is created yet
+                              </p>
+                              <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary, #94a3b8)', lineHeight: 1.4 }}>
+                                Go to <strong>Settings → Form Fields</strong> to create fields for Vendor Onboarding.
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div
+                              style={{
+                                padding: '10px 14px 8px',
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: 'var(--text-placeholder, #64748b)',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.5px',
+                                borderBottom: '1px solid var(--border, #2d3748)',
+                              }}
+                            >
+                              Form Settings Fields
+                            </div>
+                            {preconfiguredOnboardingFields
+                              .filter((f) => !onboardingFlexiFields.some((ef) => ef.fieldKey === f.fieldKey || ef.label === f.label))
+                              .map((f) => (
+                                <button
+                                  type="button"
+                                  key={f.fieldKey || f.id}
+                                  onClick={() => {
+                                    addOnboardingFlexiField(f);
+                                    setShowInfoFieldMenu(false);
+                                  }}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 10,
+                                    width: '100%',
+                                    padding: '10px 14px',
+                                    border: 'none',
+                                    borderBottom: '1px solid var(--border, #2d3748)',
+                                    background: 'transparent',
+                                    color: 'var(--text-primary, #fff)',
+                                    fontSize: 13,
+                                    cursor: 'pointer',
+                                    textAlign: 'left',
+                                    fontFamily: 'inherit',
+                                    transition: 'background 0.15s',
+                                  }}
+                                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-hover, rgba(255,255,255,0.06))')}
+                                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                                >
+                                  <span
+                                    style={{
+                                      width: 26,
+                                      height: 26,
+                                      borderRadius: 'var(--radius-sm, 6px)',
+                                      background: 'rgba(10,110,209,0.12)',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      flexShrink: 0,
+                                    }}
+                                  >
+                                    <Plus size={13} style={{ color: 'var(--primary-500, #0a6ed1)' }} />
+                                  </span>
+                                  <span style={{ flex: 1, fontWeight: 500 }}>{f.label}</span>
+                                  <span
+                                    style={{
+                                      fontSize: 10,
+                                      fontWeight: 600,
+                                      color: 'var(--primary-500, #0a6ed1)',
+                                      background: 'rgba(10,110,209,0.12)',
+                                      padding: '2px 7px',
+                                      borderRadius: 10,
+                                      textTransform: 'capitalize',
+                                    }}
+                                  >
+                                    {f.fieldType}
+                                  </span>
+                                </button>
+                              ))}
+                            {preconfiguredOnboardingFields.filter((f) => !onboardingFlexiFields.some((ef) => ef.fieldKey === f.fieldKey || ef.label === f.label)).length === 0 && (
+                              <div style={{ padding: '14px', fontSize: 12, color: 'var(--text-secondary, #94a3b8)', textAlign: 'center' }}>
+                                All configured settings fields have been added.
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* Items — Compact Summary + Popup Trigger */}
@@ -1861,17 +2124,19 @@ export default function NewOnboardingPage() {
         >
           <div
             className="onb-template-preview-card"
-            style={{ maxWidth: 520 }}
+            style={{ maxWidth: 720, width: '94vw' }}
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Header */}
             <div className="onb-template-preview-header">
               <div className="onb-template-preview-header__left">
-                <FileText size={18} />
+                <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(10,110,209,0.12)', color: 'var(--primary-500)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <FileText size={22} />
+                </div>
                 <div>
-                  <div className="onb-template-preview-header__title">{previewDoc.name}</div>
+                  <div className="onb-template-preview-header__title" style={{ fontSize: 16 }}>{previewDoc.name}</div>
                   <div className="onb-template-preview-header__sub">
-                    {previewDoc.documentCategory === 'mandatory' ? 'Mandatory' : previewDoc.documentCategory === 'optional' ? 'Optional' : 'Any Other'} Document
-                    {previewDoc.fieldType && ` · ${previewDoc.fieldType}`}
+                    {previewDoc.documentCategory === 'mandatory' ? '🔴 Mandatory Compliance Document' : previewDoc.documentCategory === 'optional' ? '🟡 Optional Compliance Document' : '🔵 Additional Document'}
                   </div>
                 </div>
               </div>
@@ -1884,60 +2149,307 @@ export default function NewOnboardingPage() {
                 <X size={20} />
               </button>
             </div>
-            <div className="onb-template-preview-body" style={{ minHeight: 180 }}>
-              {previewDoc.description ? (
-                <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-placeholder)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Description</div>
-                  <p style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.6, margin: 0 }}>{previewDoc.description}</p>
+
+            {/* Body */}
+            <div className="onb-template-preview-body" style={{ minHeight: 320, maxHeight: '72vh', overflowY: 'auto' }}>
+              
+              {/* If a real fileUrl exists, embed file iframe/image */}
+              {(previewDoc as any).fileUrl ? (
+                <div style={{ borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)', background: '#000', marginBottom: 16 }}>
+                  {(previewDoc as any).fileUrl.endsWith('.pdf') ? (
+                    <iframe src={(previewDoc as any).fileUrl} width="100%" height="380px" style={{ border: 'none' }} title={previewDoc.name} />
+                  ) : (
+                    <img src={(previewDoc as any).fileUrl} alt={previewDoc.name} style={{ width: '100%', maxHeight: 380, objectFit: 'contain' }} />
+                  )}
                 </div>
               ) : (
-                <div style={{ marginBottom: 20 }}>
-                  <p style={{ fontSize: 13, color: 'var(--text-placeholder)', fontStyle: 'italic', margin: 0 }}>No description provided for this document.</p>
+                /* Authentic Visual Sample Document Rendering */
+                <div style={{ marginBottom: 16 }}>
+                  {(() => {
+                    const docNameUpper = previewDoc.name.toUpperCase();
+
+                    // 1. PAN CARD VISUAL PREVIEW
+                    if (docNameUpper.includes('PAN')) {
+                      return (
+                        <div style={{
+                          background: 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)',
+                          border: '2px solid #6366f1',
+                          borderRadius: 12,
+                          padding: 20,
+                          color: '#1e1b4b',
+                          boxShadow: '0 8px 24px rgba(99, 102, 241, 0.15)',
+                          position: 'relative',
+                          overflow: 'hidden'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px dashed #818cf8', paddingBottom: 10, marginBottom: 14 }}>
+                            <div>
+                              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '1px', color: '#4338ca', textTransform: 'uppercase' }}>INCOME TAX DEPARTMENT</div>
+                              <div style={{ fontSize: 13, fontWeight: 800, color: '#1e1b4b' }}>GOVT. OF INDIA · PERMANENT ACCOUNT NUMBER</div>
+                            </div>
+                            <div style={{ fontSize: 10, fontWeight: 700, background: '#4338ca', color: '#fff', padding: '3px 8px', borderRadius: 4 }}>
+                              SAMPLE CARD PREVIEW
+                            </div>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: 14, alignItems: 'center' }}>
+                            <div>
+                              <div style={{ fontSize: 10, color: '#475569', fontWeight: 700 }}>CARD HOLDER NAME / VENDOR</div>
+                              <div style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', marginBottom: 8 }}>SAMPLE SUPPLIER COMPANY PVT LTD</div>
+
+                              <div style={{ fontSize: 10, color: '#475569', fontWeight: 700 }}>PERMANENT ACCOUNT NUMBER (PAN)</div>
+                              <div style={{ fontSize: 18, fontWeight: 900, fontFamily: 'monospace', letterSpacing: '2px', color: '#4338ca', marginBottom: 8 }}>ABCDE1234F</div>
+
+                              <div style={{ display: 'flex', gap: 16 }}>
+                                <div>
+                                  <div style={{ fontSize: 9, color: '#475569', fontWeight: 700 }}>DATE OF ISSUE</div>
+                                  <div style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>15 / 01 / 2022</div>
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: 9, color: '#475569', fontWeight: 700 }}>ISSUING AUTHORITY</div>
+                                  <div style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>INCOME TAX DEPT</div>
+                                </div>
+                              </div>
+                            </div>
+                            <div style={{ textAlign: 'center' }}>
+                              <div style={{ width: 80, height: 90, background: '#cbd5e1', border: '1px solid #94a3b8', borderRadius: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px' }}>
+                                <FileText size={24} style={{ color: '#64748b' }} />
+                                <span style={{ fontSize: 9, color: '#64748b', fontWeight: 700 }}>PHOTO / SEAL</span>
+                              </div>
+                              <div style={{ fontSize: 8, fontWeight: 800, color: '#4338ca' }}>GOVT VERIFIED</div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // 2. TRADE LICENSE VISUAL PREVIEW
+                    if (docNameUpper.includes('TRADE') || docNameUpper.includes('LICENSE')) {
+                      return (
+                        <div style={{
+                          background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+                          border: '2px solid #10b981',
+                          borderRadius: 12,
+                          padding: 20,
+                          color: '#064e3b',
+                          boxShadow: '0 8px 24px rgba(16, 185, 129, 0.15)',
+                          position: 'relative'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px dashed #34d399', paddingBottom: 10, marginBottom: 14 }}>
+                            <div>
+                              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '1px', color: '#047857', textTransform: 'uppercase' }}>DEPARTMENT OF ECONOMIC DEVELOPMENT</div>
+                              <div style={{ fontSize: 14, fontWeight: 800, color: '#064e3b' }}>COMMERCIAL TRADE LICENSE CERTIFICATE</div>
+                            </div>
+                            <div style={{ fontSize: 10, fontWeight: 700, background: '#047857', color: '#fff', padding: '3px 8px', borderRadius: 4 }}>
+                              LICENSE PREVIEW
+                            </div>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 10 }}>
+                            <div>
+                              <div style={{ fontSize: 9, color: '#047857', fontWeight: 700 }}>TRADE NAME</div>
+                              <div style={{ fontSize: 13, fontWeight: 800, color: '#064e3b' }}>HELIFLOW GLOBAL VENDORS LLC</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 9, color: '#047857', fontWeight: 700 }}>LICENSE NUMBER</div>
+                              <div style={{ fontSize: 13, fontWeight: 800, fontFamily: 'monospace', color: '#047857' }}>CN-1029384-UAE</div>
+                            </div>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, background: 'rgba(255,255,255,0.7)', padding: 10, borderRadius: 8, border: '1px solid #a7f3d0' }}>
+                            <div>
+                              <div style={{ fontSize: 9, color: '#047857', fontWeight: 700 }}>ISSUE DATE</div>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: '#064e3b' }}>01 / 01 / 2024</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 9, color: '#047857', fontWeight: 700 }}>EXPIRATION DATE</div>
+                              <div style={{ fontSize: 11, fontWeight: 800, color: '#d97706' }}>31 / 12 / 2026</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 9, color: '#047857', fontWeight: 700 }}>AUTHORITY</div>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: '#064e3b' }}>DED / GOVT</div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // 3. VAT / TAX CERTIFICATE VISUAL PREVIEW
+                    if (docNameUpper.includes('VAT') || docNameUpper.includes('TAX') || docNameUpper.includes('GST')) {
+                      return (
+                        <div style={{
+                          background: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)',
+                          border: '2px solid #f97316',
+                          borderRadius: 12,
+                          padding: 20,
+                          color: '#7c2d12',
+                          boxShadow: '0 8px 24px rgba(249, 115, 22, 0.15)'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px dashed #fb923c', paddingBottom: 10, marginBottom: 14 }}>
+                            <div>
+                              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '1px', color: '#c2410c', textTransform: 'uppercase' }}>FEDERAL TAX AUTHORITY / TAX REGISTRATION</div>
+                              <div style={{ fontSize: 14, fontWeight: 800, color: '#7c2d12' }}>VALUE ADDED TAX (VAT) CERTIFICATE</div>
+                            </div>
+                            <div style={{ fontSize: 10, fontWeight: 700, background: '#c2410c', color: '#fff', padding: '3px 8px', borderRadius: 4 }}>
+                              VAT PREVIEW
+                            </div>
+                          </div>
+                          <div style={{ marginBottom: 10 }}>
+                            <div style={{ fontSize: 9, color: '#c2410c', fontWeight: 700 }}>REGISTERED LEGAL ENTITY</div>
+                            <div style={{ fontSize: 13, fontWeight: 800, color: '#7c2d12' }}>HELIFLOW GLOBAL VENDOR ENTERPRISES</div>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, background: 'rgba(255,255,255,0.7)', padding: 10, borderRadius: 8, border: '1px solid #fed7aa' }}>
+                            <div>
+                              <div style={{ fontSize: 9, color: '#c2410c', fontWeight: 700 }}>TAX REGISTRATION NO. (TRN)</div>
+                              <div style={{ fontSize: 13, fontWeight: 900, fontFamily: 'monospace', color: '#ea580c' }}>100293847500003</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 9, color: '#c2410c', fontWeight: 700 }}>EFFECTIVE DATE</div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: '#7c2d12' }}>01 / 04 / 2023</div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // 4. EMIRATES ID VISUAL PREVIEW
+                    if (docNameUpper.includes('EMIRATES') || docNameUpper.includes('ID') || docNameUpper.includes('PASSPORT')) {
+                      return (
+                        <div style={{
+                          background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
+                          border: '2px solid #0284c7',
+                          borderRadius: 12,
+                          padding: 20,
+                          color: '#0c4a6e',
+                          boxShadow: '0 8px 24px rgba(2, 132, 199, 0.15)'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px dashed #38bdf8', paddingBottom: 10, marginBottom: 14 }}>
+                            <div>
+                              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '1px', color: '#0369a1', textTransform: 'uppercase' }}>UNITED ARAB EMIRATES · FEDERAL AUTHORITY</div>
+                              <div style={{ fontSize: 14, fontWeight: 800, color: '#0c4a6e' }}>EMIRATES IDENTIFICATION CARD</div>
+                            </div>
+                            <div style={{ fontSize: 10, fontWeight: 700, background: '#0369a1', color: '#fff', padding: '3px 8px', borderRadius: 4 }}>
+                              EIDA PREVIEW
+                            </div>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px', gap: 12, alignItems: 'center' }}>
+                            <div>
+                              <div style={{ fontSize: 9, color: '#0369a1', fontWeight: 700 }}>ID NUMBER</div>
+                              <div style={{ fontSize: 15, fontWeight: 900, fontFamily: 'monospace', color: '#0284c7', marginBottom: 6 }}>784 - 1990 - 1234567 - 1</div>
+
+                              <div style={{ fontSize: 9, color: '#0369a1', fontWeight: 700 }}>CARD HOLDER NAME</div>
+                              <div style={{ fontSize: 12, fontWeight: 800, color: '#0c4a6e', marginBottom: 6 }}>AUTHORIZED VENDOR REPRESENTATIVE</div>
+
+                              <div style={{ display: 'flex', gap: 16 }}>
+                                <div>
+                                  <div style={{ fontSize: 8, color: '#0369a1', fontWeight: 700 }}>ISSUE DATE</div>
+                                  <div style={{ fontSize: 10, fontWeight: 700 }}>10 / 02 / 2023</div>
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: 8, color: '#0369a1', fontWeight: 700 }}>EXPIRATION DATE</div>
+                                  <div style={{ fontSize: 10, fontWeight: 800, color: '#d97706' }}>09 / 02 / 2026</div>
+                                </div>
+                              </div>
+                            </div>
+                            <div style={{ width: 70, height: 80, background: '#bae6fd', borderRadius: 6, border: '1px solid #7dd3fc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <FileText size={22} style={{ color: '#0284c7' }} />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // DEFAULT DOCUMENT SPEC SHEET VISUAL PREVIEW
+                    return (
+                      <div style={{
+                        background: 'var(--surface)',
+                        border: '2px solid var(--primary-500)',
+                        borderRadius: 12,
+                        padding: 20,
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.06)'
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: 10, marginBottom: 12 }}>
+                          <div>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-placeholder)', textTransform: 'uppercase' }}>FORMAL COMPLIANCE DOCUMENT</div>
+                            <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)' }}>{previewDoc.name}</div>
+                          </div>
+                          <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(10,110,209,0.1)', color: 'var(--primary-500)', padding: '4px 10px', borderRadius: 12 }}>
+                            {previewDoc.documentCategory.toUpperCase()}
+                          </span>
+                        </div>
+                        <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
+                          {previewDoc.description || 'Standard vendor onboarding compliance document. Supplier must attach a clean, legible PDF or image copy upon invitation acceptance.'}
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
-              {previewDoc.acceptedFileTypes && (
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-placeholder)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>Accepted File Types</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {previewDoc.acceptedFileTypes.split(',').map((ft, i) => (
-                      <span
-                        key={i}
-                        style={{
-                          display: 'inline-flex', alignItems: 'center',
-                          padding: '3px 10px', borderRadius: 20,
-                          background: 'rgba(10,110,209,0.08)',
-                          border: '1px solid rgba(10,110,209,0.2)',
-                          color: 'var(--primary-500)',
-                          fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono)',
-                        }}
-                      >
-                        .{ft.trim()}
-                      </span>
-                    ))}
+
+              {/* Requirements & Tracking Rules Box */}
+              <div style={{ background: 'var(--surface-hover, rgba(0,0,0,0.02))', padding: 14, borderRadius: 10, border: '1px solid var(--border)', marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-placeholder)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
+                  Required Fields & Tracking Configuration
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-placeholder)' }}>Issue Date</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: previewDoc.trackIssueDate !== false ? '#10b981' : 'var(--text-secondary)' }}>
+                      {previewDoc.trackIssueDate !== false ? '✓ Required from Vendor' : 'Optional'}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-placeholder)' }}>Expiration Date</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: previewDoc.trackExpirationDate !== false ? '#10b981' : 'var(--text-secondary)' }}>
+                      {previewDoc.trackExpirationDate !== false ? '✓ Required & Tracked' : 'Not Tracked'}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-placeholder)' }}>Issuing Authority</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: previewDoc.trackIssuingAuthority !== false ? '#10b981' : 'var(--text-secondary)' }}>
+                      {previewDoc.trackIssuingAuthority !== false ? '✓ Required from Vendor' : 'Optional'}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-placeholder)' }}>Expiry Alert Window</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#f59e0b' }}>
+                      {previewDoc.expirationAlertDays || 30} Days Notice
+                    </div>
                   </div>
                 </div>
-              )}
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '10px 14px', borderRadius: 'var(--radius-md)',
-                background: selectedDocIds.includes(previewDoc.id)
-                  ? 'rgba(16,185,129,0.08)' : 'var(--surface-elevated)',
-                border: `1px solid ${
-                  selectedDocIds.includes(previewDoc.id) ? 'rgba(16,185,129,0.25)' : 'var(--border)'
-                }`,
-                marginTop: 8,
-              }}>
+              </div>
+
+              {/* Selection Checkbox Bar */}
+              <div
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '12px 16px', borderRadius: 'var(--radius-md)',
+                  background: selectedDocIds.includes(previewDoc.id)
+                    ? 'rgba(16,185,129,0.08)' : 'var(--surface-elevated)',
+                  border: `1px solid ${
+                    selectedDocIds.includes(previewDoc.id) ? 'rgba(16,185,129,0.3)' : 'var(--border)'
+                  }`,
+                  cursor: 'pointer'
+                }}
+                onClick={() => toggleDocSelection(previewDoc.id)}
+              >
                 <input
                   type="checkbox"
                   checked={selectedDocIds.includes(previewDoc.id)}
                   onChange={() => toggleDocSelection(previewDoc.id)}
-                  style={{ width: 16, height: 16, accentColor: 'var(--primary-500)', cursor: 'pointer' }}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ width: 18, height: 18, accentColor: 'var(--primary-500)', cursor: 'pointer' }}
                 />
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-                  {selectedDocIds.includes(previewDoc.id) ? '✓ Selected for this invitation' : 'Select this document for the invitation'}
-                </span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {selectedDocIds.includes(previewDoc.id) ? '✓ Included in Onboarding Invitation' : 'Include this document in Invitation'}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                    {selectedDocIds.includes(previewDoc.id)
+                      ? 'Vendor will be required to upload this document when accepting the invitation.'
+                      : 'Click to select this document for vendor onboarding.'}
+                  </div>
+                </div>
               </div>
             </div>
+
+            {/* Footer */}
             <div className="onb-template-preview-footer" style={{ justifyContent: 'space-between' }}>
               <span style={{ fontSize: 12, color: 'var(--text-placeholder)' }}>
                 Category: <strong style={{ color: 'var(--text-secondary)' }}>
@@ -1949,7 +2461,7 @@ export default function NewOnboardingPage() {
                 className="onb-popup-done-btn"
                 onClick={() => setPreviewDoc(null)}
               >
-                Close
+                Done
               </button>
             </div>
           </div>
@@ -2111,6 +2623,47 @@ export default function NewOnboardingPage() {
                 </div>
               )}
 
+              {/* Custom Flexi Fields */}
+              {detailInvitation.flexiFields && detailInvitation.flexiFields.length > 0 && (
+                <div className="onb-detail-section">
+                  <div className="onb-detail-items-header" style={{ justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <List size={14} />
+                      <span className="onb-detail-items-header__title">
+                        Custom Fields ({detailInvitation.flexiFields.length})
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="onb-eye-view-btn"
+                      onClick={() => setEyeViewModal({
+                        type: 'flexiFields',
+                        companyName: detailInvitation.companyName,
+                        flexiFields: detailInvitation.flexiFields || [],
+                      })}
+                      title="Open preview popup window"
+                    >
+                      <Eye size={13} />
+                      <span>Eye View</span>
+                    </button>
+                  </div>
+
+                  {/* Clickable Eye View Placeholder Box */}
+                  <div
+                    className="onb-eye-view-placeholder"
+                    onClick={() => setEyeViewModal({
+                      type: 'flexiFields',
+                      companyName: detailInvitation.companyName,
+                      flexiFields: detailInvitation.flexiFields || [],
+                      flexiFieldValues: detailInvitation.flexiFieldValues,
+                    })}
+                  >
+                    <Eye size={14} />
+                    <span>Click Eye View to open {detailInvitation.flexiFields.length} custom field(s) in preview popup</span>
+                  </div>
+                </div>
+              )}
+
               {/* Notes */}
               {detailInvitation.notes && (
                 <div className="onb-detail-section">
@@ -2121,10 +2674,10 @@ export default function NewOnboardingPage() {
                 </div>
               )}
 
-              {!detailInvitation.items?.length && (!detailInvitation.documentIds || detailInvitation.documentIds.length === 0) && !detailInvitation.notes && (
+              {!detailInvitation.items?.length && (!detailInvitation.documentIds || detailInvitation.documentIds.length === 0) && (!detailInvitation.flexiFields || detailInvitation.flexiFields.length === 0) && !detailInvitation.notes && (
                 <div className="onb-detail-empty">
                   <FileText size={36} />
-                  <p>No items, documents, or notes were added to this invitation.</p>
+                  <p>No items, documents, custom fields, or notes were added to this invitation.</p>
                 </div>
               )}
             </div>
@@ -2156,15 +2709,6 @@ export default function NewOnboardingPage() {
                 <h2>Sent Invitations ({invitations.length})</h2>
               </div>
               <div className="onb-list-card__header-actions">
-                <button
-                  type="button"
-                  className="onb-form-card__expand-btn onb-form-card__expand-btn--list"
-                  onClick={() => setIsSentExpanded((expanded) => !expanded)}
-                  title={isSentExpanded ? 'Restore' : 'Expand'}
-                  aria-label={isSentExpanded ? 'Restore sent invitations' : 'Expand sent invitations'}
-                >
-                  {isSentExpanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-                </button>
                 <button className="onb-list-card__queue-link" onClick={() => navigate('/onboarding/queue')}>
                   View Onboarding Queue <ArrowRight size={13} />
                 </button>
@@ -2304,10 +2848,20 @@ export default function NewOnboardingPage() {
             {/* Header */}
             <div className="onb-modal__header onb-modal__header--blue">
               <div className="onb-modal__title">
-                {eyeViewModal.type === 'items' ? <Package size={20} /> : <FileText size={20} />}
+                {eyeViewModal.type === 'items' ? (
+                  <Package size={20} />
+                ) : eyeViewModal.type === 'documents' ? (
+                  <FileText size={20} />
+                ) : (
+                  <List size={20} />
+                )}
                 <div>
                   <div style={{ fontSize: 15, fontWeight: 700 }}>
-                    {eyeViewModal.type === 'items' ? 'Attached Required Items' : 'Configured Required Documents'}
+                    {eyeViewModal.type === 'items'
+                      ? 'Attached Required Items'
+                      : eyeViewModal.type === 'documents'
+                      ? 'Configured Required Documents'
+                      : 'Assigned Custom Flexi Fields'}
                   </div>
                   <div style={{ fontSize: 11, fontWeight: 500, opacity: 0.85 }}>
                     {eyeViewModal.companyName}
@@ -2364,6 +2918,54 @@ export default function NewOnboardingPage() {
                       <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{name}</span>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {eyeViewModal.type === 'flexiFields' && eyeViewModal.flexiFields && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {eyeViewModal.flexiFields.map((f, idx) => {
+                    const fieldKey = f.fieldKey || f.label;
+                    const value = eyeViewModal.flexiFieldValues?.[fieldKey];
+                    return (
+                      <div
+                        key={idx}
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 6,
+                          padding: '12px 14px',
+                          borderRadius: 'var(--radius-md)',
+                          background: 'var(--surface-elevated)',
+                          border: '1px solid var(--border)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <List size={16} style={{ color: 'var(--primary-500)', flexShrink: 0 }} />
+                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{f.label}</span>
+                          </div>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color: 'var(--primary-500)',
+                              background: 'rgba(10,110,209,0.12)',
+                              padding: '3px 9px',
+                              borderRadius: 10,
+                              textTransform: 'capitalize',
+                            }}
+                          >
+                            {f.fieldType}
+                          </span>
+                        </div>
+                        {value !== undefined && (
+                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', paddingTop: 6, marginTop: 2, borderTop: '1px dashed var(--border)' }}>
+                            <strong>Filled Value:</strong> <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{value || 'Not filled'}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

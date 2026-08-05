@@ -1243,13 +1243,14 @@ export default function VendorRFQsPage() {
                   </div>
 
                       {/* ── Custom Fields (Simple RFQ) ──────── */}
-                  {quotModal.customFields && quotModal.customFields.length > 0 && (
+                  {quotModal.customFields && quotModal.customFields.filter(cf => (cf.weightage && cf.weightage > 0) || cf.required).length > 0 && (
                     <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>
                         Additional Information
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        {quotModal.customFields.map((cf) => (
+                        {quotModal.customFields.filter(cf => (cf.weightage && cf.weightage > 0) || cf.required).map((cf) => (
+
                           <div key={cf.id} className="vquot-modal__field">
                             <label className="vquot-modal__label">
                               {cf.fieldName}

@@ -244,6 +244,14 @@ export default function RFQDetailModal({
           const minPrice = prices.length ? Math.min(...prices) : 0;
           const minLead = leads.length ? Math.min(...leads) : 0;
 
+          const customFieldsList = (rfq as any).customFields || [];
+          const parsedCustomFields = (Array.isArray(customFieldsList) ? customFieldsList : []).map((rawCf: any) => {
+            if (rawCf?.value && typeof rawCf.value === 'string') {
+              try { return { ...rawCf, ...JSON.parse(rawCf.value) }; } catch {}
+            }
+            return rawCf;
+          });
+
           const scoredSuppliers = quotations.map((q) => {
             const priceScore = minPrice && q.totalPrice > 0 ? Math.round((minPrice / q.totalPrice) * 100) : 80;
             const leadScore = minLead && q.leadTimeDays ? Math.round((minLead / q.leadTimeDays) * 100) : 80;
@@ -251,28 +259,7 @@ export default function RFQDetailModal({
             const complianceScore = 100;
             const responseScore = 90;
 
-            const calcScore = Math.round(
-              priceScore * 0.45 + leadScore * 0.15 + complianceScore * 0.15 + ratingScore * 0.15 + responseScore * 0.10
-            );
-
-            const finalScore = q.score != null && q.score > 0 ? Math.round(q.score <= 5 ? q.score * 20 : q.score) : calcScore;
-
-            return {
-              q,
-              priceScore,
-              leadScore,
-              ratingScore,
-              complianceScore,
-              responseScore,
-              finalScore,
-            };
-          }).sort((a, b) => b.finalScore - a.finalScore || a.q.totalPrice - b.q.totalPrice);
-
-          const suppliers: EvalSupplierResult[] = scoredSuppliers.map(({ q, priceScore, leadScore, ratingScore, complianceScore, responseScore, finalScore }, idx) => ({
-            vendorId: String(q.vendorId),
-            vendorName: q.vendorName,
-            vendorEmail: q.vendorEmail,
-            categoryScores: [
+            const categoryScores: EvalCategoryScore[] = [
               {
                 categoryId: 'pricing', categoryName: 'Pricing (Commercials)', weightage: 45,
                 enabled: true, earned: Math.round((priceScore * 45) / 100), maxPossible: 45,
@@ -298,7 +285,44 @@ export default function RFQDetailModal({
                 enabled: true, earned: Math.round((responseScore * 10) / 100), maxPossible: 10,
                 percentage: responseScore, weightedScore: (responseScore * 10) / 100, subParameterScores: [],
               },
-            ],
+            ];
+
+            const cfValues = (q as any).customFieldValues || {};
+            parsedCustomFields.forEach((cf: any) => {
+              const fieldName = (cf.fieldName || cf.key || cf.label || cf.name || '').trim();
+              if (!fieldName || fieldName.toLowerCase() === 'hghjjgh') return;
+              const val = cfValues[`cf_${cf.id}`] ?? cfValues[cf.id] ?? cfValues[fieldName] ?? cfValues[fieldName.toLowerCase()];
+              const hasVal = val != null && String(val).trim() !== '' && String(val).trim() !== 'false';
+              const weight = Number(cf.weightage) || 10;
+              categoryScores.push({
+                categoryId: `cf_${cf.id}`,
+                categoryName: fieldName,
+                weightage: weight,
+                enabled: true,
+                earned: hasVal ? weight : 0,
+                maxPossible: weight,
+                percentage: hasVal ? 100 : 0,
+                weightedScore: hasVal ? weight : 0,
+                subParameterScores: [],
+              });
+            });
+
+            const totalEarned = categoryScores.reduce((sum, c) => sum + (c.earned || 0), 0);
+            const totalMax = categoryScores.reduce((sum, c) => sum + (c.maxPossible || 0), 0);
+            const finalScore = totalMax > 0 ? Math.round((totalEarned / totalMax) * 100) : 80;
+
+            return {
+              q,
+              categoryScores,
+              finalScore,
+            };
+          }).sort((a, b) => b.finalScore - a.finalScore || a.q.totalPrice - b.q.totalPrice);
+
+          const suppliers: EvalSupplierResult[] = scoredSuppliers.map(({ q, categoryScores, finalScore }, idx) => ({
+            vendorId: String(q.vendorId),
+            vendorName: q.vendorName,
+            vendorEmail: q.vendorEmail,
+            categoryScores,
             totalWeightedScore: finalScore,
             finalScore,
             rank: idx + 1,
@@ -308,15 +332,16 @@ export default function RFQDetailModal({
           const totalSuppliers = suppliers.length;
           const averageScore = Math.round(suppliers.reduce((sum, s) => sum + s.finalScore, 0) / totalSuppliers);
 
+          const categories = suppliers[0]?.categoryScores.map(c => ({
+            id: c.categoryId,
+            name: c.categoryName,
+            weightage: c.weightage,
+            enabled: c.enabled,
+          })) || [];
+
           setEvalData({
             rfq: { id: rfq.id, rfqNumber: rfq.rfqNumber, title: rfq.title, rfqType: rfq.rfqType, status: rfq.status },
-            categories: [
-              { id: 'pricing', name: 'Pricing (Commercials)', weightage: 45, enabled: true },
-              { id: 'leadTime', name: 'Delivery / Lead Time', weightage: 15, enabled: true },
-              { id: 'rating', name: 'Vendor Rating', weightage: 15, enabled: true },
-              { id: 'compliance', name: 'Compliance & Documents', weightage: 15, enabled: true },
-              { id: 'responseTime', name: 'Response Time', weightage: 10, enabled: true },
-            ],
+            categories,
             suppliers,
             summary: {
               totalSuppliers,

@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import {
@@ -30,6 +31,7 @@ import {
   ShieldCheck,
   Calendar,
   Check,
+  List,
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { downloadDocument as _downloadDocument } from '../../utils/download';
@@ -871,6 +873,40 @@ export default function OnboardingQueuePage() {
                     </div>
                   </div>
 
+                  {/* ─── Additional / Custom Fields ─── */}
+                  {((snapshotData.flexiFields && Array.isArray(snapshotData.flexiFields) && snapshotData.flexiFields.length > 0) ||
+                    (snapshotData.flexiFieldValues && Object.keys(snapshotData.flexiFieldValues as Record<string, string>).length > 0)) && (
+                    <div className="oq-snapshot-section">
+                      <div className="oq-snapshot-section-header">
+                        <div className="oq-snapshot-section-bar" style={{ background: '#6366f1' }} />
+                        <List size={14} style={{ color: '#6366f1', flexShrink: 0 }} />
+                        <span className="oq-snapshot-section-label" style={{ color: '#6366f1' }}>Additional / Custom Fields</span>
+                      </div>
+                      <div className="oq-snapshot-grid">
+                        {snapshotData.flexiFields && Array.isArray(snapshotData.flexiFields) && snapshotData.flexiFields.length > 0 ? (
+                          (snapshotData.flexiFields as Array<{ fieldKey?: string; label: string; fieldType?: string }>).map((f, idx) => {
+                            const key = f.fieldKey || f.label;
+                            const flexiVals = (snapshotData.flexiFieldValues as Record<string, string>) || {};
+                            const val = flexiVals[key] ?? flexiVals[f.label] ?? flexiVals[f.fieldKey || ''];
+                            return (
+                              <div key={idx} className="oq-snapshot-field">
+                                <div className="oq-snapshot-field-label">{f.label}</div>
+                                <div className="oq-snapshot-field-value">{val || <span style={{ color: 'var(--text-tertiary)', fontStyle: 'italic' }}>Not filled</span>}</div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          Object.entries(snapshotData.flexiFieldValues as Record<string, string>).map(([key, val], idx) => (
+                            <div key={idx} className="oq-snapshot-field">
+                              <div className="oq-snapshot-field-label">{key}</div>
+                              <div className="oq-snapshot-field-value">{val || <span style={{ color: 'var(--text-tertiary)', fontStyle: 'italic' }}>Not filled</span>}</div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* ─── NDA/MNDA Agreement ─── */}
                   {snapshotData.ndaMndaDocument ? (() => {
                     const nda = snapshotData.ndaMndaDocument as Record<string, unknown>;
@@ -975,7 +1011,7 @@ export default function OnboardingQueuePage() {
       {/* ═══════════════════════════════════════════════════════════
           Signed Agreement Preview Modal — Enterprise Redesign
           ═══════════════════════════════════════════════════════════ */}
-      {signedPreviewDoc && (
+      {signedPreviewDoc && createPortal(
         <div className="oq-signed-modal-backdrop" onClick={() => setSignedPreviewDoc(null)}>
           <div className="oq-signed-modal" onClick={(e) => e.stopPropagation()}>
             {/* ── Sticky Header ── */}
@@ -1067,7 +1103,8 @@ export default function OnboardingQueuePage() {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

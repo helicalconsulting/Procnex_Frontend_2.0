@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
 import { rfqService, type CreateRfqPayload, type EvalCategoryDTO } from '../../services/rfqService';
 import { vendorService } from '../../services/vendorService';
-import { companySettingsService, type Unit } from '../../services/companySettingsService';
+import { companySettingsService, type Unit, type FormFieldConfig } from '../../services/companySettingsService';
 import {
   ArrowLeft,
   FileText,
@@ -143,6 +143,14 @@ export default function CreateRFQPage() {
     [] as string[],
     [],
     { cacheTtlMs: 120000 }
+  );
+
+  // Pre-configured RFQ Flexi Fields from Company Settings
+  const { data: preconfiguredRfqFields } = useServiceData(
+    () => companySettingsService.listFormFieldConfigs('rfq_information'),
+    [] as FormFieldConfig[],
+    [],
+    { cacheTtlMs: 0 }
   );
 
   // Fallback if no units configured yet
@@ -296,6 +304,52 @@ export default function CreateRFQPage() {
   const updateCustomField = useCallback((id: string, field: Partial<CustomField>) => {
     setCustomFields((prev) => prev.map((cf) => (cf.id === id ? { ...cf, ...field } : cf)));
   }, []);
+
+  // ── RFQ Info: Extra Fields from Settings (Flexi Fields) ──
+  interface InfoExtraField {
+    id: string;
+    fieldKey: string;
+    label: string;
+    fieldType: string;
+    value: string;
+  }
+  const [infoExtraFields, setInfoExtraFields] = useState<InfoExtraField[]>([]);
+  const [showInfoFieldMenu, setShowInfoFieldMenu] = useState(false);
+
+  const addInfoExtraField = useCallback((field: FormFieldConfig) => {
+    setInfoExtraFields((prev) => [
+      ...prev,
+      { id: `ief_${Date.now()}`, fieldKey: field.fieldKey, label: field.label, fieldType: field.fieldType, value: '' },
+    ]);
+    setShowInfoFieldMenu(false);
+  }, []);
+
+  const removeInfoExtraField = useCallback((id: string) => {
+    setInfoExtraFields((prev) => prev.filter((f) => f.id !== id));
+  }, []);
+
+  const updateInfoExtraFieldValue = useCallback((id: string, value: string) => {
+    setInfoExtraFields((prev) => prev.map((f) => (f.id === id ? { ...f, value } : f)));
+  }, []);
+
+  // Close the Add Field menu when clicking outside
+  useEffect(() => {
+    if (!showInfoFieldMenu) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.create-rfq__add-field-container')) {
+        setShowInfoFieldMenu(false);
+      }
+    };
+    const timer = setTimeout(() => {
+      document.addEventListener('click', handler);
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('click', handler);
+    };
+  }, [showInfoFieldMenu]);
+
 
   // ── Simple RFQ: Scoring Weightages ──
   const DEFAULT_SIMPLE_WEIGHTAGES = {
@@ -553,6 +607,8 @@ export default function CreateRFQPage() {
             weightage: cf.weightage,
           }))
         : undefined,
+
+
       evaluationParameters: (() => {
         if (rfqMode === 'RFQ') {
           return [
@@ -602,12 +658,16 @@ export default function CreateRFQPage() {
       bidBondMinCurrency: bidBondMinCurrency || undefined,
       bidBondMinValidity: bidBondMinValidity ? parseInt(bidBondMinValidity, 10) : undefined,
     };
-  }, [title, description, priority, department, selectedDepartment, closingDate, companyDefaultCurrency, items, selectedVendors, evalCategories, rfqMode, customFields, simpleWeightages, bidSecurityMinValue, bidSecurityMinCurrency, bidSecurityMinValidity, bidBondMinValue, bidBondMinCurrency, bidBondMinValidity]);
+  }, [title, description, priority, department, selectedDepartment, closingDate, companyDefaultCurrency, items, selectedVendors, evalCategories, rfqMode, customFields, infoExtraFields, simpleWeightages, bidSecurityMinValue, bidSecurityMinCurrency, bidSecurityMinValidity, bidBondMinValue, bidBondMinCurrency, bidBondMinValidity]);
+
 
   const saveEvalCategories = useCallback(async (rfqId: string) => {
-    // Always save normalized weightages to backend
-    await rfqService.saveEvaluationCategories(rfqId, toEvalCategoryDTO(normalizeCategoryWeightages(evalCategories)));
-  }, [evalCategories]);
+    if (rfqMode === 'TENDER') {
+      await rfqService.saveEvaluationCategories(rfqId, toEvalCategoryDTO(normalizeCategoryWeightages(evalCategories)));
+    } else {
+      await rfqService.saveEvaluationCategories(rfqId, []);
+    }
+  }, [evalCategories, rfqMode]);
 
   const syncVendors = async (rfqId: string, newVendorIds: string[]) => {
     const current = await rfqService.getById(rfqId);
@@ -824,6 +884,199 @@ export default function CreateRFQPage() {
                 onChange={(e) => setClosingDate(e.target.value)}
               />
               <span className="create-rfq__hint">Last date for vendors to submit quotations</span>
+            </div>
+
+            {/* ── Extra Fields from Settings ── */}
+            {infoExtraFields.map((ef) => (
+              <div key={ef.id} className="create-rfq__field">
+                <label className="create-rfq__label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                  {ef.label === '' ? (
+                    <input
+                      type="text"
+                      autoFocus
+                      placeholder="Field label..."
+                      style={{
+                        flex: 1,
+                        padding: '2px 6px',
+                        border: 'none',
+                        borderBottom: '1px solid var(--primary-500)',
+                        background: 'transparent',
+                        color: 'var(--text-primary)',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        fontFamily: 'inherit',
+                        outline: 'none',
+                      }}
+                      onChange={(e) =>
+                        setInfoExtraFields((prev) =>
+                          prev.map((f) => (f.id === ef.id ? { ...f, label: e.target.value } : f))
+                        )
+                      }
+                    />
+                  ) : (
+                    <span>{ef.label}</span>
+                  )}
+                  <button
+                    onClick={() => removeInfoExtraField(ef.id)}
+                    title="Remove field"
+                    style={{
+                      width: 20, height: 20, borderRadius: 'var(--radius-sm)',
+                      border: 'none', background: 'transparent',
+                      color: 'var(--text-placeholder)', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      padding: 0, flexShrink: 0,
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.color = '#dc2626'}
+                    onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-placeholder)'}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </label>
+                {ef.fieldType === 'file' || ef.fieldType === 'attachment' ? (
+                  <input
+                    className="create-rfq__input"
+                    type="file"
+                    onChange={(e) => updateInfoExtraFieldValue(ef.id, e.target.files?.[0]?.name || '')}
+                  />
+                ) : ef.fieldType === 'number' ? (
+                  <input
+                    className="create-rfq__input"
+                    type="number"
+                    value={ef.value}
+                    placeholder={`Enter ${ef.label.toLowerCase() || 'value'}`}
+                    onChange={(e) => updateInfoExtraFieldValue(ef.id, e.target.value)}
+                  />
+                ) : (
+                  <input
+                    className="create-rfq__input"
+                    type="text"
+                    value={ef.value}
+                    placeholder={`Enter ${ef.label.toLowerCase() || 'value'}`}
+                    onChange={(e) => updateInfoExtraFieldValue(ef.id, e.target.value)}
+                  />
+                )}
+              </div>
+            ))}
+
+            {/* ── Add Field Button (inside grid, full-width row) ── */}
+            <div className="create-rfq__field create-rfq__field--full" style={{ paddingTop: 4 }}>
+              <div className="create-rfq__add-field-container" style={{ position: 'relative', display: 'inline-block' }}>
+                <button
+
+                  onClick={(e) => { e.stopPropagation(); setShowInfoFieldMenu((v) => !v); }}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '6px 0', border: 'none', background: 'transparent',
+                    color: 'var(--primary-500)', fontSize: 13, fontWeight: 600,
+                    cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.75')}
+                  onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
+                >
+                  <Plus size={14} />
+                  Add Field
+                </button>
+
+                {showInfoFieldMenu && (
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 6px)',
+                      left: 0,
+                      zIndex: 1000,
+                      background: 'var(--surface-card, #1e2530)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 'var(--radius-md)',
+                      boxShadow: '0 12px 36px rgba(0,0,0,0.35)',
+                      minWidth: 280,
+                      maxHeight: 320,
+                      overflowY: 'auto',
+                    }}
+                  >
+                    {/* Case 1: No fields configured in Settings */}
+                    {preconfiguredRfqFields.length === 0 && (
+                      <div style={{
+                        padding: '24px 18px',
+                        textAlign: 'center',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+                      }}>
+                        <div style={{
+                          width: 40, height: 40, borderRadius: '50%',
+                          background: 'var(--surface-elevated, #1a2029)',
+                          border: '1px solid var(--border)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          <Plus size={18} style={{ color: 'var(--text-placeholder)' }} />
+                        </div>
+                        <div>
+                          <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                            No field is created yet
+                          </p>
+                          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                            Go to <strong>Settings → Form Fields</strong> to create fields for RFQ Information.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Case 2: Fields exist — list them */}
+                    {preconfiguredRfqFields.length > 0 && (
+                      <>
+                        <div style={{
+                          padding: '10px 14px 8px',
+                          fontSize: 11, fontWeight: 700,
+                          color: 'var(--text-placeholder)',
+                          textTransform: 'uppercase', letterSpacing: '0.5px',
+                          borderBottom: '1px solid var(--border)',
+                        }}>
+                          Form Settings Fields
+                        </div>
+                        {preconfiguredRfqFields
+                          .filter((f) => !infoExtraFields.some((ef) => ef.fieldKey === f.fieldKey))
+                          .map((f) => (
+                            <button
+                              key={f.fieldKey}
+                              onClick={() => addInfoExtraField(f)}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 10,
+                                width: '100%', padding: '10px 14px',
+                                border: 'none', borderBottom: '1px solid var(--border)',
+                                background: 'transparent',
+                                color: 'var(--text-primary)', fontSize: 13,
+                                cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+                                transition: 'background 0.15s',
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-hover, rgba(255,255,255,0.06))')}
+                              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                            >
+                              <span style={{
+                                width: 26, height: 26, borderRadius: 'var(--radius-sm)',
+                                background: 'rgba(10,110,209,0.12)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                              }}>
+                                <Plus size={13} style={{ color: 'var(--primary-500)' }} />
+                              </span>
+                              <span style={{ flex: 1, fontWeight: 500 }}>{f.label}</span>
+                              <span style={{
+                                fontSize: 10, fontWeight: 600,
+                                color: 'var(--primary-500)',
+                                background: 'rgba(10,110,209,0.12)',
+                                padding: '2px 7px', borderRadius: 10,
+                                textTransform: 'capitalize',
+                              }}>{f.fieldType}</span>
+                            </button>
+                          ))}
+                        {preconfiguredRfqFields.filter((f) => !infoExtraFields.some((ef) => ef.fieldKey === f.fieldKey)).length === 0 && (
+                          <div style={{ padding: '14px', fontSize: 12, color: 'var(--text-secondary)', textAlign: 'center' }}>
+                            All configured settings fields have been added.
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -1191,26 +1444,29 @@ export default function CreateRFQPage() {
                 </div>
               ))}
 
-              <button
-                onClick={addCustomField}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '8px 16px',
-                  border: '1px dashed var(--border)',
-                  borderRadius: 'var(--radius-md)',
-                  background: 'transparent',
-                  color: 'var(--primary-500)',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                }}
-              >
-                <Plus size={15} />
-                Add Custom Field
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
+                <button
+                  onClick={addCustomField}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '6px 0',
+                    border: 'none',
+                    background: 'transparent',
+                    color: 'var(--primary-500)',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.75')}
+                  onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
+                >
+                  <Plus size={14} />
+                  Add Custom Field
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -210,9 +210,9 @@ export default function PurchaseRequisitionsListPage() {
 
       {/* Search Input Bar */}
       {requisitions.length > 0 && (
-        <div className="pr-search-bar-wrap" style={{ marginBottom: 16 }}>
+        <div className="pr-search-bar-wrap" style={{ marginBottom: 20 }}>
           <div style={{ position: 'relative', width: '100%' }}>
-            <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-placeholder, #94a3b8)' }} />
+            <Search size={18} style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-placeholder, #94a3b8)' }} />
             <input
               type="text"
               className="pr-search-input"
@@ -221,10 +221,10 @@ export default function PurchaseRequisitionsListPage() {
               placeholder="Search PO, vendor, status..."
               style={{
                 width: '100%',
-                padding: '10px 38px 10px 40px',
-                fontSize: 13.5,
+                padding: '12px 42px 12px 44px',
+                fontSize: 14.5,
                 border: '1px solid var(--border, #e2e8f0)',
-                borderRadius: 8,
+                borderRadius: 10,
                 background: 'var(--surface-card, #ffffff)',
                 color: 'var(--text-primary)',
                 outline: 'none',

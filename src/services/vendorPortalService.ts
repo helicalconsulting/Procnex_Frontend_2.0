@@ -431,6 +431,19 @@ export interface VendorProfileData {
     uploadedAt: string;
     verifiedAt: string | null;
     rejectionReason: string | null;
+    issueDate?: string | null;
+    expirationDate?: string | null;
+    issuingAuthority?: string | null;
+  }>;
+  requiredDocuments?: Array<{
+    id: string;
+    name: string;
+    documentCategory?: string;
+    trackIssueDate?: boolean;
+    trackExpirationDate?: boolean;
+    trackIssuingAuthority?: boolean;
+    expirationAlertDays?: number;
+    expirationAlertFrequency?: string;
   }>;
   performance: {
     avgQuality: number;
@@ -472,10 +485,19 @@ async function apiUpdateBanking(payload: UpdateBankingPayload): Promise<void> {
   });
 }
 
-async function apiUploadDocument(file: File, documentType: string): Promise<VendorProfileData['documents'][0]> {
+async function apiUploadDocument(
+  file: File,
+  documentType: string,
+  issueDate?: string,
+  expirationDate?: string,
+  issuingAuthority?: string
+): Promise<VendorProfileData['documents'][0]> {
   const formData = new FormData();
   formData.append('document', file);
   formData.append('documentType', documentType);
+  if (issueDate) formData.append('issueDate', issueDate);
+  if (expirationDate) formData.append('expirationDate', expirationDate);
+  if (issuingAuthority) formData.append('issuingAuthority', issuingAuthority);
 
   const token = authService.getToken();
   const res = await fetch(`${API_BASE}/vendors/profile/documents`, {

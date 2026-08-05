@@ -17,6 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import type { EvalCategory } from '../../types/rfqEvaluation';
+import './RfqEvaluationPanel.css';
 
 // ─── Parameter Color Palette ─────────────────────────────────
 
@@ -36,6 +37,7 @@ const PARAM_COLORS = [
 interface VendorData {
   id: string;
   name: string;
+  overallScore?: number;
 }
 
 interface VendorComparisonChartsProps {
@@ -46,7 +48,7 @@ interface VendorComparisonChartsProps {
   isFullscreen?: boolean;
 }
 
-// ─── Custom Tooltip (Image 2 Style) ─────────────────────────
+// ─── Custom Tooltip (Exact Match to User Photo with Premium Badge) ───
 
 const CustomTooltip = (props: TooltipProps<number, string>) => {
   const { active, payload, label } = props as TooltipProps<number, string> & {
@@ -58,26 +60,24 @@ const CustomTooltip = (props: TooltipProps<number, string>) => {
   const firstItem = payload[0]?.payload as Record<string, unknown>;
   const vendorFullName = (firstItem?.fullName as string) || label;
   const vendorCode = (firstItem?.vendorCode as string) || '';
+  const overallScore = firstItem?.overallScore as number | undefined;
 
   return (
     <div className="rq-chart__tooltip">
-      <div className="rq-chart__tooltip-label">
-        {vendorCode ? `${vendorCode}: ` : ''}{vendorFullName}
+      <div className="rq-chart__tooltip-header">
+        {vendorCode && <span className="rq-chart__tooltip-code-pill">{vendorCode}</span>}
+        <span className="rq-chart__tooltip-label">{vendorFullName}</span>
       </div>
-      {payload.map((entry: Record<string, unknown>, idx: number) => {
-        const val = entry.value;
-        const valStr = val === null || val === undefined || val === -1 ? 'N/A' : `${val}%`;
-        return (
-          <div key={idx} className="rq-chart__tooltip-row">
-            <span
-              className="rq-chart__tooltip-dot"
-              style={{ backgroundColor: entry.color as string }}
-            />
-            <span className="rq-chart__tooltip-name">{entry.name as string}</span>
-            <span className="rq-chart__tooltip-value">{valStr}</span>
-          </div>
-        );
-      })}
+
+      <div className="rq-chart__tooltip-row">
+        <div className="rq-chart__tooltip-left">
+          <span className="rq-chart__tooltip-dot" style={{ backgroundColor: '#00b0ff', boxShadow: '0 0 10px #00b0ff' }} />
+          <span className="rq-chart__tooltip-name">Supplier Score Curve</span>
+        </div>
+        <span className="rq-chart__tooltip-badge rq-chart__tooltip-badge--overall">
+          {overallScore !== undefined ? `${overallScore}%` : 'N/A'}
+        </span>
+      </div>
     </div>
   );
 };
@@ -94,16 +94,20 @@ export default function VendorComparisonCharts({
   const [hiddenSeries, setHiddenSeries] = useState<Set<string>>(new Set());
   const titleId = useId();
 
+  // Filter out empty non-parameter categories (e.g. raw extra fields)
   const enabledCats = useMemo(
-    () => categories.filter((c) => c.enabled),
+    () => categories.filter((c) => c.enabled && (c.weightage === undefined || c.weightage > 0) && c.subParameters && c.subParameters.length > 0),
     [categories],
   );
 
-  // ── Compute per-vendor, per-category percentage scores ──
-  const vendorCatPct = useMemo(() => {
-    const map: Record<string, Record<string, number>> = {};
+  // ── Compute per-vendor, per-category percentage scores & overall score ──
+  const vendorScoresCalculated = useMemo(() => {
+    const map: Record<string, { catPct: Record<string, number>; overallScore: number }> = {};
     for (const v of vendorNames) {
       const catScores: Record<string, number> = {};
+      let totalWeightedEarned = 0;
+      let totalWeightageSum = 0;
+
       for (const cat of enabledCats) {
         const enabledParams = cat.subParameters.filter((p) => p.enabled);
         let earned = 0;
@@ -117,56 +121,65 @@ export default function VendorComparisonCharts({
           }
           maxPossible += p.maxScore;
         }
-        catScores[cat.name] = hasData
-          ? (maxPossible > 0 ? Math.round((earned / maxPossible) * 100) : 0)
-          : -1;
+        const pct = hasData ? (maxPossible > 0 ? Math.round((earned / maxPossible) * 100) : 0) : -1;
+        catScores[cat.name] = pct;
+
+        if (pct >= 0) {
+          const weight = cat.weightage || (100 / Math.max(1, enabledCats.length));
+          totalWeightedEarned += (pct * weight) / 100;
+          totalWeightageSum += weight;
+        }
       }
-      map[v.id] = catScores;
+
+      const calculatedScore = totalWeightageSum > 0 ? Math.round((totalWeightedEarned / totalWeightageSum) * 100) : 0;
+      const overallScore = v.overallScore !== undefined && v.overallScore > 0 ? v.overallScore : calculatedScore;
+      map[v.id] = { catPct: catScores, overallScore };
     }
     return map;
   }, [vendorNames, vendorScores, enabledCats]);
 
-  // ── Map ONLY REAL vendor list with code (v1, v2, v3...) ──
+  // ── Sort vendors by overall score ascending so curve goes UPWARDS (v1, v2, v3... Image 2) ──
   const realVendors = useMemo(() => {
-    return vendorNames.map((v, i) => ({
+    const sorted = [...vendorNames].sort((a, b) => {
+      const scoreA = vendorScoresCalculated[a.id]?.overallScore || 0;
+      const scoreB = vendorScoresCalculated[b.id]?.overallScore || 0;
+      return scoreA - scoreB;
+    });
+    return sorted.map((v, i) => ({
       ...v,
       code: `v${i + 1}`,
+      overallScore: vendorScoresCalculated[v.id]?.overallScore || 0,
+      catPct: vendorScoresCalculated[v.id]?.catPct || {},
     }));
-  }, [vendorNames]);
+  }, [vendorNames, vendorScoresCalculated]);
 
-  // ── Vendor Curve Data (Strictly Real Vendors Only) ──
+  // ── Vendor Curve Data (Single Overall Curve) ──
   const vendorCurveData = useMemo(() => {
     return realVendors.map((v) => {
       const row: Record<string, unknown> = {
         vendorCode: v.code,
         fullName: v.name,
         name: v.name.length > 16 ? v.name.slice(0, 16) + '…' : v.name,
+        overallScore: v.overallScore,
       };
 
       enabledCats.forEach((cat, cIdx) => {
         const pCode = `P${cIdx + 1}`;
-        const score = vendorCatPct[v.id]?.[cat.name];
+        const score = v.catPct[cat.name];
         row[pCode] = score !== undefined && score !== -1 ? score : null;
       });
 
       return row;
     });
-  }, [realVendors, enabledCats, vendorCatPct]);
+  }, [realVendors, enabledCats]);
 
-  // ── Legend Click Toggle ──
-  const handleLegendClick = useCallback((e: Record<string, unknown>) => {
-    const dataKey = e.dataKey as string | undefined;
-    if (!dataKey) return;
-    setHiddenSeries((prev) => {
-      const next = new Set(prev);
-      if (next.has(dataKey)) {
-        next.delete(dataKey);
-      } else {
-        next.add(dataKey);
-      }
-      return next;
-    });
-  }, []);
+  // ── Left Y-Axis ticks for parameter codes ──
+  const ticksForCats = useMemo(() => {
+    if (enabledCats.length === 0) return [20, 40, 60, 80];
+    const count = enabledCats.length;
+    const step = 80 / Math.max(1, count);
+    return enabledCats.map((_, i) => Math.round(10 + (i + 0.5) * step));
+  }, [enabledCats]);
 
   // Escape key for fullscreen
   useEffect(() => {
@@ -229,27 +242,22 @@ export default function VendorComparisonCharts({
         )}
       </div>
 
-      {/* ── Single Chart Container (Strict Real Vendor Data Only) ── */}
+      {/* ── Single Curve Line Chart Container (Image 2 Exact Matching) ── */}
       <div className="rq-charts__body">
-        <ResponsiveContainer width="100%" height={460}>
+        <ResponsiveContainer width="100%" height={isFullscreen ? 450 : 280}>
           <AreaChart
             data={vendorCurveData}
-            margin={{ top: 20, right: 60, left: 30, bottom: 28 }}
+            margin={{ top: 16, right: 65, left: 35, bottom: 20 }}
           >
             <defs>
-              {enabledCats.map((cat, idx) => {
-                const color = PARAM_COLORS[idx % PARAM_COLORS.length];
-                return (
-                  <linearGradient key={cat.id} id={`grad_cat_${cat.id}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={color} stopOpacity={0.20} />
-                    <stop offset="95%" stopColor={color} stopOpacity={0.0} />
-                  </linearGradient>
-                );
-              })}
+              <linearGradient id="classyCurveGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#0a6ed1" stopOpacity={0.35} />
+                <stop offset="95%" stopColor="#0a6ed1" stopOpacity={0.02} />
+              </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={true} horizontal={true} />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.35} vertical={true} horizontal={true} />
             
-            {/* X-AXIS: Real Vendors v1, v2, v3... */}
+            {/* X-AXIS: Real Vendors v1, v2, v3... sorted ascending */}
             <XAxis
               dataKey="vendorCode"
               tick={{ fontSize: 13, fill: 'var(--text-primary)', fontWeight: 700 }}
@@ -264,22 +272,26 @@ export default function VendorComparisonCharts({
               }}
             />
             
-            {/* LEFT Y-AXIS: Parameter Labels P1, P2, P3, P4... */}
+            {/* LEFT Y-AXIS: Parameter Labels P1, P2, P3, P4, P5, P6... */}
             <YAxis
               yAxisId="left"
               domain={[0, 100]}
-              ticks={[15, 35, 55, 75, 95]}
+              ticks={ticksForCats}
               tick={{ fontSize: 12, fill: 'var(--text-primary)', fontWeight: 700 }}
               axisLine={{ stroke: 'var(--text-primary)', strokeWidth: 1.5 }}
               tickLine={true}
               tickFormatter={(val: number) => {
-                if (val <= 20) return 'P1';
-                if (val <= 40) return 'P2';
-                if (val <= 60) return 'P3';
-                if (val <= 80) return 'P4';
-                return 'P5';
+                const idx = ticksForCats.indexOf(val);
+                return idx >= 0 ? `P${idx + 1}` : '';
               }}
-              width={50}
+              width={65}
+              label={{
+                value: 'Parameters (P1..Pn)',
+                angle: -90,
+                position: 'insideLeft',
+                offset: 12,
+                style: { fontSize: 11, fill: 'var(--primary-500)', fontWeight: 700 },
+              }}
             />
             
             {/* RIGHT Y-AXIS: Percentage Scale (5%, 10%, 20%, 50%, 100% — Image 2 Exact Ticks) */}
@@ -292,71 +304,143 @@ export default function VendorComparisonCharts({
               axisLine={{ stroke: 'var(--text-primary)', strokeWidth: 1.5 }}
               tickLine={true}
               tickFormatter={(v: number) => `${v}%`}
-              width={55}
+              width={65}
+              label={{
+                value: 'Score (%)',
+                angle: 90,
+                position: 'insideRight',
+                offset: 12,
+                style: { fontSize: 11, fill: 'var(--text-secondary)', fontWeight: 700 },
+              }}
             />
 
             <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'var(--primary-500)', strokeDasharray: '3 3' }} />
-            <Legend
-              wrapperStyle={{ fontSize: 12, paddingTop: 14 }}
-              iconType="circle"
-              iconSize={10}
-              onClick={handleLegendClick}
-            />
 
-            {/* Parameter Lines across Real Vendors */}
-            {enabledCats.map((cat, cIdx) => {
-              const pCode = `P${cIdx + 1}`;
-              const color = PARAM_COLORS[cIdx % PARAM_COLORS.length];
-              const isHidden = hiddenSeries.has(`${pCode}: ${cat.name}`);
-              if (isHidden) return null;
-              return (
-                <Area
-                  key={cat.id}
-                  yAxisId="left"
-                  name={`${pCode}: ${cat.name}`}
-                  type="monotone"
-                  dataKey={pCode}
-                  stroke={color}
-                  strokeWidth={3}
-                  fillOpacity={1}
-                  fill={`url(#grad_cat_${cat.id})`}
-                  connectNulls={true}
-                  dot={{
-                    r: realVendors.length === 1 ? 8 : 6,
-                    strokeWidth: 2.5,
-                    fill: 'var(--surface-card)',
-                    stroke: color,
-                  }}
-                  activeDot={{
-                    r: 9,
-                    strokeWidth: 3,
-                    fill: 'var(--surface-card)',
-                    stroke: color,
-                  }}
-                />
-              );
-            })}
+            {/* Classy Single Shaded Area Curve */}
+            <Area
+              yAxisId="right"
+              name="Supplier Score Curve"
+              type="monotone"
+              dataKey="overallScore"
+              stroke="#0a6ed1"
+              strokeWidth={3.5}
+              fillOpacity={1}
+              fill="url(#classyCurveGradient)"
+              connectNulls={true}
+              dot={{
+                r: 6,
+                strokeWidth: 2.5,
+                fill: 'var(--surface-card, #1e2530)',
+                stroke: '#0a6ed1',
+              }}
+              activeDot={{
+                r: 9,
+                strokeWidth: 3,
+                fill: 'var(--surface-card, #1e2530)',
+                stroke: '#0a6ed1',
+              }}
+            />
           </AreaChart>
         </ResponsiveContainer>
 
-        {/* ── Footnote Legend: Real Vendor Mapping + Parameter Code Mapping ── */}
-        <div className="rq-charts__param-legend">
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center', width: '100%', marginBottom: 4 }}>
-            {realVendors.map((v) => (
-              <span key={v.id} className="rq-charts__param-chip" style={{ background: 'rgba(10,110,209,0.08)' }}>
-                <strong>{v.code}:</strong> {v.name}
-              </span>
-            ))}
+        {/* ── Footnote Legend: Glassmorphic Vendor & Parameter Mapping ── */}
+        <div style={{
+          marginTop: 10,
+          padding: '10px 14px',
+          background: 'var(--surface-elevated, rgba(255,255,255,0.03))',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-md, 8px)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+        }}>
+          {/* Vendors Mapping Row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <span style={{
+              fontSize: 11, fontWeight: 700,
+              color: 'var(--text-placeholder)',
+              textTransform: 'uppercase', letterSpacing: '0.6px',
+              minWidth: 110, flexShrink: 0,
+            }}>
+              Suppliers (Rank)
+            </span>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', flex: 1 }}>
+              {realVendors.map((v) => (
+                <div
+                  key={v.id}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '5px 12px',
+                    borderRadius: 20,
+                    background: 'rgba(10, 110, 209, 0.08)',
+                    border: '1px solid rgba(10, 110, 209, 0.2)',
+                    fontSize: 12, color: 'var(--text-primary)', fontWeight: 500,
+                  }}
+                >
+                  <span style={{ fontWeight: 700, color: 'var(--primary-500)' }}>{v.code}:</span>
+                  <span>{v.name}</span>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700,
+                    color: v.overallScore >= 75 ? '#107e3e' : 'var(--primary-500)',
+                    background: v.overallScore >= 75 ? 'rgba(16, 126, 62, 0.12)' : 'rgba(10, 110, 209, 0.12)',
+                    padding: '1px 6px', borderRadius: 10,
+                  }}>
+                    {v.overallScore}%
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center', width: '100%' }}>
-            {enabledCats.map((cat, idx) => (
-              <span key={cat.id} className="rq-charts__param-chip">
-                <strong>P{idx + 1}:</strong> {cat.name} ({cat.weightage}%)
-              </span>
-            ))}
+
+          <div style={{ height: 1, background: 'var(--border)', opacity: 0.5 }} />
+
+          {/* Evaluation Parameters Mapping Row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <span style={{
+              fontSize: 11, fontWeight: 700,
+              color: 'var(--text-placeholder)',
+              textTransform: 'uppercase', letterSpacing: '0.6px',
+              minWidth: 110, flexShrink: 0,
+            }}>
+              Parameters
+            </span>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', flex: 1 }}>
+              {enabledCats.map((cat, idx) => {
+                const color = PARAM_COLORS[idx % PARAM_COLORS.length];
+                return (
+                  <div
+                    key={cat.id}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      padding: '4px 10px',
+                      borderRadius: 'var(--radius-sm, 4px)',
+                      background: 'var(--surface-card, #1e2530)',
+                      border: '1px solid var(--border)',
+                      fontSize: 12, color: 'var(--text-primary)',
+                    }}
+                  >
+                    <span style={{
+                      width: 8, height: 8, borderRadius: '50%',
+                      background: color, display: 'inline-block', flexShrink: 0,
+                    }} />
+                    <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>P{idx + 1}:</span>
+                    <span>{cat.name}</span>
+                    <span style={{
+                      fontSize: 10, fontWeight: 700,
+                      color: 'var(--text-secondary)',
+                      background: 'var(--surface-elevated)',
+                      padding: '1px 5px', borderRadius: 4,
+                    }}>
+                      {cat.weightage}%
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
     </div>
   );
 }
+

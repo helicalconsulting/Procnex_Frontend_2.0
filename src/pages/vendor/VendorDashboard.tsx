@@ -343,9 +343,11 @@ export default function VendorDashboard() {
   );
 
   // Apply backend preferences once loaded — order by sortOrder
+  // New vendors (no saved prefs) start with an empty dashboard so they
+  // must open the Widget Gallery and deliberately toggle what they want.
   useEffect(() => {
     if (!widgetPrefs || widgetPrefs.length === 0) {
-      setActiveWidgets(VENDOR_WIDGETS.map((w) => w.id));
+      setActiveWidgets([]);
     } else {
       const active = widgetPrefs
         .filter((p) => p.isActive)

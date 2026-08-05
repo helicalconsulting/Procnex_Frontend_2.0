@@ -84,6 +84,8 @@ export interface VendorInvitationRow {
   items?: Array<{ itemCode: string; itemName: string }> | null;
   selectedDocuments?: Array<{ name: string; isRequired: boolean }> | null;
   documentIds?: string[];
+  flexiFields?: Array<{ fieldKey?: string; label: string; fieldType: string }> | null;
+  flexiFieldValues?: Record<string, string> | null;
 }
 
 export interface SendInvitationPayload {
@@ -96,6 +98,7 @@ export interface SendInvitationPayload {
   notes?: string;
   items?: Array<{ itemCode: string; itemName: string }>;
   documentIds?: string[];
+  flexiFields?: Array<{ fieldKey: string; label: string; fieldType: string }>;
   ndaMndaRequired?: boolean;
   ndaRequired?: boolean;
   mndaRequired?: boolean;
@@ -251,6 +254,7 @@ async function apiSendInvitation(payload: SendInvitationPayload): Promise<SendIn
         notes: payload.notes,
         items: payload.items,
         documentIds: payload.documentIds,
+        flexiFields: payload.flexiFields,
         ndaMndaRequired: payload.ndaMndaRequired,
         ndaRequired: payload.ndaRequired,
         mndaRequired: payload.mndaRequired,

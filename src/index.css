@@ -201,6 +201,10 @@ button {
   font-family: inherit;
 }
 
+button:focus {
+  outline: none;
+}
+
 img {
   max-width: 100%;
   display: block;
@@ -281,25 +285,6 @@ img {
 
 /* ─── Modal Open State — Freeze Background Scroll ─────────── */
 
-body.modal-open,
-html.modal-open {
-  overflow: hidden !important;
-}
-
-body.modal-open .app-layout__main,
-html.modal-open .app-layout__main,
-body.modal-open main,
-body.modal-open .app-content,
-body.modal-open .app-layout__content,
-body.modal-open [class*="-page"],
-body.modal-open [class*="-container"] {
-  overflow: hidden !important;
-  touch-action: none !important;
-}
-
-/* ═══════════════════════════════════════════════════════════
-   SAP Fiori Enterprise Dialog Design System
-   ═══════════════════════════════════════════════════════════ */
 
 .sap-dialog {
   background: var(--surface-card, #ffffff);
@@ -485,11 +470,30 @@ body.modal-open .app-layout__main,
 html.modal-open .app-layout__main,
 body.modal-open main,
 body.modal-open .app-content,
-body.modal-open .app-layout__content,
-body.modal-open [class*="-page"],
-body.modal-open [class*="-container"] {
+body.modal-open .app-layout__content {
   overflow: hidden !important;
-  touch-action: none !important;
+}
+
+/* Ensure modal bodies & scroll containers ALWAYS allow vertical scrolling */
+.quot-compare-modal__body,
+[class*="-modal__body"],
+[class*="-modal-body"],
+[class*="__modal-body"],
+[class*="-modal__content"],
+[class*="-modal-content"] {
+  overflow-y: auto !important;
+  touch-action: pan-y !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Allow Recharts containers & surfaces to handle touch & wheel scroll events */
+.recharts-responsive-container,
+.recharts-wrapper,
+.recharts-surface,
+.rq-charts,
+.rq-charts__body {
+  touch-action: pan-y !important;
 }
 
 /* ═══════════════════════════════════════════════════════════

@@ -1390,10 +1390,40 @@ export const companySettingsService = {
   // Mandatory Information Fields
   getMandatoryFields: USE_MOCK ? mockGetMandatoryFields : apiGetMandatoryFields,
   updateMandatoryFields: USE_MOCK ? mockUpdateMandatoryFields : apiUpdateMandatoryFields,
-  // Form Field Configurations (Form Builder)
+  // Form Field Configurations (Form Builder & Flexi Fields)
   getFormConfig: USE_MOCK ? mockGetFormConfig : apiGetFormConfig,
   updateFormConfig: USE_MOCK ? mockUpdateFormConfig : apiUpdateFormConfig,
   seedFormConfig: USE_MOCK ? mockSeedFormConfig : apiSeedFormConfig,
+  listFormFieldConfigs: async (formKey?: string) => {
+    const query = formKey ? `?formKey=${encodeURIComponent(formKey)}` : '';
+    // cacheTtlMs: 0 — always fetch fresh so newly added fields appear immediately
+    const data = await apiRequest<{ configs: FormFieldConfig[] }>(`/form-config/form-fields${query}`, { cacheTtlMs: 0 });
+    const configs = data.configs || [];
+    return configs.filter((f) => f.sectionKey === 'custom_fields' || f.fieldKey.startsWith('cf_'));
+  },
+  createFormFieldConfig: async (payload: { formKey: string; fieldKey: string; label: string; fieldType: string; sectionKey?: string; sectionLabel?: string; sortOrder?: number; isVisible?: boolean }) => {
+    const data = await apiRequest<FormFieldConfig>('/form-config/form-fields', {
+      method: 'POST',
+      body: JSON.stringify({
+        sectionKey: 'custom_fields',
+        sectionLabel: 'Custom Fields',
+        sortOrder: 0,
+        isVisible: true,
+        ...payload,
+      }),
+    });
+    return data;
+  },
+  updateFormFieldConfig: async (id: string, payload: Partial<FormFieldConfig>) => {
+    const data = await apiRequest<FormFieldConfig>(`/form-config/form-fields/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+    return data;
+  },
+  deleteFormFieldConfig: async (id: string) => {
+    await apiRequest(`/form-config/form-fields/${id}`, { method: 'DELETE' });
+  },
   // Document Templates (NDA / MNDA)
   listDocumentTemplates: USE_MOCK ? mockListDocumentTemplates : apiListDocumentTemplates,
   getDocumentTemplate: USE_MOCK ? mockGetDocumentTemplate : apiGetDocumentTemplate,

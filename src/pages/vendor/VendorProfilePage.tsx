@@ -100,14 +100,25 @@ export default function VendorProfilePage() {
   };
 
   const handleUploadDoc = async () => {
-    const file = fileRef.current?.files?.[0];
+    const file = fileRef.current?.files?.[0] || selectedFile;
     if (!file) { setUploadMsg('Select a file first'); return; }
     setUploading(true); setUploadMsg('');
+    const reqDocs = (profile as any).requiredDocuments as Array<{ name: string }> | undefined;
+    const docOptions = (() => {
+      if (reqDocs && reqDocs.length > 0) return reqDocs.map(r => r.name);
+      const uploadedNames = Array.from(new Set(profile.documents.map(d => d.name || d.type).filter(Boolean)));
+      if (uploadedNames.length > 0) return uploadedNames;
+      return DOC_TYPES;
+    })();
+    const targetDocType = docOptions.includes(docType) ? docType : (docOptions[0] || DOC_TYPES[0]);
     try {
-      await vendorPortalService.uploadDocument(file, docType);
-      setUploadMsg('Document uploaded! Admin will verify it shortly.');
+      await vendorPortalService.uploadDocument(file, targetDocType, issueDate, expirationDate, issuingAuthority);
+      setUploadMsg('Document uploaded successfully! Admin will verify it shortly.');
       if (fileRef.current) fileRef.current.value = '';
-      setSelectedFile(null); // ← clear preview after upload
+      setSelectedFile(null);
+      setIssueDate('');
+      setExpirationDate('');
+      setIssuingAuthority('');
       reload();
       setTimeout(() => setUploadMsg(''), 5000);
     } catch (err) { setUploadMsg(err instanceof Error ? err.message : 'Upload failed'); }
@@ -269,96 +280,156 @@ export default function VendorProfilePage() {
             </div>
             <div className="vprof-card__body">
 
+              {/* ── Expiration Alert Banner ── */}
+              {(() => {
+                const expiredCount = documents.filter(d => {
+                  const exp = (d as any).expirationDate;
+                  return exp && new Date(exp).getTime() <= Date.now();
+                }).length;
+                const expiringSoonCount = documents.filter(d => {
+                  const exp = (d as any).expirationDate;
+                  if (!exp) return false;
+                  const days = Math.ceil((new Date(exp).getTime() - Date.now()) / (1000 * 3600 * 24));
+                  return days > 0 && days <= 30;
+                }).length;
+
+                if (expiredCount === 0 && expiringSoonCount === 0) return null;
+
+                return (
+                  <div style={{ marginBottom: 16, padding: '12px 16px', borderRadius: 8, background: expiredCount > 0 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(245, 158, 11, 0.1)', border: `1px solid ${expiredCount > 0 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`, display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <AlertTriangle size={20} style={{ color: expiredCount > 0 ? '#ef4444' : '#f59e0b', flexShrink: 0 }} />
+                    <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>
+                      <strong>Action Required: </strong>
+                      {expiredCount > 0 && <span>{expiredCount} document{expiredCount > 1 ? 's have' : ' has'} <strong>expired</strong>. </span>}
+                      {expiringSoonCount > 0 && <span>{expiringSoonCount} document{expiringSoonCount > 1 ? 's are' : ' is'} <strong>expiring within 30 days</strong>. </span>}
+                      Please upload updated document copies to remain compliant and avoid portal restrictions.
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* ── Upload area ── */}
-              <div className="vprof-upload">
-                <div className="vprof-upload__row" style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-                  <select value={docType} onChange={e => setDocType(e.target.value)} className="vprof-upload__select" style={{ flex: '1 1 200px' }}>
-                    {DOC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
+              {(() => {
+                const reqDocs = (profile as any).requiredDocuments as Array<{ name: string; trackIssueDate?: boolean; trackExpirationDate?: boolean; trackIssuingAuthority?: boolean }> | undefined;
+                const docOptions = (() => {
+                  if (reqDocs && reqDocs.length > 0) {
+                    return reqDocs.map(r => r.name);
+                  }
+                  const uploadedNames = Array.from(new Set(profile.documents.map(d => d.name || d.type).filter(Boolean)));
+                  if (uploadedNames.length > 0) {
+                    return uploadedNames;
+                  }
+                  return DOC_TYPES;
+                })();
 
-                  <label className="vprof-upload__file-btn">
-                    <Paperclip size={14} /> Choose File
-                    <input
-                      type="file"
-                      ref={fileRef}
-                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
-                      hidden
-                      onChange={e => setSelectedFile(e.target.files?.[0] ?? null)}
-                    />
-                  </label>
+                const activeDocType = docOptions.includes(docType) ? docType : (docOptions[0] || '');
+                const currentRule = reqDocs?.find(r => r.name.toLowerCase().trim() === activeDocType.toLowerCase().trim());
 
-                  <button
-                    className="vprof-upload__submit"
-                    onClick={handleUploadDoc}
-                    disabled={uploading || !selectedFile}
-                  >
-                    {uploading
-                      ? <><Loader2 size={14} className="spin" /> Uploading…</>
-                      : <><Upload size={14} /> Upload</>}
-                  </button>
-                </div>
+                const showIssueDate = currentRule ? currentRule.trackIssueDate !== false : true;
+                const showExpDate = currentRule ? currentRule.trackExpirationDate !== false : true;
+                const showAuthority = currentRule ? currentRule.trackIssuingAuthority !== false : true;
 
-                {/* ── Document Metadata Fields (Date of Issue, Expiration, Issuing Authority) ── */}
-                <div className="vprof-upload__metadata-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 12, padding: 12, background: 'var(--surface-hover, rgba(255, 255, 255, 0.03))', borderRadius: 8, border: '1px solid var(--border)' }}>
-                  <div>
-                    <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Date of Issue</label>
-                    <input
-                      type="date"
-                      value={issueDate}
-                      onChange={e => setIssueDate(e.target.value)}
-                      style={{ width: '100%', padding: '6px 10px', fontSize: 12, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Date of Expiration</label>
-                    <input
-                      type="date"
-                      value={expirationDate}
-                      onChange={e => setExpirationDate(e.target.value)}
-                      style={{ width: '100%', padding: '6px 10px', fontSize: 12, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Issuing Authority</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Govt of UAE / Income Tax Dept"
-                      value={issuingAuthority}
-                      onChange={e => setIssuingAuthority(e.target.value)}
-                      style={{ width: '100%', padding: '6px 10px', fontSize: 12, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)' }}
-                    />
-                  </div>
-                </div>
+                return (
+                  <div className="vprof-upload">
+                    <div className="vprof-upload__row" style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                      <select value={activeDocType} onChange={e => setDocType(e.target.value)} className="vprof-upload__select" style={{ flex: '1 1 200px' }}>
+                        {docOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
 
-                {/* ── File preview chip ── */}
-                {selectedFile && !uploading && (
-                  <div className="vprof-upload__file-preview" style={{ marginTop: 8 }}>
-                    <FileText size={14} className="vprof-upload__file-preview-icon" />
-                    <span className="vprof-upload__file-preview-name">{selectedFile.name}</span>
-                    <span className="vprof-upload__file-preview-size">{formatBytes(selectedFile.size)}</span>
-                    <button
-                      className="vprof-upload__file-preview-clear"
-                      onClick={() => {
-                        setSelectedFile(null);
-                        if (fileRef.current) fileRef.current.value = '';
-                      }}
-                      title="Remove selected file"
-                    >
-                      <X size={13} />
-                    </button>
-                  </div>
-                )}
+                      <label className="vprof-upload__file-btn">
+                        <Paperclip size={14} /> Choose File
+                        <input
+                          type="file"
+                          ref={fileRef}
+                          accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+                          hidden
+                          onChange={e => setSelectedFile(e.target.files?.[0] ?? null)}
+                        />
+                      </label>
 
-                {uploadMsg && (
-                  <div className={`vprof-msg ${uploadMsg.includes('uploaded') ? 'vprof-msg--ok' : 'vprof-msg--err'}`} style={{ marginTop: 8 }}>
-                    {uploadMsg.includes('uploaded') ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />} {uploadMsg}
+                      <button
+                        className="vprof-upload__submit"
+                        onClick={handleUploadDoc}
+                        disabled={uploading || !selectedFile}
+                      >
+                        {uploading
+                          ? <><Loader2 size={14} className="spin" /> Uploading…</>
+                          : <><Upload size={14} /> Upload</>}
+                      </button>
+                    </div>
+
+                    {/* ── Document Metadata Fields (Date of Issue, Expiration, Issuing Authority) ── */}
+                    {(showIssueDate || showExpDate || showAuthority) && (
+                      <div className="vprof-upload__metadata-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 12, padding: 12, background: 'var(--surface-hover, rgba(255, 255, 255, 0.03))', borderRadius: 8, border: '1px solid var(--border)' }}>
+                        {showIssueDate && (
+                          <div>
+                            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Date of Issue</label>
+                            <input
+                              type="date"
+                              value={issueDate}
+                              onChange={e => setIssueDate(e.target.value)}
+                              style={{ width: '100%', padding: '6px 10px', fontSize: 12, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)' }}
+                            />
+                          </div>
+                        )}
+                        {showExpDate && (
+                          <div>
+                            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Date of Expiration</label>
+                            <input
+                              type="date"
+                              value={expirationDate}
+                              onChange={e => setExpirationDate(e.target.value)}
+                              style={{ width: '100%', padding: '6px 10px', fontSize: 12, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)' }}
+                            />
+                          </div>
+                        )}
+                        {showAuthority && (
+                          <div>
+                            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Issuing Authority</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. Govt of UAE / Income Tax Dept"
+                              value={issuingAuthority}
+                              onChange={e => setIssuingAuthority(e.target.value)}
+                              style={{ width: '100%', padding: '6px 10px', fontSize: 12, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)' }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ── File preview chip ── */}
+                    {selectedFile && !uploading && (
+                      <div className="vprof-upload__file-preview" style={{ marginTop: 8 }}>
+                        <FileText size={14} className="vprof-upload__file-preview-icon" />
+                        <span className="vprof-upload__file-preview-name">{selectedFile.name}</span>
+                        <span className="vprof-upload__file-preview-size">{formatBytes(selectedFile.size)}</span>
+                        <button
+                          className="vprof-upload__file-preview-clear"
+                          onClick={() => {
+                            setSelectedFile(null);
+                            if (fileRef.current) fileRef.current.value = '';
+                          }}
+                          title="Remove selected file"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    )}
+
+                    {uploadMsg && (
+                      <div className={`vprof-msg ${uploadMsg.includes('uploaded') ? 'vprof-msg--ok' : 'vprof-msg--err'}`} style={{ marginTop: 8 }}>
+                        {uploadMsg.includes('uploaded') ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />} {uploadMsg}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                );
+              })()}
 
               {/* Document list with Expiration Alert Badges */}
               {documents.length > 0 ? documents.map(doc => {
-                const expDays = (doc as any).expirationDate ? Math.ceil((new Date((doc as any).expirationDate).getTime() - Date.now()) / (1000 * 3600 * 24)) : null;
+                const docAny = doc as any;
+                const expDays = docAny.expirationDate ? Math.ceil((new Date(docAny.expirationDate).getTime() - Date.now()) / (1000 * 3600 * 24)) : null;
                 const isExpiringSoon = expDays !== null && expDays > 0 && expDays <= 30;
                 const isExpired = expDays !== null && expDays <= 0;
 
@@ -370,7 +441,9 @@ export default function VendorProfilePage() {
                         <div className="vprof-doc__name" style={{ fontWeight: 600 }}>{doc.name}</div>
                         <div className="vprof-doc__date" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                           {doc.type} · Uploaded: {new Date(doc.uploadedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                          {(doc as any).issuingAuthority && ` · Authority: ${(doc as any).issuingAuthority}`}
+                          {docAny.issueDate && ` · Issued: ${new Date(docAny.issueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                          {docAny.expirationDate && ` · Expires: ${new Date(docAny.expirationDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                          {docAny.issuingAuthority && ` · Authority: ${docAny.issuingAuthority}`}
                         </div>
                       </div>
                     </div>
@@ -384,6 +457,10 @@ export default function VendorProfilePage() {
                       ) : isExpiringSoon ? (
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
                           <AlertTriangle size={12} /> Alert: Expires in {expDays}d
+                        </span>
+                      ) : docAny.expirationDate ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
+                          <CheckCircle2 size={12} /> Valid ({expDays}d left)
                         </span>
                       ) : (
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
