@@ -32,7 +32,7 @@ interface PredictiveMatchResult {
 
 function analyzePredictiveMatches(
   query: string,
-  existingItems: Array<{ id?: number | string; name: string; aliases?: string[] }>,
+  existingItems: Array<{ id?: number | string; name: string; abbreviation?: string; aliases?: string[] }>,
   excludeId?: number | string
 ): PredictiveMatchResult | null {
   const trimmed = query.trim();
@@ -40,7 +40,7 @@ function analyzePredictiveMatches(
 
   const normQuery = trimmed.toLowerCase();
 
-  // 1. Check exact match
+  // 1. Check exact match (name, abbreviation, or aliases)
   for (const item of existingItems) {
     if (!item.name) continue;
     if (excludeId !== undefined && String(item.id) === String(excludeId)) continue;
@@ -48,6 +48,10 @@ function analyzePredictiveMatches(
 
     if (normName === normQuery) {
       return { exact: true, item: item.name, matchScore: 100 };
+    }
+    // Check abbreviation as exact match (e.g. "kg" matches "kilogram")
+    if (item.abbreviation && item.abbreviation.trim().toLowerCase() === normQuery) {
+      return { exact: true, item: item.name, reason: `"${normQuery}" is the abbreviation of "${item.name}"`, matchScore: 100 };
     }
     if (item.aliases && item.aliases.some((a) => a.trim().toLowerCase() === normQuery)) {
       return { exact: true, item: item.name, reason: `Matches alias of "${item.name}"`, matchScore: 100 };
@@ -63,6 +67,14 @@ function analyzePredictiveMatches(
     if (normName.includes(normQuery) || normQuery.includes(normName)) {
       const score = Math.round((Math.min(normQuery.length, normName.length) / Math.max(normQuery.length, normName.length)) * 100);
       return { exact: false, item: item.name, matchScore: Math.max(70, score) };
+    }
+
+    // Check abbreviation for partial match
+    if (item.abbreviation) {
+      const normAbbr = item.abbreviation.trim().toLowerCase();
+      if (normAbbr.includes(normQuery) || normQuery.includes(normAbbr)) {
+        return { exact: false, item: item.name, reason: `Similar to abbreviation "${item.abbreviation}" of "${item.name}"`, matchScore: 80 };
+      }
     }
 
     if (item.aliases) {
@@ -85,7 +97,7 @@ function PredictiveMatchCard({
   labelName = 'item',
 }: {
   query: string;
-  items: Array<{ id?: number | string; name: string; aliases?: string[] }>;
+  items: Array<{ id?: number | string; name: string; abbreviation?: string; aliases?: string[] }>;
   excludeId?: number | string;
   labelName?: string;
 }) {
@@ -494,6 +506,7 @@ export default function CompanySettingsPage() {
   // Unit modal state
   const [showUnitModal, setShowUnitModal] = useState(false);
   const [unitName, setUnitName] = useState('');
+  const [unitAbbreviation, setUnitAbbreviation] = useState('');
   const [unitAliases, setUnitAliases] = useState('');
   const [unitError, setUnitError] = useState<string | null>(null);
 
@@ -1856,6 +1869,7 @@ export default function CompanySettingsPage() {
 
   const openAddUnit = useCallback(() => {
     setUnitName('');
+    setUnitAbbreviation('');
     setUnitAliases('');
     setUnitError(null);
     setShowUnitModal(true);
@@ -1865,10 +1879,31 @@ export default function CompanySettingsPage() {
     const trimmed = unitName.trim();
     if (!trimmed) return;
     const trimmedLower = trimmed.toLowerCase();
+    // Build a merged list of all names+abbreviations+aliases for duplicate check
     const nameExists = units.some((u) => u.name.trim().toLowerCase() === trimmedLower);
     if (nameExists) {
       setUnitError(`Unit "${trimmed}" already exists.`);
       return;
+    }
+    // Check if entered name matches any existing abbreviation
+    const abbrMatch = units.find((u) => u.abbreviation?.trim().toLowerCase() === trimmedLower);
+    if (abbrMatch) {
+      setUnitError(`"${trimmed}" is already used as the abbreviation of "${abbrMatch.name}".`);
+      return;
+    }
+    // Check if entered abbreviation conflicts
+    const abbrevTrimmed = unitAbbreviation.trim();
+    if (abbrevTrimmed) {
+      const abbrevLower = abbrevTrimmed.toLowerCase();
+      const abbrevConflict = units.find(
+        (u) => u.name.trim().toLowerCase() === abbrevLower ||
+               u.abbreviation?.trim().toLowerCase() === abbrevLower ||
+               u.aliases?.split(',').some((a) => a.trim().toLowerCase() === abbrevLower)
+      );
+      if (abbrevConflict) {
+        setUnitError(`Abbreviation "${abbrevTrimmed}" conflicts with existing unit "${abbrevConflict.name}".`);
+        return;
+      }
     }
     const newAliases = unitAliases
       .split(',')
@@ -1887,7 +1922,7 @@ export default function CompanySettingsPage() {
     setActionLoading(true);
     setUnitError(null);
     try {
-      await companySettingsService.createUnit(trimmed, unitAliases.trim() || undefined);
+      await companySettingsService.createUnit(trimmed, abbrevTrimmed || undefined, unitAliases.trim() || undefined);
       setPageMsg(`Unit "${trimmed}" created.`);
       setShowUnitModal(false);
       reloadUnits();
@@ -1901,7 +1936,7 @@ export default function CompanySettingsPage() {
     } finally {
       setActionLoading(false);
     }
-  }, [unitName, unitAliases, units, reloadUnits]);
+  }, [unitName, unitAbbreviation, unitAliases, units, reloadUnits]);
 
   const requestDeleteUnit = useCallback((unit: Unit) => {
     setDeleteTarget({ type: 'unit', id: unit.id, name: unit.name });
@@ -2009,29 +2044,7 @@ export default function CompanySettingsPage() {
         <p>Configure your organization's departments, categories, units, positions, and payment terms</p>
       </div>
 
-      {/* ── Stats Summary ── */}
-      <div className="cs-stats">
-        <div className="cs-stat">
-          <span className="cs-stat__value">{departments.length}</span>
-          <span className="cs-stat__label">Departments</span>
-        </div>
-        <div className="cs-stat">
-          <span className="cs-stat__value">{categories.length}</span>
-          <span className="cs-stat__label">Categories</span>
-        </div>
-        <div className="cs-stat">
-          <span className="cs-stat__value">{positions.length}</span>
-          <span className="cs-stat__label">Positions</span>
-        </div>
-        <div className="cs-stat">
-          <span className="cs-stat__value">{units.length}</span>
-          <span className="cs-stat__label">Units</span>
-        </div>
-        <div className="cs-stat">
-          <span className="cs-stat__value">{paymentTerms.length}</span>
-          <span className="cs-stat__label">Payment Terms</span>
-        </div>
-      </div>
+
 
       {/* ── Tab Bar ── */}
       <div className="cs-tabs" role="tablist">
@@ -2045,9 +2058,6 @@ export default function CompanySettingsPage() {
           >
             {tab.icon}
             {tab.label}
-            {tabCounts[tab.key] !== undefined && (
-              <span className="cs-tab__count">{tabCounts[tab.key]}</span>
-            )}
           </button>
         ))}
       </div>
@@ -2262,6 +2272,9 @@ export default function CompanySettingsPage() {
                     <div key={unit.id} className={`cs-item ${!unit.isActive ? 'cs-item--inactive' : ''}`}>
                       <div className="cs-item__info">
                         <span className="cs-item__name">{unit.name}</span>
+                        {unit.abbreviation && (
+                          <span className="cs-item__unit-abbr" title="Abbreviation / Symbol">{unit.abbreviation}</span>
+                        )}
                         {unit.aliases && <span className="cs-item__aliases">{unit.aliases}</span>}
                       </div>
                       <div className="cs-item__actions">
@@ -4374,14 +4387,26 @@ export default function CompanySettingsPage() {
                 <input
                   value={unitName}
                   onChange={(e) => { setUnitName(e.target.value); setUnitError(null); }}
-                  placeholder="e.g. Pcs, Kg, Ltr, Mtr"
+                  placeholder="e.g. Kilogram, Gram, Litre, Metre"
                   className={unitError ? 'cs-input--error' : ''}
                 />
                 <PredictiveMatchCard
                   query={unitName}
-                  items={units}
+                  items={units.map(u => ({ ...u, abbreviation: u.abbreviation }))}
                   labelName="Unit"
                 />
+              </div>
+              <div className="company-settings__field">
+                <label>Abbreviation / Symbol</label>
+                <input
+                  value={unitAbbreviation}
+                  onChange={(e) => { setUnitAbbreviation(e.target.value); setUnitError(null); }}
+                  placeholder="e.g. kg, g, ltr, mtr, pcs"
+                  maxLength={20}
+                />
+                <span className="cs-field-hint">
+                  Short symbol for this unit (e.g. kilogram → <strong>kg</strong>, gram → <strong>g</strong>). Used in predictive matching — entering &quot;kg&quot; will be treated as &quot;kilogram&quot;.
+                </span>
               </div>
               <div className="company-settings__field">
                 <label>Aliases / Synonyms</label>

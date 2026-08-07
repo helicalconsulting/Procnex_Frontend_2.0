@@ -639,6 +639,15 @@
   background: #dc2626;
   color: #fff;
 }
+.oq-modal__btn--danger:disabled {
+  background: rgba(220, 38, 38, 0.2) !important;
+  color: rgba(255, 255, 255, 0.4) !important;
+  border: 1px solid rgba(220, 38, 38, 0.25) !important;
+  cursor: not-allowed !important;
+  box-shadow: none !important;
+  transform: none !important;
+  opacity: 0.6 !important;
+}
 .oq-modal__btn--primary {
   background: linear-gradient(135deg, var(--primary-500), #6366f1);
   color: #fff;

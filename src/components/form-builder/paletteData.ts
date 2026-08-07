@@ -19,7 +19,7 @@ export const FIELD_PALETTE: PaletteCategory[] = [
       },
       {
         type: 'textarea',
-        label: 'Textarea',
+        label: 'Text Area',
         icon: 'AlignLeft',
         description: 'Multi-line text area field',
         defaultConfig: {

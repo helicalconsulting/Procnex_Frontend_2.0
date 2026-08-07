@@ -9,11 +9,7 @@ import './AppLayout.css';
 
 export default function AppLayout() {
   const { companyName, supportEmail } = useBranding();
-  const [collapsed, setCollapsed] = useState(() => {
-    const saved = localStorage.getItem('heliflow_sidebar_collapsed');
-    if (saved !== null) return saved === 'true';
-    return window.innerWidth < 1200;
-  });
+  const [collapsed] = useState(true); // Always collapsed (72px) by default so hover expand works 100% reliably
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleToggle = useCallback(() => {

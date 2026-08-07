@@ -45,6 +45,8 @@ interface QueueRow {
   email: string;
   submittedDate: string;
   status: QueueStatus;
+  rawStatus: string;
+  isSubmitted: boolean;
   documentSummary: DocumentSummary;
   documents: VendorDocument[];
   phone?: string | null;
@@ -64,9 +66,12 @@ interface QueueRow {
 }
 
 function mapOnboardingVendor(v: OnboardingVendor): QueueRow {
-  const st = v.status.toUpperCase();
+  const st = (v.status || '').toUpperCase();
   const status: QueueStatus =
     st.includes('APPROVE') ? 'approved' : st.includes('REJECT') ? 'rejected' : 'pending';
+  const isSubmitted = v.isSubmitted !== undefined
+    ? v.isSubmitted
+    : (st === 'PENDING_APPROVAL' || st === 'DOCUMENTS_SUBMITTED' || st.includes('APPROVE') || st.includes('REJECT'));
   return {
     id: v.id,
     name: v.name,
@@ -77,7 +82,9 @@ function mapOnboardingVendor(v: OnboardingVendor): QueueRow {
       year: 'numeric',
     }),
     status,
-    documentSummary: v.documentSummary || { required: 7, uploaded: 0, pending: 0, verified: 0, rejected: 0 },
+    rawStatus: v.status,
+    isSubmitted,
+    documentSummary: v.documentSummary || { required: 0, uploaded: 0, pending: 0, verified: 0, rejected: 0 },
     documents: v.documents || [],
     phone: v.phone ?? null,
     contactPerson: v.contactPerson ?? null,
@@ -389,14 +396,15 @@ export default function OnboardingQueuePage() {
                         <td className="oq-table__date">{req.submittedDate}</td>
                         <td>
                           <span className={`oq-status oq-status--${req.status}`}>
-                            {STATUS_LABEL[req.status]}
+                            {req.status === 'pending' && !req.isSubmitted ? 'Awaiting submission' : STATUS_LABEL[req.status]}
                           </span>
                         </td>
                         <td>
                           {req.status === 'pending' ? (() => {
                             const hasDocs = req.documentSummary.uploaded + req.documentSummary.verified + req.documentSummary.rejected > 0;
-                            const docsDisabled = !hasDocs;
-                            const docsTitle = docsDisabled ? 'Vendor must upload documents before approval' : undefined;
+                            const isAwaitingDocs = req.documentSummary.required > 0 && !hasDocs;
+                            const notSubmitted = !req.isSubmitted;
+                            const notSubmittedTitle = notSubmitted ? 'Vendor has not submitted onboarding form yet' : undefined;
                             return (
                             <div className="oq-table__row-actions">
                               <button
@@ -426,16 +434,20 @@ export default function OnboardingQueuePage() {
                               >
                                 <Eye size={15} /> Profile
                               </button>
-                              {docsDisabled && (
+                              {notSubmitted ? (
+                                <span className="oq-docs-pending-badge">
+                                  <Clock size={12} /> Form in progress
+                                </span>
+                              ) : isAwaitingDocs ? (
                                 <span className="oq-docs-pending-badge">
                                   <FileText size={12} /> Awaiting docs
                                 </span>
-                              )}
+                              ) : null}
                               <button
                                 type="button"
                                 className="oq-btn oq-btn--reject"
-                                disabled={busyId === req.id || docsDisabled}
-                                title={docsTitle}
+                                disabled={busyId === req.id || notSubmitted}
+                                title={notSubmittedTitle}
                                 onClick={() => {
                                   setActionError(null);
                                   setRejectTarget(req);
@@ -447,8 +459,8 @@ export default function OnboardingQueuePage() {
                               <button
                                 type="button"
                                 className="oq-btn oq-btn--approve"
-                                disabled={busyId === req.id || docsDisabled}
-                                title={docsTitle}
+                                disabled={busyId === req.id || notSubmitted}
+                                title={notSubmittedTitle}
                                 onClick={() => openApproveModal(req)}
                               >
                                 <CheckCircle2 size={15} />

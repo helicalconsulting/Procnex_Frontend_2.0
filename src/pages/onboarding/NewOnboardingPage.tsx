@@ -212,6 +212,7 @@ export default function NewOnboardingPage() {
   const [showVendorDetail, setShowVendorDetail] = useState(false);
   const [showDuplicateAlert, setShowDuplicateAlert] = useState(false);
   const companyNameRef = useRef<HTMLInputElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasShownDuplicateRef = useRef(false);
   const continuedAsNewRef = useRef(false);
@@ -994,6 +995,13 @@ export default function NewOnboardingPage() {
                       }
                     }}
                     onBlur={handleCompanyNameBlur}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        setShowSuggestions(false);
+                        emailRef.current?.focus();
+                      }
+                    }}
                     placeholder="e.g. Aztech Components Ltd"
                     required
                     autoComplete="off"
@@ -1019,6 +1027,7 @@ export default function NewOnboardingPage() {
                 <div className="onb-form-field__input-wrap">
                   <Mail size={16} className="onb-form-field__icon" />
                   <input
+                    ref={emailRef}
                     type="email"
                     value={contactEmail}
                     onChange={(e) => setContactEmail(e.target.value)}

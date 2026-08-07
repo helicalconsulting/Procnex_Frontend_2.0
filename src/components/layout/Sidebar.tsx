@@ -169,14 +169,14 @@ export default function Sidebar({
       title: 'Governance',
       items: [
         ...menuItems
+          .filter((item) => item.id === 'vendors')
+          .map((item) => ({ label: item.label, icon: ICON_MAP[item.label] || <Users size={19} />, path: item.path })),
+        ...menuItems
           .filter((item) => item.id === 'new-onboarding')
           .map((item) => ({ label: item.label, icon: ICON_MAP[item.label] || <Building size={19} />, path: item.path })),
         ...menuItems
           .filter((item) => item.id === 'onboarding-queue')
           .map((item) => ({ label: item.label, icon: ICON_MAP[item.label] || <UsersRound size={19} />, path: item.path })),
-        ...menuItems
-          .filter((item) => item.id === 'signature')
-          .map((item) => ({ label: item.label, icon: ICON_MAP[item.label] || <PenLine size={19} />, path: item.path })),
       ],
     },
     {
@@ -197,14 +197,9 @@ export default function Sidebar({
     {
       title: 'Admin',
       items: [
-        // Vendors item (top-level)
         ...menuItems
-          .filter((item) => item.id === 'vendors')
-          .map((item) => ({
-            label: item.label,
-            icon: ICON_MAP[item.label] || <Users size={19} />,
-            path: item.path,
-          })),
+          .filter((item) => item.id === 'signature')
+          .map((item) => ({ label: item.label, icon: ICON_MAP[item.label] || <PenLine size={19} />, path: item.path })),
         // Admin children (Users, Roles, Approval Levels)
         ...menuItems
           .filter((item) => item.id === 'admin')

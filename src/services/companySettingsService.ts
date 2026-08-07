@@ -28,6 +28,7 @@ export interface Unit {
   id: string;
   companyCode: string;
   name: string;
+  abbreviation?: string;
   aliases?: string;
   isActive: boolean;
   createdBy: string | null;
@@ -379,12 +380,13 @@ async function apiListUnits(): Promise<Unit[]> {
   return data.units || [];
 }
 
-async function mockCreateUnit(name: string, aliases?: string): Promise<Unit> {
+async function mockCreateUnit(name: string, abbreviation?: string, aliases?: string): Promise<Unit> {
   await new Promise((r) => setTimeout(r, 200));
   const unit: Unit = {
     id: String(Date.now()),
     companyCode: 'HFL',
     name,
+    abbreviation,
     aliases,
     isActive: true,
     createdBy: String(Date.now()),
@@ -395,10 +397,10 @@ async function mockCreateUnit(name: string, aliases?: string): Promise<Unit> {
   return unit;
 }
 
-async function apiCreateUnit(name: string, aliases?: string): Promise<Unit> {
+async function apiCreateUnit(name: string, abbreviation?: string, aliases?: string): Promise<Unit> {
   return apiRequest<Unit>('/company-settings/units', {
     method: 'POST',
-    body: JSON.stringify({ name, aliases }),
+    body: JSON.stringify({ name, abbreviation, aliases }),
   });
 }
 

@@ -163,7 +163,9 @@ export default function VendorSuggestDropdown({
   }, [visible, onClose, anchorRef]);
 
   // ── Render nothing until BOTH visible AND position is computed ──
+  // Also hide when not loading and no results — don't show the empty state box
   if (!visible || !pos) return null;
+  if (!loading && results.length === 0) return null;
 
   const renderResult = (v: VendorSearchResult, idx: number) => {
     const st = statusLabel(v);

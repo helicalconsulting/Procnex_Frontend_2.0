@@ -24,6 +24,7 @@ export interface OnboardingVendor {
   category?: string | null;
   location?: string | null;
   rejectionReason?: string | null;
+  isSubmitted?: boolean;
   documentSummary?: DocumentSummary;
   documents?: VendorDocument[];
 }
@@ -168,6 +169,7 @@ async function apiOnboardingQueue(): Promise<OnboardingVendor[]> {
       onboardingNotes: extended.onboardingNotes ?? null,
       category: extended.category ?? null,
       location: extended.location ?? null,
+      isSubmitted: extended.isSubmitted,
       documentSummary: extended.documentSummary,
       rejectionReason: extended.rejectionReason ?? null,
       documents: extended.documents || [],

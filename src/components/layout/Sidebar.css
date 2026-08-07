@@ -258,9 +258,9 @@
 /* When collapsed, hovering temporarily expands the sidebar as an overlay */
 @media (min-width: 769px) {
   .sidebar--collapsed:hover {
-    width: 260px;
-    box-shadow: 6px 0 28px rgba(0, 0, 0, 0.4);
-    z-index: 1010;
+    width: 260px !important;
+    box-shadow: 8px 0 32px rgba(0, 0, 0, 0.45) !important;
+    z-index: 1015 !important;
   }
 
   /* Show logo text */
