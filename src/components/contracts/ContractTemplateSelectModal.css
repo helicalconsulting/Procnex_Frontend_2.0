@@ -19,8 +19,8 @@
 
 /* Preview Modal Backdrop - higher z-index so preview sits at the very front */
 .ctsm-backdrop--preview {
-  z-index: 11000;
-  background: rgba(0, 0, 0, 0.65);
+  z-index: 20000 !important;
+  background: rgba(0, 0, 0, 0.75) !important;
 }
 @keyframes ctsm-fade-in {
   from { opacity: 0; }
@@ -45,7 +45,10 @@
   to   { opacity: 1; transform: translateY(0)    scale(1);    }
 }
 
-.ctsm-dialog--preview { max-width: 700px; }
+.ctsm-dialog--preview {
+  max-width: 700px;
+  z-index: 20005 !important;
+}
 .ctsm-dialog--fullscreen { max-width: 96vw; max-height: 96vh; }
 
 /* Header */

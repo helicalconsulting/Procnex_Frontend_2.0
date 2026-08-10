@@ -12,6 +12,7 @@ import {
   Search, Plus, Users, UserCheck, UserX, Eye, Edit3, Trash2, X, ShieldOff,
   Mail, Phone, Globe, MapPin, Building2, ChevronLeft, ChevronRight, ChevronDown,
   Filter, LayoutList, LayoutGrid, Send, Key, Star, Award,
+  ShieldCheck, CheckCircle2, Activity, BarChart3, FileCheck, AlertTriangle,
 } from 'lucide-react';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import FloatingMenu from '../../components/shared/FloatingMenu';
@@ -121,6 +122,7 @@ export default function VendorsPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [pageMsg, setPageMsg] = useState<string | null>(null);
   const [detailVendor, setDetailVendor] = useState<VendorTableRow | null>(null);
+  const [isFullScreenDetail, setIsFullScreenDetail] = useState(false);
   const [credentialsMsg, setCredentialsMsg] = useState<string | null>(null);
   const [credVendor, setCredVendor] = useState<VendorTableRow | null>(null);
   const [credLoading, setCredLoading] = useState(false);
@@ -815,109 +817,382 @@ export default function VendorsPage() {
         </div>
       )}
 
-      {/* Detail Modal */}
-      {detailVendor && (
-        <div className="vendors-modal-backdrop" onClick={() => setDetailVendor(null)}>
-          <div className="vendors-modal vendors-modal--detail" onClick={(e) => e.stopPropagation()}>
-            <div className="vendors-modal__header">
-              <span className="vendors-modal__title"><Eye size={20} /> Vendor Profile</span>
-              <button className="vendors-modal__close" onClick={() => setDetailVendor(null)}><X size={18} /></button>
-            </div>
-            <div className="vendors-modal__body">
-              {/* Header section with avatar and name */}
-              <div className="vendors-detail-top">
-                <div className={`vendors-detail-avatar vendors-table__avatar--${detailVendor.avatarMod}`}>{detailVendor.initials}</div>
-                <div>
-                  <div className="vendors-detail-name">{detailVendor.name}</div>
-                  <div className="vendors-detail-cat">{detailVendor.category} · {detailVendor.location}</div>
+      {/* Detail Modal — Vendor 360 Dashboard Layout */}
+      {detailVendor && (() => {
+        const hasEval = detailVendor.overallScore > 0 || detailVendor.totalOrders > 0;
+        const overallRisk = hasEval ? Math.max(0, 100 - detailVendor.overallScore) : 0;
+
+        const qualRisk = detailVendor.avgQuality > 0 ? Math.max(0, 100 - detailVendor.avgQuality) : 0;
+        const delivRisk = detailVendor.avgDelivery > 0 ? Math.max(0, 100 - detailVendor.avgDelivery) : 0;
+        const priceRisk = detailVendor.avgPriceScore > 0 ? Math.max(0, 100 - detailVendor.avgPriceScore) : 0;
+        const compRisk = (detailVendor.gstNumber && detailVendor.panNumber) ? 0 : (detailVendor.gstNumber || detailVendor.panNumber) ? 50 : 100;
+        const bankRisk = (detailVendor.bankName && detailVendor.bankAccountNumber) ? 0 : detailVendor.bankName ? 50 : 100;
+        const portalRisk = detailVendor.isActive ? 0 : 100;
+
+        return (
+        <div className="vendors-modal-backdrop" onClick={() => { setDetailVendor(null); setIsFullScreenDetail(false); }}>
+          <div
+            className={`vendors-modal vendors-modal--detail-v360 ${isFullScreenDetail ? 'vendors-modal--fullscreen' : ''}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Top 360 Header Banner */}
+            <div className="v360-header">
+              {/* Row 1: Identity & Top Right Controls */}
+              <div className="v360-header__row1">
+                <div className="v360-header__identity">
+                  <div className={`v360-avatar vendors-table__avatar--${detailVendor.avatarMod}`}>
+                    {detailVendor.initials}
+                  </div>
+                  <div className="v360-identity__info">
+                    <div className="v360-identity__subtitle">
+                      SUPPLIER RELATIONSHIP · VENDOR 360
+                    </div>
+                    <div className="v360-identity__title-row">
+                      <h2 className="v360-identity__title">{detailVendor.name}</h2>
+                      <span className={`v360-tag v360-tag--tier ${detailVendor.overallScore >= 80 ? 'v360-tag--gold' : 'v360-tag--blue'}`}>
+                        {!hasEval ? 'NEW SUPPLIER' : detailVendor.overallScore >= 80 ? 'STRATEGIC TIER' : detailVendor.overallScore >= 60 ? 'PREFERRED TIER' : 'STANDARD TIER'}
+                      </span>
+                      <span className={`v360-tag v360-tag--risk ${!hasEval ? 'v360-tag--blue' : overallRisk <= 25 ? 'v360-tag--low' : overallRisk <= 50 ? 'v360-tag--med' : 'v360-tag--high'}`}>
+                        {!hasEval ? 'RISK: UNTESTED' : overallRisk <= 25 ? 'RISK: LOW' : overallRisk <= 50 ? 'RISK: MED' : 'RISK: HIGH'}
+                      </span>
+                      <span className="v360-identity__meta">
+                        VN-{String(detailVendor.id).length > 10 ? String(detailVendor.id).slice(-8).toUpperCase() : String(detailVendor.id).padStart(5, '0')} · Joined {formatDate(detailVendor.createdAt)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="v360-actions">
+                  <button
+                    className="v360-action-btn v360-action-btn--close"
+                    onClick={() => { setDetailVendor(null); setIsFullScreenDetail(false); }}
+                    title="Close"
+                  >
+                    <X size={18} />
+                  </button>
                 </div>
               </div>
 
-              {/* Contact & Status Grid */}
-              <div className="vendors-detail-section-title"><Mail size={13} /> Contact Information</div>
-              <div className="vendors-detail-grid">
-                {[
-                  { l: 'Email', v: detailVendor.email },
-                  { l: 'Phone', v: detailVendor.phone },
-                  { l: 'Contact Person', v: detailVendor.contactPerson },
-                  { l: 'Website', v: detailVendor.website },
-                  { l: 'Address', v: detailVendor.address || '—' },
-                  { l: 'Status', v: detailVendor.isActive ? 'Active' : 'Inactive' },
-                  { l: 'Total Orders', v: String(detailVendor.totalOrders) },
-                  { l: 'Joined', v: formatDate(detailVendor.createdAt) },
-                ].map(i => (
-                  <div key={i.l} className="vendors-detail-grid__item">
-                    <span className="vendors-detail-grid__label">{i.l}</span>
-                    <span className="vendors-detail-grid__value">{i.v}</span>
+              {/* Row 2: Metrics Strip (Gauge & KPIs) */}
+              <div className="v360-header__row2">
+                <div className="v360-gauge-box">
+                  <div className={`v360-gauge-ring ${!hasEval ? 'v360-gauge-ring--med' : detailVendor.overallScore >= 80 ? 'v360-gauge-ring--high' : detailVendor.overallScore >= 60 ? 'v360-gauge-ring--med' : 'v360-gauge-ring--low'}`}>
+                    <span className="v360-gauge-score">{detailVendor.overallScore > 0 ? detailVendor.overallScore : '0'}</span>
                   </div>
-                ))}
-              </div>
+                  <div className="v360-gauge-info">
+                    <span className="v360-gauge-title">
+                      {!hasEval ? 'New Vendor' : detailVendor.overallScore >= 80 ? 'Strategic Partner' : detailVendor.overallScore >= 60 ? 'Active Supplier' : 'Standard Supplier'}
+                    </span>
+                    <span className="v360-gauge-subtitle">Composite Score</span>
+                  </div>
+                </div>
 
-              {/* Tax & Bank Details — only shown if any data exists */}
-              {(detailVendor.gstNumber || detailVendor.panNumber) && (
-                <>
-                  <div className="vendors-detail-section-title"><Building2 size={13} /> Tax &amp; Registration</div>
-                  <div className="vendors-detail-grid">
-                    {[
-                      { l: 'GST Number', v: detailVendor.gstNumber || '—' },
-                      { l: 'PAN Number', v: detailVendor.panNumber || '—' },
-                    ].map(i => (
-                      <div key={i.l} className="vendors-detail-grid__item">
-                        <span className="vendors-detail-grid__label">{i.l}</span>
-                        <span className="vendors-detail-grid__value">{i.v}</span>
-                      </div>
-                    ))}
+                <div className="v360-kpi-strip">
+                  <div className="v360-kpi-item">
+                    <span className="v360-kpi-val">{detailVendor.totalOrders}</span>
+                    <span className="v360-kpi-lbl">TOTAL ORDERS</span>
                   </div>
-                </>
-              )}
-
-              {/* Banking Details */}
-              {detailVendor.bankName && (
-                <>
-                  <div className="vendors-detail-section-title"><Building2 size={13} /> Banking Details</div>
-                  <div className="vendors-detail-grid">
-                    {[
-                      { l: 'Bank Name', v: detailVendor.bankName },
-                      { l: 'Branch', v: detailVendor.bankBranch || '—' },
-                      { l: 'Account No.', v: detailVendor.bankAccountNumber || '—' },
-                      { l: 'IFSC Code', v: detailVendor.bankIfscCode || '—' },
-                    ].map(i => (
-                      <div key={i.l} className="vendors-detail-grid__item">
-                        <span className="vendors-detail-grid__label">{i.l}</span>
-                        <span className="vendors-detail-grid__value">{i.v}</span>
-                      </div>
-                    ))}
+                  <div className="v360-kpi-item">
+                    <span className="v360-kpi-val">{detailVendor.avgQuality > 0 ? `${detailVendor.avgQuality}%` : '—'}</span>
+                    <span className="v360-kpi-lbl">QUALITY</span>
                   </div>
-                </>
-              )}
-
-              {/* Performance Scores — from real scoring system */}
-              <div className="vendors-detail-section-title"><Award size={13} /> Performance Scores</div>
-              <div className="vendors-detail-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
-                {[
-                  { l: 'Quality Score', v: `${detailVendor.avgQuality}%` },
-                  { l: 'Delivery Score', v: `${detailVendor.avgDelivery}%` },
-                  { l: 'Price Score', v: `${detailVendor.avgPriceScore}%` },
-                  { l: 'Overall Score', v: `${detailVendor.overallScore}%`, hl: true },
-                ].map(i => (
-                  <div key={i.l} className="vendors-detail-grid__item" style={i.hl ? { gridColumn: '1 / -1', background: 'var(--surface-elevated)', borderRadius: 'var(--radius-md)', padding: '10px 14px' } : {}}>
-                    <span className="vendors-detail-grid__label">{i.l}</span>
-                    <span className="vendors-detail-grid__value" style={i.hl ? { fontWeight: 700, fontSize: 18, color: detailVendor.overallScore >= 80 ? 'var(--success-500)' : detailVendor.overallScore >= 60 ? '#d97706' : 'var(--danger-500)' } : {}}>{i.v}</span>
+                  <div className="v360-kpi-item">
+                    <span className="v360-kpi-val">{detailVendor.avgDelivery > 0 ? `${detailVendor.avgDelivery}%` : '—'}</span>
+                    <span className="v360-kpi-lbl">DELIVERY</span>
                   </div>
-                ))}
+                  <div className="v360-kpi-item">
+                    <span className="v360-kpi-val">{detailVendor.avgPriceScore > 0 ? `${detailVendor.avgPriceScore}%` : '—'}</span>
+                    <span className="v360-kpi-lbl">PRICE SCORE</span>
+                  </div>
+                  <div className="v360-kpi-item">
+                    <span className="v360-kpi-val" style={{ color: !hasEval ? 'var(--text-secondary)' : overallRisk <= 25 ? '#10b981' : overallRisk <= 50 ? '#f59e0b' : '#ef4444' }}>
+                      {hasEval ? `${overallRisk}/100` : '—'}
+                    </span>
+                    <span className="v360-kpi-lbl">RISK SCORE</span>
+                  </div>
+                </div>
               </div>
             </div>
+
+            {/* Dashboard Scroll Body */}
+            <div className="v360-body">
+              {/* Top Row Grid: Score Composition, Risk Dashboard, Compliance */}
+              <div className="v360-grid v360-grid--3col">
+                
+                {/* Card 1: Composite Score Composition */}
+                <div className="v360-card">
+                  <div className="v360-card__header">
+                    <BarChart3 size={15} /> Score Breakdown
+                    <span className="v360-badge v360-badge--green">{detailVendor.overallScore}/100</span>
+                  </div>
+                  <div className="v360-card__body">
+                    <div className="v360-score-list">
+                      {[
+                        { label: 'Quality Rating', score: detailVendor.avgQuality, hasData: detailVendor.avgQuality > 0, weight: '30%' },
+                        { label: 'Delivery Performance', score: detailVendor.avgDelivery, hasData: detailVendor.avgDelivery > 0, weight: '30%' },
+                        { label: 'Price Competitiveness', score: detailVendor.avgPriceScore, hasData: detailVendor.avgPriceScore > 0, weight: '20%' },
+                        { label: 'Tax Compliance', score: (detailVendor.gstNumber && detailVendor.panNumber) ? 100 : (detailVendor.gstNumber || detailVendor.panNumber) ? 50 : 0, hasData: true, weight: '10%' },
+                        { label: 'Banking Onboarding', score: (detailVendor.bankName && detailVendor.bankAccountNumber) ? 100 : detailVendor.bankName ? 50 : 0, hasData: true, weight: '10%' },
+                      ].map((item) => (
+                        <div key={item.label} className="v360-score-item">
+                          <div className="v360-score-item__top">
+                            <span className="v360-score-item__lbl">{item.label}</span>
+                            <span className="v360-score-item__vals">
+                              <strong>{item.hasData ? `${item.score}%` : 'N/A'}</strong>
+                              <small>{item.weight}</small>
+                            </span>
+                          </div>
+                          <div className="v360-score-bar-track">
+                            <div
+                              className="v360-score-bar-fill"
+                              style={{
+                                width: `${Math.min(100, Math.max(0, item.score))}%`,
+                                background: !item.hasData ? 'var(--border)' : item.score >= 80 ? 'linear-gradient(90deg, #107e3e, #10b981)' : item.score >= 60 ? 'linear-gradient(90deg, #d97706, #fbbf24)' : 'linear-gradient(90deg, #dc2626, #ef4444)',
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card 2: Risk Dashboard */}
+                <div className="v360-card">
+                  <div className="v360-card__header">
+                    <ShieldCheck size={15} /> Risk Dashboard
+                    <span className={`v360-badge ${!hasEval ? 'v360-badge--blue' : overallRisk <= 25 ? 'v360-badge--green' : 'v360-badge--warn'}`}>
+                      {!hasEval ? 'Untested' : overallRisk <= 25 ? 'Low Risk' : overallRisk <= 50 ? 'Medium Risk' : 'High Risk'} ({hasEval ? `${overallRisk}/100` : 'No Orders'})
+                    </span>
+                  </div>
+                  <div className="v360-card__body">
+                    <div className="v360-risk-list">
+                      {[
+                        { label: 'Quality Defect Risk', level: qualRisk, evaluated: detailVendor.avgQuality > 0 },
+                        { label: 'Late Delivery Risk', level: delivRisk, evaluated: detailVendor.avgDelivery > 0 },
+                        { label: 'Price Variance Risk', level: priceRisk, evaluated: detailVendor.avgPriceScore > 0 },
+                        { label: 'Tax Compliance Risk', level: compRisk, evaluated: true },
+                        { label: 'Banking Setup Risk', level: bankRisk, evaluated: true },
+                        { label: 'Portal Access Risk', level: portalRisk, evaluated: true },
+                      ].map((r) => (
+                        <div key={r.label} className="v360-risk-item">
+                          <span className="v360-risk-label">{r.label}</span>
+                          <div className="v360-risk-bar-track">
+                            <div
+                              className="v360-risk-bar-fill"
+                              style={{
+                                width: `${Math.min(100, Math.max(0, r.level))}%`,
+                                background: !r.evaluated ? 'var(--border)' : r.level > 50 ? '#ef4444' : r.level > 25 ? '#f59e0b' : '#10b981',
+                              }}
+                            />
+                          </div>
+                          <span className="v360-risk-val">
+                            <strong>{r.evaluated ? `${r.level}%` : 'N/A'}</strong>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card 3: Compliance & Registration Checklist */}
+                <div className="v360-card">
+                  <div className="v360-card__header">
+                    <FileCheck size={15} /> Tax & Compliance Checklist
+                    <span className="v360-badge v360-badge--green">
+                      {(detailVendor.gstNumber && detailVendor.panNumber && detailVendor.bankName) ? 'Verified' : 'Incomplete'}
+                    </span>
+                  </div>
+                  <div className="v360-card__body">
+                    <div className="v360-checklist">
+                      {[
+                        { label: 'GST Registration', sub: detailVendor.gstNumber ? `GST: ${detailVendor.gstNumber}` : 'Not Provided', status: detailVendor.gstNumber ? 'valid' : 'invalid' },
+                        { label: 'PAN Registration', sub: detailVendor.panNumber ? `PAN: ${detailVendor.panNumber}` : 'Not Provided', status: detailVendor.panNumber ? 'valid' : 'invalid' },
+                        { label: 'Bank Name', sub: detailVendor.bankName ? detailVendor.bankName : 'Not Provided', status: detailVendor.bankName ? 'valid' : 'invalid' },
+                        { label: 'Bank Account Number', sub: detailVendor.bankAccountNumber ? `Account: ${detailVendor.bankAccountNumber}` : 'Not Provided', status: detailVendor.bankAccountNumber ? 'valid' : 'invalid' },
+                        { label: 'Bank IFSC Code', sub: detailVendor.bankIfscCode ? `IFSC: ${detailVendor.bankIfscCode}` : 'Not Provided', status: detailVendor.bankIfscCode ? 'valid' : 'invalid' },
+                        { label: 'Portal Access', sub: detailVendor.isActive ? 'Active Vendor Account' : 'Inactive Account', status: detailVendor.isActive ? 'valid' : 'warn' },
+                        { label: 'Contact Information', sub: (detailVendor.email && detailVendor.phone) ? 'Email & Phone On File' : 'Incomplete', status: (detailVendor.email && detailVendor.phone) ? 'valid' : 'warn' },
+                        { label: 'Address Info', sub: detailVendor.address ? detailVendor.address : 'Not Provided', status: detailVendor.address ? 'valid' : 'warn' },
+                      ].map((item) => (
+                        <div key={item.label} className="v360-check-item">
+                          {item.status === 'valid' ? (
+                            <CheckCircle2 size={16} className="v360-icon--valid" />
+                          ) : item.status === 'warn' ? (
+                            <AlertTriangle size={16} className="v360-icon--warn" />
+                          ) : (
+                            <X size={16} className="v360-icon--invalid" />
+                          )}
+                          <div className="v360-check-text">
+                            <span className="v360-check-label">{item.label}</span>
+                            <span className="v360-check-sub">{item.sub}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Bottom Row Grid: Banking Details, Performance KPI Scorecard, Contact Details */}
+              <div className="v360-grid v360-grid--3col" style={{ marginTop: 16 }}>
+                
+                {/* Card 4: Banking & Financial Details */}
+                <div className="v360-card">
+                  <div className="v360-card__header">
+                    <Building2 size={15} /> Banking & System Details
+                    <span className="v360-badge v360-badge--blue">
+                      {detailVendor.bankName ? 'Banking Configured' : 'Pending Banking'}
+                    </span>
+                  </div>
+                  <div className="v360-card__body">
+                    <div className="v360-fin-summary">
+                      <div className="v360-fin-kpi">
+                        <span className="v360-fin-kpi__val">{detailVendor.totalOrders}</span>
+                        <span className="v360-fin-kpi__lbl">Orders</span>
+                      </div>
+                      <div className="v360-fin-kpi">
+                        <span className="v360-fin-kpi__val">{detailVendor.avgQuality > 0 ? `${detailVendor.avgQuality}%` : '—'}</span>
+                        <span className="v360-fin-kpi__lbl">Quality</span>
+                      </div>
+                      <div className="v360-fin-kpi">
+                        <span className="v360-fin-kpi__val">{detailVendor.avgDelivery > 0 ? `${detailVendor.avgDelivery}%` : '—'}</span>
+                        <span className="v360-fin-kpi__lbl">Delivery</span>
+                      </div>
+                      <div className="v360-fin-kpi">
+                        <span className="v360-fin-kpi__val">{detailVendor.avgPriceScore > 0 ? `${detailVendor.avgPriceScore}%` : '—'}</span>
+                        <span className="v360-fin-kpi__lbl">Price Score</span>
+                      </div>
+                    </div>
+
+                    <div className="v360-bank-section">
+                      <div className="v360-sub-title">BANKING INFORMATION</div>
+                      <div className="v360-detail-grid">
+                        <div className="v360-detail-item">
+                          <span className="v360-detail-lbl">Bank Name</span>
+                          <span className="v360-detail-val">{detailVendor.bankName || '—'}</span>
+                        </div>
+                        <div className="v360-detail-item">
+                          <span className="v360-detail-lbl">Branch</span>
+                          <span className="v360-detail-val">{detailVendor.bankBranch || '—'}</span>
+                        </div>
+                        <div className="v360-detail-item">
+                          <span className="v360-detail-lbl">Account No.</span>
+                          <span className="v360-detail-val">{detailVendor.bankAccountNumber || '—'}</span>
+                        </div>
+                        <div className="v360-detail-item">
+                          <span className="v360-detail-lbl">IFSC Code</span>
+                          <span className="v360-detail-val">{detailVendor.bankIfscCode || '—'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card 5: Performance KPI Scorecard */}
+                <div className="v360-card">
+                  <div className="v360-card__header">
+                    <Activity size={15} /> Performance Scorecard
+                    <span className="v360-badge v360-badge--green">{hasEval ? `${detailVendor.overallScore}% Overall` : 'No Eval'}</span>
+                  </div>
+                  <div className="v360-card__body" style={{ padding: 0 }}>
+                    <table className="v360-kpi-table">
+                      <thead>
+                        <tr>
+                          <th>METRIC</th>
+                          <th>SCORE</th>
+                          <th>STATUS</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[
+                          { kpi: 'Quality Score', score: detailVendor.avgQuality > 0 ? `${detailVendor.avgQuality}%` : '—', val: detailVendor.avgQuality },
+                          { kpi: 'Delivery Performance', score: detailVendor.avgDelivery > 0 ? `${detailVendor.avgDelivery}%` : '—', val: detailVendor.avgDelivery },
+                          { kpi: 'Price Competitiveness', score: detailVendor.avgPriceScore > 0 ? `${detailVendor.avgPriceScore}%` : '—', val: detailVendor.avgPriceScore },
+                          { kpi: 'Overall Performance', score: detailVendor.overallScore > 0 ? `${detailVendor.overallScore}%` : '—', val: detailVendor.overallScore },
+                        ].map((row) => {
+                          const statusText = row.val >= 80 ? 'Exceeds' : row.val >= 60 ? 'Meets' : row.val > 0 ? 'Under' : 'No Data';
+                          return (
+                            <tr key={row.kpi}>
+                              <td><strong>{row.kpi}</strong></td>
+                              <td>{row.score}</td>
+                              <td>
+                                <span className={`v360-pill ${row.val >= 80 ? 'v360-pill--success' : row.val >= 60 ? 'v360-badge--warn' : 'v360-badge--blue'}`}>
+                                  {statusText}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Card 6: Contact Information & Directory */}
+                <div className="v360-card">
+                  <div className="v360-card__header">
+                    <Mail size={15} /> Contact & Directory Details
+                    <span className={`v360-badge ${detailVendor.isActive ? 'v360-badge--green' : 'v360-badge--warn'}`}>
+                      {detailVendor.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                  <div className="v360-card__body">
+                    <div className="v360-detail-grid">
+                      <div className="v360-detail-item">
+                        <span className="v360-detail-lbl">Email</span>
+                        <span className="v360-detail-val">{detailVendor.email}</span>
+                      </div>
+                      <div className="v360-detail-item">
+                        <span className="v360-detail-lbl">Phone</span>
+                        <span className="v360-detail-val">{detailVendor.phone}</span>
+                      </div>
+                      <div className="v360-detail-item">
+                        <span className="v360-detail-lbl">Contact Person</span>
+                        <span className="v360-detail-val">{detailVendor.contactPerson}</span>
+                      </div>
+                      <div className="v360-detail-item">
+                        <span className="v360-detail-lbl">Category</span>
+                        <span className="v360-detail-val">{detailVendor.category}</span>
+                      </div>
+                      <div className="v360-detail-item">
+                        <span className="v360-detail-lbl">Website</span>
+                        <span className="v360-detail-val">{detailVendor.website}</span>
+                      </div>
+                      <div className="v360-detail-item">
+                        <span className="v360-detail-lbl">Location</span>
+                        <span className="v360-detail-val">{detailVendor.location}</span>
+                      </div>
+                      <div className="v360-detail-item" style={{ gridColumn: '1 / -1' }}>
+                        <span className="v360-detail-lbl">Address</span>
+                        <span className="v360-detail-val">{detailVendor.address || '—'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            {/* Modal Footer */}
             <div className="vendors-modal__footer">
-              <button className="vendors-modal__btn vendors-modal__btn--secondary" onClick={() => setDetailVendor(null)}>Close</button>
+              <button
+                className="vendors-modal__btn vendors-modal__btn--secondary"
+                onClick={() => { setDetailVendor(null); setIsFullScreenDetail(false); }}
+              >
+                Close
+              </button>
               {canCreateVendor ? (
                 <button
                   className="vendors-modal__btn vendors-modal__btn--secondary"
                   onClick={() => {
                     openEditModal(detailVendor);
                     setDetailVendor(null);
+                    setIsFullScreenDetail(false);
                   }}
                 >
-                  <Edit3 size={16} /> Edit
+                  <Edit3 size={16} /> Edit Vendor
                 </button>
               ) : (
                 <button
@@ -925,7 +1200,7 @@ export default function VendorsPage() {
                   disabled
                   title="You do not have permission to edit vendors"
                 >
-                  <ShieldOff size={16} /> Edit
+                  <ShieldOff size={16} /> Edit Vendor
                 </button>
               )}
               {detailVendor.isActive && canCreateVendor && (
@@ -934,15 +1209,17 @@ export default function VendorsPage() {
                   onClick={() => {
                     openCredentialsModal(detailVendor);
                     setDetailVendor(null);
+                    setIsFullScreenDetail(false);
                   }}
                 >
-                  <Send size={16} /> Password setup email
+                  <Send size={16} /> Password Setup Email
                 </button>
               )}
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Resend secure password setup link (vendor sets own password) */}
       {credVendor && (

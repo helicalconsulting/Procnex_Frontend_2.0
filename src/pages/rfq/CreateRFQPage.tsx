@@ -23,6 +23,9 @@ import {
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyMaster';
 import { PageSkeleton, CardSkeleton } from '../../components/shared/Skeleton';
+import { useAuth } from '../../context/AuthContext';
+import { isL2OrHigherUser } from '../../utils/rbac';
+import { CreatorLevelPromptModal } from '../../components/shared/CreatorLevelPromptModal';
 import './CreateRFQPage.css';
 
 // ─── Types ──────────────────────────────────────────────────
@@ -255,10 +258,13 @@ export default function CreateRFQPage() {
     });
   }, [editId]);
 
+  const { roles } = useAuth();
   const [savingDraft, setSavingDraft] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [showLevelPrompt, setShowLevelPrompt] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'draft' | 'submit' | null>(null);
 
   const [simpleWeightageError, setSimpleWeightageError] = useState<string | null>(null);
 
@@ -571,7 +577,7 @@ export default function CreateRFQPage() {
   // Backend computeEnterpriseEvaluation normalizes scores regardless of total.
   // Sub-parameter weightage validation is handled by RfqEvaluationPanel internally.
 
-  const buildPayload = useCallback((): CreateRfqPayload | null => {
+  const buildPayload = useCallback((startLevelNumber?: number): CreateRfqPayload | null => {
     if (!title.trim()) return null;
     const validItems = items.filter((i) => i.itemName.trim() && i.quantity);
     if (!validItems.length) return null;
@@ -590,6 +596,7 @@ export default function CreateRFQPage() {
       closingDate: closingDate || undefined,
       currency: companyDefaultCurrency,
       rfqType: rfqMode === 'TENDER' ? 'TENDER' : 'RFQ',
+      startLevelNumber,
       items: validItems.map((i) => ({
         itemCode: i.itemCode?.trim() || undefined,
         itemName: i.itemName.trim(),
@@ -695,9 +702,18 @@ export default function CreateRFQPage() {
   }, [simpleWeightageTotal]);
 
   const handleSaveDraft = async () => {
+    if (isL2OrHigherUser(roles)) {
+      setPendingAction('draft');
+      setShowLevelPrompt(true);
+      return;
+    }
+    await executeSaveDraft(1);
+  };
+
+  const executeSaveDraft = async (startLevelNumber?: number) => {
     setSimpleWeightageError(null);
     if (rfqMode === 'RFQ' && !validateSimpleWeightage()) return;
-    const payload = buildPayload();
+    const payload = buildPayload(startLevelNumber);
     if (!payload) {
       setSubmitError('Enter a title, unit, and at least one line item with quantity.');
       return;
@@ -720,7 +736,6 @@ export default function CreateRFQPage() {
         }
         setSuccessMsg('RFQ saved as draft successfully!');
       }
-      // Save weightage preferences to DB
       await rfqService.saveWeightagePreferences(simpleWeightages).catch(() => {});
       setTimeout(() => navigate('/rfq'), 1200);
     } catch (err) {
@@ -731,9 +746,18 @@ export default function CreateRFQPage() {
   };
 
   const handleSubmit = async () => {
+    if (isL2OrHigherUser(roles)) {
+      setPendingAction('submit');
+      setShowLevelPrompt(true);
+      return;
+    }
+    await executeSubmit(1);
+  };
+
+  const executeSubmit = async (startLevelNumber?: number) => {
     setSimpleWeightageError(null);
     if (rfqMode === 'RFQ' && !validateSimpleWeightage()) return;
-    const payload = buildPayload();
+    const payload = buildPayload(startLevelNumber);
     if (!payload) {
       setSubmitError('Enter a title, unit, and at least one line item with quantity.');
       return;
@@ -758,7 +782,6 @@ export default function CreateRFQPage() {
         rfqId = createdId;
         await saveEvalCategories(rfqId);
       }
-      // Save weightage preferences to DB
       await rfqService.saveWeightagePreferences(simpleWeightages).catch(() => {});
 
       const sendResult = await rfqService.send(rfqId);
@@ -1872,6 +1895,28 @@ export default function CreateRFQPage() {
           </button>
         </div>
       </div>
+
+      <CreatorLevelPromptModal
+        isOpen={showLevelPrompt}
+        moduleName="Quotation"
+        title="Quotation Approval Starting Level"
+        question="When vendors submit quotations for this RFQ, do you want quotation approval to start at Level 1?"
+        subtext="As an approver/manager, you can choose whether vendor quotation approvals for this RFQ start at Level 1 (Clerk review first) or directly at your level."
+        onConfirm={(startLevelNumber) => {
+          setShowLevelPrompt(false);
+          const act = pendingAction;
+          setPendingAction(null);
+          if (act === 'draft') {
+            void executeSaveDraft(startLevelNumber);
+          } else {
+            void executeSubmit(startLevelNumber);
+          }
+        }}
+        onCancel={() => {
+          setShowLevelPrompt(false);
+          setPendingAction(null);
+        }}
+      />
     </div>
   );
 }

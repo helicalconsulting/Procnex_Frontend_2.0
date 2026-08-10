@@ -33,14 +33,19 @@ import { adminService } from '../../services/adminService';
 import type { User as UserType } from '../../types';
 import './FormsPage.css';
 
-type ActiveTab = 'pending' | 'approval_pending' | 'draft' | 'completed' | 'returned';
+type ActiveTab = 'pending' | 'approval_pending' | 'submitted' | 'draft' | 'completed' | 'returned';
 
 export default function FormsPage() {
-  const { user } = useAuth();
+  const { user, roles } = useAuth();
   const currentUserId = String(user?.id || (user as any)?._id || '1');
   const currentUserEmail = user?.email || '';
   const currentUserName = user?.fullName || 'Current Employee';
-  const currentUserRole = user?.role || 'Participant';
+  const userRoles = useMemo(() => {
+    const combined = [...(roles || []), ...((user as any)?.roles || []), user?.role].filter(Boolean) as string[];
+    return combined.length > 0 ? [...new Set(combined)] : ['Participant'];
+  }, [roles, user]);
+
+  const currentUserRole = user?.role || userRoles[0] || 'Participant';
 
   const [submissions, setSubmissions] = useState<FormSubmissionInstance[]>([]);
   const [userList, setUserList] = useState<UserType[]>([]);
@@ -65,14 +70,14 @@ export default function FormsPage() {
   const loadSubmissions = useCallback(async () => {
     setLoading(true);
     try {
-      const list = await formWorkflowService.listUserSubmissions(currentUserId, currentUserEmail, currentUserRole);
+      const list = await formWorkflowService.listUserSubmissions(currentUserId, currentUserEmail, userRoles);
       setSubmissions(list);
     } catch (e) {
       console.error('Error loading submissions:', e);
     } finally {
       setLoading(false);
     }
-  }, [currentUserId, currentUserEmail, currentUserRole]);
+  }, [currentUserId, currentUserEmail, userRoles]);
 
   useEffect(() => {
     loadSubmissions();
@@ -81,58 +86,64 @@ export default function FormsPage() {
   // Helper to check if current user is an approver for submission's current level
   const isUserApproverForCurrentLevel = useCallback(
     (sub: FormSubmissionInstance) => {
-      if (!sub.workflowAttached || !sub.currentLevelNumber || sub.currentLevelNumber === 0 || !sub.approvalLevels) {
+      if (!sub.workflowAttached || !sub.approvalLevels || sub.approvalLevels.length === 0) {
         return false;
       }
       if (sub.status === 'completed') return false;
 
-      // Super Admin, Administrator, Admin, or User ID 1 can always approve active level steps
-      const isUserAdmin =
-        currentUserRole?.toLowerCase().includes('admin') ||
-        currentUserRole === 'Super Admin' ||
-        currentUserRole === 'Administrator' ||
-        currentUserId === '1';
+      const activeLevelNum = sub.currentLevelNumber || 1;
+      const currentStep = sub.approvalLevels.find((l) => l.levelNumber === activeLevelNum);
+      if (!currentStep || currentStep.status === 'approved') return false;
 
-      if (isUserAdmin) return true;
-
-      const currentStep = sub.approvalLevels.find((l) => l.levelNumber === sub.currentLevelNumber);
-      if (!currentStep) return false;
-
-      return isRoleMatching(currentStep.requiredRole, currentUserRole, currentUserId);
+      // Match required role for this exact level step
+      return isRoleMatching(currentStep.requiredRole, userRoles, currentUserId);
     },
-    [currentUserRole, currentUserId]
+    [userRoles, currentUserId]
   );
 
-  // Categorized filtered lists
+  const hasUserApprovedAnyLevel = useCallback(
+    (sub: FormSubmissionInstance) => {
+      if (!sub.workflowAttached || !sub.approvalLevels) return false;
+      return sub.approvalLevels.some(
+        (lvl) => lvl.status === 'approved' && isRoleMatching(lvl.requiredRole, userRoles, currentUserId)
+      );
+    },
+    [userRoles, currentUserId]
+  );
+
+  // Categorized filtered lists (Unified Pending Actions tab - no duplication)
   const filteredSubmissions = useMemo(() => {
     return submissions.filter((s) => {
       const isMine =
         (currentUserId && String(s.assignedUserId) === String(currentUserId)) ||
         (currentUserEmail && s.assignedUserEmail?.toLowerCase() === currentUserEmail.toLowerCase());
 
-      if (activeTab === 'pending') {
-        return isMine && s.status === 'pending';
+      const isApproverForCurrent = isUserApproverForCurrentLevel(s);
+      const hasApprovedPrior = hasUserApprovedAnyLevel(s);
+
+      if (activeTab === 'pending' || activeTab === 'approval_pending') {
+        return (isMine && s.status === 'pending') || isApproverForCurrent;
       }
-      if (activeTab === 'approval_pending') {
-        return (s.status === 'submitted' || s.status === 'pending') && isUserApproverForCurrentLevel(s);
+      if (activeTab === 'submitted') {
+        return isMine && s.status === 'submitted' && !isApproverForCurrent;
       }
       if (activeTab === 'draft') {
         return isMine && s.status === 'draft';
       }
       if (activeTab === 'completed') {
-        return s.status === 'completed' && (isMine || isUserApproverForCurrentLevel(s));
+        return s.status === 'completed' || hasApprovedPrior;
       }
       if (activeTab === 'returned') {
         return isMine && s.status === 'returned';
       }
       return true;
     });
-  }, [submissions, activeTab, currentUserId, currentUserEmail, isUserApproverForCurrentLevel]);
+  }, [submissions, activeTab, currentUserId, currentUserEmail, isUserApproverForCurrentLevel, hasUserApprovedAnyLevel]);
 
   // Counts for each tab
   const counts = useMemo(() => {
     let pending = 0;
-    let approvalPending = 0;
+    let submitted = 0;
     let draft = 0;
     let completed = 0;
     let returned = 0;
@@ -142,19 +153,22 @@ export default function FormsPage() {
         (currentUserId && String(s.assignedUserId) === String(currentUserId)) ||
         (currentUserEmail && s.assignedUserEmail?.toLowerCase() === currentUserEmail.toLowerCase());
 
-      if (isMine && s.status === 'pending') pending++;
-      if ((s.status === 'submitted' || s.status === 'pending') && isUserApproverForCurrentLevel(s)) approvalPending++;
+      const isApproverForCurrent = isUserApproverForCurrentLevel(s);
+      const hasApprovedPrior = hasUserApprovedAnyLevel(s);
+
+      if ((isMine && s.status === 'pending') || isApproverForCurrent) pending++;
+      if (isMine && s.status === 'submitted' && !isApproverForCurrent) submitted++;
       if (isMine && s.status === 'draft') draft++;
-      if (s.status === 'completed' && (isMine || isUserApproverForCurrentLevel(s))) completed++;
+      if (s.status === 'completed' || hasApprovedPrior) completed++;
       if (isMine && s.status === 'returned') returned++;
     });
 
-    return { pending, approvalPending, draft, completed, returned };
-  }, [submissions, currentUserId, currentUserEmail, isUserApproverForCurrentLevel]);
+    return { pending, approvalPending: pending, submitted, draft, completed, returned };
+  }, [submissions, currentUserId, currentUserEmail, isUserApproverForCurrentLevel, hasUserApprovedAnyLevel]);
 
-  // Auto-switch to Pending My Approval tab if user has approval tasks but no personal pending forms to fill out
+  // Auto-switch to Pending My Approval tab if user has approval tasks
   useEffect(() => {
-    if (counts.approvalPending > 0 && counts.pending === 0 && activeTab === 'pending') {
+    if (counts.approvalPending > 0 && activeTab === 'pending' && counts.pending === 0) {
       setActiveTab('approval_pending');
     }
   }, [counts.approvalPending, counts.pending, activeTab]);
@@ -183,20 +197,39 @@ export default function FormsPage() {
     }
   };
 
-  // Initial Form Submit Handler (By Recipient Employee)
+  // Initial Form Submit Handler (By Recipient Employee or Approver)
   const handleSubmitForm = async () => {
     if (!selectedSubmission) return;
     setSubmitting(true);
     try {
-      await formWorkflowService.submitFormResponse(
-        selectedSubmission.id,
-        formData,
-        currentUserName,
-        currentUserRole
-      );
-      await loadSubmissions();
-      setSelectedSubmission(null);
-      setShowSuccessModal(true);
+      const isApprover = isUserApproverForCurrentLevel(selectedSubmission);
+      if (selectedSubmission.workflowAttached && isApprover) {
+        const res = await formWorkflowService.approveFormLevel(
+          selectedSubmission.id,
+          returnComments || 'Form filled and approved at level 1',
+          currentUserName,
+          currentUserRole,
+          currentUserEmail,
+          formData
+        );
+        await loadSubmissions();
+        setSelectedSubmission(null);
+        if (res.isFinalCompletion) {
+          setPageMsg('🎉 Final approval level completed! Form workflow is finished.');
+        } else {
+          setPageMsg('✅ Form response submitted and Level 1 approved! Advanced to next level.');
+        }
+      } else {
+        await formWorkflowService.submitFormResponse(
+          selectedSubmission.id,
+          formData,
+          currentUserName,
+          currentUserRole
+        );
+        await loadSubmissions();
+        setSelectedSubmission(null);
+        setShowSuccessModal(true);
+      }
     } catch (err) {
       console.error('Submit error:', err);
       setPageMsg('Error submitting form response');
@@ -215,7 +248,8 @@ export default function FormsPage() {
         returnComments || 'Approved level sign-off',
         currentUserName,
         currentUserRole,
-        currentUserEmail
+        currentUserEmail,
+        formData
       );
       await loadSubmissions();
       setSelectedSubmission(null);
@@ -288,21 +322,21 @@ export default function FormsPage() {
       {/* Tabs Bar */}
       <div className="fp-tabs-bar">
         <button
-          className={`fp-tab-btn ${activeTab === 'pending' ? 'fp-tab-btn--active' : ''}`}
+          className={`fp-tab-btn ${activeTab === 'pending' || activeTab === 'approval_pending' ? 'fp-tab-btn--active' : ''}`}
           onClick={() => setActiveTab('pending')}
         >
-          <Inbox size={16} />
-          <span>My Pending Forms</span>
-          <span className="fp-tab-badge">{counts.pending}</span>
+          <ShieldCheck size={16} />
+          <span>Pending Actions &amp; Approvals</span>
+          <span className="fp-tab-badge fp-tab-badge--highlight">{counts.pending}</span>
         </button>
 
         <button
-          className={`fp-tab-btn ${activeTab === 'approval_pending' ? 'fp-tab-btn--active' : ''}`}
-          onClick={() => setActiveTab('approval_pending')}
+          className={`fp-tab-btn ${activeTab === 'submitted' ? 'fp-tab-btn--active' : ''}`}
+          onClick={() => setActiveTab('submitted')}
         >
-          <ShieldCheck size={16} />
-          <span>Pending My Approval</span>
-          <span className="fp-tab-badge fp-tab-badge--highlight">{counts.approvalPending}</span>
+          <Clock size={16} />
+          <span>My Submitted Forms</span>
+          <span className="fp-tab-badge">{counts.submitted}</span>
         </button>
 
 
@@ -348,6 +382,7 @@ export default function FormsPage() {
         <div className="fp-cards-grid">
           {filteredSubmissions.map((sub) => {
             const isApproverForSub = isUserApproverForCurrentLevel(sub);
+            const hasApprovedPrior = hasUserApprovedAnyLevel(sub);
             const currentRoleNeeded = sub.approvalLevels?.find((l) => l.levelNumber === sub.currentLevelNumber)?.requiredRole || 'Approver';
 
             return (
@@ -356,8 +391,12 @@ export default function FormsPage() {
                   <span className={`fp-priority-tag fp-priority-tag--${sub.priority.toLowerCase()}`}>
                     {sub.priority} Priority
                   </span>
-                  <span className={`fp-status-tag fp-status-tag--${sub.status}`}>
-                    {sub.status.toUpperCase()}
+                  <span className={`fp-status-tag fp-status-tag--${sub.status === 'completed' || hasApprovedPrior ? 'completed' : sub.status}`}>
+                    {sub.status === 'completed'
+                      ? 'COMPLETED'
+                      : hasApprovedPrior
+                      ? `MY LEVEL APPROVED (L${sub.currentLevelNumber} Pending)`
+                      : sub.status.toUpperCase()}
                   </span>
                 </div>
 
@@ -475,8 +514,6 @@ export default function FormsPage() {
                   const val = formData[field.id] || '';
                   const isReadOnly =
                     selectedSubmission.status === 'completed' ||
-                    selectedSubmission.status === 'submitted' ||
-                    isApproverForSub ||
                     field.readOnly;
 
                   return (
@@ -652,7 +689,11 @@ export default function FormsPage() {
                     {isApproverForSub ? (
                       <button className="fp-btn fp-btn--submit" disabled={submitting} onClick={handleApproveLevel}>
                         <Check size={16} />
-                        {submitting ? 'Processing...' : selectedSubmission.currentLevelNumber >= selectedSubmission.totalLevels ? 'Approve & Finalize' : `Approve Level ${selectedSubmission.currentLevelNumber}`}
+                        {submitting
+                          ? 'Processing...'
+                          : (selectedSubmission.currentLevelNumber || 1) >= selectedSubmission.totalLevels
+                          ? 'Submit & Finalize Approval'
+                          : `Submit & Approve Level ${selectedSubmission.currentLevelNumber || 1}`}
                       </button>
                     ) : (
                       <button className="fp-btn fp-btn--submit" disabled={submitting} onClick={handleSubmitForm}>

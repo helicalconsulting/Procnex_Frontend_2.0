@@ -47,6 +47,15 @@
 .ctr-detail__action-btn--success:hover { background: #0d8a40; }
 .ctr-detail__action-btn--danger { color: var(--danger-500); border-color: var(--danger-200); }
 .ctr-detail__action-btn--danger:hover { background: rgba(187,0,0,0.06); }
+.ctr-detail__action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+  pointer-events: auto !important;
+  background: rgba(148, 163, 184, 0.2) !important;
+  border-color: rgba(148, 163, 184, 0.3) !important;
+  color: var(--text-secondary, #94a3b8) !important;
+  box-shadow: none !important;
+}
 
 /* Tabs */
 .ctr-detail__tabs {

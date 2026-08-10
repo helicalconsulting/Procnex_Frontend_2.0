@@ -6,6 +6,7 @@ import type {
   ApprovalTableRow,
   NotificationRow,
 } from '../types/viewModels';
+import { formatCurrency } from '../components/shared/CurrencyMaster';
 
 const BACKEND_TO_UI_RFQ_STATUS: Record<string, RFQStatus> = {
   DRAFT: 'DRAFT',
@@ -30,10 +31,6 @@ function initials(name?: string): string {
     .join('')
     .slice(0, 2)
     .toUpperCase();
-}
-
-function formatInr(amount: number): string {
-  return `₹${amount.toLocaleString('en-IN')}`;
 }
 
 /** Map API RFQ list item to table row */
@@ -181,6 +178,15 @@ export function mapVendorToTableRow(v: Vendor & Record<string, unknown>): Vendor
   };
 }
 
+function formatApprovalAmount(amount: number, currency?: string): string {
+  const curr = currency || 'KES';
+  try {
+    return formatCurrency(amount, curr);
+  } catch {
+    return `${curr} ${amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+  }
+}
+
 export function mapApprovalToTableRow(a: Record<string, unknown>): ApprovalTableRow {
   const moduleMap: Record<string, ApprovalTableRow['module']> = {
     RFQ: 'RFQ',
@@ -199,6 +205,7 @@ export function mapApprovalToTableRow(a: Record<string, unknown>): ApprovalTable
   const level = a.level as { levelNumber?: number; requiredRole?: string } | undefined;
   const createdBy = a.createdBy as { fullName?: string } | undefined;
   const amount = Number(a.amount || 0);
+  const currency = (a.currency as string) || 'KES';
 
   return {
     id: String(a.id),
@@ -209,8 +216,9 @@ export function mapApprovalToTableRow(a: Record<string, unknown>): ApprovalTable
     requestedBy: createdBy?.fullName || 'Unknown',
     requestedByInitials: initials(createdBy?.fullName),
     avatarMod: String((Number(a.id) % 6) + 1),
-    amount: amount ? formatInr(amount) : '—',
+    amount: amount ? formatApprovalAmount(amount, currency) : '—',
     amountNum: amount,
+    currency,
     currentLevel: level?.levelNumber || 1,
     totalLevels: Number(a.totalLevels || 1),
     requiredRole: level?.requiredRole || 'Approver',

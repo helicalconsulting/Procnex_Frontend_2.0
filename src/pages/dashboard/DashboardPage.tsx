@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useDashboardWidgets } from '../../hooks/useDashboardWidgets';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { WIDGET_REGISTRY, type WidgetDefinition } from './widgets';
+import HeaderCalendarPopover from '../../components/layout/HeaderCalendarPopover';
 import {
   CalendarDays,
   Sparkles,
@@ -18,6 +19,7 @@ import {
   IndianRupee,
   Zap,
   Check,
+  ChevronDown,
 } from 'lucide-react';
 import './DashboardPage.css';
 
@@ -92,6 +94,7 @@ export default function DashboardPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [isGalleryOpen, closeGallery]);
 
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [dragState, setDragState] = useState<WidgetDragState | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const dragListenersRef = useRef<{
@@ -270,9 +273,31 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="dash-header__actions">
-          <div className="dash-header__date">
-            <CalendarDays size={15} />
-            {today}
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              className={`dash-header__date dash-header__date--clickable ${
+                isCalendarOpen ? 'dash-header__date--active' : ''
+              }`}
+              onClick={() => setIsCalendarOpen(!isCalendarOpen)}
+              title="Click to open laptop calendar"
+              aria-expanded={isCalendarOpen}
+            >
+              <CalendarDays size={15} />
+              <span>{today}</span>
+              <ChevronDown
+                size={14}
+                style={{
+                  transform: isCalendarOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s ease',
+                  opacity: 0.7,
+                }}
+              />
+            </button>
+
+            {isCalendarOpen && (
+              <HeaderCalendarPopover onClose={() => setIsCalendarOpen(false)} />
+            )}
           </div>
           <button
             className="dash-customize-btn"

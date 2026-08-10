@@ -31,6 +31,9 @@ import ContractTemplateSelectModal from '../../components/contracts/ContractTemp
 
 import type { EvalCategory } from '../../types/rfqEvaluation';
 import type { RFQEvaluationData } from '../../types';
+import { useAuth } from '../../context/AuthContext';
+import { isL2OrHigherUser } from '../../utils/rbac';
+import { CreatorLevelPromptModal } from '../../components/shared/CreatorLevelPromptModal';
 import './QuotationsPage.css';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -158,12 +161,18 @@ const ALL_LISTING_COLUMNS: ListingColumnDef[] = [
     ),
   },
   {
-    key: 'score', label: 'Score', defaultVisible: true, width: '90px', align: 'center',
+    key: 'score', label: 'Score', defaultVisible: true, width: '130px', align: 'center',
     render: (q, _ctx) => {
+      const rawScore = q.recommendationScore ?? q.score ?? 0;
+      const displayScore = Math.min(100, Math.max(0, Math.round(rawScore)));
+      const scoreClass = getScoreClass(displayScore);
       return (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          <span className={`quot-listing-table__score quot-listing-table__score--${getScoreClass(q.score)}`}>{q.score}</span>
-        </span>
+        <div className="quot-score" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, width: '100%', minWidth: 90 }}>
+          <div className="quot-score__bar" style={{ flex: 1, height: 6, borderRadius: 3, background: 'var(--surface-elevated)', overflow: 'hidden' }}>
+            <div className={`quot-score__fill quot-score__fill--${scoreClass}`} style={{ width: `${displayScore}%`, height: '100%', borderRadius: 3 }} />
+          </div>
+          <span className="quot-score__value" style={{ fontWeight: 600, fontSize: 13, minWidth: 32, textAlign: 'right' }}>{displayScore}%</span>
+        </div>
       );
     },
   },
@@ -1631,13 +1640,14 @@ function ViewQuotationModal({
 // ═══════════════════════════════════════════════════════════════
 
 type HistoryEntry = {
+  id?: string;
   levelNumber: number;
   requiredRole: string;
   status: string;
   approverName: string | null;
   comments: string | null;
   actionAt: string | null;
-  deadline: string | null;
+  deadline?: string | null;
   createdAt: string;
 };
 
@@ -1645,10 +1655,12 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
   const [historyData, setHistoryData] = useState<{
     levels: HistoryEntry[];
     timeline: HistoryEntry[];
+    history?: HistoryEntry[];
     currentLevel: number;
     totalLevels: number;
     isComplete: boolean;
     isRejected: boolean;
+    isReturned?: boolean;
   } | null>(null);
 
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -1663,10 +1675,12 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
         const data = await apiRequest<{
           levels: HistoryEntry[];
           timeline: HistoryEntry[];
+          history?: HistoryEntry[];
           currentLevel: number;
           totalLevels: number;
           isComplete: boolean;
           isRejected: boolean;
+          isReturned?: boolean;
         }>(`/approvals/Quotations/${quotationId}/chain`);
         if (!cancelled) setHistoryData(data);
       } catch (err) {
@@ -1703,7 +1717,7 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
     );
   }
 
-  if (!historyData || historyData.levels.length === 0) {
+  if (!historyData || (historyData.levels.length === 0 && (!historyData.history || historyData.history.length === 0))) {
     return (
       <div className="rfq-modal__info-panel">
         <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 14 }}>
@@ -1727,6 +1741,7 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
     switch (status) {
       case 'APPROVED': return <CheckCircle2 size={14} style={{ color: '#107e3e' }} />;
       case 'REJECTED': return <XCircle size={14} style={{ color: '#bb0000' }} />;
+      case 'AUTO_REJECTED': return <XCircle size={14} style={{ color: '#bb0000' }} />;
       case 'RETURNED': return <RotateCcw size={14} style={{ color: '#e9730c' }} />;
       case 'PENDING': return <Clock size={14} style={{ color: '#e9730c' }} />;
       case 'AUTO_FORWARDED': return <AlertTriangle size={14} style={{ color: '#8b5cf6' }} />;
@@ -1739,6 +1754,7 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
     switch (status) {
       case 'APPROVED': return 'Approved';
       case 'REJECTED': return 'Rejected';
+      case 'AUTO_REJECTED': return 'Automatically Rejected';
       case 'RETURNED': return 'Returned';
       case 'PENDING': return 'Pending';
       case 'AUTO_FORWARDED': return 'Auto-Forwarded';
@@ -1751,6 +1767,7 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
     switch (status) {
       case 'APPROVED': return '#107e3e';
       case 'REJECTED': return '#bb0000';
+      case 'AUTO_REJECTED': return '#bb0000';
       case 'RETURNED': return '#e9730c';
       case 'PENDING': return '#e9730c';
       case 'AUTO_FORWARDED': return '#8b5cf6';
@@ -1758,7 +1775,9 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
     }
   };
 
-  const displayItems = historyData.timeline.length > 0 ? historyData.timeline : historyData.levels;
+  const displayItems = historyData.history && historyData.history.length > 0
+    ? historyData.history
+    : (historyData.timeline.length > 0 ? historyData.timeline : historyData.levels);
 
   return (
     <div className="rfq-modal__info-panel">
@@ -1771,12 +1790,24 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
         {historyData.isRejected && (
           <span className="quot-badge quot-badge--REJECTED" style={{ marginLeft: 'auto', fontSize: 11 }}>Rejected</span>
         )}
+        {historyData.isReturned && (
+          <span className="quot-badge quot-badge--RETURNED" style={{ marginLeft: 'auto', fontSize: 11, background: 'rgba(233,115,12,0.1)', color: '#e9730c' }}>Returned</span>
+        )}
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
         {displayItems.map((level, idx) => {
           const isLast = idx === displayItems.length - 1;
-          const isActive = level.status === 'PENDING';
+          const isOverallRejected = historyData.isRejected;
+          const status = isOverallRejected && (level.status === 'PENDING' || level.status === 'NOT_STARTED')
+            ? 'AUTO_REJECTED'
+            : level.status;
+          const isActive = status === 'PENDING';
+          const isRejected = status === 'REJECTED' || status === 'AUTO_REJECTED';
+          const comments = isOverallRejected && (level.status === 'PENDING' || level.status === 'NOT_STARTED')
+            ? (level.comments || 'Automatically rejected (quotation not awarded)')
+            : level.comments;
+
           return (
             <div key={idx} style={{ position: 'relative', paddingLeft: 32, paddingBottom: isLast ? 0 : 24 }}>
               {/* Timeline line */}
@@ -1784,7 +1815,7 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
                 <div style={{
                   position: 'absolute', left: 11, top: 20, bottom: 0, width: 2,
                   background: level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED'
-                    ? '#107e3e' : level.status === 'REJECTED' ? '#bb0000' : 'var(--border)',
+                    ? '#107e3e' : isRejected ? '#bb0000' : 'var(--border)',
                 }} />
               )}
               {/* Timeline dot */}
@@ -1792,16 +1823,16 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
                 position: 'absolute', left: 4, top: 4, width: 16, height: 16,
                 borderRadius: '50%',
                 background: isActive ? '#e9730c' : level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED'
-                  ? '#107e3e' : level.status === 'REJECTED' ? '#bb0000' : 'var(--surface-card)',
+                  ? '#107e3e' : isRejected ? '#bb0000' : 'var(--surface-card)',
                 border: `2px solid ${
                   isActive ? '#e9730c' : level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED'
-                    ? '#107e3e' : level.status === 'REJECTED' ? '#bb0000' : 'var(--border)'
+                    ? '#107e3e' : isRejected ? '#bb0000' : 'var(--border)'
                 }`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
                 {level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED' ? (
                   <CheckCircle2 size={10} style={{ color: '#fff' }} />
-                ) : level.status === 'REJECTED' ? (
+                ) : isRejected ? (
                   <XCircle size={10} style={{ color: '#fff' }} />
                 ) : (
                   <span style={{ fontSize: 9, fontWeight: 700, color: isActive ? '#fff' : 'var(--text-secondary)' }}>{level.levelNumber}</span>
@@ -1812,7 +1843,7 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
                 padding: '12px 14px',
                 background: isActive ? 'rgba(233,115,12,0.06)' : 'var(--surface-elevated)',
                 border: `1px solid ${
-                  isActive ? 'rgba(233,115,12,0.2)' : level.status === 'APPROVED' ? 'rgba(16,126,62,0.15)' : level.status === 'REJECTED' ? 'rgba(187,0,0,0.15)' : 'var(--border)'
+                  isActive ? 'rgba(233,115,12,0.2)' : level.status === 'APPROVED' ? 'rgba(16,126,62,0.15)' : isRejected ? 'rgba(187,0,0,0.15)' : 'var(--border)'
                 }`,
                 borderRadius: 8,
               }}>
@@ -1821,11 +1852,11 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
                     Level {level.levelNumber} — {level.requiredRole.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                   </span>
                   <span style={{
-                    fontSize: 11, fontWeight: 600, color: statusColor(level.status),
+                    fontSize: 11, fontWeight: 600, color: statusColor(status),
                     display: 'inline-flex', alignItems: 'center', gap: 3,
                   }}>
-                    {statusIcon(level.status)}
-                    {statusLabel(level.status)}
+                    {statusIcon(status)}
+                    {statusLabel(status)}
                   </span>
                 </div>
                 {level.approverName && (
@@ -1867,10 +1898,11 @@ function ActionModal({
 }: {
   modal: ActiveModal;
   onClose: () => void;
-  onConfirm: (type: ModalType, comment: string) => void;
+  onConfirm: (type: ModalType, comment: string, returnTarget?: 'LEVEL_1' | 'VENDOR') => void;
   onViewPlan?: (plan: { name: string; milestones: Array<{ id: string; title: string; percentage: number }> }) => void;
 }) {
   const [comment, setComment] = useState('');
+  const [returnTarget, setReturnTarget] = useState<'LEVEL_1' | 'VENDOR'>('LEVEL_1');
   const { type, quotation: q } = modal;
   const { formatAmount } = useCurrency();
 
@@ -1987,7 +2019,7 @@ function ActionModal({
               />
             </div>
             <span className={`quot-action-modal__score-value quot-action-modal__score-value--${getScoreClass(q.score)}`}>
-              {q.score}
+              {q.score}%
             </span>
           </div>
 
@@ -2050,6 +2082,45 @@ function ActionModal({
             </div>
           )}
 
+          {/* Return Target Selection */}
+          {type === 'return' && (
+            <div style={{ margin: '14px 0', padding: 12, background: '#f7f9fa', border: '1px solid #d9d9d9', borderRadius: 6 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#32363a', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Return Destination
+              </label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 13, color: '#32363a' }}>
+                  <input
+                    type="radio"
+                    name="returnTarget"
+                    value="LEVEL_1"
+                    checked={returnTarget === 'LEVEL_1'}
+                    onChange={() => setReturnTarget('LEVEL_1')}
+                    style={{ marginTop: 3, accentColor: '#0a6ed1' }}
+                  />
+                  <div>
+                    <div style={{ fontWeight: 600, color: '#0070c0' }}>Return to Level 1</div>
+                    <div style={{ fontSize: 11, color: '#6a6d70', marginTop: 2 }}>Restart approval chain starting at Level 1 (Clerk review first)</div>
+                  </div>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 13, color: '#32363a' }}>
+                  <input
+                    type="radio"
+                    name="returnTarget"
+                    value="VENDOR"
+                    checked={returnTarget === 'VENDOR'}
+                    onChange={() => setReturnTarget('VENDOR')}
+                    style={{ marginTop: 3, accentColor: '#0a6ed1' }}
+                  />
+                  <div>
+                    <div style={{ fontWeight: 600, color: '#bb0000' }}>Return to Vendor for Resubmission</div>
+                    <div style={{ fontSize: 11, color: '#6a6d70', marginTop: 2 }}>Send feedback email & notification to Vendor so they can revise and resubmit</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+          )}
+
           {/* Comment box for non-view modals */}
           {type !== 'view' && (
             <div className="quot-action-modal__comment">
@@ -2081,7 +2152,7 @@ function ActionModal({
           {config.confirmLabel && (
             <button
               className={`quot-action-modal__btn ${config.confirmClass}`}
-              onClick={() => onConfirm(type, comment)}
+              onClick={() => onConfirm(type, comment, type === 'return' ? returnTarget : undefined)}
               disabled={type === 'return' && !comment.trim()}
             >
               {config.icon}
@@ -2104,6 +2175,15 @@ export default function QuotationsPage() {
   const rfqFromUrl = searchParams.get('rfq');
   const { formatAmount, convert, companyDefaultCurrency } = useCurrency();
   const [displayCurrency, setDisplayCurrency] = useState<string>('');
+  const { roles } = useAuth();
+  const [startLevelPromptState, setStartLevelPromptState] = useState<{
+    id: number | string;
+    apiStatus: string;
+    comment: string;
+    displayStatus: QuotStatus;
+    previousStatus: QuotStatus;
+    modalQuotation: MockQuotation;
+  } | null>(null);
   const [compareModalOpen, setCompareModalOpen] = useState(false);
 
   const { data: serverQuotations, loading, error, reload, forceRefresh } = useServiceData(
@@ -2854,27 +2934,55 @@ export default function QuotationsPage() {
     },
   }), [formatAmount, displayCurrency, activeDisplayCurrency, evalSource]);
 
-  // ── Map quotation ID → evaluation score from evaluatedSuppliers ──
+  // ── Map quotation ID → evaluation score for ALL quotations ──
   const evalScoreMap = useMemo(() => {
-    const map = new Map<number, number>();
-    const hasEval = ((selectedRfqType === 'TENDER' || selectedRfqType === 'CUSTOM') && evalCategories.length > 0) ||
-                    (simpleEvalData !== null);
-    if (!hasEval) return map;
-    for (const s of evaluatedSuppliers) {
-      if (s.recommendationScore) {
-        map.set(s.id, Math.round(s.recommendationScore));
+    const map = new Map<number | string, number>();
+
+    // 1. Populate from evaluatedSuppliers if available (e.g. for active selectedRFQ with evaluation data)
+    if (evaluatedSuppliers && evaluatedSuppliers.length > 0) {
+      for (const s of evaluatedSuppliers) {
+        const val = s.recommendationScore ?? s.score;
+        if (val !== undefined && val !== null && val > 0) {
+          map.set(s.id, Math.round(val));
+        }
       }
     }
+
+    // 2. Group all compareSource quotations by RFQ to compute standard scores for ALL RFQs
+    const groupsByRfq = new Map<string, MockQuotation[]>();
+    for (const q of compareSource) {
+      const rfqKey = String(q.rfqNumber || q.rfqId || 'UNKNOWN');
+      if (!groupsByRfq.has(rfqKey)) {
+        groupsByRfq.set(rfqKey, []);
+      }
+      groupsByRfq.get(rfqKey)!.push(q);
+    }
+
+    // 3. For any quotation not in evaluatedSuppliers, compute standard score against its RFQ group
+    for (const [_rfqKey, group] of groupsByRfq.entries()) {
+      for (const q of group) {
+        if (!map.has(q.id)) {
+          const { finalScore } = computeStandardVendorScores(group, q, rfqCustomFields, q);
+          if (finalScore > 0) {
+            map.set(q.id, Math.round(finalScore));
+          }
+        }
+      }
+    }
+
     return map;
-  }, [selectedRfqType, evaluatedSuppliers, evalCategories, simpleEvalData]);
+  }, [evaluatedSuppliers, compareSource, rfqCustomFields]);
 
   // ── Apply evaluation scores to paginated listing data for display ──
   const displayQuotations = useMemo(() => {
-    if (evalScoreMap.size === 0) return paginatedQuotations;
     return paginatedQuotations.map(q => {
       const evalScore = evalScoreMap.get(q.id);
-      if (!evalScore) return q;
-      return { ...q, score: evalScore };
+      if (evalScore !== undefined) {
+        return { ...q, score: evalScore, recommendationScore: evalScore };
+      }
+      const rawScore = q.recommendationScore ?? q.score ?? 0;
+      const normalized = rawScore <= 5 ? Math.round(rawScore * 20) : Math.round(rawScore);
+      return { ...q, score: normalized, recommendationScore: normalized };
     });
   }, [paginatedQuotations, evalScoreMap]);
 
@@ -2889,21 +2997,14 @@ export default function QuotationsPage() {
     setActiveModal(null);
   };
 
-  const handleConfirm = async (type: ModalType, comment: string) => {
-    // Use the ref instead of activeModal state to avoid stale-closure issues
-    // when the parent re-renders before the user clicks confirm
+  const handleConfirm = async (type: ModalType, comment: string, returnTarget?: 'LEVEL_1' | 'VENDOR') => {
     const modal = activeModalRef.current;
     if (!modal) return;
     const id = modal.quotation.id;
     const previousStatus = modal.quotation.status;
 
-    // ── INTERCEPT ACCEPT: Show PostAwardModal BEFORE approval (only for FINAL approver) ──
-    // When the final approver clicks Accept, show the modal first asking
-    // what they would like to create (Contract, PO, or Cancel).
-    // Only after their selection do we proceed with the actual approval.
     if (type === 'accept') {
       try {
-        // Fetch approval chain to check if current user is the FINAL approver
         const chain = await apiRequest<{
           currentLevel: number;
           totalLevels: number;
@@ -2911,14 +3012,10 @@ export default function QuotationsPage() {
           isRejected: boolean;
         }>(`/approvals/Quotations/${modal.quotation.id}/chain`);
 
-        // Only show PostAwardModal if this is the final level
         if (chain.currentLevel >= chain.totalLevels) {
-          // Mark quotation as final-approver so getDisplayStatus shows the
-          // actual backend status instead of overriding to ACCEPTED.
           finalApproverIdsRef.current.add(modal.quotation.id);
           const finalApproverQuotation = { ...modal.quotation, isFinalApprover: true };
           setPendingApprovalQuotation(finalApproverQuotation);
-          // Also sync the quotations list so the status badge stays accurate
           setQuotations(prev => prev.map(q =>
             q.id === modal.quotation.id ? { ...q, isFinalApprover: true } : q
           ));
@@ -2926,20 +3023,25 @@ export default function QuotationsPage() {
           closeModal();
           return;
         }
+
+        // If the quotation ALREADY has an active approval chain (currentLevel > 0 or status is UNDER_REVIEW),
+        // the user is acting as an APPROVER in the chain, NOT the Originator initiating the workflow.
+        // Do NOT show CreatorLevelPromptModal — execute approval action directly.
+        if (chain.currentLevel > 0 || modal.quotation.status === 'UNDER_REVIEW') {
+          closeModal();
+          await executeUpdateQuotationStatus(id, 'ACCEPTED', comment, 'ACCEPTED', previousStatus, modal.quotation, 'accept');
+          return;
+        }
       } catch (err) {
         console.error('Failed to check approval level, proceeding with normal flow:', err);
       }
-      // Fall through to normal approval flow for non-final approvers
     }
 
-
-    // Display status for optimistic update (what user sees)
     const displayStatusMap: Partial<Record<NonNullable<ModalType>, QuotStatus>> = {
       accept: 'ACCEPTED',
       reject: 'REJECTED',
-      return: 'RETURNED',
+      return: returnTarget === 'LEVEL_1' ? 'UNDER_REVIEW' : 'RETURNED',
     };
-    // API status — backend expects 'SUBMITTED' to map to RETURN action
     const apiStatusMap: Record<string, string> = {
       accept: 'ACCEPTED',
       reject: 'REJECTED',
@@ -2951,10 +3053,32 @@ export default function QuotationsPage() {
 
     if (!displayStatus || !apiStatus) return;
 
-    // Optimistic update — show ACCEPTED/RETURNED instantly on Approver 1's screen.
-    // For accept with multi-level approval, the backend only sends SSE to
-    // next-level users (not broadcast), so Approver 1's optimistic update
-    // stays intact — no reload overwrites it.
+    if (type === 'accept' && isL2OrHigherUser(roles)) {
+      setStartLevelPromptState({
+        id,
+        apiStatus,
+        comment,
+        displayStatus,
+        previousStatus,
+        modalQuotation: modal.quotation,
+      });
+      return;
+    }
+
+    await executeUpdateQuotationStatus(id, apiStatus, comment, displayStatus, previousStatus, modal.quotation, type, undefined, returnTarget);
+  };
+
+  const executeUpdateQuotationStatus = async (
+    id: number | string,
+    apiStatus: string,
+    comment: string,
+    displayStatus: QuotStatus,
+    previousStatus: QuotStatus,
+    modalQuotation: MockQuotation,
+    type: ModalType,
+    startLevelNumber?: number,
+    returnTarget?: 'LEVEL_1' | 'VENDOR'
+  ) => {
     setQuotations(prev => prev.map(q => q.id === id ? { ...q, status: displayStatus } : q));
     if (type === 'accept') {
       setToast({ message: 'Submitting acceptance...', type: 'success' });
@@ -2963,26 +3087,18 @@ export default function QuotationsPage() {
     }
 
     try {
-      const response = await quotationService.updateStatus(id, apiStatus, comment);
-      // Show appropriate toast based on action and response
+      const response = await quotationService.updateStatus(id, apiStatus, comment, startLevelNumber, returnTarget);
       if (type === 'accept') {
         if (response?.nextLevel === true) {
-          // More approval levels remain — forwarded to next level
           setToast({ message: response?.message || 'Forwarded to the next approval level.', type: 'success' });
-          // Don't reload — server status hasn't changed (more approval levels).
-          // The optimistic ACCEPTED stays on Approver 1's screen.
-          // SSE only goes to next-level users, so Approver 1 won't get overwritten.
         } else {
-          // All levels complete — show post-award modal then reload to sync
           setToast({ message: response?.message || 'Quotation accepted successfully!', type: 'success' });
-          setPostAwardQuotation(modal.quotation);
+          setPostAwardQuotation(modalQuotation);
           reload();
         }
       } else if (type === 'return') {
-        // Return — keep optimistic update instantly, no reload
         setToast({ message: response?.message || 'Quotation returned for revision.', type: 'success' });
       } else {
-        // Reject — reload to sync final server state
         if (type === 'reject') {
           setToast({ message: response?.message || 'Quotation rejected.', type: 'success' });
         }
@@ -2990,10 +3106,16 @@ export default function QuotationsPage() {
       }
     } catch (err) {
       console.error('Failed to update quotation status:', err);
-      // Revert optimistic update
       setQuotations(prev => prev.map(q => q.id === id ? { ...q, status: previousStatus } : q));
       setToast({ message: err instanceof Error ? err.message : 'Failed to update quotation status', type: 'error' });
     }
+  };
+
+  const handleStartLevelConfirm = async (startLevelNumber: number) => {
+    if (!startLevelPromptState) return;
+    const { id, apiStatus, comment, displayStatus, previousStatus, modalQuotation } = startLevelPromptState;
+    setStartLevelPromptState(null);
+    await executeUpdateQuotationStatus(id, apiStatus, comment, displayStatus, previousStatus, modalQuotation, 'accept', startLevelNumber);
   };
 
   // ── Winning quotation validation before contract generation ──
@@ -3818,8 +3940,12 @@ export default function QuotationsPage() {
         />
       )}
 
-
-
+      <CreatorLevelPromptModal
+        isOpen={!!startLevelPromptState}
+        moduleName="Quotation"
+        onConfirm={handleStartLevelConfirm}
+        onCancel={() => setStartLevelPromptState(null)}
+      />
     </div>
   );
 }

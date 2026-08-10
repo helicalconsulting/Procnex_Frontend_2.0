@@ -72,15 +72,31 @@ async function reject(id: string, comment?: string): Promise<ApprovalActionResul
   });
 }
 
-async function returnRequest(id: string, comment?: string): Promise<ApprovalActionResult> {
+async function returnRequest(id: string, comment?: string, returnTarget?: 'LEVEL_1' | 'VENDOR'): Promise<ApprovalActionResult> {
   if (USE_MOCK) {
-    console.log(`Returned ${id}`, comment);
+    console.log(`Returned ${id}`, comment, returnTarget);
     return {};
   }
   return apiRequest<ApprovalActionResult>(`/approvals/${id}/return`, {
     method: 'POST',
-    body: JSON.stringify({ comments: comment }),
+    body: JSON.stringify({ comments: comment, returnTarget }),
   });
+}
+
+async function resubmit(module: string, referenceId: string, startLevelNumber?: number): Promise<ApprovalActionResult> {
+  if (USE_MOCK) {
+    console.log(`Resubmitted ${module}#${referenceId}`, startLevelNumber);
+    return {};
+  }
+  return apiRequest<ApprovalActionResult>('/approvals/resubmit', {
+    method: 'POST',
+    body: JSON.stringify({ module, referenceId, startLevelNumber }),
+  });
+}
+
+async function getChain(module: string, referenceId: string): Promise<any> {
+  if (USE_MOCK) return { levels: [], history: [] };
+  return apiRequest<any>(`/approvals/${module}/${referenceId}/chain`);
 }
 
 export const approvalService = {
@@ -90,4 +106,6 @@ export const approvalService = {
   approve,
   reject,
   return: returnRequest,
+  resubmit,
+  getChain,
 };

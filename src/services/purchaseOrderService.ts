@@ -35,14 +35,14 @@ async function apiList(params?: { page?: number; limit?: number }): Promise<List
 
 export const purchaseOrderService = {
   list: USE_MOCK ? mockList : apiList,
-  async create(rfqId: string, notes?: string): Promise<{ poNumber: string; id: string }> {
+  async create(rfqId: string, notes?: string, startLevelNumber?: number): Promise<{ poNumber: string; id: string }> {
     if (USE_MOCK) {
       await new Promise(r => setTimeout(r, 400));
       return { id: String(Date.now()), poNumber: `PO-${Date.now()}` };
     }
     const data = await apiRequest<{ poNumber: string; id: string }>('/purchase-orders', {
       method: 'POST',
-      body: JSON.stringify({ rfqId, notes }),
+      body: JSON.stringify({ rfqId, notes, startLevelNumber }),
     });
     return data;
   },

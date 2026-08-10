@@ -28,10 +28,16 @@ async function getById(id: number): Promise<Quotation | null> {
   return q ? normalizeQuotation(q) : null;
 }
 
-async function updateStatus(id: number, status: string, comment?: string): Promise<{ nextLevel?: boolean; message?: string }> {
+async function updateStatus(
+  id: number | string,
+  status: string,
+  comment?: string,
+  startLevelNumber?: number,
+  returnTarget?: 'LEVEL_1' | 'VENDOR'
+): Promise<{ nextLevel?: boolean; message?: string }> {
   return apiRequest<{ nextLevel?: boolean; message?: string }>(`/quotations/${id}/status`, {
     method: 'PUT',
-    body: JSON.stringify({ status, comments: comment }),
+    body: JSON.stringify({ status, comments: comment, startLevelNumber, returnTarget }),
   });
 }
 
@@ -79,6 +85,13 @@ async function rejectBidSecurity(quotationId: string, reason: string): Promise<Q
   });
 }
 
+async function sendToApproval(id: string, startLevelNumber?: number): Promise<void> {
+  return apiRequest<void>(`/quotations/${id}/send-to-approval`, {
+    method: 'POST',
+    body: JSON.stringify({ startLevelNumber }),
+  });
+}
+
 export const quotationService = {
   getBidSecurity,
   uploadBidSecurity,
@@ -88,6 +101,7 @@ export const quotationService = {
   listAll,
   getById,
   updateStatus,
+  sendToApproval,
   getStats,
   updateSelectedItems,
 };

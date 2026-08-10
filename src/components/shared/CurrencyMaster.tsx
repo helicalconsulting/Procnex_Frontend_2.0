@@ -593,6 +593,7 @@ interface CurrencySelectorProps {
   size?: 'sm' | 'md';
   className?: string;
   style?: React.CSSProperties;
+  showRefresh?: boolean;
 }
 
 export function CurrencySelector({
@@ -603,6 +604,7 @@ export function CurrencySelector({
   size = 'md',
   className = '',
   style,
+  showRefresh = false,
 }: CurrencySelectorProps) {
   const { currencies, loading, refresh } = useCurrency();
   const [open, setOpen] = useState(false);
@@ -686,15 +688,17 @@ export function CurrencySelector({
             <ChevronDown size={size === 'sm' ? 12 : 14} className={`cur-selector__chevron ${open ? 'cur-selector__chevron--up' : ''}`} />
           </span>
         </button>
-        <button
-          type="button"
-          className={`cur-selector__refresh ${loading ? 'cur-selector__refresh--spinning' : ''}`}
-          onClick={refresh}
-          title="Refresh exchange rates"
-          disabled={loading}
-        >
-          <RefreshCw size={size === 'sm' ? 11 : 13} />
-        </button>
+        {showRefresh && (
+          <button
+            type="button"
+            className={`cur-selector__refresh ${loading ? 'cur-selector__refresh--spinning' : ''}`}
+            onClick={refresh}
+            title="Refresh exchange rates"
+            disabled={loading}
+          >
+            <RefreshCw size={size === 'sm' ? 11 : 13} />
+          </button>
+        )}
       </div>
 
       {/* FloatingMenu renders the dropdown via portal to document.body.

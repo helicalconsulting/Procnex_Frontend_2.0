@@ -12,10 +12,12 @@ import {
   ChevronDown,
   Home,
   ChevronRight,
+  CalendarDays,
 } from 'lucide-react';
 import { isVendor } from '../../utils/rbac';
 import VendorNotificationBell from './VendorNotificationBell';
 import AdminNotificationBell from './AdminNotificationBell';
+import HeaderCalendarPopover from './HeaderCalendarPopover';
 import './TopBar.css';
 
 // ─── Page title mapping ─────────────────────────────────────
@@ -127,13 +129,27 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const dropdownPopupRef = useRef<HTMLDivElement>(null);
+  const calendarRef = useRef<HTMLDivElement>(null);
 
   const handleMyProfile = () => {
     setDropdownOpen(false);
     navigate(isVendor(roles) ? '/vendor/profile' : '/profile');
   };
+
+  // Close calendar on click outside
+  useEffect(() => {
+    if (!isCalendarOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (calendarRef.current && !calendarRef.current.contains(e.target as Node)) {
+        setIsCalendarOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [isCalendarOpen]);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -192,6 +208,21 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
 
       {/* Right — Actions */}
       <div className="topbar__right">
+        {/* Calendar toggle */}
+        <div style={{ position: 'relative' }} ref={calendarRef}>
+          <button
+            className="topbar__icon-btn"
+            onClick={() => setIsCalendarOpen(!isCalendarOpen)}
+            title="Open Laptop Calendar"
+            aria-label="Toggle calendar"
+          >
+            <CalendarDays size={17} />
+          </button>
+          {isCalendarOpen && (
+            <HeaderCalendarPopover onClose={() => setIsCalendarOpen(false)} />
+          )}
+        </div>
+
         {/* Theme toggle */}
         <button
           className="topbar__icon-btn"

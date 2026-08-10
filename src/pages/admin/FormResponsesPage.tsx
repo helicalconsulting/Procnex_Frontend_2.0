@@ -745,7 +745,7 @@ export default function FormResponsesPage() {
                           'admin@heliflow.com'
                         );
                         setSelectedResponse(null);
-                        loadData();
+                        loadAllSubmissions();
                         if (res.isFinalCompletion) {
                           alert('🎉 Final approval level completed! Form workflow is finished.');
                         } else {

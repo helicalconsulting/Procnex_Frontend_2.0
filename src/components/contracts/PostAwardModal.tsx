@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { contractService } from '../../services/contractService';
+import { useAuth } from '../../context/AuthContext';
+import { isL2OrHigherUser } from '../../utils/rbac';
+import { CreatorLevelPromptModal } from '../shared/CreatorLevelPromptModal';
 import { MessageStrip } from '../shared/MessageStrip';
 import {
   ShoppingCart, FileText, X, Clock, DollarSign, Building2,
@@ -14,7 +17,7 @@ export interface PostAwardModalProps {
   currency: string;
   rfqId: string;
   onClose: () => void;
-  onNavigatePO: () => void;
+  onNavigatePO: (startLevelNumber?: number) => void;
   onNavigateContract: () => Promise<void>;
   /**
    * When set, the modal operates in pre-approval mode:
@@ -24,7 +27,7 @@ export interface PostAwardModalProps {
    */
   preAwardMode?: boolean;
   /** Required in preAwardMode: called before navigating to PO/contract */
-  onApproveFirst?: () => Promise<void>;
+  onApproveFirst?: (startLevelNumber?: number) => Promise<void>;
 }
 
 export default function PostAwardModal({
@@ -39,35 +42,44 @@ export default function PostAwardModal({
   preAwardMode = false,
   onApproveFirst,
 }: PostAwardModalProps) {
+  const { roles } = useAuth();
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showLevelPrompt, setShowLevelPrompt] = useState(false);
 
   useBodyScrollLock(true);
 
+  const executePoAction = async (startLevelNumber?: number) => {
+    setSaving('PO_CREATED');
+    setError(null);
+    try {
+      if (preAwardMode && onApproveFirst) {
+        await onApproveFirst(startLevelNumber);
+      }
+      if (!preAwardMode) {
+        await contractService.updatePostAwardDecision(rfqId, 'PO_CREATED');
+      }
+      await onNavigatePO(startLevelNumber);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save decision');
+    } finally {
+      setSaving(null);
+    }
+  };
+
   const handleSelect = async (decision: 'PO_CREATED' | 'CONTRACT_CREATED' | 'DISMISSED') => {
+    if (decision === 'PO_CREATED') {
+      await executePoAction();
+      return;
+    }
+
     setSaving(decision);
     setError(null);
     try {
-      if (preAwardMode && onApproveFirst && decision === 'PO_CREATED') {
-        // Approve quotation before creating PO.
-        // For CONTRACT_CREATED, approval is deferred to when the user actually
-        // clicks "Generate" in the ContractTemplateSelectModal — this prevents
-        // the quotation from showing as ACCEPTED before the contract is generated.
-        await onApproveFirst();
-      }
-
-      // In preAwardMode, skip updatePostAwardDecision — the decision is saved
-      // later when the contract is generated (generateContractFromTemplate sets it)
-      // or when the PO is created.
       if (!preAwardMode) {
         await contractService.updatePostAwardDecision(rfqId, decision);
       }
-      
-      if (decision === 'PO_CREATED') {
-        await onNavigatePO();
-        // Parent closes the modal — return early to avoid finally's setSaving(null) on unmounted component
-        return;
-      } else if (decision === 'CONTRACT_CREATED') {
+      if (decision === 'CONTRACT_CREATED') {
         await onNavigateContract();
       } else {
         onClose();
@@ -169,6 +181,16 @@ export default function PostAwardModal({
           </div>
         </div>
       </div>
+
+      <CreatorLevelPromptModal
+        isOpen={showLevelPrompt}
+        moduleName="Purchase Order"
+        onConfirm={(startLevelNumber) => {
+          setShowLevelPrompt(false);
+          void executePoAction(startLevelNumber);
+        }}
+        onCancel={() => setShowLevelPrompt(false)}
+      />
     </div>
   );
 }

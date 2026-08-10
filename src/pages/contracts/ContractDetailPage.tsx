@@ -264,7 +264,7 @@ export default function ContractDetailPage() {
     () => contractService.getContract(id!).then(r => r),
     null as { contract: Contract; activity: unknown[] } | null,
     [id],
-    { cacheKey: `contract:${id}`, cacheTtlMs: 30000 }
+    { cacheKey: `contract:${id}`, cacheTtlMs: 0 }
   );
 
   // Check if we should open sign modal from query param
@@ -314,9 +314,10 @@ export default function ContractDetailPage() {
 
   const handleCreatePO = useCallback(async () => {
     if (!id) return;
+    if (contractBalance && contractBalance.remainingValue <= 0) return;
     // Navigate to Purchase Requisition page with contract data pre-fill
     navigate(`/procurement/purchase-requisition/${data?.contract?.rfqId || ''}?contractId=${id}`);
-  }, [id, navigate, data?.contract?.rfqId]);
+  }, [id, navigate, data?.contract?.rfqId, contractBalance]);
 
   const handleSendToVendor = useCallback(async () => {
     if (!id) return;
@@ -448,6 +449,7 @@ export default function ContractDetailPage() {
   const canCreatePO = ['ACCEPTED', 'VENDOR_SIGNED', 'COMPLETED', 'ACTIVE'].includes(contract.status);
   const canTerminate = ['ACCEPTED', 'VENDOR_SIGNED', 'COMPLETED', 'ACTIVE', 'EXPIRING_SOON'].includes(contract.status);
   const canEdit = contract.status === 'DRAFT';
+  const isLimitReached = contractBalance ? contractBalance.remainingValue <= 0 : false;
 
   const handlePrint = () => {
     const win = window.open('', '_blank');
@@ -520,8 +522,13 @@ export default function ContractDetailPage() {
             )}
             {/* Create PO — only show for accepted/vendor-signed/active contracts */}
             {canCreatePO && (
-              <button className="ctr-detail__action-btn ctr-detail__action-btn--primary" onClick={handleCreatePO} disabled={creatingPO}>
-                <Plus size={14} /> {creatingPO ? 'Creating PO…' : 'Create Purchase Order'}
+              <button
+                className="ctr-detail__action-btn ctr-detail__action-btn--primary"
+                onClick={handleCreatePO}
+                disabled={creatingPO || isLimitReached}
+                title={isLimitReached ? "Limit Reached — 100% Contract Value Consumed" : "Create Purchase Order"}
+              >
+                <Plus size={14} /> {isLimitReached ? 'Limit Reached' : creatingPO ? 'Creating PO…' : 'Create Purchase Order'}
               </button>
             )}
           </div>
@@ -864,8 +871,13 @@ export default function ContractDetailPage() {
             )}
             {canCreatePO && (
               <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'center', marginTop: 8 }}>
-                <button className="ctr-detail__action-btn ctr-detail__action-btn--primary" onClick={handleCreatePO} disabled={creatingPO}>
-                  <Plus size={14} /> {creatingPO ? 'Creating PO…' : 'Create Purchase Order'}
+                <button
+                  className="ctr-detail__action-btn ctr-detail__action-btn--primary"
+                  onClick={handleCreatePO}
+                  disabled={creatingPO || isLimitReached}
+                  title={isLimitReached ? "Limit Reached — 100% Contract Value Consumed" : "Create Purchase Order"}
+                >
+                  <Plus size={14} /> {isLimitReached ? 'Limit Reached' : creatingPO ? 'Creating PO…' : 'Create Purchase Order'}
                 </button>
                 {canTerminate && (
                   <button className="ctr-detail__action-btn ctr-detail__action-btn--danger" onClick={() => setShowTerminateConfirm(true)}>
@@ -950,8 +962,13 @@ export default function ContractDetailPage() {
                   </tbody>
                 </table>
                 <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)' }}>
-                  <button className="ctr-detail__action-btn ctr-detail__action-btn--primary" onClick={handleCreatePO}>
-                    <Plus size={14} /> Create Another Purchase Order
+                  <button
+                    className="ctr-detail__action-btn ctr-detail__action-btn--primary"
+                    onClick={handleCreatePO}
+                    disabled={creatingPO || isLimitReached}
+                    title={isLimitReached ? "Limit Reached — 100% Contract Value Consumed" : "Create Another Purchase Order"}
+                  >
+                    <Plus size={14} /> {isLimitReached ? 'Limit Reached' : 'Create Another Purchase Order'}
                   </button>
                 </div>
               </>
@@ -965,8 +982,13 @@ export default function ContractDetailPage() {
                     : 'Purchase orders linked to this contract will appear here once the contract is accepted.'}
                 </p>
                 {canCreatePO && (
-                  <button className="ctr-detail__action-btn ctr-detail__action-btn--primary" onClick={handleCreatePO}>
-                    <Plus size={14} /> Create Purchase Order
+                  <button
+                    className="ctr-detail__action-btn ctr-detail__action-btn--primary"
+                    onClick={handleCreatePO}
+                    disabled={creatingPO || isLimitReached}
+                    title={isLimitReached ? "Limit Reached — 100% Contract Value Consumed" : "Create Purchase Order"}
+                  >
+                    <Plus size={14} /> {isLimitReached ? 'Limit Reached' : 'Create Purchase Order'}
                   </button>
                 )}
               </div>

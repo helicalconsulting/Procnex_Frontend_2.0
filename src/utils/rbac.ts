@@ -338,7 +338,7 @@ function filterMenuByPermissions(
       }
 
       if (item.id === 'admin') {
-        const hasAdminRole = item.roles.some((r) => roles.includes(r));
+        const hasAdminRole = item.roles.some((r) => roles.includes(r)) || isAdmin(roles);
         if (!children?.length && !hasAdminRole) return null;
         return { ...item, children };
       }
@@ -373,7 +373,13 @@ export function getAccessibleMenuItems(
       if (isAdminUser || isVendorUser) return false;
       return true;
     }
-    return item.roles.some((r) => roles.includes(r));
+    const hasRole = item.roles.some((r) => roles.includes(r));
+    if (hasRole) return true;
+    // Allow custom non-vendor roles access to general employee items
+    if (!isVendorUser && ['dashboard', 'forms', 'notifications'].includes(item.id)) {
+      return true;
+    }
+    return false;
   }).map((item) => ({
     ...item,
     children: item.children?.filter((child) => child.roles.some((r) => roles.includes(r))),
@@ -399,4 +405,24 @@ export function isAdmin(roles: string[]): boolean {
 
 export function hasApprovalRole(roles: string[]): boolean {
   return roles.includes(RoleName.PROCUREMENT_MANAGER) || roles.includes(RoleName.FINANCE_MANAGER) || roles.includes(RoleName.FINANCE_APPROVER);
+}
+
+export function isL2OrHigherUser(roles: string[]): boolean {
+  if (!roles || roles.length === 0) return false;
+  const l2Roles = [
+    RoleName.SUPER_ADMIN,
+    RoleName.ADMINISTRATOR,
+    RoleName.PROCUREMENT_MANAGER,
+    RoleName.FINANCE_MANAGER,
+    RoleName.FINANCE_APPROVER,
+    'admin',
+    'super_admin',
+    'l2',
+    'l3',
+    'level 2',
+    'level 3',
+    'purchase_manager',
+    'purchase manager',
+  ];
+  return roles.some((r) => l2Roles.some((l2) => r.toLowerCase().includes(l2.toLowerCase())));
 }

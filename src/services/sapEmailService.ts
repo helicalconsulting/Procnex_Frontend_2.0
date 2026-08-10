@@ -1,5 +1,5 @@
 import { adminService } from './adminService';
-import type { FormSubmissionInstance } from './formWorkflowService';
+import { isRoleMatching, type FormSubmissionInstance } from './formWorkflowService';
 
 export interface SapEmailLog {
   id: string;
@@ -248,10 +248,8 @@ export const sapEmailService = {
       const level1Approvers = allUsers.filter(
         (u) =>
           u.isActive !== false &&
-          (u.role === level1Role ||
-            (u as any).roles?.includes(level1Role) ||
-            u.role === 'Super Admin' ||
-            u.role === 'Administrator')
+          (isRoleMatching(level1Role, u.role, String(u.id)) ||
+            ((u as any).roles && (u as any).roles.some((r: string) => isRoleMatching(level1Role, r, String(u.id)))))
       );
 
       for (const app of level1Approvers) {
@@ -341,10 +339,8 @@ export const sapEmailService = {
       const nextApprovers = allUsers.filter(
         (u) =>
           u.isActive !== false &&
-          (u.role === nextRole ||
-            (u as any).roles?.includes(nextRole) ||
-            u.role === 'Super Admin' ||
-            u.role === 'Administrator')
+          (isRoleMatching(nextRole, u.role, String(u.id)) ||
+            ((u as any).roles && (u as any).roles.some((r: string) => isRoleMatching(nextRole, r, String(u.id)))))
       );
 
       for (const app of nextApprovers) {

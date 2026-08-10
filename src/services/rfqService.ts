@@ -29,6 +29,7 @@ export interface CreateRfqPayload {
   }>;
   vendorIds?: string[];
   rfqType?: 'RFQ' | 'TENDER';
+  startLevelNumber?: number;
   customFields?: Array<{
     fieldName: string;
     fieldType: 'text' | 'number' | 'date' | 'attachment';

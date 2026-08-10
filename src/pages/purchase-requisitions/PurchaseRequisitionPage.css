@@ -275,68 +275,75 @@
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 16px;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 
 .pr-kpi-card {
+  padding: 20px;
+  border-radius: var(--radius-lg);
   background: var(--surface-card);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg, 14px);
-  padding: 20px 24px;
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 16px;
   box-shadow: var(--shadow-sm);
-  transition: all 0.2s ease;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
 }
 
 .pr-kpi-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
   border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.pr-kpi-card--active {
+  border-color: var(--primary-500) !important;
+  box-shadow: 0 2px 12px rgba(10, 110, 209, 0.15) !important;
+  transform: translateY(-2px);
 }
 
 .pr-kpi-icon {
-  width: 50px;
-  height: 50px;
-  border-radius: 12px;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: rgba(10, 110, 209, 0.08);
-  color: var(--primary-500, #0a6ed1);
+  background: rgba(10, 110, 209, 0.1);
+  color: var(--primary-500);
 }
 
 .pr-kpi-icon--grand {
-  background: linear-gradient(135deg, #0a6ed1 0%, #0854a0 100%);
-  color: #ffffff;
-  box-shadow: 0 4px 12px rgba(10, 110, 209, 0.3);
+  background: rgba(10, 110, 209, 0.1);
+  color: var(--primary-500);
 }
 
 .pr-kpi-info {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
 }
 
 .pr-kpi-label {
-  font-size: 11.5px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.6px;
+  letter-spacing: 0.4px;
 }
 
 .pr-kpi-value {
-  font-size: 22px;
-  font-weight: 800;
+  font-size: 26px;
+  font-weight: 700;
   color: var(--text-primary);
-  font-family: var(--font-mono, monospace);
+  line-height: 1.1;
+  font-family: inherit;
 }
 
 .pr-kpi-value--grand {
-  color: var(--primary-500, #0a6ed1);
+  color: var(--primary-500);
 }
 
 /* ── Content Layout ───────────────────────────────────────── */
@@ -685,59 +692,139 @@
   font-weight: 800;
 }
 
-/* ── SAP Fiori Contract Balance Gauge / Banner ─────────────── */
+/* ── SAP Fiori Contract Balance Gauge / Banner (Enterprise Edition) ───────── */
 
 .pr-contract-balance {
-  background: linear-gradient(135deg, rgba(10, 110, 209, 0.06) 0%, rgba(10, 110, 209, 0.02) 100%);
-  border: 1px solid rgba(10, 110, 209, 0.2);
-  border-radius: var(--radius-lg, 12px);
-  padding: 20px 24px;
+  background: var(--surface-card, #ffffff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  padding: 22px 26px;
   margin-bottom: 24px;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.02);
   animation: prFadeIn 0.3s ease;
+  position: relative;
+  overflow: hidden;
 }
 
 [data-theme="dark"] .pr-contract-balance {
-  background: linear-gradient(135deg, rgba(10, 110, 209, 0.12) 0%, rgba(10, 110, 209, 0.04) 100%);
-  border-color: rgba(77, 177, 255, 0.3);
+  background: #111827;
+  border-color: #1f293d;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
 }
 
-.pr-contract-balance--exceeded {
-  background: linear-gradient(135deg, rgba(187, 0, 0, 0.08) 0%, rgba(187, 0, 0, 0.02) 100%);
-  border-color: rgba(187, 0, 0, 0.25);
+.pr-contract-balance::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #0a6ed1 0%, #00c853 50%, #0a6ed1 100%);
+}
+
+.pr-contract-balance--exceeded::before {
+  background: linear-gradient(90deg, #ff1744 0%, #ff5252 100%);
 }
 
 .pr-contract-balance__header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid rgba(10, 110, 209, 0.15);
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border, #e2e8f0);
 }
 
+[data-theme="dark"] .pr-contract-balance__header {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.pr-contract-balance__header-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+.pr-sap-header-icon {
+  color: var(--primary-500, #0a6ed1);
+}
+
+.pr-contract-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: rgba(10, 110, 209, 0.1);
+  color: #0a6ed1;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid rgba(10, 110, 209, 0.25);
+  letter-spacing: 0;
+}
+
+[data-theme="dark"] .pr-contract-chip {
+  background: rgba(56, 149, 248, 0.15);
+  color: #3895f8;
+  border-color: rgba(56, 149, 248, 0.3);
+}
+
+.pr-contract-balance__header-limit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: #059669;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pr-contract-balance--exceeded .pr-contract-balance__header-limit {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+}
+
+[data-theme="dark"] .pr-contract-balance__header-limit {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
+[data-theme="dark"] .pr-contract-balance--exceeded .pr-contract-balance__header-limit {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+}
+
+/* Progress Section */
 .pr-contract-balance__progress-section {
-  margin-bottom: 18px;
+  margin-bottom: 22px;
 }
 
 .pr-contract-balance__progress-labels {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .pr-contract-balance__progress-label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
 }
 
 .pr-contract-balance__progress-pct {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
   color: var(--text-primary);
   font-family: var(--font-mono, monospace);
@@ -746,10 +833,15 @@
 .pr-contract-balance__progress-track {
   position: relative;
   height: 10px;
-  background: var(--surface-elevated);
-  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 8px;
   overflow: hidden;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="dark"] .pr-contract-balance__progress-track {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 .pr-contract-balance__progress-fill {
@@ -757,29 +849,71 @@
   top: 0;
   left: 0;
   height: 100%;
-  border-radius: 999px;
-  min-width: 4px;
+  border-radius: 8px;
+  min-width: 6px;
+  background: linear-gradient(90deg, #059669 0%, #10b981 100%);
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.pr-contract-balance--exceeded .pr-contract-balance__progress-fill {
+  background: linear-gradient(90deg, #dc2626 0%, #ef4444 100%);
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+}
+
+.pr-contract-balance__progress-labels--sub {
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* Metric Cards Grid */
 .pr-contract-balance__items {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 14px;
+  margin-bottom: 4px;
 }
 
 .pr-contract-balance__item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 12px 16px;
-  background: var(--surface-card);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  gap: 6px;
+  padding: 14px 18px;
+  background: rgba(248, 250, 252, 0.8);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 10px;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+[data-theme="dark"] .pr-contract-balance__item {
+  background: #192233;
+  border-color: #26334d;
+}
+
+.pr-contract-balance__item:hover {
+  transform: translateY(-2px);
+  border-color: var(--primary-500, #0a6ed1);
+  box-shadow: 0 4px 14px rgba(10, 110, 209, 0.1);
+}
+
+.pr-contract-balance__item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pr-cb-icon {
+  flex-shrink: 0;
+}
+
+.pr-cb-icon--total { color: #0a6ed1; }
+.pr-cb-icon--consumed { color: #d97706; }
+.pr-cb-icon--po { color: #6366f1; }
+.pr-cb-icon--remaining { color: #059669; }
+
 .pr-contract-balance__label {
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 700;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -787,15 +921,68 @@
 }
 
 .pr-contract-balance__value {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 800;
   color: var(--text-primary);
   font-family: var(--font-mono, monospace);
+  letter-spacing: -0.3px;
 }
 
-.pr-contract-balance__value--consumed { color: var(--warning-500, #e9730c); }
-.pr-contract-balance__value--remaining { color: var(--success-500, #107e3e); }
-.pr-contract-balance__value--over { color: var(--danger-500, #bb0000) !important; }
+.pr-contract-balance__value--consumed { color: #d97706; }
+[data-theme="dark"] .pr-contract-balance__value--consumed { color: #fbbf24; }
+
+.pr-contract-balance__value--po { color: #4f46e5; }
+[data-theme="dark"] .pr-contract-balance__value--po { color: #818cf8; }
+
+.pr-contract-balance__value--remaining { color: #059669; }
+[data-theme="dark"] .pr-contract-balance__value--remaining { color: #34d399; }
+
+.pr-contract-balance__value--over { color: #dc2626 !important; }
+[data-theme="dark"] .pr-contract-balance__value--over { color: #f87171 !important; }
+
+/* Callout Alerts */
+.pr-contract-balance__warning {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: rgba(220, 38, 38, 0.08);
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  border-left: 4px solid #dc2626;
+  border-radius: 8px;
+  color: #dc2626;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+[data-theme="dark"] .pr-contract-balance__warning {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
+  border-left-color: #ef4444;
+  color: #f87171;
+}
+
+.pr-contract-balance__warning--caution {
+  background: rgba(217, 119, 6, 0.08);
+  border-color: rgba(217, 119, 6, 0.25);
+  border-left-color: #d97706;
+  color: #b45309;
+}
+
+[data-theme="dark"] .pr-contract-balance__warning--caution {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.3);
+  border-left-color: #f59e0b;
+  color: #fbbf24;
+}
+
+.pr-contract-balance__warning--exhausted {
+  background: rgba(100, 116, 139, 0.08);
+  border-color: rgba(100, 116, 139, 0.25);
+  border-left-color: #64748b;
+  color: var(--text-secondary);
+}
 
 /* ── Validation Alerts ────────────────────────────────────── */
 
@@ -827,31 +1014,65 @@
 
 /* ── SAP Fiori Listing Table Page ─────────────────────────── */
 
+/* ── Search Bar Input ──────────────────────────────────────── */
+
+.pr-search-bar-wrap {
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.pr-search-input {
+  width: 100%;
+  padding: 10px 12px 10px 38px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.pr-search-input::placeholder {
+  color: var(--text-placeholder);
+}
+
+.pr-search-input:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.1);
+}
+
+/* ── Listing Table Page ─────────────────────────────────── */
+
 .pr-list-table-wrap {
   background: var(--surface-card);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg, 14px);
-  overflow: hidden;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
+  overflow: hidden;
 }
 
 .pr-list-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14.5px;
+  table-layout: fixed;
+  min-width: 700px;
 }
 
 .pr-list-table thead th {
-  background: linear-gradient(180deg, var(--surface-elevated), var(--surface-card));
-  padding: 16px 22px;
-  font-size: 12px;
+  text-align: left;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.6px;
+  letter-spacing: 0.5px;
   color: var(--text-secondary);
-  text-align: left;
-  border-bottom: 2px solid var(--border-strong);
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-elevated);
   white-space: nowrap;
+  overflow: hidden;
+  user-select: none;
 }
 
 .pr-list-table thead th.pr-list__th--amount { text-align: right; }
@@ -862,85 +1083,116 @@
 }
 
 .pr-list-row:hover {
-  background: rgba(10, 110, 209, 0.04);
+  background: var(--surface-hover);
 }
 
 .pr-list-row td {
-  padding: 18px 22px;
+  padding: 12px 14px;
+  font-size: 13px;
+  color: var(--text-primary);
   border-bottom: 1px solid var(--border);
   vertical-align: middle;
-  font-size: 14.5px;
+  overflow: hidden;
 }
 
 .pr-list-row:last-child td { border-bottom: none; }
 
 .pr-list__po-num {
   font-weight: 700;
-  font-size: 15px;
-  color: var(--primary-500, #0a6ed1);
-  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  color: var(--primary-500);
 }
 
 .pr-po-link {
-  color: var(--primary-500, #0a6ed1);
+  color: var(--primary-500);
+  font-size: 13px;
   font-weight: 700;
   text-decoration: underline dotted;
+  text-underline-offset: 3px;
   cursor: pointer;
-  transition: color 0.15s ease;
+  white-space: nowrap;
+  transition: color 0.15s ease, text-decoration-style 0.15s ease;
 }
 
 .pr-po-link:hover {
-  color: var(--primary-600, #0854a0);
-  text-decoration: underline;
-}
-
-.pr-kpi-card--active {
-  border-color: var(--primary-500, #0a6ed1) !important;
-  box-shadow: 0 0 0 2px rgba(10, 110, 209, 0.18), var(--shadow-md) !important;
-  background: var(--surface-card, #ffffff);
-}
-
-.pr-search-input:focus {
-  border-color: var(--primary-500, #0a6ed1) !important;
-  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.12) !important;
+  color: var(--primary-600);
+  text-decoration-style: solid;
 }
 
 .pr-list__vendor {
-  font-weight: 600;
-  font-size: 14.5px;
+  font-weight: 500;
+  font-size: 13px;
   color: var(--text-primary);
 }
 
 .pr-list__total {
   font-weight: 700;
-  font-size: 15px;
-  font-family: var(--font-mono, monospace);
+  font-size: 13px;
   text-align: right;
   color: var(--text-primary);
+  white-space: nowrap;
 }
 
 .pr-list__view-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  border: none;
-  background: transparent;
-  color: var(--text-secondary, #64748b);
-  cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 .pr-list__view-btn:hover {
-  background: rgba(10, 110, 209, 0.1);
-  color: var(--primary-500, #0a6ed1);
+  background: var(--surface-hover);
+  color: var(--text-primary);
 }
 
 .pr-list__delete-btn:hover {
-  background: rgba(220, 38, 38, 0.1) !important;
-  color: #dc2626 !important;
+  background: rgba(187, 0, 0, 0.08) !important;
+  color: var(--danger-500) !important;
+}
+
+/* ── 3-Dot Column Customizer Button ──────────────────────── */
+.rfq-table__col-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-card);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 0;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+.rfq-table__col-btn span {
+  display: block;
+  width: 3.5px;
+  height: 3.5px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  transition: background 0.15s;
+}
+
+.rfq-table__col-btn:hover,
+.rfq-table__col-btn--active {
+  background: var(--primary-500);
+  border-color: var(--primary-500);
+  box-shadow: 0 2px 8px rgba(10, 110, 209, 0.25);
+}
+
+.rfq-table__col-btn:hover span,
+.rfq-table__col-btn--active span {
+  background: #fff;
 }
 
 /* ── Centered Empty State Card Container ── */

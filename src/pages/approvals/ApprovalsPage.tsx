@@ -181,10 +181,12 @@ function ApprovalChainView({ module, referenceId, onClose }: { module: string; r
   const [chainData, setChainData] = useState<{
     levels: ChainEntry[];
     timeline: ChainEntry[];
+    history?: ChainEntry[];
     currentLevel: number;
     totalLevels: number;
     isComplete: boolean;
     isRejected: boolean;
+    isReturned?: boolean;
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -230,7 +232,7 @@ function ApprovalChainView({ module, referenceId, onClose }: { module: string; r
     switch (status) {
       case 'APPROVED': return 'Approved';
       case 'REJECTED': return 'Rejected';
-      case 'RETURNED': return 'Returned';
+      case 'RETURNED': return 'Returned for Revision';
       case 'PENDING': return 'Pending';
       case 'AUTO_FORWARDED': return 'Auto-Forwarded';
       default: return status;
@@ -248,20 +250,24 @@ function ApprovalChainView({ module, referenceId, onClose }: { module: string; r
     }
   };
 
+  const itemsToDisplay = chainData?.history && chainData.history.length > 0
+    ? chainData.history
+    : (chainData?.timeline && chainData.timeline.length > 0 ? chainData.timeline : chainData?.levels || []);
+
   return (
     <div className="approvals-modal-backdrop" onClick={onClose}>
       <div className="approvals-modal approvals-modal--detail" onClick={e => e.stopPropagation()}>
         <div className="approvals-modal__header">
-          <div className="approvals-modal__title"><Clock size={20} /><span>Approval Chain — {module}</span></div>
+          <div className="approvals-modal__title"><Clock size={20} /><span>Approval History & Timeline — {module}</span></div>
           <button className="approvals-modal__close" onClick={onClose}><X size={18} /></button>
         </div>
         <div className="approvals-modal__body">
           {loading && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-secondary)' }}>Loading approval chain…</div>}
           {error && <div style={{ textAlign: 'center', padding: 32, color: '#bb0000' }}>{error}</div>}
-          {!loading && !error && (!chainData || chainData.levels.length === 0) && (
+          {!loading && !error && (!chainData || itemsToDisplay.length === 0) && (
             <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-secondary)' }}>No approval chain data available.</div>
           )}
-          {chainData && chainData.levels.length > 0 && (
+          {chainData && itemsToDisplay.length > 0 && (
             <>
               <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
                 {chainData.isComplete && (
@@ -274,11 +280,16 @@ function ApprovalChainView({ module, referenceId, onClose }: { module: string; r
                     <XCircle size={12} /> Rejected
                   </span>
                 )}
+                {chainData.isReturned && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px', borderRadius: 12, background: 'rgba(233,115,12,0.1)', color: '#e9730c', fontSize: 11, fontWeight: 700 }}>
+                    <RotateCcw size={12} /> Returned to Originator
+                  </span>
+                )}
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                {(chainData.timeline.length > 0 ? chainData.timeline : chainData.levels).map((level, idx) => {
-                  const isLast = idx === (chainData.timeline.length > 0 ? chainData.timeline : chainData.levels).length - 1;
+                {itemsToDisplay.map((level, idx) => {
+                  const isLast = idx === itemsToDisplay.length - 1;
                   const isActive = level.status === 'PENDING';
                   return (
                     <div key={idx} style={{ position: 'relative', paddingLeft: 32, paddingBottom: isLast ? 0 : 24 }}>
@@ -287,7 +298,7 @@ function ApprovalChainView({ module, referenceId, onClose }: { module: string; r
                         <div style={{
                           position: 'absolute', left: 11, top: 20, bottom: 0, width: 2,
                           background: level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED'
-                            ? '#107e3e' : level.status === 'REJECTED' ? '#bb0000' : 'var(--border)',
+                            ? '#107e3e' : level.status === 'REJECTED' ? '#bb0000' : level.status === 'RETURNED' ? '#e9730c' : 'var(--border)',
                         }} />
                       )}
                       {/* Timeline dot */}
@@ -295,10 +306,10 @@ function ApprovalChainView({ module, referenceId, onClose }: { module: string; r
                         position: 'absolute', left: 4, top: 4, width: 16, height: 16,
                         borderRadius: '50%',
                         background: isActive ? '#e9730c' : level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED'
-                          ? '#107e3e' : level.status === 'REJECTED' ? '#bb0000' : 'var(--surface-card)',
+                          ? '#107e3e' : level.status === 'REJECTED' ? '#bb0000' : level.status === 'RETURNED' ? '#e9730c' : 'var(--surface-card)',
                         border: `2px solid ${
                           isActive ? '#e9730c' : level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED'
-                            ? '#107e3e' : level.status === 'REJECTED' ? '#bb0000' : 'var(--border)'
+                            ? '#107e3e' : level.status === 'REJECTED' ? '#bb0000' : level.status === 'RETURNED' ? '#e9730c' : 'var(--border)'
                         }`,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                       }}>
@@ -306,6 +317,8 @@ function ApprovalChainView({ module, referenceId, onClose }: { module: string; r
                           <CheckCircle2 size={10} style={{ color: '#fff' }} />
                         ) : level.status === 'REJECTED' ? (
                           <XCircle size={10} style={{ color: '#fff' }} />
+                        ) : level.status === 'RETURNED' ? (
+                          <RotateCcw size={10} style={{ color: '#fff' }} />
                         ) : (
                           <span style={{ fontSize: 9, fontWeight: 700, color: isActive ? '#fff' : 'var(--text-secondary)' }}>{level.levelNumber}</span>
                         )}
@@ -313,9 +326,9 @@ function ApprovalChainView({ module, referenceId, onClose }: { module: string; r
                       {/* Content card */}
                       <div style={{
                         padding: '12px 14px',
-                        background: isActive ? 'rgba(233,115,12,0.06)' : 'var(--surface-elevated)',
+                        background: isActive ? 'rgba(233,115,12,0.06)' : level.status === 'RETURNED' ? 'rgba(233,115,12,0.04)' : 'var(--surface-elevated)',
                         border: `1px solid ${
-                          isActive ? 'rgba(233,115,12,0.2)' : level.status === 'APPROVED' ? 'rgba(16,126,62,0.15)' : level.status === 'REJECTED' ? 'rgba(187,0,0,0.15)' : 'var(--border)'
+                          isActive ? 'rgba(233,115,12,0.2)' : level.status === 'APPROVED' ? 'rgba(16,126,62,0.15)' : level.status === 'REJECTED' ? 'rgba(187,0,0,0.15)' : level.status === 'RETURNED' ? 'rgba(233,115,12,0.2)' : 'var(--border)'
                         }`,
                         borderRadius: 8,
                       }}>
@@ -347,7 +360,7 @@ function ApprovalChainView({ module, referenceId, onClose }: { module: string; r
                           </div>
                         )}
                         <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 6 }}>
-                          {level.actionAt ? `Acted: ${formatDt(level.actionAt)}` : `Deadline: ${formatDt(level.deadline)}`}
+                          {level.actionAt ? `Acted: ${formatDt(level.actionAt)}` : level.createdAt ? `Date: ${formatDt(level.createdAt)}` : `Deadline: ${formatDt(level.deadline)}`}
                         </div>
                       </div>
                     </div>
@@ -380,18 +393,23 @@ const CANONICAL_MODULE: Record<string, string> = {
 export default function ApprovalsPage() {
   const { data: approvals, loading, error, reload } = useServiceData(
     () => approvalService.listTable(),
-    [] as ApprovalTableRow[]
+    [] as ApprovalTableRow[],
+    { cacheTtlMs: 0 }
   );
 
-  // SSE real-time refresh — listen for approval events
+  // SSE real-time refresh — listen for approval and PO creation events
   useEffect(() => {
     const unsubLevel = sseClient.on('approval_level_complete', () => reload());
     const unsubChain = sseClient.on('approval_chain_complete', () => reload());
     const unsubForwarded = sseClient.on('approval_auto_forwarded', () => reload());
+    const unsubPoCreated = sseClient.on('po_created', () => reload());
+    const unsubApprovalInit = sseClient.on('approval_initiated', () => reload());
     return () => {
       unsubLevel();
       unsubChain();
       unsubForwarded();
+      unsubPoCreated();
+      unsubApprovalInit();
     };
   }, [reload]);
 
@@ -400,6 +418,7 @@ export default function ApprovalsPage() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [actionModal, setActionModal] = useState<{ request: ApprovalRequest; action: 'approve' | 'reject' | 'return' } | null>(null);
   const [actionComment, setActionComment] = useState('');
+  const [actionReturnTarget, setActionReturnTarget] = useState<'LEVEL_1' | 'VENDOR'>('LEVEL_1');
   const [detailRequest, setDetailRequest] = useState<ApprovalRequest | null>(null);
   const [chainModal, setChainModal] = useState<{ module: string; referenceId: string } | null>(null);
   useBodyScrollLock(!!(actionModal || detailRequest || chainModal));
@@ -471,7 +490,7 @@ export default function ApprovalsPage() {
         const res = await approvalService.reject(id, comment);
         message = res?.message || 'Request rejected.';
       } else {
-        const res = await approvalService.return(id, comment);
+        const res = await approvalService.return(id, comment, actionReturnTarget);
         message = res?.message || 'Request returned for revision.';
       }
       setToast({ message, type: 'success' });
@@ -480,11 +499,12 @@ export default function ApprovalsPage() {
       setToast({ message: err instanceof Error ? err.message : 'Action failed.', type: 'error' });
       reload();
     }
-  }, [actionModal, actionComment, reload]);
+  }, [actionModal, actionComment, actionReturnTarget, reload]);
 
   const openAction = useCallback((request: ApprovalRequest, action: 'approve' | 'reject' | 'return') => {
     setActionModal({ request, action });
     setActionComment('');
+    setActionReturnTarget('LEVEL_1');
   }, []);
 
   const formatDateTime = (d: string) => {
@@ -694,6 +714,43 @@ export default function ApprovalsPage() {
                   <span className="approvals-modal__summary-value">{actionModal.request.requestedBy}</span>
                 </div>
               </div>
+              {actionModal.action === 'return' && (actionModal.request.module === 'Quotation' || actionModal.request.module === 'Quotations') && (
+                <div style={{ margin: '14px 0 6px', padding: 12, background: '#f7f9fa', border: '1px solid #d9d9d9', borderRadius: 6 }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: '#32363a', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Return Destination
+                  </label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 13, color: '#32363a' }}>
+                      <input
+                        type="radio"
+                        name="approvalReturnTarget"
+                        value="LEVEL_1"
+                        checked={actionReturnTarget === 'LEVEL_1'}
+                        onChange={() => setActionReturnTarget('LEVEL_1')}
+                        style={{ marginTop: 3, accentColor: '#0a6ed1' }}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 600, color: '#0070c0' }}>Return to Level 1</div>
+                        <div style={{ fontSize: 11, color: '#6a6d70', marginTop: 2 }}>Restart approval chain starting at Level 1 (Clerk review first)</div>
+                      </div>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 13, color: '#32363a' }}>
+                      <input
+                        type="radio"
+                        name="approvalReturnTarget"
+                        value="VENDOR"
+                        checked={actionReturnTarget === 'VENDOR'}
+                        onChange={() => setActionReturnTarget('VENDOR')}
+                        style={{ marginTop: 3, accentColor: '#0a6ed1' }}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 600, color: '#bb0000' }}>Return to Vendor for Resubmission</div>
+                        <div style={{ fontSize: 11, color: '#6a6d70', marginTop: 2 }}>Send feedback email & notification to Vendor so they can revise and resubmit</div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              )}
               <div className="approvals-modal__field">
                 <label className="approvals-modal__label">
                   <MessageSquare size={13} style={{ marginRight: 4 }} />

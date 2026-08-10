@@ -36,6 +36,7 @@
   gap: 16px;
   flex-wrap: wrap;
   position: relative;
+  z-index: 100;
 }
 
 .dash-header::after {
@@ -69,6 +70,8 @@
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+  position: relative;
+  z-index: 100;
 }
 
 .dash-header__date {
@@ -84,7 +87,31 @@
   gap: 8px;
 }
 
-.dash-header__date svg { opacity: 0.5; }
+.dash-header__date--clickable {
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+
+.dash-header__date--clickable:hover,
+.dash-header__date--active {
+  border-color: var(--primary-500, #6366f1);
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.2);
+  background: var(--surface-elevated, #ffffff);
+  color: var(--primary-500, #6366f1);
+}
+
+[data-theme="dark"] .dash-header__date--clickable:hover,
+[data-theme="dark"] .dash-header__date--active {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: #818cf8;
+  color: #818cf8;
+}
+
+.dash-header__date svg { opacity: 0.7; transition: opacity 0.2s, color 0.2s; }
+.dash-header__date--clickable:hover svg,
+.dash-header__date--active svg { opacity: 1; }
 
 /* ─── Customize Button ───────────────────────────────────── */
 

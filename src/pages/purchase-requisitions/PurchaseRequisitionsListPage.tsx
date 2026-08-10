@@ -1,9 +1,11 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { purchaseRequisitionService, type PurchaseRequisition } from '../../services/purchaseRequisitionService';
-import { ShoppingCart, Eye, Trash2, Loader2, AlertTriangle, FileText, Search, X, CheckCircle, Clock } from 'lucide-react';
+import { ShoppingCart, Eye, Pencil, Trash2, Loader2, AlertTriangle, FileText, Search, X, CheckCircle, Clock } from 'lucide-react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { MessageStrip } from '../../components/shared/MessageStrip';
+import ColumnCustomizer, { type ColumnDef } from '../../components/shared/ColumnCustomizer';
+import '../../components/shared/ColumnCustomizer.css';
 import '../purchase-requisitions/PurchaseRequisitionPage.css';
 
 function formatCurrency(amount: number, currency: string = 'KES'): string {
@@ -31,6 +33,24 @@ function formatDate(dateStr: string): string {
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+const ALL_COLUMNS: ColumnDef[] = [
+  { key: 'poNumber', label: 'PO / PR Number', defaultVisible: true, required: true },
+  { key: 'vendorName', label: 'Vendor', defaultVisible: true },
+  { key: 'poDate', label: 'PO Date', defaultVisible: true },
+  { key: 'currency', label: 'Currency', defaultVisible: true },
+  { key: 'grandTotal', label: 'Grand Total', defaultVisible: true },
+  { key: 'status', label: 'Status', defaultVisible: true },
+];
+
+const COL_WIDTHS: Record<string, string> = {
+  poNumber: '150px',
+  vendorName: '180px',
+  poDate: '120px',
+  currency: '90px',
+  grandTotal: '140px',
+  status: '150px',
+};
+
 export default function PurchaseRequisitionsListPage() {
   const navigate = useNavigate();
   const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
@@ -43,6 +63,14 @@ export default function PurchaseRequisitionsListPage() {
   // Search & Filter State
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+
+  // Column Customizer State
+  const defaultOrder = useMemo(() => ALL_COLUMNS.map((c) => c.key), []);
+  const defaultVisible = useMemo(() => new Set(ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key)), []);
+  const [columnOrder, setColumnOrder] = useState<string[]>(defaultOrder);
+  const [visibleKeys, setVisibleKeys] = useState<Set<string>>(defaultVisible);
+  const [showColPanel, setShowColPanel] = useState(false);
+  const colBtnRef = useRef<HTMLButtonElement>(null);
 
   useBodyScrollLock(!!deleteTarget);
 
@@ -107,6 +135,25 @@ export default function PurchaseRequisitionsListPage() {
       );
     });
   }, [requisitions, searchTerm, statusFilter]);
+
+  const visibleColumns = useMemo(
+    () => columnOrder.map((k) => ALL_COLUMNS.find((c) => c.key === k)!).filter((c) => c && visibleKeys.has(c.key)),
+    [columnOrder, visibleKeys]
+  );
+
+  const handleToggleColumn = (key: string) => {
+    setVisibleKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const handleResetColumns = () => {
+    setColumnOrder(defaultOrder);
+    setVisibleKeys(new Set(defaultVisible));
+  };
 
   if (loading) {
     return (
@@ -210,26 +257,15 @@ export default function PurchaseRequisitionsListPage() {
 
       {/* Search Input Bar */}
       {requisitions.length > 0 && (
-        <div className="pr-search-bar-wrap" style={{ marginBottom: 20 }}>
+        <div className="pr-search-bar-wrap">
           <div style={{ position: 'relative', width: '100%' }}>
-            <Search size={18} style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-placeholder, #94a3b8)' }} />
+            <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-placeholder)', pointerEvents: 'none' }} />
             <input
               type="text"
               className="pr-search-input"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search PO, vendor, status..."
-              style={{
-                width: '100%',
-                padding: '12px 42px 12px 44px',
-                fontSize: 14.5,
-                border: '1px solid var(--border, #e2e8f0)',
-                borderRadius: 10,
-                background: 'var(--surface-card, #ffffff)',
-                color: 'var(--text-primary)',
-                outline: 'none',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-              }}
             />
             {searchTerm && (
               <button
@@ -280,15 +316,52 @@ export default function PurchaseRequisitionsListPage() {
       ) : (
         <div className="pr-list-table-wrap">
           <table className="pr-list-table">
+            <colgroup>
+              {[
+                ...visibleColumns.map((col) => (
+                  <col key={col.key} style={{ width: COL_WIDTHS[col.key] || 'auto' }} />
+                )),
+                <col key="__actions" style={{ width: '135px' }} />,
+              ]}
+            </colgroup>
             <thead>
               <tr>
-                <th>PO / PR NUMBER</th>
-                <th>VENDOR</th>
-                <th>PO DATE</th>
-                <th>CURRENCY</th>
-                <th className="pr-list__th--amount">GRAND TOTAL</th>
-                <th>STATUS</th>
-                <th style={{ width: 100, textAlign: 'center' }}>ACTIONS</th>
+                {visibleColumns.map((col) => (
+                  <th
+                    key={col.key}
+                    style={{ textAlign: col.key === 'grandTotal' ? 'right' : 'left' }}
+                  >
+                    {col.label.toUpperCase()}
+                  </th>
+                ))}
+                <th className="pr-list__th--actions" style={{ width: 135 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                    <span>ACTIONS</span>
+                    <div style={{ position: 'relative' }}>
+                      <button
+                        ref={colBtnRef}
+                        className={`rfq-table__col-btn ${showColPanel ? 'rfq-table__col-btn--active' : ''}`}
+                        onClick={() => setShowColPanel((v) => !v)}
+                        title="Customize columns"
+                        aria-label="Customize columns"
+                      >
+                        <span /><span /><span />
+                      </button>
+                      {showColPanel && (
+                        <ColumnCustomizer
+                          columnOrder={columnOrder}
+                          visibleKeys={visibleKeys}
+                          allColumns={ALL_COLUMNS}
+                          onToggle={handleToggleColumn}
+                          onReorder={setColumnOrder}
+                          onReset={handleResetColumns}
+                          onClose={() => setShowColPanel(false)}
+                          anchorRef={colBtnRef}
+                        />
+                      )}
+                    </div>
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -296,37 +369,65 @@ export default function PurchaseRequisitionsListPage() {
                 <tr
                   key={pr.id || pr.rfqId}
                   className="pr-list-row"
-                  onClick={() => pr.rfqId && navigate(`/procurement/purchase-requisition/${pr.rfqId}`)}
+                  onClick={() => pr.rfqId && navigate(`/procurement/purchase-requisition/${pr.rfqId}?mode=view`, { state: { readOnly: true } })}
                 >
-                  <td className="pr-list__po-num">
-                    <span className="pr-po-link">
-                      {pr.poNumber || '-'}
-                    </span>
-                  </td>
-                  <td className="pr-list__vendor">{pr.vendorName || '-'}</td>
-                  <td>{pr.poDate ? formatDate(pr.poDate) : '-'}</td>
-                  <td>{pr.currency || 'KES'}</td>
-                  <td className="pr-list__total">{formatCurrency(pr.grandTotal, pr.currency)}</td>
-                  <td>
-                    <span className={`pr-badge pr-badge--${pr.status}`}>
-                      {getStatusLabel(pr.status)}
-                    </span>
-                  </td>
+                  {visibleColumns.map((col) => {
+                    if (col.key === 'poNumber') {
+                      return (
+                        <td key="poNumber" className="pr-list__po-num">
+                          <span className="pr-po-link">{pr.poNumber || '-'}</span>
+                        </td>
+                      );
+                    }
+                    if (col.key === 'vendorName') {
+                      return <td key="vendorName" className="pr-list__vendor">{pr.vendorName || '-'}</td>;
+                    }
+                    if (col.key === 'poDate') {
+                      return <td key="poDate">{pr.poDate ? formatDate(pr.poDate) : '-'}</td>;
+                    }
+                    if (col.key === 'currency') {
+                      return <td key="currency">{pr.currency || 'KES'}</td>;
+                    }
+                    if (col.key === 'grandTotal') {
+                      return <td key="grandTotal" className="pr-list__total">{formatCurrency(pr.grandTotal, pr.currency)}</td>;
+                    }
+                    if (col.key === 'status') {
+                      return (
+                        <td key="status">
+                          <span className={`pr-badge pr-badge--${pr.status}`}>{getStatusLabel(pr.status)}</span>
+                        </td>
+                      );
+                    }
+                    return <td key={col.key}>-</td>;
+                  })}
                   <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
                       <button
                         className="pr-list__view-btn"
-                        onClick={(e) => { e.stopPropagation(); pr.rfqId && navigate(`/procurement/purchase-requisition/${pr.rfqId}`); }}
-                        title="View / Edit PO Document"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          pr.rfqId && navigate(`/procurement/purchase-requisition/${pr.rfqId}?mode=view`, { state: { readOnly: true } });
+                        }}
+                        title="View PO Document (Read-Only)"
                       >
-                        <Eye size={16} />
+                        <Eye size={15} />
+                      </button>
+                      <button
+                        className="pr-list__view-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          pr.rfqId && navigate(`/procurement/purchase-requisition/${pr.rfqId}?mode=edit`, { state: { readOnly: false } });
+                        }}
+                        title="Edit PO Document"
+                      >
+                        <Pencil size={15} />
                       </button>
                       <button
                         className="pr-list__view-btn pr-list__delete-btn"
                         onClick={(e) => { e.stopPropagation(); setDeleteTarget(pr); }}
                         title="Delete PO document"
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={15} />
                       </button>
                     </div>
                   </td>

@@ -30,13 +30,73 @@ interface PredictiveMatchResult {
   matchScore: number;
 }
 
+// Built-in standard unit synonym & symbol equivalence groups
+const UNIT_SYNONYM_GROUPS: string[][] = [
+  ['kilogram', 'kilograms', 'kg', 'kgs', 'kilo', 'kilos'],
+  ['gram', 'grams', 'g', 'gm', 'gms'],
+  ['milligram', 'milligrams', 'mg', 'mgs'],
+  ['metric ton', 'metric tonne', 'ton', 'tonne', 'tons', 'tonnes', 'tn', 't'],
+  ['quintal', 'quintals', 'qtl', 'qtls'],
+  ['pound', 'pounds', 'lb', 'lbs'],
+
+  ['litre', 'litres', 'liter', 'liters', 'ltr', 'ltrs', 'l'],
+  ['millilitre', 'millilitres', 'milliliter', 'milliliters', 'ml', 'mls'],
+  ['gallon', 'gallons', 'gal', 'gals'],
+  ['cubic metre', 'cubic meter', 'cbm', 'cu m', 'm3'],
+  ['barrel', 'barrels', 'bbl', 'bbls'],
+
+  ['metre', 'metres', 'meter', 'meters', 'mtr', 'mtrs', 'm'],
+  ['centimetre', 'centimetres', 'centimeter', 'centimeters', 'cm', 'cms'],
+  ['millimetre', 'millimetres', 'millimeter', 'millimeters', 'mm', 'mms'],
+  ['feet', 'foot', 'ft', 'feets'],
+  ['inch', 'inches', 'in'],
+  ['yard', 'yards', 'yd', 'yds'],
+  ['kilometre', 'kilometres', 'kilometer', 'kilometres', 'km', 'kms'],
+
+  ['square metre', 'square meter', 'sq m', 'sqm', 'sq.m', 'm2'],
+  ['square feet', 'square foot', 'sq ft', 'sqft', 'sq.ft', 'ft2'],
+  ['square yard', 'square yards', 'sq yd', 'sqyd'],
+  ['acre', 'acres'],
+  ['hectare', 'hectares', 'ha'],
+
+  ['piece', 'pieces', 'pc', 'pcs'],
+  ['box', 'boxes', 'bx', 'bxs'],
+  ['pack', 'packs', 'pk', 'pks', 'packet', 'packets', 'pkt', 'pkts'],
+  ['set', 'sets'],
+  ['pair', 'pairs', 'pr', 'prs'],
+  ['roll', 'rolls', 'rl'],
+  ['dozen', 'dozens', 'doz'],
+  ['bundle', 'bundles', 'bdl', 'bdls'],
+  ['carton', 'cartons', 'ctn', 'ctns'],
+  ['bag', 'bags'],
+  ['container', 'containers', 'ctr'],
+  ['drum', 'drums'],
+
+  ['hour', 'hours', 'hr', 'hrs'],
+  ['day', 'days'],
+  ['month', 'months', 'mth', 'mths'],
+  ['year', 'years', 'yr', 'yrs'],
+  ['shift', 'shifts'],
+  ['man-day', 'manday', 'man day', 'man days', 'man-days'],
+];
+
+function findSynonymGroup(unitStr: string): string[] | null {
+  const norm = unitStr.trim().toLowerCase();
+  for (const group of UNIT_SYNONYM_GROUPS) {
+    if (group.includes(norm)) {
+      return group;
+    }
+  }
+  return null;
+}
+
 function analyzePredictiveMatches(
   query: string,
   existingItems: Array<{ id?: number | string; name: string; abbreviation?: string; aliases?: string[] }>,
   excludeId?: number | string
 ): PredictiveMatchResult | null {
   const trimmed = query.trim();
-  if (trimmed.length < 2) return null;
+  if (trimmed.length < 1) return null;
 
   const normQuery = trimmed.toLowerCase();
 
@@ -58,7 +118,34 @@ function analyzePredictiveMatches(
     }
   }
 
-  // 2. Check high similarity match (substring/contains/words)
+  // 2. Check Built-in Synonym & Symbol mapping (e.g. "kg" <-> "Kilogram")
+  const queryGroup = findSynonymGroup(normQuery);
+  if (queryGroup) {
+    for (const item of existingItems) {
+      if (!item.name) continue;
+      if (excludeId !== undefined && String(item.id) === String(excludeId)) continue;
+      const normName = item.name.trim().toLowerCase();
+
+      if (queryGroup.includes(normName)) {
+        return {
+          exact: true,
+          item: item.name,
+          reason: `"${trimmed}" is the standard symbol/equivalent for existing unit "${item.name}"`,
+          matchScore: 100,
+        };
+      }
+      if (item.abbreviation && queryGroup.includes(item.abbreviation.trim().toLowerCase())) {
+        return {
+          exact: true,
+          item: item.name,
+          reason: `"${trimmed}" matches symbol for existing unit "${item.name}"`,
+          matchScore: 100,
+        };
+      }
+    }
+  }
+
+  // 3. Check high similarity match (substring/contains/words)
   for (const item of existingItems) {
     if (!item.name) continue;
     if (excludeId !== undefined && String(item.id) === String(excludeId)) continue;
@@ -69,7 +156,6 @@ function analyzePredictiveMatches(
       return { exact: false, item: item.name, matchScore: Math.max(70, score) };
     }
 
-    // Check abbreviation for partial match
     if (item.abbreviation) {
       const normAbbr = item.abbreviation.trim().toLowerCase();
       if (normAbbr.includes(normQuery) || normQuery.includes(normAbbr)) {
@@ -227,6 +313,69 @@ const EMAIL_PLACEHOLDERS: Record<string, string> = {
   '{{invitationExpiryDays}}': 'Number of days until the onboarding invitation expires (set in Company Settings > Time Limits)',
   '{{resubmissionDeadlineDays}}': 'Number of days the vendor has to resubmit after rejection (set in Company Settings > Time Limits)',
 };
+
+// ─── Standard Embedded Units Preset List ─────────────────────
+
+interface EmbeddedUnit {
+  name: string;
+  category: string;
+}
+
+const EMBEDDED_STANDARD_UNITS: EmbeddedUnit[] = [
+  // Weight & Mass
+  { name: 'Kilogram', category: 'Weight & Mass' },
+  { name: 'Gram', category: 'Weight & Mass' },
+  { name: 'Milligram', category: 'Weight & Mass' },
+  { name: 'Metric Ton', category: 'Weight & Mass' },
+  { name: 'Quintal', category: 'Weight & Mass' },
+  { name: 'Pound', category: 'Weight & Mass' },
+
+  // Volume & Liquids
+  { name: 'Litre', category: 'Volume & Liquids' },
+  { name: 'Millilitre', category: 'Volume & Liquids' },
+  { name: 'Gallon', category: 'Volume & Liquids' },
+  { name: 'Cubic Metre', category: 'Volume & Liquids' },
+  { name: 'Barrel', category: 'Volume & Liquids' },
+
+  // Length & Distance
+  { name: 'Metre', category: 'Length & Distance' },
+  { name: 'Centimetre', category: 'Length & Distance' },
+  { name: 'Millimetre', category: 'Length & Distance' },
+  { name: 'Feet', category: 'Length & Distance' },
+  { name: 'Inch', category: 'Length & Distance' },
+  { name: 'Yard', category: 'Length & Distance' },
+  { name: 'Kilometre', category: 'Length & Distance' },
+
+  // Area
+  { name: 'Square Metre', category: 'Area' },
+  { name: 'Square Feet', category: 'Area' },
+  { name: 'Square Yard', category: 'Area' },
+  { name: 'Acre', category: 'Area' },
+  { name: 'Hectare', category: 'Area' },
+
+  // Quantity & Count
+  { name: 'Piece', category: 'Quantity & Count' },
+  { name: 'Box', category: 'Quantity & Count' },
+  { name: 'Pack', category: 'Quantity & Count' },
+  { name: 'Packet', category: 'Quantity & Count' },
+  { name: 'Set', category: 'Quantity & Count' },
+  { name: 'Pair', category: 'Quantity & Count' },
+  { name: 'Roll', category: 'Quantity & Count' },
+  { name: 'Dozen', category: 'Quantity & Count' },
+  { name: 'Bundle', category: 'Quantity & Count' },
+  { name: 'Carton', category: 'Quantity & Count' },
+  { name: 'Bag', category: 'Quantity & Count' },
+  { name: 'Container', category: 'Quantity & Count' },
+  { name: 'Drum', category: 'Quantity & Count' },
+
+  // Time & Service
+  { name: 'Hour', category: 'Time & Service' },
+  { name: 'Day', category: 'Time & Service' },
+  { name: 'Month', category: 'Time & Service' },
+  { name: 'Year', category: 'Time & Service' },
+  { name: 'Shift', category: 'Time & Service' },
+  { name: 'Man-day', category: 'Time & Service' },
+];
 
 // ─── Component ──────────────────────────────────────────────
 
@@ -506,8 +655,7 @@ export default function CompanySettingsPage() {
   // Unit modal state
   const [showUnitModal, setShowUnitModal] = useState(false);
   const [unitName, setUnitName] = useState('');
-  const [unitAbbreviation, setUnitAbbreviation] = useState('');
-  const [unitAliases, setUnitAliases] = useState('');
+  const [selectedPresetUnit, setSelectedPresetUnit] = useState('');
   const [unitError, setUnitError] = useState<string | null>(null);
 
   // Payment Term modal state
@@ -1869,8 +2017,7 @@ export default function CompanySettingsPage() {
 
   const openAddUnit = useCallback(() => {
     setUnitName('');
-    setUnitAbbreviation('');
-    setUnitAliases('');
+    setSelectedPresetUnit('');
     setUnitError(null);
     setShowUnitModal(true);
   }, []);
@@ -1879,50 +2026,32 @@ export default function CompanySettingsPage() {
     const trimmed = unitName.trim();
     if (!trimmed) return;
     const trimmedLower = trimmed.toLowerCase();
-    // Build a merged list of all names+abbreviations+aliases for duplicate check
+
+    // 1. Direct name match check
     const nameExists = units.some((u) => u.name.trim().toLowerCase() === trimmedLower);
     if (nameExists) {
       setUnitError(`Unit "${trimmed}" already exists.`);
       return;
     }
-    // Check if entered name matches any existing abbreviation
-    const abbrMatch = units.find((u) => u.abbreviation?.trim().toLowerCase() === trimmedLower);
-    if (abbrMatch) {
-      setUnitError(`"${trimmed}" is already used as the abbreviation of "${abbrMatch.name}".`);
-      return;
-    }
-    // Check if entered abbreviation conflicts
-    const abbrevTrimmed = unitAbbreviation.trim();
-    if (abbrevTrimmed) {
-      const abbrevLower = abbrevTrimmed.toLowerCase();
-      const abbrevConflict = units.find(
-        (u) => u.name.trim().toLowerCase() === abbrevLower ||
-               u.abbreviation?.trim().toLowerCase() === abbrevLower ||
-               u.aliases?.split(',').some((a) => a.trim().toLowerCase() === abbrevLower)
-      );
-      if (abbrevConflict) {
-        setUnitError(`Abbreviation "${abbrevTrimmed}" conflicts with existing unit "${abbrevConflict.name}".`);
+
+    // 2. Synonym & symbol match check (e.g. kg <-> Kilogram)
+    const queryGroup = findSynonymGroup(trimmedLower);
+    if (queryGroup) {
+      const synonymMatch = units.find((u) => {
+        const exName = u.name.trim().toLowerCase();
+        const exAbbr = u.abbreviation?.trim().toLowerCase();
+        return queryGroup.includes(exName) || (exAbbr && queryGroup.includes(exAbbr));
+      });
+      if (synonymMatch) {
+        setUnitError(`"${trimmed}" is equivalent to existing unit "${synonymMatch.name}". Duplicate creation blocked.`);
         return;
       }
     }
-    const newAliases = unitAliases
-      .split(',')
-      .map((a) => a.trim().toLowerCase())
-      .filter(Boolean);
-    for (const alias of newAliases) {
-      const aliasMatch = units.find(
-        (u) => u.name.trim().toLowerCase() === alias ||
-               u.aliases?.some((a) => a.trim().toLowerCase() === alias)
-      );
-      if (aliasMatch) {
-        setUnitError(`Alias "${alias}" conflicts with existing unit "${aliasMatch.name}".`);
-        return;
-      }
-    }
+
     setActionLoading(true);
     setUnitError(null);
     try {
-      await companySettingsService.createUnit(trimmed, abbrevTrimmed || undefined, unitAliases.trim() || undefined);
+      await companySettingsService.createUnit(trimmed);
       setPageMsg(`Unit "${trimmed}" created.`);
       setShowUnitModal(false);
       reloadUnits();
@@ -1936,7 +2065,7 @@ export default function CompanySettingsPage() {
     } finally {
       setActionLoading(false);
     }
-  }, [unitName, unitAbbreviation, unitAliases, units, reloadUnits]);
+  }, [unitName, units, reloadUnits]);
 
   const requestDeleteUnit = useCallback((unit: Unit) => {
     setDeleteTarget({ type: 'unit', id: unit.id, name: unit.name });
@@ -4382,42 +4511,64 @@ export default function CompanySettingsPage() {
                   <MessageStrip type="error" compact>{unitError}</MessageStrip>
                 </div>
               )}
+
+              {/* Standard Embedded Units Dropdown */}
+              <div className="company-settings__field">
+                <label>Standard Units Preset</label>
+                <select
+                  value={selectedPresetUnit}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSelectedPresetUnit(val);
+                    if (val) {
+                      setUnitName(val);
+                      setUnitError(null);
+                    }
+                  }}
+                  className="cs-select"
+                >
+                  <option value="">-- Select from Standard Units (or enter custom unit below) --</option>
+                  {Array.from(new Set(EMBEDDED_STANDARD_UNITS.map((u) => u.category))).map((cat) => (
+                    <optgroup key={cat} label={cat}>
+                      {EMBEDDED_STANDARD_UNITS.filter((u) => u.category === cat).map((u) => {
+                        const isAdded = units.some((existing) => {
+                          const exLower = existing.name.trim().toLowerCase();
+                          if (exLower === u.name.toLowerCase()) return true;
+                          const group = findSynonymGroup(u.name);
+                          return group ? group.includes(exLower) : false;
+                        });
+                        return (
+                          <option key={u.name} value={u.name}>
+                            {u.name} {isAdded ? '✓ (Already added)' : ''}
+                          </option>
+                        );
+                      })}
+                    </optgroup>
+                  ))}
+                </select>
+                <span className="cs-field-hint">
+                  Pick a standard embedded unit to auto-fill, or enter any custom unit below.
+                </span>
+              </div>
+
+              {/* Unit Name Input & Predictive Analysis */}
               <div className="company-settings__field">
                 <label>Unit Name <span>*</span></label>
                 <input
                   value={unitName}
-                  onChange={(e) => { setUnitName(e.target.value); setUnitError(null); }}
-                  placeholder="e.g. Kilogram, Gram, Litre, Metre"
+                  onChange={(e) => {
+                    setUnitName(e.target.value);
+                    setSelectedPresetUnit('');
+                    setUnitError(null);
+                  }}
+                  placeholder="e.g. Kilogram, Gram, Litre, Metre, Piece"
                   className={unitError ? 'cs-input--error' : ''}
                 />
                 <PredictiveMatchCard
                   query={unitName}
-                  items={units.map(u => ({ ...u, abbreviation: u.abbreviation }))}
+                  items={units}
                   labelName="Unit"
                 />
-              </div>
-              <div className="company-settings__field">
-                <label>Abbreviation / Symbol</label>
-                <input
-                  value={unitAbbreviation}
-                  onChange={(e) => { setUnitAbbreviation(e.target.value); setUnitError(null); }}
-                  placeholder="e.g. kg, g, ltr, mtr, pcs"
-                  maxLength={20}
-                />
-                <span className="cs-field-hint">
-                  Short symbol for this unit (e.g. kilogram → <strong>kg</strong>, gram → <strong>g</strong>). Used in predictive matching — entering &quot;kg&quot; will be treated as &quot;kilogram&quot;.
-                </span>
-              </div>
-              <div className="company-settings__field">
-                <label>Aliases / Synonyms</label>
-                <input
-                  value={unitAliases}
-                  onChange={(e) => { setUnitAliases(e.target.value); setUnitError(null); }}
-                  placeholder="e.g. piece, pieces, pc"
-                />
-                <span className="cs-field-hint">
-                  Comma-separated list of alternative names. If any alias matches an existing unit, creation will be blocked.
-                </span>
               </div>
             </div>
             <div className="company-settings__modal-footer">

@@ -40,11 +40,11 @@ import {
   ChevronUp,
   ListChecks,
 } from 'lucide-react';
+import HeaderCalendarPopover from '../../components/layout/HeaderCalendarPopover';
 import '../../styles/vendor-portal.css';
 import '../dashboard/DashboardPage.css';
 import '../rfq/RFQPage.css';
 import './VendorDashboard.css';
-import '../dashboard/DashboardPage.css';
 
 // ─────────────────────────────────────────────────────────────
 //  Helpers (unchanged from original VendorDashboard)
@@ -184,7 +184,21 @@ export default function VendorDashboard() {
   const navigate = useNavigate();
   const { formatAmount, companyDefaultCurrency } = useCurrency();
   const [displayCurrency, setDisplayCurrency] = useState<string>(companyDefaultCurrency);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const calendarRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => { setDisplayCurrency(companyDefaultCurrency); }, [companyDefaultCurrency]);
+
+  useEffect(() => {
+    if (!isCalendarOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (calendarRef.current && !calendarRef.current.contains(e.target as Node)) {
+        setIsCalendarOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [isCalendarOpen]);
 
   // ── Backend data (UNCHANGED logic from original) ─────────
   const { data: rfqs } = useServiceData(
@@ -779,9 +793,19 @@ export default function VendorDashboard() {
           </p>
         </div>
         <div className="dash-header__actions">
-          <div className="dash-header__date">
-            <CalendarDays size={15} />
-            {today}
+          <div style={{ position: 'relative' }} ref={calendarRef}>
+            <button
+              className={`dash-header__date ${isCalendarOpen ? 'dash-header__date--active' : ''}`}
+              onClick={() => setIsCalendarOpen(!isCalendarOpen)}
+              title="Click to open laptop calendar"
+              style={{ cursor: 'pointer' }}
+            >
+              <CalendarDays size={15} />
+              <span>{today}</span>
+            </button>
+            {isCalendarOpen && (
+              <HeaderCalendarPopover onClose={() => setIsCalendarOpen(false)} />
+            )}
           </div>
           <button className="dash-customize-btn" onClick={openGallery}>
             <Sparkles size={16} />

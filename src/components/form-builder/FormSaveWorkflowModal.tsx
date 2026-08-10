@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import {
   GitMerge,
@@ -123,7 +124,7 @@ export default function FormSaveWorkflowModal({
         .listApprovalLevels()
         .then((levels) => {
           const formLevels = levels
-            .filter((l) => l.module === 'CustomForms' || l.module === 'CustomForm' || l.module === 'Approvals')
+            .filter((l) => l.module === 'CustomForms' || l.module === 'CustomForm')
             .sort((a, b) => a.levelNumber - b.levelNumber);
 
           if (formLevels.length > 0) {
@@ -332,289 +333,291 @@ export default function FormSaveWorkflowModal({
     });
   };
 
-  return (
-    <div className="fwm-backdrop" onClick={onClose}>
-      <div className="fwm-modal" onClick={(e) => e.stopPropagation()}>
-        {/* Top Header */}
-        <div className="fwm-modal__header">
-          <div className="fwm-modal__header-left">
-            <div className="fwm-icon-badge">
-              <GitMerge size={22} />
+  return createPortal(
+    <>
+      <div className="fwm-backdrop" style={{ zIndex: 99999 }} onClick={onClose}>
+        <div className="fwm-modal" onClick={(e) => e.stopPropagation()}>
+          {/* Top Header */}
+          <div className="fwm-modal__header">
+            <div className="fwm-modal__header-left">
+              <div className="fwm-icon-badge">
+                <GitMerge size={22} />
+              </div>
+              <div>
+                <h2 className="fwm-modal__title">Form Distribution & Workflow</h2>
+                <p className="fwm-modal__subtitle">
+                  Form: <strong>{formTitle || 'Untitled Custom Form'}</strong>
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="fwm-modal__title">Form Distribution & Workflow</h2>
-              <p className="fwm-modal__subtitle">
-                Form: <strong>{formTitle || 'Untitled Custom Form'}</strong>
-              </p>
+            <button className="fwm-close-btn" onClick={onClose} aria-label="Close modal">
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Wizard Steps Indicator */}
+          <div className="fwm-steps-bar">
+            <div className={`fwm-step-pill ${step === 1 ? 'fwm-step-pill--active' : 'fwm-step-pill--completed'}`}>
+              <span className="fwm-step-num">1</span>
+              <span className="fwm-step-label">Select Form Audience</span>
+            </div>
+            <div className="fwm-step-divider" />
+            <div className={`fwm-step-pill ${step === 2 ? 'fwm-step-pill--active' : ''}`}>
+              <span className="fwm-step-num">2</span>
+              <span className="fwm-step-label">Attach Workflow & Distribute</span>
             </div>
           </div>
-          <button className="fwm-close-btn" onClick={onClose} aria-label="Close modal">
-            <X size={18} />
-          </button>
-        </div>
 
-        {/* Wizard Steps Indicator */}
-        <div className="fwm-steps-bar">
-          <div className={`fwm-step-pill ${step === 1 ? 'fwm-step-pill--active' : 'fwm-step-pill--completed'}`}>
-            <span className="fwm-step-num">1</span>
-            <span className="fwm-step-label">Select Form Audience</span>
-          </div>
-          <div className="fwm-step-divider" />
-          <div className={`fwm-step-pill ${step === 2 ? 'fwm-step-pill--active' : ''}`}>
-            <span className="fwm-step-num">2</span>
-            <span className="fwm-step-label">Attach Workflow & Distribute</span>
-          </div>
-        </div>
+          {modalError && (
+            <MessageStrip type="error" compact onClose={() => setModalError(null)} style={{ margin: '12px 24px 0' }}>
+              {modalError}
+            </MessageStrip>
+          )}
 
-        {modalError && (
-          <MessageStrip type="error" compact onClose={() => setModalError(null)} style={{ margin: '12px 24px 0' }}>
-            {modalError}
-          </MessageStrip>
-        )}
-
-        {/* Body Content */}
-        <div className="fwm-body">
-          {step === 1 ? (
-            /* ── STEP 1: AUDIENCE SELECTION ── */
-            <div className="fwm-step-content">
-              <div className="fwm-section-title">
-                <Users size={16} />
-                <span>Who should receive this form?</span>
-              </div>
-
-              {/* Audience Type Radio Cards */}
-              <div className="fwm-audience-grid">
-                <div
-                  className={`fwm-audience-card ${audienceType === 'specific_users' ? 'fwm-audience-card--selected' : ''}`}
-                  onClick={() => setAudienceType('specific_users')}
-                >
-                  <div className="fwm-audience-card__icon">
-                    <UserCheck size={22} />
-                  </div>
-                  <div className="fwm-audience-card__info">
-                    <h4>Specific User(s)</h4>
-                    <p>Assign to one or multiple specific employees or managers.</p>
-                  </div>
-                  <div className="fwm-audience-card__radio">
-                    <div className="fwm-radio-dot" />
-                  </div>
+          {/* Body Content */}
+          <div className="fwm-body">
+            {step === 1 ? (
+              /* ── STEP 1: AUDIENCE SELECTION ── */
+              <div className="fwm-step-content">
+                <div className="fwm-section-title">
+                  <Users size={16} />
+                  <span>Who should receive this form?</span>
                 </div>
 
-                <div
-                  className={`fwm-audience-card ${audienceType === 'whole_org' ? 'fwm-audience-card--selected' : ''}`}
-                  onClick={() => setAudienceType('whole_org')}
-                >
-                  <div className="fwm-audience-card__icon fwm-audience-card__icon--org">
-                    <Building size={22} />
-                  </div>
-                  <div className="fwm-audience-card__info">
-                    <h4>Whole Organization</h4>
-                    <p>Publish to every active employee across the organization ({eligibleUsers.length} users).</p>
-                  </div>
-                  <div className="fwm-audience-card__radio">
-                    <div className="fwm-radio-dot" />
-                  </div>
-                </div>
-              </div>
-
-              {/* User Selection Box (If Specific Users Selected) */}
-              {audienceType === 'specific_users' && (
-                <div className="fwm-user-picker-container">
-                  <div className="fwm-user-picker__header">
-                    <div className="fwm-user-search-wrap">
-                      <Search size={15} className="fwm-search-icon" />
-                      <input
-                        type="text"
-                        className="fwm-user-search-input"
-                        placeholder="Search employee by name, email, department..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                      />
-                    </div>
-                    <div className="fwm-user-picker__actions">
-                      <button type="button" className="fwm-link-btn" onClick={handleSelectAllFiltered}>
-                        Select All
-                      </button>
-                      <button type="button" className="fwm-link-btn fwm-link-btn--muted" onClick={handleClearSelection}>
-                        Clear ({selectedUserIds.length})
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Selected count badge */}
-                  <div className="fwm-selected-count-strip">
-                    <Check size={14} />
-                    <span>
-                      {selectedUserIds.length} user{selectedUserIds.length !== 1 ? 's' : ''} selected for assignment
-                    </span>
-                  </div>
-
-                  {/* Users list grid */}
-                  <div className="fwm-user-list">
-                    {filteredUsers.map((u) => {
-                      const isSelected = selectedUserIds.includes(String(u.id));
-                      return (
-                        <div
-                          key={u.id}
-                          className={`fwm-user-item ${isSelected ? 'fwm-user-item--selected' : ''}`}
-                          onClick={() => toggleUserSelection(String(u.id))}
-                        >
-                          <div className="fwm-user-item__avatar">
-                            {u.fullName.split(' ').map((n) => n[0]).join('').substring(0, 2)}
-                          </div>
-                          <div className="fwm-user-item__info">
-                            <span className="fwm-user-item__name">{u.fullName}</span>
-                            <span className="fwm-user-item__email">{u.email}</span>
-                          </div>
-                          <div className={`fwm-checkbox ${isSelected ? 'fwm-checkbox--checked' : ''}`}>
-                            {isSelected && <Check size={12} />}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {audienceType === 'whole_org' && (
-                <div className="fwm-org-notice">
-                  <Sparkles size={18} />
-                  <div>
-                    <strong>Organization-Wide Distribution Mode</strong>
-                    <p>
-                      Upon publishing, an independent submission & workflow instance will be created for each employee.
-                      Employees submit individually and progress through their approval pipeline.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            /* ── STEP 2: WORKFLOW ATTACHMENT & PUBLISH ── */
-            <div className="fwm-step-content">
-              <div className="fwm-section-title">
-                <GitMerge size={16} />
-                <span>Workflow & Distribution Settings</span>
-              </div>
-
-              {/* Attach Workflow Toggle Box */}
-              <div className="fwm-workflow-toggle-box">
-                <div className="fwm-wf-toggle-left">
-                  <div className="fwm-wf-toggle-icon">
-                    <GitMerge size={20} />
-                  </div>
-                  <div>
-                    <h4>Attach Approval Workflow</h4>
-                    <p>
-                      Connect Approval Levels matrix (Level 1 → Level 2 → Level 3) so form submissions progress sequentially through each level before final completion.
-                    </p>
-                  </div>
-                </div>
-                <label className="fwm-switch">
-                  <input
-                    type="checkbox"
-                    checked={attachWorkflow}
-                    onChange={(e) => setAttachWorkflow(e.target.checked)}
-                  />
-                  <span className="fwm-slider" />
-                </label>
-              </div>
-
-              {/* Options Breakdown */}
-              <div className="fwm-meta-grid">
-                <div className="fwm-meta-field">
-                  <label>
-                    <Calendar size={14} /> Due Date
-                  </label>
-                  <input
-                    type="date"
-                    className="fwm-meta-input"
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
-                  />
-                </div>
-
-                <div className="fwm-meta-field">
-                  <label>
-                    <Clock size={14} /> Priority Level
-                  </label>
-                  <select
-                    className="fwm-meta-select"
-                    value={priority}
-                    onChange={(e) => setPriority(e.target.value as any)}
+                {/* Audience Type Radio Cards */}
+                <div className="fwm-audience-grid">
+                  <div
+                    className={`fwm-audience-card ${audienceType === 'specific_users' ? 'fwm-audience-card--selected' : ''}`}
+                    onClick={() => setAudienceType('specific_users')}
                   >
-                    <option value="High">🔴 High Priority</option>
-                    <option value="Medium">🟡 Medium Priority</option>
-                    <option value="Low">🟢 Low Priority</option>
-                  </select>
+                    <div className="fwm-audience-card__icon">
+                      <UserCheck size={22} />
+                    </div>
+                    <div className="fwm-audience-card__info">
+                      <h4>Specific User(s)</h4>
+                      <p>Assign to one or multiple specific employees or managers.</p>
+                    </div>
+                    <div className="fwm-audience-card__radio">
+                      <div className="fwm-radio-dot" />
+                    </div>
+                  </div>
+
+                  <div
+                    className={`fwm-audience-card ${audienceType === 'whole_org' ? 'fwm-audience-card--selected' : ''}`}
+                    onClick={() => setAudienceType('whole_org')}
+                  >
+                    <div className="fwm-audience-card__icon fwm-audience-card__icon--org">
+                      <Building size={22} />
+                    </div>
+                    <div className="fwm-audience-card__info">
+                      <h4>Whole Organization</h4>
+                      <p>Publish to every active employee across the organization ({eligibleUsers.length} users).</p>
+                    </div>
+                    <div className="fwm-audience-card__radio">
+                      <div className="fwm-radio-dot" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* User Selection Box (If Specific Users Selected) */}
+                {audienceType === 'specific_users' && (
+                  <div className="fwm-user-picker-container">
+                    <div className="fwm-user-picker__header">
+                      <div className="fwm-user-search-wrap">
+                        <Search size={15} className="fwm-search-icon" />
+                        <input
+                          type="text"
+                          className="fwm-user-search-input"
+                          placeholder="Search employee by name, email, department..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                      </div>
+                      <div className="fwm-user-picker__actions">
+                        <button type="button" className="fwm-link-btn" onClick={handleSelectAllFiltered}>
+                          Select All
+                        </button>
+                        <button type="button" className="fwm-link-btn fwm-link-btn--muted" onClick={handleClearSelection}>
+                          Clear ({selectedUserIds.length})
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Selected count badge */}
+                    <div className="fwm-selected-count-strip">
+                      <Check size={14} />
+                      <span>
+                        {selectedUserIds.length} user{selectedUserIds.length !== 1 ? 's' : ''} selected for assignment
+                      </span>
+                    </div>
+
+                    {/* Users list grid */}
+                    <div className="fwm-user-list">
+                      {filteredUsers.map((u) => {
+                        const isSelected = selectedUserIds.includes(String(u.id));
+                        return (
+                          <div
+                            key={u.id}
+                            className={`fwm-user-item ${isSelected ? 'fwm-user-item--selected' : ''}`}
+                            onClick={() => toggleUserSelection(String(u.id))}
+                          >
+                            <div className="fwm-user-item__avatar">
+                              {u.fullName.split(' ').map((n) => n[0]).join('').substring(0, 2)}
+                            </div>
+                            <div className="fwm-user-item__info">
+                              <span className="fwm-user-item__name">{u.fullName}</span>
+                              <span className="fwm-user-item__email">{u.email}</span>
+                            </div>
+                            <div className={`fwm-checkbox ${isSelected ? 'fwm-checkbox--checked' : ''}`}>
+                              {isSelected && <Check size={12} />}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {audienceType === 'whole_org' && (
+                  <div className="fwm-org-notice">
+                    <Sparkles size={18} />
+                    <div>
+                      <strong>Organization-Wide Distribution Mode</strong>
+                      <p>
+                        Upon publishing, an independent submission & workflow instance will be created for each employee.
+                        Employees submit individually and progress through their approval pipeline.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* ── STEP 2: WORKFLOW ATTACHMENT & PUBLISH ── */
+              <div className="fwm-step-content">
+                <div className="fwm-section-title">
+                  <GitMerge size={16} />
+                  <span>Workflow & Distribution Settings</span>
+                </div>
+
+                {/* Attach Workflow Toggle Box */}
+                <div className="fwm-workflow-toggle-box">
+                  <div className="fwm-wf-toggle-left">
+                    <div className="fwm-wf-toggle-icon">
+                      <GitMerge size={20} />
+                    </div>
+                    <div>
+                      <h4>Attach Approval Workflow</h4>
+                      <p>
+                        Connect Approval Levels matrix (Level 1 → Level 2 → Level 3) so form submissions progress sequentially through each level before final completion.
+                      </p>
+                    </div>
+                  </div>
+                  <label className="fwm-switch">
+                    <input
+                      type="checkbox"
+                      checked={attachWorkflow}
+                      onChange={(e) => setAttachWorkflow(e.target.checked)}
+                    />
+                    <span className="fwm-slider" />
+                  </label>
+                </div>
+
+                {/* Options Breakdown */}
+                <div className="fwm-meta-grid">
+                  <div className="fwm-meta-field">
+                    <label>
+                      <Calendar size={14} /> Due Date
+                    </label>
+                    <input
+                      type="date"
+                      className="fwm-meta-input"
+                      value={dueDate}
+                      onChange={(e) => setDueDate(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="fwm-meta-field">
+                    <label>
+                      <Clock size={14} /> Priority Level
+                    </label>
+                    <select
+                      className="fwm-meta-select"
+                      value={priority}
+                      onChange={(e) => setPriority(e.target.value as any)}
+                    >
+                      <option value="High">🔴 High Priority</option>
+                      <option value="Medium">🟡 Medium Priority</option>
+                      <option value="Low">🟢 Low Priority</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="fwm-summary-strip">
+                  <AlertCircle size={16} />
+                  <span>
+                    Ready to publish to{' '}
+                    <strong>
+                      {audienceType === 'whole_org'
+                        ? 'Whole Organization (All Active Employees)'
+                        : `${selectedUserIds.length} Selected Users`}
+                    </strong>
+                    {attachWorkflow
+                      ? ` with ${matrixLevels.length}-level sequential approval workflow attached.`
+                      : ' directly (no approval levels attached).'}
+                  </span>
                 </div>
               </div>
+            )}
+          </div>
 
-              <div className="fwm-summary-strip">
-                <AlertCircle size={16} />
-                <span>
-                  Ready to publish to{' '}
-                  <strong>
-                    {audienceType === 'whole_org'
-                      ? 'Whole Organization (All Active Employees)'
-                      : `${selectedUserIds.length} Selected Users`}
-                  </strong>
-                  {attachWorkflow
-                    ? ` with ${matrixLevels.length}-level sequential approval workflow attached.`
-                    : ' directly (no approval levels attached).'}
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Modal Footer */}
-        <div className="fwm-footer">
-          {step === 1 ? (
-            <>
-              <button type="button" className="fwm-btn fwm-btn--secondary" onClick={onClose}>
-                Cancel
-              </button>
-              <div className="fwm-footer-right">
-                <button type="button" className="fwm-btn fwm-btn--draft" onClick={onSaveAsDraft}>
-                  <FileText size={15} />
-                  Save as Draft
+          {/* Modal Footer */}
+          <div className="fwm-footer">
+            {step === 1 ? (
+              <>
+                <button type="button" className="fwm-btn fwm-btn--secondary" onClick={onClose}>
+                  Cancel
                 </button>
-                <button type="button" className="fwm-btn fwm-btn--primary" onClick={handleNextStep}>
-                  Next: Workflow Options
-                  <ChevronRight size={16} />
+                <div className="fwm-footer-right">
+                  <button type="button" className="fwm-btn fwm-btn--draft" onClick={onSaveAsDraft}>
+                    <FileText size={15} />
+                    Save as Draft
+                  </button>
+                  <button type="button" className="fwm-btn fwm-btn--primary" onClick={handleNextStep}>
+                    Next: Workflow Options
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <button type="button" className="fwm-btn fwm-btn--secondary" onClick={() => setStep(1)}>
+                  <ChevronLeft size={16} />
+                  Back
                 </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <button type="button" className="fwm-btn fwm-btn--secondary" onClick={() => setStep(1)}>
-                <ChevronLeft size={16} />
-                Back
-              </button>
-              <div className="fwm-footer-right">
-                <button
-                  type="button"
-                  className="fwm-btn fwm-btn--configure-wf"
-                  onClick={() => setShowMatrixEditor(true)}
-                >
-                  <GitMerge size={15} />
-                  Configure Approval Matrix {matrixLevels.length > 0 ? `(${matrixLevels.length} Levels)` : ''}
-                </button>
-                <button type="button" className="fwm-btn fwm-btn--publish" onClick={handlePublish}>
-                  <Send size={15} />
-                  Publish & Distribute
-                </button>
-              </div>
-            </>
-          )}
+                <div className="fwm-footer-right">
+                  <button
+                    type="button"
+                    className="fwm-btn fwm-btn--configure-wf"
+                    onClick={() => setShowMatrixEditor(true)}
+                  >
+                    <GitMerge size={15} />
+                    Configure Approval Matrix {matrixLevels.length > 0 ? `(${matrixLevels.length} Levels)` : ''}
+                  </button>
+                  <button type="button" className="fwm-btn fwm-btn--publish" onClick={handlePublish}>
+                    <Send size={15} />
+                    Publish & Distribute
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* ── Approval Matrix Configurator Modal Overlay ── */}
-      {showMatrixEditor && (
-        <div className="fwm-backdrop" style={{ zIndex: 100005 }} onClick={() => setShowMatrixEditor(false)}>
-          <div className="fwm-modal fwm-modal--matrix" onClick={(e) => e.stopPropagation()}>
+      {/* ── Approval Matrix Configurator Modal Overlay (Portaled ON TOP of main modal) ── */}
+      {showMatrixEditor && createPortal(
+        <div className="fwm-backdrop fwm-backdrop--matrix" style={{ zIndex: 100010 }} onClick={() => setShowMatrixEditor(false)}>
+          <div className="fwm-modal fwm-modal--matrix" style={{ zIndex: 100011, position: 'relative' }} onClick={(e) => e.stopPropagation()}>
             <div className="fwm-modal__header">
               <div className="fwm-modal__header-left">
                 <div className="fwm-icon-badge" style={{ background: '#8b5cf6' }}>
@@ -777,8 +780,10 @@ export default function FormSaveWorkflowModal({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>,
+    document.body
   );
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { rfqService } from '../../services/rfqService';
 import { contractService } from '../../services/contractService';
@@ -13,12 +13,15 @@ import {
   Save, Eye, FileText, Printer, Send, ArrowLeft, Plus, Trash2,
   ShoppingCart, Building2, Truck, ClipboardList, Hash, DollarSign,
   Percent, Calculator, X, Loader2, AlertTriangle, Settings,
-  AlertCircle, Download,
+  AlertCircle, Download, FileCheck, ShieldAlert, CheckCircle2, PieChart, IndianRupee,
 } from 'lucide-react';
 import { useBranding } from '../../context/BrandingContext';
 import PurchaseOrderDocument from '../../components/purchase-orders/PurchaseOrderDocument';
 import { toCanvas } from 'html-to-image';
 import { jsPDF } from 'jspdf';
+import { useAuth } from '../../context/AuthContext';
+import { isL2OrHigherUser } from '../../utils/rbac';
+import { CreatorLevelPromptModal } from '../../components/shared/CreatorLevelPromptModal';
 import './PurchaseRequisitionPage.css';
 
 // ─── Helper ─────────────────────────────────────────────────
@@ -66,8 +69,11 @@ function getStatusLabel(status: string): string {
 export default function PurchaseRequisitionPage() {
   const { rfqId } = useParams<{ rfqId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const contractId = searchParams.get('contractId');
+  const isReadOnly = searchParams.get('mode') === 'view' || searchParams.get('readOnly') === 'true' || Boolean((location.state as any)?.readOnly);
+  const { roles } = useAuth();
   const { formatAmount, companyDefaultCurrency } = useCurrency();
   const branding = useBranding();
 
@@ -79,6 +85,7 @@ export default function PurchaseRequisitionPage() {
   const [contractData, setContractData] = useState<any>(null);
   const [contractBalance, setContractBalance] = useState<{ contractValue: number; consumedValue: number; remainingValue: number; currency: string } | null>(null);
   const [poCreated, setPoCreated] = useState(false);
+  const [showLevelPrompt, setShowLevelPrompt] = useState(false);
 
   // Print / PDF state
   const [downloadingPdf, setDownloadingPdf] = useState(false);
@@ -106,22 +113,14 @@ export default function PurchaseRequisitionPage() {
       setLoading(true);
       setError(null);
       try {
-        // Try fetching existing PR first
-        const existing = await purchaseRequisitionService.getByRfqId(rfqId);
-        if (existing) {
-          setPr(existing);
-          setLoading(false);
-          // If this is a contract-based PO, still fetch contract balance for the banner
-          if (contractId) {
-            contractService.getContractBalance(contractId)
-              .then(balance => {
-                setContractBalance(balance);
-                // Also fetch contract data for the header
-                contractService.getContract(contractId).then(cr => setContractData(cr.contract)).catch(() => {});
-              })
-              .catch(() => {});
+        // Try fetching existing PR first (only for non-contract PR view/edit)
+        if (!contractId) {
+          const existing = await purchaseRequisitionService.getByRfqId(rfqId);
+          if (existing) {
+            setPr(existing);
+            setLoading(false);
+            return;
           }
-          return;
         }
 
         // Fetch contract data if contractId provided (from Post-Contract PO flow)
@@ -308,26 +307,26 @@ export default function PurchaseRequisitionPage() {
 
   // Update a field
   const updateField = useCallback(<K extends keyof PurchaseRequisition>(key: K, value: PurchaseRequisition[K]) => {
-    if (!pr) return;
+    if (!pr || isReadOnly) return;
     const draft = { ...pr, [key]: value };
     if (key === 'shippingCharges' || key === 'otherCharges') {
       setPr(recalc(draft));
     } else {
       setPr(draft);
     }
-  }, [pr, recalc]);
+  }, [pr, recalc, isReadOnly]);
 
   // Update an item field
   const updateItem = useCallback((index: number, key: keyof PurchaseRequisitionItem, value: any) => {
-    if (!pr) return;
+    if (!pr || isReadOnly) return;
     const items = [...pr.items];
     items[index] = { ...items[index], [key]: value };
     setPr(recalc({ ...pr, items }));
-  }, [pr, recalc]);
+  }, [pr, recalc, isReadOnly]);
 
   // Add item
   const addItem = useCallback(() => {
-    if (!pr) return;
+    if (!pr || isReadOnly) return;
     const items = [...pr.items, {
       itemNo: pr.items.length + 1,
       description: '',
@@ -339,14 +338,14 @@ export default function PurchaseRequisitionPage() {
       total: 0,
     }];
     setPr(recalc({ ...pr, items }));
-  }, [pr, recalc]);
+  }, [pr, recalc, isReadOnly]);
 
   // Delete item
   const deleteItem = useCallback((index: number) => {
-    if (!pr || pr.items.length <= 1) return;
+    if (!pr || pr.items.length <= 1 || isReadOnly) return;
     const items = pr.items.filter((_, i) => i !== index).map((item, i) => ({ ...item, itemNo: i + 1 }));
     setPr(recalc({ ...pr, items }));
-  }, [pr, recalc]);
+  }, [pr, recalc, isReadOnly]);
 
   // ── Validation ──────────────────────────────────────────────
 
@@ -414,7 +413,7 @@ export default function PurchaseRequisitionPage() {
 
   // Save Draft
   const handleSave = async () => {
-    if (!pr) return;
+    if (!pr || isReadOnly) return;
     if (!validate()) {
       setToast({ message: 'Please fix the validation errors before saving.', type: 'error' });
       return;
@@ -452,11 +451,6 @@ export default function PurchaseRequisitionPage() {
 
   // Print — uses the professional PO document
   const handlePrint = () => {
-    if (!pr) return;
-    if (!validate()) {
-      setToast({ message: 'Please fix the validation errors before printing.', type: 'error' });
-      return;
-    }
     window.print();
   };
 
@@ -516,23 +510,30 @@ export default function PurchaseRequisitionPage() {
 
   // Submit for Approval (saves + triggers approval workflow + redirects to approvals page)
   const handleSubmitForApproval = async () => {
-    if (!pr) return;
+    if (!pr || isReadOnly) return;
     if (!validate()) {
       setToast({ message: 'Please fix the validation errors before submitting for approval.', type: 'error' });
       return;
     }
-    // Save first (backend auto-creates PO with PENDING_APPROVAL + initiates approval workflow)
+    if (isL2OrHigherUser(roles)) {
+      setShowLevelPrompt(true);
+      return;
+    }
+    await executeSubmitForApproval(1);
+  };
+
+  const executeSubmitForApproval = async (startLevelNumber?: number) => {
+    if (!pr) return;
     setSaving(true);
     setError(null);
     try {
-      // Send status as PENDING_APPROVAL so backend saves it correctly
       const payload = {
         ...(contractId ? { ...pr, contractId } : pr),
         status: 'PENDING_APPROVAL' as const,
+        startLevelNumber,
       };
       const result = await purchaseRequisitionService.save(payload) as PurchaseRequisition & { createdPO?: { poNumber: string } };
       
-      // Update local state: set status to PENDING_APPROVAL regardless of backend response
       const updatedPr = result 
         ? { ...result, status: 'PENDING_APPROVAL' as const } 
         : { ...pr, status: 'PENDING_APPROVAL' as const };
@@ -550,7 +551,6 @@ export default function PurchaseRequisitionPage() {
         setToast({ message: 'Purchase Requisition submitted for approval. Redirecting to approvals…', type: 'success' });
       }
 
-      // Navigate to approvals page after a brief delay so user can see the toast
       setTimeout(() => navigate('/approvals'), 1500);
     } catch (err: any) {
       setToast({ message: err?.message || 'Failed to submit for approval', type: 'error' });
@@ -628,114 +628,117 @@ export default function PurchaseRequisitionPage() {
         </div>
       )}
 
-      {/* ── Contract Balance Banner ── */}
+      {/* ── Contract Balance Banner (SAP Fiori Enterprise Edition) ── */}
       {contractBalance && (() => {
         const consumedAfterPo = contractBalance.consumedValue + pr.grandTotal;
         const consumedPct = Math.min(100, (consumedAfterPo / contractBalance.contractValue) * 100);
         const isOver = pr.grandTotal > contractBalance.remainingValue;
-        const barColor = consumedPct >= 100 ? '#dc2626' : consumedPct >= 80 ? '#d97706' : consumedPct >= 60 ? '#ca8a04' : '#059669';
-
+        const remainingAfterThisPo = Math.max(0, contractBalance.remainingValue - (isOver ? 0 : pr.grandTotal));
         const maxPOAmount = Math.max(0, contractBalance.remainingValue);
 
         return (
           <div className={`pr-contract-balance ${isOver ? 'pr-contract-balance--exceeded' : ''}`}>
             <div className="pr-contract-balance__header">
-              <FileText size={16} />
-              <span>Contract: {contractData?.contractNumber || 'N/A'}</span>
-              <span className="pr-contract-balance__max-po" style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 600, color: isOver ? '#dc2626' : '#059669' }}>
-                Max PO Amount: {formatAmount(maxPOAmount, contractBalance.currency || companyDefaultCurrency)}
-              </span>
+              <div className="pr-contract-balance__header-title">
+                <FileCheck size={18} className="pr-sap-header-icon" />
+                <span>CONTRACT AGREEMENT</span>
+                <span className="pr-contract-chip">{contractData?.contractNumber || 'N/A'}</span>
+              </div>
+              <div className="pr-contract-balance__header-limit">
+                <ShieldAlert size={14} />
+                <span>Max PO Limit: <strong>{formatAmount(maxPOAmount, contractBalance.currency || companyDefaultCurrency)}</strong></span>
+              </div>
             </div>
 
             {/* ── Progress Bar ── */}
             <div className="pr-contract-balance__progress-section">
               <div className="pr-contract-balance__progress-labels">
                 <span className="pr-contract-balance__progress-label">
-                  Consumed: {formatAmount(consumedAfterPo, contractBalance.currency || companyDefaultCurrency)}
+                  CONSUMPTION (AFTER THIS PO): {formatAmount(consumedAfterPo, contractBalance.currency || companyDefaultCurrency)}
                 </span>
                 <span className="pr-contract-balance__progress-pct">
                   {Math.round(consumedPct)}%
                 </span>
               </div>
               <div
-                  className="pr-contract-balance__progress-track"
-                  role="progressbar"
-                  aria-valuenow={Math.round(consumedPct)}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-label={`${Math.round(consumedPct)}% of contract value consumed`}
-                >
+                className="pr-contract-balance__progress-track"
+                role="progressbar"
+                aria-valuenow={Math.round(consumedPct)}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              >
                 <div
                   className="pr-contract-balance__progress-fill"
                   style={{
                     width: `${Math.min(100, consumedPct)}%`,
-                    background: barColor,
-                    transition: 'width 0.4s cubic-bezier(0.4,0,0.2,1), background 0.3s ease',
                   }}
                 />
-                {!isOver && consumedPct < 100 && (
-                  <div
-                    className="pr-contract-balance__progress-this-po"
-                    style={{
-                      left: `${Math.min(95, consumedPct)}%`,
-                      width: `${Math.min(5, 100 - consumedPct)}%`,
-                    }}
-                    title="This PO"
-                  />
-                )}
               </div>
               <div className="pr-contract-balance__progress-labels pr-contract-balance__progress-labels--sub">
-                <span>
-                  Contract: {formatAmount(contractBalance.contractValue, contractBalance.currency || companyDefaultCurrency)}
-                </span>
-                <span>
-                  Remaining: {formatAmount(Math.max(0, contractBalance.remainingValue - (isOver ? 0 : pr.grandTotal)), contractBalance.currency || companyDefaultCurrency)}
-                </span>
+                <span>TOTAL CONTRACT VALUE: {formatAmount(contractBalance.contractValue, contractBalance.currency || companyDefaultCurrency)}</span>
+                <span>AVAILABLE REMAINING BALANCE: {formatAmount(remainingAfterThisPo, contractBalance.currency || companyDefaultCurrency)}</span>
               </div>
             </div>
 
+            {/* ── 4 SAP Metric Cards ── */}
             <div className="pr-contract-balance__items">
               <div className="pr-contract-balance__item">
-                <span className="pr-contract-balance__label">Contract Value</span>
+                <div className="pr-contract-balance__item-head">
+                  <IndianRupee size={14} className="pr-cb-icon pr-cb-icon--total" />
+                  <span className="pr-contract-balance__label">Contract Value</span>
+                </div>
                 <span className="pr-contract-balance__value">
                   {formatAmount(contractBalance.contractValue, contractBalance.currency || companyDefaultCurrency)}
                 </span>
               </div>
+
               <div className="pr-contract-balance__item">
-                <span className="pr-contract-balance__label">Already Consumed</span>
+                <div className="pr-contract-balance__item-head">
+                  <PieChart size={14} className="pr-cb-icon pr-cb-icon--consumed" />
+                  <span className="pr-contract-balance__label">Already Consumed</span>
+                </div>
                 <span className="pr-contract-balance__value pr-contract-balance__value--consumed">
                   {formatAmount(contractBalance.consumedValue, contractBalance.currency || companyDefaultCurrency)}
                 </span>
               </div>
+
               <div className="pr-contract-balance__item">
-                <span className="pr-contract-balance__label">This PO</span>
+                <div className="pr-contract-balance__item-head">
+                  <ShoppingCart size={14} className="pr-cb-icon pr-cb-icon--po" />
+                  <span className="pr-contract-balance__label">This PO Amount</span>
+                </div>
                 <span className={`pr-contract-balance__value pr-contract-balance__value--po ${isOver ? 'pr-contract-balance__value--over' : ''}`}>
                   {formatAmount(pr.grandTotal, contractBalance.currency || companyDefaultCurrency)}
                 </span>
               </div>
+
               <div className="pr-contract-balance__item">
-                <span className="pr-contract-balance__label">Remaining</span>
-                <span className={`pr-contract-balance__value pr-contract-balance__value--remaining ${contractBalance.remainingValue <= 0 ? 'pr-contract-balance__value--exhausted' : ''}`}>
-                  {formatAmount(Math.max(0, contractBalance.remainingValue - (isOver ? 0 : pr.grandTotal)), contractBalance.currency || companyDefaultCurrency)}
+                <div className="pr-contract-balance__item-head">
+                  <CheckCircle2 size={14} className="pr-cb-icon pr-cb-icon--remaining" />
+                  <span className="pr-contract-balance__label">Remaining Balance</span>
+                </div>
+                <span className={`pr-contract-balance__value pr-contract-balance__value--remaining ${remainingAfterThisPo <= 0 ? 'pr-contract-balance__value--exhausted' : ''}`}>
+                  {formatAmount(remainingAfterThisPo, contractBalance.currency || companyDefaultCurrency)}
                 </span>
               </div>
             </div>
 
+            {/* Warnings */}
             {isOver && (
               <div className="pr-contract-balance__warning">
-                <AlertCircle size={14} />
-                <span>PO amount exceeds remaining contract value by {formatAmount(pr.grandTotal - contractBalance.remainingValue, contractBalance.currency || companyDefaultCurrency)}</span>
+                <AlertCircle size={15} />
+                <span>PO amount exceeds remaining contract value by {formatAmount(pr.grandTotal - contractBalance.remainingValue, contractBalance.currency || companyDefaultCurrency)}. Reduce PO items or amounts.</span>
               </div>
             )}
             {!isOver && consumedPct >= 80 && consumedPct < 100 && (
               <div className="pr-contract-balance__warning pr-contract-balance__warning--caution">
-                <AlertCircle size={14} />
-                <span>Warning: This PO will consume {Math.round(consumedPct)}% of the contract value. Only {formatAmount(Math.max(0, contractBalance.remainingValue - pr.grandTotal), contractBalance.currency || companyDefaultCurrency)} will remain.</span>
+                <AlertCircle size={15} />
+                <span>Warning: This PO will consume {Math.round(consumedPct)}% of the total contract value. Only {formatAmount(remainingAfterThisPo, contractBalance.currency || companyDefaultCurrency)} will remain.</span>
               </div>
             )}
             {contractBalance.remainingValue <= 0 && (
               <div className="pr-contract-balance__warning pr-contract-balance__warning--exhausted">
-                <AlertCircle size={14} />
+                <AlertCircle size={15} />
                 <span>Contract value is fully consumed. No further purchase orders can be created from this contract.</span>
               </div>
             )}
@@ -753,23 +756,32 @@ export default function PurchaseRequisitionPage() {
           <span className="pr-toolbar__title-text">PO Creation</span>
           {pr.poNumber && <span className="pr-toolbar__po-num">#{pr.poNumber}</span>}
           <span className={`pr-badge pr-badge--${pr.status}`}>{getStatusLabel(pr.status)}</span>
+          {isReadOnly && (
+            <span className="pr-badge" style={{ background: 'rgba(10, 110, 209, 0.12)', color: 'var(--primary-500)', border: '1px solid rgba(10, 110, 209, 0.25)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <Eye size={12} /> View Only
+            </span>
+          )}
         </div>
         <div className="pr-toolbar__actions">
-          <button className="pr-btn pr-btn--outline" onClick={handleSave} disabled={saving || (contractBalance ? pr.grandTotal > contractBalance.remainingValue : false)}>
-            {contractBalance && pr.grandTotal > contractBalance.remainingValue ? 'Amount Exceeds Limit' : <><Save size={16} /> {saving ? 'Saving…' : 'Save Draft'}</>}
-          </button>
+          {!isReadOnly && (
+            <button className="pr-btn pr-btn--outline" onClick={handleSave} disabled={saving || (contractBalance ? pr.grandTotal > contractBalance.remainingValue : false)}>
+              {contractBalance && pr.grandTotal > contractBalance.remainingValue ? 'Amount Exceeds Limit' : <><Save size={16} /> {saving ? 'Saving…' : 'Save Draft'}</>}
+            </button>
+          )}
           <button className="pr-btn pr-btn--outline" onClick={handlePrint}>
             <Printer size={16} /> Print
           </button>
           <button className="pr-btn pr-btn--outline" onClick={handleDownloadPdf} disabled={downloadingPdf}>
             <Download size={16} /> {downloadingPdf ? 'Downloading…' : 'Download PDF'}
           </button>
-          <button className="pr-btn pr-btn--primary" onClick={handleSubmitForApproval} disabled={saving || (contractBalance && pr.grandTotal > contractBalance.remainingValue)}>
-            {contractBalance && pr.grandTotal > contractBalance.remainingValue
-              ? 'PO Exceeds Contract Limit'
-              : <><Send size={16} /> {saving ? 'Submitting…' : 'Send for Approval'}</>}
-          </button>
-          {poCreated && (
+          {!isReadOnly && (
+            <button className="pr-btn pr-btn--primary" onClick={handleSubmitForApproval} disabled={saving || (contractBalance && pr.grandTotal > contractBalance.remainingValue)}>
+              {contractBalance && pr.grandTotal > contractBalance.remainingValue
+                ? 'PO Exceeds Contract Limit'
+                : <><Send size={16} /> {saving ? 'Submitting…' : 'Send for Approval'}</>}
+            </button>
+          )}
+          {poCreated && !isReadOnly && (
             <button
               className="pr-btn pr-btn--outline"
               onClick={() => {
@@ -845,11 +857,11 @@ export default function PurchaseRequisitionPage() {
         <section className="pr-section">
           <div className="pr-section__header"><Building2 size={16} /> Company Details</div>
           <div className="pr-section__grid pr-section__grid--2col">
-            <div className="pr-field"><label>Company Name</label><input value={pr.companyName} onChange={e => updateField('companyName', e.target.value)} /></div>
-            <div className="pr-field"><label>Website</label><input value={pr.companyWebsite} onChange={e => updateField('companyWebsite', e.target.value)} /></div>
-            <div className="pr-field pr-field--wide"><label>Address</label><input value={pr.companyAddress} onChange={e => updateField('companyAddress', e.target.value)} /></div>
-            <div className="pr-field"><label>Phone</label><input value={pr.companyPhone} onChange={e => updateField('companyPhone', e.target.value)} /></div>
-            <div className="pr-field"><label>Email</label><input value={pr.companyEmail} onChange={e => updateField('companyEmail', e.target.value)} /></div>
+            <div className="pr-field"><label>Company Name</label><input value={pr.companyName} disabled={isReadOnly} onChange={e => updateField('companyName', e.target.value)} /></div>
+            <div className="pr-field"><label>Website</label><input value={pr.companyWebsite} disabled={isReadOnly} onChange={e => updateField('companyWebsite', e.target.value)} /></div>
+            <div className="pr-field pr-field--wide"><label>Address</label><input value={pr.companyAddress} disabled={isReadOnly} onChange={e => updateField('companyAddress', e.target.value)} /></div>
+            <div className="pr-field"><label>Phone</label><input value={pr.companyPhone} disabled={isReadOnly} onChange={e => updateField('companyPhone', e.target.value)} /></div>
+            <div className="pr-field"><label>Email</label><input value={pr.companyEmail} disabled={isReadOnly} onChange={e => updateField('companyEmail', e.target.value)} /></div>
           </div>
         </section>
 
@@ -858,15 +870,15 @@ export default function PurchaseRequisitionPage() {
           <div className="pr-section__header"><Building2 size={16} /> Vendor Details</div>
           <div className="pr-section__grid pr-section__grid--2col">
             <div className={`pr-field ${validationErrors.vendorName ? 'pr-field--error' : ''}`}>
-              <label>Company Name <span className="pr-required">*</span></label>
-              <input value={pr.vendorName} onChange={e => { updateField('vendorName', e.target.value); clearFieldError('vendorName'); }} />
+              <label>Company Name {!isReadOnly && <span className="pr-required">*</span>}</label>
+              <input value={pr.vendorName} disabled={isReadOnly} onChange={e => { updateField('vendorName', e.target.value); clearFieldError('vendorName'); }} />
               {validationErrors.vendorName && <span className="pr-field__error-msg">{validationErrors.vendorName}</span>}
             </div>
-            <div className="pr-field"><label>Contact Person</label><input value={pr.vendorContactPerson} onChange={e => updateField('vendorContactPerson', e.target.value)} /></div>
-            <div className="pr-field pr-field--wide"><label>Address</label><input value={pr.vendorAddress} onChange={e => updateField('vendorAddress', e.target.value)} /></div>
-            <div className="pr-field"><label>Phone</label><input value={pr.vendorPhone} onChange={e => updateField('vendorPhone', e.target.value)} /></div>
-            <div className="pr-field"><label>Email</label><input value={pr.vendorEmail} onChange={e => updateField('vendorEmail', e.target.value)} /></div>
-            <div className="pr-field"><label>GST/VAT</label><input value={pr.vendorGstVat} onChange={e => updateField('vendorGstVat', e.target.value)} /></div>
+            <div className="pr-field"><label>Contact Person</label><input value={pr.vendorContactPerson} disabled={isReadOnly} onChange={e => updateField('vendorContactPerson', e.target.value)} /></div>
+            <div className="pr-field pr-field--wide"><label>Address</label><input value={pr.vendorAddress} disabled={isReadOnly} onChange={e => updateField('vendorAddress', e.target.value)} /></div>
+            <div className="pr-field"><label>Phone</label><input value={pr.vendorPhone} disabled={isReadOnly} onChange={e => updateField('vendorPhone', e.target.value)} /></div>
+            <div className="pr-field"><label>Email</label><input value={pr.vendorEmail} disabled={isReadOnly} onChange={e => updateField('vendorEmail', e.target.value)} /></div>
+            <div className="pr-field"><label>GST/VAT</label><input value={pr.vendorGstVat} disabled={isReadOnly} onChange={e => updateField('vendorGstVat', e.target.value)} /></div>
           </div>
         </section>
 
@@ -874,11 +886,11 @@ export default function PurchaseRequisitionPage() {
         <section className="pr-section">
           <div className="pr-section__header"><Truck size={16} /> Ship To</div>
           <div className="pr-section__grid pr-section__grid--2col">
-            <div className="pr-field"><label>Company</label><input value={pr.shipToCompany} onChange={e => updateField('shipToCompany', e.target.value)} /></div>
-            <div className="pr-field"><label>Warehouse</label><input value={pr.shipToWarehouse} onChange={e => updateField('shipToWarehouse', e.target.value)} /></div>
-            <div className="pr-field pr-field--wide"><label>Address</label><input value={pr.shipToAddress} onChange={e => updateField('shipToAddress', e.target.value)} /></div>
-            <div className="pr-field"><label>Contact</label><input value={pr.shipToContact} onChange={e => updateField('shipToContact', e.target.value)} /></div>
-            <div className="pr-field"><label>Phone</label><input value={pr.shipToPhone} onChange={e => updateField('shipToPhone', e.target.value)} /></div>
+            <div className="pr-field"><label>Company</label><input value={pr.shipToCompany} disabled={isReadOnly} onChange={e => updateField('shipToCompany', e.target.value)} /></div>
+            <div className="pr-field"><label>Warehouse</label><input value={pr.shipToWarehouse} disabled={isReadOnly} onChange={e => updateField('shipToWarehouse', e.target.value)} /></div>
+            <div className="pr-field pr-field--wide"><label>Address</label><input value={pr.shipToAddress} disabled={isReadOnly} onChange={e => updateField('shipToAddress', e.target.value)} /></div>
+            <div className="pr-field"><label>Contact</label><input value={pr.shipToContact} disabled={isReadOnly} onChange={e => updateField('shipToContact', e.target.value)} /></div>
+            <div className="pr-field"><label>Phone</label><input value={pr.shipToPhone} disabled={isReadOnly} onChange={e => updateField('shipToPhone', e.target.value)} /></div>
           </div>
         </section>
 
@@ -886,22 +898,23 @@ export default function PurchaseRequisitionPage() {
         <section className="pr-section">
           <div className="pr-section__header"><ClipboardList size={16} /> Purchase Order Details</div>
           <div className="pr-section__grid pr-section__grid--3col">
-            <div className="pr-field"><label>PO Number</label><input value={pr.poNumber || ''} onChange={e => updateField('poNumber', e.target.value)} className="pr-field--auto" title="Auto-generated. You can edit if needed." /></div>
+            <div className="pr-field"><label>PO Number</label><input value={pr.poNumber || ''} disabled={isReadOnly} onChange={e => updateField('poNumber', e.target.value)} className="pr-field--auto" title="Auto-generated. You can edit if needed." /></div>
             <div className={`pr-field ${validationErrors.poDate ? 'pr-field--error' : ''}`}>
-              <label>PO Date <span className="pr-required">*</span></label>
-              <input type="date" value={pr.poDate} onChange={e => { updateField('poDate', e.target.value); clearFieldError('poDate'); }} />
+              <label>PO Date {!isReadOnly && <span className="pr-required">*</span>}</label>
+              <input type="date" value={pr.poDate} disabled={isReadOnly} onChange={e => { updateField('poDate', e.target.value); clearFieldError('poDate'); }} />
               {validationErrors.poDate && <span className="pr-field__error-msg">{validationErrors.poDate}</span>}
             </div>
             <div className="pr-field">
               <label>Currency</label>
               <CurrencySelector
                 value={pr.currency}
+                disabled={isReadOnly}
                 onChange={(code) => updateField('currency', code)}
               />
             </div>
-            <div className="pr-field"><label>Requisitioner</label><input value={pr.requisitioner} onChange={e => updateField('requisitioner', e.target.value)} /></div>
+            <div className="pr-field"><label>Requisitioner</label><input value={pr.requisitioner} disabled={isReadOnly} onChange={e => updateField('requisitioner', e.target.value)} /></div>
             <div className="pr-field"><label>Ship Via</label>
-              <select value={pr.shipVia} onChange={e => updateField('shipVia', e.target.value)}>
+              <select value={pr.shipVia} disabled={isReadOnly} onChange={e => updateField('shipVia', e.target.value)}>
                 <option>Surface</option>
                 <option>Air</option>
                 <option>Sea</option>
@@ -909,13 +922,13 @@ export default function PurchaseRequisitionPage() {
               </select>
             </div>
             <div className="pr-field"><label>FOB</label>
-              <select value={pr.fob} onChange={e => updateField('fob', e.target.value)}>
+              <select value={pr.fob} disabled={isReadOnly} onChange={e => updateField('fob', e.target.value)}>
                 <option>Origin</option>
                 <option>Destination</option>
               </select>
             </div>
             <div className="pr-field"><label>Payment Terms</label>
-              <select value={pr.paymentTerms} onChange={e => updateField('paymentTerms', e.target.value)}>
+              <select value={pr.paymentTerms} disabled={isReadOnly} onChange={e => updateField('paymentTerms', e.target.value)}>
                 <option>Net 15</option>
                 <option>Net 30</option>
                 <option>Net 45</option>
@@ -924,9 +937,9 @@ export default function PurchaseRequisitionPage() {
                 <option>Advance Payment</option>
               </select>
             </div>
-            <div className="pr-field"><label>Delivery Date</label><input type="date" value={pr.deliveryDate} onChange={e => updateField('deliveryDate', e.target.value)} /></div>
+            <div className="pr-field"><label>Delivery Date</label><input type="date" value={pr.deliveryDate} disabled={isReadOnly} onChange={e => updateField('deliveryDate', e.target.value)} /></div>
             <div className="pr-field"><label>Shipping Terms</label>
-              <select value={pr.shippingTerms} onChange={e => updateField('shippingTerms', e.target.value)}>
+              <select value={pr.shippingTerms} disabled={isReadOnly} onChange={e => updateField('shippingTerms', e.target.value)}>
                 <option>FOB Origin</option>
                 <option>FOB Destination</option>
                 <option>CIF</option>
@@ -941,9 +954,11 @@ export default function PurchaseRequisitionPage() {
         <section className="pr-section">
           <div className="pr-section__header">
             <Hash size={16} /> Items
-            <button className="pr-btn pr-btn--sm pr-btn--ghost" onClick={addItem}>
-              <Plus size={14} /> Add Item
-            </button>
+            {!isReadOnly && (
+              <button className="pr-btn pr-btn--sm pr-btn--ghost" onClick={addItem}>
+                <Plus size={14} /> Add Item
+              </button>
+            )}
           </div>
           <div className="pr-items-table-wrap">
             <table className="pr-items-table">
@@ -956,51 +971,53 @@ export default function PurchaseRequisitionPage() {
                 <col className="pr-col--num" />
                 <col className="pr-col--num" />
                 <col className="pr-col--total" />
-                <col className="pr-col--action" />
+                {!isReadOnly && <col className="pr-col--action" />}
               </colgroup>
               <thead>
                 <tr>
                   <th className="pr-th--no">#</th>
                   <th className="pr-th--desc">Description</th>
-                  <th className="pr-th--num">Qty <span className="pr-required">*</span></th>
+                  <th className="pr-th--num">Qty {!isReadOnly && <span className="pr-required">*</span>}</th>
                   <th className="pr-th--unit">Unit</th>
-                  <th className="pr-th--price">Unit Price <span className="pr-required">*</span></th>
+                  <th className="pr-th--price">Unit Price {!isReadOnly && <span className="pr-required">*</span>}</th>
                   <th className="pr-th--num">Tax %</th>
                   <th className="pr-th--num">Disc %</th>
                   <th className="pr-th--total">Total</th>
-                  <th className="pr-th--action"></th>
+                  {!isReadOnly && <th className="pr-th--action"></th>}
                 </tr>
               </thead>
               <tbody>
                 {pr.items.map((item, idx) => (
                   <tr key={idx} className={itemValidationErrors[idx] ? 'pr-item--error-row' : ''}>
                     <td className="pr-td--no">{item.itemNo}</td>
-                    <td className="pr-td--desc"><input value={item.description} onChange={e => updateItem(idx, 'description', e.target.value)} placeholder="Item description" /></td>
+                    <td className="pr-td--desc"><input value={item.description} disabled={isReadOnly} onChange={e => updateItem(idx, 'description', e.target.value)} placeholder="Item description" /></td>
                     <td className={`pr-td--num ${itemValidationErrors[idx]?.quantity ? 'pr-item__cell--error' : ''}`}>
-                      <input type="number" min="1" value={item.quantity}
+                      <input type="number" min="1" value={item.quantity} disabled={isReadOnly}
                         onChange={e => { updateItem(idx, 'quantity', Math.max(1, Number(e.target.value))); clearItemError(idx, 'quantity'); }}
                       />
                       {itemValidationErrors[idx]?.quantity && <span className="pr-field__error-msg">{itemValidationErrors[idx].quantity}</span>}
                     </td>
                     <td className="pr-td--unit">
-                      <select value={item.unit} onChange={e => updateItem(idx, 'unit', e.target.value)}>
+                      <select value={item.unit} disabled={isReadOnly} onChange={e => updateItem(idx, 'unit', e.target.value)}>
                         <option>Pcs</option><option>Kg</option><option>Ltr</option><option>Mtr</option><option>Box</option><option>Set</option>
                       </select>
                     </td>
                     <td className={`pr-td--num ${itemValidationErrors[idx]?.unitPrice ? 'pr-item__cell--error' : ''}`}>
-                      <input type="number" min="0" step="0.01" value={item.unitPrice}
+                      <input type="number" min="0" step="0.01" value={item.unitPrice} disabled={isReadOnly}
                         onChange={e => { updateItem(idx, 'unitPrice', Math.max(0, Number(e.target.value))); clearItemError(idx, 'unitPrice'); }}
                       />
                       {itemValidationErrors[idx]?.unitPrice && <span className="pr-field__error-msg">{itemValidationErrors[idx].unitPrice}</span>}
                     </td>
-                    <td className="pr-td--num"><input type="number" min="0" max="100" value={item.taxPercent} onChange={e => updateItem(idx, 'taxPercent', Math.max(0, Math.min(100, Number(e.target.value))))} /></td>
-                    <td className="pr-td--num"><input type="number" min="0" max="100" value={item.discount} onChange={e => updateItem(idx, 'discount', Math.max(0, Math.min(100, Number(e.target.value))))} /></td>
+                    <td className="pr-td--num"><input type="number" min="0" max="100" value={item.taxPercent} disabled={isReadOnly} onChange={e => updateItem(idx, 'taxPercent', Math.max(0, Math.min(100, Number(e.target.value))))} /></td>
+                    <td className="pr-td--num"><input type="number" min="0" max="100" value={item.discount} disabled={isReadOnly} onChange={e => updateItem(idx, 'discount', Math.max(0, Math.min(100, Number(e.target.value))))} /></td>
                     <td className="pr-td--total">{formatCurrency(item.total, pr.currency)}</td>
-                    <td className="pr-td--action">
-                      <button className="pr-item__delete" onClick={() => deleteItem(idx)} disabled={pr.items.length <= 1}>
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
+                    {!isReadOnly && (
+                      <td className="pr-td--action">
+                        <button className="pr-item__delete" onClick={() => deleteItem(idx)} disabled={pr.items.length <= 1}>
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -1018,11 +1035,11 @@ export default function PurchaseRequisitionPage() {
               <div className="pr-total-row"><span>Tax</span><span>{formatCurrency(pr.taxTotal, pr.currency)}</span></div>
               <div className="pr-total-row pr-total-row--charge">
                 <span>Shipping Charges</span>
-                <input type="number" min="0" value={pr.shippingCharges} onChange={e => updateField('shippingCharges', Math.max(0, Number(e.target.value)))} />
+                <input type="number" min="0" value={pr.shippingCharges} disabled={isReadOnly} onChange={e => updateField('shippingCharges', Math.max(0, Number(e.target.value)))} />
               </div>
               <div className="pr-total-row pr-total-row--charge">
                 <span>Other Charges</span>
-                <input type="number" min="0" value={pr.otherCharges} onChange={e => updateField('otherCharges', Math.max(0, Number(e.target.value)))} />
+                <input type="number" min="0" value={pr.otherCharges} disabled={isReadOnly} onChange={e => updateField('otherCharges', Math.max(0, Number(e.target.value)))} />
               </div>
               <div className={`pr-total-row pr-total-row--grand ${contractBalance && pr.grandTotal > contractBalance.remainingValue ? 'pr-total-row--exceeded' : ''}`}>
                 <span>
@@ -1036,8 +1053,8 @@ export default function PurchaseRequisitionPage() {
                 <span>
                   {formatCurrency(pr.grandTotal, pr.currency)}
                   {contractBalance && (
-                    <span style={{ display: 'block', fontSize: 11, fontWeight: 400, color: contractBalance.remainingValue >= pr.grandTotal ? '#059669' : '#dc2626', marginTop: 2 }}>
-                      Remaining: {formatCurrency(Math.max(0, contractBalance.remainingValue), contractBalance.currency || pr.currency)}
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 400, color: (contractBalance.remainingValue - pr.grandTotal) >= 0 ? '#059669' : '#dc2626', marginTop: 2 }}>
+                      Remaining: {formatCurrency(Math.max(0, contractBalance.remainingValue - (pr.grandTotal > contractBalance.remainingValue ? 0 : pr.grandTotal)), contractBalance.currency || pr.currency)}
                     </span>
                   )}
                 </span>
@@ -1052,11 +1069,11 @@ export default function PurchaseRequisitionPage() {
           <div className="pr-section__grid pr-section__grid--2col">
             <div className="pr-field pr-field--wide">
               <label>Internal Notes</label>
-              <textarea rows={3} value={pr.internalNotes} onChange={e => updateField('internalNotes', e.target.value)} placeholder="Internal notes for procurement team..." />
+              <textarea rows={3} value={pr.internalNotes} disabled={isReadOnly} onChange={e => updateField('internalNotes', e.target.value)} placeholder="Internal notes for procurement team..." />
             </div>
             <div className="pr-field pr-field--wide">
               <label>Special Instructions</label>
-              <textarea rows={3} value={pr.specialInstructions} onChange={e => updateField('specialInstructions', e.target.value)} placeholder="Special instructions for vendor..." />
+              <textarea rows={3} value={pr.specialInstructions} disabled={isReadOnly} onChange={e => updateField('specialInstructions', e.target.value)} placeholder="Special instructions for vendor..." />
             </div>
           </div>
         </section>
@@ -1108,6 +1125,16 @@ export default function PurchaseRequisitionPage() {
           </div>
         </div>
       )}
+
+      <CreatorLevelPromptModal
+        isOpen={showLevelPrompt}
+        moduleName="Purchase Order"
+        onConfirm={(startLevelNumber) => {
+          setShowLevelPrompt(false);
+          void executeSubmitForApproval(startLevelNumber);
+        }}
+        onCancel={() => setShowLevelPrompt(false)}
+      />
     </div>
   );
 }
