@@ -581,12 +581,6 @@ export default function FormResponsesPage() {
                         <div>
                           <strong className="frp-form-name">{sub.formTitle}</strong>
                           <span className="frp-form-sub">{sub.fields.length} fields configured</span>
-                          {returnReason && (
-                            <div className="frp-table-return-note">
-                              <RotateCcw size={11} />
-                              <span>Return Note: <strong>"{returnReason}"</strong></span>
-                            </div>
-                          )}
                         </div>
                       </div>
                     </td>
@@ -603,8 +597,19 @@ export default function FormResponsesPage() {
                     </td>
                     <td>
                       <div className="frp-user-cell">
-                        <span className="frp-user-name">{sub.assignedUserName}</span>
-                        <span className="frp-user-email">{sub.assignedUserEmail}</span>
+                        {sub.workflowAttached ? (
+                          <>
+                            <span className="frp-user-name">Approval Workflow</span>
+                            <span className="frp-user-email">
+                              {sub.totalLevels}-Level Sequential Approval
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="frp-user-name">{sub.assignedUserName}</span>
+                            <span className="frp-user-email">{sub.assignedUserEmail}</span>
+                          </>
+                        )}
                       </div>
                     </td>
                     <td>
@@ -624,7 +629,7 @@ export default function FormResponsesPage() {
                             ? 'No Workflow (Direct Submission)'
                             : sub.status === 'completed'
                             ? 'Completed (All Levels)'
-                            : sub.status === 'pending' && sub.currentLevelNumber === 0
+                            : sub.status === 'pending' || sub.currentLevelNumber === 0
                             ? 'Awaiting Employee Fill Out'
                             : `Level ${sub.currentLevelNumber || 1} of ${sub.totalLevels}${
                                 sub.approvalLevels?.find((l) => l.levelNumber === (sub.currentLevelNumber || 1))?.requiredRole
@@ -706,7 +711,7 @@ export default function FormResponsesPage() {
               </div>
 
               <div className="frp-modal-body">
-                {retReason && (
+                {selectedResponse.status === 'returned' && retReason && (
                   <div className="frp-return-banner">
                     <RotateCcw size={16} className="frp-return-banner-icon" />
                     <div>

@@ -227,6 +227,7 @@ export function mapApprovalToTableRow(a: Record<string, unknown>): ApprovalTable
     submittedAt: String(a.createdAt || a.submittedAt || new Date().toISOString()),
     comments: a.comments ? String(a.comments) : undefined,
     department: String(a.department || '—'),
+    canAct: Boolean(a.canAct ?? true),
   };
 }
 

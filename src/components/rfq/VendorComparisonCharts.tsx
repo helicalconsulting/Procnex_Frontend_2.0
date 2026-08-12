@@ -226,7 +226,7 @@ export default function VendorComparisonCharts({
       {/* ── Header Controls ── */}
       <div className="rq-charts__header">
         <h3 id={titleId} className="rq-charts__header-title">
-          Supplier Comparison Curve
+          Active Quotation Comparison Curve
         </h3>
 
         {onFullscreen && (
@@ -244,7 +244,7 @@ export default function VendorComparisonCharts({
 
       {/* ── Single Curve Line Chart Container (Image 2 Exact Matching) ── */}
       <div className="rq-charts__body">
-        <ResponsiveContainer width="100%" height={isFullscreen ? 450 : 280}>
+        <ResponsiveContainer width="100%" height={isFullscreen ? 520 : 380}>
           <AreaChart
             data={vendorCurveData}
             margin={{ top: 16, right: 65, left: 35, bottom: 20 }}
@@ -294,12 +294,12 @@ export default function VendorComparisonCharts({
               }}
             />
             
-            {/* RIGHT Y-AXIS: Percentage Scale (5%, 10%, 20%, 50%, 100% — Image 2 Exact Ticks) */}
+            {/* RIGHT Y-AXIS: Percentage Scale (0%, 20%, 40%, 60%, 80%, 100%) */}
             <YAxis
               yAxisId="right"
               orientation="right"
               domain={[0, 100]}
-              ticks={[5, 10, 20, 50, 100]}
+              ticks={[0, 20, 40, 60, 80, 100]}
               tick={{ fontSize: 12, fill: 'var(--text-secondary)', fontWeight: 700 }}
               axisLine={{ stroke: 'var(--text-primary)', strokeWidth: 1.5 }}
               tickLine={true}

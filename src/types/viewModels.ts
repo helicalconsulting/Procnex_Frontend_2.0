@@ -121,6 +121,7 @@ export interface ApprovalTableRow {
   submittedAt: string;
   comments?: string;
   department: string;
+  canAct?: boolean;
 }
 
 export interface NotificationRow {

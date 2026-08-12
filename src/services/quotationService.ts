@@ -1,6 +1,7 @@
 import { apiRequest } from '../api/client';
 import { pickList, toNumber } from '../api/normalize';
 import type { Quotation, QuotationBidSecurity } from '../types';
+import { isRfqDeleted } from './rfqService';
 
 export interface QuotationStats {
   total: number;
@@ -13,10 +14,14 @@ function normalizeQuotation(q: Quotation): Quotation {
   return { ...q, totalPrice: toNumber(q.totalPrice) };
 }
 
-async function list(includeAll?: boolean): Promise<Quotation[]> {
+async function list(includeAll = true): Promise<Quotation[]> {
   const params = includeAll ? '?limit=100&includeAll=true' : '?limit=100';
   const data = await apiRequest<{ quotations: Quotation[] }>(`/quotations${params}`);
-  return pickList<Quotation>(data, ['quotations']).map(normalizeQuotation);
+  const items = pickList<Quotation>(data, ['quotations']).map(normalizeQuotation);
+  return items.filter((q) => {
+    const rfqNum = (q as Quotation & { rfq?: { rfqNumber?: string }; rfqNumber?: string }).rfq?.rfqNumber || (q as any).rfqNumber;
+    return !isRfqDeleted(q.rfqId, rfqNum);
+  });
 }
 
 async function listAll(): Promise<Quotation[]> {

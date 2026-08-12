@@ -538,6 +538,109 @@
   margin-bottom: 4px;
 }
 
+/* ── RFQ Active/Inactive Filter Tabs inside Dropdown ───── */
+.quot-compare__dropdown-filter-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  background: var(--surface-elevated);
+  border-bottom: 1px solid var(--border);
+}
+
+.quot-compare__filter-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.quot-compare__filter-tab:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.quot-compare__filter-tab--active {
+  background: var(--surface-card) !important;
+  color: var(--primary-600) !important;
+  border-color: var(--border) !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  font-weight: 700;
+}
+
+.quot-compare__filter-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.quot-compare__filter-dot--active {
+  background: #107e3e;
+  box-shadow: 0 0 6px rgba(16,126,62,0.4);
+}
+
+.quot-compare__filter-dot--inactive {
+  background: #6b7280;
+}
+
+/* ── RFQ status pill tag ─────────────────────────────── */
+.quot-compare__dropdown-rfq-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.quot-compare__rfq-status-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 6px;
+  line-height: 1.2;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.quot-compare__rfq-status-tag--active {
+  background: rgba(16, 126, 62, 0.1);
+  color: #107e3e;
+  border: 1px solid rgba(16, 126, 62, 0.25);
+}
+
+.quot-compare__rfq-status-tag--inactive {
+  background: rgba(107, 114, 128, 0.1);
+  color: var(--text-secondary);
+  border: 1px solid rgba(107, 114, 128, 0.2);
+}
+
+[data-theme="dark"] .quot-compare__rfq-status-tag--active {
+  background: rgba(16, 126, 62, 0.2);
+  color: #34d399;
+  border-color: rgba(16, 126, 62, 0.35);
+}
+
+[data-theme="dark"] .quot-compare__rfq-status-tag--inactive {
+  background: rgba(107, 114, 128, 0.18);
+  color: #9ca3af;
+  border-color: rgba(107, 114, 128, 0.3);
+}
+
 /* ── Selected RFQ badge ─────────────────────────────────── */
 .quot-compare__rfq-badge {
   display: inline-flex;
@@ -3455,4 +3558,214 @@
   border: 1px solid rgba(56, 189, 248, 0.5) !important;
   box-shadow: 0 0 12px rgba(56, 189, 248, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
 }
+
+/* ─── RFQ Grouping Accordion View ─── */
+.quot-rfq-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.quot-rfq-card {
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.quot-rfq-card:hover {
+  border-color: rgba(10, 110, 209, 0.35);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.quot-rfq-card--expanded {
+  border-color: rgba(10, 110, 209, 0.45);
+  box-shadow: 0 4px 20px rgba(10, 110, 209, 0.12);
+}
+
+.quot-rfq-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: var(--surface-card);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.quot-rfq-card__header:hover {
+  background: var(--surface-hover);
+}
+
+.quot-rfq-card__header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.quot-rfq-card__chevron {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface-elevated);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s, background 0.15s, color 0.15s;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.quot-rfq-card__header:hover .quot-rfq-card__chevron {
+  color: var(--primary-500);
+  border-color: rgba(10, 110, 209, 0.3);
+}
+
+.quot-rfq-card__chevron--expanded {
+  transform: rotate(90deg);
+  background: rgba(10, 110, 209, 0.1);
+  color: var(--primary-500);
+  border-color: rgba(10, 110, 209, 0.3);
+}
+
+.quot-rfq-card__title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.quot-rfq-card__badge-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.quot-rfq-card__rfq-num {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--primary-500);
+  background: rgba(10, 110, 209, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.quot-rfq-card__status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.quot-rfq-card__status-dot--active {
+  background: var(--success-500);
+  box-shadow: 0 0 6px var(--success-500);
+}
+
+.quot-rfq-card__status-dot--inactive {
+  background: var(--text-tertiary);
+}
+
+.quot-rfq-card__status-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.quot-rfq-card__title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.quot-rfq-card__header-right {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.quot-rfq-card__stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+.quot-rfq-card__stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+}
+
+.quot-rfq-card__stat-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.quot-rfq-card__stat-val--best {
+  color: var(--success-500);
+}
+
+.quot-rfq-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.quot-rfq-card__compare-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(10, 110, 209, 0.3);
+  background: rgba(10, 110, 209, 0.08);
+  color: var(--primary-500);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.quot-rfq-card__compare-btn:hover {
+  background: var(--primary-500);
+  color: #ffffff;
+  border-color: var(--primary-500);
+  box-shadow: 0 2px 8px rgba(10, 110, 209, 0.3);
+}
+
+.quot-rfq-card__body {
+  border-top: 1px solid var(--border);
+  background: var(--surface-elevated);
+  padding: 12px 18px 18px;
+}
+
+.quot-rfq-card__expand-all-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.quot-rfq-card__expand-all-btn:hover {
+  border-color: var(--primary-500);
+  color: var(--primary-500);
+  background: rgba(10, 110, 209, 0.06);
+}
+
 

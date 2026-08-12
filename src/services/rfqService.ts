@@ -61,9 +61,33 @@ export interface CreateRfqPayload {
   bidBondMinValidity?: number;
 }
 
+export function getDeletedRfqIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem('heliflow_deleted_rfq_ids');
+    if (raw) return new Set(JSON.parse(raw));
+  } catch {}
+  return new Set();
+}
+
+export function addDeletedRfqId(id: string | number, rfqNumber?: string) {
+  try {
+    const ids = getDeletedRfqIds();
+    if (id != null) ids.add(String(id));
+    if (rfqNumber) ids.add(rfqNumber);
+    localStorage.setItem('heliflow_deleted_rfq_ids', JSON.stringify(Array.from(ids)));
+  } catch {}
+}
+
+export function isRfqDeleted(id?: string | number, rfqNumber?: string): boolean {
+  const ids = getDeletedRfqIds();
+  if (id != null && ids.has(String(id))) return true;
+  if (rfqNumber && ids.has(rfqNumber)) return true;
+  return false;
+}
+
 async function mockList(params?: ListParams): Promise<RFQTableRow[]> {
   await new Promise((r) => setTimeout(r, 300));
-  let list = [...RFQ_PAGE_MOCK];
+  let list = RFQ_PAGE_MOCK.filter((r) => !isRfqDeleted(r.id, r.rfqNumber));
   if (params?.status && params.status !== 'ALL') {
     list = list.filter((r) => r.status === params.status);
   }
@@ -90,7 +114,9 @@ async function apiList(params?: ListParams): Promise<RFQTableRow[]> {
     `/rfqs${qs ? `?${qs}` : ''}`,
     { cacheTtlMs: 0 }
   );
-  let rows = (data.rfqs || []).map(mapApiRfqToTableRow);
+  let rows = (data.rfqs || [])
+    .map(mapApiRfqToTableRow)
+    .filter((r) => !isRfqDeleted(r.id, r.rfqNumber));
   if (params?.status && params.status !== 'ALL') {
     rows = rows.filter((r) => r.status === params.status);
   }
@@ -108,16 +134,20 @@ async function apiList(params?: ListParams): Promise<RFQTableRow[]> {
 
 async function mockGetById(id: string): Promise<RFQTableRow | null> {
   await new Promise((r) => setTimeout(r, 200));
-  return RFQ_PAGE_MOCK.find((r) => r.id === id) || null;
+  const item = RFQ_PAGE_MOCK.find((r) => r.id === id);
+  if (!item || isRfqDeleted(item.id, item.rfqNumber)) return null;
+  return item;
 }
 
 async function apiGetById(id: string): Promise<RFQTableRow | null> {
   const rfq = await apiRequest<Record<string, unknown>>(`/rfqs/${id}`, { cacheTtlMs: 0 });
-  return mapApiRfqToTableRow(rfq);
+  const mapped = mapApiRfqToTableRow(rfq);
+  if (!mapped || isRfqDeleted(mapped.id, mapped.rfqNumber)) return null;
+  return mapped;
 }
 
 async function mockListTyped(): Promise<RFQ[]> {
-  return MOCK_RFQS;
+  return MOCK_RFQS.filter((r) => !isRfqDeleted(r.id, r.rfqNumber));
 }
 
 async function apiListTyped(): Promise<RFQ[]> {
@@ -157,8 +187,19 @@ async function apiSend(id: string): Promise<SendRfqResult> {
   };
 }
 
-async function mockDelete(_id: string): Promise<void> {
+async function mockDelete(id: string): Promise<void> {
   await new Promise((r) => setTimeout(r, 200));
+  const idx = RFQ_PAGE_MOCK.findIndex((r) => r.id === id);
+  if (idx !== -1) {
+    const deletedRfq = RFQ_PAGE_MOCK[idx];
+    addDeletedRfqId(id, deletedRfq.rfqNumber);
+    RFQ_PAGE_MOCK.splice(idx, 1);
+  } else {
+    addDeletedRfqId(id);
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('rfq_deleted', { detail: { id } }));
+  }
 }
 
 async function apiUpdate(id: string, payload: Partial<CreateRfqPayload>): Promise<Record<string, unknown>> {
@@ -181,7 +222,17 @@ async function apiRemoveVendor(id: string, vendorId: string): Promise<void> {
 
 async function apiDelete(id: string, options?: { force?: boolean }): Promise<void> {
   const query = options?.force ? '?force=true' : '';
+  const target = RFQ_PAGE_MOCK.find(r => r.id === id);
+  if (target?.rfqNumber) {
+    addDeletedRfqId(id, target.rfqNumber);
+  } else {
+    addDeletedRfqId(id);
+  }
   await apiRequest(`/rfqs/${id}${query}`, { method: 'DELETE' });
+  addDeletedRfqId(id);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('rfq_deleted', { detail: { id } }));
+  }
 }
 
 // ─── RFQ Type System: Evaluation Parameters & Scores ───

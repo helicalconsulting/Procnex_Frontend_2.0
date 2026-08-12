@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { quotationService } from '../../services/quotationService';
-import { rfqService } from '../../services/rfqService';
+import { rfqService, isRfqDeleted } from '../../services/rfqService';
 import { sseClient } from '../../services/sseClient';
 import { toNumber } from '../../api/normalize';
 import { apiRequest } from '../../api/client';
@@ -50,7 +50,7 @@ interface QuotationAttachment {
 }
 
 interface MockQuotation {
-  id: number; rfqId: number; rfqNumber: string; vendorName: string; vendorEmail: string;
+  id: number; rfqId: number; rfqNumber: string; rfqTitle?: string; vendorName: string; vendorEmail: string;
   vendorInitials: string; avatarMod: string; totalPrice: string;
   totalPriceNum: number; currency?: string; leadTimeDays: number; paymentTerms: string;
   paymentPlanSnapshot?: Array<{ title: string; percentage: number }> | null;
@@ -232,8 +232,9 @@ function mapQuotationToRow(q: Quotation): MockQuotation {
   const vendor = q.vendor;
   const name = vendor?.name || 'Unknown';
   const initials = name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
-  const rfqNumber = (q as Quotation & { rfq?: { rfqNumber?: string } }).rfq?.rfqNumber
-    || `RFQ-${q.rfqId}`;
+  const rfqObj = (q as Quotation & { rfq?: { rfqNumber?: string; title?: string } }).rfq;
+  const rfqNumber = rfqObj?.rfqNumber || (q as any).rfqNumber || `RFQ-${q.rfqId}`;
+  const rfqTitle = rfqObj?.title || rfqNumber;
   const rawScore = q.score ?? 0;
   const score = rawScore <= 5 ? Math.round(rawScore * 20) : Math.round(rawScore);
   const price = computeSelectedTotalPrice(q);
@@ -241,6 +242,7 @@ function mapQuotationToRow(q: Quotation): MockQuotation {
     id: q.id,
     rfqId: q.rfqId,
     rfqNumber,
+    rfqTitle,
     vendorName: name,
     vendorEmail: vendor?.email || '',
     vendorInitials: initials,
@@ -2187,7 +2189,7 @@ export default function QuotationsPage() {
   const [compareModalOpen, setCompareModalOpen] = useState(false);
 
   const { data: serverQuotations, loading, error, reload, forceRefresh } = useServiceData(
-    () => quotationService.list().then((list) => list.map(mapQuotationToRow)),
+    () => quotationService.listAll().then((list) => list.map(mapQuotationToRow)),
     [] as MockQuotation[]
   );
   const [quotations, setQuotations] = useState<MockQuotation[]>([]);
@@ -2214,15 +2216,24 @@ export default function QuotationsPage() {
     [] as MockQuotation[],
   );
 
+  // Filter out any quotations belonging to deleted RFQs
+  const validQuotations = useMemo(() => {
+    return quotations.filter(q => !isRfqDeleted(q.rfqId, q.rfqNumber));
+  }, [quotations]);
+
+  const validAllQuotations = useMemo(() => {
+    return allQuotations.filter(q => !isRfqDeleted(q.rfqId, q.rfqNumber));
+  }, [allQuotations]);
+
   // ── KPI stats from local data ──
   // Compute counts directly from the quotations array so they're always in sync
   // with the visible data, regardless of backend stats API availability.
   const stats = useMemo(() => ({
-    total: quotations.length,
-    pending: quotations.filter((q) => q.status === 'UNDER_REVIEW').length,
-    accepted: quotations.filter((q) => q.status === 'ACCEPTED').length,
-    rejected: quotations.filter((q) => q.status === 'REJECTED').length,
-  }), [quotations]);
+    total: validQuotations.length,
+    pending: validQuotations.filter((q) => q.status === 'UNDER_REVIEW').length,
+    accepted: validQuotations.filter((q) => q.status === 'ACCEPTED').length,
+    rejected: validQuotations.filter((q) => q.status === 'REJECTED').length,
+  }), [validQuotations]);
 
   // Force refetch on mount — bypass cache so all users see latest data & scores
   useEffect(() => {
@@ -2259,7 +2270,19 @@ export default function QuotationsPage() {
       unsubLevel();
       unsubReceived();
     };
-  }, [reload]);
+  }, [reload, reloadAllQuotations]);
+
+  // Listen for local RFQ deletion events to refresh Quotations page & comparison dropdown automatically
+  useEffect(() => {
+    const handleRfqDeleted = () => {
+      reload();
+      reloadAllQuotations();
+    };
+    window.addEventListener('rfq_deleted', handleRfqDeleted);
+    return () => {
+      window.removeEventListener('rfq_deleted', handleRfqDeleted);
+    };
+  }, [reload, reloadAllQuotations]);
 
   const [statusFilter, setStatusFilter]             = useState<string | null>(null);
   const [search, setSearch]                           = useState('');
@@ -2267,6 +2290,13 @@ export default function QuotationsPage() {
   const listingPerPage = 8;
   const [compareSearch, setCompareSearch]             = useState('');
   const [selectedRFQ, setSelectedRFQ]                 = useState<string | null>(rfqFromUrl);
+  const [rfqFilterStatus, setRfqFilterStatus]         = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+
+  useEffect(() => {
+    if (selectedRFQ && isRfqDeleted(undefined, selectedRFQ)) {
+      setSelectedRFQ(null);
+    }
+  }, [selectedRFQ]);
   const [toast, setToast] = useState<{ message: string; type: MessageStripType } | null>(null);
   const [compareDropdownOpen, setCompareDropdownOpen] = useState(false);
   const [compareExpanded, setCompareExpanded] = useState(false);
@@ -2350,34 +2380,12 @@ export default function QuotationsPage() {
   // specific status = exact match
   const statusFilteredQuotations = useMemo(() => {
     if (!statusFilter) {
-      return quotations;
+      return validQuotations;
     }
-    return quotations.filter(q => q.status === statusFilter);
-  }, [quotations, statusFilter]);
+    return validQuotations.filter(q => q.status === statusFilter);
+  }, [validQuotations, statusFilter]);
 
-  // ── Client-side filter by search + status for the listing view ──
-  const filteredQuotations = useMemo(() => {
-    let list = quotations;
-    if (statusFilter) {
-      list = list.filter(q => q.status === statusFilter);
-    }
-    if (search.trim()) {
-      const s = search.toLowerCase();
-      list = list.filter(
-        (q) =>
-          q.vendorName.toLowerCase().includes(s) ||
-          q.vendorEmail.toLowerCase().includes(s) ||
-          q.rfqNumber.toLowerCase().includes(s)
-      );
-    }
-    return list;
-  }, [quotations, search, statusFilter]);
 
-  const listingTotalPages = Math.ceil(filteredQuotations.length / listingPerPage);
-  const paginatedQuotations = filteredQuotations.slice(
-    (listingPage - 1) * listingPerPage,
-    listingPage * listingPerPage,
-  );
 
   // KPI card click handler
   const handleKpiClick = useCallback((filter: string | null) => {
@@ -2573,23 +2581,55 @@ export default function QuotationsPage() {
 
   // Supplier Comparison uses allQuotations (bypasses approval-level visibility filter)
   // so ALL approvers see ALL vendors' quotations regardless of their place in the chain.
-  const compareSource = allQuotations.length > 0 ? allQuotations : statusFilteredQuotations;
+  const compareSource = validAllQuotations.length > 0 ? validAllQuotations : statusFilteredQuotations;
 
-  const uniqueRFQs   = useMemo(() => Array.from(new Set(compareSource.map(q => q.rfqNumber))).sort(), [compareSource]);
-  const filteredRFQs = useMemo(() => {
-    if (!compareSearch.trim()) return uniqueRFQs;
-    const s = compareSearch.toLowerCase();
-    return uniqueRFQs.filter(rfq => {
-      // Match by RFQ number
-      if (rfq.toLowerCase().includes(s)) return true;
-      // Match by vendor name or email under this RFQ
-      const vendors = compareSource.filter(q => q.rfqNumber === rfq);
-      return vendors.some(v =>
-        v.vendorName.toLowerCase().includes(s) ||
-        v.vendorEmail.toLowerCase().includes(s)
-      );
+  // Helper to check if an RFQ is Inactive (Vendor has been chosen/accepted)
+  const isRfqInactive = useCallback((rfqNum: string) => {
+    const group = compareSource.filter(q => q.rfqNumber === rfqNum);
+    return group.some(q => q.status === 'ACCEPTED' || getDisplayStatus(q) === 'ACCEPTED');
+  }, [compareSource]);
+
+  const uniqueRFQs   = useMemo(() => {
+    return Array.from(new Set(compareSource.map(q => q.rfqNumber)))
+      .filter(rfq => !isRfqDeleted(undefined, rfq))
+      .sort();
+  }, [compareSource]);
+
+  const rfqCounts = useMemo(() => {
+    let active = 0;
+    let inactive = 0;
+    uniqueRFQs.forEach(rfq => {
+      if (isRfqInactive(rfq)) inactive++;
+      else active++;
     });
-  }, [compareSearch, uniqueRFQs, compareSource]);
+    return { all: uniqueRFQs.length, active, inactive };
+  }, [uniqueRFQs, isRfqInactive]);
+
+  const filteredRFQs = useMemo(() => {
+    let list = uniqueRFQs;
+
+    // Filter by Active vs Inactive
+    if (rfqFilterStatus === 'ACTIVE') {
+      list = list.filter(rfq => !isRfqInactive(rfq));
+    } else if (rfqFilterStatus === 'INACTIVE') {
+      list = list.filter(rfq => isRfqInactive(rfq));
+    }
+
+    // Filter by Search string
+    if (compareSearch.trim()) {
+      const s = compareSearch.toLowerCase();
+      list = list.filter(rfq => {
+        if (rfq.toLowerCase().includes(s)) return true;
+        const vendors = compareSource.filter(q => q.rfqNumber === rfq);
+        return vendors.some(v =>
+          v.vendorName.toLowerCase().includes(s) ||
+          v.vendorEmail.toLowerCase().includes(s)
+        );
+      });
+    }
+
+    return list;
+  }, [compareSearch, uniqueRFQs, compareSource, rfqFilterStatus, isRfqInactive]);
 
   // Store loaded custom fields from RFQ for dynamic chart rendering
   const [rfqCustomFields, setRfqCustomFields] = useState<any[]>([]);
@@ -2891,6 +2931,154 @@ export default function QuotationsPage() {
     return 'formula';
   }, [selectedRfqType, evalCategories, evalVendorNames, simpleEvalData, simpleVendorNames]);
 
+  // ── Map quotation ID → evaluation score for ALL quotations ──
+  const evalScoreMap = useMemo(() => {
+    const map = new Map<number | string, number>();
+
+    // 1. Populate from evaluatedSuppliers if available (e.g. for active selectedRFQ with evaluation data)
+    if (evaluatedSuppliers && evaluatedSuppliers.length > 0) {
+      for (const s of evaluatedSuppliers) {
+        const val = s.recommendationScore ?? s.score;
+        if (val !== undefined && val !== null && val > 0) {
+          map.set(s.id, Math.round(val));
+        }
+      }
+    }
+
+    // 2. Group all compareSource quotations by RFQ to compute standard scores for ALL RFQs
+    const groupsByRfq = new Map<string, MockQuotation[]>();
+    for (const q of compareSource) {
+      const rfqKey = String(q.rfqNumber || q.rfqId || 'UNKNOWN');
+      if (!groupsByRfq.has(rfqKey)) {
+        groupsByRfq.set(rfqKey, []);
+      }
+      groupsByRfq.get(rfqKey)!.push(q);
+    }
+
+    // 3. For any quotation not in evaluatedSuppliers, compute standard score against its RFQ group
+    for (const [_rfqKey, group] of groupsByRfq.entries()) {
+      for (const q of group) {
+        if (!map.has(q.id)) {
+          const { finalScore } = computeStandardVendorScores(group, q, rfqCustomFields, q);
+          if (finalScore > 0) {
+            map.set(q.id, Math.round(finalScore));
+          }
+        }
+      }
+    }
+
+    return map;
+  }, [evaluatedSuppliers, compareSource, rfqCustomFields]);
+
+  // ── Apply evaluation scores to valid quotations ──
+  const scoredQuotations = useMemo(() => {
+    return validQuotations.map(q => {
+      const evalScore = evalScoreMap.get(q.id);
+      if (evalScore !== undefined) {
+        return { ...q, score: evalScore, recommendationScore: evalScore };
+      }
+      const rawScore = q.recommendationScore ?? q.score ?? 0;
+      const normalized = rawScore <= 5 ? Math.round(rawScore * 20) : Math.round(rawScore);
+      return { ...q, score: normalized, recommendationScore: normalized };
+    });
+  }, [validQuotations, evalScoreMap]);
+
+  // ── Client-side filter by search + status for the listing view ──
+  const filteredQuotations = useMemo(() => {
+    let list = scoredQuotations;
+    if (statusFilter) {
+      list = list.filter(q => q.status === statusFilter);
+    }
+    if (search.trim()) {
+      const s = search.toLowerCase();
+      list = list.filter(
+        (q) =>
+          q.vendorName.toLowerCase().includes(s) ||
+          q.vendorEmail.toLowerCase().includes(s) ||
+          q.rfqNumber.toLowerCase().includes(s) ||
+          (q.rfqTitle && q.rfqTitle.toLowerCase().includes(s))
+      );
+    }
+    return list;
+  }, [scoredQuotations, search, statusFilter]);
+
+  interface RfqGroup {
+    rfqNumber: string;
+    rfqTitle: string;
+    quotations: MockQuotation[];
+    quotationCount: number;
+    bestPrice: number;
+    bestCurrency: string;
+    latestSubmitted: string;
+    isInactive: boolean;
+  }
+
+  const [expandedRfqNumbers, setExpandedRfqNumbers] = useState<Set<string>>(new Set());
+
+  const rfqGroups = useMemo<RfqGroup[]>(() => {
+    const map = new Map<string, MockQuotation[]>();
+    for (const q of filteredQuotations) {
+      if (!map.has(q.rfqNumber)) map.set(q.rfqNumber, []);
+      map.get(q.rfqNumber)!.push(q);
+    }
+
+    const result: RfqGroup[] = [];
+    for (const [rfqNumber, quots] of map.entries()) {
+      const sortedQuots = [...quots].sort((a, b) => (b.recommendationScore || b.score) - (a.recommendationScore || a.score) || a.totalPriceNum - b.totalPriceNum);
+      const first = sortedQuots[0];
+      const rfqTitle = first?.rfqTitle || first?.rfqNumber || rfqNumber;
+      const bestPrice = Math.min(...sortedQuots.map(q => q.totalPriceNum));
+      const bestCurrency = sortedQuots.find(q => q.totalPriceNum === bestPrice)?.currency || DEFAULT_CURRENCY;
+      const latestSubmitted = sortedQuots.reduce((max, q) => q.submittedAt > max ? q.submittedAt : max, sortedQuots[0].submittedAt);
+      const isInactive = sortedQuots.some(q => q.status === 'ACCEPTED' || getDisplayStatus(q) === 'ACCEPTED');
+
+      result.push({
+        rfqNumber,
+        rfqTitle,
+        quotations: sortedQuots,
+        quotationCount: sortedQuots.length,
+        bestPrice,
+        bestCurrency,
+        latestSubmitted,
+        isInactive,
+      });
+    }
+
+    return result.sort((a, b) => b.latestSubmitted.localeCompare(a.latestSubmitted));
+  }, [filteredQuotations]);
+
+  // Auto-expand matching RFQs when searching
+  useEffect(() => {
+    if (search.trim()) {
+      setExpandedRfqNumbers(new Set(rfqGroups.map(g => g.rfqNumber)));
+    }
+  }, [search, rfqGroups]);
+
+  const toggleRfqExpand = useCallback((rfqNum: string) => {
+    setExpandedRfqNumbers(prev => {
+      const next = new Set(prev);
+      if (next.has(rfqNum)) next.delete(rfqNum);
+      else next.add(rfqNum);
+      return next;
+    });
+  }, []);
+
+  const toggleExpandAll = useCallback(() => {
+    if (expandedRfqNumbers.size === rfqGroups.length) {
+      setExpandedRfqNumbers(new Set());
+    } else {
+      setExpandedRfqNumbers(new Set(rfqGroups.map(g => g.rfqNumber)));
+    }
+  }, [expandedRfqNumbers, rfqGroups]);
+
+  const listingTotalPages = Math.ceil(rfqGroups.length / listingPerPage);
+  const paginatedRfqGroups = useMemo(() => {
+    return rfqGroups.slice(
+      (listingPage - 1) * listingPerPage,
+      listingPage * listingPerPage,
+    );
+  }, [rfqGroups, listingPage, listingPerPage]);
+
   const listingRenderCtx = useMemo<ListingRenderCtx & { __evalSource?: string }>(() => ({
     formatDate,
     formatAmount,
@@ -2934,57 +3122,7 @@ export default function QuotationsPage() {
     },
   }), [formatAmount, displayCurrency, activeDisplayCurrency, evalSource]);
 
-  // ── Map quotation ID → evaluation score for ALL quotations ──
-  const evalScoreMap = useMemo(() => {
-    const map = new Map<number | string, number>();
 
-    // 1. Populate from evaluatedSuppliers if available (e.g. for active selectedRFQ with evaluation data)
-    if (evaluatedSuppliers && evaluatedSuppliers.length > 0) {
-      for (const s of evaluatedSuppliers) {
-        const val = s.recommendationScore ?? s.score;
-        if (val !== undefined && val !== null && val > 0) {
-          map.set(s.id, Math.round(val));
-        }
-      }
-    }
-
-    // 2. Group all compareSource quotations by RFQ to compute standard scores for ALL RFQs
-    const groupsByRfq = new Map<string, MockQuotation[]>();
-    for (const q of compareSource) {
-      const rfqKey = String(q.rfqNumber || q.rfqId || 'UNKNOWN');
-      if (!groupsByRfq.has(rfqKey)) {
-        groupsByRfq.set(rfqKey, []);
-      }
-      groupsByRfq.get(rfqKey)!.push(q);
-    }
-
-    // 3. For any quotation not in evaluatedSuppliers, compute standard score against its RFQ group
-    for (const [_rfqKey, group] of groupsByRfq.entries()) {
-      for (const q of group) {
-        if (!map.has(q.id)) {
-          const { finalScore } = computeStandardVendorScores(group, q, rfqCustomFields, q);
-          if (finalScore > 0) {
-            map.set(q.id, Math.round(finalScore));
-          }
-        }
-      }
-    }
-
-    return map;
-  }, [evaluatedSuppliers, compareSource, rfqCustomFields]);
-
-  // ── Apply evaluation scores to paginated listing data for display ──
-  const displayQuotations = useMemo(() => {
-    return paginatedQuotations.map(q => {
-      const evalScore = evalScoreMap.get(q.id);
-      if (evalScore !== undefined) {
-        return { ...q, score: evalScore, recommendationScore: evalScore };
-      }
-      const rawScore = q.recommendationScore ?? q.score ?? 0;
-      const normalized = rawScore <= 5 ? Math.round(rawScore * 20) : Math.round(rawScore);
-      return { ...q, score: normalized, recommendationScore: normalized };
-    });
-  }, [paginatedQuotations, evalScoreMap]);
 
   // ── Modal actions ───────────────────────────────────────────
   const openModal = (type: ModalType, q: MockQuotation) => {
@@ -3208,6 +3346,33 @@ export default function QuotationsPage() {
             {/* Compare RFQ dropdown — simple absolute positioning (no FloatingMenu to avoid zoom/fixed conflict) */}
             {compareDropdownOpen && (
               <div className="quot-compare__dropdown-menu" ref={compareDropdownMenuRef}>
+                {/* Active / Inactive Filter Tabs */}
+                <div className="quot-compare__dropdown-filter-tabs">
+                  <button
+                    type="button"
+                    className={`quot-compare__filter-tab ${rfqFilterStatus === 'ALL' ? 'quot-compare__filter-tab--active' : ''}`}
+                    onClick={(e) => { e.stopPropagation(); setRfqFilterStatus('ALL'); }}
+                  >
+                    All ({rfqCounts.all})
+                  </button>
+                  <button
+                    type="button"
+                    className={`quot-compare__filter-tab ${rfqFilterStatus === 'ACTIVE' ? 'quot-compare__filter-tab--active' : ''}`}
+                    onClick={(e) => { e.stopPropagation(); setRfqFilterStatus('ACTIVE'); }}
+                  >
+                    <span className="quot-compare__filter-dot quot-compare__filter-dot--active" />
+                    Active ({rfqCounts.active})
+                  </button>
+                  <button
+                    type="button"
+                    className={`quot-compare__filter-tab ${rfqFilterStatus === 'INACTIVE' ? 'quot-compare__filter-tab--active' : ''}`}
+                    onClick={(e) => { e.stopPropagation(); setRfqFilterStatus('INACTIVE'); }}
+                  >
+                    <span className="quot-compare__filter-dot quot-compare__filter-dot--inactive" />
+                    Inactive ({rfqCounts.inactive})
+                  </button>
+                </div>
+
                 <div className="quot-compare__dropdown-search">
                   <Search size={13}/>
                   <input type="text" placeholder="Search by RFQ or vendor name..." value={compareSearch}
@@ -3216,19 +3381,32 @@ export default function QuotationsPage() {
                 <div className="quot-compare__dropdown-list">
                   {filteredRFQs.length > 0 ? filteredRFQs.map(rfq => {
                     const count = quotations.filter(q => q.rfqNumber === rfq).length;
+                    const inactive = isRfqInactive(rfq);
                     return (
                       <button key={rfq}
                         className={`quot-compare__dropdown-item ${selectedRFQ === rfq ? 'quot-compare__dropdown-item--active' : ''}`}
                         onClick={() => { setSelectedRFQ(rfq); setCompareDropdownOpen(false); setCompareSearch(''); }}
                       >
                         <span className="quot-compare__dropdown-item-left">
-                          <span className="quot-compare__dropdown-rfq">{rfq}</span>
-                          <span className="quot-compare__dropdown-rfq-sub">Click to compare suppliers</span>
+                          <span className="quot-compare__dropdown-rfq-row">
+                            <span className="quot-compare__dropdown-rfq">{rfq}</span>
+                            <span className={`quot-compare__rfq-status-tag ${inactive ? 'quot-compare__rfq-status-tag--inactive' : 'quot-compare__rfq-status-tag--active'}`}>
+                              {inactive ? 'Inactive' : 'Active'}
+                            </span>
+                          </span>
+                          <span className="quot-compare__dropdown-rfq-sub">
+                            {inactive ? 'Vendor selected / Completed' : 'Under evaluation'}
+                          </span>
                         </span>
                         <span className="quot-compare__dropdown-count">{count} supplier{count > 1 ? 's' : ''}</span>
                       </button>
                     );
-                  }) : <div className="quot-compare__dropdown-empty"><div className="quot-compare__dropdown-empty-icon"><Search size={20} /></div>No RFQs found</div>}
+                  }) : (
+                    <div className="quot-compare__dropdown-empty">
+                      <div className="quot-compare__dropdown-empty-icon"><Search size={20} /></div>
+                      No {rfqFilterStatus !== 'ALL' ? rfqFilterStatus.toLowerCase() : ''} RFQs found
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -3236,6 +3414,9 @@ export default function QuotationsPage() {
           {selectedRFQ && (
             <div className="quot-compare__rfq-badge">
               <span>{selectedRFQ}</span>
+              <span className={`quot-compare__rfq-status-tag ${isRfqInactive(selectedRFQ) ? 'quot-compare__rfq-status-tag--inactive' : 'quot-compare__rfq-status-tag--active'}`}>
+                {isRfqInactive(selectedRFQ) ? 'Inactive (Vendor Chosen)' : 'Active (Evaluating)'}
+              </span>
               <span className="quot-compare__rfq-count">{evaluatedSuppliers.length} suppliers</span>
               <div className="quot-compare__view-toggle">
                 <button
@@ -3446,10 +3627,11 @@ export default function QuotationsPage() {
             <span className="quot-compare__value-main">{formatDate(s.submittedAt)}</span>
           </td>
         );
-      case 'actions':
+      case 'actions': {
+        const actionable = getDisplayStatus(s) !== 'ACCEPTED' && getDisplayStatus(s) !== 'REJECTED';
         return (
           <td key={key} className="quot-compare__value" style={{ textAlign: 'center' }}>
-            <div className="quot-table__actions" style={{ justifyContent: 'center' }}>
+            <div className="quot-table__actions" style={{ justifyContent: 'center', gap: 4 }}>
               <button
                 className="quot-table__action-btn"
                 title="View Details"
@@ -3457,9 +3639,35 @@ export default function QuotationsPage() {
               >
                 <Eye size={15}/>
               </button>
+              {actionable && (
+                <>
+                  <button
+                    className="quot-table__action-btn quot-table__action-btn--accept"
+                    title="Accept Quotation"
+                    onClick={() => openModal('accept', s)}
+                  >
+                    <ThumbsUp size={15} />
+                  </button>
+                  <button
+                    className="quot-table__action-btn quot-table__action-btn--reject"
+                    title="Reject Quotation"
+                    onClick={() => openModal('reject', s)}
+                  >
+                    <ThumbsDown size={15} />
+                  </button>
+                  <button
+                    className="quot-table__action-btn quot-table__action-btn--return"
+                    title="Return for Revision"
+                    onClick={() => openModal('return', s)}
+                  >
+                    <RotateCcw size={15} />
+                  </button>
+                </>
+              )}
             </div>
           </td>
         );
+      }
       default: return <td key={key} />;
     }
   };
@@ -3485,14 +3693,14 @@ export default function QuotationsPage() {
           <p>Compare vendor quotations side-by-side across your RFQs</p>
         </div>
         <div className="quot-page__header-actions">
-          {/* Supplier Comparison Button */}
+          {/* Active Quotation Comparison Button */}
           <button
             className="quot-page__compare-btn"
             onClick={() => setCompareModalOpen(true)}
-            title="Open supplier comparison"
+            title="Open active quotation comparison"
           >
             <GitCompareArrows size={16} />
-            <span>Supplier Comparison</span>
+            <span>Active Quotation Comparison</span>
           </button>
           {/* Currency Converter Widget */}
           <div className="quot-page__converter">
@@ -3554,117 +3762,158 @@ export default function QuotationsPage() {
             <Search size={16} className="quot-listing-toolbar__search-icon" />
             <input
               type="text"
-              placeholder="Search by vendor, RFQ number, or email..."
+              placeholder="Search by RFQ number, title, vendor or email..."
               value={search}
               onChange={(e) => { setSearch(e.target.value); setListingPage(1); }}
             />
           </div>
+          {rfqGroups.length > 0 && (
+            <button
+              type="button"
+              className="quot-rfq-card__expand-all-btn"
+              onClick={toggleExpandAll}
+            >
+              {expandedRfqNumbers.size === rfqGroups.length ? (
+                <>
+                  <ChevronUp size={14} />
+                  <span>Collapse All</span>
+                </>
+              ) : (
+                <>
+                  <ChevronDown size={14} />
+                  <span>Expand All ({rfqGroups.length})</span>
+                </>
+              )}
+            </button>
+          )}
         </div>
 
-        {/* Table */}
-        {displayQuotations.length > 0 ? (
-          <div className="quot-listing-table-card">
-            <div className="quot-listing-table-wrap">
-              <table className="quot-listing-table" style={{ tableLayout: 'fixed', minWidth: '900px' }}>
-                <colgroup>
-                  {listingVisibleColumns.map((col) => (
-                    <col key={col.key} style={{ width: col.width || 'auto' }} />
-                  ))}
-                  <col style={{ width: '150px' }} />
-                </colgroup>
-                <thead>
-                  <tr>
-                    {listingVisibleColumns.map((col) => (
-                      <th key={col.key} style={{ textAlign: col.align || 'left' }}>{col.label}</th>
-                    ))}
-                    <th>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                        <span>Actions</span>
-                        <div className="col-btn-wrap">
-                          <button
-                            ref={listingColBtnRef}
-                            className={`col-btn ${listingShowColPanel ? 'col-btn--active' : ''}`}
-                            onClick={() => setListingShowColPanel((v) => !v)}
-                            title="Customize columns"
-                            aria-label="Customize columns"
-                            aria-expanded={listingShowColPanel}
-                          >
-                            <span /><span /><span />
-                          </button>
-                          {listingShowColPanel && (
-                            <ColumnCustomizer
-                              columnOrder={listingColumnOrder}
-                              visibleKeys={listingVisibleKeys}
-                              allColumns={ALL_LISTING_COLUMNS}
-                              onToggle={handleListingToggleColumn}
-                              onReorder={setListingColumnOrder}
-                              onReset={handleListingResetColumns}
-                              onClose={() => setListingShowColPanel(false)}
-                              anchorRef={listingColBtnRef}
-                            />
-                          )}
+        {/* Grouped RFQs Accordion List */}
+        {paginatedRfqGroups.length > 0 ? (
+          <div>
+            <div className="quot-rfq-groups">
+              {paginatedRfqGroups.map((group) => {
+                const isExpanded = expandedRfqNumbers.has(group.rfqNumber);
+
+                return (
+                  <div key={group.rfqNumber} className={`quot-rfq-card ${isExpanded ? 'quot-rfq-card--expanded' : ''}`}>
+                    {/* RFQ Group Header */}
+                    <div
+                      className="quot-rfq-card__header"
+                      onClick={() => toggleRfqExpand(group.rfqNumber)}
+                    >
+                      <div className="quot-rfq-card__header-left">
+                        <button
+                          type="button"
+                          className={`quot-rfq-card__chevron ${isExpanded ? 'quot-rfq-card__chevron--expanded' : ''}`}
+                          aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                        >
+                          <ChevronRight size={18} />
+                        </button>
+                        <div className="quot-rfq-card__title-block">
+                          <div className="quot-rfq-card__badge-wrap">
+                            <span className="quot-rfq-card__rfq-num">{group.rfqNumber}</span>
+                            <span className={`quot-rfq-card__status-dot quot-rfq-card__status-dot--${group.isInactive ? 'inactive' : 'active'}`} />
+                            <span className="quot-rfq-card__status-text">{group.isInactive ? 'Completed' : 'Active'}</span>
+                          </div>
+                          <h3 className="quot-rfq-card__title">{group.rfqTitle}</h3>
                         </div>
                       </div>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {displayQuotations.map((q) => {
-                    const actionable = getDisplayStatus(q) !== 'ACCEPTED' && getDisplayStatus(q) !== 'REJECTED';
-                    return (
-                      <tr key={q.id}>
-                        {listingVisibleColumns.map((col) => (
-                          <td key={col.key} style={{ textAlign: col.align || 'left' }}>
-                            {col.render(q, listingRenderCtx)}
-                          </td>
-                        ))}
-                        <td>
-                          <div className="quot-listing-table__actions">
-                            <button
-                              className="quot-listing-table__action-btn"
-                              title="View Details"
-                              onClick={() => openModal('view', q)}
-                            >
-                              <Eye size={15} />
-                            </button>
-                            {actionable && (
-                              <>
-                                <button
-                                  className="quot-listing-table__action-btn quot-listing-table__action-btn--accept"
-                                  title="Accept Quotation"
-                                  onClick={() => openModal('accept', q)}
-                                >
-                                  <ThumbsUp size={15} />
-                                </button>
-                                <button
-                                  className="quot-listing-table__action-btn quot-listing-table__action-btn--reject"
-                                  title="Reject Quotation"
-                                  onClick={() => openModal('reject', q)}
-                                >
-                                  <ThumbsDown size={15} />
-                                </button>
-                                <button
-                                  className="quot-listing-table__action-btn quot-listing-table__action-btn--return"
-                                  title="Return for Revision"
-                                  onClick={() => openModal('return', q)}
-                                >
-                                  <RotateCcw size={15} />
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+
+                      <div className="quot-rfq-card__header-right">
+                        <div className="quot-rfq-card__stat">
+                          <span className="quot-rfq-card__stat-label">Quotations</span>
+                          <span className="quot-rfq-card__stat-val">
+                            <ClipboardList size={13} style={{ verticalAlign: -1, marginRight: 4 }} />
+                            {group.quotationCount} {group.quotationCount === 1 ? 'Quotation' : 'Quotations'}
+                          </span>
+                        </div>
+
+                        <div className="quot-rfq-card__stat">
+                          <span className="quot-rfq-card__stat-label">Best Price</span>
+                          <span className="quot-rfq-card__stat-val quot-rfq-card__stat-val--best">
+                            {convertPrice(group.bestPrice, group.bestCurrency).converted}
+                          </span>
+                        </div>
+
+                        <div className="quot-rfq-card__stat">
+                          <span className="quot-rfq-card__stat-label">Latest Submitted</span>
+                          <span className="quot-rfq-card__stat-val">
+                            {formatDate(group.latestSubmitted)}
+                          </span>
+                        </div>
+
+                        <div className="quot-rfq-card__actions" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            className="quot-rfq-card__compare-btn"
+                            title="Open Side-by-Side Comparison for this RFQ"
+                            onClick={() => {
+                              setSelectedRFQ(group.rfqNumber);
+                              setCompareModalOpen(true);
+                            }}
+                          >
+                            <GitCompareArrows size={14} />
+                            <span>Compare</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Collapsible Quotations Sub-Table */}
+                    {isExpanded && (
+                      <div className="quot-rfq-card__body">
+                        <div className="quot-listing-table-wrap">
+                          <table className="quot-listing-table" style={{ tableLayout: 'fixed', minWidth: '850px' }}>
+                            <colgroup>
+                              {listingVisibleColumns.map((col) => (
+                                <col key={col.key} style={{ width: col.width || 'auto' }} />
+                              ))}
+                              <col style={{ width: '80px' }} />
+                            </colgroup>
+                            <thead>
+                              <tr>
+                                {listingVisibleColumns.map((col) => (
+                                  <th key={col.key} style={{ textAlign: col.align || 'left' }}>{col.label}</th>
+                                ))}
+                                <th style={{ textAlign: 'center' }}>Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {group.quotations.map((q) => (
+                                <tr key={q.id}>
+                                  {listingVisibleColumns.map((col) => (
+                                    <td key={col.key} style={{ textAlign: col.align || 'left' }}>
+                                      {col.render(q, listingRenderCtx)}
+                                    </td>
+                                  ))}
+                                  <td style={{ textAlign: 'center' }}>
+                                    <div className="quot-listing-table__actions" style={{ justifyContent: 'center' }}>
+                                      <button
+                                        className="quot-listing-table__action-btn"
+                                        title="View Details"
+                                        onClick={() => openModal('view', q)}
+                                      >
+                                        <Eye size={15} />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
-            {filteredQuotations.length > listingPerPage && (
-              <div className="quot-listing-pagination">
+            {rfqGroups.length > listingPerPage && (
+              <div className="quot-listing-pagination" style={{ marginTop: 16, borderRadius: 'var(--radius-md)' }}>
                 <span className="quot-listing-pagination__info">
-                  Showing {(listingPage - 1) * listingPerPage + 1}–{Math.min(listingPage * listingPerPage, filteredQuotations.length)} of {filteredQuotations.length}
+                  Showing {(listingPage - 1) * listingPerPage + 1}–{Math.min(listingPage * listingPerPage, rfqGroups.length)} of {rfqGroups.length} RFQs
                 </span>
                 <div className="quot-listing-pagination__btns">
                   <button
@@ -3674,18 +3923,12 @@ export default function QuotationsPage() {
                   >
                     <ChevronLeft size={14} />
                   </button>
-                  {Array.from({ length: listingTotalPages }, (_, i) => i + 1).map((p) => (
-                    <button
-                      key={p}
-                      className={`quot-listing-pagination__btn ${listingPage === p ? 'quot-listing-pagination__btn--active' : ''}`}
-                      onClick={() => setListingPage(p)}
-                    >
-                      {p}
-                    </button>
-                  ))}
+                  <span className="quot-listing-pagination__page">
+                    {listingPage} / {listingTotalPages}
+                  </span>
                   <button
                     className="quot-listing-pagination__btn"
-                    disabled={listingPage === listingTotalPages}
+                    disabled={listingPage >= listingTotalPages}
                     onClick={() => setListingPage((p) => p + 1)}
                   >
                     <ChevronRight size={14} />
@@ -3742,7 +3985,7 @@ export default function QuotationsPage() {
         }}
       />
 
-      {/* ── Supplier Comparison Full-Page Modal (Gmail-style like RFQ modal) ── */}
+      {/* ── Active Quotation Comparison Full-Page Modal (Gmail-style like RFQ modal) ── */}
       {compareModalOpen && (
         <div className={`quot-compare-modal-backdrop ${compareExpanded ? 'quot-compare-modal-backdrop--expanded' : ''}`} onClick={() => setCompareModalOpen(false)}>
           <div
@@ -3755,7 +3998,7 @@ export default function QuotationsPage() {
                 <span className="quot-compare-modal__header-icon-bg">
                   <GitCompareArrows size={18} />
                 </span>
-                <span className="quot-compare-modal__header-title">Supplier Comparison</span>
+                <span className="quot-compare-modal__header-title">Active Quotation Comparison</span>
               </div>
 
               <div className="quot-compare-modal__window-controls">
@@ -3799,7 +4042,7 @@ export default function QuotationsPage() {
             {/* Hero section */}
             {/* Hero section */}
             <div className="quot-compare-modal__hero">
-              <h2 className="quot-compare-modal__hero-title">Supplier Comparison</h2>
+              <h2 className="quot-compare-modal__hero-title">Active Quotation Comparison</h2>
               <p className="quot-compare-modal__hero-desc">
                 Select an RFQ to compare all supplier quotations side-by-side
               </p>

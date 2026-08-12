@@ -418,7 +418,7 @@ export default function ApprovalsPage() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [actionModal, setActionModal] = useState<{ request: ApprovalRequest; action: 'approve' | 'reject' | 'return' } | null>(null);
   const [actionComment, setActionComment] = useState('');
-  const [actionReturnTarget, setActionReturnTarget] = useState<'LEVEL_1' | 'VENDOR'>('LEVEL_1');
+  const [actionReturnTarget, setActionReturnTarget] = useState<'ORIGINATOR' | 'LEVEL_1' | 'VENDOR'>('ORIGINATOR');
   const [detailRequest, setDetailRequest] = useState<ApprovalRequest | null>(null);
   const [chainModal, setChainModal] = useState<{ module: string; referenceId: string } | null>(null);
   useBodyScrollLock(!!(actionModal || detailRequest || chainModal));
@@ -490,7 +490,7 @@ export default function ApprovalsPage() {
         const res = await approvalService.reject(id, comment);
         message = res?.message || 'Request rejected.';
       } else {
-        const res = await approvalService.return(id, comment, actionReturnTarget);
+        const res = await approvalService.return(id, comment, actionReturnTarget as any);
         message = res?.message || 'Request returned for revision.';
       }
       setToast({ message, type: 'success' });
@@ -504,7 +504,8 @@ export default function ApprovalsPage() {
   const openAction = useCallback((request: ApprovalRequest, action: 'approve' | 'reject' | 'return') => {
     setActionModal({ request, action });
     setActionComment('');
-    setActionReturnTarget('LEVEL_1');
+    const defaultTarget = (request.module === 'Quotation' || request.module === 'Quotations') ? 'VENDOR' : 'ORIGINATOR';
+    setActionReturnTarget(defaultTarget);
   }, []);
 
   const formatDateTime = (d: string) => {
@@ -631,7 +632,7 @@ export default function ApprovalsPage() {
                         <button className="approvals-table__action-btn" title="View Details" onClick={() => setDetailRequest(req)}>
                           <Eye size={15} />
                         </button>
-                        {req.status === 'PENDING' && (
+                        {req.status === 'PENDING' && (req.canAct ?? true) ? (
                           <>
                             <button className="approvals-table__action-btn approvals-table__action-btn--approve" title="Approve" onClick={() => openAction(req, 'approve')}>
                               <ThumbsUp size={15} />
@@ -643,7 +644,11 @@ export default function ApprovalsPage() {
                               <RotateCcw size={15} />
                             </button>
                           </>
-                        )}
+                        ) : req.status === 'PENDING' ? (
+                          <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontStyle: 'italic', padding: '2px 6px', background: 'var(--surface-elevated, #f0f2f5)', borderRadius: 4, border: '1px solid var(--border)' }} title={`Awaiting Level ${req.currentLevel} approval by ${req.requiredRole}`}>
+                            L{req.currentLevel} ({req.requiredRole})
+                          </span>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -714,13 +719,47 @@ export default function ApprovalsPage() {
                   <span className="approvals-modal__summary-value">{actionModal.request.requestedBy}</span>
                 </div>
               </div>
-              {actionModal.action === 'return' && (actionModal.request.module === 'Quotation' || actionModal.request.module === 'Quotations') && (
-                <div style={{ margin: '14px 0 6px', padding: 12, background: '#f7f9fa', border: '1px solid #d9d9d9', borderRadius: 6 }}>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: '#32363a', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              {actionModal.action === 'return' && (
+                <div style={{ margin: '14px 0 6px', padding: 12, background: 'var(--surface-card, #f7f9fa)', border: '1px solid var(--border, #d9d9d9)', borderRadius: 6 }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary, #32363a)', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                     Return Destination
                   </label>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 13, color: '#32363a' }}>
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 13, color: 'var(--text-primary, #32363a)' }}>
+                      <input
+                        type="radio"
+                        name="approvalReturnTarget"
+                        value="ORIGINATOR"
+                        checked={actionReturnTarget === 'ORIGINATOR'}
+                        onChange={() => setActionReturnTarget('ORIGINATOR')}
+                        style={{ marginTop: 3, accentColor: '#0a6ed1' }}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 600, color: '#e9730c' }}>Return to Originator for Revision</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-secondary, #6a6d70)', marginTop: 2 }}>
+                          Mark request as Returned & notify creator so they can revise and resubmit
+                        </div>
+                      </div>
+                    </label>
+                    {(actionModal.request.module === 'Quotation' || actionModal.request.module === 'Quotations') && (
+                      <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 13, color: 'var(--text-primary, #32363a)' }}>
+                        <input
+                          type="radio"
+                          name="approvalReturnTarget"
+                          value="VENDOR"
+                          checked={actionReturnTarget === 'VENDOR'}
+                          onChange={() => setActionReturnTarget('VENDOR')}
+                          style={{ marginTop: 3, accentColor: '#0a6ed1' }}
+                        />
+                        <div>
+                          <div style={{ fontWeight: 600, color: '#bb0000' }}>Return to Vendor for Resubmission</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-secondary, #6a6d70)', marginTop: 2 }}>
+                            Send feedback to Vendor so they can revise and resubmit
+                          </div>
+                        </div>
+                      </label>
+                    )}
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 13, color: 'var(--text-primary, #32363a)' }}>
                       <input
                         type="radio"
                         name="approvalReturnTarget"
@@ -730,22 +769,10 @@ export default function ApprovalsPage() {
                         style={{ marginTop: 3, accentColor: '#0a6ed1' }}
                       />
                       <div>
-                        <div style={{ fontWeight: 600, color: '#0070c0' }}>Return to Level 1</div>
-                        <div style={{ fontSize: 11, color: '#6a6d70', marginTop: 2 }}>Restart approval chain starting at Level 1 (Clerk review first)</div>
-                      </div>
-                    </label>
-                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 13, color: '#32363a' }}>
-                      <input
-                        type="radio"
-                        name="approvalReturnTarget"
-                        value="VENDOR"
-                        checked={actionReturnTarget === 'VENDOR'}
-                        onChange={() => setActionReturnTarget('VENDOR')}
-                        style={{ marginTop: 3, accentColor: '#0a6ed1' }}
-                      />
-                      <div>
-                        <div style={{ fontWeight: 600, color: '#bb0000' }}>Return to Vendor for Resubmission</div>
-                        <div style={{ fontSize: 11, color: '#6a6d70', marginTop: 2 }}>Send feedback email & notification to Vendor so they can revise and resubmit</div>
+                        <div style={{ fontWeight: 600, color: '#0070c0' }}>Restart at Level 1</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-secondary, #6a6d70)', marginTop: 2 }}>
+                          Immediately restart internal approval chain at Level 1 (creates new pending Level 1 request)
+                        </div>
                       </div>
                     </label>
                   </div>

@@ -7,6 +7,23 @@ import type { NotificationRow } from '../types/viewModels';
 import type { Notification } from '../types';
 import { isRoleMatching, type FormSubmissionInstance } from './formWorkflowService';
 import { adminService } from './adminService';
+import { companySettingsService } from './companySettingsService';
+
+// ─── Helper to fetch dynamic Company Name with fallback to 'Procnex' ─────────
+let cachedCompanyName = '';
+async function getEffectiveCompanyName(): Promise<string> {
+  if (cachedCompanyName) return cachedCompanyName;
+  try {
+    const profile = await companySettingsService.getCompanyProfile();
+    if (profile && profile.companyName && profile.companyName.trim()) {
+      cachedCompanyName = profile.companyName.trim();
+      return cachedCompanyName;
+    }
+  } catch {
+    // ignore fetch errors
+  }
+  return 'Procnex';
+}
 
 // ─── Direct SMTP System Email Dispatcher ───────────────────────────────────────
 
@@ -41,7 +58,9 @@ export function buildSystemEmailHtml(params: {
   comments?: string;
   actionUrl?: string;
   actionButtonText?: string;
+  companyName?: string;
 }): string {
+  const cName = (params.companyName && params.companyName.trim()) || 'Procnex';
   const {
     recipientName,
     headline,
@@ -54,7 +73,7 @@ export function buildSystemEmailHtml(params: {
     dueDate,
     comments,
     actionUrl = 'http://localhost:5173/forms',
-    actionButtonText = 'Open Heliflow Portal',
+    actionButtonText = `Open ${cName} Portal`,
   } = params;
 
   const priorityColor = priority === 'High' ? '#dc2626' : priority === 'Low' ? '#107e3e' : '#d97706';
@@ -86,7 +105,7 @@ export function buildSystemEmailHtml(params: {
 <body>
   <div class="email-card">
     <div class="email-header">
-      <div class="email-brand">Heliflow Enterprise Notification Service</div>
+      <div class="email-brand">${cName.toUpperCase()} ENTERPRISE NOTIFICATION SERVICE</div>
       <div class="email-title">${headline}</div>
     </div>
     <div class="email-body">
@@ -108,8 +127,8 @@ export function buildSystemEmailHtml(params: {
       </div>
     </div>
     <div class="email-footer">
-      This is an automated system notification from Heliflow Portal.<br>
-      © ${new Date().getFullYear()} Heliflow Enterprise Systems. All rights reserved.
+      This is an automated system notification from ${cName} Portal.<br>
+      © ${new Date().getFullYear()} ${cName}. All rights reserved.
     </div>
   </div>
 </body>
@@ -121,6 +140,7 @@ export function buildSystemEmailHtml(params: {
 
 export async function dispatchFormAssignmentEmails(submissionList: FormSubmissionInstance[]): Promise<number> {
   if (!submissionList || submissionList.length === 0) return 0;
+  const cName = await getEffectiveCompanyName();
 
   for (const sub of submissionList) {
     const isWorkflow = Boolean(sub.workflowAttached && sub.totalLevels > 0);
@@ -143,15 +163,17 @@ export async function dispatchFormAssignmentEmails(submissionList: FormSubmissio
       dueDate: sub.dueDate,
       actionUrl: 'http://localhost:5173/forms',
       actionButtonText: 'Fill Form Response',
+      companyName: cName,
     });
 
-    sendSystemEmail(sub.assignedUserEmail, `[Heliflow Notification] ${headline}: ${sub.formTitle}`, html).catch(() => {});
+    sendSystemEmail(sub.assignedUserEmail, `[${cName} Notification] ${headline}: ${sub.formTitle}`, html).catch(() => {});
   }
   return submissionList.length;
 }
 
 export async function dispatchFormSubmissionEmail(sub: FormSubmissionInstance, actorName: string): Promise<number> {
   const isWorkflow = Boolean(sub.workflowAttached && sub.totalLevels > 0);
+  const cName = await getEffectiveCompanyName();
 
   if (!isWorkflow) {
     const html = buildSystemEmailHtml({
@@ -165,9 +187,10 @@ export async function dispatchFormSubmissionEmail(sub: FormSubmissionInstance, a
       priority: sub.priority,
       actionUrl: 'http://localhost:5173/admin/form-responses',
       actionButtonText: 'View Response in Admin Dashboard',
+      companyName: cName,
     });
 
-    sendSystemEmail('admin@heliflow.com', `[Heliflow Notification] Direct Submission Received: ${sub.formTitle} (${sub.assignedUserName})`, html).catch(() => {});
+    sendSystemEmail('admin@heliflow.com', `[${cName} Notification] Direct Submission Received: ${sub.formTitle} (${sub.assignedUserName})`, html).catch(() => {});
     return 1;
   } else {
     const level1Step = sub.approvalLevels ? sub.approvalLevels[0] : null;
@@ -194,9 +217,10 @@ export async function dispatchFormSubmissionEmail(sub: FormSubmissionInstance, a
         dueDate: sub.dueDate,
         actionUrl: 'http://localhost:5173/forms',
         actionButtonText: 'Review & Approve Request',
+        companyName: cName,
       });
 
-      sendSystemEmail(app.email, `[Heliflow Notification] 🔔 Level 1 Approval Required (${level1Role}): ${sub.formTitle}`, html).catch(() => {});
+      sendSystemEmail(app.email, `[${cName} Notification] 🔔 Level 1 Approval Required (${level1Role}): ${sub.formTitle}`, html).catch(() => {});
     }
     return level1Approvers.length;
   }
@@ -210,6 +234,7 @@ export async function dispatchLevelApprovalEmail(
   comments = ''
 ): Promise<number> {
   const isFinal = approvedLevelNum >= sub.totalLevels;
+  const cName = await getEffectiveCompanyName();
 
   if (isFinal) {
     const htmlSubmitter = buildSystemEmailHtml({
@@ -224,9 +249,10 @@ export async function dispatchLevelApprovalEmail(
       comments: comments || `Final Level ${approvedLevelNum} approved by ${actorName} (${actorRole}).`,
       actionUrl: 'http://localhost:5173/forms',
       actionButtonText: 'View Approved Response',
+      companyName: cName,
     });
 
-    sendSystemEmail(sub.assignedUserEmail, `[Heliflow Notification] 🎉 Form Fully Approved: ${sub.formTitle}`, htmlSubmitter).catch(() => {});
+    sendSystemEmail(sub.assignedUserEmail, `[${cName} Notification] 🎉 Form Fully Approved: ${sub.formTitle}`, htmlSubmitter).catch(() => {});
     return 1;
   } else {
     const nextLevelNum = approvedLevelNum + 1;
@@ -255,9 +281,10 @@ export async function dispatchLevelApprovalEmail(
         comments,
         actionUrl: 'http://localhost:5173/forms',
         actionButtonText: `Review Level ${nextLevelNum} Request`,
+        companyName: cName,
       });
 
-      sendSystemEmail(app.email, `[Heliflow Notification] 🔔 Level ${nextLevelNum} Approval Required (${nextRole}): ${sub.formTitle}`, html).catch(() => {});
+      sendSystemEmail(app.email, `[${cName} Notification] 🔔 Level ${nextLevelNum} Approval Required (${nextRole}): ${sub.formTitle}`, html).catch(() => {});
     }
     return nextApprovers.length;
   }
@@ -269,6 +296,7 @@ export async function dispatchFormReturnEmail(
   actorRole: string,
   comments = ''
 ): Promise<number> {
+  const cName = await getEffectiveCompanyName();
   const html = buildSystemEmailHtml({
     recipientName: sub.assignedUserName,
     headline: `⚠️ Form Response Returned for Revision`,
@@ -281,9 +309,10 @@ export async function dispatchFormReturnEmail(
     comments: comments || 'Please revise your inputs and resubmit.',
     actionUrl: 'http://localhost:5173/forms',
     actionButtonText: 'Revise & Resubmit Form',
+    companyName: cName,
   });
 
-  sendSystemEmail(sub.assignedUserEmail, `[Heliflow Notification] ⚠️ Action Required: Form "${sub.formTitle}" Returned for Revision`, html).catch(() => {});
+  sendSystemEmail(sub.assignedUserEmail, `[${cName} Notification] ⚠️ Action Required: Form "${sub.formTitle}" Returned for Revision`, html).catch(() => {});
   return 1;
 }
 

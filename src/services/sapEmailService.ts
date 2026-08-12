@@ -1,5 +1,6 @@
 import { adminService } from './adminService';
 import { isRoleMatching, type FormSubmissionInstance } from './formWorkflowService';
+import { companySettingsService } from './companySettingsService';
 
 export interface SapEmailLog {
   id: string;
@@ -14,6 +15,21 @@ export interface SapEmailLog {
 }
 
 const STORAGE_KEY_SAP_EMAILS = 'heliflow_sap_emails_v1';
+
+let cachedCompanyName = '';
+async function getEffectiveCompanyName(): Promise<string> {
+  if (cachedCompanyName) return cachedCompanyName;
+  try {
+    const profile = await companySettingsService.getCompanyProfile();
+    if (profile && profile.companyName && profile.companyName.trim()) {
+      cachedCompanyName = profile.companyName.trim();
+      return cachedCompanyName;
+    }
+  } catch {
+    // ignore
+  }
+  return 'Procnex';
+}
 
 export function getStoredSapEmails(): SapEmailLog[] {
   try {
@@ -73,7 +89,9 @@ export function generateSapEmailHtml(params: {
   comments?: string;
   actionUrl?: string;
   actionButtonText?: string;
+  companyName?: string;
 }): string {
+  const cName = (params.companyName && params.companyName.trim()) || 'Procnex';
   const {
     recipientName,
     headline,
@@ -86,7 +104,7 @@ export function generateSapEmailHtml(params: {
     dueDate,
     comments,
     actionUrl = 'http://localhost:5173/forms',
-    actionButtonText = 'Open Heliflow Portal',
+    actionButtonText = `Open ${cName} Portal`,
   } = params;
 
   const priorityColor = priority === 'High' ? '#dc2626' : priority === 'Low' ? '#107e3e' : '#d97706';
@@ -118,7 +136,7 @@ export function generateSapEmailHtml(params: {
 <body>
   <div class="email-card">
     <div class="email-header">
-      <div class="email-brand">Heliflow 3.0 — Enterprise Custom Form Portal</div>
+      <div class="email-brand">${cName} — Enterprise Custom Form Portal</div>
       <div class="email-title">${headline}</div>
     </div>
     <div class="email-body">
@@ -140,8 +158,8 @@ export function generateSapEmailHtml(params: {
       </div>
     </div>
     <div class="email-footer">
-      This is an automated SAP Enterprise notification from Heliflow Portal.<br>
-      © ${new Date().getFullYear()} Heliflow Enterprise Systems. All rights reserved.
+      This is an automated notification from ${cName} Portal.<br>
+      © ${new Date().getFullYear()} ${cName}. All rights reserved.
     </div>
   </div>
 </body>
@@ -160,6 +178,7 @@ export const sapEmailService = {
 
     const currentLogs = getStoredSapEmails();
     const newLogs: SapEmailLog[] = [];
+    const cName = await getEffectiveCompanyName();
 
     for (const sub of submissionList) {
       const isWorkflow = Boolean(sub.workflowAttached && sub.totalLevels > 0);
@@ -182,13 +201,14 @@ export const sapEmailService = {
         dueDate: sub.dueDate,
         actionUrl: 'http://localhost:5173/forms',
         actionButtonText: 'Fill Form Response',
+        companyName: cName,
       });
 
       newLogs.push({
         id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         recipientEmail: sub.assignedUserEmail,
         recipientName: sub.assignedUserName,
-        subject: `[Heliflow SAP] ${headline}: ${sub.formTitle}`,
+        subject: `[${cName} SAP] ${headline}: ${sub.formTitle}`,
         bodyHtml: html,
         sentAt: new Date().toISOString(),
         formTitle: sub.formTitle,
@@ -211,6 +231,7 @@ export const sapEmailService = {
     const currentLogs = getStoredSapEmails();
     const newLogs: SapEmailLog[] = [];
     const isWorkflow = Boolean(sub.workflowAttached && sub.totalLevels > 0);
+    const cName = await getEffectiveCompanyName();
 
     if (!isWorkflow) {
       // Direct Submission without workflow -> Send email to Admin
@@ -225,13 +246,14 @@ export const sapEmailService = {
         priority: sub.priority,
         actionUrl: 'http://localhost:5173/admin/form-responses',
         actionButtonText: 'View Response in Admin Dashboard',
+        companyName: cName,
       });
 
       newLogs.push({
         id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         recipientEmail: 'admin@heliflow.com',
         recipientName: 'Administrator',
-        subject: `[Heliflow SAP] Direct Submission Received: ${sub.formTitle} (${sub.assignedUserName})`,
+        subject: `[${cName} SAP] Direct Submission Received: ${sub.formTitle} (${sub.assignedUserName})`,
         bodyHtml: html,
         sentAt: new Date().toISOString(),
         formTitle: sub.formTitle,
@@ -265,13 +287,14 @@ export const sapEmailService = {
           dueDate: sub.dueDate,
           actionUrl: 'http://localhost:5173/forms',
           actionButtonText: 'Review & Approve Request',
+          companyName: cName,
         });
 
         newLogs.push({
           id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
           recipientEmail: app.email,
           recipientName: app.fullName,
-          subject: `[Heliflow SAP] 🔔 Level 1 Approval Required (${level1Role}): ${sub.formTitle}`,
+          subject: `[${cName} SAP] 🔔 Level 1 Approval Required (${level1Role}): ${sub.formTitle}`,
           bodyHtml: html,
           sentAt: new Date().toISOString(),
           formTitle: sub.formTitle,
@@ -301,6 +324,7 @@ export const sapEmailService = {
   ): Promise<number> {
     const currentLogs = getStoredSapEmails();
     const newLogs: SapEmailLog[] = [];
+    const cName = await getEffectiveCompanyName();
 
     if (isFinal) {
       // Final approval -> Notify Submitter
@@ -316,13 +340,14 @@ export const sapEmailService = {
         comments,
         actionUrl: 'http://localhost:5173/forms',
         actionButtonText: 'View Approved Response',
+        companyName: cName,
       });
 
       newLogs.push({
         id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         recipientEmail: sub.assignedUserEmail,
         recipientName: sub.assignedUserName,
-        subject: `[Heliflow SAP] 🎉 Form Fully Approved: ${sub.formTitle}`,
+        subject: `[${cName} SAP] 🎉 Form Fully Approved: ${sub.formTitle}`,
         bodyHtml: html,
         sentAt: new Date().toISOString(),
         formTitle: sub.formTitle,
@@ -356,13 +381,14 @@ export const sapEmailService = {
           comments,
           actionUrl: 'http://localhost:5173/forms',
           actionButtonText: `Review Level ${nextLevelNum} Request`,
+          companyName: cName,
         });
 
         newLogs.push({
           id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
           recipientEmail: app.email,
           recipientName: app.fullName,
-          subject: `[Heliflow SAP] 🔔 Level ${nextLevelNum} Approval Required (${nextRole}): ${sub.formTitle}`,
+          subject: `[${cName} SAP] 🔔 Level ${nextLevelNum} Approval Required (${nextRole}): ${sub.formTitle}`,
           bodyHtml: html,
           sentAt: new Date().toISOString(),
           formTitle: sub.formTitle,
@@ -390,6 +416,7 @@ export const sapEmailService = {
     comments: string
   ): Promise<number> {
     const currentLogs = getStoredSapEmails();
+    const cName = await getEffectiveCompanyName();
 
     const html = generateSapEmailHtml({
       recipientName: sub.assignedUserName,
@@ -403,13 +430,14 @@ export const sapEmailService = {
       comments: comments || 'Please review form fields and resubmit to Level 1.',
       actionUrl: 'http://localhost:5173/forms',
       actionButtonText: 'Revise & Resubmit Form',
+      companyName: cName,
     });
 
     const newLog: SapEmailLog = {
       id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       recipientEmail: sub.assignedUserEmail,
       recipientName: sub.assignedUserName,
-      subject: `[Heliflow SAP] ⚠️ Form Returned for Edits: ${sub.formTitle}`,
+      subject: `[${cName} SAP] ⚠️ Form Returned for Edits: ${sub.formTitle}`,
       bodyHtml: html,
       sentAt: new Date().toISOString(),
       formTitle: sub.formTitle,

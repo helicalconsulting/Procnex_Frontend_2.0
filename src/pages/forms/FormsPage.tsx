@@ -89,13 +89,15 @@ export default function FormsPage() {
       if (!sub.workflowAttached || !sub.approvalLevels || sub.approvalLevels.length === 0) {
         return false;
       }
-      if (sub.status === 'completed') return false;
+      if (sub.status === 'completed' || sub.status === 'returned') return false;
 
       const activeLevelNum = sub.currentLevelNumber || 1;
       const currentStep = sub.approvalLevels.find((l) => l.levelNumber === activeLevelNum);
+
+      // Step must exist and not already be approved
       if (!currentStep || currentStep.status === 'approved') return false;
 
-      // Match required role for this exact level step
+      // STRICT: only match exact role for current level — no broad fallbacks
       return isRoleMatching(currentStep.requiredRole, userRoles, currentUserId);
     },
     [userRoles, currentUserId]
@@ -111,6 +113,26 @@ export default function FormsPage() {
     [userRoles, currentUserId]
   );
 
+  // Check if current user's role matches ANY level in this workflow form
+  const isWorkflowApproverForAnyLevel = useCallback(
+    (sub: FormSubmissionInstance) => {
+      if (!sub.workflowAttached || !sub.approvalLevels || sub.approvalLevels.length === 0) return false;
+      return sub.approvalLevels.some((lvl) => isRoleMatching(lvl.requiredRole, userRoles, currentUserId));
+    },
+    [userRoles, currentUserId]
+  );
+
+  // Check if current user or their role has ever returned this form at any stage
+  const hasUserReturnedForm = useCallback(
+    (sub: FormSubmissionInstance) => {
+      if (!sub.timeline || !Array.isArray(sub.timeline)) return false;
+      return sub.timeline.some(
+        (t) => t.action === 'Returned' && (isRoleMatching(t.actorRole, userRoles, currentUserId) || (t.actorName && currentUserName && t.actorName.toLowerCase() === currentUserName.toLowerCase()))
+      );
+    },
+    [userRoles, currentUserId, currentUserName]
+  );
+
   // Categorized filtered lists (Unified Pending Actions tab - no duplication)
   const filteredSubmissions = useMemo(() => {
     return submissions.filter((s) => {
@@ -120,6 +142,10 @@ export default function FormsPage() {
 
       const isApproverForCurrent = isUserApproverForCurrentLevel(s);
       const hasApprovedPrior = hasUserApprovedAnyLevel(s);
+      // In workflow mode assignedUserId is always Admin/publisher — so approvers
+      // must also be able to see the returned form via their role match
+      const isWorkflowApprover = isWorkflowApproverForAnyLevel(s);
+      const hasReturned = hasUserReturnedForm(s);
 
       if (activeTab === 'pending' || activeTab === 'approval_pending') {
         return (isMine && s.status === 'pending') || isApproverForCurrent;
@@ -134,11 +160,14 @@ export default function FormsPage() {
         return s.status === 'completed' || hasApprovedPrior;
       }
       if (activeTab === 'returned') {
-        return isMine && s.status === 'returned';
+        // Show returned forms to:
+        // 1. Status is 'returned' (returned at Level 1 to submitter) -> show to assigned user, workflow approvers, or prior approvers
+        // 2. OR user/role has returned this form at any stage (e.g. Level 2 approver returned it to Level 1)
+        return (s.status === 'returned' && (isMine || isWorkflowApprover || hasApprovedPrior)) || hasReturned;
       }
       return true;
     });
-  }, [submissions, activeTab, currentUserId, currentUserEmail, isUserApproverForCurrentLevel, hasUserApprovedAnyLevel]);
+  }, [submissions, activeTab, currentUserId, currentUserEmail, isUserApproverForCurrentLevel, hasUserApprovedAnyLevel, isWorkflowApproverForAnyLevel, hasUserReturnedForm]);
 
   // Counts for each tab
   const counts = useMemo(() => {
@@ -155,16 +184,18 @@ export default function FormsPage() {
 
       const isApproverForCurrent = isUserApproverForCurrentLevel(s);
       const hasApprovedPrior = hasUserApprovedAnyLevel(s);
+      const isWorkflowApprover = isWorkflowApproverForAnyLevel(s);
+      const hasReturned = hasUserReturnedForm(s);
 
       if ((isMine && s.status === 'pending') || isApproverForCurrent) pending++;
       if (isMine && s.status === 'submitted' && !isApproverForCurrent) submitted++;
       if (isMine && s.status === 'draft') draft++;
       if (s.status === 'completed' || hasApprovedPrior) completed++;
-      if (isMine && s.status === 'returned') returned++;
+      if ((s.status === 'returned' && (isMine || isWorkflowApprover || hasApprovedPrior)) || hasReturned) returned++;
     });
 
     return { pending, approvalPending: pending, submitted, draft, completed, returned };
-  }, [submissions, currentUserId, currentUserEmail, isUserApproverForCurrentLevel, hasUserApprovedAnyLevel]);
+  }, [submissions, currentUserId, currentUserEmail, isUserApproverForCurrentLevel, hasUserApprovedAnyLevel, isWorkflowApproverForAnyLevel, hasUserReturnedForm]);
 
   // Auto-switch to Pending My Approval tab if user has approval tasks
   useEffect(() => {
@@ -391,12 +422,18 @@ export default function FormsPage() {
                   <span className={`fp-priority-tag fp-priority-tag--${sub.priority.toLowerCase()}`}>
                     {sub.priority} Priority
                   </span>
-                  <span className={`fp-status-tag fp-status-tag--${sub.status === 'completed' || hasApprovedPrior ? 'completed' : sub.status}`}>
+                  <span className={`fp-status-tag fp-status-tag--${sub.status === 'completed' ? 'completed' : sub.status === 'returned' ? 'returned' : sub.status}`}>
                     {sub.status === 'completed'
                       ? 'COMPLETED'
-                      : hasApprovedPrior
-                      ? `MY LEVEL APPROVED (L${sub.currentLevelNumber} Pending)`
-                      : sub.status.toUpperCase()}
+                      : sub.status === 'returned'
+                      ? 'RETURNED'
+                      : sub.status === 'draft'
+                      ? 'DRAFT'
+                      : sub.status === 'pending'
+                      ? 'AWAITING RESPONSE'
+                      : sub.workflowAttached && sub.currentLevelNumber > 0
+                      ? `PENDING LEVEL ${sub.currentLevelNumber} APPROVAL`
+                      : 'SUBMITTED'}
                   </span>
                 </div>
 
@@ -448,7 +485,15 @@ export default function FormsPage() {
                 <div className="fp-card__meta">
                   <div className="fp-meta-item">
                     <User size={13} />
-                    <span>Assigned To: <strong>{sub.assignedUserName}</strong></span>
+                    {sub.workflowAttached ? (
+                      <span>
+                        {sub.status === 'completed'
+                          ? <>All Levels <strong>Approved ✓</strong></>
+                          : <>Current Approver: <strong>{currentRoleNeeded}</strong></>}
+                      </span>
+                    ) : (
+                      <span>Assigned To: <strong>{sub.assignedUserName}</strong></span>
+                    )}
                   </div>
                   <div className="fp-meta-item">
                     <Calendar size={13} />
@@ -464,7 +509,11 @@ export default function FormsPage() {
                   <button className="fp-card-btn" onClick={() => openFormFiller(sub)}>
                     {isApproverForSub ? (
                       <>
-                        <ShieldCheck size={15} /> Review & Approve Level {sub.currentLevelNumber}
+                        <ShieldCheck size={15} /> Review &amp; Approve Level {sub.currentLevelNumber}
+                      </>
+                    ) : activeTab === 'returned' || sub.status === 'returned' ? (
+                      <>
+                        <RotateCcw size={15} /> View Returned Form
                       </>
                     ) : sub.status === 'completed' || sub.status === 'submitted' ? (
                       <>
@@ -497,7 +546,9 @@ export default function FormsPage() {
                 <div>
                   <h2>{selectedSubmission.formTitle}</h2>
                   <p className="fp-filler__assigned-note">
-                    {isApproverForSub
+                    {selectedSubmission.status === 'returned'
+                      ? `⚠️ Returned at Level ${selectedSubmission.currentLevelNumber} — Pending revision`
+                      : isApproverForSub
                       ? `Approver Review (Level ${selectedSubmission.currentLevelNumber} of ${selectedSubmission.totalLevels})`
                       : `Form Submission for ${selectedSubmission.assignedUserName}`}
                   </p>
@@ -507,13 +558,40 @@ export default function FormsPage() {
                 </button>
               </div>
 
+              {/* Returned reason banner */}
+              {selectedSubmission.status === 'returned' && (() => {
+                const retEntry = selectedSubmission.timeline?.slice().reverse().find((t: any) => t.action === 'Returned');
+                const retReason = retEntry?.comments || 'Form returned for revision.';
+                const retActor = retEntry?.actorName ? `${retEntry.actorName} (${retEntry.actorRole || 'Approver'})` : 'Approver';
+                return (
+                  <div style={{
+                    margin: '0 0 4px',
+                    padding: '12px 20px',
+                    background: 'rgba(233,115,12,0.08)',
+                    border: '1px solid rgba(233,115,12,0.3)',
+                    borderLeft: '4px solid #e9730c',
+                    borderRadius: '4px',
+                  }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#e9730c', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>
+                      ⚠️ Returned for Revision — by {retActor}
+                    </div>
+                    <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>{retReason}</div>
+                  </div>
+                );
+              })()}
+
               <div className="fp-filler__body">
 
                 {/* Form Fields Canvas Render */}
                 {selectedSubmission.fields.map((field) => {
                   const val = formData[field.id] || '';
+                  // Read-only when: completed, OR the viewer is not the assigned user (approver viewing returned form)
+                  const isAssignedUser =
+                    (currentUserId && String(selectedSubmission.assignedUserId) === String(currentUserId)) ||
+                    (currentUserEmail && selectedSubmission.assignedUserEmail?.toLowerCase() === currentUserEmail.toLowerCase());
                   const isReadOnly =
                     selectedSubmission.status === 'completed' ||
+                    (selectedSubmission.status === 'returned' && !isAssignedUser) ||
                     field.readOnly;
 
                   return (

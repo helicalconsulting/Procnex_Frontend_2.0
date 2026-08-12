@@ -682,14 +682,17 @@
   width: 100%;
   max-width: 500px;
   height: 100vh;
-  position: absolute;
+  max-height: 100vh;
+  position: fixed;
   right: 0;
   top: 0;
+  bottom: 0;
   background: var(--surface-card);
   border-left: 1px solid var(--border);
   box-shadow: var(--shadow-lg);
   display: flex;
   flex-direction: column;
+  z-index: 100000;
 }
 
 .frp-drawer-header {
@@ -725,7 +728,7 @@
 }
 
 .frp-drawer-body {
-  padding: 24px;
+  padding: 24px 24px 80px 24px;
   overflow-y: auto;
   flex: 1;
 }
