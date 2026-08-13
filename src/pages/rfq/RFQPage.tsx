@@ -196,7 +196,14 @@ const ALL_COLUMNS: ColumnDef[] = [
 type StatusFilter = 'ALL' | RFQStatus;
 
 const STATUS_LABELS: Record<RFQStatus, string> = {
-  DRAFT: 'Draft', SENT: 'Sent', IN_PROGRESS: 'In Progress', CLOSED: 'Closed', CANCELLED: 'Cancelled',
+  DRAFT: 'Draft',
+  PENDING_APPROVAL: 'Pending Approval',
+  APPROVED: 'Approved',
+  SENT: 'Sent',
+  IN_PROGRESS: 'In Progress',
+  CLOSED: 'Closed',
+  CANCELLED: 'Cancelled',
+  REJECTED: 'Rejected',
 };
 
 const PRIORITY_CLASS: Record<string, string> = {
@@ -249,7 +256,7 @@ export default function RFQPage() {
   }, []);
 
   const handleSendRFQ = useCallback(async () => {
-    if (!detailRFQ || detailRFQ.status !== 'DRAFT') return;
+    if (!detailRFQ || (detailRFQ.status !== 'DRAFT' && detailRFQ.status !== 'APPROVED')) return;
 
     setSending(true);
     setSendError(null);

@@ -10,15 +10,21 @@ import { isVendor, NAVIGATION_MENU } from '../utils/rbac';
  */
 function hasRoleRouteAccess(pathname: string, roles: string[]): boolean {
   if (pathname === '/forms' || pathname.startsWith('/forms/')) return true;
+  // Non-vendor internal employees with valid app access should not be blocked by static role lists
+  if (!isVendor(roles)) return true;
+  // Normalize purchase-requisition route path matching
+  const normalizedPath = pathname.startsWith('/procurement/purchase-requisition') 
+    ? '/procurement/purchase-requisitions' 
+    : pathname;
   for (const item of NAVIGATION_MENU) {
     // Check the item's path
-    if (pathname.startsWith(item.path) && item.roles.some((r) => roles.includes(r))) {
+    if (normalizedPath.startsWith(item.path) && item.roles.some((r) => roles.includes(r))) {
       return true;
     }
     // Check children paths
     if (item.children) {
       for (const child of item.children) {
-        if (pathname.startsWith(child.path) && child.roles.some((r) => roles.includes(r))) {
+        if (normalizedPath.startsWith(child.path) && child.roles.some((r) => roles.includes(r))) {
           return true;
         }
       }

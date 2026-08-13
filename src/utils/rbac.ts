@@ -3,7 +3,7 @@
  * Handles permission checking and role-based visibility
  */
 
-import { checkMenuItemPermission, type UserPermissionsMap } from './permissions';
+import { checkMenuItemPermission, getMenuPermissionRule, type UserPermissionsMap } from './permissions';
 
 // ─── Role Definitions ───────────────────────────────────────
 
@@ -11,6 +11,7 @@ export const RoleName = {
   SUPER_ADMIN: 'Super Admin',
   ADMINISTRATOR: 'Administrator',
   PROCUREMENT_MANAGER: 'Procurement Manager',
+  PURCHASE_CLERK: 'Purchase Clerk',
   FINANCE_MANAGER: 'Finance Manager',
   FINANCE_APPROVER: 'Finance Approver',
   VENDOR: 'Vendor',
@@ -116,27 +117,27 @@ export const NAVIGATION_MENU: MenuItem[] = [
     path: '/rfq',
     roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.FINANCE_MANAGER, RoleName.FINANCE_APPROVER],
     children: [
-      { id: 'rfq-list', label: 'RFQ List', path: '/rfq', roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.FINANCE_MANAGER, RoleName.FINANCE_APPROVER] },
-      { id: 'rfq-create', label: 'Create RFQ', path: '/rfq/create', roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER] },
+      { id: 'rfq-list', label: 'RFQ List', path: '/rfq', roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.PURCHASE_CLERK, RoleName.FINANCE_MANAGER, RoleName.FINANCE_APPROVER, 'purchase_clerk', 'Purchase Clerk', 'procurement_manager'] },
+      { id: 'rfq-create', label: 'Create RFQ', path: '/rfq/create', roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.PURCHASE_CLERK, 'purchase_clerk', 'Purchase Clerk', 'procurement_manager'] },
     ],
   },    {
       id: 'quotations',
       label: 'Quotations',
       path: '/quotations',
-      roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.FINANCE_MANAGER],
+      roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.PURCHASE_CLERK, RoleName.FINANCE_MANAGER, 'purchase_clerk', 'Purchase Clerk', 'procurement_manager'],
     },
     {
       id: 'purchase-requisitions',
       label: 'PO Creation',
       path: '/procurement/purchase-requisitions',
-      roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER],
+      roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.PURCHASE_CLERK, 'purchase_clerk', 'Purchase Clerk', 'procurement_manager'],
     },
 
   {
     id: 'contracts',
     label: 'Contracts',
     path: '/contracts',
-    roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.FINANCE_MANAGER, RoleName.FINANCE_APPROVER],
+    roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.PURCHASE_CLERK, RoleName.FINANCE_MANAGER, RoleName.FINANCE_APPROVER, 'purchase_clerk', 'Purchase Clerk', 'procurement_manager'],
   },
 
   {
@@ -348,10 +349,17 @@ function filterMenuByPermissions(
         return { ...item, children: children ?? [] };
       }
 
-      // Check permission-based access, fall back to role-based if not explicitly set
-      const hasPerm = checkMenuItemPermission(permissions, item.id);
-      const hasRole = item.roles.some((r) => roles.includes(r));
-      if (!hasPerm && !hasRole) return null;
+      // Check permission-based access:
+      // When permissions map is present, module permission is strict & authoritative!
+      const rule = getMenuPermissionRule(item.id);
+      if (rule) {
+        const allowed = checkMenuItemPermission(permissions, item.id);
+        if (!allowed) return null;
+      } else {
+        const hasRole = item.roles.some((r) => roles.includes(r));
+        if (!hasRole) return null;
+      }
+
       return { ...item, children };
     })
     .filter((item): item is MenuItem => item !== null);

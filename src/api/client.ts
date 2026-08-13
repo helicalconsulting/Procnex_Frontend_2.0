@@ -86,6 +86,11 @@ function bustRelatedCache(mutatedPath: string): void {
     else break;
   }
 
+  // Cross-invalidation for user/role mutations so counts update instantly
+  if (basePath.startsWith('/admin/users') || basePath.startsWith('/admin/roles')) {
+    ancestors.push('/admin/users', '/admin/roles');
+  }
+
   for (const key of apiCache.keys()) {
     const parts = key.split('|');
     if (parts[0] !== 'GET') continue;

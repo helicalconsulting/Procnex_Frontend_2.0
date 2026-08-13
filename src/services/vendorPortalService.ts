@@ -588,7 +588,12 @@ async function apiDeletePaymentPlan(planId: string): Promise<void> {
   await vendorFetch(`/payment-plans/${planId}`, { method: 'DELETE' });
 }
 
+async function apiGetRfq(rfqId: string): Promise<{ rfq: any; myQuotation: any; inviteStatus: string }> {
+  return vendorFetch<{ rfq: any; myQuotation: any; inviteStatus: string }>(`/rfqs/${rfqId}`, { cacheTtlMs: 0 });
+}
+
 export const vendorPortalService = {
+  getRfq: apiGetRfq,
   listRfqs: USE_MOCK ? mockVendorRfqs : apiVendorRfqs,
   listQuotations: USE_MOCK ? mockVendorQuotations : apiVendorQuotations,
   listOrders: USE_MOCK ? mockOrders : apiOrders,

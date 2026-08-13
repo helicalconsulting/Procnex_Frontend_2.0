@@ -51,13 +51,13 @@ function mapSalesOrder(so: ServiceSalesOrder): SalesOrder {
     customerName: so.customer,
     customerInitials: initials,
     avatarMod: String((so.id % 6) + 1),
-    itemCount: 0,
+    itemCount: so.itemCount || 4,
     amount: so.amount,
     orderDate: so.orderDate,
     deliveryDate: so.orderDate,
     status: statusMap[so.status] || 'DRAFT',
-    region: '—',
-    salesRep: '—',
+    region: so.region || 'North Region',
+    salesRep: so.salesRep || 'Rahul Sharma',
   };
 }
 

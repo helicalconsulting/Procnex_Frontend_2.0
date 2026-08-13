@@ -6,7 +6,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1200;
+  z-index: 25000;
 }
 
 .prompt-modal {
@@ -66,70 +66,50 @@
   padding: 20px;
 }
 
-.prompt-modal__question {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary, #111827);
-  margin-bottom: 6px;
-}
-
-.prompt-modal__subtext {
-  font-size: 13px;
-  color: var(--text-secondary, #6b7280);
-  margin-bottom: 18px;
-  line-height: 1.5;
-}
-
-.prompt-modal__options {
+.prompt-modal__field {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-}
-
-.prompt-modal__option {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 14px;
-  border: 2px solid var(--border, #e5e7eb);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.prompt-modal__option:hover {
-  border-color: #93c5fd;
-  background: rgba(59, 130, 246, 0.02);
-}
-
-.prompt-modal__option--selected {
-  border-color: #3b82f6;
-  background: rgba(59, 130, 246, 0.05);
-}
-
-.prompt-modal__option input[type="radio"] {
-  margin-top: 3px;
-  accent-color: #3b82f6;
-}
-
-.prompt-modal__option-content {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.prompt-modal__option-title {
-  display: flex;
-  align-items: center;
   gap: 6px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary, #111827);
+  margin-bottom: 16px;
 }
 
-.prompt-modal__option-desc {
+.prompt-modal__field:last-child {
+  margin-bottom: 0;
+}
+
+.prompt-modal__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #ffffff);
+}
+
+.prompt-modal__select {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border, #374151);
+  border-radius: var(--radius-md, 8px);
+  background: var(--surface, #111827);
+  color: var(--text-primary, #ffffff);
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236a6d70' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 38px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.prompt-modal__select:focus {
+  border-color: var(--primary-500, #3b82f6);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.prompt-modal__hint {
   font-size: 12px;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary, #9ca3af);
   line-height: 1.4;
 }
 

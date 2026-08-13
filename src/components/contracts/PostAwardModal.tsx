@@ -57,7 +57,9 @@ export default function PostAwardModal({
         await onApproveFirst(startLevelNumber);
       }
       if (!preAwardMode) {
-        await contractService.updatePostAwardDecision(rfqId, 'PO_CREATED');
+        contractService.updatePostAwardDecision(rfqId, 'PO_CREATED').catch((err) => {
+          console.warn('[PostAwardModal] Post-award decision background log skipped:', err);
+        });
       }
       await onNavigatePO(startLevelNumber);
     } catch (err) {
@@ -77,7 +79,9 @@ export default function PostAwardModal({
     setError(null);
     try {
       if (!preAwardMode) {
-        await contractService.updatePostAwardDecision(rfqId, decision);
+        contractService.updatePostAwardDecision(rfqId, decision).catch((err) => {
+          console.warn('[PostAwardModal] Post-award decision background log skipped:', err);
+        });
       }
       if (decision === 'CONTRACT_CREATED') {
         await onNavigateContract();

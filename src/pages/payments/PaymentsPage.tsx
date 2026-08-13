@@ -58,8 +58,8 @@ function mapPayment(p: ServicePayment): Payment {
     method: (p.method as PaymentMethod) || 'NEFT',
     date: p.paidAt,
     status: statusMap[p.status] || 'PENDING',
-    approvedBy: '—',
-    remarks: '',
+    approvedBy: p.approvedBy || '—',
+    remarks: p.remarks || '',
   };
 }
 

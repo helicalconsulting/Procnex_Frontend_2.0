@@ -146,6 +146,8 @@ async function apiCreateUser(payload: CreateUserPayload): Promise<UserWithRoles>
       username: string;
       email: string;
       role?: string;
+      department?: string;
+      phone?: string;
       isActive: boolean;
       createdAt: string;
     };
@@ -164,14 +166,15 @@ async function apiCreateUser(payload: CreateUserPayload): Promise<UserWithRoles>
 
   const created = json.data;
   invalidateApiCache('/admin/users');
+  invalidateApiCache('/admin/roles');
   return {
     id: created.id,
     fullName: created.fullName,
     username: created.username,
     email: created.email,
     companyCode: payload.companyCode || 'HFL',
-    department: payload.department,
-    phone: payload.phone,
+    department: created.department || payload.department || '—',
+    phone: created.phone || payload.phone || '—',
     isActive: created.isActive,
     createdAt: created.createdAt,
     roles: [created.role || payload.roleName],
@@ -205,6 +208,8 @@ async function apiUpdateUser(id: string, payload: UpdateUserPayload): Promise<Us
     method: 'PUT',
     body: JSON.stringify(payload),
   });
+  invalidateApiCache('/admin/users');
+  invalidateApiCache('/admin/roles');
   return {
     id: updated.id,
     fullName: updated.fullName,
@@ -228,6 +233,8 @@ async function mockDeleteUser(id: string): Promise<void> {
 
 async function apiDeleteUser(id: string): Promise<void> {
   await apiRequest(`/admin/users/${id}`, { method: 'DELETE' });
+  invalidateApiCache('/admin/users');
+  invalidateApiCache('/admin/roles');
 }
 
 async function mockToggleUserStatus(id: string): Promise<{ isActive: boolean }> {
@@ -238,10 +245,13 @@ async function mockToggleUserStatus(id: string): Promise<{ isActive: boolean }> 
 }
 
 async function apiToggleUserStatus(id: string): Promise<{ isActive: boolean }> {
-  return apiRequest<{ isActive: boolean }>(`/admin/users/${id}/toggle-status`, {
+  const res = await apiRequest<{ isActive: boolean }>(`/admin/users/${id}/toggle-status`, {
     method: 'PUT',
     body: JSON.stringify({}),
   });
+  invalidateApiCache('/admin/users');
+  invalidateApiCache('/admin/roles');
+  return res;
 }
 
 // ─── Roles ───────────────────────────────────────────────────────────────────

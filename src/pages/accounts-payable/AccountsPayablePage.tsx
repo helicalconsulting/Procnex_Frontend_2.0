@@ -170,20 +170,21 @@ function mapServiceInvoice(inv: ServiceAPInvoice): APInvoice {
   };
   const status = statusMap[inv.status] || 'PENDING';
   const paidAmount = status === 'PAID' ? inv.amount : status === 'PARTIAL' ? Math.floor(inv.amount / 2) : 0;
+  const numId = typeof inv.id === 'number' ? inv.id : parseInt(String(inv.id).replace(/\D/g, ''), 10) || 1;
   return {
-    id: inv.id,
+    id: numId,
     invoiceNumber: inv.invoiceNumber,
     poNumber: inv.poNumber,
     vendorName: inv.vendorName,
     vendorInitials: initials,
-    avatarMod: String((inv.id % 6) + 1),
+    avatarMod: String((numId % 6) + 1),
     amount: inv.amount,
     paidAmount,
     dueDate: inv.dueDate,
     invoiceDate: inv.submittedAt,
     status,
-    paymentTerms: 'Net 30',
-    department: '—',
+    paymentTerms: inv.paymentTerms || 'Net 30',
+    department: inv.department || 'Finance',
   };
 }
 

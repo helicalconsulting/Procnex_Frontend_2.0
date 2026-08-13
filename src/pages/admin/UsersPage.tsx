@@ -61,27 +61,9 @@ interface MockUser {
   initials: string;
 }
 
-const ROLE_DISPLAY_NAME: Record<string, string> = {
-  purchase_clerk: 'Purchase Clerk',
-  admin: 'Super Admin',
-  finance_approver: 'Finance Approver',
-  finance_manager: 'Finance Manager',
-  Vendor: 'Vendor',
-};
-
-const API_ROLE_NAME: Record<string, string> = {
-  'Super Admin': 'Super Admin',
-  Administrator: 'Administrator',
-  'Procurement Manager': 'Procurement Manager',
-  Manager: 'Manager',
-  'Finance Approver': 'Finance Approver',
-  'Purchase Clerk': 'purchase_clerk',
-  Staff: 'Staff',
-};
-
 function mapUser(u: User & { roles?: string[] }): MockUser {
   const rawRole = u.roles?.[0] || 'Staff';
-  const role = ROLE_DISPLAY_NAME[rawRole] || rawRole;
+  const role = rawRole;
   const initials = u.fullName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
   return {
     id: u.id,
@@ -220,15 +202,15 @@ export default function UsersPage() {
     [roleRecords]
   );
 
-  // Merge system roles with company positions for the edit role dropdown
-  const editRoleOptions = useMemo(() => {
+  // Combine roles from Roles & Permissions with company positions
+  const positionRoleOptions = useMemo(() => {
+    const roleNames = roleRecords.map((r) => r.roleName);
     const positionNames = positions
       .filter((p) => p.isActive)
       .map((p) => p.name);
-    // Super Admin always appears as an option even if not in positions
-    const all = ['Super Admin', ...assignableRoles, ...positionNames];
-    return [...new Set(all)];
-  }, [assignableRoles, positions]);
+    const all = [...roleNames, ...positionNames];
+    return [...new Set(all.filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  }, [roleRecords, positions]);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'admins'>('all');
@@ -409,8 +391,8 @@ export default function UsersPage() {
   const handleCreateUser = useCallback(async () => {
     const roleName =
       selectedUserType === 'rfq'
-        ? 'purchase_clerk'
-        : API_ROLE_NAME[newRole] || newRole;
+        ? (newRole || newPosition || 'Purchase Clerk')
+        : (newRole || 'Staff');
 
     if (!newFullName.trim() || !newUsername.trim() || !newPassword.trim() || !newEmail.trim()) return;
     if (selectedUserType === 'heliflow' && !newRole) return;
@@ -945,7 +927,7 @@ export default function UsersPage() {
                         <label className="users-modal__label"><Shield size={13} style={{ marginRight: 4 }} />Position <span>*</span></label>
                         <select className="users-modal__select" value={newPosition} onChange={(e) => setNewPosition(e.target.value)}>
                           <option value="">Select position</option>
-                          {positions.filter((p) => p.isActive).map((p) => (<option key={p.id} value={p.name}>{p.name}</option>))}
+                          {positionRoleOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
                         </select>
                       </div>
                       <div className="users-modal__field">
@@ -963,7 +945,7 @@ export default function UsersPage() {
                         <label className="users-modal__label"><Shield size={13} style={{ marginRight: 4 }} />Role <span>*</span></label>
                         <select className="users-modal__select" value={newRole} onChange={(e) => setNewRole(e.target.value)}>
                           <option value="">Select role</option>
-                          {ALL_ROLES.map((r) => (<option key={r} value={r}>{r}</option>))}
+                          {positionRoleOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
                         </select>
                       </div>
                       <div className="users-modal__field">
@@ -1095,7 +1077,7 @@ export default function UsersPage() {
                   <label className="users-modal__label">Role</label>
                   <select className="users-modal__select" value={editRoleName} onChange={(e) => setEditRoleName(e.target.value)}>
                     <option value="">Select role / position</option>
-                    {editRoleOptions.map((r) => (<option key={r} value={r}>{r}</option>))}
+                    {positionRoleOptions.map((r) => (<option key={r} value={r}>{r}</option>))}
                   </select>
                 </div>
               </div>

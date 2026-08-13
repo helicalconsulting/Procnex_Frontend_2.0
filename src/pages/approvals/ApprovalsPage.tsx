@@ -851,15 +851,13 @@ export default function ApprovalsPage() {
                   <ExternalLink size={16} /> View Contract
                 </button>
               )}
-              {detailRequest.module !== 'RFQ' && (
-                <button
-                  className="approvals-modal__btn approvals-modal__btn--view-contract"
-                  onClick={() => setChainModal({ module: CANONICAL_MODULE[detailRequest.module] || detailRequest.module, referenceId: detailRequest.referenceId })}
-                  style={{ width: '100%', justifyContent: 'center' }}
-                >
-                  <Clock size={16} /> View Approval Chain
-                </button>
-              )}
+              <button
+                className="approvals-modal__btn approvals-modal__btn--view-contract"
+                onClick={() => setChainModal({ module: CANONICAL_MODULE[detailRequest.module] || detailRequest.module, referenceId: detailRequest.referenceId })}
+                style={{ width: '100%', justifyContent: 'center' }}
+              >
+                <Clock size={16} /> View Approval Chain
+              </button>
             </div>
             <div className="approvals-modal__footer">
               <button className="approvals-modal__btn approvals-modal__btn--secondary" onClick={() => setDetailRequest(null)}>Close</button>

@@ -3064,3 +3064,186 @@ input[type="date"].vquot-modal__input {
   border-color: color-mix(in srgb, var(--vendor-accent) 25%, transparent);
   color: var(--vendor-accent);
 }
+
+/* ─── Quotation Revision Banner & Table (Dark & Light Mode Responsive) ─── */
+.vquot-modal__previous-banner {
+  background: linear-gradient(135deg, rgba(254, 243, 199, 0.6) 0%, rgba(253, 230, 138, 0.4) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-left: 5px solid #f59e0b;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.08);
+  transition: all 0.2s ease;
+}
+
+.vquot-modal__previous-banner-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.vquot-modal__previous-banner-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #d97706;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.vquot-modal__previous-banner-comment {
+  font-size: 13px;
+  color: #1e293b;
+  background: rgba(255, 255, 255, 0.85);
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.vquot-modal__previous-banner-comment strong {
+  color: #ea580c;
+}
+
+.vquot-modal__previous-banner-hint {
+  font-size: 12px;
+  color: #475569;
+  line-height: 1.4;
+}
+
+.vquot-modal__previous-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: #f59e0b;
+  color: #ffffff;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.vquot-modal__previous-toggle-btn:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.vquot-modal__previous-snapshot {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed rgba(245, 158, 11, 0.3);
+}
+
+.vquot-modal__previous-snapshot-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #d97706;
+  margin-bottom: 10px;
+}
+
+.vquot-modal__previous-table-wrap {
+  overflow-x: auto;
+  background: #ffffff;
+  border-radius: 6px;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.vquot-modal__previous-table {
+  width: 100%;
+  font-size: 12px;
+  border-collapse: collapse;
+}
+
+.vquot-modal__previous-table th {
+  padding: 10px 14px;
+  background: rgba(254, 243, 199, 0.7);
+  border-bottom: 1px solid rgba(245, 158, 11, 0.25);
+  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 700;
+  color: #78350f;
+}
+
+.vquot-modal__previous-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #1e293b;
+}
+
+.vquot-modal__previous-table tfoot td {
+  background: #f8fafc;
+  font-weight: 600;
+  border-top: 1px solid #e2e8f0;
+}
+
+/* Dark Mode Overrides for Banner & Table */
+[data-theme="dark"] .vquot-modal__previous-banner,
+.dark .vquot-modal__previous-banner {
+  background: linear-gradient(135deg, rgba(45, 32, 10, 0.7) 0%, rgba(30, 22, 5, 0.6) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-left: 5px solid #fbbf24;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .vquot-modal__previous-banner-title,
+.dark .vquot-modal__previous-banner-title {
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .vquot-modal__previous-banner-comment,
+.dark .vquot-modal__previous-banner-comment {
+  background: rgba(15, 23, 42, 0.7);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .vquot-modal__previous-banner-comment strong,
+.dark .vquot-modal__previous-banner-comment strong {
+  color: #fb923c;
+}
+
+[data-theme="dark"] .vquot-modal__previous-banner-hint,
+.dark .vquot-modal__previous-banner-hint {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .vquot-modal__previous-snapshot-title,
+.dark .vquot-modal__previous-snapshot-title {
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .vquot-modal__previous-table-wrap,
+.dark .vquot-modal__previous-table-wrap {
+  background: rgba(15, 23, 42, 0.9);
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+[data-theme="dark"] .vquot-modal__previous-table th,
+.dark .vquot-modal__previous-table th {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fde68a;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .vquot-modal__previous-table td,
+.dark .vquot-modal__previous-table td {
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .vquot-modal__previous-table tfoot td,
+.dark .vquot-modal__previous-table tfoot td {
+  background: rgba(30, 41, 59, 0.7);
+  color: #cbd5e1;
+  border-top-color: rgba(255, 255, 255, 0.1);
+}

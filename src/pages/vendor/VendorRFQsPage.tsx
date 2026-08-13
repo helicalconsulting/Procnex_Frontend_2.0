@@ -296,6 +296,10 @@ export default function VendorRFQsPage() {
   const isVquotExpanded = vquotModalState === 'expanded';
   const isVquotMinimized = vquotModalState === 'minimized';
 
+  // ── Previous Submission Pre-fill & Snapshot Comparison ──
+  const [previousQuotation, setPreviousQuotation] = useState<any | null>(null);
+  const [showPreviousQuoteDetails, setShowPreviousQuoteDetails] = useState(false);
+
   // ── Bid Security — per-RFQ state to support multiple RFQ cards ──
   const [bidSecurityUploadingRfqId, setBidSecurityUploadingRfqId] = useState<number | null>(null);
   const [bidSecurityDocs, setBidSecurityDocs] = useState<Record<number, QuotationBidSecurity>>({});
@@ -388,39 +392,67 @@ export default function VendorRFQsPage() {
   const openQuotModal = useCallback(async (rfq: VendorRFQ) => {
     let currentRfq = rfq;
     setQuotModal(currentRfq);
+    setPreviousQuotation(null);
+    setShowPreviousQuoteDetails(false);
+
+    // Fetch RFQ details + existing quotation (if any) for pre-filling
+    let myQuot: any = null;
+    try {
+      const res = await vendorPortalService.getRfq(String(rfq.id));
+      if (res?.myQuotation) {
+        myQuot = res.myQuotation;
+        setPreviousQuotation(myQuot);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch existing quotation for pre-fill:', err);
+    }
 
     const prices: Record<number, number> = {};
     const initCurrencies: Record<number, string> = {};
-    currentRfq.items.forEach((_, idx) => {
-      prices[idx] = 0;
-      initCurrencies[idx] = companyDefaultCurrency;
+    currentRfq.items.forEach((item, idx) => {
+      let prevUnitPrice = 0;
+      if (myQuot?.items) {
+        const matchingLine = myQuot.items.find((line: any) => String(line.rfqItemId) === String(item.id)) || myQuot.items[idx];
+        if (matchingLine) {
+          prevUnitPrice = Number(matchingLine.unitPrice) || 0;
+        }
+      }
+      prices[idx] = prevUnitPrice;
+      initCurrencies[idx] = myQuot?.currency || companyDefaultCurrency;
     });
     setQuotPrices(prices);
     setItemCurrencies(initCurrencies);
-    setQuotLeadTime('');
-    setQuotPayTerms(defaultPayTerm);
-    setSelectedPaymentPlanId(null);
+    setQuotLeadTime(myQuot?.leadTimeDays ? String(myQuot.leadTimeDays) : '');
+    setQuotPayTerms(myQuot?.paymentTerms || defaultPayTerm);
+    setSelectedPaymentPlanId(myQuot?.paymentPlanId || null);
     setQuotNotes('');
-    setCurrency(companyDefaultCurrency);
+    setCurrency(myQuot?.currency || companyDefaultCurrency);
     setAttachments([]);
-    // Initialize custom field values
+
+    // Initialize custom field values (pre-fill from previous submission if available)
     const initCustomValues: Record<string, string | number> = {};
+    const prevCustomValues = myQuot?.customFieldValues || {};
     (currentRfq.customFields || []).forEach((cf) => {
-      initCustomValues[cf.id] = cf.fieldType === 'number' ? 0 : '';
+      initCustomValues[cf.id] = prevCustomValues[cf.id] !== undefined
+        ? prevCustomValues[cf.id]
+        : (cf.fieldType === 'number' ? 0 : '');
     });
     setCustomFieldValues(initCustomValues);
-    // Initialize evaluation parameter values (empty strings — vendor fills info, not scores)
+
+    // Initialize evaluation parameter values (pre-fill from previous submission if available)
     const initEvalValues: Record<string, string> = {};
     (currentRfq.evaluationCategories || []).forEach((cat) => {
       (cat.subParameters || []).filter(p => p.enabled !== false).forEach((sp) => {
-        initEvalValues[sp.id] = '';
+        const prevVal = prevCustomValues[`eval_${sp.id}`] || prevCustomValues[sp.id] || '';
+        initEvalValues[sp.id] = String(prevVal);
       });
     });
     setEvalParamValues(initEvalValues);
+
     // All categories collapsed by default — vendor clicks to expand
     setExpandedEvalCats(new Set());
+
     // Pre-fill bid security & bid bond format fields (type, currency, unit) from RFQ.
-    // Value and validity fields are kept empty — buyer requirements are shown as hints.
     setBidSecValueType(
       (currentRfq.bidSecurityValueType as 'FIXED_AMOUNT' | 'PERCENTAGE') || 'FIXED_AMOUNT'
     );
@@ -1047,6 +1079,91 @@ export default function VendorRFQsPage() {
                   }}>
                     {quotModal.title}
                   </div>
+
+                  {/* ── SAP Fiori Style Revision Request & Previous Submission Snapshot ── */}
+                  {previousQuotation && (
+                    <div className="vquot-modal__previous-banner">
+                      <div className="vquot-modal__previous-banner-header">
+                        <div style={{ flex: 1 }}>
+                          <div className="vquot-modal__previous-banner-title">
+                            <RotateCcw size={16} />
+                            <span>Quotation Revision Request (SAP Reference #{previousQuotation.id?.slice(-6)?.toUpperCase() || 'PREV'})</span>
+                          </div>
+
+                          {previousQuotation.returnComment && (
+                            <div className="vquot-modal__previous-banner-comment">
+                              <strong>💬 Buyer Feedback / Return Reason:</strong> "{previousQuotation.returnComment}"
+                            </div>
+                          )}
+
+                          <div className="vquot-modal__previous-banner-hint">
+                            ✓ All fields have been <strong>pre-filled with your previous quotation values</strong> ({previousQuotation.currency || 'KES'} {Number(previousQuotation.totalPrice || 0).toLocaleString()}). Edit the required fields and click Resubmit.
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="vquot-modal__previous-toggle-btn"
+                          onClick={() => setShowPreviousQuoteDetails(prev => !prev)}
+                        >
+                          <Eye size={13} />
+                          {showPreviousQuoteDetails ? 'Hide Previous Values' : 'View Previous Quote'}
+                        </button>
+                      </div>
+
+                      {/* Collapsible Previous Values Snapshot Table */}
+                      {showPreviousQuoteDetails && (
+                        <div className="vquot-modal__previous-snapshot">
+                          <div className="vquot-modal__previous-snapshot-title">
+                            📋 Previous Quotation Snapshot (Submitted: {new Date(previousQuotation.submittedAt || Date.now()).toLocaleDateString('en-IN')})
+                          </div>
+                          <div className="vquot-modal__previous-table-wrap">
+                            <table className="vquot-modal__previous-table">
+                              <thead>
+                                <tr>
+                                  <th style={{ textAlign: 'left' }}>Item</th>
+                                  <th style={{ textAlign: 'center' }}>Qty</th>
+                                  <th style={{ textAlign: 'right' }}>Previous Unit Price</th>
+                                  <th style={{ textAlign: 'right' }}>Previous Line Total</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(previousQuotation.items || []).map((line: any, idx: number) => (
+                                  <tr key={line.id || idx}>
+                                    <td style={{ fontWeight: '500' }}>{quotModal.items[idx]?.name || `Line Item ${idx+1}`}</td>
+                                    <td style={{ textAlign: 'center' }}>{quotModal.items[idx]?.quantity || 1} {quotModal.items[idx]?.unit || ''}</td>
+                                    <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>{previousQuotation.currency || 'KES'} {Number(line.unitPrice || 0).toLocaleString()}</td>
+                                    <td style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: '700', color: '#10b981' }}>{previousQuotation.currency || 'KES'} {Number(line.totalPrice || 0).toLocaleString()}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                              <tfoot>
+                                <tr>
+                                  <td colSpan={3} style={{ textAlign: 'right' }}>Previous Total Price:</td>
+                                  <td style={{ textAlign: 'right', fontFamily: 'monospace', color: '#3b82f6', fontWeight: '700' }}>
+                                    {previousQuotation.currency || 'KES'} {Number(previousQuotation.totalPrice || 0).toLocaleString()}
+                                  </td>
+                                </tr>
+                                {previousQuotation.leadTimeDays && (
+                                  <tr>
+                                    <td colSpan={3} style={{ textAlign: 'right' }}>Previous Lead Time:</td>
+                                    <td style={{ textAlign: 'right' }}>{previousQuotation.leadTimeDays} Days</td>
+                                  </tr>
+                                )}
+                                {previousQuotation.paymentTerms && (
+                                  <tr>
+                                    <td colSpan={3} style={{ textAlign: 'right' }}>Previous Payment Terms:</td>
+                                    <td style={{ textAlign: 'right' }}>{previousQuotation.paymentTerms}</td>
+                                  </tr>
+                                )}
+                              </tfoot>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="vrfq-card__items-title">Item Pricing</div>
                   <div className="vquot-modal__items">
                     {quotModal.items.map((item, idx) => (

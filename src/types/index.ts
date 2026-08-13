@@ -1,7 +1,7 @@
 // ─── Status Enums ───────────────────────────────────────────
 
-export type RFQStatus = 'DRAFT' | 'SENT' | 'IN_PROGRESS' | 'CLOSED' | 'CANCELLED';
-export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type RFQStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'SENT' | 'IN_PROGRESS' | 'CLOSED' | 'CANCELLED' | 'REJECTED';
+export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'RETURNED';
 
 // ─── User & Auth ────────────────────────────────────────────
 
@@ -84,6 +84,10 @@ export interface RFQ {
   bidSecurityMinValidity?: number;
   bidBondMinValue?: number;
   bidBondMinValidity?: number;
+  // Approval Settings
+  rfqApprovalStartPoint?: 'ORIGINATOR' | 'L1_USER';
+  quotationApprovalMode?: 'DIRECT_X_ONLY' | 'FULL_CHAIN';
+  quotationXUserRole?: string;
 }
 
 export interface RFQItem {

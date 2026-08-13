@@ -66,6 +66,7 @@ const ROLE_NAME_ALIASES: Record<string, RoleName> = {
   Manager: 'Manager',
   'Finance Approver': 'Finance Approver',
   'Procurement Manager': 'Manager',
+  'Purchase Clerk': 'Manager',
   purchase_clerk: 'Manager',
   Staff: 'Staff',
 };
@@ -214,7 +215,9 @@ export default function RolesPermissionsPage() {
 
   const { data: roles, loading, error, reload } = useServiceData(
     () => adminService.listRoles().then((list) => list.map(mapRole)),
-    [] as RoleData[]
+    [] as RoleData[],
+    [],
+    { cacheKey: 'roles:list', cacheTtlMs: 0 }
   );
 
   const [search, setSearch] = useState('');
@@ -575,7 +578,7 @@ export default function RolesPermissionsPage() {
                       >
                         <Edit3 size={15} />
                       </button>
-                      {!role.isSystem && canDeleteRoles && role.userCount === 0 && (
+                      {role.roleName !== 'Super Admin' && canDeleteRoles && (
                         <button
                           className="roles-card__action-btn roles-card__action-btn--danger"
                           title="Delete Role"

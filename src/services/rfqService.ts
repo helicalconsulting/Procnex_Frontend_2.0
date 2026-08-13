@@ -30,6 +30,9 @@ export interface CreateRfqPayload {
   vendorIds?: string[];
   rfqType?: 'RFQ' | 'TENDER';
   startLevelNumber?: number;
+  rfqApprovalStartPoint?: 'ORIGINATOR' | 'L1_USER';
+  quotationApprovalMode?: 'DIRECT_X_ONLY' | 'FULL_CHAIN';
+  quotationXUserRole?: string;
   customFields?: Array<{
     fieldName: string;
     fieldType: 'text' | 'number' | 'date' | 'attachment';

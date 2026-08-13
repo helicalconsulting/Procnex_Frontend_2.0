@@ -188,6 +188,9 @@ export default function CreateRFQPage() {
         if ((rfq as any).bidBondMinCurrency != null) setBidBondMinCurrency((rfq as any).bidBondMinCurrency);
         if ((rfq as any).bidBondMinValidity != null) setBidBondMinValidity(String((rfq as any).bidBondMinValidity));
       }
+      if ((rfq as any).rfqApprovalStartPoint) setRfqApprovalStartPoint((rfq as any).rfqApprovalStartPoint);
+      if ((rfq as any).quotationApprovalMode) setQuotationApprovalMode((rfq as any).quotationApprovalMode);
+      if ((rfq as any).quotationXUserRole) setQuotationXUserRole((rfq as any).quotationXUserRole);
       setRfqMode(rfq.rfqType === 'TENDER' || rfq.rfqType === 'CUSTOM' ? 'TENDER' : 'RFQ');
       if (rfq.customFields && rfq.customFields.length > 0) {
         setCustomFields(rfq.customFields.map((cf: { id: string; fieldName: string; fieldType: string; required: boolean; weightage?: number }) => ({
@@ -293,6 +296,11 @@ export default function CreateRFQPage() {
   const [bidBondMinValue, setBidBondMinValue] = useState('');
   const [bidBondMinCurrency, setBidBondMinCurrency] = useState(companyDefaultCurrency);
   const [bidBondMinValidity, setBidBondMinValidity] = useState('');
+
+  // ── Approval & Workflow Settings State ─────────────────
+  const [rfqApprovalStartPoint, setRfqApprovalStartPoint] = useState<'ORIGINATOR' | 'L1_USER'>('L1_USER');
+  const [quotationApprovalMode, setQuotationApprovalMode] = useState<'DIRECT_X_ONLY' | 'FULL_CHAIN'>('DIRECT_X_ONLY');
+  const [quotationXUserRole, setQuotationXUserRole] = useState('L1 User');
 
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
 
@@ -577,7 +585,11 @@ export default function CreateRFQPage() {
   // Backend computeEnterpriseEvaluation normalizes scores regardless of total.
   // Sub-parameter weightage validation is handled by RfqEvaluationPanel internally.
 
-  const buildPayload = useCallback((startLevelNumber?: number): CreateRfqPayload | null => {
+  const buildPayload = useCallback((
+    startLevelNumber?: number,
+    overrideStartPoint?: 'ORIGINATOR' | 'L1_USER',
+    overrideQuotationMode?: 'DIRECT_X_ONLY' | 'FULL_CHAIN'
+  ): CreateRfqPayload | null => {
     if (!title.trim()) return null;
     const validItems = items.filter((i) => i.itemName.trim() && i.quantity);
     if (!validItems.length) return null;
@@ -597,6 +609,9 @@ export default function CreateRFQPage() {
       currency: companyDefaultCurrency,
       rfqType: rfqMode === 'TENDER' ? 'TENDER' : 'RFQ',
       startLevelNumber,
+      rfqApprovalStartPoint: overrideStartPoint || rfqApprovalStartPoint,
+      quotationApprovalMode: overrideQuotationMode || quotationApprovalMode,
+      quotationXUserRole,
       items: validItems.map((i) => ({
         itemCode: i.itemCode?.trim() || undefined,
         itemName: i.itemName.trim(),
@@ -665,7 +680,7 @@ export default function CreateRFQPage() {
       bidBondMinCurrency: bidBondMinCurrency || undefined,
       bidBondMinValidity: bidBondMinValidity ? parseInt(bidBondMinValidity, 10) : undefined,
     };
-  }, [title, description, priority, department, selectedDepartment, closingDate, companyDefaultCurrency, items, selectedVendors, evalCategories, rfqMode, customFields, infoExtraFields, simpleWeightages, bidSecurityMinValue, bidSecurityMinCurrency, bidSecurityMinValidity, bidBondMinValue, bidBondMinCurrency, bidBondMinValidity]);
+  }, [title, description, priority, department, selectedDepartment, closingDate, companyDefaultCurrency, items, selectedVendors, evalCategories, rfqMode, customFields, infoExtraFields, simpleWeightages, bidSecurityMinValue, bidSecurityMinCurrency, bidSecurityMinValidity, bidBondMinValue, bidBondMinCurrency, bidBondMinValidity, rfqApprovalStartPoint, quotationApprovalMode, quotationXUserRole]);
 
 
   const saveEvalCategories = useCallback(async (rfqId: string) => {
@@ -702,18 +717,18 @@ export default function CreateRFQPage() {
   }, [simpleWeightageTotal]);
 
   const handleSaveDraft = async () => {
-    if (isL2OrHigherUser(roles)) {
-      setPendingAction('draft');
-      setShowLevelPrompt(true);
-      return;
-    }
-    await executeSaveDraft(1);
+    setPendingAction('draft');
+    setShowLevelPrompt(true);
   };
 
-  const executeSaveDraft = async (startLevelNumber?: number) => {
+  const executeSaveDraft = async (
+    startLevelNumber?: number,
+    startPoint?: 'ORIGINATOR' | 'L1_USER',
+    mode?: 'DIRECT_X_ONLY' | 'FULL_CHAIN'
+  ) => {
     setSimpleWeightageError(null);
     if (rfqMode === 'RFQ' && !validateSimpleWeightage()) return;
-    const payload = buildPayload(startLevelNumber);
+    const payload = buildPayload(startLevelNumber, startPoint, mode);
     if (!payload) {
       setSubmitError('Enter a title, unit, and at least one line item with quantity.');
       return;
@@ -746,18 +761,18 @@ export default function CreateRFQPage() {
   };
 
   const handleSubmit = async () => {
-    if (isL2OrHigherUser(roles)) {
-      setPendingAction('submit');
-      setShowLevelPrompt(true);
-      return;
-    }
-    await executeSubmit(1);
+    setPendingAction('submit');
+    setShowLevelPrompt(true);
   };
 
-  const executeSubmit = async (startLevelNumber?: number) => {
+  const executeSubmit = async (
+    startLevelNumber?: number,
+    startPoint?: 'ORIGINATOR' | 'L1_USER',
+    mode?: 'DIRECT_X_ONLY' | 'FULL_CHAIN'
+  ) => {
     setSimpleWeightageError(null);
     if (rfqMode === 'RFQ' && !validateSimpleWeightage()) return;
-    const payload = buildPayload(startLevelNumber);
+    const payload = buildPayload(startLevelNumber, startPoint, mode);
     if (!payload) {
       setSubmitError('Enter a title, unit, and at least one line item with quantity.');
       return;
@@ -1898,18 +1913,19 @@ export default function CreateRFQPage() {
 
       <CreatorLevelPromptModal
         isOpen={showLevelPrompt}
-        moduleName="Quotation"
-        title="Quotation Approval Starting Level"
-        question="When vendors submit quotations for this RFQ, do you want quotation approval to start at Level 1?"
-        subtext="As an approver/manager, you can choose whether vendor quotation approvals for this RFQ start at Level 1 (Clerk review first) or directly at your level."
-        onConfirm={(startLevelNumber) => {
+        title="Approval & Workflow Settings"
+        initialRfqApprovalStartPoint={rfqApprovalStartPoint}
+        initialQuotationApprovalMode={quotationApprovalMode}
+        onConfirm={(startLevelNumber, startPoint, mode) => {
+          if (startPoint) setRfqApprovalStartPoint(startPoint);
+          if (mode) setQuotationApprovalMode(mode);
           setShowLevelPrompt(false);
           const act = pendingAction;
           setPendingAction(null);
           if (act === 'draft') {
-            void executeSaveDraft(startLevelNumber);
+            void executeSaveDraft(startLevelNumber, startPoint, mode);
           } else {
-            void executeSubmit(startLevelNumber);
+            void executeSubmit(startLevelNumber, startPoint, mode);
           }
         }}
         onCancel={() => {

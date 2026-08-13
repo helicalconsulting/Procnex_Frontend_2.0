@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, type ReactNode } from 'react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useServiceData } from '../../hooks/useServiceData';
-import { adminService } from '../../services/adminService';
+import { adminService, type AdminRoleRecord } from '../../services/adminService';
 import { companySettingsService, type Position } from '../../services/companySettingsService';
 import type { ApprovalLevel } from '../../types';
 import {
@@ -150,15 +150,22 @@ export default function ApprovalLevelsPage() {
     [],
     { cacheKey: 'approvalLevels:positions' }
   );
+  const { data: dbRoles } = useServiceData(
+    () => adminService.listRoles(),
+    [] as AdminRoleRecord[],
+    [],
+    { cacheKey: 'approvalLevels:dbRoles' }
+  );
   const roleOptions = useMemo(() => {
+    // Merge DB roles + Company Settings positions into one list
+    const dbRoleNames = dbRoles.map((r) => r.roleName).filter(Boolean);
     const positionNames = positions
       .filter((p) => p.isActive)
       .map((p) => p.name)
-      .sort();
-    // Super Admin always appears as an option even if not in positions
-    const all = ['Super Admin', ...positionNames];
+      .filter(Boolean);
+    const all = ['Super Admin', ...dbRoleNames, ...positionNames].sort();
     return [...new Set(all)];
-  }, [positions]);
+  }, [positions, dbRoles]);
   const [selectedModule, setSelectedModule] = useState<string>('ALL');
   const [activeSystem, setActiveSystem] = useState<SystemType>('heliflow');
   const [showAddModal, setShowAddModal] = useState(false);

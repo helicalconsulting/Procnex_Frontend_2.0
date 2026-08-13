@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
@@ -15,7 +16,7 @@ import {
   Crown, GitCompareArrows, ArrowDownNarrowWide, X, RotateCcw,
   MessageSquare, AlertTriangle, ArrowRightLeft, Shield, Check, X as XIcon,
   Maximize2, Minimize2, Minus, ChevronUp, BarChart3, Loader2, LayoutGrid, LayoutList,
-  Download,
+  Download, FileCheck, ShoppingCart,
 } from 'lucide-react';
 import { downloadDocument } from '../../utils/download';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
@@ -59,11 +60,8 @@ interface MockQuotation {
   attachments?: QuotationAttachment[];
   returnReason?: string | null;
   userAction?: string | null;
-  /**
-   * Whether the current user is the final approver for this quotation's
-   * approval chain. When true, getDisplayStatus shows the actual backend
-   * status rather than overriding it with userAction.
-   */
+  rfqApprovalStartPoint?: string;
+  rfqCreatedBy?: number | string;
   isFinalApprover?: boolean;
 }
 
@@ -243,6 +241,8 @@ function mapQuotationToRow(q: Quotation): MockQuotation {
     rfqId: q.rfqId,
     rfqNumber,
     rfqTitle,
+    rfqApprovalStartPoint: (rfqObj as any)?.rfqApprovalStartPoint || (q as any).rfqApprovalStartPoint || null,
+    rfqCreatedBy: (rfqObj as any)?.createdBy || (q as any).rfqCreatedBy || (q as any).createdBy || null,
     vendorName: name,
     vendorEmail: vendor?.email || '',
     vendorInitials: initials,
@@ -1888,11 +1888,200 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
   );
 }
 
+function canActionQuotation(s: MockQuotation | null | undefined, user: any, roles: string[]): boolean {
+  if (!s) return false;
+
+  const currentUserId = String(user?.id || '');
+  const rfqCreatorId = String(s.rfqCreatedBy || (s as any).rfq?.createdBy || (s as any).createdBy || '');
+  const isOriginatorUser = !!currentUserId && !!rfqCreatorId && currentUserId === rfqCreatorId;
+
+  const isOriginatorStart = s.rfqApprovalStartPoint === 'ORIGINATOR' || (s as any).rfq?.rfqApprovalStartPoint === 'ORIGINATOR';
+
+  if (isOriginatorStart) {
+    // If X = ORIGINATOR, ONLY the RFQ Originator (creator) can Accept/Reject/Return!
+    // Admin who is NOT the originator cannot accept, reject, or return.
+    return isOriginatorUser;
+  }
+
+  // If X = L1_USER / Multi-level chain:
+  // User can act if they are the RFQ Creator, OR if they hold the role matching the active approval level
+  if (isOriginatorUser) return true;
+
+  const activeRole = s.currentLevelRole;
+  if (!activeRole) return false;
+
+  const userRoles: string[] = Array.isArray(roles) ? roles : [];
+  const normalizedActiveRole = activeRole.toLowerCase();
+
+  return userRoles.some((r) => {
+    const normalizedUserRole = r.toLowerCase();
+    return (
+      normalizedUserRole === normalizedActiveRole ||
+      normalizedUserRole.includes(normalizedActiveRole) ||
+      normalizedActiveRole.includes(normalizedUserRole)
+    );
+  });
+}
+
+function canPerformPostAward(s: MockQuotation | null | undefined, user: any, roles: string[]): boolean {
+  if (!s) return false;
+
+  const isSuperAdmin = Array.isArray(roles) && (roles.includes('SUPER_ADMIN') || user?.role === 'SUPER_ADMIN');
+  const isOriginatorStart = s.rfqApprovalStartPoint === 'ORIGINATOR' || (s as any).rfq?.rfqApprovalStartPoint === 'ORIGINATOR';
+
+  if (isOriginatorStart) {
+    // If X = ORIGINATOR, ONLY the RFQ Originator (creator) or Super Admin can create PO / Contract
+    const rfqCreatorId = s.rfqCreatedBy || (s as any).rfq?.createdBy || (s as any).createdBy;
+    const isOriginatorUser = (user?.id && rfqCreatorId && String(user.id) === String(rfqCreatorId)) || isSuperAdmin;
+    return isOriginatorUser;
+  } else {
+    // If X = L1_USER (Multi-level approval chain), ONLY the Final Approver or Super Admin can create PO / Contract
+    const isFinal = s.isFinalApprover === true || isSuperAdmin;
+    return isFinal;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Quotation Accepted Success Modal (Portal ON TOP OF COMPARE MODAL)
+// ═══════════════════════════════════════════════════════════════
+
+interface AcceptedModalData {
+  quotation: MockQuotation;
+  isNextLevel?: boolean;
+  message?: string;
+}
+
+function QuotationAcceptedModalInner({
+  data,
+  user,
+  roles,
+  onClose,
+  onCreatePO,
+  onCreateContract,
+}: {
+  data: AcceptedModalData;
+  user: any;
+  roles: string[];
+  onClose: () => void;
+  onCreatePO: () => void;
+  onCreateContract: () => void;
+}) {
+  const { quotation: q, isNextLevel, message } = data;
+  const { formatAmount } = useCurrency();
+  const canShowOptions = !isNextLevel && canPerformPostAward(q, user, roles);
+
+  return (
+    <div className="qam-accepted-backdrop" onClick={onClose}>
+      <div className="qam-accepted-modal" onClick={(e) => e.stopPropagation()}>
+        {/* Glowing Success Icon */}
+        <div className="qam-accepted__icon-wrap">
+          <div className="qam-accepted__icon-ring" />
+          <CheckCircle2 size={44} className="qam-accepted__icon" />
+        </div>
+
+        {/* Title & Subtitle */}
+        <h2 className="qam-accepted__title">
+          {isNextLevel ? 'Forwarded for Next Level Approval' : 'Quotation Accepted Successfully!'}
+        </h2>
+        <p className="qam-accepted__subtitle">
+          {message || (isNextLevel
+            ? 'The approval request has been forwarded to the next level approver.'
+            : canShowOptions
+            ? 'The vendor quotation has been approved and marked as the winning proposal. Choose next action:'
+            : 'The vendor quotation has been approved and forwarded to the designated authority for PO/Contract generation.')}
+        </p>
+
+        {/* Details Card */}
+        <div className="qam-accepted__card">
+          <div className="qam-accepted__row">
+            <span className="qam-accepted__label">Vendor</span>
+            <span className="qam-accepted__value qam-accepted__value--vendor">{q.vendorName}</span>
+          </div>
+          <div className="qam-accepted__row">
+            <span className="qam-accepted__label">RFQ</span>
+            <span className="qam-accepted__value">{q.rfqNumber}</span>
+          </div>
+          <div className="qam-accepted__row">
+            <span className="qam-accepted__label">Total Amount</span>
+            <span className="qam-accepted__value qam-accepted__value--price">
+              {formatAmount(q.totalPriceNum, q.currency || DEFAULT_CURRENCY)}
+            </span>
+          </div>
+          <div className="qam-accepted__row">
+            <span className="qam-accepted__label">Lead Time</span>
+            <span className="qam-accepted__value">{q.leadTimeDays} days</span>
+          </div>
+          <div className="qam-accepted__row">
+            <span className="qam-accepted__label">Payment Terms</span>
+            <span className="qam-accepted__value">{q.paymentTerms}</span>
+          </div>
+        </div>
+
+        {/* Post-Award Option Buttons (Create PO / Create Contract) — ONLY shown if authorized */}
+        {canShowOptions && (
+          <div className="qam-accepted__options">
+            <button
+              type="button"
+              className="qam-accepted__option-btn qam-accepted__option-btn--po"
+              onClick={onCreatePO}
+            >
+              <div className="qam-accepted__option-icon qam-accepted__option-icon--po">
+                <ShoppingCart size={20} />
+              </div>
+              <div className="qam-accepted__option-info">
+                <span className="qam-accepted__option-title">Create Purchase Order</span>
+                <span className="qam-accepted__option-desc">Generate PO linked to this accepted quotation</span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              className="qam-accepted__option-btn qam-accepted__option-btn--contract"
+              onClick={onCreateContract}
+            >
+              <div className="qam-accepted__option-icon qam-accepted__option-icon--contract">
+                <FileText size={20} />
+              </div>
+              <div className="qam-accepted__option-info">
+                <span className="qam-accepted__option-title">Create Contract</span>
+                <span className="qam-accepted__option-desc">Select contract template and generate agreement</span>
+              </div>
+            </button>
+          </div>
+        )}
+
+        {/* Footer Actions */}
+        <div className="qam-accepted__actions">
+          <button
+            type="button"
+            className="qam-accepted__btn qam-accepted__btn--secondary"
+            onClick={onClose}
+            style={{ width: '100%', justifyContent: 'center' }}
+          >
+            <X size={15} /> Cancel / Continue Comparison
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QuotationAcceptedModal(props: {
+  data: AcceptedModalData;
+  user: any;
+  roles: string[];
+  onClose: () => void;
+  onCreatePO: () => void;
+  onCreateContract: () => void;
+}) {
+  return createPortal(<QuotationAcceptedModalInner {...props} />, document.body);
+}
+
 // ═══════════════════════════════════════════════════════════════
 // Action Modals
 // ═══════════════════════════════════════════════════════════════
 
-function ActionModal({
+function ActionModalInner({
   modal,
   onClose,
   onConfirm,
@@ -1904,8 +2093,18 @@ function ActionModal({
   onViewPlan?: (plan: { name: string; milestones: Array<{ id: string; title: string; percentage: number }> }) => void;
 }) {
   const [comment, setComment] = useState('');
-  const [returnTarget, setReturnTarget] = useState<'LEVEL_1' | 'VENDOR'>('LEVEL_1');
   const { type, quotation: q } = modal;
+  const isOriginatorStart = (q as any).rfqApprovalStartPoint === 'ORIGINATOR' || (q as any).rfq?.rfqApprovalStartPoint === 'ORIGINATOR';
+  const [returnTarget, setReturnTarget] = useState<'LEVEL_1' | 'VENDOR'>(
+    isOriginatorStart ? 'VENDOR' : 'LEVEL_1'
+  );
+
+  useEffect(() => {
+    if (isOriginatorStart) {
+      setReturnTarget('VENDOR');
+    }
+  }, [isOriginatorStart]);
+
   const { formatAmount } = useCurrency();
 
   const formatDate = (d: string) =>
@@ -2084,8 +2283,8 @@ function ActionModal({
             </div>
           )}
 
-          {/* Return Target Selection */}
-          {type === 'return' && (
+          {/* Return Target Selection — only show if not Originator mode */}
+          {type === 'return' && !isOriginatorStart && (
             <div style={{ margin: '14px 0', padding: 12, background: '#f7f9fa', border: '1px solid #d9d9d9', borderRadius: 6 }}>
               <label style={{ fontSize: 12, fontWeight: 700, color: '#32363a', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 Return Destination
@@ -2167,6 +2366,18 @@ function ActionModal({
   );
 }
 
+function ActionModal(props: {
+  modal: ActiveModal;
+  onClose: () => void;
+  onConfirm: (type: ModalType, comment: string, returnTarget?: 'LEVEL_1' | 'VENDOR') => void;
+  onViewPlan?: (plan: { name: string; milestones: Array<{ id: string; title: string; percentage: number }> }) => void;
+}) {
+  return createPortal(
+    <ActionModalInner {...props} />,
+    document.body
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════
 // Main Page Component
 // ═══════════════════════════════════════════════════════════════
@@ -2177,7 +2388,7 @@ export default function QuotationsPage() {
   const rfqFromUrl = searchParams.get('rfq');
   const { formatAmount, convert, companyDefaultCurrency } = useCurrency();
   const [displayCurrency, setDisplayCurrency] = useState<string>('');
-  const { roles } = useAuth();
+  const { user, roles } = useAuth();
   const [startLevelPromptState, setStartLevelPromptState] = useState<{
     id: number | string;
     apiStatus: string;
@@ -2187,9 +2398,10 @@ export default function QuotationsPage() {
     modalQuotation: MockQuotation;
   } | null>(null);
   const [compareModalOpen, setCompareModalOpen] = useState(false);
+  const [acceptedModalData, setAcceptedModalData] = useState<AcceptedModalData | null>(null);
 
   const { data: serverQuotations, loading, error, reload, forceRefresh } = useServiceData(
-    () => quotationService.listAll().then((list) => list.map(mapQuotationToRow)),
+    () => quotationService.list(false).then((list) => list.map(mapQuotationToRow)),
     [] as MockQuotation[]
   );
   const [quotations, setQuotations] = useState<MockQuotation[]>([]);
@@ -2211,10 +2423,15 @@ export default function QuotationsPage() {
 
   // Separate data for Supplier Comparison — bypasses approval-level visibility filter
   // so ALL approvers see ALL vendors' quotations regardless of their position in the chain.
-  const { data: allQuotations, reload: reloadAllQuotations } = useServiceData(
+  const { data: serverAllQuotations, reload: reloadAllQuotations } = useServiceData(
     () => quotationService.listAll().then((list) => list.map(mapQuotationToRow)),
     [] as MockQuotation[],
   );
+
+  const [allQuotations, setAllQuotations] = useState<MockQuotation[]>([]);
+  useEffect(() => {
+    if (serverAllQuotations) setAllQuotations(serverAllQuotations);
+  }, [serverAllQuotations]);
 
   // Filter out any quotations belonging to deleted RFQs
   const validQuotations = useMemo(() => {
@@ -2248,17 +2465,8 @@ export default function QuotationsPage() {
       reload();
       reloadAllQuotations();
     };
-    const onChainComplete = (data: unknown) => {
-      reload();
-      // Show PostAwardModal when Quotation approval chain completes
-      const chainData = data as { referenceId?: string; module?: string } | null;
-      if (chainData?.referenceId && chainData?.module === 'Quotations') {
-        const currentQuotations = quotationsRef.current;
-        const acceptedQuotation = currentQuotations.find(q => String(q.id) === chainData.referenceId);
-        if (acceptedQuotation) {
-          setPostAwardQuotation(acceptedQuotation);
-        }
-      }
+    const onChainComplete = () => {
+      refreshAll();
     };
     const unsubStatus = sseClient.on('quotation_status_changed', refreshAll);
     const unsubChain = sseClient.on('approval_chain_complete', onChainComplete);
@@ -2327,7 +2535,7 @@ export default function QuotationsPage() {
   const [simpleEvalData, setSimpleEvalData] = useState<RFQEvaluationData | null>(null);
   const [detailRfq, setDetailRfq]                     = useState<RFQTableRow | null>(null);
   const [detailRfqLoading, setDetailRfqLoading]       = useState(false);
-  useBodyScrollLock(!!(compareModalOpen || activeModal || detailRfq || postAwardQuotation || pendingApprovalQuotation || showTemplateSelect));
+  useBodyScrollLock(!!(compareModalOpen || activeModal || detailRfq || postAwardQuotation || pendingApprovalQuotation || showTemplateSelect || acceptedModalData));
   const confirmCallbackRef = useRef<{ type: ModalType; comment: string } | null>(null);
   const activeModalRef = useRef<ActiveModal | null>(null);
   const compareDropdownRef = useRef<HTMLDivElement>(null);
@@ -2615,7 +2823,7 @@ export default function QuotationsPage() {
       list = list.filter(rfq => isRfqInactive(rfq));
     }
 
-    // Filter by Search string
+    // Filter by Search string (search by RFQ number, RFQ title, vendor name, or vendor email)
     if (compareSearch.trim()) {
       const s = compareSearch.toLowerCase();
       list = list.filter(rfq => {
@@ -2623,13 +2831,20 @@ export default function QuotationsPage() {
         const vendors = compareSource.filter(q => q.rfqNumber === rfq);
         return vendors.some(v =>
           v.vendorName.toLowerCase().includes(s) ||
-          v.vendorEmail.toLowerCase().includes(s)
+          v.vendorEmail.toLowerCase().includes(s) ||
+          (v.rfqTitle && v.rfqTitle.toLowerCase().includes(s))
         );
       });
     }
 
     return list;
   }, [compareSearch, uniqueRFQs, compareSource, rfqFilterStatus, isRfqInactive]);
+
+  const selectedRFQTitle = useMemo(() => {
+    if (!selectedRFQ) return null;
+    const match = compareSource.find(q => q.rfqNumber === selectedRFQ);
+    return match?.rfqTitle && match.rfqTitle !== selectedRFQ ? match.rfqTitle : null;
+  }, [selectedRFQ, compareSource]);
 
   // Store loaded custom fields from RFQ for dynamic chart rendering
   const [rfqCustomFields, setRfqCustomFields] = useState<any[]>([]);
@@ -3126,6 +3341,10 @@ export default function QuotationsPage() {
 
   // ── Modal actions ───────────────────────────────────────────
   const openModal = (type: ModalType, q: MockQuotation) => {
+    if (type !== 'view' && !canActionQuotation(q, user, roles)) {
+      setToast({ message: 'You are not authorized to perform action on this quotation', type: 'error' });
+      return;
+    }
     const modal = { type, quotation: q };
     activeModalRef.current = modal;
     setActiveModal(modal);
@@ -3150,21 +3369,6 @@ export default function QuotationsPage() {
           isRejected: boolean;
         }>(`/approvals/Quotations/${modal.quotation.id}/chain`);
 
-        if (chain.currentLevel >= chain.totalLevels) {
-          finalApproverIdsRef.current.add(modal.quotation.id);
-          const finalApproverQuotation = { ...modal.quotation, isFinalApprover: true };
-          setPendingApprovalQuotation(finalApproverQuotation);
-          setQuotations(prev => prev.map(q =>
-            q.id === modal.quotation.id ? { ...q, isFinalApprover: true } : q
-          ));
-          confirmCallbackRef.current = { type, comment };
-          closeModal();
-          return;
-        }
-
-        // If the quotation ALREADY has an active approval chain (currentLevel > 0 or status is UNDER_REVIEW),
-        // the user is acting as an APPROVER in the chain, NOT the Originator initiating the workflow.
-        // Do NOT show CreatorLevelPromptModal — execute approval action directly.
         if (chain.currentLevel > 0 || modal.quotation.status === 'UNDER_REVIEW') {
           closeModal();
           await executeUpdateQuotationStatus(id, 'ACCEPTED', comment, 'ACCEPTED', previousStatus, modal.quotation, 'accept');
@@ -3217,34 +3421,61 @@ export default function QuotationsPage() {
     startLevelNumber?: number,
     returnTarget?: 'LEVEL_1' | 'VENDOR'
   ) => {
-    setQuotations(prev => prev.map(q => q.id === id ? { ...q, status: displayStatus } : q));
-    if (type === 'accept') {
-      setToast({ message: 'Submitting acceptance...', type: 'success' });
-    } else if (type === 'return') {
-      setToast({ message: 'Returning quotation for revision...', type: 'success' });
-    }
+    // ── Instant 0ms Local State Update for both listing table & comparison tab ──
+    const targetRfqId = modalQuotation.rfqId;
+    const targetRfqNum = modalQuotation.rfqNumber;
+
+    const updateItem = (q: MockQuotation): MockQuotation => {
+      if (q.id === id) {
+        return { ...q, status: displayStatus };
+      }
+      // If accepting a quotation, competing quotations for the same RFQ are auto-rejected!
+      if (type === 'accept' && displayStatus === 'ACCEPTED') {
+        if ((targetRfqId && q.rfqId === targetRfqId) || (targetRfqNum && q.rfqNumber === targetRfqNum)) {
+          return { ...q, status: 'REJECTED' };
+        }
+      }
+      return q;
+    };
+
+    setQuotations(prev => prev.map(updateItem));
+    setAllQuotations(prev => prev.map(updateItem));
+
+    // ── Instant Toast Notification ──
+    const actionLabel = type === 'accept' ? 'accepted' : type === 'reject' ? 'rejected' : 'returned for revision';
+    setToast({
+      message: `Quotation ${actionLabel} successfully!`,
+      type: 'success',
+    });
 
     try {
       const response = await quotationService.updateStatus(id, apiStatus, comment, startLevelNumber, returnTarget);
       if (type === 'accept') {
+        reload();
+        reloadAllQuotations();
         if (response?.nextLevel === true) {
-          setToast({ message: response?.message || 'Forwarded to the next approval level.', type: 'success' });
+          setToast({ message: response?.message || 'Quotation approved and forwarded to next level approver.', type: 'success' });
         } else {
-          setToast({ message: response?.message || 'Quotation accepted successfully!', type: 'success' });
-          setPostAwardQuotation(modalQuotation);
-          reload();
+          setToast({ message: response?.message || 'Quotation accepted successfully! Click 🛒 to create PO or 📄 to create Contract.', type: 'success' });
         }
       } else if (type === 'return') {
-        setToast({ message: response?.message || 'Quotation returned for revision.', type: 'success' });
+        reload();
+        reloadAllQuotations();
+        if (response?.message) {
+          setToast({ message: response.message, type: 'success' });
+        }
       } else {
-        if (type === 'reject') {
-          setToast({ message: response?.message || 'Quotation rejected.', type: 'success' });
+        if (response?.message) {
+          setToast({ message: response.message, type: 'success' });
         }
         reload();
+        reloadAllQuotations();
       }
     } catch (err) {
       console.error('Failed to update quotation status:', err);
+      // Revert local state on error
       setQuotations(prev => prev.map(q => q.id === id ? { ...q, status: previousStatus } : q));
+      setAllQuotations(prev => prev.map(q => q.id === id ? { ...q, status: previousStatus } : q));
       setToast({ message: err instanceof Error ? err.message : 'Failed to update quotation status', type: 'error' });
     }
   };
@@ -3335,11 +3566,16 @@ export default function QuotationsPage() {
               <Search size={14}/>
               {selectedRFQ ? (
                 <span className="quot-compare__selected-rfq">
-                  {selectedRFQ}
+                  <span>{selectedRFQ}</span>
+                  {selectedRFQTitle && (
+                    <span className="quot-compare__selected-title-inline" style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)' }}>
+                      — {selectedRFQTitle}
+                    </span>
+                  )}
                   <span className="quot-compare__selected-rfq-badge">RFQ</span>
                 </span>
               ) : (
-                <span className="quot-compare__placeholder">Search &amp; select RFQ number...</span>
+                <span className="quot-compare__placeholder">Search &amp; select RFQ number or title...</span>
               )}
               <ChevronDown size={14} className={`quot-compare__chevron ${compareDropdownOpen ? 'quot-compare__chevron--open' : ''}`}/>
             </button>
@@ -3375,12 +3611,15 @@ export default function QuotationsPage() {
 
                 <div className="quot-compare__dropdown-search">
                   <Search size={13}/>
-                  <input type="text" placeholder="Search by RFQ or vendor name..." value={compareSearch}
+                  <input type="text" placeholder="Search by RFQ number, title or vendor name..." value={compareSearch}
                     onChange={e => setCompareSearch(e.target.value)} autoFocus/>
                 </div>
                 <div className="quot-compare__dropdown-list">
                   {filteredRFQs.length > 0 ? filteredRFQs.map(rfq => {
-                    const count = quotations.filter(q => q.rfqNumber === rfq).length;
+                    const rfqQuotations = compareSource.filter(q => q.rfqNumber === rfq);
+                    const count = rfqQuotations.length;
+                    const firstQuot = rfqQuotations[0];
+                    const rfqTitle = firstQuot?.rfqTitle && firstQuot.rfqTitle !== rfq ? firstQuot.rfqTitle : null;
                     const inactive = isRfqInactive(rfq);
                     return (
                       <button key={rfq}
@@ -3394,6 +3633,11 @@ export default function QuotationsPage() {
                               {inactive ? 'Inactive' : 'Active'}
                             </span>
                           </span>
+                          {rfqTitle && (
+                            <span className="quot-compare__dropdown-rfq-title">
+                              {rfqTitle}
+                            </span>
+                          )}
                           <span className="quot-compare__dropdown-rfq-sub">
                             {inactive ? 'Vendor selected / Completed' : 'Under evaluation'}
                           </span>
@@ -3628,7 +3872,11 @@ export default function QuotationsPage() {
           </td>
         );
       case 'actions': {
-        const actionable = getDisplayStatus(s) !== 'ACCEPTED' && getDisplayStatus(s) !== 'REJECTED';
+        const displaySt = getDisplayStatus(s);
+        const isAccepted = displaySt === 'ACCEPTED';
+        const canUserAction = canActionQuotation(s, user, roles);
+        const actionable = displaySt !== 'ACCEPTED' && displaySt !== 'REJECTED' && canUserAction;
+        const hasPostAwardAccess = canPerformPostAward(s, user, roles);
         return (
           <td key={key} className="quot-compare__value" style={{ textAlign: 'center' }}>
             <div className="quot-table__actions" style={{ justifyContent: 'center', gap: 4 }}>
@@ -3661,6 +3909,40 @@ export default function QuotationsPage() {
                     onClick={() => openModal('return', s)}
                   >
                     <RotateCcw size={15} />
+                  </button>
+                </>
+              )}
+              {isAccepted && hasPostAwardAccess && (
+                <>
+                  <button
+                    type="button"
+                    className="quot-sap-btn quot-sap-btn--po"
+                    title="Create Purchase Order for this accepted quotation"
+                    onClick={() => {
+                      navigate(`/procurement/purchase-requisition/${s.rfqId}`);
+                    }}
+                  >
+                    <ShoppingCart size={13} />
+                    <span>Create PO</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="quot-sap-btn quot-sap-btn--contract"
+                    title="Create Contract agreement for this accepted quotation"
+                    onClick={() => {
+                      setPostAwardQuotation(s);
+                      setShowTemplateSelect(true);
+                    }}
+                  >
+                    <FileText size={13} />
+                    <span>Create Contract</span>
+                  </button>
+                  <button
+                    className="quot-table__action-btn quot-table__action-btn--danger"
+                    title="Cancel Acceptance"
+                    onClick={() => openModal('reject', s)}
+                  >
+                    <X size={15} />
                   </button>
                 </>
               )}
@@ -3967,6 +4249,26 @@ export default function QuotationsPage() {
         />
       )}
 
+      {acceptedModalData && (
+        <QuotationAcceptedModal
+          data={acceptedModalData}
+          user={user}
+          roles={roles}
+          onClose={() => setAcceptedModalData(null)}
+          onCreatePO={() => {
+            const q = acceptedModalData.quotation;
+            setAcceptedModalData(null);
+            navigate(`/procurement/purchase-requisition/${q.rfqId}`);
+          }}
+          onCreateContract={() => {
+            const q = acceptedModalData.quotation;
+            setAcceptedModalData(null);
+            setPostAwardQuotation(q);
+            setShowTemplateSelect(true);
+          }}
+        />
+      )}
+
       {viewPlanQuotation && (
         <ViewPaymentPlanModal
           plan={viewPlanQuotation}
@@ -4049,35 +4351,20 @@ export default function QuotationsPage() {
             </div>
 
             <div className="quot-compare-modal__body">
+              {toast && (
+                <MessageStrip
+                  type={toast.type}
+                  onClose={() => setToast(null)}
+                  autoHideMs={4000}
+                  style={{ marginBottom: 16 }}
+                >
+                  {toast.message}
+                </MessageStrip>
+              )}
               {renderComparisonPanel(true)}
             </div>
           </div>
         </div>
-      )}
-
-      {postAwardQuotation && !showTemplateSelect && (
-        <PostAwardModal
-          rfqId={String(postAwardQuotation.rfqId)}
-          rfqNumber={postAwardQuotation.rfqNumber}
-          vendorName={postAwardQuotation.vendorName}
-          awardValue={postAwardQuotation.totalPriceNum}
-          currency={postAwardQuotation.currency || companyDefaultCurrency || 'KES'}
-          onClose={() => setPostAwardQuotation(null)}
-          onNavigatePO={async () => {
-            // Directly execute RFQ-based PO flow: accept quotation and navigate to PO creation
-            const quotation = postAwardQuotation;
-            try {
-              await quotationService.updateStatus(quotation.id, 'ACCEPTED');
-            } catch (err) {
-              console.error('Failed to accept quotation:', err);
-            } finally {
-              setPostAwardQuotation(null);
-              reload();
-            }
-            navigate(`/procurement/purchase-requisition/${quotation.rfqId}`);
-          }}
-          onNavigateContract={() => handleNavigateContract(postAwardQuotation)}
-        />
       )}
 
       {postAwardQuotation && showTemplateSelect && (
@@ -4090,94 +4377,9 @@ export default function QuotationsPage() {
             const targetId = postAwardQuotation.id;
             setShowTemplateSelect(false);
             setPostAwardQuotation(null);
-            setPendingApprovalQuotation(null);
-            confirmCallbackRef.current = null;
             closeModal();
             setQuotations(prev => prev.map(q => q.id === targetId ? { ...q, status: 'ACCEPTED' } : q));
-            setToast({ message: 'Contract generated and quotation accepted successfully!', type: 'success' });
-            reload();
-          }}
-        />
-      )}
-
-      {/* ── Pre-Approval PostAwardModal (shows BEFORE final approval) ── */}
-      {pendingApprovalQuotation && !showTemplateSelect && (
-        <PostAwardModal
-          rfqId={String(pendingApprovalQuotation.rfqId)}
-          rfqNumber={pendingApprovalQuotation.rfqNumber}
-          vendorName={pendingApprovalQuotation.vendorName}
-          awardValue={pendingApprovalQuotation.totalPriceNum}
-          currency={pendingApprovalQuotation.currency || companyDefaultCurrency || 'KES'}
-          preAwardMode
-          onApproveFirst={async () => {
-            // Complete the approval directly (handleConfirm needs activeModalRef which is null after closeModal)
-            // No try/catch here — PostAwardModal's handleSelect already catches errors and shows them inline
-            const saved = confirmCallbackRef.current;
-            if (!saved || !pendingApprovalQuotation) return;
-            await quotationService.updateStatus(
-              pendingApprovalQuotation.id,
-              'ACCEPTED',
-              saved.comment
-            );
-            // Reload happens in onNavigatePO's finally after modal closes (to avoid blank screen)
-          }}
-          onClose={() => { setPendingApprovalQuotation(null); confirmCallbackRef.current = null; }}
-          onNavigatePO={async () => {
-            // Directly execute RFQ-based PO flow: accept quotation and navigate to PO creation
-            const quotation = pendingApprovalQuotation;
-            try {
-              if (confirmCallbackRef.current) {
-                await quotationService.updateStatus(
-                  quotation.id,
-                  'ACCEPTED',
-                  confirmCallbackRef.current.comment
-                );
-              } else {
-                await quotationService.updateStatus(quotation.id, 'ACCEPTED');
-              }
-            } catch (err) {
-              console.error('Failed to accept quotation:', err);
-            } finally {
-              setPendingApprovalQuotation(null);
-              confirmCallbackRef.current = null;
-              reload();
-            }
-            navigate(`/procurement/purchase-requisition/${quotation.rfqId}`);
-          }}
-          onNavigateContract={async () => {
-            // In pre-award mode, skip selectedQuotationId validation since
-            // approval hasn't happened yet — go straight to template selection.
-            // Approval will be deferred to when the user clicks Generate.
-            setShowTemplateSelect(true);
-          }}
-        />
-      )}
-
-      {/* ── Pre-Approval ContractTemplateSelectModal ── */}
-      {pendingApprovalQuotation && showTemplateSelect && (
-        <ContractTemplateSelectModal
-          rfqId={String(pendingApprovalQuotation.rfqId)}
-          rfqNumber={pendingApprovalQuotation.rfqNumber}
-          vendorName={pendingApprovalQuotation.vendorName}
-          onApproveFirst={async () => {
-            const saved = confirmCallbackRef.current;
-            if (!saved || !pendingApprovalQuotation) return;
-            await quotationService.updateStatus(
-              pendingApprovalQuotation.id,
-              'ACCEPTED',
-              saved.comment
-            );
-          }}
-          onClose={() => { setShowTemplateSelect(false); setPendingApprovalQuotation(null); confirmCallbackRef.current = null; }}
-          onGenerated={(_contractId) => {
-            const targetId = pendingApprovalQuotation.id;
-            setShowTemplateSelect(false);
-            setPendingApprovalQuotation(null);
-            setPostAwardQuotation(null);
-            confirmCallbackRef.current = null;
-            closeModal();
-            setQuotations(prev => prev.map(q => q.id === targetId ? { ...q, status: 'ACCEPTED' } : q));
-            setToast({ message: 'Contract generated and quotation accepted successfully!', type: 'success' });
+            setToast({ message: 'Contract generated successfully!', type: 'success' });
             reload();
           }}
         />
