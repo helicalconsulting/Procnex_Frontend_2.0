@@ -575,7 +575,7 @@ export default function VendorsPage() {
                 </thead>
                 <tbody>
                   {paginated.map((v) => (
-                    <tr key={v.id} className="vendors-table__row" onClick={() => setDetailVendor(v)}>
+                    <tr key={v.id} className={`vendors-table__row vendors-table__row--${v.status ? v.status.toLowerCase() : (v.isActive ? 'active' : 'inactive')}`} onClick={() => setDetailVendor(v)}>
                       {visibleColumns.map((col) => (<td key={col.key}>{col.render(v, formatDate, toggleActive)}</td>))}
                       <td onClick={(e) => e.stopPropagation()}>
                         <div className="vendors-table__actions">

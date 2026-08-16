@@ -1,9 +1,10 @@
 /* Heliflow Theme (Light & Dark Mode Supported) — Form Responses & Analytics Dashboard */
 
 .frp-container {
-  padding: 24px;
-  max-width: 1400px;
-  margin: 0 auto;
+  padding: 24px 28px;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
   color: var(--text-primary);
 }
 
@@ -98,9 +99,21 @@
 /* Analytics Cards Grid */
 .frp-analytics-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
   margin-bottom: 24px;
+}
+
+@media (max-width: 1200px) {
+  .frp-analytics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .frp-analytics-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .frp-card {
@@ -339,29 +352,66 @@
 
 .frp-table th {
   background: var(--surface-elevated);
-  padding: 12px 18px;
+  padding: 11px 16px;
   text-align: left;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-secondary);
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  border-bottom: 1px solid var(--border);
+  letter-spacing: 0.6px;
+  border-bottom: 2px solid var(--border);
+  border-right: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.frp-table th:last-child {
+  border-right: none;
 }
 
 .frp-table td {
-  padding: 14px 18px;
+  padding: 11px 16px;
   border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
   vertical-align: middle;
   color: var(--text-primary);
 }
 
-.frp-table tr:hover td {
-  background: var(--surface-hover);
+.frp-table td:last-child {
+  border-right: none;
 }
 
 .frp-table tr:last-child td {
-  border-bottom: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.frp-table tbody tr {
+  transition: background 0.15s;
+  border-left: 3px solid transparent;
+  background: var(--surface-card);
+}
+
+.frp-table tbody tr:hover td {
+  background: var(--surface-hover);
+}
+
+/* Status Indicator Left Border for Form Responses */
+.frp-table tbody tr.frp-table__row--completed,
+.frp-table tbody tr.frp-table__row--submitted {
+  border-left: 3px solid var(--success-500) !important;
+}
+
+.frp-table tbody tr.frp-table__row--pending,
+.frp-table tbody tr.frp-table__row--draft {
+  border-left: 3px solid var(--warning-500) !important;
+}
+
+.frp-table tbody tr.frp-table__row--rejected,
+.frp-table tbody tr.frp-table__row--returned {
+  border-left: 3px solid var(--danger-500) !important;
+}
+
+.frp-table tbody tr.frp-table__row--in_progress {
+  border-left: 3px solid #8b5cf6 !important;
 }
 
 /* Rich Status Tag Pill Badges */
@@ -574,7 +624,7 @@
 
 .frp-response-modal {
   width: 100%;
-  max-width: 680px;
+  max-width: 960px;
   background: var(--surface-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl, 16px);
@@ -1275,3 +1325,85 @@
   box-sizing: border-box !important;
   z-index: 10 !important;
 }
+
+/* ─── Approval Level Component ───────────────────────────── */
+
+.approvals-level {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  white-space: nowrap !important;
+}
+
+.approvals-level__steps {
+  display: flex !important;
+  align-items: center !important;
+}
+
+.approvals-level__step {
+  display: flex !important;
+  align-items: center !important;
+}
+
+.approvals-level__step-circle {
+  width: 20px !important;
+  height: 20px !important;
+  border-radius: 50% !important;
+  border: 2px solid var(--border-strong, #4b5563) !important;
+  background: var(--surface-card, #1e293b) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  color: var(--text-secondary, #94a3b8) !important;
+  flex-shrink: 0 !important;
+  position: relative !important;
+  z-index: 1 !important;
+  transition: all 0.2s ease !important;
+}
+
+.approvals-level__step-circle--done {
+  background: var(--success-500, #107e3e) !important;
+  border-color: var(--success-500, #107e3e) !important;
+  color: #ffffff !important;
+}
+
+.approvals-level__step-circle--current {
+  background: var(--primary-500, #0a6ed1) !important;
+  border-color: var(--primary-500, #0a6ed1) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.25) !important;
+}
+
+.approvals-level__step-circle--rejected {
+  background: var(--danger-500, #bb0000) !important;
+  border-color: var(--danger-500, #bb0000) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 0 3px rgba(187, 0, 0, 0.25) !important;
+}
+
+.approvals-level__step-connector {
+  width: 14px !important;
+  height: 2px !important;
+  background: var(--border, #334155) !important;
+  flex-shrink: 0 !important;
+}
+
+.approvals-level__step-connector--done {
+  background: var(--success-500, #107e3e) !important;
+}
+
+.approvals-level__text {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: var(--text-secondary, #94a3b8) !important;
+  white-space: nowrap !important;
+}
+
+.frp-level-no-wf {
+  font-size: 12px !important;
+  color: var(--text-placeholder) !important;
+  font-style: italic !important;
+}
+

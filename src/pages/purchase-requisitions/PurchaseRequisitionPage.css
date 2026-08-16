@@ -4,8 +4,9 @@
 
 .pr-page {
   padding: 24px 32px 100px;
-  max-width: 1560px;
-  margin: 0 auto;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
   color: var(--text-primary);
 }
 
@@ -510,16 +511,18 @@
 /* Table Header */
 .pr-items-table thead th {
   background: linear-gradient(180deg, var(--surface-elevated), var(--surface-card));
-  padding: 12px 10px;
+  padding: 11px 10px;
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-secondary);
   text-align: left;
-  border-bottom: 2px solid var(--border-strong);
+  border-bottom: 2px solid var(--border);
+  border-right: 1px solid var(--border);
   white-space: nowrap;
 }
+.pr-items-table thead th:last-child { border-right: none; }
 
 .pr-th--no     { text-align: center !important; }
 .pr-th--num    { text-align: right !important; }
@@ -531,8 +534,10 @@
 .pr-items-table tbody td {
   padding: 8px 10px;
   border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
   vertical-align: middle;
 }
+.pr-items-table tbody td:last-child { border-right: none; }
 
 .pr-items-table tbody tr:last-child td { border-bottom: none; }
 
@@ -1065,21 +1070,25 @@
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
   color: var(--text-secondary);
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border);
+  padding: 11px 14px;
+  border-bottom: 2px solid var(--border);
+  border-right: 1px solid var(--border);
   background: var(--surface-elevated);
   white-space: nowrap;
   overflow: hidden;
   user-select: none;
 }
+.pr-list-table thead th:last-child { border-right: none; }
 
 .pr-list-table thead th.pr-list__th--amount { text-align: right; }
 
 .pr-list-row {
   cursor: pointer;
   transition: background 0.15s ease;
+  border-left: 3px solid transparent;
+  background: var(--surface-card);
 }
 
 .pr-list-row:hover {
@@ -1087,15 +1096,41 @@
 }
 
 .pr-list-row td {
-  padding: 12px 14px;
+  padding: 11px 14px;
   font-size: 13px;
   color: var(--text-primary);
   border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
   vertical-align: middle;
   overflow: hidden;
 }
+.pr-list-row td:last-child { border-right: none; }
 
-.pr-list-row:last-child td { border-bottom: none; }
+.pr-list-row:last-child td { border-bottom: 1px solid var(--border); }
+
+/* Status Left Border Indicators for PR / PO Creation */
+.pr-list-row--po_created,
+.pr-list-row--approved,
+.pr-list-row--completed {
+  border-left: 3px solid var(--success-500) !important;
+}
+
+.pr-list-row--draft,
+.pr-list-row--pending_approval,
+.pr-list-row--sent {
+  border-left: 3px solid var(--warning-500) !important;
+}
+
+.pr-list-row--cancelled,
+.pr-list-row--rejected {
+  border-left: 3px solid var(--danger-500) !important;
+}
+
+.pr-list-row--quotations_received,
+.pr-list-row--under_evaluation,
+.pr-list-row--in_progress {
+  border-left: 3px solid #8b5cf6 !important;
+}
 
 .pr-list__po-num {
   font-weight: 700;

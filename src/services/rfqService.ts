@@ -143,10 +143,17 @@ async function mockGetById(id: string): Promise<RFQTableRow | null> {
 }
 
 async function apiGetById(id: string): Promise<RFQTableRow | null> {
-  const rfq = await apiRequest<Record<string, unknown>>(`/rfqs/${id}`, { cacheTtlMs: 0 });
-  const mapped = mapApiRfqToTableRow(rfq);
-  if (!mapped || isRfqDeleted(mapped.id, mapped.rfqNumber)) return null;
-  return mapped;
+  try {
+    const rfq = await apiRequest<Record<string, unknown>>(`/rfqs/${id}`, { cacheTtlMs: 0 });
+    const mapped = mapApiRfqToTableRow(rfq);
+    if (!mapped || isRfqDeleted(mapped.id, mapped.rfqNumber)) return null;
+    return mapped;
+  } catch (err: any) {
+    if (err?.status === 404 || err?.code === 'NOT_FOUND' || err?.message?.includes('404') || err?.message?.includes('not found')) {
+      return null;
+    }
+    throw err;
+  }
 }
 
 async function mockListTyped(): Promise<RFQ[]> {
@@ -231,7 +238,15 @@ async function apiDelete(id: string, options?: { force?: boolean }): Promise<voi
   } else {
     addDeletedRfqId(id);
   }
-  await apiRequest(`/rfqs/${id}${query}`, { method: 'DELETE' });
+  try {
+    await apiRequest(`/rfqs/${id}${query}`, { method: 'DELETE' });
+  } catch (err: any) {
+    // If the server returns 404 Not Found, the RFQ was already deleted from DB — treat as successful deletion
+    const is404 = err?.status === 404 || err?.code === 'NOT_FOUND' || err?.message?.includes('404') || err?.message?.includes('not found');
+    if (!is404) {
+      throw err;
+    }
+  }
   addDeletedRfqId(id);
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('rfq_deleted', { detail: { id } }));
@@ -328,7 +343,11 @@ export interface EvalScoreDTO {
 }
 
 async function apiGetEvaluationCategories(rfqId: string): Promise<EvalCategoryDTO[]> {
-  return apiRequest<EvalCategoryDTO[]>(`/rfqs/${rfqId}/evaluation/categories`);
+  try {
+    return await apiRequest<EvalCategoryDTO[]>(`/rfqs/${rfqId}/evaluation/categories`);
+  } catch {
+    return [];
+  }
 }
 
 async function apiSaveEvaluationCategories(rfqId: string, categories: EvalCategoryDTO[]): Promise<EvalCategoryDTO[]> {
@@ -339,7 +358,11 @@ async function apiSaveEvaluationCategories(rfqId: string, categories: EvalCatego
 }
 
 async function apiGetEvaluationScores(rfqId: string): Promise<Record<string, unknown>> {
-  return apiRequest<Record<string, unknown>>(`/rfqs/${rfqId}/evaluation/scores`);
+  try {
+    return await apiRequest<Record<string, unknown>>(`/rfqs/${rfqId}/evaluation/scores`);
+  } catch {
+    return {};
+  }
 }
 
 async function apiSaveWeightagePreferences(preferences: Record<string, { label: string; weightage: number }>): Promise<void> {

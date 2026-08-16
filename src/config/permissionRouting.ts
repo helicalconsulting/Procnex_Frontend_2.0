@@ -44,6 +44,7 @@ export const MENU_ITEM_PERMISSIONS: Record<string, RoutePermissionRule> = {
   'rfq-list': { module: 'RFQ', action: 'canView' },
   'rfq-create': { module: 'RFQ', action: 'canCreate' },
   quotations: { module: 'Quotations', action: 'canView' },
+  'purchase-requisitions': { module: 'Purchase Orders', action: 'canView' },
   approvals: { module: 'Approvals', action: 'canView' },
   'accounts-payable': { module: 'Approvals', action: 'canView' },
   payments: { module: 'Approvals', action: 'canView' },

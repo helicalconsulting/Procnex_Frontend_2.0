@@ -198,6 +198,7 @@
 .quot-badge--REJECTED     { background: rgba(187,0,0,0.08);    color: var(--danger-500);  }
 .quot-badge--SHORTLISTED  { background: rgba(139,92,246,0.1);  color: #8b5cf6; }
 .quot-badge--RETURNED     { background: rgba(233,115,12,0.1);  color: #e9730c; }
+.quot-badge--APPROVED_L1  { background: rgba(16,126,62,0.1);   color: var(--success-500); }
 [data-theme="dark"] .quot-badge--SUBMITTED { background: rgba(10,110,209,0.15); }
 [data-theme="dark"] .quot-badge--REJECTED  { background: rgba(187,0,0,0.12);   }
 

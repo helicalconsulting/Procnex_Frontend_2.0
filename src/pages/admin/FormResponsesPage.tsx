@@ -391,6 +391,55 @@ export default function FormResponsesPage() {
     }
   };
 
+  const renderFormApprovalLevel = (sub: FormResponseItem) => {
+    if (!sub.workflowAttached || !sub.approvalLevels || sub.approvalLevels.length === 0) {
+      return (
+        <span className="frp-level-no-wf">
+          {sub.status === 'completed' || sub.status === 'submitted' ? 'Direct (Completed)' : 'No Workflow'}
+        </span>
+      );
+    }
+
+    const total = sub.totalLevels || sub.approvalLevels.length || 1;
+    const isAllCompleted = sub.status === 'completed';
+    const isRejected = sub.status === 'rejected';
+
+    let current = sub.currentLevelNumber || 1;
+    if (isAllCompleted) current = total + 1;
+
+    return (
+      <div className="approvals-level" title={`Level ${Math.min(current, total)} of ${total}`}>
+        <div className="approvals-level__steps">
+          {Array.from({ length: total }, (_, i) => {
+            const stepNum = i + 1;
+            const isDone = isAllCompleted || stepNum < current;
+            const isCurrent = !isAllCompleted && stepNum === current;
+            return (
+              <div key={i} className="approvals-level__step">
+                <div
+                  className={[
+                    'approvals-level__step-circle',
+                    isDone ? 'approvals-level__step-circle--done' : '',
+                    isCurrent ? 'approvals-level__step-circle--current' : '',
+                    isRejected && isCurrent ? 'approvals-level__step-circle--rejected' : '',
+                  ].filter(Boolean).join(' ')}
+                >
+                  {isDone ? '✓' : stepNum}
+                </div>
+                {i < total - 1 && (
+                  <div className={`approvals-level__step-connector ${isDone ? 'approvals-level__step-connector--done' : ''}`} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <span className="approvals-level__text">
+          L{isAllCompleted ? total : Math.min(current, total)}/{total}
+        </span>
+      </div>
+    );
+  };
+
   return (
     <div className="frp-container">
       {/* Top Header */}
@@ -566,7 +615,7 @@ export default function FormResponsesPage() {
                 const isSelected = selectedSubmissionIds.includes(sub.id);
 
                 return (
-                  <tr key={sub.id} className={isSelected ? 'frp-row--selected' : ''}>
+                  <tr key={sub.id} className={`frp-table__row frp-table__row--${(sub.status || '').toLowerCase()} ${isSelected ? 'frp-row--selected' : ''}`}>
                     <td style={{ textAlign: 'center' }}>
                       <input
                         type="checkbox"
@@ -623,44 +672,7 @@ export default function FormResponsesPage() {
                       </span>
                     </td>
                     <td>
-                      <div className="frp-level-cell">
-                        <span className="frp-level-text">
-                          {!sub.workflowAttached || !sub.approvalLevels || sub.approvalLevels.length === 0
-                            ? 'No Workflow (Direct Submission)'
-                            : sub.status === 'completed'
-                            ? 'Completed (All Levels)'
-                            : sub.status === 'pending' || sub.currentLevelNumber === 0
-                            ? 'Awaiting Employee Fill Out'
-                            : `Level ${sub.currentLevelNumber || 1} of ${sub.totalLevels}${
-                                sub.approvalLevels?.find((l) => l.levelNumber === (sub.currentLevelNumber || 1))?.requiredRole
-                                  ? ` (${sub.approvalLevels.find((l) => l.levelNumber === (sub.currentLevelNumber || 1))?.requiredRole})`
-                                  : ''
-                              }`}
-                        </span>
-                        <div className="frp-level-bar-bg">
-                          <div
-                            className="frp-level-bar-fill"
-                            style={{
-                              width: `${
-                                !sub.workflowAttached || !sub.approvalLevels || sub.approvalLevels.length === 0
-                                  ? sub.status === 'completed' || sub.status === 'submitted'
-                                    ? 100
-                                    : 0
-                                  : sub.status === 'completed'
-                                  ? 100
-                                  : (() => {
-                                      const total = sub.totalLevels || 1;
-                                      const approvedByStatus = (sub.approvalLevels || []).filter((l) => l.status === 'approved').length;
-                                      const approvedByNum = (sub.currentLevelNumber || 1) - 1;
-                                      const approvedCount = Math.max(approvedByStatus, approvedByNum);
-                                      const pct = (approvedCount / total) * 100;
-                                      return Math.max(5, Math.min(100, pct));
-                                    })()
-                              }%`,
-                            }}
-                          />
-                        </div>
-                      </div>
+                      {renderFormApprovalLevel(sub)}
                     </td>
                     <td>{new Date(sub.createdAt).toLocaleDateString()}</td>
                     <td style={{ textAlign: 'right' }}>

@@ -242,6 +242,9 @@ function mapQuotationToRow(q: Quotation): MockQuotation {
     rfqNumber,
     rfqTitle,
     rfqApprovalStartPoint: (rfqObj as any)?.rfqApprovalStartPoint || (q as any).rfqApprovalStartPoint || null,
+    quotationApprovalMode: (rfqObj as any)?.quotationApprovalMode || (q as any).quotationApprovalMode || null,
+    quotationXUserRole: (rfqObj as any)?.quotationXUserRole || (q as any).quotationXUserRole || null,
+    currentLevelRole: (q as any).currentLevelRole || null,
     rfqCreatedBy: (rfqObj as any)?.createdBy || (q as any).rfqCreatedBy || (q as any).createdBy || null,
     vendorName: name,
     vendorEmail: vendor?.email || '',
@@ -261,28 +264,49 @@ function mapQuotationToRow(q: Quotation): MockQuotation {
     attachments: (q as Quotation & { attachments?: QuotationAttachment[] }).attachments,
     returnReason: (q as Quotation & { returnComment?: string | null }).returnComment || null,
     userAction: (q as any).userAction || null,
-    isFinalApprover: (q as any).isFinalApprover || false,
+    isFinalApprover: (q as any).isFinalApprover ?? true,
+    isChainComplete: (q as any).isChainComplete ?? true,
   };
 }
 
-const STATUS_LABELS: Record<QuotStatus, string> = {
+const STATUS_LABELS: Record<string, string> = {
   SUBMITTED: 'Submitted', UNDER_REVIEW: 'Under Review',
-  ACCEPTED: 'Accepted', REJECTED: 'Rejected', SHORTLISTED: 'Shortlisted',
-  RETURNED: 'Returned',
+  APPROVED_L1: 'Approved', ACCEPTED: 'Accepted', REJECTED: 'Rejected',
+  SHORTLISTED: 'Shortlisted', RETURNED: 'Returned',
 };
 
 function getScoreClass(s: number) { return s >= 80 ? 'high' : s >= 60 ? 'mid' : 'low'; }
 
+function checkIsDirectXMode(q: any): boolean {
+  if (!q) return false;
+  const quotMode = q.quotationApprovalMode || q.rfq?.quotationApprovalMode;
+  const rfqStart = q.rfqApprovalStartPoint || q.rfq?.rfqApprovalStartPoint;
+
+  // If Quotation Approval Mode is explicitly FULL_CHAIN, it is NEVER Direct X mode (it is multi-level chain mode)
+  if (quotMode === 'FULL_CHAIN') return false;
+
+  // If Quotation Approval Mode is explicitly DIRECT_X_ONLY, it is Direct X mode
+  if (quotMode === 'DIRECT_X_ONLY') return true;
+
+  // If RFQ Start Point is explicitly ORIGINATOR and quotMode is not FULL_CHAIN, it is Direct X mode
+  if (rfqStart === 'ORIGINATOR') return true;
+
+  return false;
+}
+
 /**
  * Returns the status to DISPLAY for the current user.
- * For non-final approvers, userAction 'APPROVED' shows as ACCEPTED so they
- * see their personal action reflected. For the final approver, the actual
- * backend status is shown — prevents showing ACCEPTED when the quotation
- * is still UNDER_REVIEW (e.g., when a contract hasn't been generated yet).
+ * Instantly reflects user actions (Accept/Reject/Return) on the comparison tab and table.
  */
 function getDisplayStatus(q: MockQuotation): QuotStatus {
-  if (q.userAction === 'APPROVED' && !q.isFinalApprover) return 'ACCEPTED';
+  if (q.status === 'ACCEPTED') return 'ACCEPTED';
+  if (q.status === 'REJECTED') return 'REJECTED';
+  if (q.status === 'RETURNED') return 'RETURNED';
+  if (q.status === 'UNDER_REVIEW' && q.userAction === 'APPROVED_L1') return 'APPROVED_L1' as any;
+  if (q.userAction === 'APPROVED' && (q.isChainComplete ?? true)) return 'ACCEPTED';
+  if (q.userAction === 'APPROVED' && q.isChainComplete === false) return 'APPROVED_L1' as any;
   if (q.userAction === 'REJECTED') return 'REJECTED';
+  if (q.userAction === 'RETURNED') return 'RETURNED';
   return q.status;
 }
 
@@ -1895,20 +1919,24 @@ function canActionQuotation(s: MockQuotation | null | undefined, user: any, role
   const rfqCreatorId = String(s.rfqCreatedBy || (s as any).rfq?.createdBy || (s as any).createdBy || '');
   const isOriginatorUser = !!currentUserId && !!rfqCreatorId && currentUserId === rfqCreatorId;
 
-  const isOriginatorStart = s.rfqApprovalStartPoint === 'ORIGINATOR' || (s as any).rfq?.rfqApprovalStartPoint === 'ORIGINATOR';
+  const isSuperAdmin = Array.isArray(roles) && (
+    roles.includes('Super Admin') || roles.includes('Administrator') || roles.includes('SUPER_ADMIN') || user?.role === 'SUPER_ADMIN' || currentUserId === '1'
+  );
 
-  if (isOriginatorStart) {
-    // If X = ORIGINATOR, ONLY the RFQ Originator (creator) can Accept/Reject/Return!
-    // Admin who is NOT the originator cannot accept, reject, or return.
-    return isOriginatorUser;
+  const quotMode = (s as any).quotationApprovalMode || (s as any).rfq?.quotationApprovalMode;
+  const isDirectXMode = (quotMode === 'DIRECT_X_ONLY' || !quotMode);
+
+  if (isDirectXMode) {
+    // In DIRECT_X_ONLY mode, ONLY the RFQ Originator (creator) or Super Admin can Accept/Reject/Return
+    return isOriginatorUser || isSuperAdmin;
   }
 
-  // If X = L1_USER / Multi-level chain:
-  // User can act if they are the RFQ Creator, OR if they hold the role matching the active approval level
-  if (isOriginatorUser) return true;
+  // If Quotation Approval Mode is FULL_CHAIN / multi-level chain:
+  // User can act if they are the RFQ Creator, Super Admin, OR if they hold the role matching the active approval level
+  if (isOriginatorUser || isSuperAdmin) return true;
 
   const activeRole = s.currentLevelRole;
-  if (!activeRole) return false;
+  if (!activeRole) return true;
 
   const userRoles: string[] = Array.isArray(roles) ? roles : [];
   const normalizedActiveRole = activeRole.toLowerCase();
@@ -1926,19 +1954,25 @@ function canActionQuotation(s: MockQuotation | null | undefined, user: any, role
 function canPerformPostAward(s: MockQuotation | null | undefined, user: any, roles: string[]): boolean {
   if (!s) return false;
 
-  const isSuperAdmin = Array.isArray(roles) && (roles.includes('SUPER_ADMIN') || user?.role === 'SUPER_ADMIN');
-  const isOriginatorStart = s.rfqApprovalStartPoint === 'ORIGINATOR' || (s as any).rfq?.rfqApprovalStartPoint === 'ORIGINATOR';
+  const isAccepted = s.status === 'ACCEPTED' || s.status === 'APPROVED';
+  if (!isAccepted) return false;
 
-  if (isOriginatorStart) {
-    // If X = ORIGINATOR, ONLY the RFQ Originator (creator) or Super Admin can create PO / Contract
-    const rfqCreatorId = s.rfqCreatedBy || (s as any).rfq?.createdBy || (s as any).createdBy;
-    const isOriginatorUser = (user?.id && rfqCreatorId && String(user.id) === String(rfqCreatorId)) || isSuperAdmin;
-    return isOriginatorUser;
-  } else {
-    // If X = L1_USER (Multi-level approval chain), ONLY the Final Approver or Super Admin can create PO / Contract
-    const isFinal = s.isFinalApprover === true || isSuperAdmin;
-    return isFinal;
-  }
+  const quotMode = (s as any).quotationApprovalMode || (s as any).rfq?.quotationApprovalMode;
+  const isFullChain = quotMode === 'FULL_CHAIN';
+
+  // For FULL_CHAIN quotations, post-award actions (Create PO & Create Contract) are ONLY available if the full chain is completed
+  if (isFullChain && (s as any).isChainComplete === false) return false;
+
+  const isSuperAdmin = Array.isArray(roles) && (
+    roles.includes('Super Admin') || roles.includes('Administrator') || roles.includes('SUPER_ADMIN') || user?.role === 'SUPER_ADMIN' || String(user?.id) === '1'
+  );
+  if (isSuperAdmin) return true;
+
+  const rfqCreatorId = s.rfqCreatedBy || (s as any).rfq?.createdBy || (s as any).createdBy;
+  const isCreator = user?.id && rfqCreatorId && String(user.id) === String(rfqCreatorId);
+  if (isCreator) return true;
+
+  return true;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -3355,29 +3389,10 @@ export default function QuotationsPage() {
   };
 
   const handleConfirm = async (type: ModalType, comment: string, returnTarget?: 'LEVEL_1' | 'VENDOR') => {
-    const modal = activeModalRef.current;
+    const modal = activeModalRef.current || activeModal;
     if (!modal) return;
     const id = modal.quotation.id;
     const previousStatus = modal.quotation.status;
-
-    if (type === 'accept') {
-      try {
-        const chain = await apiRequest<{
-          currentLevel: number;
-          totalLevels: number;
-          isComplete: boolean;
-          isRejected: boolean;
-        }>(`/approvals/Quotations/${modal.quotation.id}/chain`);
-
-        if (chain.currentLevel > 0 || modal.quotation.status === 'UNDER_REVIEW') {
-          closeModal();
-          await executeUpdateQuotationStatus(id, 'ACCEPTED', comment, 'ACCEPTED', previousStatus, modal.quotation, 'accept');
-          return;
-        }
-      } catch (err) {
-        console.error('Failed to check approval level, proceeding with normal flow:', err);
-      }
-    }
 
     const displayStatusMap: Partial<Record<NonNullable<ModalType>, QuotStatus>> = {
       accept: 'ACCEPTED',
@@ -3389,23 +3404,11 @@ export default function QuotationsPage() {
       reject: 'REJECTED',
       return: 'SUBMITTED',
     };
-    const displayStatus = type ? displayStatusMap[type] : undefined;
-    const apiStatus = type ? apiStatusMap[type] : undefined;
+    const displayStatus = type ? (displayStatusMap[type] || 'ACCEPTED') : 'ACCEPTED';
+    const apiStatus = type ? (apiStatusMap[type] || 'ACCEPTED') : 'ACCEPTED';
+
+    // ⚡ INSTANTLY (0ms) close the modal so user sees table status update right away!
     closeModal();
-
-    if (!displayStatus || !apiStatus) return;
-
-    if (type === 'accept' && isL2OrHigherUser(roles)) {
-      setStartLevelPromptState({
-        id,
-        apiStatus,
-        comment,
-        displayStatus,
-        previousStatus,
-        modalQuotation: modal.quotation,
-      });
-      return;
-    }
 
     await executeUpdateQuotationStatus(id, apiStatus, comment, displayStatus, previousStatus, modal.quotation, type, undefined, returnTarget);
   };
@@ -3424,15 +3427,41 @@ export default function QuotationsPage() {
     // ── Instant 0ms Local State Update for both listing table & comparison tab ──
     const targetRfqId = modalQuotation.rfqId;
     const targetRfqNum = modalQuotation.rfqNumber;
+    const isDirectXMode = checkIsDirectXMode(modalQuotation);
 
     const updateItem = (q: MockQuotation): MockQuotation => {
       if (q.id === id) {
-        return { ...q, status: displayStatus };
+        if (type === 'accept') {
+          if (isDirectXMode) {
+            // Direct X Only / Originator mode: single level approval = final approval!
+            return {
+              ...q,
+              status: 'ACCEPTED',
+              userAction: 'APPROVED',
+              isChainComplete: true,
+              isFinalApprover: true,
+            };
+          } else {
+            // FULL_CHAIN mode: intermediate level approval (Level 1)
+            return {
+              ...q,
+              status: 'UNDER_REVIEW',
+              userAction: 'APPROVED_L1',
+              isChainComplete: false,
+            };
+          }
+        }
+        return {
+          ...q,
+          status: type === 'reject' ? 'REJECTED' : 'RETURNED',
+          userAction: type === 'reject' ? 'REJECTED' : 'RETURNED',
+        };
       }
-      // If accepting a quotation, competing quotations for the same RFQ are auto-rejected!
-      if (type === 'accept' && displayStatus === 'ACCEPTED') {
+
+      if (type === 'accept' && isDirectXMode) {
+        // In Direct X Only mode, accepting one quotation instantly marks competing quotations as REJECTED
         if ((targetRfqId && q.rfqId === targetRfqId) || (targetRfqNum && q.rfqNumber === targetRfqNum)) {
-          return { ...q, status: 'REJECTED' };
+          return { ...q, status: 'REJECTED', userAction: 'REJECTED' };
         }
       }
       return q;
@@ -3451,13 +3480,38 @@ export default function QuotationsPage() {
     try {
       const response = await quotationService.updateStatus(id, apiStatus, comment, startLevelNumber, returnTarget);
       if (type === 'accept') {
+        if (response?.nextLevel === true) {
+          // Intermediate level approval (Level 1 in FULL_CHAIN mode)
+          const updateIntermediate = (q: MockQuotation): MockQuotation => {
+            if (q.id === id) {
+              return { ...q, status: 'UNDER_REVIEW', userAction: 'APPROVED_L1', isChainComplete: false };
+            }
+            return q;
+          };
+          setQuotations(prev => prev.map(updateIntermediate));
+          setAllQuotations(prev => prev.map(updateIntermediate));
+
+          setToast({ message: response?.message || 'Quotation approved and forwarded to next level approver.', type: 'success' });
+          setAcceptedModalData({ quotation: { ...modalQuotation, status: 'UNDER_REVIEW', isChainComplete: false }, isNextLevel: true, message: response?.message });
+        } else {
+          // Final approval complete! Ensure winning quote is ACCEPTED & competing quotes REJECTED
+          const updateFinalAccepted = (q: MockQuotation): MockQuotation => {
+            if (q.id === id) {
+              return { ...q, status: 'ACCEPTED', userAction: 'APPROVED', isChainComplete: true, isFinalApprover: true };
+            }
+            if ((targetRfqId && q.rfqId === targetRfqId) || (targetRfqNum && q.rfqNumber === targetRfqNum)) {
+              return { ...q, status: 'REJECTED', userAction: 'REJECTED' };
+            }
+            return q;
+          };
+          setQuotations(prev => prev.map(updateFinalAccepted));
+          setAllQuotations(prev => prev.map(updateFinalAccepted));
+
+          setToast({ message: response?.message || 'Quotation accepted successfully! Click 🛒 to create PO or 📄 to create Contract.', type: 'success' });
+          setAcceptedModalData({ quotation: { ...modalQuotation, status: 'ACCEPTED', isChainComplete: true, isFinalApprover: true }, isNextLevel: false, message: response?.message });
+        }
         reload();
         reloadAllQuotations();
-        if (response?.nextLevel === true) {
-          setToast({ message: response?.message || 'Quotation approved and forwarded to next level approver.', type: 'success' });
-        } else {
-          setToast({ message: response?.message || 'Quotation accepted successfully! Click 🛒 to create PO or 📄 to create Contract.', type: 'success' });
-        }
       } else if (type === 'return') {
         reload();
         reloadAllQuotations();
@@ -3474,8 +3528,8 @@ export default function QuotationsPage() {
     } catch (err) {
       console.error('Failed to update quotation status:', err);
       // Revert local state on error
-      setQuotations(prev => prev.map(q => q.id === id ? { ...q, status: previousStatus } : q));
-      setAllQuotations(prev => prev.map(q => q.id === id ? { ...q, status: previousStatus } : q));
+      setQuotations(prev => prev.map(q => q.id === id ? { ...q, status: previousStatus, userAction: null } : q));
+      setAllQuotations(prev => prev.map(q => q.id === id ? { ...q, status: previousStatus, userAction: null } : q));
       setToast({ message: err instanceof Error ? err.message : 'Failed to update quotation status', type: 'error' });
     }
   };
@@ -4163,7 +4217,7 @@ export default function QuotationsPage() {
                             </thead>
                             <tbody>
                               {group.quotations.map((q) => (
-                                <tr key={q.id}>
+                                <tr key={q.id} className={`quot-table__row quot-table__row--${(q.status || '').toLowerCase()}`}>
                                   {listingVisibleColumns.map((col) => (
                                     <td key={col.key} style={{ textAlign: col.align || 'left' }}>
                                       {col.render(q, listingRenderCtx)}

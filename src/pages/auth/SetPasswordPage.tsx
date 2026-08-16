@@ -317,7 +317,7 @@ export default function SetPasswordPage() {
             <div className="sap-login__logo">
               <img src={logoUrl || heliflowLogo} alt={companyName} className="sap-login__logo-icon" />
             </div>
-            <h1 className="sap-login__brand-title">{companyName} · {PORTAL_NAMES.secondary} Portal</h1>
+            <h1 className="sap-login__brand-title">{companyName}</h1>
             <p className="sap-login__brand-tagline">Create your secure portal password</p>
           </div>
         </div>

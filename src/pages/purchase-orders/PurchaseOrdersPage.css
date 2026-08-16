@@ -58,11 +58,37 @@
 .po-table-card { background: var(--surface-card); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); overflow: hidden; }
 .po-table-wrap { overflow-x: auto; }
 .po-table { width: 100%; border-collapse: collapse; min-width: 950px; }
-.po-table th { text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); padding: 14px 16px; border-bottom: 1px solid var(--border); background: var(--surface-elevated); white-space: nowrap; }
-.po-table td { padding: 14px 16px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-.po-table tr:last-child td { border-bottom: none; }
-.po-table tbody tr { transition: background 0.15s; }
+.po-table th { text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-secondary); padding: 11px 16px; border-bottom: 2px solid var(--border); border-right: 1px solid var(--border); background: var(--surface-elevated); white-space: nowrap; }
+.po-table th:last-child { border-right: none; }
+.po-table td { padding: 11px 16px; font-size: 13px; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); vertical-align: middle; color: var(--text-primary); }
+.po-table td:last-child { border-right: none; }
+.po-table tr:last-child td { border-bottom: 1px solid var(--border); }
+.po-table tbody tr { transition: background 0.15s; border-left: 3px solid transparent; background: var(--surface-card); }
 .po-table tbody tr:hover { background: var(--surface-hover); }
+
+/* Status Left Indicator for Purchase Orders */
+.po-table tbody tr.po-table__row--approved,
+.po-table tbody tr.po-table__row--issued,
+.po-table tbody tr.po-table__row--completed,
+.po-table tbody tr.po-table__row--delivered {
+  border-left: 3px solid var(--success-500) !important;
+}
+
+.po-table tbody tr.po-table__row--draft,
+.po-table tbody tr.po-table__row--pending_approval {
+  border-left: 3px solid var(--warning-500) !important;
+}
+
+.po-table tbody tr.po-table__row--cancelled,
+.po-table tbody tr.po-table__row--rejected {
+  border-left: 3px solid var(--danger-500) !important;
+}
+
+.po-table tbody tr.po-table__row--dispatched,
+.po-table tbody tr.po-table__row--partially_received,
+.po-table tbody tr.po-table__row--amended {
+  border-left: 3px solid #8b5cf6 !important;
+}
 
 .po-table__po-info { display: flex; flex-direction: column; gap: 2px; }
 .po-table__po-number { font-size: 13px; font-weight: 700; color: var(--primary-500); }

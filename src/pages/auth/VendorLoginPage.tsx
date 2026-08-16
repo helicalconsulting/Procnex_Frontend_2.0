@@ -56,7 +56,7 @@ export default function VendorLoginPage() {
             <img src={logoUrl || heliflowLogo} alt={companyName} className="sap-login__logo-icon" />
           </div>
 
-          <h1 className="sap-login__brand-title">{companyName} · {PORTAL_NAMES.secondary} Portal</h1>
+          <h1 className="sap-login__brand-title">{companyName}</h1>
           <p className="sap-login__brand-tagline">
             {loginText || 'Supplier Collaboration & Order Management'}
           </p>
@@ -104,7 +104,7 @@ export default function VendorLoginPage() {
           {/* Mobile logo */}
           <div className="sap-login__mobile-logo">
             <img src={logoUrl || heliflowLogo} alt={companyName} className="sap-login__mobile-logo-icon" />
-            <span className="sap-login__mobile-title">{companyName} · {PORTAL_NAMES.secondary} Portal</span>
+            <span className="sap-login__mobile-title">{companyName}</span>
           </div>
 
           <div className="sap-login__form-header">

@@ -7,8 +7,9 @@ import type { DashboardRecentRfq } from '../../../types/viewModels';
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: 'Draft',
-  SENT: 'Sent',
-  IN_PROGRESS: 'In Progress',
+  SENT: 'Approved',
+  IN_PROGRESS: 'Accepted',
+  ACCEPTED: 'Accepted',
   CLOSED: 'Closed',
   CANCELLED: 'Cancelled',
 };
@@ -16,7 +17,8 @@ const STATUS_LABELS: Record<string, string> = {
 const STATUS_BADGE: Record<string, string> = {
   DRAFT: 'draft',
   SENT: 'sent',
-  IN_PROGRESS: 'progress',
+  IN_PROGRESS: 'closed',
+  ACCEPTED: 'closed',
   CLOSED: 'closed',
   CANCELLED: 'cancelled',
 };

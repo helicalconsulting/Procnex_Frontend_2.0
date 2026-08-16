@@ -376,7 +376,6 @@ export default function VendorQuotationsPage() {
             { key: 'ACCEPTED' as QuotStatus, label: 'Accepted', value: summary.accepted, foot: 'Approved by buyer', icon: <CheckCircle2 size={16} />, iconCls: 'green' },
             { key: 'PENDING' as QuotStatus, label: 'Under Review', value: summary.pending, foot: 'Awaiting decision', icon: <Clock size={16} />, iconCls: 'orange' },
             { key: 'REJECTED' as QuotStatus, label: 'Rejected', value: summary.rejected, foot: summary.rejected > 0 ? 'Not selected' : 'None rejected', icon: <XCircle size={16} />, iconCls: 'red' },
-            { key: null, label: 'Win Rate', value: `${summary.winRate}%`, foot: 'Acceptance ratio', icon: <TrendingUp size={16} />, iconCls: 'green' },
           ].map((tile) => (
             <button
               key={tile.label}

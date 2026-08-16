@@ -311,33 +311,50 @@
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
   color: var(--text-secondary);
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
+  padding: 11px 16px;
+  border-bottom: 2px solid var(--border);
+  border-right: 1px solid var(--border);
   background: var(--surface-elevated);
   white-space: nowrap;
 }
+.users-table th:last-child { border-right: none; }
 
 .users-table td {
-  padding: 14px 16px;
+  padding: 11px 16px;
   font-size: 13px;
   color: var(--text-primary);
   border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
   vertical-align: middle;
   overflow: hidden;
 }
+.users-table td:last-child { border-right: none; }
 
 .users-table tr:last-child td {
-  border-bottom: none;
+  border-bottom: 1px solid var(--border);
 }
 
 .users-table tbody tr {
   transition: background 0.15s;
+  border-left: 3px solid transparent;
+  background: var(--surface-card);
 }
 
 .users-table tbody tr:hover {
   background: var(--surface-hover);
+}
+
+/* Status Left Indicator for Users */
+.users-table tbody tr.users-table__row--active,
+.users-table tbody tr.users-table__row--enabled {
+  border-left: 3px solid var(--success-500) !important;
+}
+
+.users-table tbody tr.users-table__row--inactive,
+.users-table tbody tr.users-table__row--disabled {
+  border-left: 3px solid var(--danger-500) !important;
 }
 
 /* User cell */

@@ -714,7 +714,7 @@ export default function UsersPage() {
                 </thead>
                 <tbody>
                   {paginated.map((user) => (
-                    <tr key={user.id}>
+                    <tr key={user.id} className={`users-table__row users-table__row--${user.isActive ? 'active' : 'inactive'}`}>
                       {visibleColumns.map((col) => (<td key={col.key}>{col.render(user, formatDate, formatDateTime, toggleActive)}</td>))}
                       <td>
                         <div className="users-table__actions">

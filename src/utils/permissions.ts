@@ -38,7 +38,25 @@ export function hasModulePermission(
   action: PermissionField = 'canView'
 ): boolean {
   if (!permissions || Object.keys(permissions).length === 0) return false;
-  return Boolean(permissions[module]?.[action]);
+  if (Boolean(permissions[module]?.[action])) return true;
+
+  const aliases: Record<string, string[]> = {
+    'Purchase Orders': ['Purchase Orders', 'PurchaseOrder', 'Purchase Order', 'PurchaseOrders', 'PO'],
+    PurchaseOrder: ['Purchase Orders', 'PurchaseOrder', 'Purchase Order', 'PurchaseOrders', 'PO'],
+    Contracts: ['Contracts', 'Contract'],
+    Contract: ['Contracts', 'Contract'],
+    RFQ: ['RFQ', 'RFQs', 'rfq'],
+    Quotations: ['Quotations', 'Quotation', 'QUOTATION'],
+    Approvals: ['Approvals', 'ApprovalManagement', 'Approval Management'],
+    Vendors: ['Vendors', 'Vendor'],
+  };
+
+  const list = aliases[module] || [module, `${module}s`, module.replace(/s$/, '')];
+  for (const m of list) {
+    if (permissions[m]?.[action]) return true;
+  }
+
+  return false;
 }
 
 export function checkRoutePermission(

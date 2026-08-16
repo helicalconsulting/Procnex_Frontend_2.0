@@ -19,6 +19,7 @@ import {
   Edit3,
   Shield,
   ChevronDown,
+  CheckCircle2,
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyMaster';
@@ -159,6 +160,8 @@ export default function CreateRFQPage() {
   // Fallback if no units configured yet
   const UNIT_OPTIONS = useMemo(() => unitOptions.length > 0 ? unitOptions : ['Pcs', 'Kg', 'Ltr', 'Mtr', 'Box', 'Set', 'Nos', 'Pair'], [unitOptions]);
 
+  const [isEditLocked, setIsEditLocked] = useState(false);
+
   // Load existing RFQ data when editing
   useEffect(() => {
     if (!editId) return;
@@ -168,6 +171,16 @@ export default function CreateRFQPage() {
       rfqService.getEvaluationCategories(editId).catch(() => null),
     ]).then(([rfq, evalCats]) => {
       if (!rfq) return;
+
+      const currentUserId = String(user?.id || (user as any)?._id || '');
+      const creatorId = String((rfq as any).createdBy || (rfq as any).creatorId || (rfq as any).creator?.id || '');
+      const isOriginator = creatorId ? creatorId === currentUserId : true;
+
+      if (rfq.status === 'PENDING_APPROVAL' && !isOriginator) {
+        setIsEditLocked(true);
+        setSubmitError(`RFQ #${rfq.rfqNumber} is currently under approval workflow. Only the originator (${rfq.creator || 'Originator'}) can edit it.`);
+      }
+
       setTitle(rfq.title);
       setDescription(rfq.description);
       setPriority(rfq.priority || 'Medium');
@@ -268,6 +281,7 @@ export default function CreateRFQPage() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [showLevelPrompt, setShowLevelPrompt] = useState(false);
   const [pendingAction, setPendingAction] = useState<'draft' | 'submit' | null>(null);
+  const [approvalSubmittedRfq, setApprovalSubmittedRfq] = useState<{ number: string; levelNumber: number; isApprovalChain?: boolean; vendorCount?: number } | null>(null);
 
   const [simpleWeightageError, setSimpleWeightageError] = useState<string | null>(null);
 
@@ -737,14 +751,14 @@ export default function CreateRFQPage() {
     setSubmitError(null);
     try {
       if (isEditing && editId) {
-        await rfqService.update(editId, payload);
+        await rfqService.update(editId, { ...payload, isDraft: true });
         await saveEvalCategories(editId);
         if (payload.vendorIds) {
           await syncVendors(editId, payload.vendorIds);
         }
         setSuccessMsg('RFQ draft updated successfully!');
       } else {
-        const created = await rfqService.create(payload);
+        const created = await rfqService.create({ ...payload, isDraft: true });
         const createdId = (created as { id?: string })?.id;
         if (createdId) {
           await saveEvalCategories(createdId);
@@ -784,31 +798,62 @@ export default function CreateRFQPage() {
     setSendingEmail(true);
     setSubmitError(null);
     try {
-      let rfqId: string;
+      let rfqResult: any;
       if (isEditing && editId) {
-        rfqId = editId;
-        await rfqService.update(rfqId, { ...payload, vendorIds: selectedVendors });
-        await saveEvalCategories(rfqId);
-        await syncVendors(rfqId, selectedVendors);
+        rfqResult = await rfqService.update(editId, { ...payload, vendorIds: selectedVendors, isDraft: false });
+        await saveEvalCategories(editId);
+        await syncVendors(editId, selectedVendors);
       } else {
-        const created = await rfqService.create({ ...payload, vendorIds: selectedVendors });
-        const createdId = (created as { id?: string })?.id;
+        rfqResult = await rfqService.create({ ...payload, vendorIds: selectedVendors, isDraft: false });
+        const createdId = (rfqResult as { id?: string })?.id;
         if (!createdId) throw new Error('RFQ created but no id returned');
-        rfqId = createdId;
-        await saveEvalCategories(rfqId);
+        await saveEvalCategories(createdId);
       }
       await rfqService.saveWeightagePreferences(simpleWeightages).catch(() => {});
 
-      const sendResult = await rfqService.send(rfqId);
-      if (sendResult.emailFailures?.length) {
-        setSubmitError(
-          `RFQ created and sent, but some emails failed: ${sendResult.emailFailures.join('; ')}. Check SMTP in backend .env.`
-        );
+      const rfqStatus = rfqResult?.status;
+      const rfqNum = rfqResult?.rfqNumber || payload.rfqNumber || 'RFQ';
+      const isOriginatorSkip = (startPoint || rfqApprovalStartPoint) === 'ORIGINATOR';
+
+      // If internal approval workflow is active and RFQ is PENDING_APPROVAL and NOT ORIGINATOR skip
+      if (rfqStatus === 'PENDING_APPROVAL' && !isOriginatorSkip) {
+        setApprovalSubmittedRfq({
+          number: rfqNum,
+          levelNumber: startLevelNumber || 1,
+          isApprovalChain: true,
+        });
         return;
       }
-      navigate('/rfq');
+
+      // If status is not already SENT (backend auto-dispatches on ORIGINATOR self-approval), send to vendors
+      if (rfqStatus !== 'SENT') {
+        const sendResult = await rfqService.send(rfqResult.id || editId).catch(() => null);
+        if (sendResult?.emailFailures?.length) {
+          setSubmitError(
+            `RFQ created and sent, but some emails failed: ${sendResult.emailFailures.join('; ')}.`
+          );
+          return;
+        }
+      }
+
+      setApprovalSubmittedRfq({
+        number: rfqNum,
+        levelNumber: 1,
+        isApprovalChain: false,
+        vendorCount: selectedVendors.length,
+      });
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : 'Failed to submit RFQ');
+      const isOriginatorSkip = (startPoint || rfqApprovalStartPoint) === 'ORIGINATOR';
+      const msg = err instanceof Error ? err.message : 'Failed to submit RFQ';
+      if ((msg.includes('PENDING_APPROVAL') || msg.includes('APPROVAL_REQUIRED')) && !isOriginatorSkip) {
+        setApprovalSubmittedRfq({
+          number: payload.rfqNumber || 'RFQ',
+          levelNumber: startLevelNumber || 1,
+          isApprovalChain: true,
+        });
+      } else {
+        setSubmitError(msg);
+      }
     } finally {
       setSendingEmail(false);
     }
@@ -1900,11 +1945,11 @@ export default function CreateRFQPage() {
           </button>
         </div>
         <div className="create-rfq__footer-right">
-          <button className="create-rfq__btn create-rfq__btn--secondary" onClick={handleSaveDraft} disabled={savingDraft || sendingEmail}>
+          <button className="create-rfq__btn create-rfq__btn--secondary" onClick={handleSaveDraft} disabled={savingDraft || sendingEmail || isEditLocked}>
             <Save size={16} />
             {savingDraft ? 'Saving\u2026' : 'Save as Draft'}
           </button>
-          <button className="create-rfq__btn create-rfq__btn--primary" onClick={handleSubmit} disabled={savingDraft || sendingEmail}>
+          <button className="create-rfq__btn create-rfq__btn--primary" onClick={handleSubmit} disabled={savingDraft || sendingEmail || isEditLocked}>
             <Send size={16} />
             {sendingEmail ? 'Sending\u2026' : 'Submit & Email Vendors'}
           </button>
@@ -1933,6 +1978,75 @@ export default function CreateRFQPage() {
           setPendingAction(null);
         }}
       />
+
+      {approvalSubmittedRfq && (
+        <div className="prompt-modal-backdrop" onClick={() => { setApprovalSubmittedRfq(null); navigate('/rfq'); }}>
+          <div className="prompt-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460, textAlign: 'center', padding: '32px 28px' }}>
+            <div style={{
+              width: 60, height: 60, borderRadius: '50%', background: 'rgba(16, 185, 129, 0.12)',
+              color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 20px', border: '1px solid rgba(16, 185, 129, 0.25)'
+            }}>
+              {approvalSubmittedRfq.isApprovalChain ? <CheckCircle2 size={32} /> : <Send size={30} />}
+            </div>
+            <h2 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 10px', color: 'var(--text-primary)' }}>
+              {approvalSubmittedRfq.isApprovalChain ? 'RFQ Sent for Internal Approval!' : 'RFQ Sent to Vendors!'}
+            </h2>
+            <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 24px' }}>
+              {approvalSubmittedRfq.isApprovalChain ? (
+                <>
+                  RFQ <strong style={{ color: 'var(--text-primary)' }}>#{approvalSubmittedRfq.number}</strong> has been successfully created and sent to <strong>Approver Level {approvalSubmittedRfq.levelNumber || 1} (Approver 1)</strong> for internal approval.
+                  <br/><br/>
+                  Once internally approved, it will be automatically dispatched to vendors.
+                </>
+              ) : (
+                <>
+                  RFQ <strong style={{ color: 'var(--text-primary)' }}>#{approvalSubmittedRfq.number}</strong> has been successfully created and sent to vendors to submit their quotations.
+                  <br/><br/>
+                  Invited vendors can now access this RFQ and submit their proposals directly through the portal.
+                </>
+              )}
+            </p>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+              {approvalSubmittedRfq.isApprovalChain ? (
+                <>
+                  <button
+                    className="create-rfq__btn create-rfq__btn--secondary"
+                    style={{ minWidth: 130, justifyContent: 'center' }}
+                    onClick={() => { setApprovalSubmittedRfq(null); navigate('/approvals'); }}
+                  >
+                    View Approvals
+                  </button>
+                  <button
+                    className="create-rfq__btn create-rfq__btn--primary"
+                    style={{ minWidth: 130, justifyContent: 'center' }}
+                    onClick={() => { setApprovalSubmittedRfq(null); navigate('/rfq'); }}
+                  >
+                    Go to RFQ List
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    className="create-rfq__btn create-rfq__btn--secondary"
+                    style={{ minWidth: 130, justifyContent: 'center' }}
+                    onClick={() => { setApprovalSubmittedRfq(null); window.location.reload(); }}
+                  >
+                    Create Another RFQ
+                  </button>
+                  <button
+                    className="create-rfq__btn create-rfq__btn--primary"
+                    style={{ minWidth: 130, justifyContent: 'center' }}
+                    onClick={() => { setApprovalSubmittedRfq(null); navigate('/rfq'); }}
+                  >
+                    Go to RFQ List
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

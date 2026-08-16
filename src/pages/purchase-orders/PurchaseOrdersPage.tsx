@@ -253,7 +253,7 @@ export default function PurchaseOrdersPage() {
                 </thead>
                 <tbody>
                   {paginated.map(po => (
-                    <tr key={po.id}>
+                    <tr key={po.id} className={`po-table__row po-table__row--${(po.status || '').toLowerCase()}`}>
                       {visibleColumns.map((col) => (<td key={col.key}>{col.render(po, formatDate)}</td>))}
                       <td>
                         <div className="po-table__actions">

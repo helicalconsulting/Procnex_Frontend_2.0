@@ -652,7 +652,7 @@ export default function ContractsPage() {
                 </thead>
                 <tbody>
                   {paginated.map(r => (
-                    <tr key={r.id} onClick={() => handleView(r.id)}>
+                    <tr key={r.id} className={`ctr-table__row ctr-table__row--${(r.status || '').toLowerCase()}`} onClick={() => handleView(r.id)}>
                       {visibleColumns.map(col => <td key={col.key}>{col.render(r, formatDate)}</td>)}
                       <td onClick={e => e.stopPropagation()}>
                         <div className="ctr-table__actions">

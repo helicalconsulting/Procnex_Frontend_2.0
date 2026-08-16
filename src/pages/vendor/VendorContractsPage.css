@@ -7,7 +7,7 @@
 .vc-hero {
   position: relative;
   background: linear-gradient(135deg, #0a6ed1 0%, #1a8af7 50%, #4db1ff 100%);
-  border-radius: 16px;
+  border-radius: 4px;
   padding: 32px 36px;
   margin-bottom: 24px;
   overflow: hidden;
@@ -97,7 +97,7 @@
 .vc-card {
   background: var(--surface-card);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 4px;
   overflow: hidden;
   transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
 }
@@ -283,7 +283,7 @@
   gap: 6px;
   padding: 8px 18px;
   border: none;
-  border-radius: 8px;
+  border-radius: 4px;
   font-size: 13px;
   font-weight: 600;
   font-family: inherit;
@@ -327,7 +327,7 @@
   align-items: center;
   gap: 5px;
   padding: 4px 10px;
-  border-radius: 20px;
+  border-radius: 4px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.2px;
@@ -470,7 +470,7 @@
 
 .vc-preview-modal {
   background: var(--surface-card);
-  border-radius: 16px;
+  border-radius: 4px;
   max-width: 900px;
   width: 100%;
   max-height: 90vh;

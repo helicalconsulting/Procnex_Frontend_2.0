@@ -74,7 +74,7 @@ export default function VendorMagicLinkPage() {
         <div className="sap-login__form-container">
           <div className="sap-login__mobile-logo">
             <img src={logoUrl || heliflowLogo} alt={companyName} className="sap-login__mobile-logo-icon" />
-            <span className="sap-login__mobile-title">{companyName} · {PORTAL_NAMES.secondary} Portal</span>
+            <span className="sap-login__mobile-title">{companyName}</span>
           </div>
           <h2 className="sap-login__form-title">Opening your RFQ…</h2>
           <p className="sap-login__form-subtitle">Signing you in securely from your invitation email.</p>

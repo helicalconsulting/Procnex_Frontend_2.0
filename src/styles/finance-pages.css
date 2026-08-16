@@ -46,7 +46,7 @@
 .fin-kpi {
   background: var(--surface-card);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 4px;
   padding: 20px;
   display: flex;
   align-items: center;
@@ -82,7 +82,7 @@
 .fin-kpi__icon {
   width: 46px;
   height: 46px;
-  border-radius: 12px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -138,7 +138,7 @@
   width: 100%;
   padding: 11px 16px 11px 44px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 4px;
   background: var(--surface-card);
   color: var(--text-primary);
   font-size: 13px;
@@ -160,7 +160,7 @@
 .fin-table-card {
   background: var(--surface-card);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 4px;
   overflow: hidden;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
   overflow-x: auto;
@@ -173,19 +173,28 @@
 }
 
 .fin-table thead {
-  background: linear-gradient(180deg, var(--surface-elevated), var(--surface-card));
-  border-bottom: 2px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface-elevated);
 }
 
 .fin-table th {
-  padding: 14px 16px;
+  padding: 11px 14px;
   text-align: left;
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
   color: var(--text-secondary);
+  background: var(--surface-elevated);
+  border-bottom: 2px solid var(--border);
+  border-right: 1px solid var(--border);
   white-space: nowrap;
+}
+
+.fin-table th:last-child {
+  border-right: none;
 }
 
 .fin-table__actions-header {
@@ -197,16 +206,55 @@
 
 .fin-table tbody tr {
   border-bottom: 1px solid var(--border);
+  border-left: 3px solid transparent;
   transition: background 0.15s;
+  background: var(--surface-card);
 }
 
 .fin-table tbody tr:hover { background: var(--surface-hover); }
-.fin-table tbody tr:last-child { border-bottom: none; }
+.fin-table tbody tr:last-child { border-bottom: 1px solid var(--border); }
+
+/* Status Indicator Left Border for Finance Pages */
+.fin-table tbody tr.fin-table__row--completed,
+.fin-table tbody tr.fin-table__row--confirmed,
+.fin-table tbody tr.fin-table__row--approved,
+.fin-table tbody tr.fin-table__row--paid,
+.fin-table tbody tr.fin-table__row--delivered {
+  border-left: 3px solid var(--success-500) !important;
+}
+
+.fin-table tbody tr.fin-table__row--pending,
+.fin-table tbody tr.fin-table__row--draft {
+  border-left: 3px solid var(--warning-500) !important;
+}
+
+.fin-table tbody tr.fin-table__row--failed,
+.fin-table tbody tr.fin-table__row--cancelled,
+.fin-table tbody tr.fin-table__row--overdue,
+.fin-table tbody tr.fin-table__row--rejected,
+.fin-table tbody tr.fin-table__row--discarded {
+  border-left: 3px solid var(--danger-500) !important;
+}
+
+.fin-table tbody tr.fin-table__row--processing,
+.fin-table tbody tr.fin-table__row--shipped,
+.fin-table tbody tr.fin-table__row--partial,
+.fin-table tbody tr.fin-table__row--retried,
+.fin-table tbody tr.fin-table__row--returned {
+  border-left: 3px solid #8b5cf6 !important;
+}
 
 .fin-table td {
-  padding: 14px 16px;
+  padding: 11px 14px;
   font-size: 13px;
   vertical-align: middle;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  color: var(--text-primary);
+}
+
+.fin-table td:last-child {
+  border-right: none;
 }
 
 .fin-table__ref {
@@ -381,3 +429,322 @@
 @media (max-width: 480px) {
   .fin-kpis { grid-template-columns: 1fr 1fr; }
 }
+
+/* ─── Shared Action Buttons & Modals for Finance Pages ─────────────────── */
+
+.approvals-table__actions {
+  display: flex !important;
+  gap: 6px !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  white-space: nowrap !important;
+}
+
+.approvals-table__action-btn {
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  min-height: 32px !important;
+  border-radius: 4px !important;
+  border: 1px solid var(--border) !important;
+  background: var(--surface-card) !important;
+  color: var(--text-secondary) !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.15s ease !important;
+  flex-shrink: 0 !important;
+  outline: none !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.approvals-table__action-btn:hover {
+  background: var(--surface-hover) !important;
+  border-color: var(--border-strong) !important;
+  color: var(--text-primary) !important;
+  transform: translateY(-1px);
+}
+
+.approvals-table__action-btn--approve {
+  color: var(--success-500) !important;
+  border-color: rgba(16, 126, 62, 0.3) !important;
+  background: rgba(16, 126, 62, 0.08) !important;
+}
+
+.approvals-table__action-btn--approve:hover {
+  background: var(--success-500) !important;
+  color: #ffffff !important;
+  border-color: var(--success-500) !important;
+}
+
+.approvals-table__action-btn--reject {
+  color: var(--danger-500) !important;
+  border-color: rgba(187, 0, 0, 0.3) !important;
+  background: rgba(187, 0, 0, 0.08) !important;
+}
+
+.approvals-table__action-btn--reject:hover {
+  background: var(--danger-500) !important;
+  color: #ffffff !important;
+  border-color: var(--danger-500) !important;
+}
+
+.approvals-table__action-btn--return {
+  color: #8b5cf6 !important;
+  border-color: rgba(139, 92, 246, 0.3) !important;
+  background: rgba(139, 92, 246, 0.08) !important;
+}
+
+.approvals-table__action-btn--return:hover {
+  background: #8b5cf6 !important;
+  color: #ffffff !important;
+  border-color: #8b5cf6 !important;
+}
+
+/* Modals for Finance Pages */
+.approvals-modal-backdrop {
+  position: fixed !important;
+  inset: 0 !important;
+  background: var(--overlay) !important;
+  backdrop-filter: blur(4px) !important;
+  z-index: 10000 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 20px !important;
+}
+
+.approvals-modal {
+  background: var(--surface-card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 4px !important;
+  box-shadow: var(--shadow-lg) !important;
+  width: 100% !important;
+  max-width: 520px !important;
+  max-height: 90vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  z-index: 10005 !important;
+}
+
+.approvals-modal--detail { max-width: 600px !important; }
+
+.approvals-modal__header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 18px 24px !important;
+  border-bottom: 1px solid var(--border) !important;
+  background: var(--surface-elevated) !important;
+}
+
+.approvals-modal__title {
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  color: var(--text-primary) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+
+.approvals-modal__close {
+  width: 30px !important;
+  height: 30px !important;
+  border-radius: 4px !important;
+  border: 1px solid var(--border) !important;
+  background: var(--surface-card) !important;
+  color: var(--text-secondary) !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.15s ease !important;
+}
+
+.approvals-modal__close:hover {
+  background: var(--surface-hover) !important;
+  color: var(--text-primary) !important;
+}
+
+.approvals-modal__body {
+  padding: 24px !important;
+  overflow-y: auto !important;
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 18px !important;
+}
+
+.approvals-modal__request-summary {
+  background: var(--surface-elevated) !important;
+  border-radius: 4px !important;
+  padding: 16px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  border: 1px solid var(--border) !important;
+}
+
+.approvals-modal__summary-row {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+}
+
+.approvals-modal__summary-label {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--text-secondary) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.3px !important;
+}
+
+.approvals-modal__summary-value {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--text-primary) !important;
+}
+
+.approvals-modal__summary-value--amount {
+  font-family: var(--font-mono) !important;
+  font-weight: 700 !important;
+  color: var(--primary-500) !important;
+}
+
+.approvals-modal__field {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+}
+
+.approvals-modal__label {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: var(--text-secondary) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.4px !important;
+}
+
+.approvals-modal__textarea {
+  width: 100% !important;
+  padding: 10px 14px !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 4px !important;
+  background: var(--surface) !important;
+  color: var(--text-primary) !important;
+  font-size: 13px !important;
+  font-family: inherit !important;
+  resize: vertical !important;
+  min-height: 80px !important;
+  outline: none !important;
+}
+
+.approvals-modal__footer {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 10px !important;
+  padding: 16px 24px !important;
+  border-top: 1px solid var(--border) !important;
+  background: var(--surface-elevated) !important;
+}
+
+.approvals-modal__btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 9px 20px !important;
+  border-radius: 4px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  border: 1px solid transparent !important;
+  transition: all 0.15s ease !important;
+}
+
+.approvals-modal__btn--secondary {
+  background: var(--surface-card) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+}
+
+.approvals-modal__btn--secondary:hover {
+  background: var(--surface-hover) !important;
+  border-color: var(--border-strong) !important;
+}
+
+.approvals-modal__btn--approve {
+  background: var(--success-500) !important;
+  color: #ffffff !important;
+  border-color: var(--success-500) !important;
+}
+
+.approvals-modal__btn--reject {
+  background: var(--danger-500) !important;
+  color: #ffffff !important;
+  border-color: var(--danger-500) !important;
+}
+
+.approvals-modal__btn--return {
+  background: #8b5cf6 !important;
+  color: #ffffff !important;
+  border-color: #8b5cf6 !important;
+}
+
+.approvals-detail-grid {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 14px !important;
+}
+
+.approvals-detail-grid__item {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  background: var(--surface-elevated) !important;
+  padding: 10px 12px !important;
+  border-radius: 4px !important;
+  border: 1px solid var(--border) !important;
+}
+
+.approvals-detail-grid__label {
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  color: var(--text-secondary) !important;
+  text-transform: uppercase !important;
+}
+
+.approvals-detail-grid__value {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--text-primary) !important;
+}
+
+.approvals-detail-comments {
+  padding: 14px !important;
+  background: var(--surface-elevated) !important;
+  border-radius: 4px !important;
+  border: 1px solid var(--border) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+}
+
+.approvals-detail-comments__label {
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  color: var(--text-secondary) !important;
+  text-transform: uppercase !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.approvals-detail-comments__text {
+  font-size: 13px !important;
+  color: var(--text-primary) !important;
+  margin: 0 !important;
+}
+

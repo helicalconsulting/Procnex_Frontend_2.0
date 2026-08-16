@@ -259,7 +259,7 @@ export default function PaymentsPage() {
             {visibleColumns.map((col) => (
               <col key={col.key} style={{ width: col.width || 'auto' }} />
             ))}
-            <col style={{ width: '120px' }} />
+            <col style={{ width: '160px' }} />
           </colgroup>
           <thead>
             <tr>
@@ -301,7 +301,7 @@ export default function PaymentsPage() {
             {filtered.map(pay => {
               const actionable = ACTIONABLE.includes(pay.status);
               return (
-                <tr key={pay.id}>
+                <tr key={pay.id} className={`fin-table__row fin-table__row--${pay.status.toLowerCase()}`}>
                   {visibleColumns.map((col) => (
                     <td key={col.key} style={{ textAlign: col.align || 'left' }}>
                       {col.render(pay, fmt, fmtDate)}

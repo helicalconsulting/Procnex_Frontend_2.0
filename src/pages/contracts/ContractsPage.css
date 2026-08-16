@@ -70,12 +70,73 @@
 .ctr-table-card { background: var(--surface-card); border: 1px solid var(--border); border-radius: 4px; box-shadow: none; overflow: hidden; }
 .ctr-table-wrap { overflow-x: auto; }
 .ctr-table { width: 100%; border-collapse: collapse; }
-.ctr-table th { text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-secondary); padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface-elevated); white-space: nowrap; font-family: var(--font-sans) !important; }
-.ctr-table td { padding: 12px 16px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-sans) !important; }
-.ctr-table tr:last-child td { border-bottom: none; }
-.ctr-table tbody tr { transition: background 0.15s; }
+.ctr-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-secondary);
+  padding: 11px 16px;
+  border-bottom: 2px solid var(--border);
+  border-right: 1px solid var(--border);
+  background: var(--surface-elevated);
+  white-space: nowrap;
+  font-family: var(--font-sans) !important;
+}
+.ctr-table th:last-child { border-right: none; }
+
+.ctr-table td {
+  padding: 11px 16px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-sans) !important;
+  color: var(--text-primary);
+}
+.ctr-table td:last-child { border-right: none; }
+.ctr-table tr:last-child td { border-bottom: 1px solid var(--border); }
+
+.ctr-table tbody tr {
+  transition: background 0.15s;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  background: var(--surface-card);
+}
 .ctr-table tbody tr:hover { background: var(--surface-hover); }
-.ctr-table tbody tr { cursor: pointer; }
+
+/* Status Left Indicator for Contracts */
+.ctr-table tbody tr.ctr-table__row--active,
+.ctr-table tbody tr.ctr-table__row--signed,
+.ctr-table tbody tr.ctr-table__row--executed,
+.ctr-table tbody tr.ctr-table__row--completed {
+  border-left: 3px solid var(--success-500) !important;
+}
+
+.ctr-table tbody tr.ctr-table__row--draft,
+.ctr-table tbody tr.ctr-table__row--pending_signature,
+.ctr-table tbody tr.ctr-table__row--pending_vendor_signature,
+.ctr-table tbody tr.ctr-table__row--awaiting_vendor_signature,
+.ctr-table tbody tr.ctr-table__row--awaiting_customer_signature,
+.ctr-table tbody tr.ctr-table__row--under_review {
+  border-left: 3px solid var(--warning-500) !important;
+}
+
+.ctr-table tbody tr.ctr-table__row--terminated,
+.ctr-table tbody tr.ctr-table__row--cancelled,
+.ctr-table tbody tr.ctr-table__row--expired,
+.ctr-table tbody tr.ctr-table__row--rejected {
+  border-left: 3px solid var(--danger-500) !important;
+}
+
+.ctr-table tbody tr.ctr-table__row--expiring_soon,
+.ctr-table tbody tr.ctr-table__row--renewed {
+  border-left: 3px solid #8b5cf6 !important;
+}
 
 .ctr-table__contract-info { display: flex; flex-direction: column; gap: 2px; }
 .ctr-table__contract-number { font-size: 13px; font-weight: 700; color: var(--primary-500); font-family: var(--font-sans) !important; }

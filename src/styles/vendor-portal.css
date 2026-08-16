@@ -33,10 +33,10 @@
   --vendor-space-12: 48px;
   
   /* Radius */
-  --vendor-radius-sm: 6px;
-  --vendor-radius-md: 10px;
-  --vendor-radius-lg: 16px;
-  --vendor-radius-xl: 24px;
+  --vendor-radius-sm: 4px;
+  --vendor-radius-md: 4px;
+  --vendor-radius-lg: 4px;
+  --vendor-radius-xl: 4px;
 }
 
 /* ─── Animations ──────────────────────────────────────────────────────────── */
@@ -119,8 +119,9 @@
 }
 
 .vendor-portal__container {
-  max-width: 1400px;
-  margin: 0 auto;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
 }
 
 /* ─── Vendor Header Section ───────────────────────────────────────────────── */
@@ -844,18 +845,18 @@
 
 .vd-tiles {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
   margin-bottom: 28px;
 }
 
-@media (max-width: 1200px) { .vd-tiles { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 1200px) { .vd-tiles { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 768px) { .vd-tiles { grid-template-columns: repeat(2, 1fr); } }
 
 .vd-tile {
   background: var(--surface-card);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 4px;
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -1544,7 +1545,7 @@
   opacity: 1;
   pointer-events: all;
   top: 50%; left: 50%; transform: translate(-50%, -50%);
-  width: min(1000px, calc(100vw - 40px)); max-height: 90vh;
+  width: min(1280px, calc(100vw - 40px)); max-height: 92vh;
   border-radius: var(--vendor-radius-xl);
   animation: vquotSlideUp 0.28s cubic-bezier(0.32,0.72,0,1);
 }

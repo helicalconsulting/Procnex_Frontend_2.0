@@ -140,7 +140,9 @@ function applyFavicon(faviconUrl: string | null, logoUrl: string | null = null) 
     link.rel = 'icon';
     document.head.appendChild(link);
   }
-  const targetUrl = faviconUrl || logoUrl || heliflowLogo || '/favicon.png';
+  const rawTarget = faviconUrl || logoUrl;
+  const isValidUrl = rawTarget && (rawTarget.startsWith('http://') || rawTarget.startsWith('https://') || rawTarget.startsWith('data:') || rawTarget.startsWith('/'));
+  const targetUrl = isValidUrl ? rawTarget : (heliflowLogo || '/favicon.ico');
   if (targetUrl.endsWith('.svg')) {
     link.type = 'image/svg+xml';
   } else {

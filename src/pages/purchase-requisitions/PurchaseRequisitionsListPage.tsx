@@ -368,7 +368,7 @@ export default function PurchaseRequisitionsListPage() {
               {filteredRequisitions.map((pr) => (
                 <tr
                   key={pr.id || pr.rfqId}
-                  className="pr-list-row"
+                  className={`pr-list-row pr-list-row--${(pr.status || '').toLowerCase()}`}
                   onClick={() => pr.rfqId && navigate(`/procurement/purchase-requisition/${pr.rfqId}?mode=view`, { state: { readOnly: true } })}
                 >
                   {visibleColumns.map((col) => {

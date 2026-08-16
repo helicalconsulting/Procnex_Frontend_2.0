@@ -1,15 +1,18 @@
 import { useState, useMemo, useRef, useCallback, useEffect, Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import type { RFQStatus } from '../../types';
 import type { RFQTableRow } from '../../types/viewModels';
 import ColumnCustomizer from '../shared/ColumnCustomizer';
 import { MessageStrip } from '../shared/MessageStrip';
 import { rfqService } from '../../services/rfqService';
+import { approvalService } from '../../services/approvalService';
 import { sseClient } from '../../services/sseClient';
 import {
   X, CalendarDays, Building2, Tag, Banknote, ClipboardList, Users,
   Package, FileText, Minus, Maximize2, Minimize2, ChevronUp,
-  Trophy, Eye, ArrowRightLeft, Shield, TrendingUp,
+  Trophy, Eye, ArrowRightLeft, Shield, ShieldCheck, TrendingUp, CheckCircle2,
+  XCircle, Undo2, Clock,
 } from 'lucide-react';
 import { useCurrency, CurrencySelector, CurrencyBadge, DEFAULT_CURRENCY } from '../../components/shared/CurrencyMaster';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
@@ -69,7 +72,14 @@ interface EvalData {
 }
 
 const STATUS_LABELS: Record<RFQStatus, string> = {
-  DRAFT: 'Draft', SENT: 'Sent', IN_PROGRESS: 'In Progress', CLOSED: 'Closed', CANCELLED: 'Cancelled',
+  DRAFT: 'Draft',
+  PENDING_APPROVAL: 'Pending Approval',
+  APPROVED: 'Approved',
+  SENT: 'Approved',
+  IN_PROGRESS: 'Accepted',
+  CLOSED: 'Closed',
+  CANCELLED: 'Cancelled',
+  REJECTED: 'Rejected',
 };
 
 const QUOT_STATUS_LABELS: Record<string, string> = {
@@ -174,17 +184,136 @@ export default function RFQDetailModal({
   onCompareQuotations,
 }: RFQDetailModalProps) {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'info' | 'items' | 'vendors' | 'quotations'>('info');
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<'info' | 'items' | 'vendors' | 'quotations' | 'approvals'>('info');
   const [modalState, setModalState] = useState<ModalState>('open');
   const [viewPlanQuotation, setViewPlanQuotation] = useState<{ name: string; milestones: Array<{ id: string; title: string; percentage: number }> } | null>(null);
   const [viewDisplayCurrency, setViewDisplayCurrency] = useState('');
-
   // ── Evaluation State ──────────────────────────────────────
   const [evalData, setEvalData] = useState<EvalData | null>(null);
   const [evalLoading, setEvalLoading] = useState(false);
   const [evalError, setEvalError] = useState<string | null>(null);
   const [showCharts, setShowCharts] = useState(false);
   const [selectedVendorId, setSelectedVendorId] = useState<string | null>(null);
+
+  // ── Approval Action State for RFQ Approval Flow ──
+  const [pendingApproval, setPendingApproval] = useState<any | null>(null);
+  const [approvalActionLoading, setApprovalActionLoading] = useState(false);
+  const [approvalComment, setApprovalComment] = useState('');
+  const [showCommentBox, setShowCommentBox] = useState<'reject' | 'return' | null>(null);
+  const [approvalActionSuccess, setApprovalActionSuccess] = useState<string | null>(null);
+  const [approvalActionError, setApprovalActionError] = useState<string | null>(null);
+
+  const [approvalChain, setApprovalChain] = useState<{ levels?: any[]; history?: any[]; timeline?: any[]; totalLevels?: number } | null>(null);
+  const [approvalChainLoading, setApprovalChainLoading] = useState(false);
+
+  const fetchApprovalChain = useCallback(() => {
+    if (!rfq?.id) return;
+    setApprovalChainLoading(true);
+    approvalService.getChain('RFQ', String(rfq.id))
+      .then((res) => {
+        if (res) setApprovalChain(res);
+      })
+      .catch(() => {})
+      .finally(() => setApprovalChainLoading(false));
+  }, [rfq?.id]);
+
+  useEffect(() => {
+    fetchApprovalChain();
+  }, [rfq?.id, fetchApprovalChain]);
+
+  // Fetch pending approval for this RFQ when status is PENDING_APPROVAL
+  useEffect(() => {
+    if (!rfq || rfq.status !== 'PENDING_APPROVAL') {
+      setPendingApproval(null);
+      return;
+    }
+    approvalService.listTable({ module: 'RFQ', status: 'PENDING' })
+      .then((pendingRows) => {
+        const pendingFound = pendingRows.find(
+          (r) => String(r.referenceId) === String(rfq.id) || r.referenceNumber === rfq.rfqNumber
+        );
+        setPendingApproval(pendingFound || null);
+      })
+      .catch(() => {
+        setPendingApproval(null);
+      });
+  }, [rfq?.id, rfq?.status]);
+
+  const handleApproveRFQ = async () => {
+    if (!pendingApproval || !rfq) return;
+    setApprovalActionLoading(true);
+    setApprovalActionError(null);
+    setApprovalActionSuccess(null);
+    try {
+      const res = await approvalService.approve(pendingApproval.id, approvalComment);
+      setApprovalActionSuccess(res.message || 'RFQ Approved successfully!');
+      setShowCommentBox(null);
+      setApprovalComment('');
+      if (res.nextLevel) {
+        // Re-fetch pending approval for next level
+        const rows = await approvalService.listTable({ module: 'RFQ', status: 'PENDING' });
+        const found = rows.find((r) => String(r.referenceId) === String(rfq.id) || r.referenceNumber === rfq.rfqNumber);
+        if (found) setPendingApproval(found);
+      } else {
+        setPendingApproval(null);
+        rfq.status = 'APPROVED';
+      }
+      fetchApprovalChain();
+    } catch (err) {
+      setApprovalActionError(err instanceof Error ? err.message : 'Failed to approve RFQ');
+    } finally {
+      setApprovalActionLoading(false);
+    }
+  };
+
+  const handleRejectRFQ = async () => {
+    if (!pendingApproval || !rfq) return;
+    if (!approvalComment.trim()) {
+      setApprovalActionError('Please enter a comment explaining the reason for rejection.');
+      return;
+    }
+    setApprovalActionLoading(true);
+    setApprovalActionError(null);
+    setApprovalActionSuccess(null);
+    try {
+      const res = await approvalService.reject(pendingApproval.id, approvalComment);
+      setApprovalActionSuccess(res.message || 'RFQ Rejected.');
+      setPendingApproval(null);
+      setShowCommentBox(null);
+      setApprovalComment('');
+      rfq.status = 'REJECTED';
+      fetchApprovalChain();
+    } catch (err) {
+      setApprovalActionError(err instanceof Error ? err.message : 'Failed to reject RFQ');
+    } finally {
+      setApprovalActionLoading(false);
+    }
+  };
+
+  const handleReturnRFQ = async () => {
+    if (!pendingApproval || !rfq) return;
+    if (!approvalComment.trim()) {
+      setApprovalActionError('Please enter a comment explaining the reason for return.');
+      return;
+    }
+    setApprovalActionLoading(true);
+    setApprovalActionError(null);
+    setApprovalActionSuccess(null);
+    try {
+      const res = await approvalService.return(pendingApproval.id, approvalComment, 'LEVEL_1');
+      setApprovalActionSuccess(res.message || 'RFQ Returned for revision.');
+      setPendingApproval(null);
+      setShowCommentBox(null);
+      setApprovalComment('');
+      rfq.status = 'DRAFT';
+      fetchApprovalChain();
+    } catch (err) {
+      setApprovalActionError(err instanceof Error ? err.message : 'Failed to return RFQ');
+    } finally {
+      setApprovalActionLoading(false);
+    }
+  };
 
   const loadEvalData = useCallback(async () => {
     if (!rfq) return;
@@ -465,7 +594,8 @@ export default function RFQDetailModal({
             <span className="rfq-modal__rfq-num">{rfq.title}</span>
             {!isMinimized && (
               <span className={`rfq-badge rfq-badge--${rfq.status}`}>
-                <span className="rfq-badge__dot" />{STATUS_LABELS[rfq.status]}
+                <span className="rfq-badge__dot" />
+                {STATUS_LABELS[rfq.status] || rfq.status}
               </span>
             )}
             {isMinimized && (
@@ -545,7 +675,7 @@ export default function RFQDetailModal({
             </div>
 
             <div className="rfq-modal__tabs">
-              {(['info', 'items', 'vendors', 'quotations'] as const).map((tab) => (
+              {(['info', 'items', 'vendors', 'quotations', 'approvals'] as const).map((tab) => (
                 <button
                   key={tab}
                   type="button"
@@ -563,11 +693,23 @@ export default function RFQDetailModal({
                       </span>
                     </>
                   )}
+                  {tab === 'approvals' && (
+                    <>
+                      <ShieldCheck size={13} /> Approvals
+                      {approvalChain?.totalLevels != null && (
+                        <span className="rfq-modal__tab-count">
+                          {approvalChain.totalLevels}
+                        </span>
+                      )}
+                    </>
+                  )}
                 </button>
               ))}
             </div>
 
             <div className="rfq-modal__body">
+
+
               {activeTab === 'info' && (
                 <div className="rfq-modal__info-panel">
                   <div className="rfq-modal__info-grid">
@@ -895,6 +1037,100 @@ export default function RFQDetailModal({
                 </div>
               )}
 
+              {activeTab === 'approvals' && (
+                <div className="rfq-modal__approvals-panel" style={{ padding: '4px 0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                    <h4 style={{ margin: 0, fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-primary)' }}>
+                      <ShieldCheck size={18} style={{ color: 'var(--primary-500)' }} />
+                      Approval History & Audit Trail
+                    </h4>
+                    {approvalChain?.totalLevels != null && (
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--surface-hover)', padding: '4px 10px', borderRadius: 12 }}>
+                        Level {approvalChain.currentLevel || 1} of {approvalChain.totalLevels}
+                      </span>
+                    )}
+                  </div>
+
+                  {approvalChainLoading ? (
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', padding: '24px 0', textAlign: 'center' }}>Loading approval history...</div>
+                  ) : (() => {
+                    const displayList = (approvalChain?.levels && approvalChain.levels.length > 0)
+                      ? approvalChain.levels
+                      : (approvalChain?.history || []);
+                    return displayList.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        {displayList.map((item: any, idx: number) => {
+                          const isApproved = item.status === 'APPROVED';
+                          const isRejected = item.status === 'REJECTED';
+                          const isReturned = item.status === 'RETURNED';
+                          const isPending  = item.status === 'PENDING';
+
+                          const statusColor = isApproved ? '#16a34a' : isRejected ? '#dc2626' : isReturned ? '#d97706' : isPending ? '#eab308' : '#9ca3af';
+                          const statusBg    = isApproved ? 'rgba(22, 163, 74, 0.08)' : isRejected ? 'rgba(220, 38, 38, 0.08)' : isReturned ? 'rgba(217, 119, 6, 0.08)' : isPending ? 'rgba(234, 179, 8, 0.08)' : 'rgba(156, 163, 175, 0.08)';
+                          const statusBorder = isApproved ? 'rgba(22, 163, 74, 0.2)' : isRejected ? 'rgba(220, 38, 38, 0.2)' : isReturned ? 'rgba(217, 119, 6, 0.2)' : isPending ? 'rgba(234, 179, 8, 0.2)' : 'rgba(156, 163, 175, 0.2)';
+
+                          const statusLabel = item.status === 'NOT_STARTED' ? 'Awaiting Previous Level' : item.status;
+                          const actionByText = item.approverName || (isPending ? 'Awaiting Approval' : item.status === 'NOT_STARTED' ? 'Pending Previous Level' : rfq.creator || 'User');
+
+                          return (
+                            <div
+                              key={item.id || item.levelNumber || idx}
+                              style={{
+                                padding: '14px 16px',
+                                borderRadius: 'var(--radius-md)',
+                                background: 'var(--surface-card)',
+                                border: `1px solid ${statusBorder}`,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 8,
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                  <span style={{
+                                    fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 4,
+                                    background: statusBg, color: statusColor, textTransform: 'uppercase', letterSpacing: '0.3px',
+                                  }}>
+                                    Level {item.levelNumber} — {statusLabel}
+                                  </span>
+                                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                                    {item.requiredRole}
+                                  </span>
+                                </div>
+                                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                                  {item.actionAt ? formatDate(item.actionAt) : item.createdAt ? formatDate(item.createdAt) : '—'}
+                                </span>
+                              </div>
+
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
+                                <Users size={13} />
+                                <span>Action By: <strong style={{ color: 'var(--text-primary)' }}>{actionByText}</strong></span>
+                              </div>
+
+                              {item.comments && (
+                                <div style={{
+                                  fontSize: 12, color: 'var(--text-primary)', background: 'var(--surface-hover)',
+                                  padding: '8px 12px', borderRadius: 4, marginTop: 2, fontStyle: 'italic',
+                                }}>
+                                  "{item.comments}"
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div style={{
+                        fontSize: 13, color: 'var(--text-secondary)', padding: '24px', textAlign: 'center',
+                        background: 'var(--surface-card)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)'
+                      }}>
+                        No approval history recorded yet.
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
 
 
 
@@ -913,13 +1149,13 @@ export default function RFQDetailModal({
                 </MessageStrip>
               )}
               <button type="button" className="rfq-modal__btn rfq-modal__btn--secondary" onClick={onClose}>Close</button>
-              {enableSend && rfq.status === 'DRAFT' && (
+              {enableSend && (rfq.status === 'DRAFT' || (rfq.status === 'PENDING_APPROVAL' && String((rfq as any).createdBy || (rfq as any).creatorId || '') === String(user?.id || (user as any)?._id || ''))) && (
                 <button
                   type="button"
                   className="rfq-modal__btn rfq-modal__btn--primary"
                   onClick={() => navigate(`/rfq/edit/${rfq.id}`)}
                 >
-                  <FileText size={15} /> Edit Draft
+                  <FileText size={15} /> Edit {rfq.status === 'DRAFT' ? 'Draft' : 'RFQ'}
                 </button>
               )}
             </div>

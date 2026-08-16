@@ -58,11 +58,10 @@
 .rfq-toolbar__search input:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(10,110,209,0.1); }
 
 
-@media (max-width: 1023px) { .rfq-summary { grid-template-columns: repeat(3, 1fr); } }
-@media (max-width: 480px) { .rfq-summary { grid-template-columns: repeat(2, 1fr); } }
-
 /* ─── KPI Summary Cards ──────────────────────────────────── */
-.rfq-summary { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; }
+.rfq-summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; width: 100%; }
+@media (max-width: 1366px) { .rfq-summary { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 640px) { .rfq-summary { grid-template-columns: repeat(2, 1fr); } }
 .rfq-summary-card {
   padding: 20px; border-radius: var(--radius-lg); background: var(--surface-card);
   border: 1px solid var(--border); display: flex; align-items: center; gap: 16px;
@@ -81,12 +80,18 @@
 }
 .rfq-summary-card__icon--total    { background: rgba(10,110,209,0.1);  color: var(--primary-500); }
 .rfq-summary-card__icon--draft    { background: rgba(148,163,184,0.12); color: #64748b; }
+.rfq-summary-card__icon--pending  { background: rgba(234,179,8,0.12);   color: #eab308; }
+.rfq-summary-card__icon--approved { background: rgba(16,126,62,0.12);   color: var(--success-500); }
+.rfq-summary-card__icon--rejected { background: rgba(187,0,0,0.08);    color: var(--danger-500);  }
 .rfq-summary-card__icon--sent     { background: rgba(10,110,209,0.1);  color: var(--primary-500); }
 .rfq-summary-card__icon--progress { background: rgba(233,115,12,0.1);  color: var(--warning-500); }
 .rfq-summary-card__icon--closed   { background: rgba(16,126,62,0.1);   color: var(--success-500); }
 .rfq-summary-card__icon--cancelled{ background: rgba(187,0,0,0.08);    color: var(--danger-500);  }
 [data-theme="dark"] .rfq-summary-card__icon--total    { background: rgba(10,110,209,0.18); }
 [data-theme="dark"] .rfq-summary-card__icon--draft    { background: rgba(148,163,184,0.15); }
+[data-theme="dark"] .rfq-summary-card__icon--pending  { background: rgba(234,179,8,0.18); }
+[data-theme="dark"] .rfq-summary-card__icon--approved { background: rgba(16,126,62,0.18); }
+[data-theme="dark"] .rfq-summary-card__icon--rejected { background: rgba(187,0,0,0.15); }
 [data-theme="dark"] .rfq-summary-card__icon--sent     { background: rgba(10,110,209,0.18); }
 [data-theme="dark"] .rfq-summary-card__icon--progress { background: rgba(233,115,12,0.18); }
 [data-theme="dark"] .rfq-summary-card__icon--closed   { background: rgba(16,126,62,0.18);  }
@@ -98,18 +103,28 @@
 /* ─── Badge ──────────────────────────────────────────────── */
 .rfq-badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; }
 .rfq-badge__dot { width: 6px; height: 6px; border-radius: 50%; }
-.rfq-badge--DRAFT       { background: rgba(148,163,184,0.12); color: #64748b; }
+.rfq-badge--DRAFT            { background: rgba(148,163,184,0.12); color: #64748b; }
 .rfq-badge--DRAFT .rfq-badge__dot { background: #64748b; }
-.rfq-badge--SENT        { background: rgba(10,110,209,0.1); color: var(--primary-500); }
-.rfq-badge--SENT .rfq-badge__dot { background: var(--primary-500); }
-.rfq-badge--IN_PROGRESS { background: rgba(233,115,12,0.1); color: var(--warning-500); }
-.rfq-badge--IN_PROGRESS .rfq-badge__dot { background: var(--warning-500); }
-.rfq-badge--CLOSED      { background: rgba(16,126,62,0.1);  color: var(--success-500); }
+.rfq-badge--PENDING_APPROVAL { background: rgba(234,179,8,0.12); color: #ca8a04; }
+.rfq-badge--PENDING_APPROVAL .rfq-badge__dot { background: #eab308; }
+.rfq-badge--APPROVED,
+.rfq-badge--ACCEPTED         { background: rgba(16,126,62,0.12); color: var(--success-500); }
+.rfq-badge--APPROVED .rfq-badge__dot,
+.rfq-badge--ACCEPTED .rfq-badge__dot { background: var(--success-500); }
+.rfq-badge--REJECTED         { background: rgba(187,0,0,0.08); color: var(--danger-500); }
+.rfq-badge--REJECTED .rfq-badge__dot { background: var(--danger-500); }
+.rfq-badge--SENT             { background: rgba(16,126,62,0.12); color: var(--success-500); }
+.rfq-badge--SENT .rfq-badge__dot { background: var(--success-500); }
+.rfq-badge--IN_PROGRESS      { background: rgba(16,126,62,0.12); color: var(--success-500); }
+.rfq-badge--IN_PROGRESS .rfq-badge__dot { background: var(--success-500); }
+.rfq-badge--CLOSED           { background: rgba(16,126,62,0.1);  color: var(--success-500); }
 .rfq-badge--CLOSED .rfq-badge__dot { background: var(--success-500); }
-.rfq-badge--CANCELLED   { background: rgba(187,0,0,0.08);   color: var(--danger-500); }
+.rfq-badge--CANCELLED        { background: rgba(187,0,0,0.08);   color: var(--danger-500); }
 .rfq-badge--CANCELLED .rfq-badge__dot { background: var(--danger-500); }
 [data-theme="dark"] .rfq-badge--DRAFT { background: rgba(148,163,184,0.14); color: #94a3b8; }
 [data-theme="dark"] .rfq-badge--DRAFT .rfq-badge__dot { background: #94a3b8; }
+[data-theme="dark"] .rfq-badge--PENDING_APPROVAL { background: rgba(234,179,8,0.18); color: #facc15; }
+[data-theme="dark"] .rfq-badge--PENDING_APPROVAL .rfq-badge__dot { background: #facc15; }
 
 /* ── RFQ Type Badge ─────────────────────────────────────── */
 .rfq-type-badge {
@@ -155,29 +170,59 @@
 .rfq-table th {
   text-align: left;
   font-size: 11px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.5px; color: var(--text-secondary);
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border);
+  letter-spacing: 0.6px; color: var(--text-secondary);
+  padding: 11px 14px;
+  border-bottom: 2px solid var(--border);
+  border-right: 1px solid var(--border);
   background: var(--surface-elevated);
   white-space: nowrap;
   overflow: hidden;
   user-select: none;
 }
+.rfq-table th:last-child { border-right: none; }
 .rfq-table th svg { vertical-align: middle; opacity: 0.5; }
 
-/* All tds: clip overflow, never wrap unless explicitly allowed */
+/* All tds: clip overflow, vertical border dividers */
 .rfq-table td,
 .rfq-td {
-  padding: 12px 14px;
+  padding: 11px 14px;
   font-size: 13px;
   color: var(--text-primary);
   border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
   vertical-align: middle;
   overflow: hidden;
 }
-.rfq-table tr:last-child td { border-bottom: none; }
-.rfq-table tbody tr { transition: background 0.15s; cursor: pointer; }
+.rfq-table td:last-child,
+.rfq-td:last-child { border-right: none; }
+.rfq-table tr:last-child td { border-bottom: 1px solid var(--border); }
+
+.rfq-table tbody tr {
+  transition: background 0.15s;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  background: var(--surface-card);
+}
 .rfq-table tbody tr:hover { background: var(--surface-hover); }
+
+/* Status Indicator Left Border for RFQs */
+.rfq-table tbody tr.rfq-table__row--draft,
+.rfq-table tbody tr.rfq-table__row--pending_approval {
+  border-left: 3px solid var(--warning-500) !important;
+}
+
+.rfq-table tbody tr.rfq-table__row--approved,
+.rfq-table tbody tr.rfq-table__row--accepted,
+.rfq-table tbody tr.rfq-table__row--sent,
+.rfq-table tbody tr.rfq-table__row--closed,
+.rfq-table tbody tr.rfq-table__row--po_created {
+  border-left: 3px solid var(--success-500) !important;
+}
+
+.rfq-table tbody tr.rfq-table__row--cancelled,
+.rfq-table tbody tr.rfq-table__row--rejected {
+  border-left: 3px solid var(--danger-500) !important;
+}
 
 /* RFQ number link */
 .rfq-table__num-btn {
@@ -283,14 +328,22 @@
 .rfq-table__col-btn--active span { background: #fff; }
 
 /* ── Row actions ─────────────────────────────────────────── */
-.rfq-table__actions { display: flex; gap: 4px; }
+.rfq-td--actions { padding: 8px 10px; }
+.rfq-table__actions { display: flex; align-items: center; justify-content: flex-start; gap: 6px; }
 .rfq-table__action-btn {
-  width: 30px; height: 30px; border-radius: var(--radius-sm); border: none;
-  background: transparent; color: var(--text-secondary); cursor: pointer;
+  width: 32px; height: 32px; border-radius: 6px; border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.03); color: var(--text-secondary); cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.1s;
+  flex-shrink: 0;
 }
-.rfq-table__action-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
+.rfq-table__action-btn:hover { background: var(--surface-hover); color: var(--text-primary); border-color: var(--border); transform: translateY(-1px); }
+.rfq-table__action-btn--approve { color: #16a34a; background: rgba(22, 163, 74, 0.08); border-color: rgba(22, 163, 74, 0.2); }
+.rfq-table__action-btn--approve:hover { background: rgba(22, 163, 74, 0.18); color: #16a34a; border-color: rgba(22, 163, 74, 0.4); }
+.rfq-table__action-btn--reject  { color: #dc2626; background: rgba(220, 38, 38, 0.08); border-color: rgba(220, 38, 38, 0.2); }
+.rfq-table__action-btn--reject:hover   { background: rgba(220, 38, 38, 0.18); color: #dc2626; border-color: rgba(220, 38, 38, 0.4); }
+.rfq-table__action-btn--return  { color: #d97706; background: rgba(217, 119, 6, 0.08); border-color: rgba(217, 119, 6, 0.2); }
+.rfq-table__action-btn--return:hover   { background: rgba(217, 119, 6, 0.18); color: #d97706; border-color: rgba(217, 119, 6, 0.4); }
 .rfq-table__action-btn--danger:hover { background: rgba(187,0,0,0.08); color: var(--danger-500); }
 .rfq-table__action-btn:disabled { opacity: 0.45; cursor: wait; }
 

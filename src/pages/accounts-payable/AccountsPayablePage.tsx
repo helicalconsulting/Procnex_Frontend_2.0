@@ -332,7 +332,7 @@ export default function AccountsPayablePage() {
               {visibleColumns.map((col) => (
                 <col key={col.key} style={{ width: col.width || 'auto' }} />
               ))}
-              <col style={{ width: '120px' }} />
+              <col style={{ width: '160px' }} />
             </colgroup>
             <thead>
               <tr>
@@ -378,7 +378,7 @@ export default function AccountsPayablePage() {
               {filtered.map(inv => {
                 const actionable = ACTIONABLE.includes(inv.status);
                 return (
-                  <tr key={inv.id}>
+                  <tr key={inv.id} className={`fin-table__row fin-table__row--${inv.status.toLowerCase()}`}>
                     {visibleColumns.map((col) => (
                       <td key={col.key} style={{ textAlign: col.align || 'left' }}>
                         {col.render(inv, fmt, fmtDate)}

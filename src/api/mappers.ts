@@ -10,17 +10,21 @@ import { formatCurrency } from '../components/shared/CurrencyMaster';
 
 const BACKEND_TO_UI_RFQ_STATUS: Record<string, RFQStatus> = {
   DRAFT: 'DRAFT',
-  SENT: 'SENT',
-  QUOTATIONS_RECEIVED: 'IN_PROGRESS',
-  UNDER_EVALUATION: 'IN_PROGRESS',
+  PENDING_APPROVAL: 'PENDING_APPROVAL',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+  SENT: 'ACCEPTED',
+  QUOTATIONS_RECEIVED: 'ACCEPTED',
+  UNDER_EVALUATION: 'ACCEPTED',
   PO_CREATED: 'CLOSED',
   CLOSED: 'CLOSED',
   CANCELLED: 'CANCELLED',
-  IN_PROGRESS: 'IN_PROGRESS',
+  IN_PROGRESS: 'ACCEPTED',
+  ACCEPTED: 'ACCEPTED',
 };
 
 export function mapBackendRfqStatus(status: string): RFQStatus {
-  return BACKEND_TO_UI_RFQ_STATUS[status] || 'DRAFT';
+  return BACKEND_TO_UI_RFQ_STATUS[status] || (status as RFQStatus) || 'DRAFT';
 }
 
 function initials(name?: string): string {

@@ -216,13 +216,26 @@ export default function SalesOrdersPage() {
 
       {/* ── Table ── */}
       <div className="fin-table-card">
-        <table className="fin-table">
+        <div style={{ overflowX: 'auto' }}>
+        <table className="fin-table" style={{ tableLayout: 'fixed', minWidth: '700px' }}>
+          <colgroup>
+            <col style={{ width: '130px' }} />
+            <col style={{ width: '180px' }} />
+            <col style={{ width: '80px' }} />
+            <col style={{ width: '120px' }} />
+            <col style={{ width: '110px' }} />
+            <col style={{ width: '110px' }} />
+            <col style={{ width: '120px' }} />
+            <col style={{ width: '130px' }} />
+            <col style={{ width: '110px' }} />
+            <col style={{ width: '140px' }} />
+          </colgroup>
           <thead>
             <tr>
               <th>SO #</th>
               <th>Customer</th>
-              <th>Items</th>
-              <th>Amount</th>
+              <th style={{ textAlign: 'center' }}>Items</th>
+              <th style={{ textAlign: 'right' }}>Amount</th>
               <th>Order date</th>
               <th>Delivery</th>
               <th>Region</th>
@@ -236,7 +249,7 @@ export default function SalesOrdersPage() {
               const cfg     = STATUS_MAP[so.status];
               const actCfg  = ACTION_CFG[so.status];
               return (
-                <tr key={so.id}>
+                <tr key={so.id} className={`fin-table__row fin-table__row--${so.status.toLowerCase()}`}>
                   <td><span className="fin-table__ref">{so.soNumber}</span></td>
                   <td>
                     <div className="fin-table__vendor">
@@ -288,6 +301,7 @@ export default function SalesOrdersPage() {
             })}
           </tbody>
         </table>
+        </div>
         {filtered.length === 0 && (
           <div className="fin-empty"><span>📊</span><p>No sales orders found</p></div>
         )}

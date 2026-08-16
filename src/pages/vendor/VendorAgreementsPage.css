@@ -220,7 +220,7 @@
 .va-preview-modal {
   background: var(--surface-card);
   border: 1px solid var(--border);
-  border-radius: var(--vendor-radius-xl);
+  border-radius: 4px;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.3);
   width: min(900px, calc(100vw - 48px));
   max-height: 85vh;
