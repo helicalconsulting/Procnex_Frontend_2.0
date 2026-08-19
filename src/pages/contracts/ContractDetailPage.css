@@ -177,6 +177,38 @@
 .ctr-detail__po-empty { text-align: center; padding: 48px; color: var(--text-secondary); }
 .ctr-detail__po-empty-icon { margin-bottom: 12px; }
 
+/* Table Action Buttons */
+.ctr-table__action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent !important;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.ctr-table__action-btn:hover {
+  background: rgba(10, 110, 209, 0.1) !important;
+  color: var(--primary-500) !important;
+  border-color: rgba(10, 110, 209, 0.2);
+}
+
+[data-theme="dark"] .ctr-table__action-btn {
+  color: #94a3b8;
+  background: transparent !important;
+}
+
+[data-theme="dark"] .ctr-table__action-btn:hover {
+  background: rgba(56, 189, 248, 0.15) !important;
+  color: #38bdf8 !important;
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
 /* Milestones section */
 .ctr-detail__milestones { margin-top: 16px; }
 .ctr-detail__milestone { display: flex; align-items: center; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px; }

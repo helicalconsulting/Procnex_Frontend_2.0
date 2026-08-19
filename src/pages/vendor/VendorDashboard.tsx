@@ -1104,66 +1104,6 @@ export default function VendorDashboard() {
                     </div>
                   </div>
 
-                  {/* Distribution & Breakdown Section */}
-                  <div className="sap-kpi-section" style={{ marginTop: 18 }}>
-                    <div className="sap-kpi-section__title">
-                      <ListChecks size={13} /> Distribution & Breakdown
-                    </div>
-                    <div className="rfq-modal__quotations-panel sap-kpi-panel">
-                      {(() => {
-                        const items = selectedKpiType === 'rfqs' ?
-                          rfqs.filter((r) => !('hasSubmittedQuotation' in r && (r as RFQ & { hasSubmittedQuotation?: boolean }).hasSubmittedQuotation)).slice(0, 10).map((r) => ({
-                            label: r.rfqNumber,
-                            value: r.title,
-                            helper: r.closingDate ? new Date(r.closingDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—',
-                          })) :
-                        selectedKpiType === 'quotes' ?
-                          quotations.slice(0, 10).map((q) => ({
-                            label: q.rfqNumber || `#${q.id}`,
-                            value: q.status,
-                            helper: new Date(q.submittedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
-                          })) :
-                        selectedKpiType === 'orders' ?
-                          orders.filter((o) => o.status !== 'DELIVERED' && o.status !== 'CANCELLED').slice(0, 10).map((o) => ({
-                            label: o.orderId || o.poNumber || `#${o.id}`,
-                            value: o.status,
-                            helper: o.expectedDelivery ? new Date(o.expectedDelivery).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—',
-                          })) :
-                        selectedKpiType === 'invoices' ?
-                          invoices.filter((inv) => inv.status === 'PENDING' || inv.status === 'OVERDUE').slice(0, 10).map((inv) => ({
-                            label: inv.invoiceNumber || `#${inv.id}`,
-                            value: inv.status,
-                            helper: inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—',
-                          })) :
-                          invoices.filter((inv) => inv.status === 'PAID').slice(0, 10).map((inv) => ({
-                            label: inv.invoiceNumber || `#${inv.id}`,
-                            value: formatAmount(Number(inv.totalAmount || inv.amount || 0), displayCurrency),
-                            helper: new Date(inv.paidDate || inv.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
-                          }));
-
-                        if (items.length === 0) {
-                          return (
-                            <div className="rfq-modal__no-vendors">
-                              <FileText size={22} />
-                              <p>No records available for this section.</p>
-                            </div>
-                          );
-                        }
-
-                        return items.map((item) => (
-                          <div key={item.label} className="rfq-modal__quotation-row">
-                            <div className="rfq-modal__quotation-info">
-                              <span className="rfq-modal__vendor-name">{item.label}</span>
-                              {item.helper && <span className="rfq-modal__quotation-meta">{item.helper}</span>}
-                            </div>
-                            <div className="rfq-modal__quotation-right">
-                              <span className="rfq-modal__quotation-price">{item.value}</span>
-                            </div>
-                          </div>
-                        ));
-                      })()}
-                    </div>
-                  </div>
 
                   {/* Related Activity Section */}
                   <div className="sap-kpi-section" style={{ marginTop: 18 }}>

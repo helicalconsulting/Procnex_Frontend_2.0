@@ -157,26 +157,38 @@ export const NAVIGATION_MENU: MenuItem[] = [
       { id: 'rfq-list', label: 'RFQ List', path: '/rfq', roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.PURCHASE_CLERK, RoleName.FINANCE_MANAGER, RoleName.FINANCE_APPROVER, 'purchase_clerk', 'Purchase Clerk', 'procurement_manager', 'Purchase Manager', 'purchase_manager'] },
       { id: 'rfq-create', label: 'Create RFQ', path: '/rfq/create', roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.PURCHASE_CLERK, 'purchase_clerk', 'Purchase Clerk', 'procurement_manager', 'Purchase Manager', 'purchase_manager'] },
     ],
-  },    {
-      id: 'quotations',
-      label: 'Quotations',
-      path: '/quotations',
-      roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.PURCHASE_CLERK, RoleName.FINANCE_MANAGER, 'purchase_clerk', 'Purchase Clerk', 'procurement_manager', 'Purchase Manager', 'purchase_manager'],
-    },
-    {
-      id: 'purchase-requisitions',
-      label: 'PO Creation',
-      path: '/procurement/purchase-requisitions',
-      roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.PURCHASE_CLERK, 'purchase_clerk', 'Purchase Clerk', 'procurement_manager', 'Purchase Manager', 'purchase_manager'],
-    },
-
+  },
+  {
+    id: 'purchase-requisitions',
+    label: 'PO Creation',
+    path: '/procurement/purchase-requisitions',
+    roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.PURCHASE_CLERK, 'purchase_clerk', 'Purchase Clerk', 'procurement_manager', 'Purchase Manager', 'purchase_manager'],
+  },
   {
     id: 'contracts',
     label: 'Contracts',
     path: '/contracts',
     roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.PURCHASE_CLERK, RoleName.FINANCE_MANAGER, RoleName.FINANCE_APPROVER, 'purchase_clerk', 'Purchase Clerk', 'procurement_manager', 'Purchase Manager', 'purchase_manager'],
   },
+  {
+    id: 'create-purchase-invoice',
+    label: 'Create Purchase Invoice',
+    path: '/procurement/create-purchase-invoice',
+    roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.PURCHASE_CLERK, RoleName.FINANCE_MANAGER, RoleName.FINANCE_APPROVER, 'purchase_clerk', 'Purchase Clerk', 'procurement_manager', 'Purchase Manager', 'purchase_manager'],
+  },
+  {
+    id: 'create-payment-voucher',
+    label: 'Create Payment Voucher',
+    path: '/procurement/create-payment-voucher',
+    roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.PURCHASE_CLERK, RoleName.FINANCE_MANAGER, RoleName.FINANCE_APPROVER, 'purchase_clerk', 'Purchase Clerk', 'procurement_manager', 'Purchase Manager', 'purchase_manager'],
+  },
 
+  {
+    id: 'quotations',
+    label: 'Quotation Approval',
+    path: '/quotations',
+    roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.PURCHASE_CLERK, RoleName.FINANCE_MANAGER, 'purchase_clerk', 'Purchase Clerk', 'procurement_manager', 'Purchase Manager', 'purchase_manager'],
+  },
   {
     id: 'approvals',
     label: 'Purchase Order Approval',
@@ -186,21 +198,15 @@ export const NAVIGATION_MENU: MenuItem[] = [
 
   {
     id: 'accounts-payable',
-    label: 'Accounts Payable',
+    label: 'Purchase Invoice Approval',
     path: '/accounts-payable',
     roles: [RoleName.SUPER_ADMIN, RoleName.FINANCE_MANAGER, RoleName.FINANCE_APPROVER],
   },
   {
     id: 'payments',
-    label: 'Payments',
+    label: 'Payment Voucher Approval',
     path: '/payments',
     roles: [RoleName.SUPER_ADMIN, RoleName.FINANCE_MANAGER, RoleName.FINANCE_APPROVER],
-  },
-  {
-    id: 'sales-orders',
-    label: 'Sales Orders',
-    path: '/sales-orders',
-    roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.FINANCE_MANAGER],
   },
   {
     id: 'vendors',

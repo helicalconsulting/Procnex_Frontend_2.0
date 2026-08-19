@@ -316,8 +316,8 @@ async function mockOrders(): Promise<VendorOrderMock[]> {
 
 async function apiOrders(): Promise<VendorOrderMock[]> {
   try {
-    const data = await vendorFetch<{ purchaseOrders?: VendorOrderMock[] }>('/erp-data');
-    return data.purchaseOrders ?? [];
+    const data = await vendorFetch<{ orders?: VendorOrderMock[] }>('/orders', { cacheTtlMs: 0 });
+    return data.orders ?? [];
   } catch {
     return [];
   }

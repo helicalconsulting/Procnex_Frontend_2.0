@@ -146,6 +146,7 @@ export default function PaymentsPage() {
     return serverPayments.map(p => pendingActions[p.id] ?? p);
   }, [serverPayments, pendingActions]);
   const [search, setSearch]               = useState('');
+  const [statusFilter, setStatusFilter]   = useState<string>('ALL');
   const [actionModal, setActionModal]     = useState<{ payment: Payment; action: 'confirm' | 'cancel' | 'retry' } | null>(null);
   const [actionComment, setActionComment] = useState('');
   const [detailPayment, setDetailPayment] = useState<Payment | null>(null);
@@ -182,6 +183,9 @@ export default function PaymentsPage() {
   // ── Filtered list ──
   const filtered = useMemo(() => {
     let list = payments;
+    if (statusFilter !== 'ALL') {
+      list = list.filter(p => p.status === statusFilter);
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(p =>
@@ -191,7 +195,7 @@ export default function PaymentsPage() {
       );
     }
     return list;
-  }, [payments, search]);
+  }, [payments, search, statusFilter]);
 
   // ── Action handler ──
   const handleAction = useCallback(() => {
@@ -230,17 +234,41 @@ export default function PaymentsPage() {
       {/* ── Header ── */}
       <div className="fin-page__header">
         <div>
-          <h1>Payments</h1>
+          <h1>Payment Voucher Approval</h1>
           <p>Track payment transactions and disbursements to vendors</p>
         </div>
       </div>
 
       {/* ── KPIs ── */}
       <div className="fin-kpis">
-        <div className="fin-kpi"><div className="fin-kpi__icon fin-kpi__icon--success"><Banknote size={20} /></div><div><span className="fin-kpi__value">{fmt(summary.totalPaid)}</span><span className="fin-kpi__label">Total Paid</span></div></div>
-        <div className="fin-kpi"><div className="fin-kpi__icon fin-kpi__icon--warning"><Clock size={20} /></div><div><span className="fin-kpi__value">{summary.pending}</span><span className="fin-kpi__label">Pending</span></div></div>
-        <div className="fin-kpi"><div className="fin-kpi__icon fin-kpi__icon--primary"><CheckCircle2 size={20} /></div><div><span className="fin-kpi__value">{summary.completed}</span><span className="fin-kpi__label">Completed</span></div></div>
-        <div className="fin-kpi"><div className="fin-kpi__icon fin-kpi__icon--danger"><XCircle size={20} /></div><div><span className="fin-kpi__value">{summary.failed}</span><span className="fin-kpi__label">Failed / Cancelled</span></div></div>
+        <div
+          className={`fin-kpi${statusFilter === 'ALL' ? ' fin-kpi--active' : ''}`}
+          onClick={() => setStatusFilter('ALL')}
+        >
+          <div className="fin-kpi__icon fin-kpi__icon--success"><Banknote size={20} /></div>
+          <div><span className="fin-kpi__value">{fmt(summary.totalPaid)}</span><span className="fin-kpi__label">Total Paid</span></div>
+        </div>
+        <div
+          className={`fin-kpi${statusFilter === 'PENDING' ? ' fin-kpi--active' : ''}`}
+          onClick={() => setStatusFilter(prev => prev === 'PENDING' ? 'ALL' : 'PENDING')}
+        >
+          <div className="fin-kpi__icon fin-kpi__icon--warning"><Clock size={20} /></div>
+          <div><span className="fin-kpi__value">{summary.pending}</span><span className="fin-kpi__label">Pending</span></div>
+        </div>
+        <div
+          className={`fin-kpi${statusFilter === 'COMPLETED' ? ' fin-kpi--active' : ''}`}
+          onClick={() => setStatusFilter(prev => prev === 'COMPLETED' ? 'ALL' : 'COMPLETED')}
+        >
+          <div className="fin-kpi__icon fin-kpi__icon--primary"><CheckCircle2 size={20} /></div>
+          <div><span className="fin-kpi__value">{summary.completed}</span><span className="fin-kpi__label">Completed</span></div>
+        </div>
+        <div
+          className={`fin-kpi${statusFilter === 'FAILED' ? ' fin-kpi--active' : ''}`}
+          onClick={() => setStatusFilter(prev => prev === 'FAILED' ? 'ALL' : 'FAILED')}
+        >
+          <div className="fin-kpi__icon fin-kpi__icon--danger"><XCircle size={20} /></div>
+          <div><span className="fin-kpi__value">{summary.failed}</span><span className="fin-kpi__label">Failed / Cancelled</span></div>
+        </div>
       </div>
 
       {/* ── Toolbar ── */}

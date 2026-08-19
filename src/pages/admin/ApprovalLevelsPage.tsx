@@ -64,7 +64,7 @@ interface ApprovalModuleDef {
 
 const MODULE_DEFS: ApprovalModuleDef[] = [
   { key: 'RFQ', label: 'RFQ', system: 'rfq', color: 'rfq', icon: <FileText size={16} /> },
-  { key: 'Quotations', label: 'Quotations', system: 'rfq', color: 'quotations', icon: <ClipboardList size={16} /> },
+  { key: 'Quotations', label: 'Quotation Approval', system: 'rfq', color: 'quotations', aliases: ['Quotations', 'Quotation', 'Quotation Approval'], icon: <ClipboardList size={16} /> },
   {
     key: 'PurchaseOrders',
     label: 'Purchase Orders',
@@ -75,13 +75,13 @@ const MODULE_DEFS: ApprovalModuleDef[] = [
   },
   {
     key: 'AccountsPayable',
-    label: 'Accounts Payable',
+    label: 'Purchase Invoice Approval',
     system: 'heliflow',
     color: 'accounts',
-    aliases: ['Accounts Payable'],
+    aliases: ['Accounts Payable', 'Purchase Invoice Approval'],
     icon: <Wallet size={16} />,
   },
-  { key: 'Payments', label: 'Payments', system: 'heliflow', color: 'payments', icon: <CreditCard size={16} /> },
+  { key: 'Payments', label: 'Payment Voucher Approval', system: 'heliflow', color: 'payments', aliases: ['Payments', 'Payment Voucher Approval'], icon: <CreditCard size={16} /> },
   {
     key: 'SalesOrders',
     label: 'Sales Orders',

@@ -1,9 +1,6 @@
 import { useState } from 'react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { contractService } from '../../services/contractService';
-import { useAuth } from '../../context/AuthContext';
-import { isL2OrHigherUser } from '../../utils/rbac';
-import { CreatorLevelPromptModal } from '../shared/CreatorLevelPromptModal';
 import { MessageStrip } from '../shared/MessageStrip';
 import {
   ShoppingCart, FileText, X, Clock, DollarSign, Building2,
@@ -28,6 +25,8 @@ export interface PostAwardModalProps {
   preAwardMode?: boolean;
   /** Required in preAwardMode: called before navigating to PO/contract */
   onApproveFirst?: (startLevelNumber?: number) => Promise<void>;
+  hasPO?: boolean;
+  hasContract?: boolean;
 }
 
 export default function PostAwardModal({
@@ -41,11 +40,11 @@ export default function PostAwardModal({
   onNavigateContract,
   preAwardMode = false,
   onApproveFirst,
+  hasPO = false,
+  hasContract = false,
 }: PostAwardModalProps) {
-  const { roles } = useAuth();
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showLevelPrompt, setShowLevelPrompt] = useState(false);
 
   useBodyScrollLock(true);
 
@@ -133,39 +132,43 @@ export default function PostAwardModal({
           )}
 
           <div className="ctr-award-modal__actions">
-            <button
-              className="ctr-award-modal__btn"
-              onClick={() => handleSelect('PO_CREATED')}
-              disabled={!!saving}
-            >
-              <div className="ctr-award-modal__btn-icon ctr-award-modal__btn-icon--po">
-                <ShoppingCart size={22} />
-              </div>
-              <div className="ctr-award-modal__btn-info">
-                <span className="ctr-award-modal__btn-title">Create Purchase Order</span>
-                <span className="ctr-award-modal__btn-desc">
-                  Create a standalone purchase order linked to this RFQ
-                </span>
-              </div>
-              {saving === 'PO_CREATED' && <Clock size={16} className="ctr-award-modal__spinner" />}
-            </button>
+            {!hasPO && (
+              <button
+                className="ctr-award-modal__btn"
+                onClick={() => handleSelect('PO_CREATED')}
+                disabled={!!saving}
+              >
+                <div className="ctr-award-modal__btn-icon ctr-award-modal__btn-icon--po">
+                  <ShoppingCart size={22} />
+                </div>
+                <div className="ctr-award-modal__btn-info">
+                  <span className="ctr-award-modal__btn-title">Create Purchase Order</span>
+                  <span className="ctr-award-modal__btn-desc">
+                    Create a standalone purchase order linked to this RFQ
+                  </span>
+                </div>
+                {saving === 'PO_CREATED' && <Clock size={16} className="ctr-award-modal__spinner" />}
+              </button>
+            )}
 
-            <button
-              className="ctr-award-modal__btn"
-              onClick={() => handleSelect('CONTRACT_CREATED')}
-              disabled={!!saving}
-            >
-              <div className="ctr-award-modal__btn-icon ctr-award-modal__btn-icon--contract">
-                <FileText size={22} />
-              </div>
-              <div className="ctr-award-modal__btn-info">
-                <span className="ctr-award-modal__btn-title">Create Contract</span>
-                <span className="ctr-award-modal__btn-desc">
-                  Select an active contract template and generate the agreement
-                </span>
-              </div>
-              {saving === 'CONTRACT_CREATED' && <Clock size={16} className="ctr-award-modal__spinner" />}
-            </button>
+            {!hasContract && (
+              <button
+                className="ctr-award-modal__btn"
+                onClick={() => handleSelect('CONTRACT_CREATED')}
+                disabled={!!saving}
+              >
+                <div className="ctr-award-modal__btn-icon ctr-award-modal__btn-icon--contract">
+                  <FileText size={22} />
+                </div>
+                <div className="ctr-award-modal__btn-info">
+                  <span className="ctr-award-modal__btn-title">Create Contract</span>
+                  <span className="ctr-award-modal__btn-desc">
+                    Select an active contract template and generate the agreement
+                  </span>
+                </div>
+                {saving === 'CONTRACT_CREATED' && <Clock size={16} className="ctr-award-modal__spinner" />}
+              </button>
+            )}
 
             <button
               className="ctr-award-modal__btn"
@@ -185,16 +188,6 @@ export default function PostAwardModal({
           </div>
         </div>
       </div>
-
-      <CreatorLevelPromptModal
-        isOpen={showLevelPrompt}
-        moduleName="Purchase Order"
-        onConfirm={(startLevelNumber) => {
-          setShowLevelPrompt(false);
-          void executePoAction(startLevelNumber);
-        }}
-        onCancel={() => setShowLevelPrompt(false)}
-      />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { purchaseRequisitionService, type PurchaseRequisition } from '../../services/purchaseRequisitionService';
-import { ShoppingCart, Eye, Pencil, Trash2, Loader2, AlertTriangle, FileText, Search, X, CheckCircle, Clock } from 'lucide-react';
+import { ShoppingCart, Eye, Pencil, Trash2, Loader2, AlertTriangle, FileText, Search, X, CheckCircle, Clock, Plus } from 'lucide-react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import ColumnCustomizer, { type ColumnDef } from '../../components/shared/ColumnCustomizer';
@@ -183,13 +183,22 @@ export default function PurchaseRequisitionsListPage() {
         </MessageStrip>
       )}
       {/* Clean Page Title Header */}
-      <div className="pr-page__header" style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
-          PO Creation & Orders
-        </h1>
-        <p style={{ margin: '4px 0 0', fontSize: 13.5, color: 'var(--text-secondary, #64748b)' }}>
-          Manage purchase orders, requisitions and vendor release documents
-        </p>
+      <div className="pr-page__header" style={{ marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+        <div>
+          <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+            PO Creation & Orders
+          </h1>
+          <p style={{ margin: '4px 0 0', fontSize: 13.5, color: 'var(--text-secondary, #64748b)' }}>
+            Manage purchase orders, requisitions and vendor release documents
+          </p>
+        </div>
+        <button
+          className="pr-btn pr-btn--primary"
+          onClick={() => navigate('/procurement/create-purchase-order')}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 8, fontSize: 13.5, fontWeight: 600, background: 'linear-gradient(135deg, #0a6ed1, #0856a4)', color: '#fff', border: 'none', cursor: 'pointer', boxShadow: '0 4px 12px rgba(10, 110, 209, 0.25)' }}
+        >
+          <Plus size={16} /> New PO
+        </button>
       </div>
 
       {/* KPI Metric Summary Cards */}
@@ -365,74 +374,92 @@ export default function PurchaseRequisitionsListPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredRequisitions.map((pr) => (
-                <tr
-                  key={pr.id || pr.rfqId}
-                  className={`pr-list-row pr-list-row--${(pr.status || '').toLowerCase()}`}
-                  onClick={() => pr.rfqId && navigate(`/procurement/purchase-requisition/${pr.rfqId}?mode=view`, { state: { readOnly: true } })}
-                >
-                  {visibleColumns.map((col) => {
-                    if (col.key === 'poNumber') {
-                      return (
-                        <td key="poNumber" className="pr-list__po-num">
-                          <span className="pr-po-link">{pr.poNumber || '-'}</span>
-                        </td>
-                      );
-                    }
-                    if (col.key === 'vendorName') {
-                      return <td key="vendorName" className="pr-list__vendor">{pr.vendorName || '-'}</td>;
-                    }
-                    if (col.key === 'poDate') {
-                      return <td key="poDate">{pr.poDate ? formatDate(pr.poDate) : '-'}</td>;
-                    }
-                    if (col.key === 'currency') {
-                      return <td key="currency">{pr.currency || 'KES'}</td>;
-                    }
-                    if (col.key === 'grandTotal') {
-                      return <td key="grandTotal" className="pr-list__total">{formatCurrency(pr.grandTotal, pr.currency)}</td>;
-                    }
-                    if (col.key === 'status') {
-                      return (
-                        <td key="status">
-                          <span className={`pr-badge pr-badge--${pr.status}`}>{getStatusLabel(pr.status)}</span>
-                        </td>
-                      );
-                    }
-                    return <td key={col.key}>-</td>;
-                  })}
-                  <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
-                      <button
-                        className="pr-list__view-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          pr.rfqId && navigate(`/procurement/purchase-requisition/${pr.rfqId}?mode=view`, { state: { readOnly: true } });
-                        }}
-                        title="View PO Document (Read-Only)"
-                      >
-                        <Eye size={15} />
-                      </button>
-                      <button
-                        className="pr-list__view-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          pr.rfqId && navigate(`/procurement/purchase-requisition/${pr.rfqId}?mode=edit`, { state: { readOnly: false } });
-                        }}
-                        title="Edit PO Document"
-                      >
-                        <Pencil size={15} />
-                      </button>
-                      <button
-                        className="pr-list__view-btn pr-list__delete-btn"
-                        onClick={(e) => { e.stopPropagation(); setDeleteTarget(pr); }}
-                        title="Delete PO document"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {filteredRequisitions.map((pr) => {
+                const rfqStr = (pr.rfqId || '').toLowerCase();
+                const isStandalone = Boolean(
+                  (pr as any).isStandalone ||
+                  !pr.rfqId ||
+                  rfqStr.startsWith('direct-po') ||
+                  rfqStr.startsWith('rfq-direct') ||
+                  rfqStr === 'direct-po-master-id' ||
+                  rfqStr.includes('direct')
+                );
+                const openPO = (mode: 'view' | 'edit') => {
+                  if (isStandalone) {
+                    navigate(`/procurement/create-purchase-order?id=${pr.id || pr.rfqId}${mode === 'view' ? '&mode=view' : ''}`);
+                  } else {
+                    navigate(`/procurement/purchase-requisition/${pr.rfqId}?mode=${mode}`, { state: { readOnly: mode === 'view' } });
+                  }
+                };
+                return (
+                  <tr
+                    key={pr.id || pr.rfqId}
+                    className={`pr-list-row pr-list-row--${(pr.status || '').toLowerCase()}`}
+                    onClick={() => openPO('view')}
+                  >
+                    {visibleColumns.map((col) => {
+                      if (col.key === 'poNumber') {
+                        return (
+                          <td key="poNumber" className="pr-list__po-num">
+                            <span className="pr-po-link">{pr.poNumber || '-'}</span>
+                          </td>
+                        );
+                      }
+                      if (col.key === 'vendorName') {
+                        return <td key="vendorName" className="pr-list__vendor">{pr.vendorName || '-'}</td>;
+                      }
+                      if (col.key === 'poDate') {
+                        return <td key="poDate">{pr.poDate ? formatDate(pr.poDate) : '-'}</td>;
+                      }
+                      if (col.key === 'currency') {
+                        return <td key="currency">{pr.currency || 'KES'}</td>;
+                      }
+                      if (col.key === 'grandTotal') {
+                        return <td key="grandTotal" className="pr-list__total">{formatCurrency(pr.grandTotal, pr.currency)}</td>;
+                      }
+                      if (col.key === 'status') {
+                        return (
+                          <td key="status">
+                            <span className={`pr-badge pr-badge--${pr.status}`}>{getStatusLabel(pr.status)}</span>
+                          </td>
+                        );
+                      }
+                      return <td key={col.key}>-</td>;
+                    })}
+                    <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
+                        <button
+                          className="pr-list__view-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openPO('view');
+                          }}
+                          title="View PO Document (Read-Only)"
+                        >
+                          <Eye size={15} />
+                        </button>
+                        <button
+                          className="pr-list__view-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openPO('edit');
+                          }}
+                          title="Edit PO Document"
+                        >
+                          <Pencil size={15} />
+                        </button>
+                        <button
+                          className="pr-list__view-btn pr-list__delete-btn"
+                          onClick={(e) => { e.stopPropagation(); setDeleteTarget(pr); }}
+                          title="Delete PO document"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

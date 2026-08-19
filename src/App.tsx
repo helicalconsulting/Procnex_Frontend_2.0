@@ -53,6 +53,12 @@ const VendorAgreementsPage = lazy(() => import("./pages/vendor/VendorAgreementsP
 const AccountsPayablePage = lazy(
   () => import("./pages/accounts-payable/AccountsPayablePage"),
 );
+const CreatePurchaseInvoicePage = lazy(
+  () => import("./pages/invoices/CreatePurchaseInvoicePage"),
+);
+const CreatePaymentVoucherPage = lazy(
+  () => import("./pages/payments/CreatePaymentVoucherPage"),
+);
 const PaymentsPage = lazy(() => import("./pages/payments/PaymentsPage"));
 const NewOnboardingPage = lazy(
   () => import("./pages/onboarding/NewOnboardingPage"),
@@ -80,6 +86,10 @@ const ContractDetailPage = lazy(() => import("./pages/contracts/ContractDetailPa
 const CreateContractPage = lazy(() => import("./pages/contracts/CreateContractPage"));
 const PurchaseRequisitionPage = lazy(() => import("./pages/purchase-requisitions/PurchaseRequisitionPage"));
 const PurchaseRequisitionsListPage = lazy(() => import("./pages/purchase-requisitions/PurchaseRequisitionsListPage"));
+const PurchaseOrdersPage = lazy(() => import("./pages/purchase-orders/PurchaseOrdersPage"));
+const CreatePurchaseOrderPage = lazy(() => import("./pages/purchase-orders/CreatePurchaseOrderPage"));
+
+import ErrorBoundary from "./components/shared/ErrorBoundary";
 
 function CurrencyProviderWithAuth({ children }: { children: React.ReactNode }) {
   return <CurrencyProvider>{children}</CurrencyProvider>;
@@ -91,9 +101,11 @@ function RouteFallback() {
 
 function page(Component: ComponentType) {
   return (
-    <Suspense fallback={<RouteFallback />}>
-      <Component />
-    </Suspense>
+    <ErrorBoundary>
+      <Suspense fallback={<RouteFallback />}>
+        <Component />
+      </Suspense>
+    </ErrorBoundary>
   );
 }
 
@@ -184,16 +196,24 @@ export default function App() {
                     path="/accounts-payable"
                     element={page(AccountsPayablePage)}
                   />
+                  <Route
+                    path="/procurement/create-purchase-invoice"
+                    element={page(CreatePurchaseInvoicePage)}
+                  />
+                  <Route
+                    path="/procurement/create-payment-voucher"
+                    element={page(CreatePaymentVoucherPage)}
+                  />
                   <Route path="/payments" element={page(PaymentsPage)} />
-                  <Route path="/sales-orders" element={page(SalesOrdersPage)} />
+                  <Route path="/sales-orders" element={<Navigate to="/dashboard" replace />} />
                   <Route path="/vendors" element={page(VendorsPage)} />
                   <Route
                     path="/onboarding/new"
                     element={page(NewOnboardingPage)}
                   />
                   <Route element={<ProtectedRoute allowedRoles={[...ADMIN_ACCESS_ROLES]} />}>
-  <Route path="/onboarding/queue" element={<OnboardingQueuePage />} />
-</Route>
+                    <Route path="/onboarding/queue" element={page(OnboardingQueuePage)} />
+                  </Route>
                   <Route path="/signature" element={page(SignaturePage)} />
                   <Route path="/reports" element={page(ReportsPage)} />
                   <Route
@@ -220,6 +240,9 @@ export default function App() {
                   <Route path="/contracts/:id" element={page(ContractDetailPage)} />
                   <Route path="/contracts/new" element={page(CreateContractPage)} />
                   <Route path="/contracts/:id/edit" element={page(ContractDetailPage)} />
+                  <Route path="/purchase-orders" element={page(PurchaseOrdersPage)} />
+                  <Route path="/purchase-orders/new" element={page(CreatePurchaseOrderPage)} />
+                  <Route path="/procurement/create-purchase-order" element={page(CreatePurchaseOrderPage)} />
                   <Route path="/procurement/purchase-requisitions" element={page(PurchaseRequisitionsListPage)} />
                   <Route path="/procurement/purchase-requisition/:rfqId" element={page(PurchaseRequisitionPage)} />
                   <Route path="/audit" element={page(AuditTrailPage)} />

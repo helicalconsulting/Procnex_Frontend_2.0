@@ -12,7 +12,8 @@ import {
   Search, Plus, Users, UserCheck, UserX, Eye, Edit3, Trash2, X, ShieldOff,
   Mail, Phone, Globe, MapPin, Building2, ChevronLeft, ChevronRight, ChevronDown,
   Filter, LayoutList, LayoutGrid, Send, Key, Star, Award,
-  ShieldCheck, CheckCircle2, Activity, BarChart3, FileCheck, AlertTriangle,
+  ShieldCheck, CheckCircle2, Activity, BarChart3, FileCheck, AlertTriangle, PieChart,
+  Maximize2, Minimize2,
 } from 'lucide-react';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import FloatingMenu from '../../components/shared/FloatingMenu';
@@ -123,6 +124,7 @@ export default function VendorsPage() {
   const [pageMsg, setPageMsg] = useState<string | null>(null);
   const [detailVendor, setDetailVendor] = useState<VendorTableRow | null>(null);
   const [isFullScreenDetail, setIsFullScreenDetail] = useState(false);
+  const [v360Tab, setV360Tab] = useState<'overview' | 'directory'>('overview');
   const [credentialsMsg, setCredentialsMsg] = useState<string | null>(null);
   const [credVendor, setCredVendor] = useState<VendorTableRow | null>(null);
   const [credLoading, setCredLoading] = useState(false);
@@ -203,9 +205,15 @@ export default function VendorsPage() {
 
   const availableCategories = useMemo(() => {
     const names = new Set<string>();
-    categories.filter((c) => c.isActive).forEach((c) => names.add(c.name));
-    vendors.forEach((v) => { if (v.category) names.add(v.category); });
-    return Array.from(names).sort((a, b) => a.localeCompare(b));
+    categories.filter((c) => c?.isActive).forEach((c) => {
+      const cName = typeof c?.name === 'string' ? c.name : (c?.name ? String(c.name) : '');
+      if (cName) names.add(cName);
+    });
+    vendors.forEach((v) => {
+      const vCat = typeof v?.category === 'string' ? v.category : (v?.category ? String(v.category) : '');
+      if (vCat) names.add(vCat);
+    });
+    return Array.from(names).sort((a, b) => String(a).localeCompare(String(b)));
   }, [categories, vendors]);
 
   const categoryCounts = useMemo(() => {
@@ -214,7 +222,10 @@ export default function VendorsPage() {
     else if (filterMode === 'inactive') list = list.filter((v) => !v.isActive);
     else if (filterMode === 'top-rated') list = list.filter((v) => v.overallScore >= 80);
     const counts: Record<string, number> = {};
-    for (const v of list) counts[v.category] = (counts[v.category] || 0) + 1;
+    for (const v of list) {
+      const cName = typeof v?.category === 'string' ? v.category : String(v?.category || 'General');
+      counts[cName] = (counts[cName] || 0) + 1;
+    }
     return counts;
   }, [vendors, filterMode]);
 
@@ -229,13 +240,16 @@ export default function VendorsPage() {
       list = list.filter((v) => v.overallScore >= 80);
       list = [...list].sort((a, b) => b.overallScore - a.overallScore);
     }
-    if (categoryFilter) list = list.filter((v) => v.category === categoryFilter);
+    if (categoryFilter) list = list.filter((v) => String(v.category || '') === categoryFilter);
     if (!search.trim()) return list;
     const q = search.toLowerCase();
     return list.filter(
-      (v) => v.name.toLowerCase().includes(q) || v.email.toLowerCase().includes(q) ||
-        v.category.toLowerCase().includes(q) || v.contactPerson.toLowerCase().includes(q) ||
-        v.location.toLowerCase().includes(q)
+      (v) =>
+        String(v.name || '').toLowerCase().includes(q) ||
+        String(v.email || '').toLowerCase().includes(q) ||
+        String(v.category || '').toLowerCase().includes(q) ||
+        String(v.contactPerson || '').toLowerCase().includes(q) ||
+        String(v.location || '').toLowerCase().includes(q)
     );
   }, [vendors, filterMode, categoryFilter, search]);
 
@@ -479,8 +493,15 @@ export default function VendorsPage() {
       <div className="vendors-toolbar">
         <div className="vendors-toolbar__search">
           <Search size={16} className="vendors-toolbar__search-icon" />
-          <input type="text" placeholder="Search by name, email, category, contact, or location..." autoComplete="off"
-            value={search} onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }} />
+          <input
+            id="vendor-search-input"
+            name="vendor_search_query"
+            type="text"
+            placeholder="Search by name, email, category, contact, or location..."
+            autoComplete="off"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+          />
         </div>
         <div className="vendors-toolbar__right">
           <div className="vendors-category-filter" ref={categoryFilterRef}>              <button
@@ -706,72 +727,122 @@ export default function VendorsPage() {
       {showModal && (
         <div className="vendors-modal-backdrop" onClick={closeFormModal}>
           <div className="vendors-modal" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}>
-            <div className="vendors-modal__header">
-              <span className="vendors-modal__title">
-                <Building2 size={20} /> {editingVendor ? 'Edit Vendor' : 'Add New Vendor'}
-              </span>
-              <button className="vendors-modal__close" onClick={closeFormModal}><X size={18} /></button>
-            </div>
-            <div className="vendors-modal__body">
-              <div className="vendors-modal__field">
-                <label className="vendors-modal__label">Company Name <span>*</span></label>
-                <input ref={nameInputRef} className="vendors-modal__input" placeholder="e.g. TechSupply Co." value={fName} onChange={e=>setFName(e.target.value)} />
+            <form onSubmit={(e) => { e.preventDefault(); if (canSave && !actionLoading) handleSaveVendor(); }}>
+              <div className="vendors-modal__header">
+                <span className="vendors-modal__title">
+                  <Building2 size={20} /> {editingVendor ? 'Edit Vendor' : 'Add New Vendor'}
+                </span>
+                <button type="button" className="vendors-modal__close" onClick={closeFormModal}><X size={18} /></button>
               </div>
-              <div className="vendors-modal__row">
+              <div className="vendors-modal__body">
                 <div className="vendors-modal__field">
-                  <label className="vendors-modal__label"><Mail size={13} style={{marginRight:4}} /> Email <span>*</span></label>
-                  <input className="vendors-modal__input" type="email" placeholder="vendor@company.in" value={fEmail} onChange={e=>setFEmail(e.target.value)} />
-                </div>
-                <div className="vendors-modal__field">
-                  <label className="vendors-modal__label"><Phone size={13} style={{marginRight:4}} /> Phone</label>
-                  <PhoneInput
-                    countryCode={fCountryCode}
-                    onCountryCodeChange={setFCountryCode}
-                    value={fPhone}
-                    onChange={setFPhone}
-                    placeholder="Type your mobile number"
+                  <label htmlFor="vendor-company-name" className="vendors-modal__label">Company Name <span>*</span></label>
+                  <input
+                    ref={nameInputRef}
+                    id="vendor-company-name"
+                    name="vendor_company_name"
+                    className="vendors-modal__input"
+                    placeholder="e.g. TechSupply Co."
+                    value={fName}
+                    onChange={(e) => setFName(e.target.value)}
+                    autoComplete="off"
                   />
                 </div>
+                <div className="vendors-modal__row">
+                  <div className="vendors-modal__field">
+                    <label htmlFor="vendor-email" className="vendors-modal__label"><Mail size={13} style={{marginRight:4}} /> Email <span>*</span></label>
+                    <input
+                      id="vendor-email"
+                      name="vendor_email"
+                      className="vendors-modal__input"
+                      type="email"
+                      placeholder="vendor@company.in"
+                      value={fEmail}
+                      onChange={(e) => setFEmail(e.target.value)}
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div className="vendors-modal__field">
+                    <label className="vendors-modal__label"><Phone size={13} style={{marginRight:4}} /> Phone</label>
+                    <PhoneInput
+                      countryCode={fCountryCode}
+                      onCountryCodeChange={setFCountryCode}
+                      value={fPhone}
+                      onChange={setFPhone}
+                      placeholder="Type your mobile number"
+                    />
+                  </div>
+                </div>
+                <div className="vendors-modal__row">
+                  <div className="vendors-modal__field">
+                    <label htmlFor="vendor-contact-person" className="vendors-modal__label">Contact Person</label>
+                    <input
+                      id="vendor-contact-person"
+                      name="vendor_contact_person"
+                      className="vendors-modal__input"
+                      placeholder="e.g. Arun Mehta"
+                      value={fContact}
+                      onChange={(e) => setFContact(e.target.value)}
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div className="vendors-modal__field">
+                    <label htmlFor="vendor-category" className="vendors-modal__label">Category</label>
+                    <select
+                      id="vendor-category"
+                      name="vendor_category"
+                      className="vendors-modal__select"
+                      value={fCategory}
+                      onChange={(e) => { setFCategory(e.target.value); const matched = categories.find(c => c.name === e.target.value); setFCategoryId(matched?.id); }}
+                    >
+                      <option value="">Select category</option>
+                      {categories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="vendors-modal__row">
+                  <div className="vendors-modal__field">
+                    <label htmlFor="vendor-location" className="vendors-modal__label"><MapPin size={13} style={{marginRight:4}} /> Location</label>
+                    <input
+                      id="vendor-location"
+                      name="vendor_location"
+                      className="vendors-modal__input"
+                      placeholder="e.g. Mumbai, MH"
+                      value={fLocation}
+                      onChange={(e) => setFLocation(e.target.value)}
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div className="vendors-modal__field">
+                    <label htmlFor="vendor-website" className="vendors-modal__label"><Globe size={13} style={{marginRight:4}} /> Website</label>
+                    <input
+                      id="vendor-website"
+                      name="vendor_website"
+                      className="vendors-modal__input"
+                      placeholder="e.g. company.in"
+                      value={fWebsite}
+                      onChange={(e) => setFWebsite(e.target.value)}
+                      autoComplete="off"
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="vendors-modal__row">
-                <div className="vendors-modal__field">
-                  <label className="vendors-modal__label">Contact Person</label>
-                  <input className="vendors-modal__input" placeholder="e.g. Arun Mehta" value={fContact} onChange={e=>setFContact(e.target.value)} />
-                </div>
-                <div className="vendors-modal__field">
-                  <label className="vendors-modal__label">Category</label>
-                  <select className="vendors-modal__select" value={fCategory} onChange={e=>{ setFCategory(e.target.value); const matched = categories.find(c => c.name === e.target.value); setFCategoryId(matched?.id); }}>
-                    <option value="">Select category</option>
-                    {categories.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}
-                  </select>
-                </div>
+              {editingVendor && (
+                <p style={{ margin: '0 20px 12px', fontSize: '0.85rem', color: 'var(--text-secondary, #64748b)' }}>
+                  Vendor profile fields are saved to the system. Use the Active toggle in the table for portal access.
+                </p>
+              )}
+              <div className="vendors-modal__footer">
+                <button type="button" className="vendors-modal__btn vendors-modal__btn--secondary" onClick={closeFormModal}>Cancel</button>
+                <button
+                  type="submit"
+                  className="vendors-modal__btn vendors-modal__btn--primary"
+                  disabled={!canSave || actionLoading}
+                >
+                  <Building2 size={16} /> {actionLoading ? 'Saving…' : editingVendor ? 'Save changes' : 'Add Vendor'}
+                </button>
               </div>
-              <div className="vendors-modal__row">
-                <div className="vendors-modal__field">
-                  <label className="vendors-modal__label"><MapPin size={13} style={{marginRight:4}} /> Location</label>
-                  <input className="vendors-modal__input" placeholder="e.g. Mumbai, MH" value={fLocation} onChange={e=>setFLocation(e.target.value)} />
-                </div>
-                <div className="vendors-modal__field">
-                  <label className="vendors-modal__label"><Globe size={13} style={{marginRight:4}} /> Website</label>
-                  <input className="vendors-modal__input" placeholder="e.g. company.in" value={fWebsite} onChange={e=>setFWebsite(e.target.value)} />
-                </div>
-              </div>
-            </div>
-            {editingVendor && (
-              <p style={{ margin: '0 20px 12px', fontSize: '0.85rem', color: 'var(--text-secondary, #64748b)' }}>
-                Vendor profile fields are saved to the system. Use the Active toggle in the table for portal access.
-              </p>
-            )}
-            <div className="vendors-modal__footer">
-              <button className="vendors-modal__btn vendors-modal__btn--secondary" onClick={closeFormModal}>Cancel</button>
-              <button
-                className="vendors-modal__btn vendors-modal__btn--primary"
-                disabled={!canSave || actionLoading}
-                onClick={handleSaveVendor}
-              >
-                <Building2 size={16} /> {actionLoading ? 'Saving…' : editingVendor ? 'Save changes' : 'Add Vendor'}
-              </button>
-            </div>
+            </form>
           </div>
         </div>
       )}
@@ -864,6 +935,7 @@ export default function VendorsPage() {
 
                 <div className="v360-actions">
                   <button
+                    type="button"
                     className="v360-action-btn v360-action-btn--close"
                     onClick={() => { setDetailVendor(null); setIsFullScreenDetail(false); }}
                     title="Close"
@@ -914,265 +986,326 @@ export default function VendorsPage() {
               </div>
             </div>
 
+            {/* Sub-Header Horizontal Tab Navigation */}
+            <div className="v360-tab-bar">
+              <button
+                type="button"
+                className={`v360-tab-btn ${v360Tab === 'overview' ? 'v360-tab-btn--active' : ''}`}
+                onClick={() => setV360Tab('overview')}
+              >
+                <PieChart size={14} />
+                <span>Evaluation & Risk Overview</span>
+              </button>
+              <button
+                type="button"
+                className={`v360-tab-btn ${v360Tab === 'directory' ? 'v360-tab-btn--active' : ''}`}
+                onClick={() => setV360Tab('directory')}
+              >
+                <Building2 size={14} />
+                <span>Banking, Performance & Directory</span>
+              </button>
+            </div>
+
             {/* Dashboard Scroll Body */}
             <div className="v360-body">
-              {/* Top Row Grid: Score Composition, Risk Dashboard, Compliance */}
-              <div className="v360-grid v360-grid--3col">
-                
-                {/* Card 1: Composite Score Composition */}
-                <div className="v360-card">
-                  <div className="v360-card__header">
-                    <BarChart3 size={15} /> Score Breakdown
-                    <span className="v360-badge v360-badge--green">{detailVendor.overallScore}/100</span>
+              {v360Tab === 'overview' ? (
+                /* Tab 1: Evaluation & Risk Overview (Score Pie Chart, Risk Dashboard, Compliance Grid) */
+                <div className="v360-grid v360-grid--3col">
+                  
+                  {/* Card 1: Donut Pie Chart Score Breakdown */}
+                  <div className="v360-card">
+                    <div className="v360-card__header">
+                      <PieChart size={15} /> Score Breakdown (Weight Breakdown)
+                      <span className="v360-badge v360-badge--green">{detailVendor.overallScore}/100</span>
+                    </div>
+                    <div className="v360-card__body">
+                      <div className="v360-pie-layout">
+                        {/* SVG Donut Chart */}
+                        <div className="v360-pie-chart-wrap">
+                          <svg viewBox="0 0 42 42" className="v360-pie-svg">
+                            <circle cx="21" cy="21" r="15.9155" fill="transparent" stroke="var(--border)" strokeWidth="4.5" />
+                            {(() => {
+                              const quality = detailVendor.avgQuality || 0;
+                              const delivery = detailVendor.avgDelivery || 0;
+                              const price = detailVendor.avgPriceScore || 0;
+                              const tax = (detailVendor.gstNumber && detailVendor.panNumber) ? 100 : (detailVendor.gstNumber || detailVendor.panNumber) ? 50 : 0;
+                              const bank = (detailVendor.bankName && detailVendor.bankAccountNumber) ? 100 : detailVendor.bankName ? 50 : 0;
+
+                              const items = [
+                                { weight: 30, color: '#6366f1' },
+                                { weight: 30, color: '#10b981' },
+                                { weight: 20, color: '#f59e0b' },
+                                { weight: 10, color: '#ec4899' },
+                                { weight: 10, color: '#06b6d4' },
+                              ];
+
+                              let accum = 0;
+                              return items.map((item, idx) => {
+                                const dash = `${item.weight} ${100 - item.weight}`;
+                                const offset = 100 - accum + 25;
+                                accum += item.weight;
+                                return (
+                                  <circle
+                                    key={idx}
+                                    cx="21"
+                                    cy="21"
+                                    r="15.9155"
+                                    fill="transparent"
+                                    stroke={item.color}
+                                    strokeWidth="4.5"
+                                    strokeDasharray={dash}
+                                    strokeDashoffset={offset}
+                                  />
+                                );
+                              });
+                            })()}
+                            <text x="21" y="20" className="v360-pie-center-val" textAnchor="middle">
+                              {detailVendor.overallScore > 0 ? detailVendor.overallScore : '0'}
+                            </text>
+                            <text x="21" y="26" className="v360-pie-center-lbl" textAnchor="middle">
+                              SCORE
+                            </text>
+                          </svg>
+                        </div>
+
+                        {/* Pie Chart Legend & Scores */}
+                        <div className="v360-pie-legend">
+                          {[
+                            { label: 'Quality Rating', score: detailVendor.avgQuality, color: '#6366f1', weight: '30%' },
+                            { label: 'Delivery Performance', score: detailVendor.avgDelivery, color: '#10b981', weight: '30%' },
+                            { label: 'Price Competitiveness', score: detailVendor.avgPriceScore, color: '#f59e0b', weight: '20%' },
+                            { label: 'Tax Compliance', score: (detailVendor.gstNumber && detailVendor.panNumber) ? 100 : (detailVendor.gstNumber || detailVendor.panNumber) ? 50 : 0, color: '#ec4899', weight: '10%' },
+                            { label: 'Banking Onboarding', score: (detailVendor.bankName && detailVendor.bankAccountNumber) ? 100 : detailVendor.bankName ? 50 : 0, color: '#06b6d4', weight: '10%' },
+                          ].map((item) => (
+                            <div key={item.label} className="v360-pie-legend-item">
+                              <span className="v360-pie-dot" style={{ background: item.color }} />
+                              <span className="v360-pie-label">{item.label}</span>
+                              <span className="v360-pie-val">{item.score > 0 ? `${item.score}%` : 'N/A'}</span>
+                              <span className="v360-pie-weight">({item.weight})</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="v360-card__body">
-                    <div className="v360-score-list">
-                      {[
-                        { label: 'Quality Rating', score: detailVendor.avgQuality, hasData: detailVendor.avgQuality > 0, weight: '30%' },
-                        { label: 'Delivery Performance', score: detailVendor.avgDelivery, hasData: detailVendor.avgDelivery > 0, weight: '30%' },
-                        { label: 'Price Competitiveness', score: detailVendor.avgPriceScore, hasData: detailVendor.avgPriceScore > 0, weight: '20%' },
-                        { label: 'Tax Compliance', score: (detailVendor.gstNumber && detailVendor.panNumber) ? 100 : (detailVendor.gstNumber || detailVendor.panNumber) ? 50 : 0, hasData: true, weight: '10%' },
-                        { label: 'Banking Onboarding', score: (detailVendor.bankName && detailVendor.bankAccountNumber) ? 100 : detailVendor.bankName ? 50 : 0, hasData: true, weight: '10%' },
-                      ].map((item) => (
-                        <div key={item.label} className="v360-score-item">
-                          <div className="v360-score-item__top">
-                            <span className="v360-score-item__lbl">{item.label}</span>
-                            <span className="v360-score-item__vals">
-                              <strong>{item.hasData ? `${item.score}%` : 'N/A'}</strong>
-                              <small>{item.weight}</small>
+
+                  {/* Card 2: Risk Dashboard */}
+                  <div className="v360-card">
+                    <div className="v360-card__header">
+                      <ShieldCheck size={15} /> Risk Dashboard
+                      <span className={`v360-badge ${!hasEval ? 'v360-badge--blue' : overallRisk <= 25 ? 'v360-badge--green' : 'v360-badge--warn'}`}>
+                        {!hasEval ? 'Untested' : overallRisk <= 25 ? 'Low Risk' : overallRisk <= 50 ? 'Medium Risk' : 'High Risk'} ({hasEval ? `${overallRisk}/100` : 'No Orders'})
+                      </span>
+                    </div>
+                    <div className="v360-card__body">
+                      <div className="v360-risk-list">
+                        {[
+                          { label: 'Quality Defect Risk', level: qualRisk, evaluated: detailVendor.avgQuality > 0 },
+                          { label: 'Late Delivery Risk', level: delivRisk, evaluated: detailVendor.avgDelivery > 0 },
+                          { label: 'Price Variance Risk', level: priceRisk, evaluated: detailVendor.avgPriceScore > 0 },
+                          { label: 'Tax Compliance Risk', level: compRisk, evaluated: true },
+                          { label: 'Banking Setup Risk', level: bankRisk, evaluated: true },
+                          { label: 'Portal Access Risk', level: portalRisk, evaluated: true },
+                        ].map((r) => (
+                          <div key={r.label} className="v360-risk-item">
+                            <span className="v360-risk-label">{r.label}</span>
+                            <div className="v360-risk-bar-track">
+                              <div
+                                className="v360-risk-bar-fill"
+                                style={{
+                                  width: `${Math.min(100, Math.max(0, r.level))}%`,
+                                  background: !r.evaluated ? 'var(--border)' : r.level > 50 ? '#ef4444' : r.level > 25 ? '#f59e0b' : '#10b981',
+                                }}
+                              />
+                            </div>
+                            <span className="v360-risk-val">
+                              <strong>{r.evaluated ? `${r.level}%` : 'N/A'}</strong>
                             </span>
                           </div>
-                          <div className="v360-score-bar-track">
-                            <div
-                              className="v360-score-bar-fill"
-                              style={{
-                                width: `${Math.min(100, Math.max(0, item.score))}%`,
-                                background: !item.hasData ? 'var(--border)' : item.score >= 80 ? 'linear-gradient(90deg, #107e3e, #10b981)' : item.score >= 60 ? 'linear-gradient(90deg, #d97706, #fbbf24)' : 'linear-gradient(90deg, #dc2626, #ef4444)',
-                              }}
-                            />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card 3: Tax & Compliance Checklist (Compact 2-Column Grid) */}
+                  <div className="v360-card">
+                    <div className="v360-card__header">
+                      <FileCheck size={15} /> Tax & Compliance Checklist
+                      <span className="v360-badge v360-badge--green">
+                        {(detailVendor.gstNumber && detailVendor.panNumber && detailVendor.bankName) ? 'Verified' : 'Incomplete'}
+                      </span>
+                    </div>
+                    <div className="v360-card__body">
+                      <div className="v360-checklist v360-checklist--2col">
+                        {[
+                          { label: 'GST Registration', sub: detailVendor.gstNumber ? `GST: ${detailVendor.gstNumber}` : 'Not Provided', status: detailVendor.gstNumber ? 'valid' : 'invalid' },
+                          { label: 'PAN Registration', sub: detailVendor.panNumber ? `PAN: ${detailVendor.panNumber}` : 'Not Provided', status: detailVendor.panNumber ? 'valid' : 'invalid' },
+                          { label: 'Bank Name', sub: detailVendor.bankName ? detailVendor.bankName : 'Not Provided', status: detailVendor.bankName ? 'valid' : 'invalid' },
+                          { label: 'Bank Account Number', sub: detailVendor.bankAccountNumber ? `Account: ${detailVendor.bankAccountNumber}` : 'Not Provided', status: detailVendor.bankAccountNumber ? 'valid' : 'invalid' },
+                          { label: 'Bank IFSC Code', sub: detailVendor.bankIfscCode ? `IFSC: ${detailVendor.bankIfscCode}` : 'Not Provided', status: detailVendor.bankIfscCode ? 'valid' : 'invalid' },
+                          { label: 'Portal Access', sub: detailVendor.isActive ? 'Active Vendor Account' : 'Inactive Account', status: detailVendor.isActive ? 'valid' : 'warn' },
+                          { label: 'Contact Info', sub: (detailVendor.email && detailVendor.phone) ? 'Email & Phone On File' : 'Incomplete', status: (detailVendor.email && detailVendor.phone) ? 'valid' : 'warn' },
+                          { label: 'Address Info', sub: detailVendor.address ? detailVendor.address : 'Not Provided', status: detailVendor.address ? 'valid' : 'warn' },
+                        ].map((item) => (
+                          <div key={item.label} className="v360-check-item">
+                            {item.status === 'valid' ? (
+                              <CheckCircle2 size={15} className="v360-icon--valid" />
+                            ) : item.status === 'warn' ? (
+                              <AlertTriangle size={15} className="v360-icon--warn" />
+                            ) : (
+                              <X size={15} className="v360-icon--invalid" />
+                            )}
+                            <div className="v360-check-text">
+                              <span className="v360-check-label">{item.label}</span>
+                              <span className="v360-check-sub">{item.sub}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              ) : (
+                /* Tab 2: Banking, Performance & Directory Details */
+                <div className="v360-grid v360-grid--3col">
+                  
+                  {/* Card 4: Banking & Financial Details */}
+                  <div className="v360-card">
+                    <div className="v360-card__header">
+                      <Building2 size={15} /> Banking & System Details
+                      <span className="v360-badge v360-badge--blue">
+                        {detailVendor.bankName ? 'Banking Configured' : 'Pending Banking'}
+                      </span>
+                    </div>
+                    <div className="v360-card__body">
+                      <div className="v360-fin-summary">
+                        <div className="v360-fin-kpi">
+                          <span className="v360-fin-kpi__val">{detailVendor.totalOrders}</span>
+                          <span className="v360-fin-kpi__lbl">Orders</span>
+                        </div>
+                        <div className="v360-fin-kpi">
+                          <span className="v360-fin-kpi__val">{detailVendor.avgQuality > 0 ? `${detailVendor.avgQuality}%` : '—'}</span>
+                          <span className="v360-fin-kpi__lbl">Quality</span>
+                        </div>
+                        <div className="v360-fin-kpi">
+                          <span className="v360-fin-kpi__val">{detailVendor.avgDelivery > 0 ? `${detailVendor.avgDelivery}%` : '—'}</span>
+                          <span className="v360-fin-kpi__lbl">Delivery</span>
+                        </div>
+                        <div className="v360-fin-kpi">
+                          <span className="v360-fin-kpi__val">{detailVendor.avgPriceScore > 0 ? `${detailVendor.avgPriceScore}%` : '—'}</span>
+                          <span className="v360-fin-kpi__lbl">Price Score</span>
+                        </div>
+                      </div>
+
+                      <div className="v360-bank-section">
+                        <div className="v360-sub-title">BANKING INFORMATION</div>
+                        <div className="v360-detail-grid">
+                          <div className="v360-detail-item">
+                            <span className="v360-detail-lbl">Bank Name</span>
+                            <span className="v360-detail-val">{detailVendor.bankName || '—'}</span>
+                          </div>
+                          <div className="v360-detail-item">
+                            <span className="v360-detail-lbl">Branch</span>
+                            <span className="v360-detail-val">{detailVendor.bankBranch || '—'}</span>
+                          </div>
+                          <div className="v360-detail-item">
+                            <span className="v360-detail-lbl">Account No.</span>
+                            <span className="v360-detail-val">{detailVendor.bankAccountNumber || '—'}</span>
+                          </div>
+                          <div className="v360-detail-item">
+                            <span className="v360-detail-lbl">IFSC Code</span>
+                            <span className="v360-detail-val">{detailVendor.bankIfscCode || '—'}</span>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Card 2: Risk Dashboard */}
-                <div className="v360-card">
-                  <div className="v360-card__header">
-                    <ShieldCheck size={15} /> Risk Dashboard
-                    <span className={`v360-badge ${!hasEval ? 'v360-badge--blue' : overallRisk <= 25 ? 'v360-badge--green' : 'v360-badge--warn'}`}>
-                      {!hasEval ? 'Untested' : overallRisk <= 25 ? 'Low Risk' : overallRisk <= 50 ? 'Medium Risk' : 'High Risk'} ({hasEval ? `${overallRisk}/100` : 'No Orders'})
-                    </span>
-                  </div>
-                  <div className="v360-card__body">
-                    <div className="v360-risk-list">
-                      {[
-                        { label: 'Quality Defect Risk', level: qualRisk, evaluated: detailVendor.avgQuality > 0 },
-                        { label: 'Late Delivery Risk', level: delivRisk, evaluated: detailVendor.avgDelivery > 0 },
-                        { label: 'Price Variance Risk', level: priceRisk, evaluated: detailVendor.avgPriceScore > 0 },
-                        { label: 'Tax Compliance Risk', level: compRisk, evaluated: true },
-                        { label: 'Banking Setup Risk', level: bankRisk, evaluated: true },
-                        { label: 'Portal Access Risk', level: portalRisk, evaluated: true },
-                      ].map((r) => (
-                        <div key={r.label} className="v360-risk-item">
-                          <span className="v360-risk-label">{r.label}</span>
-                          <div className="v360-risk-bar-track">
-                            <div
-                              className="v360-risk-bar-fill"
-                              style={{
-                                width: `${Math.min(100, Math.max(0, r.level))}%`,
-                                background: !r.evaluated ? 'var(--border)' : r.level > 50 ? '#ef4444' : r.level > 25 ? '#f59e0b' : '#10b981',
-                              }}
-                            />
-                          </div>
-                          <span className="v360-risk-val">
-                            <strong>{r.evaluated ? `${r.level}%` : 'N/A'}</strong>
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Card 3: Compliance & Registration Checklist */}
-                <div className="v360-card">
-                  <div className="v360-card__header">
-                    <FileCheck size={15} /> Tax & Compliance Checklist
-                    <span className="v360-badge v360-badge--green">
-                      {(detailVendor.gstNumber && detailVendor.panNumber && detailVendor.bankName) ? 'Verified' : 'Incomplete'}
-                    </span>
-                  </div>
-                  <div className="v360-card__body">
-                    <div className="v360-checklist">
-                      {[
-                        { label: 'GST Registration', sub: detailVendor.gstNumber ? `GST: ${detailVendor.gstNumber}` : 'Not Provided', status: detailVendor.gstNumber ? 'valid' : 'invalid' },
-                        { label: 'PAN Registration', sub: detailVendor.panNumber ? `PAN: ${detailVendor.panNumber}` : 'Not Provided', status: detailVendor.panNumber ? 'valid' : 'invalid' },
-                        { label: 'Bank Name', sub: detailVendor.bankName ? detailVendor.bankName : 'Not Provided', status: detailVendor.bankName ? 'valid' : 'invalid' },
-                        { label: 'Bank Account Number', sub: detailVendor.bankAccountNumber ? `Account: ${detailVendor.bankAccountNumber}` : 'Not Provided', status: detailVendor.bankAccountNumber ? 'valid' : 'invalid' },
-                        { label: 'Bank IFSC Code', sub: detailVendor.bankIfscCode ? `IFSC: ${detailVendor.bankIfscCode}` : 'Not Provided', status: detailVendor.bankIfscCode ? 'valid' : 'invalid' },
-                        { label: 'Portal Access', sub: detailVendor.isActive ? 'Active Vendor Account' : 'Inactive Account', status: detailVendor.isActive ? 'valid' : 'warn' },
-                        { label: 'Contact Information', sub: (detailVendor.email && detailVendor.phone) ? 'Email & Phone On File' : 'Incomplete', status: (detailVendor.email && detailVendor.phone) ? 'valid' : 'warn' },
-                        { label: 'Address Info', sub: detailVendor.address ? detailVendor.address : 'Not Provided', status: detailVendor.address ? 'valid' : 'warn' },
-                      ].map((item) => (
-                        <div key={item.label} className="v360-check-item">
-                          {item.status === 'valid' ? (
-                            <CheckCircle2 size={16} className="v360-icon--valid" />
-                          ) : item.status === 'warn' ? (
-                            <AlertTriangle size={16} className="v360-icon--warn" />
-                          ) : (
-                            <X size={16} className="v360-icon--invalid" />
-                          )}
-                          <div className="v360-check-text">
-                            <span className="v360-check-label">{item.label}</span>
-                            <span className="v360-check-sub">{item.sub}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Bottom Row Grid: Banking Details, Performance KPI Scorecard, Contact Details */}
-              <div className="v360-grid v360-grid--3col" style={{ marginTop: 16 }}>
-                
-                {/* Card 4: Banking & Financial Details */}
-                <div className="v360-card">
-                  <div className="v360-card__header">
-                    <Building2 size={15} /> Banking & System Details
-                    <span className="v360-badge v360-badge--blue">
-                      {detailVendor.bankName ? 'Banking Configured' : 'Pending Banking'}
-                    </span>
-                  </div>
-                  <div className="v360-card__body">
-                    <div className="v360-fin-summary">
-                      <div className="v360-fin-kpi">
-                        <span className="v360-fin-kpi__val">{detailVendor.totalOrders}</span>
-                        <span className="v360-fin-kpi__lbl">Orders</span>
-                      </div>
-                      <div className="v360-fin-kpi">
-                        <span className="v360-fin-kpi__val">{detailVendor.avgQuality > 0 ? `${detailVendor.avgQuality}%` : '—'}</span>
-                        <span className="v360-fin-kpi__lbl">Quality</span>
-                      </div>
-                      <div className="v360-fin-kpi">
-                        <span className="v360-fin-kpi__val">{detailVendor.avgDelivery > 0 ? `${detailVendor.avgDelivery}%` : '—'}</span>
-                        <span className="v360-fin-kpi__lbl">Delivery</span>
-                      </div>
-                      <div className="v360-fin-kpi">
-                        <span className="v360-fin-kpi__val">{detailVendor.avgPriceScore > 0 ? `${detailVendor.avgPriceScore}%` : '—'}</span>
-                        <span className="v360-fin-kpi__lbl">Price Score</span>
                       </div>
                     </div>
+                  </div>
 
-                    <div className="v360-bank-section">
-                      <div className="v360-sub-title">BANKING INFORMATION</div>
+                  {/* Card 5: Performance KPI Scorecard */}
+                  <div className="v360-card">
+                    <div className="v360-card__header">
+                      <Activity size={15} /> Performance Scorecard
+                      <span className="v360-badge v360-badge--green">{hasEval ? `${detailVendor.overallScore}% Overall` : 'No Eval'}</span>
+                    </div>
+                    <div className="v360-card__body" style={{ padding: 0 }}>
+                      <table className="v360-kpi-table">
+                        <thead>
+                          <tr>
+                            <th>METRIC</th>
+                            <th>SCORE</th>
+                            <th>STATUS</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[
+                            { kpi: 'Quality Score', score: detailVendor.avgQuality > 0 ? `${detailVendor.avgQuality}%` : '—', val: detailVendor.avgQuality },
+                            { kpi: 'Delivery Performance', score: detailVendor.avgDelivery > 0 ? `${detailVendor.avgDelivery}%` : '—', val: detailVendor.avgDelivery },
+                            { kpi: 'Price Competitiveness', score: detailVendor.avgPriceScore > 0 ? `${detailVendor.avgPriceScore}%` : '—', val: detailVendor.avgPriceScore },
+                            { kpi: 'Overall Performance', score: detailVendor.overallScore > 0 ? `${detailVendor.overallScore}%` : '—', val: detailVendor.overallScore },
+                          ].map((row) => {
+                            const statusText = row.val >= 80 ? 'Exceeds' : row.val >= 60 ? 'Meets' : row.val > 0 ? 'Under' : 'No Data';
+                            return (
+                              <tr key={row.kpi}>
+                                <td><strong>{row.kpi}</strong></td>
+                                <td>{row.score}</td>
+                                <td>
+                                  <span className={`v360-pill ${row.val >= 80 ? 'v360-pill--success' : row.val >= 60 ? 'v360-badge--warn' : 'v360-badge--blue'}`}>
+                                    {statusText}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Card 6: Contact Information & Directory */}
+                  <div className="v360-card">
+                    <div className="v360-card__header">
+                      <Mail size={15} /> Contact & Directory Details
+                      <span className={`v360-badge ${detailVendor.isActive ? 'v360-badge--green' : 'v360-badge--warn'}`}>
+                        {detailVendor.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                    <div className="v360-card__body">
                       <div className="v360-detail-grid">
                         <div className="v360-detail-item">
-                          <span className="v360-detail-lbl">Bank Name</span>
-                          <span className="v360-detail-val">{detailVendor.bankName || '—'}</span>
+                          <span className="v360-detail-lbl">Email</span>
+                          <span className="v360-detail-val">{detailVendor.email}</span>
                         </div>
                         <div className="v360-detail-item">
-                          <span className="v360-detail-lbl">Branch</span>
-                          <span className="v360-detail-val">{detailVendor.bankBranch || '—'}</span>
+                          <span className="v360-detail-lbl">Phone</span>
+                          <span className="v360-detail-val">{detailVendor.phone}</span>
                         </div>
                         <div className="v360-detail-item">
-                          <span className="v360-detail-lbl">Account No.</span>
-                          <span className="v360-detail-val">{detailVendor.bankAccountNumber || '—'}</span>
+                          <span className="v360-detail-lbl">Contact Person</span>
+                          <span className="v360-detail-val">{detailVendor.contactPerson}</span>
                         </div>
                         <div className="v360-detail-item">
-                          <span className="v360-detail-lbl">IFSC Code</span>
-                          <span className="v360-detail-val">{detailVendor.bankIfscCode || '—'}</span>
+                          <span className="v360-detail-lbl">Category</span>
+                          <span className="v360-detail-val">{detailVendor.category}</span>
+                        </div>
+                        <div className="v360-detail-item">
+                          <span className="v360-detail-lbl">Website</span>
+                          <span className="v360-detail-val">{detailVendor.website}</span>
+                        </div>
+                        <div className="v360-detail-item">
+                          <span className="v360-detail-lbl">Location</span>
+                          <span className="v360-detail-val">{detailVendor.location}</span>
+                        </div>
+                        <div className="v360-detail-item" style={{ gridColumn: '1 / -1' }}>
+                          <span className="v360-detail-lbl">Address</span>
+                          <span className="v360-detail-val">{detailVendor.address || '—'}</span>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Card 5: Performance KPI Scorecard */}
-                <div className="v360-card">
-                  <div className="v360-card__header">
-                    <Activity size={15} /> Performance Scorecard
-                    <span className="v360-badge v360-badge--green">{hasEval ? `${detailVendor.overallScore}% Overall` : 'No Eval'}</span>
-                  </div>
-                  <div className="v360-card__body" style={{ padding: 0 }}>
-                    <table className="v360-kpi-table">
-                      <thead>
-                        <tr>
-                          <th>METRIC</th>
-                          <th>SCORE</th>
-                          <th>STATUS</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {[
-                          { kpi: 'Quality Score', score: detailVendor.avgQuality > 0 ? `${detailVendor.avgQuality}%` : '—', val: detailVendor.avgQuality },
-                          { kpi: 'Delivery Performance', score: detailVendor.avgDelivery > 0 ? `${detailVendor.avgDelivery}%` : '—', val: detailVendor.avgDelivery },
-                          { kpi: 'Price Competitiveness', score: detailVendor.avgPriceScore > 0 ? `${detailVendor.avgPriceScore}%` : '—', val: detailVendor.avgPriceScore },
-                          { kpi: 'Overall Performance', score: detailVendor.overallScore > 0 ? `${detailVendor.overallScore}%` : '—', val: detailVendor.overallScore },
-                        ].map((row) => {
-                          const statusText = row.val >= 80 ? 'Exceeds' : row.val >= 60 ? 'Meets' : row.val > 0 ? 'Under' : 'No Data';
-                          return (
-                            <tr key={row.kpi}>
-                              <td><strong>{row.kpi}</strong></td>
-                              <td>{row.score}</td>
-                              <td>
-                                <span className={`v360-pill ${row.val >= 80 ? 'v360-pill--success' : row.val >= 60 ? 'v360-badge--warn' : 'v360-badge--blue'}`}>
-                                  {statusText}
-                                </span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
                 </div>
-
-                {/* Card 6: Contact Information & Directory */}
-                <div className="v360-card">
-                  <div className="v360-card__header">
-                    <Mail size={15} /> Contact & Directory Details
-                    <span className={`v360-badge ${detailVendor.isActive ? 'v360-badge--green' : 'v360-badge--warn'}`}>
-                      {detailVendor.isActive ? 'Active' : 'Inactive'}
-                    </span>
-                  </div>
-                  <div className="v360-card__body">
-                    <div className="v360-detail-grid">
-                      <div className="v360-detail-item">
-                        <span className="v360-detail-lbl">Email</span>
-                        <span className="v360-detail-val">{detailVendor.email}</span>
-                      </div>
-                      <div className="v360-detail-item">
-                        <span className="v360-detail-lbl">Phone</span>
-                        <span className="v360-detail-val">{detailVendor.phone}</span>
-                      </div>
-                      <div className="v360-detail-item">
-                        <span className="v360-detail-lbl">Contact Person</span>
-                        <span className="v360-detail-val">{detailVendor.contactPerson}</span>
-                      </div>
-                      <div className="v360-detail-item">
-                        <span className="v360-detail-lbl">Category</span>
-                        <span className="v360-detail-val">{detailVendor.category}</span>
-                      </div>
-                      <div className="v360-detail-item">
-                        <span className="v360-detail-lbl">Website</span>
-                        <span className="v360-detail-val">{detailVendor.website}</span>
-                      </div>
-                      <div className="v360-detail-item">
-                        <span className="v360-detail-lbl">Location</span>
-                        <span className="v360-detail-val">{detailVendor.location}</span>
-                      </div>
-                      <div className="v360-detail-item" style={{ gridColumn: '1 / -1' }}>
-                        <span className="v360-detail-lbl">Address</span>
-                        <span className="v360-detail-val">{detailVendor.address || '—'}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
+              )}
             </div>
 
             {/* Modal Footer */}

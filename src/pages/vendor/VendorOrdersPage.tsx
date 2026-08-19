@@ -19,8 +19,10 @@ import {
   AlertCircle,
   Upload,
   MessageSquare,
+  Download,
 } from 'lucide-react';
 import { useCurrency, CurrencySelector, CurrencyBadge } from '../../components/shared/CurrencyMaster';
+import { downloadPurchaseOrderAsPdf } from '../../utils/pdfDownload';
 import '../../styles/vendor-portal.css';
 import '../../styles/vendor-orders.css';
 
@@ -368,7 +370,16 @@ export default function VendorOrdersPage() {
                       </div>
 
                       {/* Action Buttons */}
-                      <div style={{ display: 'flex', gap: 12, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+                      <div style={{ display: 'flex', gap: 12, paddingTop: 16, borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
+                        <button
+                          className="vendor-btn vendor-btn--primary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            downloadPurchaseOrderAsPdf(order, formatAmount, displayCurrency);
+                          }}
+                        >
+                          <Download size={15} /> Download PO (PDF)
+                        </button>
                         {order.status === 'DELIVERED' && (
                           <Link to="/vendor/invoices" className="vendor-btn vendor-btn--primary" style={{ textDecoration: 'none' }}>
                             <Upload size={15} /> Upload Invoice

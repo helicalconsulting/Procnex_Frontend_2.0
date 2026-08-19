@@ -142,43 +142,65 @@ export function mapApiRfqDetailToTableRow(rfq: Record<string, unknown>): RFQTabl
   return mapApiRfqToTableRow(rfq);
 }
 
+function safeString(val: unknown, fallback = '—'): string {
+  if (val == null) return fallback;
+  if (typeof val === 'string') return val || fallback;
+  if (typeof val === 'number' || typeof val === 'boolean') return String(val);
+  if (typeof val === 'object') {
+    const obj = val as Record<string, unknown>;
+    if (typeof obj.name === 'string' && obj.name) return obj.name;
+    if (typeof obj.label === 'string' && obj.label) return obj.label;
+    if (typeof obj.title === 'string' && obj.title) return obj.title;
+    try {
+      const str = String(val);
+      return str === '[object Object]' ? fallback : str;
+    } catch {
+      return fallback;
+    }
+  }
+  return fallback;
+}
+
 export function mapVendorToTableRow(v: Vendor & Record<string, unknown>): VendorTableRow {
-  const name = v.name;
   const raw = v as Record<string, unknown>;
-  const rawLocation = raw.location as string | null | undefined;
-  const rawAddress = raw.address as string | null | undefined;
-  // If location is empty/missing, use address as fallback
-  const location = rawLocation || rawAddress || '—';
-  // Extract performance data from the nested `performance` object
+  const name = safeString(raw.name, 'Vendor');
+  const email = safeString(raw.email, '');
+  const phone = safeString(raw.phone, '—');
+  const contactPerson = safeString(raw.contactPerson, name);
+  const category = safeString(raw.category, 'General');
+  const location = safeString(raw.location || raw.address, '—');
+  const website = safeString(raw.website, '—');
   const perf = raw.performance as { avgQuality?: number; avgDelivery?: number; avgPriceScore?: number; overallScore?: number } | null | undefined;
+  const idStr = safeString(raw.id, String(Math.random()));
+
   return {
-    id: v.id,
+    id: idStr,
     name,
-    email: v.email,
-    phone: String(raw.phone || '—'),
-    contactPerson: String(raw.contactPerson || name),
-    category: String(raw.category || 'General'),
-    location: String(location),
-    website: String(raw.website || '—'),
-    isActive: v.isActive,
+    email,
+    phone,
+    contactPerson,
+    category,
+    location,
+    website,
+    isActive: Boolean(raw.isActive),
     initials: initials(name),
-    avatarMod: String((Number(v.id) % 6) + 1),
+    avatarMod: String((Math.abs(Number(idStr) || 1) % 6) + 1),
     avgQuality: perf?.avgQuality ?? 0,
     avgDelivery: perf?.avgDelivery ?? 0,
     avgPriceScore: perf?.avgPriceScore ?? 0,
     overallScore: perf?.overallScore ?? 0,
     totalOrders: Number(raw.totalOrders || 0),
-    createdAt: String(raw.createdAt || new Date().toISOString()).slice(0, 10),
+    createdAt: safeString(raw.createdAt, new Date().toISOString()).slice(0, 10),
     hasPortalCredentials: Boolean(raw.hasPortalCredentials),
     passwordSetupPending: Boolean(raw.passwordSetupPending),
     // Additional profile fields from backend (may be null for mock)
-    address: raw.address as string | undefined || undefined,
-    gstNumber: raw.gstNumber as string | undefined || undefined,
-    panNumber: raw.panNumber as string | undefined || undefined,
-    bankName: raw.bankName as string | undefined || undefined,
-    bankAccountNumber: raw.bankAccountNumber as string | undefined || undefined,
-    bankIfscCode: raw.bankIfscCode as string | undefined || undefined,
-    bankBranch: raw.bankBranch as string | undefined || undefined,
+    address: raw.address ? safeString(raw.address, undefined as any) : undefined,
+    gstNumber: raw.gstNumber ? safeString(raw.gstNumber, undefined as any) : undefined,
+    panNumber: raw.panNumber ? safeString(raw.panNumber, undefined as any) : undefined,
+    bankName: raw.bankName ? safeString(raw.bankName, undefined as any) : undefined,
+    bankAccountNumber: raw.bankAccountNumber ? safeString(raw.bankAccountNumber, undefined as any) : undefined,
+    bankIfscCode: raw.bankIfscCode ? safeString(raw.bankIfscCode, undefined as any) : undefined,
+    bankBranch: raw.bankBranch ? safeString(raw.bankBranch, undefined as any) : undefined,
   };
 }
 

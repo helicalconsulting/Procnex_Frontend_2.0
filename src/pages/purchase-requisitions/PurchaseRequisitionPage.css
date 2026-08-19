@@ -281,44 +281,107 @@
 
 .pr-kpi-card {
   padding: 20px;
-  border-radius: var(--radius-lg);
-  background: var(--surface-card);
-  border: 1px solid var(--border);
+  border-radius: 14px !important;
+  background: rgba(255, 255, 255, 0.72) !important;
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.8) !important;
   display: flex;
   align-items: center;
   gap: 16px;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.08), inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
   cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+[data-theme="dark"] .pr-kpi-card {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.65) 0%, rgba(15, 23, 42, 0.75) 100%) !important;
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.35), inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
 }
 
 .pr-kpi-card:hover {
-  border-color: var(--border-strong);
-  box-shadow: var(--shadow-md);
-  transform: translateY(-2px);
+  transform: translateY(-4px) scale(1.015);
+  background: rgba(255, 255, 255, 0.88) !important;
+  border-color: rgba(10, 110, 209, 0.4) !important;
+  box-shadow: 0 16px 40px 0 rgba(10, 110, 209, 0.15), inset 0 1px 0 0 rgba(255, 255, 255, 1);
 }
 
-.pr-kpi-card--active {
-  border-color: var(--primary-500) !important;
-  box-shadow: 0 2px 12px rgba(10, 110, 209, 0.15) !important;
-  transform: translateY(-2px);
+[data-theme="dark"] .pr-kpi-card:hover {
+  background: linear-gradient(135deg, rgba(38, 52, 75, 0.8) 0%, rgba(22, 33, 52, 0.85) 100%) !important;
+  border-color: rgba(77, 177, 255, 0.4) !important;
+  box-shadow: 0 12px 36px 0 rgba(0, 0, 0, 0.45), inset 0 1px 0 0 rgba(255, 255, 255, 0.18);
+}
+
+.pr-kpi-card--active,
+[data-theme="dark"] .pr-kpi-card--active,
+.pr-kpi-card.active,
+[data-theme="dark"] .pr-kpi-card.active {
+  border: 1.5px solid #388bfd !important;
+  box-shadow: 0 0 0 1.5px #388bfd, 0 0 25px rgba(56, 139, 253, 0.75), 0 0 10px rgba(56, 139, 253, 0.9), inset 0 0 15px rgba(56, 139, 253, 0.2) !important;
+  background: rgba(56, 139, 253, 0.16) !important;
+  transform: translateY(-3px) scale(1.01) !important;
+}
+
+.pr-kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  transition: left 0.6s ease;
+  pointer-events: none;
+}
+
+[data-theme="dark"] .pr-kpi-card::before {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+}
+
+.pr-kpi-card:hover::before {
+  left: 100%;
 }
 
 .pr-kpi-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: var(--radius-md);
+  width: 46px;
+  height: 46px;
+  border-radius: 10px !important;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: rgba(10, 110, 209, 0.1);
+  background: rgba(10, 110, 209, 0.12);
   color: var(--primary-500);
+  border: 1px solid rgba(10, 110, 209, 0.2);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  transition: transform 0.25s ease;
+}
+
+.pr-kpi-card:hover .pr-kpi-icon {
+  transform: scale(1.08) rotate(2deg);
+}
+
+[data-theme="dark"] .pr-kpi-icon {
+  background: rgba(10, 110, 209, 0.25);
+  color: #4db1ff;
+  border-color: rgba(77, 177, 255, 0.3);
 }
 
 .pr-kpi-icon--grand {
-  background: rgba(10, 110, 209, 0.1);
+  background: rgba(10, 110, 209, 0.12);
   color: var(--primary-500);
+}
+
+[data-theme="dark"] .pr-kpi-icon--grand {
+  background: rgba(10, 110, 209, 0.25);
+  color: #4db1ff;
 }
 
 .pr-kpi-info {

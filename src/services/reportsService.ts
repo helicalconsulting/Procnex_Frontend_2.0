@@ -38,14 +38,12 @@ async function mockList(): Promise<InvoiceRecord[]> {
 }
 
 async function apiList(): Promise<InvoiceRecord[]> {
+  warnNoBackend('Reports (uses invoice API)');
   const invoices = await invoiceService.list();
   return invoices.map(mapApToReport);
-}
-
-if (!USE_MOCK) {
-  warnNoBackend('Reports (uses invoice API)');
 }
 
 export const reportsService = {
   list: USE_MOCK ? mockList : apiList,
 };
+

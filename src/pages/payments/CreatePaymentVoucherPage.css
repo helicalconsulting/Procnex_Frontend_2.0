@@ -1,0 +1,366 @@
+/* Create Payment Voucher Page Styles */
+
+.cpv-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  color: var(--text-primary);
+}
+
+.cpv-header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cpv-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s ease;
+  width: fit-content;
+}
+
+.cpv-back-btn:hover {
+  color: var(--primary-500);
+}
+
+.cpv-header__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.cpv-header__title-row h1 {
+  font-size: 24px;
+  font-weight: 800;
+  margin: 0 0 4px;
+  letter-spacing: -0.02em;
+}
+
+.cpv-header__title-row p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.cpv-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cpv-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 20px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.cpv-btn--secondary {
+  background: var(--surface-card);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+.cpv-btn--secondary:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+
+.cpv-btn--primary {
+  background: var(--primary-500);
+  color: #ffffff;
+  border-color: var(--primary-500);
+}
+
+.cpv-btn--primary:hover {
+  background: color-mix(in srgb, var(--primary-500) 90%, black);
+}
+
+.cpv-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Grid Layout */
+
+.cpv-grid {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 20px;
+  align-items: start;
+}
+
+.cpv-grid__main {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.cpv-grid__sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Card */
+
+.cpv-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.cpv-card__header {
+  padding: 14px 20px;
+  background: var(--surface-elevated);
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cpv-card__header--space {
+  justify-content: space-between;
+}
+
+.cpv-card__header-icon {
+  color: var(--primary-500);
+}
+
+.cpv-card__body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Form inputs & controls */
+
+.cpv-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.cpv-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cpv-form-group label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.cpv-form-group label span {
+  color: var(--danger-500);
+}
+
+.cpv-form-group input,
+.cpv-form-group select,
+.cpv-form-group textarea {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: all 0.2s;
+  box-sizing: border-box;
+}
+
+.cpv-form-group input:focus,
+.cpv-form-group select:focus,
+.cpv-form-group textarea:focus {
+  border-color: var(--primary-500);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-500) 8%, transparent);
+}
+
+.cpv-input-with-icon {
+  position: relative;
+  width: 100%;
+}
+
+.cpv-input-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-placeholder);
+  pointer-events: none;
+}
+
+.cpv-input-with-icon input,
+.cpv-input-with-icon select {
+  padding-left: 36px !important;
+}
+
+/* Sidebar Summary Card */
+
+.cpv-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.cpv-summary-row span:last-child {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.cpv-summary-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 0;
+}
+
+.cpv-summary-row--total {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.cpv-summary-total-val {
+  font-size: 18px;
+  font-weight: 800;
+  color: #10b981;
+  font-family: var(--font-mono);
+}
+
+/* Dropzone & Attachments */
+
+.cpv-upload-dropzone {
+  border: 2px dashed var(--border);
+  border-radius: 4px;
+  padding: 20px 14px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  background: var(--surface);
+  transition: all 0.2s ease;
+}
+
+.cpv-upload-dropzone:hover {
+  border-color: var(--primary-500);
+  background: color-mix(in srgb, var(--primary-500) 4%, transparent);
+}
+
+.cpv-upload-icon {
+  color: var(--primary-500);
+}
+
+.cpv-upload-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.cpv-upload-sub {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.cpv-attachments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.cpv-attachment-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.cpv-attachment-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.cpv-att-icon {
+  color: var(--primary-500);
+  flex-shrink: 0;
+}
+
+.cpv-att-name {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 170px;
+}
+
+.cpv-att-size {
+  font-size: 11px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.cpv-att-remove {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+}
+
+.cpv-att-remove:hover {
+  color: var(--danger-500);
+}
+
+/* Responsive */
+
+@media (max-width: 900px) {
+  .cpv-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cpv-form-row {
+    grid-template-columns: 1fr;
+  }
+}

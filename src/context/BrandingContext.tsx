@@ -81,7 +81,7 @@ const BrandingContext = createContext<BrandingContextType | undefined>(undefined
 // ─── Defaults ───────────────────────────────────────────────
 
 const DEFAULT_PRIMARY = '#0a6ed1';
-const DEFAULT_NAME = 'Procnex';
+const DEFAULT_NAME = 'Heliflow Consulting';
 
 // ─── Color shade generation ─────────────────────────────────
 

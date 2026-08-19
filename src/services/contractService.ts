@@ -547,7 +547,22 @@ async function apiGetContractBalance(id: string): Promise<ContractBalance> {
 
 async function mockCreatePOFromContract(id: string, amount?: number): Promise<{ poNumber: string; consumedValue?: number; remainingValue?: number }> {
   await new Promise(r => setTimeout(r, 400));
-  return { poNumber: `PO-${Date.now()}`, consumedValue: amount || 0, remainingValue: amount ? 100000 - amount : 100000 };
+  const contract = MOCK_CONTRACTS.find(c => c.id === id);
+  const poNumber = `PO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+  const poAmount = amount || (contract?.contractValue || 50000);
+  if (contract) {
+    if (!contract.purchaseOrders) contract.purchaseOrders = [];
+    contract.purchaseOrders.push({
+      id: String(Date.now()),
+      poNumber,
+      totalAmount: poAmount,
+      status: 'APPROVED',
+      createdAt: new Date().toISOString(),
+    });
+    if (!contract._count) contract._count = { purchaseOrders: 0, items: 0 };
+    contract._count.purchaseOrders = contract.purchaseOrders.length;
+  }
+  return { poNumber, consumedValue: poAmount, remainingValue: Math.max(0, (contract?.contractValue || 100000) - poAmount) };
 }
 
 async function apiCreatePOFromContract(id: string, amount?: number): Promise<{ poNumber: string; consumedValue?: number; remainingValue?: number }> {

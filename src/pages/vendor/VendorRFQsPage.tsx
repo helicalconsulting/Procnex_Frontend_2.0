@@ -748,14 +748,44 @@ export default function VendorRFQsPage() {
                       </div>
                       <span className="vrfq-card__title">{rfq.title} · {rfq.buyerCompany}</span>
                     </div>
-                    <div className="vrfq-card__right">
+                    <div className="vrfq-card__right" onClick={(e) => e.stopPropagation()}>
+                      {rfq.status === 'OPEN' && !rfq.needsResubmit && (
+                        <button
+                          type="button"
+                          className="vendor-btn vendor-btn--primary"
+                          style={{ padding: '6px 12px', fontSize: 12 }}
+                          onClick={() => openQuotModal(rfq)}
+                        >
+                          <Send size={13} /> Submit Quote
+                        </button>
+                      )}
+                      {rfq.status === 'SUBMITTED' && !rfq.needsResubmit && (
+                        <button
+                          type="button"
+                          className="vendor-btn vendor-btn--outline"
+                          style={{ padding: '6px 12px', fontSize: 12 }}
+                          onClick={() => openQuotModal(rfq)}
+                        >
+                          <Eye size={13} /> View / Edit Quote
+                        </button>
+                      )}
+                      {rfq.status === 'RETURNED' && (
+                        <button
+                          type="button"
+                          className="vendor-btn vendor-btn--primary"
+                          style={{ padding: '6px 12px', fontSize: 12 }}
+                          onClick={() => openQuotModal(rfq)}
+                        >
+                          <RotateCcw size={13} /> Resubmit Quote
+                        </button>
+                      )}
                       {rfq.status === 'OPEN' && (
                         <span className={`vrfq-card__deadline vrfq-card__deadline--${dl.cls}`}>
                           <Clock size={13} /> {dl.text}
                         </span>
                       )}
                       <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{rfq.items.length} items</span>
-                      <ChevronDown size={18} className={`vrfq-card__chevron ${isExpanded ? 'vrfq-card__chevron--open' : ''}`} />
+                      <ChevronDown size={18} className={`vrfq-card__chevron ${isExpanded ? 'vrfq-card__chevron--open' : ''}`} onClick={() => setExpandedRFQ(isExpanded ? null : rfq.id)} />
                     </div>
                   </div>
 
@@ -849,7 +879,16 @@ export default function VendorRFQsPage() {
                           </div>
                         )}
                         {rfq.status === 'SUBMITTED' && !rfq.needsResubmit && (
-                          <span className="vendor-badge vendor-badge--submitted"><CheckCircle2 size={13} /> Quotation Already Submitted</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <span className="vendor-badge vendor-badge--submitted"><CheckCircle2 size={13} /> Quotation Already Submitted</span>
+                            <button
+                              type="button"
+                              className="vendor-btn vendor-btn--outline"
+                              onClick={() => openQuotModal(rfq)}
+                            >
+                              <Eye size={15} /> View / Edit Quotation
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>

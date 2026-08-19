@@ -18,6 +18,7 @@ import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import RFQDetailModal from '../../components/rfq/RFQDetailModal';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TableSkeleton } from '../../components/shared/Skeleton';
+import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
 import '../../components/shared/ColumnCustomizer.css';
 import './RFQPage.css';
 
@@ -201,7 +202,7 @@ const ALL_COLUMNS: ColumnDef[] = [
   },
 ];
 
-type StatusFilter = 'ALL' | RFQStatus;
+type StatusFilter = 'ALL' | RFQStatus | 'DRAFT_OR_PENDING';
 
 const STATUS_LABELS: Record<RFQStatus, string> = {
   DRAFT: 'Draft',
@@ -263,6 +264,7 @@ export default function RFQPage() {
   const [approvalActionLoading, setApprovalActionLoading] = useState(false);
   const [approvalActionMessage, setApprovalActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [actionReturnTarget, setActionReturnTarget] = useState<'ORIGINATOR' | 'LEVEL_1'>('ORIGINATOR');
+  const [actionSuccessData, setActionSuccessData] = useState<ActionSuccessModalData | null>(null);
 
   const fetchPendingApprovals = useCallback(async () => {
     try {
@@ -313,9 +315,17 @@ export default function RFQPage() {
       let res: any;
       if (action === 'approve') {
         res = await approvalService.approve(approvalId, approvalComment);
-        setApprovalActionMessage({
-          type: 'success',
-          text: res.message || `RFQ #${rfq.rfqNumber} Level approved successfully!`,
+        setActionSuccessData({
+          actionType: 'approve',
+          module: 'RFQ',
+          referenceNumber: rfq.rfqNumber,
+          title: rfq.title,
+          message: res?.message || `RFQ #${rfq.rfqNumber} Level approved successfully!`,
+          comment: approvalComment.trim() || undefined,
+          details: [
+            { label: 'Created By', value: rfq.creator },
+            { label: 'Department', value: rfq.department || 'Procurement' },
+          ],
         });
       } else if (action === 'reject') {
         if (!approvalComment.trim()) {
@@ -324,7 +334,18 @@ export default function RFQPage() {
           return;
         }
         res = await approvalService.reject(approvalId, approvalComment);
-        setApprovalActionMessage({ type: 'success', text: res.message || `RFQ #${rfq.rfqNumber} Rejected.` });
+        setActionSuccessData({
+          actionType: 'reject',
+          module: 'RFQ',
+          referenceNumber: rfq.rfqNumber,
+          title: rfq.title,
+          message: res?.message || `RFQ #${rfq.rfqNumber} Rejected.`,
+          comment: approvalComment.trim() || undefined,
+          details: [
+            { label: 'Created By', value: rfq.creator },
+            { label: 'Department', value: rfq.department || 'Procurement' },
+          ],
+        });
       } else {
         if (!approvalComment.trim()) {
           setApprovalActionMessage({ type: 'error', text: 'Please enter a comment explaining the reason for return.' });
@@ -332,7 +353,18 @@ export default function RFQPage() {
           return;
         }
         res = await approvalService.return(approvalId, approvalComment, actionReturnTarget);
-        setApprovalActionMessage({ type: 'success', text: res.message || `RFQ #${rfq.rfqNumber} Returned for revision.` });
+        setActionSuccessData({
+          actionType: 'return',
+          module: 'RFQ',
+          referenceNumber: rfq.rfqNumber,
+          title: rfq.title,
+          message: res?.message || `RFQ #${rfq.rfqNumber} Returned for revision.`,
+          comment: approvalComment.trim() || undefined,
+          details: [
+            { label: 'Created By', value: rfq.creator },
+            { label: 'Department', value: rfq.department || 'Procurement' },
+          ],
+        });
       }
 
       setApprovalActionModal(null);
@@ -346,20 +378,24 @@ export default function RFQPage() {
     }
   }, [approvalActionModal, approvalComment, actionReturnTarget, reload, fetchPendingApprovals]);
 
-  const anyModalOpen = !!(detailRFQ || deleteTarget || approvalActionModal);
+  const anyModalOpen = !!(detailRFQ || deleteTarget || approvalActionModal || actionSuccessData);
   useBodyScrollLock(anyModalOpen);
 
-  const stats = useMemo(() => ({
-    total: rfqList.length,
-    draft: rfqList.filter((r) => r.status === 'DRAFT').length,
-    pendingApproval: rfqList.filter((r) => r.status === 'PENDING_APPROVAL').length,
-    approved: rfqList.filter((r) => r.status === 'APPROVED' || r.status === 'SENT' || r.status === 'IN_PROGRESS' || r.status === 'ACCEPTED').length,
-    rejected: rfqList.filter((r) => r.status === 'REJECTED').length,
-    sent: rfqList.filter((r) => r.status === 'SENT' || r.status === 'APPROVED' || r.status === 'ACCEPTED').length,
-    inProgress: 0,
-    closed: rfqList.filter((r) => r.status === 'CLOSED').length,
-    cancelled: rfqList.filter((r) => r.status === 'CANCELLED').length,
-  }), [rfqList]);
+  const stats = useMemo(() => {
+    const cleanList = rfqList.filter((r) => r.title !== 'Direct PO Master' && !r.rfqNumber?.startsWith('RFQ-DIRECT'));
+    return {
+      total: cleanList.length,
+      draft: cleanList.filter((r) => r.status === 'DRAFT').length,
+      pendingApproval: cleanList.filter((r) => r.status === 'PENDING_APPROVAL').length,
+      draftOrPending: cleanList.filter((r) => r.status === 'DRAFT' || r.status === 'PENDING_APPROVAL').length,
+      approved: cleanList.filter((r) => r.status === 'APPROVED' || r.status === 'SENT' || r.status === 'IN_PROGRESS' || r.status === 'ACCEPTED').length,
+      rejected: cleanList.filter((r) => r.status === 'REJECTED').length,
+      sent: cleanList.filter((r) => r.status === 'SENT' || r.status === 'APPROVED' || r.status === 'ACCEPTED').length,
+      inProgress: 0,
+      closed: cleanList.filter((r) => r.status === 'CLOSED').length,
+      cancelled: cleanList.filter((r) => r.status === 'CANCELLED').length,
+    };
+  }, [rfqList]);
 
   const handleKpiClick = useCallback((filter: StatusFilter | null) => {
     setStatusFilter(prev => prev === filter ? 'ALL' : (filter || 'ALL'));
@@ -487,10 +523,12 @@ export default function RFQPage() {
   const perPage = 8;
 
   const filtered = useMemo(() => {
-    let list = rfqList;
+    let list = rfqList.filter((r) => r.title !== 'Direct PO Master' && !r.rfqNumber?.startsWith('RFQ-DIRECT'));
     if (statusFilter !== 'ALL') {
       if (statusFilter === 'APPROVED') {
         list = list.filter((r) => r.status === 'APPROVED' || r.status === 'SENT' || r.status === 'IN_PROGRESS' || r.status === 'ACCEPTED');
+      } else if (statusFilter === 'DRAFT_OR_PENDING') {
+        list = list.filter((r) => r.status === 'DRAFT' || r.status === 'PENDING_APPROVAL');
       } else {
         list = list.filter((r) => r.status === statusFilter);
       }
@@ -625,10 +663,9 @@ export default function RFQPage() {
       <div className="rfq-summary">
         {[
           { icon: <ClipboardList size={22}/>, mod: 'total',     value: stats.total,           label: 'Total RFQs',      filter: null as StatusFilter | null },
-          { icon: <FileText size={22}/>,      mod: 'draft',     value: stats.draft,           label: 'Draft',           filter: 'DRAFT' },
-          { icon: <Clock size={22}/>,         mod: 'pending',   value: stats.pendingApproval, label: 'Pending Approval', filter: 'PENDING_APPROVAL' },
-          { icon: <CheckCircle2 size={22}/>,  mod: 'approved',  value: stats.approved,        label: 'Approved',         filter: 'APPROVED' },
-          { icon: <XCircle size={22}/>,       mod: 'rejected',  value: stats.rejected,        label: 'Rejected',         filter: 'REJECTED' },
+          { icon: <Clock size={22}/>,         mod: 'pending',   value: stats.draftOrPending,  label: 'Pending Approval / Drafts', filter: 'DRAFT_OR_PENDING' as StatusFilter },
+          { icon: <CheckCircle2 size={22}/>,  mod: 'approved',  value: stats.approved,        label: 'Approved',         filter: 'APPROVED' as StatusFilter },
+          { icon: <XCircle size={22}/>,       mod: 'rejected',  value: stats.rejected,        label: 'Rejected',         filter: 'REJECTED' as StatusFilter },
         ].map(c => {
           const isActive = c.mod === 'total' ? !statusFilter || statusFilter === 'ALL' : statusFilter === c.filter;
           return (
@@ -1164,6 +1201,11 @@ export default function RFQPage() {
         </div>
       )}
 
+      {/* Action Success Modal */}
+      <ActionSuccessModal
+        data={actionSuccessData}
+        onClose={() => setActionSuccessData(null)}
+      />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useBranding } from '../../context/BrandingContext';
 import type { PurchaseRequisition } from '../../services/purchaseRequisitionService';
+import defaultHeliflowLogo from '../../assets/heliflow.png';
 import './PurchaseOrderDocument.css';
 
 interface Props {
@@ -38,23 +39,23 @@ function ensurePONumber(poNumber: string | null | undefined): string {
 export default function PurchaseOrderDocument({ pr }: Props) {
   const { companyName: brandingCompanyName, companyPhone: brandingPhone, companyEmail: brandingEmail, logoUrl } = useBranding();
 
+  const finalCompanyName = pr.companyName || brandingCompanyName || 'Heliflow Consulting';
+
+  const finalLogoUrl = logoUrl || (pr as any).companyLogoUrl || defaultHeliflowLogo;
+
   return (
     <div className="po-document">
       {/* ── Header ── */}
       <div className="po-doc__header">
         <div className="po-doc__header-left">
-          {logoUrl ? (
-            <img src={logoUrl} alt={brandingCompanyName} className="po-doc__logo" />
-          ) : (
-            <div className="po-doc__logo-placeholder">{brandingCompanyName?.charAt(0) || 'H'}</div>
-          )}
+          <img src={finalLogoUrl} alt={finalCompanyName} className="po-doc__logo" />
           <div className="po-doc__company-info">
-            <h1 className="po-doc__company-name">{val(brandingCompanyName)}</h1>
-            <p className="po-doc__company-detail">{val(pr.companyAddress)}</p>
+            <h1 className="po-doc__company-name">{val(finalCompanyName)}</h1>
+            <p className="po-doc__company-detail">{val(pr.companyAddress, 'Industrial Zone, Building 4')}</p>
             <p className="po-doc__company-detail">
-              Phone: {val(brandingPhone)} &nbsp;|&nbsp; Email: {val(brandingEmail)}
+              Phone: {val(brandingPhone || pr.companyPhone, '+91 800-HELIFLOW')} &nbsp;|&nbsp; Email: {val(brandingEmail || pr.companyEmail, 'procurement@heliflow.com')}
             </p>
-            <p className="po-doc__company-detail">{val(pr.companyWebsite)}</p>
+            <p className="po-doc__company-detail">{val(pr.companyWebsite, 'www.heliflow.com')}</p>
           </div>
         </div>
         <div className="po-doc__header-right">

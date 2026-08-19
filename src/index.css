@@ -782,7 +782,7 @@ body.modal-open .app-layout__content {
 [class*="__box"],
 [class*="-container"],
 [class*="__container"] {
-  border-radius: 4px !important;
+  border-radius: 12px !important;
 }
 
 /* Specific exclusions for circles / pills */
@@ -794,3 +794,245 @@ body.modal-open .app-layout__content {
 .fp-step-num {
   border-radius: 50% !important;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Heliflow Ultra-Premium Glassmorphism Design System
+   ═══════════════════════════════════════════════════════════ */
+
+:root {
+  --glass-blur: 16px;
+  --glass-saturate: 180%;
+
+  /* Light Theme Glass Tokens */
+  --glass-bg-light: rgba(255, 255, 255, 0.75);
+  --glass-bg-hover-light: rgba(255, 255, 255, 0.88);
+  --glass-border-light: rgba(255, 255, 255, 0.7);
+  --glass-border-hover-light: rgba(10, 110, 209, 0.4);
+  --glass-shadow-light: 0 8px 32px 0 rgba(31, 38, 135, 0.08), inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
+  --glass-shadow-hover-light: 0 16px 40px 0 rgba(10, 110, 209, 0.15), inset 0 1px 0 0 rgba(255, 255, 255, 1);
+
+  /* Dark Theme Glass Tokens */
+  --glass-bg-dark: linear-gradient(135deg, rgba(30, 41, 59, 0.65) 0%, rgba(15, 23, 42, 0.75) 100%);
+  --glass-bg-hover-dark: linear-gradient(135deg, rgba(38, 52, 75, 0.8) 0%, rgba(22, 33, 52, 0.85) 100%);
+  --glass-border-dark: rgba(255, 255, 255, 0.14);
+  --glass-border-hover-dark: rgba(77, 177, 255, 0.5);
+  --glass-shadow-dark: 0 8px 32px 0 rgba(0, 0, 0, 0.35), inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
+  --glass-shadow-hover-dark: 0 16px 44px 0 rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.18);
+}
+
+.glass-card {
+  position: relative !important;
+  background: var(--glass-bg-light) !important;
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate)) !important;
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate)) !important;
+  border: 1px solid var(--glass-border-light) !important;
+  box-shadow: var(--glass-shadow-light) !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+[data-theme="dark"] .glass-card {
+  background: var(--glass-bg-dark) !important;
+  border-color: var(--glass-border-dark) !important;
+  box-shadow: var(--glass-shadow-dark) !important;
+}
+
+.glass-card:hover {
+  transform: translateY(-3px) scale(1.01);
+  background: var(--glass-bg-hover-light) !important;
+  border-color: var(--glass-border-hover-light) !important;
+  box-shadow: var(--glass-shadow-hover-light) !important;
+}
+
+[data-theme="dark"] .glass-card:hover {
+  background: var(--glass-bg-hover-dark) !important;
+  border-color: var(--glass-border-hover-dark) !important;
+  box-shadow: var(--glass-shadow-hover-dark) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Universal Card Selection & Glow System (App-Wide Standard)
+   ═══════════════════════════════════════════════════════════ */
+
+:root {
+  --card-glow-border: #1a80e0;
+  --card-glow-shadow: 0 0 0 1.5px #1a80e0, 0 0 25px rgba(26, 128, 224, 0.65), 0 0 10px rgba(26, 128, 224, 0.8), inset 0 0 15px rgba(26, 128, 224, 0.15);
+  --card-glow-bg: rgba(26, 128, 224, 0.1);
+}
+
+[data-theme="dark"] {
+  --card-glow-border: #388bfd;
+  --card-glow-shadow: 0 0 0 1.5px #388bfd, 0 0 28px rgba(56, 139, 253, 0.8), 0 0 12px rgba(56, 139, 253, 0.95), inset 0 0 16px rgba(56, 139, 253, 0.22);
+  --card-glow-bg: rgba(56, 139, 253, 0.16);
+}
+
+/* Master Active / Selected Card Glow Selector */
+.card-glow,
+.card-selected,
+.card-active,
+.active-card,
+[data-selected="true"],
+.contracts-stat-card.active,
+.contracts-stat-card--active,
+[data-theme="dark"] .contracts-stat-card.active,
+[data-theme="dark"] .contracts-stat-card--active,
+.ctr-summary-card.active,
+.ctr-summary-card--active,
+[data-theme="dark"] .ctr-summary-card.active,
+[data-theme="dark"] .ctr-summary-card--active,
+.pr-kpi-card.active,
+.pr-kpi-card--active,
+[data-theme="dark"] .pr-kpi-card.active,
+[data-theme="dark"] .pr-kpi-card--active,
+.pr-list__card.active,
+.pr-list__card--active,
+[data-theme="dark"] .pr-list__card.active,
+[data-theme="dark"] .pr-list__card--active,
+.rfq-kpi__card.active,
+.rfq-kpi__card--active,
+[data-theme="dark"] .rfq-kpi__card.active,
+[data-theme="dark"] .rfq-kpi__card--active,
+.quot-summary-card.active,
+.quot-summary-card--active,
+[data-theme="dark"] .quot-summary-card.active,
+[data-theme="dark"] .quot-summary-card--active,
+.quot-kpi-card.active,
+.quot-kpi-card--active,
+[data-theme="dark"] .quot-kpi-card.active,
+[data-theme="dark"] .quot-kpi-card--active,
+.approvals-stat-card.active,
+.approvals-stat-card--active,
+[data-theme="dark"] .approvals-stat-card.active,
+[data-theme="dark"] .approvals-stat-card--active,
+.approvals-summary-card.active,
+.approvals-summary-card--active,
+[data-theme="dark"] .approvals-summary-card.active,
+[data-theme="dark"] .approvals-summary-card--active,
+.vendors-kpi__card.active,
+.vendors-kpi__card--active,
+[data-theme="dark"] .vendors-kpi__card.active,
+[data-theme="dark"] .vendors-kpi__card--active,
+.vendor-orders-kpi.active,
+.vendor-orders-kpi--active,
+[data-theme="dark"] .vendor-orders-kpi.active,
+[data-theme="dark"] .vendor-orders-kpi--active,
+.vq-kpi.active,
+.vq-kpi--active,
+[data-theme="dark"] .vq-kpi.active,
+[data-theme="dark"] .vq-kpi--active,
+.vrfq-kpi.active,
+.vrfq-kpi--active,
+[data-theme="dark"] .vrfq-kpi.active,
+[data-theme="dark"] .vrfq-kpi--active,
+.ap-kpi-card.active,
+.ap-kpi-card--active,
+[data-theme="dark"] .ap-kpi-card.active,
+[data-theme="dark"] .ap-kpi-card--active,
+.payments-kpi-card.active,
+.payments-kpi-card--active,
+[data-theme="dark"] .payments-kpi-card.active,
+[data-theme="dark"] .payments-kpi-card--active,
+.so-kpi-card.active,
+.so-kpi-card--active,
+[data-theme="dark"] .so-kpi-card.active,
+[data-theme="dark"] .so-kpi-card--active,
+.po-summary-card.active,
+.po-summary-card--active,
+[data-theme="dark"] .po-summary-card.active,
+[data-theme="dark"] .po-summary-card--active,
+.audit-summary-card.active,
+.audit-summary-card--active,
+[data-theme="dark"] .audit-summary-card.active,
+[data-theme="dark"] .audit-summary-card--active,
+.vc-hero__stat.active,
+.vc-hero__stat--active,
+[data-theme="dark"] .vc-hero__stat.active,
+[data-theme="dark"] .vc-hero__stat--active,
+.kpi-card.active,
+.kpi-card--active,
+[data-theme="dark"] .kpi-card.active,
+[data-theme="dark"] .kpi-card--active,
+.kpi-stat-card.active,
+[data-theme="dark"] .kpi-stat-card.active,
+.glass-card.active,
+.glass-card.selected,
+[data-theme="dark"] .glass-card.active,
+[data-theme="dark"] .glass-card.selected,
+.po-card.active,
+.docs-card.active,
+[class*="-card"].active,
+[class*="-card--active"],
+[class*="__card"].active,
+[class*="__card--active"],
+[class*="-kpi"].active,
+[class*="-kpi--active"],
+[class*="__kpi"].active,
+[class*="__kpi--active"],
+[class*="-stat"].active,
+[class*="-stat--active"],
+[class*="__stat"].active,
+[class*="__stat--active"],
+[data-theme="dark"] [class*="-card"].active,
+[data-theme="dark"] [class*="-card--active"],
+[data-theme="dark"] [class*="__card"].active,
+[data-theme="dark"] [class*="__card--active"],
+[data-theme="dark"] [class*="-kpi"].active,
+[data-theme="dark"] [class*="-kpi--active"],
+[data-theme="dark"] [class*="__kpi"].active,
+[data-theme="dark"] [class*="__kpi--active"],
+[data-theme="dark"] [class*="-stat"].active,
+[data-theme="dark"] [class*="-stat--active"],
+[data-theme="dark"] [class*="__stat"].active,
+[data-theme="dark"] [class*="__stat--active"] {
+  border: 1.5px solid var(--card-glow-border) !important;
+  box-shadow: var(--card-glow-shadow) !important;
+  background: var(--card-glow-bg) !important;
+  transform: translateY(-2px) scale(1.008) !important;
+  transition: border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* Smooth hover transition for interactive cards */
+.contracts-stat-card,
+.pr-list__card,
+.rfq-kpi__card,
+.quot-kpi-card,
+.approvals-stat-card,
+.vendors-kpi__card,
+.vendor-orders-kpi,
+.vq-kpi,
+.vrfq-kpi,
+.ap-kpi-card,
+.payments-kpi-card,
+.so-kpi-card,
+.kpi-card,
+.kpi-stat-card,
+.glass-card,
+.po-card,
+.docs-card {
+  cursor: pointer;
+  transition: border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.contracts-stat-card:hover:not(.active),
+.pr-list__card:hover:not(.active),
+.rfq-kpi__card:hover:not(.active),
+.quot-kpi-card:hover:not(.active),
+.approvals-stat-card:hover:not(.active),
+.vendors-kpi__card:hover:not(.active),
+.vendor-orders-kpi:hover:not(.active),
+.vq-kpi:hover:not(.active),
+.vrfq-kpi:hover:not(.active),
+.ap-kpi-card:hover:not(.active),
+.payments-kpi-card:hover:not(.active),
+.so-kpi-card:hover:not(.active),
+.kpi-card:hover:not(.active),
+.kpi-stat-card:hover:not(.active),
+.glass-card:hover:not(.active),
+.po-card:hover:not(.active),
+.docs-card:hover:not(.active) {
+  border-color: rgba(56, 139, 253, 0.4) !important;
+  box-shadow: 0 0 14px rgba(56, 139, 253, 0.22) !important;
+  transform: translateY(-2px) !important;
+}
+

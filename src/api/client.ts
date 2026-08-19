@@ -225,6 +225,12 @@ async function fetchApi<T>(
 /** Log when a module has no backend API and mock is forced */
 export function warnNoBackend(module: string): void {
   if (!USE_MOCK) {
-    console.warn(`[Heliflow] ${module}: no backend API — using local mock data`);
+    let name = 'Module';
+    try {
+      name = typeof module === 'string' ? module : String(module);
+    } catch {
+      name = 'Module';
+    }
+    console.warn(`[Heliflow] ${name}: no backend API — using local mock data`);
   }
 }

@@ -33,6 +33,50 @@ async function apiList(params?: { page?: number; limit?: number }): Promise<List
   };
 }
 
+export interface StandalonePOPayload {
+  vendorId: string;
+  totalAmount: number;
+  notes?: string;
+  paymentTerms?: string;
+  deliveryDate?: string;
+  status?: string;
+  items?: Array<{
+    itemCode?: string;
+    itemName: string;
+    description?: string;
+    quantity: number;
+    unit?: string;
+    unitPrice: number;
+    taxPercent?: number;
+    totalPrice: number;
+  }>;
+  sourceReferences?: Record<string, string>;
+}
+
+async function createStandalonePO(payload: StandalonePOPayload): Promise<{ poNumber: string; id: string }> {
+  if (USE_MOCK) {
+    await new Promise(r => setTimeout(r, 400));
+    const poNumber = `PO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const newPO: any = {
+      id: String(Date.now()),
+      poNumber,
+      vendorId: payload.vendorId,
+      totalAmount: payload.totalAmount,
+      status: payload.status || 'PENDING_APPROVAL',
+      createdAt: new Date().toISOString(),
+      vendor: { id: payload.vendorId, name: 'Selected Vendor', email: 'vendor@example.com' },
+      items: payload.items || [],
+    };
+    MOCK_PURCHASE_ORDERS.unshift(newPO);
+    return { id: newPO.id, poNumber };
+  }
+  const data = await apiRequest<{ poNumber: string; id: string }>('/purchase-orders', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return data;
+}
+
 export const purchaseOrderService = {
   list: USE_MOCK ? mockList : apiList,
   async create(rfqId: string, notes?: string, startLevelNumber?: number): Promise<{ poNumber: string; id: string }> {
@@ -46,4 +90,5 @@ export const purchaseOrderService = {
     });
     return data;
   },
+  createStandalonePO,
 };

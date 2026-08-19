@@ -28,6 +28,7 @@ import { MessageStrip, type MessageStripType } from '../../components/shared/Mes
 import { CurrencyBadge, CurrencySelector, useCurrency, DEFAULT_CURRENCY } from '../../components/shared/CurrencyMaster';
 import VendorComparisonCharts from '../../components/rfq/VendorComparisonCharts';
 import PostAwardModal from '../../components/contracts/PostAwardModal';
+import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
 import ContractTemplateSelectModal from '../../components/contracts/ContractTemplateSelectModal';
 
 import type { EvalCategory } from '../../types/rfqEvaluation';
@@ -63,6 +64,9 @@ interface MockQuotation {
   rfqApprovalStartPoint?: string;
   rfqCreatedBy?: number | string;
   isFinalApprover?: boolean;
+  hasPO?: boolean;
+  hasContract?: boolean;
+  postAwardDecision?: string;
 }
 
 interface QuotColDef {
@@ -266,6 +270,9 @@ function mapQuotationToRow(q: Quotation): MockQuotation {
     userAction: (q as any).userAction || null,
     isFinalApprover: (q as any).isFinalApprover ?? true,
     isChainComplete: (q as any).isChainComplete ?? true,
+    hasPO: Boolean((q as any).hasPO),
+    hasContract: Boolean((q as any).hasContract),
+    postAwardDecision: (q as any).postAwardDecision || (rfqObj as any)?.postAwardDecision || null,
   };
 }
 
@@ -1968,11 +1975,33 @@ function canPerformPostAward(s: MockQuotation | null | undefined, user: any, rol
   );
   if (isSuperAdmin) return true;
 
-  const rfqCreatorId = s.rfqCreatedBy || (s as any).rfq?.createdBy || (s as any).createdBy;
-  const isCreator = user?.id && rfqCreatorId && String(user.id) === String(rfqCreatorId);
-  if (isCreator) return true;
+  const currentUserId = String(user?.id || '');
+  const rfqCreatorId = String(s.rfqCreatedBy || (s as any).rfq?.createdBy || (s as any).createdBy || '');
+  const isCreator = !!currentUserId && !!rfqCreatorId && currentUserId === rfqCreatorId;
 
-  return true;
+  if (!isFullChain) {
+    // In DIRECT_X_ONLY mode (X = ORIGINATOR): ONLY the RFQ Originator (creator) acts as Final Approver for Post Award
+    return isCreator;
+  }
+
+  // In FULL_CHAIN mode: ONLY the Final Approver (user who completed final level or has final level role, or Originator if chain is complete)
+  const isFinalApprover = (s as any).isFinalApprover === true;
+  if (isFinalApprover) return true;
+
+  if (isCreator && (s as any).isChainComplete !== false) return true;
+
+  const finalLevelRole = (s as any).finalLevelRole || (s as any).totalLevelsRole;
+  if (finalLevelRole) {
+    const normalizedFinalRole = String(finalLevelRole).toLowerCase();
+    const userRoles: string[] = Array.isArray(roles) ? roles : [];
+    const hasFinalRole = userRoles.some((r) => {
+      const norm = r.toLowerCase();
+      return norm === normalizedFinalRole || norm.includes(normalizedFinalRole) || normalizedFinalRole.includes(norm);
+    });
+    if (hasFinalRole) return true;
+  }
+
+  return false;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2051,36 +2080,40 @@ function QuotationAcceptedModalInner({
           </div>
         </div>
 
-        {/* Post-Award Option Buttons (Create PO / Create Contract) — ONLY shown if authorized */}
-        {canShowOptions && (
+        {/* Post-Award Option Buttons (Create PO / Create Contract) — ONLY shown if authorized and not yet created */}
+        {canShowOptions && (!q.hasPO && !q.hasContract && q.postAwardDecision !== 'PO_CREATED' && q.postAwardDecision !== 'CONTRACT_CREATED') && (
           <div className="qam-accepted__options">
-            <button
-              type="button"
-              className="qam-accepted__option-btn qam-accepted__option-btn--po"
-              onClick={onCreatePO}
-            >
-              <div className="qam-accepted__option-icon qam-accepted__option-icon--po">
-                <ShoppingCart size={20} />
-              </div>
-              <div className="qam-accepted__option-info">
-                <span className="qam-accepted__option-title">Create Purchase Order</span>
-                <span className="qam-accepted__option-desc">Generate PO linked to this accepted quotation</span>
-              </div>
-            </button>
+            {(!q.hasPO && q.postAwardDecision !== 'PO_CREATED') && (
+              <button
+                type="button"
+                className="qam-accepted__option-btn qam-accepted__option-btn--po"
+                onClick={onCreatePO}
+              >
+                <div className="qam-accepted__option-icon qam-accepted__option-icon--po">
+                  <ShoppingCart size={20} />
+                </div>
+                <div className="qam-accepted__option-info">
+                  <span className="qam-accepted__option-title">Create Purchase Order</span>
+                  <span className="qam-accepted__option-desc">Generate PO linked to this accepted quotation</span>
+                </div>
+              </button>
+            )}
 
-            <button
-              type="button"
-              className="qam-accepted__option-btn qam-accepted__option-btn--contract"
-              onClick={onCreateContract}
-            >
-              <div className="qam-accepted__option-icon qam-accepted__option-icon--contract">
-                <FileText size={20} />
-              </div>
-              <div className="qam-accepted__option-info">
-                <span className="qam-accepted__option-title">Create Contract</span>
-                <span className="qam-accepted__option-desc">Select contract template and generate agreement</span>
-              </div>
-            </button>
+            {(!q.hasContract && q.postAwardDecision !== 'CONTRACT_CREATED') && (
+              <button
+                type="button"
+                className="qam-accepted__option-btn qam-accepted__option-btn--contract"
+                onClick={onCreateContract}
+              >
+                <div className="qam-accepted__option-icon qam-accepted__option-icon--contract">
+                  <FileText size={20} />
+                </div>
+                <div className="qam-accepted__option-info">
+                  <span className="qam-accepted__option-title">Create Contract</span>
+                  <span className="qam-accepted__option-desc">Select contract template and generate agreement</span>
+                </div>
+              </button>
+            )}
           </div>
         )}
 
@@ -2569,7 +2602,8 @@ export default function QuotationsPage() {
   const [simpleEvalData, setSimpleEvalData] = useState<RFQEvaluationData | null>(null);
   const [detailRfq, setDetailRfq]                     = useState<RFQTableRow | null>(null);
   const [detailRfqLoading, setDetailRfqLoading]       = useState(false);
-  useBodyScrollLock(!!(compareModalOpen || activeModal || detailRfq || postAwardQuotation || pendingApprovalQuotation || showTemplateSelect || acceptedModalData));
+  const [actionSuccessModalData, setActionSuccessModalData] = useState<ActionSuccessModalData | null>(null);
+  useBodyScrollLock(!!(compareModalOpen || activeModal || detailRfq || postAwardQuotation || pendingApprovalQuotation || showTemplateSelect || acceptedModalData || actionSuccessModalData));
   const confirmCallbackRef = useRef<{ type: ModalType; comment: string } | null>(null);
   const activeModalRef = useRef<ActiveModal | null>(null);
   const compareDropdownRef = useRef<HTMLDivElement>(null);
@@ -3470,13 +3504,6 @@ export default function QuotationsPage() {
     setQuotations(prev => prev.map(updateItem));
     setAllQuotations(prev => prev.map(updateItem));
 
-    // ── Instant Toast Notification ──
-    const actionLabel = type === 'accept' ? 'accepted' : type === 'reject' ? 'rejected' : 'returned for revision';
-    setToast({
-      message: `Quotation ${actionLabel} successfully!`,
-      type: 'success',
-    });
-
     try {
       const response = await quotationService.updateStatus(id, apiStatus, comment, startLevelNumber, returnTarget);
       if (type === 'accept') {
@@ -3491,7 +3518,6 @@ export default function QuotationsPage() {
           setQuotations(prev => prev.map(updateIntermediate));
           setAllQuotations(prev => prev.map(updateIntermediate));
 
-          setToast({ message: response?.message || 'Quotation approved and forwarded to next level approver.', type: 'success' });
           setAcceptedModalData({ quotation: { ...modalQuotation, status: 'UNDER_REVIEW', isChainComplete: false }, isNextLevel: true, message: response?.message });
         } else {
           // Final approval complete! Ensure winning quote is ACCEPTED & competing quotes REJECTED
@@ -3507,21 +3533,38 @@ export default function QuotationsPage() {
           setQuotations(prev => prev.map(updateFinalAccepted));
           setAllQuotations(prev => prev.map(updateFinalAccepted));
 
-          setToast({ message: response?.message || 'Quotation accepted successfully! Click 🛒 to create PO or 📄 to create Contract.', type: 'success' });
           setAcceptedModalData({ quotation: { ...modalQuotation, status: 'ACCEPTED', isChainComplete: true, isFinalApprover: true }, isNextLevel: false, message: response?.message });
         }
         reload();
         reloadAllQuotations();
       } else if (type === 'return') {
+        setActionSuccessModalData({
+          actionType: 'return',
+          module: 'Quotation',
+          referenceNumber: modalQuotation.rfqNumber ? `Quotation for ${modalQuotation.rfqNumber}` : `Quotation #${id}`,
+          title: modalQuotation.vendorName ? `Quotation by ${modalQuotation.vendorName}` : undefined,
+          message: response?.message || 'Quotation returned for revision successfully.',
+          comment: comment,
+          details: [
+            { label: 'Vendor', value: modalQuotation.vendorName },
+            { label: 'Total Price', value: `${modalQuotation.currency || ''} ${modalQuotation.totalPriceNum}` },
+          ],
+        });
         reload();
         reloadAllQuotations();
-        if (response?.message) {
-          setToast({ message: response.message, type: 'success' });
-        }
       } else {
-        if (response?.message) {
-          setToast({ message: response.message, type: 'success' });
-        }
+        setActionSuccessModalData({
+          actionType: 'reject',
+          module: 'Quotation',
+          referenceNumber: modalQuotation.rfqNumber ? `Quotation for ${modalQuotation.rfqNumber}` : `Quotation #${id}`,
+          title: modalQuotation.vendorName ? `Quotation by ${modalQuotation.vendorName}` : undefined,
+          message: response?.message || 'Quotation rejected successfully.',
+          comment: comment,
+          details: [
+            { label: 'Vendor', value: modalQuotation.vendorName },
+            { label: 'Total Price', value: `${modalQuotation.currency || ''} ${modalQuotation.totalPriceNum}` },
+          ],
+        });
         reload();
         reloadAllQuotations();
       }
@@ -3968,36 +4011,52 @@ export default function QuotationsPage() {
               )}
               {isAccepted && hasPostAwardAccess && (
                 <>
-                  <button
-                    type="button"
-                    className="quot-sap-btn quot-sap-btn--po"
-                    title="Create Purchase Order for this accepted quotation"
-                    onClick={() => {
-                      navigate(`/procurement/purchase-requisition/${s.rfqId}`);
-                    }}
-                  >
-                    <ShoppingCart size={13} />
-                    <span>Create PO</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="quot-sap-btn quot-sap-btn--contract"
-                    title="Create Contract agreement for this accepted quotation"
-                    onClick={() => {
-                      setPostAwardQuotation(s);
-                      setShowTemplateSelect(true);
-                    }}
-                  >
-                    <FileText size={13} />
-                    <span>Create Contract</span>
-                  </button>
-                  <button
-                    className="quot-table__action-btn quot-table__action-btn--danger"
-                    title="Cancel Acceptance"
-                    onClick={() => openModal('reject', s)}
-                  >
-                    <X size={15} />
-                  </button>
+                  {(!s.hasPO && s.postAwardDecision !== 'PO_CREATED') && (
+                    <button
+                      type="button"
+                      className="quot-sap-btn quot-sap-btn--po"
+                      title="Create Purchase Order for this accepted quotation"
+                      onClick={() => {
+                        const targetRfqId = s.rfqId;
+                        const targetRfqNum = s.rfqNumber;
+                        const updatePOGen = (q: MockQuotation): MockQuotation => {
+                          if ((targetRfqId && q.rfqId === targetRfqId) || (targetRfqNum && q.rfqNumber === targetRfqNum)) {
+                            return { ...q, hasPO: true, postAwardDecision: 'PO_CREATED' };
+                          }
+                          return q;
+                        };
+                        setQuotations(prev => prev.map(updatePOGen));
+                        setAllQuotations(prev => prev.map(updatePOGen));
+                        navigate(`/procurement/purchase-requisition/${s.rfqId}`);
+                      }}
+                    >
+                      <ShoppingCart size={13} />
+                      <span>Create PO</span>
+                    </button>
+                  )}
+                  {(!s.hasContract && s.postAwardDecision !== 'CONTRACT_CREATED') && (
+                    <button
+                      type="button"
+                      className="quot-sap-btn quot-sap-btn--contract"
+                      title="Create Contract agreement for this accepted quotation"
+                      onClick={() => {
+                        setPostAwardQuotation(s);
+                        setShowTemplateSelect(true);
+                      }}
+                    >
+                      <FileText size={13} />
+                      <span>Create Contract</span>
+                    </button>
+                  )}
+                  {(!s.hasPO && !s.hasContract && s.postAwardDecision !== 'PO_CREATED' && s.postAwardDecision !== 'CONTRACT_CREATED') && (
+                    <button
+                      className="quot-table__action-btn quot-table__action-btn--danger"
+                      title="Cancel Acceptance"
+                      onClick={() => openModal('reject', s)}
+                    >
+                      <X size={15} />
+                    </button>
+                  )}
                 </>
               )}
             </div>
@@ -4025,7 +4084,7 @@ export default function QuotationsPage() {
       {/* Header */}
       <div className="quot-page__header">
         <div className="quot-page__header-left">
-          <h1>Quotations</h1>
+          <h1>Quotation Approval</h1>
           <p>Compare vendor quotations side-by-side across your RFQs</p>
         </div>
         <div className="quot-page__header-actions">
@@ -4428,13 +4487,24 @@ export default function QuotationsPage() {
           vendorName={postAwardQuotation.vendorName}
           onClose={() => { setShowTemplateSelect(false); setPostAwardQuotation(null); }}
           onGenerated={(_contractId) => {
-            const targetId = postAwardQuotation.id;
+            if (postAwardQuotation) {
+              const targetRfqId = postAwardQuotation.rfqId;
+              const targetRfqNum = postAwardQuotation.rfqNumber;
+              const updateContractGen = (q: MockQuotation): MockQuotation => {
+                if ((targetRfqId && q.rfqId === targetRfqId) || (targetRfqNum && q.rfqNumber === targetRfqNum)) {
+                  return { ...q, hasContract: true, postAwardDecision: 'CONTRACT_CREATED' };
+                }
+                return q;
+              };
+              setQuotations(prev => prev.map(updateContractGen));
+              setAllQuotations(prev => prev.map(updateContractGen));
+            }
             setShowTemplateSelect(false);
             setPostAwardQuotation(null);
             closeModal();
-            setQuotations(prev => prev.map(q => q.id === targetId ? { ...q, status: 'ACCEPTED' } : q));
             setToast({ message: 'Contract generated successfully!', type: 'success' });
             reload();
+            reloadAllQuotations();
           }}
         />
       )}
@@ -4444,6 +4514,12 @@ export default function QuotationsPage() {
         moduleName="Quotation"
         onConfirm={handleStartLevelConfirm}
         onCancel={() => setStartLevelPromptState(null)}
+      />
+
+      {/* Action Success Modal */}
+      <ActionSuccessModal
+        data={actionSuccessModalData}
+        onClose={() => setActionSuccessModalData(null)}
       />
     </div>
   );

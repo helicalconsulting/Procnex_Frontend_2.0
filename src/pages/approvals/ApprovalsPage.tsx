@@ -31,6 +31,7 @@ import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import '../../components/shared/ColumnCustomizer.css';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TableSkeleton } from '../../components/shared/Skeleton';
+import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
 import { apiRequest } from '../../api/client';
 import './ApprovalsPage.css';
 
@@ -107,22 +108,26 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
   {
     key: 'level', label: 'Approval Level', defaultVisible: true, width: '150px',
     render: (req) => {
-      const total = req.totalLevels;
-      const current = req.currentLevel;
+      const total = req.totalLevels || 1;
+      const isApproved = req.status === 'APPROVED';
+      const isRejected = req.status === 'REJECTED';
+      const current = isApproved ? total + 1 : (req.currentLevel || 1);
+
       return (
-        <div className="approvals-level">
+        <div className="approvals-level" title={`Approval Level ${Math.min(current, total)} of ${total}`}>
           <div className="approvals-level__steps">
             {Array.from({ length: total }, (_, i) => {
               const stepNum = i + 1;
-              const isDone    = stepNum < current;
-              const isCurrent = stepNum === current;
+              const isDone    = isApproved || stepNum < current;
+              const isCurrent = !isApproved && stepNum === current;
               return (
                 <div key={i} className="approvals-level__step">
                   <div
                     className={[
                       'approvals-level__step-circle',
-                      isDone    ? 'approvals-level__step-circle--done'    : '',
-                      isCurrent ? 'approvals-level__step-circle--current' : '',
+                      isDone                   ? 'approvals-level__step-circle--done'     : '',
+                      isCurrent && !isRejected ? 'approvals-level__step-circle--current'  : '',
+                      isCurrent && isRejected  ? 'approvals-level__step-circle--rejected' : '',
                     ].filter(Boolean).join(' ')}
                   >
                     {isDone ? '✓' : stepNum}
@@ -134,7 +139,9 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
               );
             })}
           </div>
-          <span className="approvals-level__text">L{current}/{total}</span>
+          <span className="approvals-level__text">
+            L{isApproved ? total : Math.min(current, total)}/{total}
+          </span>
         </div>
       );
     },
@@ -390,10 +397,32 @@ const CANONICAL_MODULE: Record<string, string> = {
 
 // ─── Component ──────────────────────────────────────────────
 
+import { useSearchParams } from 'react-router-dom';
+
 export default function ApprovalsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialModule = searchParams.get('module');
+  const initialStatus = searchParams.get('status');
+
+  const [moduleFilter, setModuleFilter] = useState<string>(() => {
+    if (!initialModule) return 'Purchase Order';
+    const m = initialModule.toLowerCase();
+    if (m.includes('po') || m.includes('purchase')) return 'Purchase Order';
+    if (m.includes('quotation')) return 'Quotation';
+    if (m.includes('rfq')) return 'RFQ';
+    if (m.includes('contract')) return 'Contract';
+    if (m.includes('all')) return 'ALL';
+    return 'Purchase Order';
+  });
+
+  const [statusFilter, setStatusFilter] = useState<string>(initialStatus || 'ALL');
+
   const { data: approvals, loading, error, reload } = useServiceData(
-    () => approvalService.listTable(),
-    [] as ApprovalTableRow[],
+    () => approvalService.listTable({
+      module: moduleFilter !== 'ALL' ? (CANONICAL_MODULE[moduleFilter] || moduleFilter) : undefined,
+      status: statusFilter !== 'ALL' ? statusFilter : undefined,
+    }),
+    [moduleFilter, statusFilter] as any[],
     { cacheTtlMs: 0 }
   );
 
@@ -416,12 +445,13 @@ export default function ApprovalsPage() {
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [actionSuccessData, setActionSuccessData] = useState<ActionSuccessModalData | null>(null);
   const [actionModal, setActionModal] = useState<{ request: ApprovalRequest; action: 'approve' | 'reject' | 'return' } | null>(null);
   const [actionComment, setActionComment] = useState('');
   const [actionReturnTarget, setActionReturnTarget] = useState<'ORIGINATOR' | 'LEVEL_1' | 'VENDOR'>('ORIGINATOR');
   const [detailRequest, setDetailRequest] = useState<ApprovalRequest | null>(null);
   const [chainModal, setChainModal] = useState<{ module: string; referenceId: string } | null>(null);
-  useBodyScrollLock(!!(actionModal || detailRequest || chainModal));
+  useBodyScrollLock(!!(actionModal || detailRequest || chainModal || actionSuccessData));
   const perPage = 8;
 
   // ── Column state ──
@@ -441,17 +471,29 @@ export default function ApprovalsPage() {
   };
   const handleResetColumns = () => { setColumnOrder(defaultOrder); setVisibleKeys(new Set(defaultVisible)); };
 
-  // Summary
-  const summary = useMemo(() => ({
-    total: approvals.length,
-    pending: approvals.filter((a) => a.status === 'PENDING').length,
-    approved: approvals.filter((a) => a.status === 'APPROVED').length,
-    rejected: approvals.filter((a) => a.status === 'REJECTED').length,
-  }), [approvals]);
+  const [optimisticMap, setOptimisticMap] = useState<Record<string, { status: ApprovalStatusType; currentLevel?: number }>>({});
 
-  // Filter + search
-  const filtered = useMemo(() => {
-    let list = approvals;
+  // Module & Search filtered list (used for summary metrics so counts stay steady while filtering)
+  const moduleFiltered = useMemo(() => {
+    let list = approvals.map((a) => {
+      const opt = optimisticMap[a.id];
+      if (opt) {
+        const isApproved = opt.status === 'APPROVED';
+        return {
+          ...a,
+          status: opt.status,
+          currentLevel: opt.currentLevel ?? (isApproved ? (a.totalLevels || 1) : a.currentLevel),
+        };
+      }
+      return a;
+    });
+    if (moduleFilter !== 'ALL') {
+      const filterLower = moduleFilter.toLowerCase();
+      list = list.filter((a) => {
+        const modLower = (a.module || '').toLowerCase();
+        return modLower === filterLower || modLower.includes(filterLower) || filterLower.includes(modLower);
+      });
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(
@@ -463,39 +505,89 @@ export default function ApprovalsPage() {
       );
     }
     return list;
-  }, [approvals, search]);
+  }, [approvals, optimisticMap, moduleFilter, search]);
+
+  // Final table list (also filtered by statusFilter)
+  const filtered = useMemo(() => {
+    if (statusFilter === 'ALL') return moduleFiltered;
+    return moduleFiltered.filter((a) => a.status === statusFilter);
+  }, [moduleFiltered, statusFilter]);
+
+  // Summary calculated based on moduleFiltered list
+  const summary = useMemo(() => ({
+    total: moduleFiltered.length,
+    pending: moduleFiltered.filter((a) => a.status === 'PENDING').length,
+    approved: moduleFiltered.filter((a) => a.status === 'APPROVED').length,
+    rejected: moduleFiltered.filter((a) => a.status === 'REJECTED').length,
+  }), [moduleFiltered]);
 
   // Pagination
   const totalPages = Math.ceil(filtered.length / perPage);
   const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
 
-  // Action handler — close modal instantly, call API, then refresh & toast
+  // Action handler — show success modal INSTANTLY (0ms delay), call API in background & refresh
   const handleAction = useCallback(async () => {
     if (!actionModal) return;
     const { id } = actionModal.request;
     const actionType = actionModal.action;
+    const req = actionModal.request;
     const comment = actionComment.trim() || undefined;
 
-    // Close modal instantly for immediate feedback
+    // Close action dialog
     setActionModal(null);
     setActionComment('');
 
-    // Call API and refresh in background
+    const newStatus: ApprovalStatusType = actionType === 'approve' ? 'APPROVED' : actionType === 'reject' ? 'REJECTED' : 'RETURNED';
+    const targetLevel = actionType === 'approve' ? ((req.currentLevel || 1) + 1) : req.currentLevel;
+
+    // 1. INSTANT OPTIMISTIC TABLE ROW STATUS UPDATE (0ms delay!)
+    setOptimisticMap((prev) => ({
+      ...prev,
+      [id]: { status: newStatus, currentLevel: targetLevel },
+    }));
+
+    const defaultMsg = actionType === 'approve'
+      ? `${req.module || 'Purchase Order'} Approved`
+      : actionType === 'reject'
+      ? `${req.module || 'Purchase Order'} Rejected`
+      : `${req.module || 'Purchase Order'} Returned for Revision`;
+
+    // 2. INSTANT OPTIMISTIC SUCCESS MODAL (0ms delay!)
+    setActionSuccessData({
+      actionType,
+      module: req.module || 'Approval Request',
+      referenceNumber: req.referenceNumber,
+      title: req.title,
+      message: defaultMsg,
+      comment,
+      details: [
+        { label: 'Amount', value: req.amount },
+        { label: 'Requested By', value: req.requestedBy },
+      ],
+    });
+
+    // 3. Execute network request in the background
     try {
-      let message: string;
+      let res: any;
       if (actionType === 'approve') {
-        const res = await approvalService.approve(id, comment);
-        message = res?.message || 'Request approved successfully.';
+        res = await approvalService.approve(id, comment);
       } else if (actionType === 'reject') {
-        const res = await approvalService.reject(id, comment);
-        message = res?.message || 'Request rejected.';
+        res = await approvalService.reject(id, comment);
       } else {
-        const res = await approvalService.return(id, comment, actionReturnTarget as any);
-        message = res?.message || 'Request returned for revision.';
+        res = await approvalService.return(id, comment, actionReturnTarget as any);
       }
-      setToast({ message, type: 'success' });
+
+      if (res?.message) {
+        setActionSuccessData((prev) => (prev ? { ...prev, message: res.message } : null));
+      }
       reload();
     } catch (err) {
+      setOptimisticMap((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      setActionSuccessData(null);
       setToast({ message: err instanceof Error ? err.message : 'Action failed.', type: 'error' });
       reload();
     }
@@ -516,6 +608,20 @@ export default function ApprovalsPage() {
   const actionTitle = actionModal?.action === 'approve' ? 'Approve Request' : actionModal?.action === 'reject' ? 'Reject Request' : 'Return Request';
   const actionColor = actionModal?.action === 'approve' ? 'approve' : actionModal?.action === 'reject' ? 'reject' : 'return';
 
+  const pageTitle = moduleFilter === 'Purchase Order'
+    ? 'Purchase Order Approval'
+    : moduleFilter === 'Quotation'
+    ? 'Quotation Approval'
+    : moduleFilter === 'RFQ'
+    ? 'RFQ Approval'
+    : moduleFilter === 'Contract'
+    ? 'Contract Approval'
+    : 'All Approval Requests';
+
+  const pageSubtitle = moduleFilter === 'Purchase Order'
+    ? 'Review, approve, or reject pending purchase order requests'
+    : 'Review, approve, or reject pending requests across modules';
+
   return (
     <div className="approvals-page">
       {error && <MessageStrip type="error">{error}</MessageStrip>}
@@ -532,27 +638,42 @@ export default function ApprovalsPage() {
       {/* Header */}
       <div className="approvals-page__header">
         <div className="approvals-page__header-left">
-          <h1>Purchase Order Approval</h1>
-          <p>Review, approve, or reject pending purchase order requests across modules</p>
+          <h1>{pageTitle}</h1>
+          <p>{pageSubtitle}</p>
         </div>
       </div>
 
-      {/* Summary */}
+
+
+      {/* Summary Cards (Clickable Filter Buttons) */}
       <div className="approvals-summary">
         {[
-          { icon: <CheckSquare size={22} />, value: summary.total, label: 'Total Requests', cls: 'total' },
-          { icon: <Clock size={22} />, value: summary.pending, label: 'Pending', cls: 'pending' },
-          { icon: <CheckCircle2 size={22} />, value: summary.approved, label: 'Approved', cls: 'approved' },
-          { icon: <XCircle size={22} />, value: summary.rejected, label: 'Rejected', cls: 'rejected' },
-        ].map((c) => (
-          <div key={c.cls} className="approvals-summary-card">
-            <div className={`approvals-summary-card__icon approvals-summary-card__icon--${c.cls}`}>{c.icon}</div>
-            <div className="approvals-summary-card__info">
-              <span className="approvals-summary-card__value">{c.value}</span>
-              <span className="approvals-summary-card__label">{c.label}</span>
+          { icon: <CheckSquare size={22} />, value: summary.total, label: 'Total Requests', cls: 'total', statusKey: 'ALL' },
+          { icon: <Clock size={22} />, value: summary.pending, label: 'Pending', cls: 'pending', statusKey: 'PENDING' },
+          { icon: <CheckCircle2 size={22} />, value: summary.approved, label: 'Approved', cls: 'approved', statusKey: 'APPROVED' },
+          { icon: <XCircle size={22} />, value: summary.rejected, label: 'Rejected', cls: 'rejected', statusKey: 'REJECTED' },
+        ].map((c) => {
+          const isActive = statusFilter === c.statusKey;
+          return (
+            <div
+              key={c.cls}
+              className={`approvals-summary-card approvals-summary-card--clickable ${isActive ? 'approvals-summary-card--active' : ''}`}
+              onClick={() => {
+                setStatusFilter(c.statusKey);
+                setCurrentPage(1);
+              }}
+              title={`Filter table by ${c.label}`}
+              role="button"
+              tabIndex={0}
+            >
+              <div className={`approvals-summary-card__icon approvals-summary-card__icon--${c.cls}`}>{c.icon}</div>
+              <div className="approvals-summary-card__info">
+                <span className="approvals-summary-card__value">{c.value}</span>
+                <span className="approvals-summary-card__label">{c.label}</span>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Toolbar */}
@@ -632,7 +753,7 @@ export default function ApprovalsPage() {
                         <button className="approvals-table__action-btn" title="View Details" onClick={() => setDetailRequest(req)}>
                           <Eye size={15} />
                         </button>
-                        {req.status === 'PENDING' && (req.canAct ?? true) ? (
+                        {req.status === 'PENDING' && req.canAct ? (
                           <>
                             <button className="approvals-table__action-btn approvals-table__action-btn--approve" title="Approve" onClick={() => openAction(req, 'approve')}>
                               <ThumbsUp size={15} />
@@ -861,7 +982,7 @@ export default function ApprovalsPage() {
             </div>
             <div className="approvals-modal__footer">
               <button className="approvals-modal__btn approvals-modal__btn--secondary" onClick={() => setDetailRequest(null)}>Close</button>
-              {detailRequest.status === 'PENDING' && (
+              {detailRequest.status === 'PENDING' && detailRequest.canAct && (
                 <>
                   <button className="approvals-modal__btn approvals-modal__btn--approve" onClick={() => { setDetailRequest(null); openAction(detailRequest, 'approve'); }}>
                     <ThumbsUp size={16} /> Approve
@@ -884,6 +1005,12 @@ export default function ApprovalsPage() {
           onClose={() => setChainModal(null)}
         />
       )}
+
+      {/* Action Success Modal */}
+      <ActionSuccessModal
+        data={actionSuccessData}
+        onClose={() => setActionSuccessData(null)}
+      />
     </div>
   );
 }

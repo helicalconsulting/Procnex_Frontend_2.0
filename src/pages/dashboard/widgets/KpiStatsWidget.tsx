@@ -473,34 +473,6 @@ export default function KpiStatsWidget() {
                     </div>
                   )}
 
-                  {/* Distribution & Breakdown Section */}
-                  {breakdownRows.length > 0 && (
-                    <div className="sap-kpi-section" style={{ marginTop: 18 }}>
-                      <div className="sap-kpi-section__title">
-                        <ListChecks size={13} /> Distribution & Breakdown
-                      </div>
-                      <div className="rfq-modal__quotations-panel sap-kpi-panel">
-                        {breakdownRows.map((row) => (
-                          <div
-                            key={`${row.label}-${row.value}`}
-                            className={`rfq-modal__quotation-row ${row.link ? 'dash-kpi-modal__task-row' : ''}`}
-                            onClick={row.link ? () => handleTaskClick(row.link!) : undefined}
-                            role={row.link ? 'button' : undefined}
-                            tabIndex={row.link ? 0 : undefined}
-                            onKeyDown={row.link ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleTaskClick(row.link!); } } : undefined}
-                          >
-                            <div className="rfq-modal__quotation-info">
-                              <span className="rfq-modal__vendor-name">{row.label}</span>
-                              {row.helper && <span className="rfq-modal__quotation-meta">{row.helper}</span>}
-                            </div>
-                            <div className="rfq-modal__quotation-right">
-                              <span className="rfq-modal__quotation-price">{row.value}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
 
                   {/* Related Activity Section */}
                   {relatedRfqs.length > 0 && (

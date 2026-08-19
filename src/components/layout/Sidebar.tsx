@@ -50,14 +50,20 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   Dashboard: <LayoutDashboard size={19} />,
   'RFQ Management': <FileText size={19} />,
   Quotations: <ClipboardList size={19} />,
+  'Quotation Approval': <ClipboardList size={19} />,
   'PO Creation': <ShoppingCart size={19} />,
+  'Purchase Orders': <ShoppingCart size={19} />,
   'PO Approval': <ShoppingCart size={19} />,
   'Accounts Payable': <Wallet size={19} />,
+  'Purchase Invoice Approval': <Wallet size={19} />,
   'Payments': <CreditCard size={19} />,
+  'Payment Voucher Approval': <CreditCard size={19} />,
   'Sales Orders': <TrendingUp size={19} />,
   Vendors: <Users size={19} />,
   Approvals: <CheckSquare size={19} />,
   Contracts: <FileText size={19} />,
+  'Create Purchase Invoice': <Receipt size={19} />,
+  'Create Payment Voucher': <CreditCard size={19} />,
   Documents: <FolderOpen size={19} />,
   Notifications: <Bell size={19} />,
   'Audit Trail': <History size={19} />,
@@ -115,7 +121,7 @@ export default function Sidebar({
       title: 'Procurement',
       items: [
         ...menuItems
-          .filter((item) => ['rfq', 'quotations', 'contracts', 'vendor-rfqs', 'vendor-quotations', 'purchase-requisitions', 'forms'].includes(item.id))
+          .filter((item) => ['rfq', 'contracts', 'create-purchase-invoice', 'create-payment-voucher', 'vendor-rfqs', 'vendor-quotations', 'purchase-requisitions', 'forms'].includes(item.id))
           .map((item) => ({
             label: item.label,
             icon: ICON_MAP[item.label] || <FileText size={19} />,
@@ -127,6 +133,9 @@ export default function Sidebar({
       title: 'Approvals',
       items: [
         ...menuItems
+          .filter((item) => item.id === 'quotations')
+          .map((item) => ({ label: item.label, icon: ICON_MAP[item.label] || <ClipboardList size={19} />, path: item.path })),
+        ...menuItems
           .filter((item) => item.id === 'approvals')
           .map((item) => ({ label: item.label, icon: ICON_MAP[item.label] || <ShoppingCart size={19} />, path: item.path })),
         ...menuItems
@@ -135,9 +144,6 @@ export default function Sidebar({
         ...menuItems
           .filter((item) => item.id === 'payments')
           .map((item) => ({ label: item.label, icon: ICON_MAP[item.label] || <CreditCard size={19} />, path: item.path })),
-        ...menuItems
-          .filter((item) => item.id === 'sales-orders')
-          .map((item) => ({ label: item.label, icon: ICON_MAP[item.label] || <TrendingUp size={19} />, path: item.path })),
       ],
     },
     {
@@ -177,21 +183,6 @@ export default function Sidebar({
         ...menuItems
           .filter((item) => item.id === 'onboarding-queue')
           .map((item) => ({ label: item.label, icon: ICON_MAP[item.label] || <UsersRound size={19} />, path: item.path })),
-      ],
-    },
-    {
-      title: 'Intelligence',
-      items: [
-        ...menuItems
-          .filter((item) => item.id === 'audit-trail')
-          .map((item) => ({ label: item.label, icon: ICON_MAP[item.label] || <History size={19} />, path: item.path })),
-        ...menuItems
-          .filter((item) => item.id === 'reports')
-          .map((item) => ({
-            label: item.label,
-            icon: ICON_MAP[item.label] || <BarChart3 size={19} />,
-            path: item.path,
-          })),
       ],
     },
     {

@@ -36,13 +36,14 @@ interface ContractRow {
   endDate: string | null;
   status: ContractStatus;
   contractOwner: string;
+  hasPO?: boolean;
 }
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: 'Draft',
-  PENDING_VENDOR_SIGNATURE: 'Pending Vendor Signature',
+  PENDING_VENDOR_SIGNATURE: 'Pending Signature',
   AWAITING_CUSTOMER_SIGNATURE: 'Awaiting Your Signature',
-  AWAITING_VENDOR_SIGNATURE: 'Pending Vendor Signature',
+  AWAITING_VENDOR_SIGNATURE: 'Pending Signature',
   VENDOR_SIGNED: 'Vendor Signed',
   ACCEPTED: 'Accepted',
   COMPLETED: 'Completed',
@@ -108,6 +109,7 @@ export default function ContractsPage() {
     endDate: c.expirationDate,
     status: c.status as ContractStatus,
     contractOwner: c.contractOwner?.fullName || '—',
+    hasPO: ((c as any)._count?.purchaseOrders ?? 0) > 0 || ((c as any).purchaseOrders?.length ?? 0) > 0,
   })), [rawResult.rawContracts, contractTypeLabels]);
 
   const [search, setSearch] = useState('');
@@ -294,10 +296,18 @@ export default function ContractsPage() {
         r.sourceRfq.toLowerCase().includes(q)
       );
     }
-    if (statusFilter !== 'ALL') list = list.filter(r => r.status === statusFilter);
+    if (statusFilter !== 'ALL') {
+      if (statusFilter === 'VENDOR_SIGNED_GROUP') {
+        list = list.filter(r => ['VENDOR_SIGNED', 'ACCEPTED', 'COMPLETED', 'ACTIVE'].includes(r.status));
+      } else if (statusFilter === 'PENDING_SIGNATURE_GROUP') {
+        list = list.filter(r => ['PENDING_VENDOR_SIGNATURE', 'AWAITING_CUSTOMER_SIGNATURE', 'AWAITING_VENDOR_SIGNATURE'].includes(r.status));
+      } else {
+        list = list.filter(r => r.status === statusFilter);
+      }
+    }
     if (typeFilter !== 'ALL') list = list.filter(r => r.contractType === contractTypeLabels[typeFilter] || r.contractType === typeFilter);
     return list;
-  }, [contracts, search, statusFilter, typeFilter]);
+  }, [contracts, search, statusFilter, typeFilter, contractTypeLabels]);
 
   const totalPages = Math.ceil(filtered.length / perPage);
   const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
@@ -354,12 +364,13 @@ export default function ContractsPage() {
       const result = await contractService.createPOFromContract(id);
       setPageMsg(`Purchase Order ${result.poNumber} created successfully.`);
       await reload();
+      navigate(`/contracts/${id}?tab=orders`);
     } catch (err) {
       setPageMsg(err instanceof Error ? err.message : 'Failed to create PO');
     } finally {
       setOperating(null);
     }
-  }, [reload]);
+  }, [reload, navigate]);
 
   const handleDownload = useCallback(async (r: ContractRow) => {
     try {
@@ -539,21 +550,42 @@ export default function ContractsPage() {
       {/* Summary */}
       <div className="ctr-summary">
         {[
-          { icon: <FileText size={22} />, val: summary.total, label: 'Total Contracts', cls: 'total' },
-          { icon: <CheckCircle2 size={22} />, val: summary.vendorSigned, label: 'Vendor Signed', cls: 'active' },
-          { icon: <Clock size={22} />, val: summary.pendingSignature, label: 'Pending Signature', cls: 'pending' },
-          { icon: <DollarSign size={22} />, val: formatCurrency(summary.totalValue, displayCurrency), label: 'Total Value', cls: 'value' },
-        ].map(c => (
-          <div key={c.cls} className="ctr-summary-card">
-            <div className={`ctr-summary-card__icon ctr-summary-card__icon--${c.cls}`}>{c.icon}</div>
-            <div className="ctr-summary-card__info">
-              <span className="ctr-summary-card__value">
-                {typeof c.val === 'number' ? c.val.toLocaleString('en-IN') : c.val}
-              </span>
-              <span className="ctr-summary-card__label">{c.label}</span>
+          { icon: <FileText size={22} />, val: summary.total, label: 'Total Contracts', cls: 'total', filterKey: 'ALL', isFilter: true },
+          { icon: <CheckCircle2 size={22} />, val: summary.vendorSigned, label: 'Vendor Signed', cls: 'signed', filterKey: 'VENDOR_SIGNED_GROUP', isFilter: true },
+          { icon: <Clock size={22} />, val: summary.pendingSignature, label: 'Pending Signature', cls: 'pending', filterKey: 'PENDING_SIGNATURE_GROUP', isFilter: true },
+          { icon: <DollarSign size={22} />, val: formatCurrency(summary.totalValue, displayCurrency), label: 'Total Value', cls: 'value', isFilter: false },
+        ].map(c => {
+          const isActive = c.isFilter && statusFilter === c.filterKey;
+          return (
+            <div
+              key={c.label}
+              className={`ctr-summary-card ${isActive ? 'ctr-summary-card--active' : ''}`}
+              onClick={() => {
+                if (c.isFilter && c.filterKey) {
+                  setStatusFilter(prev => (prev === c.filterKey ? 'ALL' : c.filterKey));
+                  setCurrentPage(1);
+                }
+              }}
+              style={{ cursor: c.isFilter ? 'pointer' : 'default' }}
+              role={c.isFilter ? 'button' : undefined}
+              tabIndex={c.isFilter ? 0 : undefined}
+              onKeyDown={(e) => {
+                if (c.isFilter && c.filterKey && (e.key === 'Enter' || e.key === ' ')) {
+                  setStatusFilter(prev => (prev === c.filterKey ? 'ALL' : c.filterKey));
+                  setCurrentPage(1);
+                }
+              }}
+            >
+              <div className={`ctr-summary-card__icon ctr-summary-card__icon--${c.cls}`}>{c.icon}</div>
+              <div className="ctr-summary-card__info">
+                <span className="ctr-summary-card__value">
+                  {typeof c.val === 'number' ? c.val.toLocaleString('en-IN') : c.val}
+                </span>
+                <span className="ctr-summary-card__label">{c.label}</span>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Toolbar */}
@@ -585,6 +617,8 @@ export default function ContractsPage() {
             style={{ minWidth: '160px' }}
           >
             <option value="ALL">All Statuses</option>
+            <option value="VENDOR_SIGNED_GROUP">Vendor Signed (All)</option>
+            <option value="PENDING_SIGNATURE_GROUP">Pending Signature (All)</option>
             {(['DRAFT', 'PENDING_VENDOR_SIGNATURE', 'VENDOR_SIGNED', 'ACCEPTED', 'COMPLETED', 'CANCELLED', 'TERMINATED'] as const).map(s => (
               <option key={s} value={s}>{STATUS_LABELS[s] || s}</option>
             ))}
@@ -690,12 +724,13 @@ export default function ContractsPage() {
                             ><Download size={15} /></button>
                           )}
 
-                          {/* Create PO — Accepted, Active, Vendor Signed, or Expiring Soon */}
-                          {['ACCEPTED', 'ACTIVE', 'VENDOR_SIGNED', 'EXPIRING_SOON'].includes(r.status) && (
+                          {/* Create PO — Accepted, Active, Vendor Signed, or Expiring Soon (ONLY if PO not yet created) */}
+                          {['ACCEPTED', 'ACTIVE', 'VENDOR_SIGNED', 'EXPIRING_SOON'].includes(r.status) && !r.hasPO && (
                             <button
                               className="ctr-table__action-btn"
                               title="Create Purchase Order"
-                              onClick={() => navigate(`/contracts/${r.id}?tab=orders`)}
+                              onClick={() => handleCreatePO(r.id)}
+                              disabled={operating === r.id}
                             ><Plus size={15} /></button>
                           )}
 

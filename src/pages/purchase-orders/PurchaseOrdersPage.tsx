@@ -1,13 +1,15 @@
 import React from 'react';
 import { useState, useMemo, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
+import { downloadPurchaseOrderAsPdf } from '../../utils/pdfDownload';
 import { toNumber } from '../../api/normalize';
 import type { PurchaseOrder } from '../../types';
 import {
   ShoppingCart, Search, Plus, Eye, Filter, Clock, CheckCircle2, XCircle,
-  Truck, Package, FileText, X, ChevronLeft, ChevronRight,
+  Truck, Package, FileText, X, ChevronLeft, ChevronRight, Download,
   LayoutList, LayoutGrid, Calendar, IndianRupee, AlertTriangle,
 } from 'lucide-react';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
@@ -76,7 +78,7 @@ const STATUS_ICONS: Record<POStatus, React.ReactNode> = {
 // ─── Column Definitions ─────────────────────────────────────
 interface POColumnDef {
   key: string; label: string; defaultVisible: boolean; required?: boolean;
-  width?: string; render: (po: MockPO, fmtDate: (d: string) => string) => React.ReactNode;
+  width?: string; render: (po: MockPO, fmtDate: (d: string) => string, fmtAmt?: (amt: number, c?: string) => string, curr?: string) => React.ReactNode;
 }
 
 const ALL_COLUMNS: POColumnDef[] = [
@@ -99,7 +101,7 @@ const ALL_COLUMNS: POColumnDef[] = [
       </div>
     ),
   },
-  { key: 'amount', label: 'Amount', defaultVisible: true, width: '120px', render: (po) => <span className="po-table__amount">{formatAmount(po.totalAmountNum, displayCurrency)}</span> },
+  { key: 'amount', label: 'Amount', defaultVisible: true, width: '120px', render: (po, _fmtDate, fmtAmt, curr) => <span className="po-table__amount">{fmtAmt ? fmtAmt(po.totalAmountNum, curr) : po.totalAmount}</span> },
   { key: 'items', label: 'Items', defaultVisible: true, width: '70px', render: (po) => <span className="po-table__items">{po.itemCount}</span> },
   {
     key: 'priority', label: 'Priority', defaultVisible: true, width: '100px',
@@ -122,6 +124,7 @@ const ALL_COLUMNS: POColumnDef[] = [
 // ─── Component ──────────────────────────────────────────────
 
 export default function PurchaseOrdersPage() {
+  const navigate = useNavigate();
   const { data: poResult, loading, error } = useServiceData(
     () => purchaseOrderService.list().then((r) => r.orders.map(mapPO)),
     [] as MockPO[]
@@ -184,25 +187,40 @@ export default function PurchaseOrdersPage() {
           <h1>Purchase Orders</h1>
           <p>Track, manage, and monitor all purchase orders across departments</p>
         </div>
-        <button className="po-page__add-btn"><Plus size={18} /> Create PO</button>
+        <button className="po-page__add-btn" onClick={() => navigate('/procurement/create-purchase-order')}>
+          <Plus size={18} /> Create PO
+        </button>
       </div>
 
       {/* Summary */}
       <div className="po-summary">
         {[
-          { icon: <ShoppingCart size={22} />, val: summary.total, label: 'Total Orders', cls: 'total' },
-          { icon: <Clock size={22} />, val: summary.pending, label: 'Pending', cls: 'pending' },
-          { icon: <Truck size={22} />, val: summary.active, label: 'Active', cls: 'active' },
-          { icon: <IndianRupee size={22} />, val: summary.totalValue, label: 'Total Value', cls: 'value' },
-        ].map(c => (
-          <div key={c.cls} className="po-summary-card">
-            <div className={`po-summary-card__icon po-summary-card__icon--${c.cls}`}>{c.icon}</div>
-            <div className="po-summary-card__info">
-              <span className="po-summary-card__value">{c.val}</span>
-              <span className="po-summary-card__label">{c.label}</span>
+          { icon: <ShoppingCart size={22} />, val: summary.total, label: 'Total Orders', cls: 'total', filterKey: 'ALL', isFilter: true },
+          { icon: <Clock size={22} />, val: summary.pending, label: 'Pending', cls: 'pending', filterKey: 'PENDING_APPROVAL', isFilter: true },
+          { icon: <Truck size={22} />, val: summary.active, label: 'Active', cls: 'released', filterKey: 'APPROVED', isFilter: true },
+          { icon: <IndianRupee size={22} />, val: summary.totalValue, label: 'Total Value', cls: 'value', isFilter: false },
+        ].map(c => {
+          const isActive = c.isFilter && statusFilter === c.filterKey;
+          return (
+            <div
+              key={c.label}
+              className={`po-summary-card ${isActive ? 'po-summary-card--active' : ''}`}
+              onClick={() => {
+                if (c.isFilter && c.filterKey) {
+                  setStatusFilter(prev => (prev === c.filterKey ? 'ALL' : c.filterKey));
+                  setCurrentPage(1);
+                }
+              }}
+              style={{ cursor: c.isFilter ? 'pointer' : 'default' }}
+            >
+              <div className={`po-summary-card__icon po-summary-card__icon--${c.cls}`}>{c.icon}</div>
+              <div className="po-summary-card__info">
+                <span className="po-summary-card__value">{c.val}</span>
+                <span className="po-summary-card__label">{c.label}</span>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Toolbar */}
@@ -254,10 +272,11 @@ export default function PurchaseOrdersPage() {
                 <tbody>
                   {paginated.map(po => (
                     <tr key={po.id} className={`po-table__row po-table__row--${(po.status || '').toLowerCase()}`}>
-                      {visibleColumns.map((col) => (<td key={col.key}>{col.render(po, formatDate)}</td>))}
+                      {visibleColumns.map((col) => (<td key={col.key}>{col.render(po, formatDate, formatAmount, displayCurrency)}</td>))}
                       <td>
                         <div className="po-table__actions">
                           <button className="po-table__action-btn" title="View Details" onClick={() => setDetailPO(po)}><Eye size={15} /></button>
+                          <button className="po-table__action-btn" title="Download PDF" onClick={() => downloadPurchaseOrderAsPdf(po, formatAmount, displayCurrency)}><Download size={15} /></button>
                         </div>
                       </td>
                     </tr>
@@ -369,6 +388,9 @@ export default function PurchaseOrdersPage() {
               </div>
             </div>
             <div className="po-modal__footer">
+              <button className="po-modal__btn po-modal__btn--primary" onClick={() => downloadPurchaseOrderAsPdf(detailPO, formatAmount, displayCurrency)}>
+                <Download size={14} style={{ marginRight: 6 }} /> Download PDF
+              </button>
               <button className="po-modal__btn po-modal__btn--secondary" onClick={() => setDetailPO(null)}>Close</button>
             </div>
           </div>

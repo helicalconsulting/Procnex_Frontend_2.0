@@ -20,8 +20,6 @@ import PurchaseOrderDocument from '../../components/purchase-orders/PurchaseOrde
 import { toCanvas } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import { useAuth } from '../../context/AuthContext';
-import { isL2OrHigherUser } from '../../utils/rbac';
-import { CreatorLevelPromptModal } from '../../components/shared/CreatorLevelPromptModal';
 import './PurchaseRequisitionPage.css';
 
 // ─── Helper ─────────────────────────────────────────────────
@@ -85,7 +83,6 @@ export default function PurchaseRequisitionPage() {
   const [contractData, setContractData] = useState<any>(null);
   const [contractBalance, setContractBalance] = useState<{ contractValue: number; consumedValue: number; remainingValue: number; currency: string } | null>(null);
   const [poCreated, setPoCreated] = useState(false);
-  const [showLevelPrompt, setShowLevelPrompt] = useState(false);
 
   // Print / PDF state
   const [downloadingPdf, setDownloadingPdf] = useState(false);
@@ -105,6 +102,16 @@ export default function PurchaseRequisitionPage() {
 
   // Company settings for auto-fill
   const [companyProfile, setCompanyProfile] = useState<Record<string, any> | null>(null);
+  const [vendorsList, setVendorsList] = useState<any[]>([]);
+
+  useEffect(() => {
+    apiRequest<{ vendors?: any[]; data?: any[] }>('/vendors')
+      .then((res) => {
+        const list = res.vendors || res.data || [];
+        setVendorsList(list);
+      })
+      .catch(() => {});
+  }, []);
 
   // Fetch RFQ data on mount
   useEffect(() => {
@@ -515,10 +522,6 @@ export default function PurchaseRequisitionPage() {
       setToast({ message: 'Please fix the validation errors before submitting for approval.', type: 'error' });
       return;
     }
-    if (isL2OrHigherUser(roles)) {
-      setShowLevelPrompt(true);
-      return;
-    }
     await executeSubmitForApproval(1);
   };
 
@@ -544,14 +547,14 @@ export default function PurchaseRequisitionPage() {
       if (result?.createdPO?.poNumber) {
         setPoCreated(true);
         setToast({
-          message: `✅ Purchase Order ${result.createdPO.poNumber} submitted for approval. Redirecting to approvals…`,
+          message: `✅ Purchase Order ${result.createdPO.poNumber} submitted for approval. Redirecting to PO Creation page…`,
           type: 'success'
         });
       } else {
-        setToast({ message: 'Purchase Requisition submitted for approval. Redirecting to approvals…', type: 'success' });
+        setToast({ message: 'Purchase Requisition submitted for approval. Redirecting to PO Creation page…', type: 'success' });
       }
 
-      setTimeout(() => navigate('/approvals'), 1500);
+      setTimeout(() => navigate('/procurement/purchase-requisitions'), 1500);
     } catch (err: any) {
       setToast({ message: err?.message || 'Failed to submit for approval', type: 'error' });
     } finally {
@@ -868,6 +871,47 @@ export default function PurchaseRequisitionPage() {
         {/* ── Vendor Details ── */}
         <section className="pr-section">
           <div className="pr-section__header"><Building2 size={16} /> Vendor Details</div>
+          {!isReadOnly && (
+            <div className="pr-field pr-field--wide" style={{ marginBottom: 16 }}>
+              <label>Select Registered Vendor from Master</label>
+              <select
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  color: 'var(--text-primary)',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  outline: 'none',
+                  cursor: 'pointer',
+                }}
+                onChange={(e) => {
+                  const v = vendorsList.find(item => item.id === e.target.value);
+                  if (v) {
+                    setPr(prev => prev ? {
+                      ...prev,
+                      vendorName: v.name,
+                      vendorEmail: v.email || prev.vendorEmail,
+                      vendorPhone: v.phone || prev.vendorPhone,
+                      vendorContactPerson: v.contactPerson || prev.vendorContactPerson,
+                      vendorAddress: v.address || prev.vendorAddress,
+                      vendorGstVat: v.gstNumber || v.panNumber || prev.vendorGstVat,
+                    } : prev);
+                    clearFieldError('vendorName');
+                  }
+                }}
+              >
+                <option value="">-- Choose Vendor from Database Master --</option>
+                {vendorsList.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name} {v.email ? `(${v.email})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="pr-section__grid pr-section__grid--2col">
             <div className={`pr-field ${validationErrors.vendorName ? 'pr-field--error' : ''}`}>
               <label>Company Name {!isReadOnly && <span className="pr-required">*</span>}</label>
@@ -1125,16 +1169,6 @@ export default function PurchaseRequisitionPage() {
           </div>
         </div>
       )}
-
-      <CreatorLevelPromptModal
-        isOpen={showLevelPrompt}
-        moduleName="Purchase Order"
-        onConfirm={(startLevelNumber) => {
-          setShowLevelPrompt(false);
-          void executeSubmitForApproval(startLevelNumber);
-        }}
-        onCancel={() => setShowLevelPrompt(false)}
-      />
     </div>
   );
 }

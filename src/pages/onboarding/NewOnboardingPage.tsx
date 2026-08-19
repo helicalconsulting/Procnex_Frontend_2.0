@@ -427,6 +427,12 @@ export default function NewOnboardingPage() {
     return digits.length < 7 || digits.length > 15;
   }, [contactPhone]);
 
+  const isEmailInvalid = useMemo(() => {
+    if (!contactEmail.trim()) return false;
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return !emailRegex.test(contactEmail.trim());
+  }, [contactEmail]);
+
   useBodyScrollLock(isInviteExpanded);
   useBodyScrollLock(isSentExpanded);
   useBodyScrollLock(!!showVendorDetail);
@@ -556,8 +562,9 @@ export default function NewOnboardingPage() {
 
   const handleSendInviteClick = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!companyName.trim() || !contactEmail.trim()) {
-      setFormError('Please fill in both Company Name and Contact Email');
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!companyName.trim() || !contactEmail.trim() || !emailRegex.test(contactEmail.trim())) {
+      setFormError('Please enter a valid Company Name and complete Email address (e.g. name@domain.com)');
       return;
     }
     if (contactPhone.trim()) {
@@ -1033,9 +1040,15 @@ export default function NewOnboardingPage() {
                     onChange={(e) => setContactEmail(e.target.value)}
                     placeholder="vendor@company.com"
                     required
-                    className="onb-form-field__input"
+                    className={`onb-form-field__input ${isEmailInvalid ? 'onb-form-field__input--error' : ''}`}
+                    style={isEmailInvalid ? { borderColor: '#ef4444' } : undefined}
                   />
                 </div>
+                {isEmailInvalid && (
+                  <span style={{ fontSize: '12px', color: '#ef4444', marginTop: '4px', display: 'block', fontWeight: 500 }}>
+                    Please enter a valid email address with domain extension (e.g. name@domain.com)
+                  </span>
+                )}
               </div>
 
               <div className="onb-form-field">
@@ -2133,7 +2146,7 @@ export default function NewOnboardingPage() {
         >
           <div
             className="onb-template-preview-card"
-            style={{ maxWidth: 720, width: '94vw' }}
+            style={{ maxWidth: 1100, width: '95vw' }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}

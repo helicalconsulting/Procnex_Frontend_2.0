@@ -315,9 +315,20 @@ export default function ContractDetailPage() {
   const handleCreatePO = useCallback(async () => {
     if (!id) return;
     if (contractBalance && contractBalance.remainingValue <= 0) return;
-    // Navigate to Purchase Requisition page with contract data pre-fill
-    navigate(`/procurement/purchase-requisition/${data?.contract?.rfqId || ''}?contractId=${id}`);
-  }, [id, navigate, data?.contract?.rfqId, contractBalance]);
+    setCreatingPO(true);
+    setPageMsg(null);
+    try {
+      const result = await contractService.createPOFromContract(id);
+      setPageMsg(`Purchase Order ${result.poNumber} created successfully.`);
+      await reload();
+      await refreshBalance();
+      setActiveTab('purchase-orders');
+    } catch (err) {
+      setPageMsg(err instanceof Error ? err.message : 'Failed to create PO');
+    } finally {
+      setCreatingPO(false);
+    }
+  }, [id, contractBalance, reload, refreshBalance]);
 
   const handleSendToVendor = useCallback(async () => {
     if (!id) return;
@@ -443,10 +454,11 @@ export default function ContractDetailPage() {
     return match?.signature?.dataUrl || null;
   })();
 
+  const hasPO = (contract._count?.purchaseOrders || contract.purchaseOrders?.length || contractBalance?.totalPOs || 0) > 0;
   const canSign = contract.status === 'DRAFT' || contract.status === 'AWAITING_CUSTOMER_SIGNATURE';
   const canSendToVendor = contract.status === 'DRAFT';
   const canComplete = contract.status === 'VENDOR_SIGNED' || contract.status === 'ACCEPTED' || contract.status === 'ACTIVE';
-  const canCreatePO = ['ACCEPTED', 'VENDOR_SIGNED', 'COMPLETED', 'ACTIVE'].includes(contract.status);
+  const canCreatePO = ['ACCEPTED', 'VENDOR_SIGNED', 'COMPLETED', 'ACTIVE'].includes(contract.status) && !hasPO;
   const canTerminate = ['ACCEPTED', 'VENDOR_SIGNED', 'COMPLETED', 'ACTIVE', 'EXPIRING_SOON'].includes(contract.status);
   const canEdit = contract.status === 'DRAFT';
   const isLimitReached = contractBalance ? contractBalance.remainingValue <= 0 : false;

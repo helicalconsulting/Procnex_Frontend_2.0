@@ -204,6 +204,7 @@ export default function AccountsPayablePage() {
     return serverInvoices.map(inv => pendingActions[inv.id] ?? inv);
   }, [serverInvoices, pendingActions]);
   const [search, setSearch]               = useState('');
+  const [statusFilter, setStatusFilter]   = useState<string>('ALL');
   const [detailInvoice, setDetailInvoice] = useState<APInvoice | null>(null);
   const [actionModal, setActionModal]     = useState<{ invoice: APInvoice; action: 'approve' | 'reject' | 'return' } | null>(null);
   const [actionComment, setActionComment] = useState('');
@@ -252,6 +253,9 @@ export default function AccountsPayablePage() {
   // ── Filtered list ──
   const filtered = useMemo(() => {
     let list = invoices;
+    if (statusFilter !== 'ALL') {
+      list = list.filter(i => i.status === statusFilter);
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(i =>
@@ -261,7 +265,7 @@ export default function AccountsPayablePage() {
       );
     }
     return list;
-  }, [invoices, search]);
+  }, [invoices, search, statusFilter]);
 
   // ── Action handler ──
   const handleAction = useCallback(() => {
@@ -299,17 +303,41 @@ export default function AccountsPayablePage() {
       {/* ── Header ── */}
       <div className="fin-page__header">
         <div>
-          <h1>Accounts Payable</h1>
+          <h1>Purchase Invoice Approval</h1>
           <p>Track outstanding invoices and manage vendor payments</p>
         </div>
       </div>
 
       {/* ── KPIs ── */}
       <div className="fin-kpis">
-        <div className="fin-kpi"><div className="fin-kpi__icon fin-kpi__icon--primary"><Wallet size={20} /></div><div>                  <span className="fin-kpi__value">{formatAmount(summary.totalPayable, displayCurrency)}</span><span className="fin-kpi__label">Total Payable</span></div></div>
-        <div className="fin-kpi"><div className="fin-kpi__icon fin-kpi__icon--danger"><AlertTriangle size={20} /></div><div><span className="fin-kpi__value">{summary.overdue}</span><span className="fin-kpi__label">Overdue</span></div></div>
-        <div className="fin-kpi"><div className="fin-kpi__icon fin-kpi__icon--warning"><Clock size={20} /></div><div><span className="fin-kpi__value">{summary.dueThisMonth}</span><span className="fin-kpi__label">Due This Month</span></div></div>
-        <div className="fin-kpi"><div className="fin-kpi__icon fin-kpi__icon--success"><CheckCircle2 size={20} /></div><div><span className="fin-kpi__value">{summary.paidThisMonth}</span><span className="fin-kpi__label">Paid / Approved</span></div></div>
+        <div
+          className={`fin-kpi${statusFilter === 'ALL' ? ' fin-kpi--active' : ''}`}
+          onClick={() => setStatusFilter('ALL')}
+        >
+          <div className="fin-kpi__icon fin-kpi__icon--primary"><Wallet size={20} /></div>
+          <div><span className="fin-kpi__value">{formatAmount(summary.totalPayable, displayCurrency)}</span><span className="fin-kpi__label">Total Payable</span></div>
+        </div>
+        <div
+          className={`fin-kpi${statusFilter === 'OVERDUE' ? ' fin-kpi--active' : ''}`}
+          onClick={() => setStatusFilter(prev => prev === 'OVERDUE' ? 'ALL' : 'OVERDUE')}
+        >
+          <div className="fin-kpi__icon fin-kpi__icon--danger"><AlertTriangle size={20} /></div>
+          <div><span className="fin-kpi__value">{summary.overdue}</span><span className="fin-kpi__label">Overdue</span></div>
+        </div>
+        <div
+          className={`fin-kpi${statusFilter === 'PENDING' ? ' fin-kpi--active' : ''}`}
+          onClick={() => setStatusFilter(prev => prev === 'PENDING' ? 'ALL' : 'PENDING')}
+        >
+          <div className="fin-kpi__icon fin-kpi__icon--warning"><Clock size={20} /></div>
+          <div><span className="fin-kpi__value">{summary.dueThisMonth}</span><span className="fin-kpi__label">Due This Month</span></div>
+        </div>
+        <div
+          className={`fin-kpi${statusFilter === 'PAID' ? ' fin-kpi--active' : ''}`}
+          onClick={() => setStatusFilter(prev => prev === 'PAID' ? 'ALL' : 'PAID')}
+        >
+          <div className="fin-kpi__icon fin-kpi__icon--success"><CheckCircle2 size={20} /></div>
+          <div><span className="fin-kpi__value">{summary.paidThisMonth}</span><span className="fin-kpi__label">Paid / Approved</span></div>
+        </div>
       </div>
 
       {/* ── Toolbar ── */}
