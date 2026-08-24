@@ -12,14 +12,6 @@ export default function AppLayout() {
   const [collapsed] = useState(true); // Always collapsed (72px) by default so hover expand works 100% reliably
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const handleToggle = useCallback(() => {
-    setCollapsed((prev) => {
-      const next = !prev;
-      localStorage.setItem('heliflow_sidebar_collapsed', String(next));
-      return next;
-    });
-  }, []);
-
   const handleMobileOpen = useCallback(() => {
     setMobileOpen(true);
   }, []);

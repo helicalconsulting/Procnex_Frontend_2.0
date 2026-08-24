@@ -6,8 +6,9 @@ import { invalidateApiCache } from '../../api/client';
 import {
   Plus, X, Edit3, Building2, Tag, ChevronDown, ChevronRight, ChevronUp, Search,
   Save, Settings, DollarSign, Trash2, Ruler, Users, CreditCard, Mail, FileText, RotateCcw, Clock,
-  Palette, Image, FileSignature, Eye, Upload, Loader2, ArrowRight, Sparkles, AlertTriangle, CheckCircle2, Info, FileCheck,
+  Palette, Image, FileSignature, Eye, Upload, Loader2, ArrowRight, Sparkles, AlertTriangle, CheckCircle2, Info, FileCheck, Globe,
 } from 'lucide-react';
+import { useLanguage } from '../../context/LanguageContext';
 import ImageCropperModal from '../../components/shared/ImageCropperModal';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
 import { useBranding } from '../../context/BrandingContext';
@@ -430,6 +431,17 @@ export default function CompanySettingsPage() {
   const [expandedDept, setExpandedDept] = useState<Set<number>>(new Set());
   const [pageMsg, setPageMsg] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const { language, setLanguage, t } = useLanguage();
+  const [langMsg, setLangMsg] = useState<string | null>(null);
+
+  // Auto-dismiss language toast notification after 3 seconds
+  useEffect(() => {
+    if (!langMsg) return;
+    const timer = setTimeout(() => {
+      setLangMsg(null);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [langMsg]);
 
   // Currency default
   const { companyDefaultCurrency: ctxDefaultCurrency, setCompanyDefaultCurrency } = useCurrency();
@@ -2214,6 +2226,85 @@ export default function CompanySettingsPage() {
             </div>
           </div>
 
+          {/* ── System Language & Localization ── */}
+          <div className="cs-section-card">
+            <div className="cs-section-header">
+              <div className="cs-section-header__left">
+                <h2><Globe size={17} /> {t('settings.language_title', 'Language & Localization / Langue du Système')}</h2>
+                <p>{t('settings.language_desc', 'Select your preferred interface language across the entire Heliflow portal (English / Français 🇫🇷).')}</p>
+              </div>
+            </div>
+            <div className="cs-section-body">
+              <div className="cs-language-selector-grid" style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className={`cs-lang-card ${language === 'en' ? 'cs-lang-card--active' : ''}`}
+                  onClick={() => {
+                    setLanguage('en');
+                    setLangMsg('System language set to English 🇺🇸');
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '14px 20px',
+                    borderRadius: 8,
+                    border: language === 'en' ? '2px solid var(--primary-500, #0a6ed1)' : '1px solid var(--border)',
+                    background: language === 'en' ? 'rgba(10, 110, 209, 0.08)' : 'var(--surface-card)',
+                    cursor: 'pointer',
+                    fontWeight: 700,
+                    fontSize: 14,
+                    color: 'var(--text-primary)',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <span style={{ fontSize: 24 }}>🇺🇸</span>
+                  <div style={{ textAlign: 'left' }}>
+                    <div>English</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 500 }}>Default System Language</div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  className={`cs-lang-card ${language === 'fr' ? 'cs-lang-card--active' : ''}`}
+                  onClick={() => {
+                    setLanguage('fr');
+                    setLangMsg('Langue du système changée en Français 🇫🇷');
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '14px 20px',
+                    borderRadius: 8,
+                    border: language === 'fr' ? '2px solid var(--primary-500, #0a6ed1)' : '1px solid var(--border)',
+                    background: language === 'fr' ? 'rgba(10, 110, 209, 0.08)' : 'var(--surface-card)',
+                    cursor: 'pointer',
+                    fontWeight: 700,
+                    fontSize: 14,
+                    color: 'var(--text-primary)',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <span style={{ fontSize: 24 }}>🇫🇷</span>
+                  <div style={{ textAlign: 'left' }}>
+                    <div>Français</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 500 }}>Langue Française</div>
+                  </div>
+                </button>
+              </div>
+
+              {langMsg && (
+                <div style={{ marginTop: 12 }}>
+                  <MessageStrip type="success" compact onClose={() => setLangMsg(null)}>
+                    {langMsg}
+                  </MessageStrip>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* ── Portal Name ── */}
           <div className="cs-section-card">
             <div className="cs-section-header">
@@ -3064,7 +3155,7 @@ export default function CompanySettingsPage() {
                   <div className="cs-mandatory-custom-list" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {editableDocs.map((doc, idx) => (
                       <div key={doc.id} className="cs-mandatory-custom-item--doc-row">
-                        <div className="cs-mandatory-item-label" style={{ fontWeight: 600, fontSize: 13 }}>
+                        <div className="cs-mandatory-item-label" style={{ fontWeight: 700, fontSize: 13.5 }}>
                           Document {idx + 1}
                         </div>
                         <div className="company-settings__field">
@@ -3072,7 +3163,7 @@ export default function CompanySettingsPage() {
                             value={doc.name}
                             onChange={(e) => updateDocInline(doc.id, e.target.value)}
                             placeholder="e.g. Emirates ID / Trade License"
-                            style={{ fontSize: 13 }}
+                            style={{ fontSize: 15.5, fontWeight: 700 }}
                           />
                         </div>
                         <div>
@@ -3130,7 +3221,7 @@ export default function CompanySettingsPage() {
                             className="cs-doc-field-type"
                             value={doc.expirationAlertFrequency || 'DAILY'}
                             onChange={(e) => updateDocExpirationAlertFrequency(doc.id, e.target.value as 'DAILY' | 'WEEKLY' | 'MONTHLY')}
-                            style={{ width: '100%', fontSize: 12 }}
+                            style={{ width: '100%', fontSize: 14.5, fontWeight: 600 }}
                           >
                             <option value="DAILY">Daily</option>
                             <option value="WEEKLY">Weekly</option>
@@ -3145,7 +3236,7 @@ export default function CompanySettingsPage() {
                               setEditableDocs(prev => prev.map(d => d.id === doc.id ? { ...d, documentCategory: e.target.value as 'mandatory' | 'optional' } : d));
                               setDocsDirty(true);
                             }}
-                            style={{ width: '100%', fontSize: 12 }}
+                            style={{ width: '100%', fontSize: 14.5, fontWeight: 600 }}
                           >
                             <option value="mandatory">Mandatory</option>
                             <option value="optional">Optional</option>

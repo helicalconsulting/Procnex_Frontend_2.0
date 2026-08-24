@@ -47,7 +47,7 @@ export default function CreatePurchaseOrderPage() {
 
   // ── Form State ──
   const [poNumber, setPoNumber] = useState(`PO-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`);
-  const [revisionNo] = useState('0');
+  const [revisionNo, setRevisionNo] = useState('0');
   const [poDate, setPoDate] = useState(new Date().toISOString().slice(0, 10));
   const [status, setStatus] = useState<string>('Draft');
 
@@ -106,7 +106,8 @@ export default function CreatePurchaseOrderPage() {
   const [specialInstructions, setSpecialInstructions] = useState('');
 
   // Actions state
-  const [submitting, setSubmitting] = useState(false);
+  const [submittingAction, setSubmittingAction] = useState<'draft' | 'submit' | null>(null);
+  const submittingRef = React.useRef(false); // Hard guard against concurrent submits
   const [msg, setMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   // ── Fetch Vendors dynamically from DB Master ──
@@ -314,110 +315,150 @@ export default function CreatePurchaseOrderPage() {
 
   // ── Submit / Save Draft Handler ──
   const handleSubmit = async (targetStatus: 'Draft' | 'Pending Approval') => {
+    // Hard guard: prevent duplicate submissions from double-click or fast re-renders
+    if (submittingRef.current) return;
+
     if (!supplierName.trim()) {
       setMsg({ text: 'Please select or enter Supplier Name.', type: 'error' });
+      return;
+    }
+    if (!selectedVendorId) {
+      setMsg({ text: 'Please select a Vendor from the Database Master dropdown. Vendor ID is required to create a Purchase Order.', type: 'error' });
       return;
     }
     if (items.some((i) => !i.itemName.trim())) {
       setMsg({ text: 'Please fill in Item Name for all row items.', type: 'error' });
       return;
     }
+    if (items.some((i) => Number(i.unitPrice) <= 0)) {
+      setMsg({ text: 'Please enter a valid Unit Price (greater than 0) for all items.', type: 'error' });
+      return;
+    }
 
-    setSubmitting(true);
+    submittingRef.current = true;
+    setSubmittingAction(targetStatus === 'Draft' ? 'draft' : 'submit');
     setMsg(null);
 
     const statusPayload = targetStatus === 'Pending Approval' ? 'PENDING_APPROVAL' : 'DRAFT';
 
-    const prPayload: any = {
-      ...(editId ? { id: editId } : {}),
-      rfqId: rfqNo || editId || `rfq-direct-${Date.now()}`,
-      poNumber: poNumber,
-      status: statusPayload,
-      companyName: brandingCompanyName || 'Heliflow Consulting',
-      companyAddress: supplierAddress || 'Industrial Zone, Building 4',
-      companyPhone: brandingPhone || '+91 800-HELIFLOW',
-      companyEmail: brandingEmail || 'procurement@heliflow.com',
-      companyWebsite: 'www.heliflow.com',
-      supplierType: supplierType,
-      supplierCode: supplierCode,
-      selectedVendorId: selectedVendorId,
-      vendorId: selectedVendorId,
-      vendorName: supplierName,
-      vendorAddress: supplierAddress,
-      vendorContactPerson: contactPerson,
-      vendorPhone: contactPhone,
-      vendorEmail: contactEmail,
-      vendorGstVat: supplierTaxId,
-      shipToCompany: 'Heliflow Warehouse',
-      shipToWarehouse: 'Central Warehouse',
-      shipToAddress: supplierAddress || 'Central Depot',
-      shipToContact: contactPerson || 'Warehouse Manager',
-      shipToPhone: contactPhone || '+91 800-HELIFLOW',
-      poDate: poDate,
-      currency: currency,
-      requisitioner: 'Procurement Officer',
-      shipVia: 'Surface',
-      fob: 'Destination',
-      paymentTerms: paymentTerms,
-      deliveryDate: deliveryDate,
-      shippingTerms: shippingTerms,
-      items: items.map((i, idx) => ({
-        itemNo: idx + 1,
-        description: `${i.itemName}${i.description ? ` - ${i.description}` : ''}`,
-        quantity: Number(i.quantity) || 1,
-        unit: i.unit || 'pcs',
-        unitPrice: Number(i.unitPrice) || 0,
-        taxPercent: Number(i.taxPercent) || 0,
-        discount: 0,
-        total: (Number(i.quantity) || 1) * (Number(i.unitPrice) || 0),
-      })),
-      shippingCharges: Number(shippingCharges) || 0,
-      otherCharges: Number(otherCharges) || 0,
-      internalNotes: internalNotes,
-      specialInstructions: specialInstructions,
-      subtotal: subtotal,
-      taxTotal: taxTotal,
-      discountTotal: 0,
-      grandTotal: grandTotal,
-    };
-
-    const standalonePayload = {
-      vendorId: selectedVendorId || 'v1',
-      totalAmount: grandTotal,
-      notes: internalNotes,
-      paymentTerms,
-      deliveryDate,
-      status: statusPayload,
-      items: items.map((i) => ({
-        itemCode: i.itemCode,
-        itemName: i.itemName,
-        description: i.description,
-        quantity: i.quantity,
-        unit: i.unit,
-        unitPrice: i.unitPrice,
-        taxPercent: i.taxPercent,
-        totalPrice: i.quantity * i.unitPrice * (1 + i.taxPercent / 100),
-      })),
-      sourceReferences: {
-        prNo,
-        contractNo,
-        rfqNo,
-        tenderNo,
-        supplierQuotationNo,
-        quotationDate,
-        blanketOrderNo,
-        frameworkAgreement,
-      },
-    };
-
     try {
-      // Save PR requisition record
-      await purchaseRequisitionService.save(prPayload);
+      // ── Build standalone PO payload (used for both Draft and Submit for Approval) ──
+      const standalonePayload = {
+        vendorId: selectedVendorId || undefined,
+        vendorName: supplierName,
+        poNumber: poNumber,
+        poDate: poDate,
+        totalAmount: grandTotal,
+        notes: internalNotes,
+        paymentTerms,
+        deliveryDate,
+        currency,
+        status: statusPayload,
+        supplierType,
+        supplierCode,
+        supplierAddress,
+        supplierTaxId,
+        contactPerson,
+        contactEmail,
+        contactPhone,
+        subtotal,
+        taxTotal,
+        shippingCharges: Number(shippingCharges) || 0,
+        otherCharges: Number(otherCharges) || 0,
+        grandTotal,
+        internalNotes,
+        specialInstructions,
+        items: items.map((i) => ({
+          itemCode: i.itemCode,
+          itemName: i.itemName,
+          description: i.description,
+          quantity: i.quantity,
+          unit: i.unit,
+          unitPrice: i.unitPrice,
+          taxPercent: i.taxPercent,
+          totalPrice: i.quantity * i.unitPrice * (1 + i.taxPercent / 100),
+        })),
+        sourceReferences: {
+          prNo,
+          contractNo,
+          rfqNo,
+          tenderNo,
+          supplierQuotationNo,
+          quotationDate,
+          blanketOrderNo,
+          frameworkAgreement,
+        },
+      };
 
-      // Only initiate approval workflow if submitting for approval!
-      if (targetStatus === 'Pending Approval') {
-        await purchaseOrderService.createStandalonePO(standalonePayload).catch(() => {});
-      }
+      // Always create/update in the PO table so it shows on PO Creation & Orders list
+      const createdPO = await purchaseOrderService.createStandalonePO(standalonePayload);
+      const finalPoNumber = createdPO?.poNumber || poNumber;
+
+      // Also save to PR table so it appears in the PO Creation & Orders list page
+      // (PurchaseRequisitionsListPage reads from purchaseRequisitionService)
+      const prPayload: any = {
+        ...(editId ? { id: editId } : {}),
+        rfqId: rfqNo || editId || `rfq-direct-${Date.now()}`,
+        poNumber: finalPoNumber,
+        status: statusPayload,
+        isStandalone: true,
+        companyName: brandingCompanyName || 'Heliflow Consulting',
+        companyAddress: supplierAddress || '',
+        companyPhone: brandingPhone || '',
+        companyEmail: brandingEmail || '',
+        companyWebsite: '',
+        supplierType: supplierType,
+        supplierCode: supplierCode,
+        selectedVendorId: selectedVendorId,
+        vendorId: selectedVendorId,
+        vendorName: supplierName,
+        vendorAddress: supplierAddress,
+        vendorContactPerson: contactPerson,
+        vendorPhone: contactPhone,
+        vendorEmail: contactEmail,
+        vendorGstVat: supplierTaxId,
+        shipToCompany: brandingCompanyName || 'Heliflow Warehouse',
+        shipToWarehouse: 'Central Warehouse',
+        shipToAddress: supplierAddress || '',
+        shipToContact: contactPerson || '',
+        shipToPhone: contactPhone || '',
+        poDate: poDate,
+        currency: currency,
+        requisitioner: 'Procurement Officer',
+        shipVia: 'Surface',
+        fob: 'Destination',
+        paymentTerms: paymentTerms,
+        deliveryDate: deliveryDate,
+        shippingTerms: shippingTerms,
+        items: items.map((i, idx) => ({
+          itemNo: idx + 1,
+          description: `${i.itemName}${i.description ? ` - ${i.description}` : ''}`,
+          quantity: Number(i.quantity) || 1,
+          unit: i.unit || 'pcs',
+          unitPrice: Number(i.unitPrice) || 0,
+          taxPercent: Number(i.taxPercent) || 0,
+          discount: 0,
+          total: (Number(i.quantity) || 1) * (Number(i.unitPrice) || 0),
+        })),
+        shippingCharges: Number(shippingCharges) || 0,
+        otherCharges: Number(otherCharges) || 0,
+        internalNotes: internalNotes,
+        specialInstructions: specialInstructions,
+        subtotal: subtotal,
+        taxTotal: taxTotal,
+        discountTotal: 0,
+        grandTotal: grandTotal,
+      };
+      await purchaseRequisitionService.save(prPayload).catch(() => {});
+
+      // 🔔 Instant sync notification across open tabs and windows
+      window.dispatchEvent(new CustomEvent('heliflow:po-created', { detail: { poNumber, status: statusPayload } }));
+      window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
+      try {
+        const bc = new BroadcastChannel('heliflow_sync');
+        bc.postMessage({ type: 'PO_CREATED', poNumber, status: statusPayload, timestamp: Date.now() });
+        bc.close();
+      } catch {}
 
       setMsg({
         text: targetStatus === 'Draft'
@@ -426,15 +467,17 @@ export default function CreatePurchaseOrderPage() {
         type: 'success',
       });
       setTimeout(() => {
+        // Redirect to PO Creation & Orders list page
         navigate('/procurement/purchase-requisitions');
-      }, 1500);
+      }, 1200);
     } catch (err) {
       setMsg({
         text: err instanceof Error ? err.message : 'Failed to save Purchase Order',
         type: 'error',
       });
     } finally {
-      setSubmitting(false);
+      submittingRef.current = false; // Always reset so button works again
+      setSubmittingAction(null);
     }
   };
 
@@ -442,24 +485,34 @@ export default function CreatePurchaseOrderPage() {
   const handleDownloadPdf = () => {
     const poData = {
       poNumber,
+      revisionNo,
       orderDate: poDate,
-      companyName: 'Heliflow Procurement',
+      companyName: brandingCompanyName || 'Heliflow Consulting',
       companyAddress: 'Industrial Zone, Building 4',
-      companyPhone: '+91 800-HELIFLOW',
-      companyEmail: 'procurement@heliflow.com',
+      companyPhone: brandingPhone || '+91 800-HELIFLOW',
+      companyEmail: brandingEmail || 'procurement@heliflow.com',
       companyWebsite: 'www.heliflow.com',
       vendorName: supplierName || 'Supplier',
-      vendorContactPerson: contactPerson,
-      vendorAddress: supplierAddress,
-      vendorPhone: contactPhone,
-      vendorEmail: contactEmail,
-      vendorGstVat: supplierTaxId,
-      shipToCompany: 'Heliflow Warehouse',
+      supplierCode: supplierCode || undefined,
+      supplierType: supplierType || undefined,
+      vendorContactPerson: contactPerson || undefined,
+      vendorAddress: supplierAddress || undefined,
+      vendorPhone: contactPhone || undefined,
+      vendorEmail: contactEmail || undefined,
+      vendorGstVat: supplierTaxId || undefined,
+      shipToCompany: brandingCompanyName || 'Heliflow Warehouse',
+      shipToWarehouse: 'Central Warehouse',
       shipToAddress: supplierAddress || 'Central Depot',
+      shipToContact: contactPerson || 'Warehouse Manager',
+      shipToPhone: contactPhone || brandingPhone || '+91 800-HELIFLOW',
       requisitioner: 'Procurement Officer',
+      shipVia: 'Surface',
+      fob: 'Destination',
       paymentTerms,
       expectedDelivery: deliveryDate,
+      shippingTerms,
       items: items.map((i) => ({
+        itemCode: i.itemCode,
         name: i.itemName,
         description: i.description,
         quantity: i.quantity,
@@ -518,16 +571,16 @@ export default function CreatePurchaseOrderPage() {
           <button
             className="cpo-btn cpo-btn--outline"
             onClick={() => handleSubmit('Draft')}
-            disabled={submitting}
+            disabled={submittingAction !== null}
           >
-            <Save size={15} /> Save Draft
+            <Save size={15} /> {submittingAction === 'draft' ? 'Saving Draft…' : 'Save Draft'}
           </button>
           <button
             className="cpo-btn cpo-btn--primary"
             onClick={() => handleSubmit('Pending Approval')}
-            disabled={submitting}
+            disabled={submittingAction !== null}
           >
-            <Send size={15} /> {submitting ? 'Submitting…' : 'Submit for Approval'}
+            <Send size={15} /> {submittingAction === 'submit' ? 'Submitting…' : 'Submit for Approval'}
           </button>
         </div>
       </div>
@@ -541,7 +594,7 @@ export default function CreatePurchaseOrderPage() {
             <span className="cpo-section__title">Identification</span>
             <span className="cpo-section__hint">System-generated references</span>
           </div>
-          <div className="cpo-grid cpo-grid--4">
+          <div className="cpo-grid cpo-grid--3">
             <div className="cpo-field">
               <label>PURCHASE ORDER NO.</label>
               <input type="text" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} />
@@ -549,24 +602,18 @@ export default function CreatePurchaseOrderPage() {
             </div>
             <div className="cpo-field">
               <label>REVISION NO.</label>
-              <input type="text" value={revisionNo} readOnly className="cpo-input--readonly" />
+              <input
+                type="text"
+                value={revisionNo}
+                onChange={(e) => setRevisionNo(e.target.value)}
+                placeholder="0"
+              />
               <span className="cpo-field__sub">PO revision / version</span>
             </div>
             <div className="cpo-field">
               <label>PO DATE</label>
               <input type="date" value={poDate} onChange={(e) => setPoDate(e.target.value)} />
               <span className="cpo-field__sub">Date of issue</span>
-            </div>
-            <div className="cpo-field">
-              <label>STATUS</label>
-              <select value={status} onChange={(e) => setStatus(e.target.value)}>
-                <option value="Draft">Draft</option>
-                <option value="Pending Approval">Pending Approval</option>
-                <option value="Approved">Approved</option>
-                <option value="Returned">Returned</option>
-                <option value="Rejected">Rejected</option>
-              </select>
-              <span className="cpo-field__sub">Workflow status</span>
             </div>
           </div>
         </div>
@@ -593,7 +640,7 @@ export default function CreatePurchaseOrderPage() {
             <div style={{ flex: 1 }}>
               <label style={{
                 display: 'block',
-                fontSize: '11px',
+                fontSize: '12.5px',
                 fontWeight: 800,
                 letterSpacing: '0.6px',
                 textTransform: 'uppercase',
@@ -613,7 +660,7 @@ export default function CreatePurchaseOrderPage() {
                   background: 'var(--surface-card, #ffffff)',
                   border: '2px solid var(--primary-500, #0a6ed1)',
                   color: 'var(--text-primary)',
-                  fontSize: '14px',
+                  fontSize: '15.5px',
                   fontWeight: 700,
                   cursor: 'pointer',
                   outline: 'none',
@@ -635,8 +682,8 @@ export default function CreatePurchaseOrderPage() {
               </select>
             </div>
             <div className="cpo-field" style={{ minWidth: '220px' }}>
-              <label style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)' }}>SUPPLIER TYPE (CATEGORY)</label>
-              <select value={supplierType} onChange={(e) => setSupplierType(e.target.value)} style={{ padding: '10px 14px', borderRadius: '8px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)' }}>SUPPLIER TYPE (CATEGORY)</label>
+              <select value={supplierType} onChange={(e) => setSupplierType(e.target.value)} style={{ padding: '11px 15px', borderRadius: '8px', fontSize: '15px' }}>
                 {categoriesList.map((cat) => (
                   <option key={cat} value={cat}>
                     {cat}
@@ -699,7 +746,10 @@ export default function CreatePurchaseOrderPage() {
           <div className="cpo-section__header">
             <span className="cpo-section__num">03</span>
             <span className="cpo-section__title">Source References</span>
-            <span className="cpo-section__hint">Optional links to upstream procurement documents</span>
+            <div className="cpo-section__hint-group">
+              <span className="cpo-optional-pill">OPTIONAL</span>
+              <span className="cpo-section__hint">Links to upstream procurement documents</span>
+            </div>
           </div>
           <div className="cpo-grid cpo-grid--4">
             <div className="cpo-field">
@@ -827,10 +877,14 @@ export default function CreatePurchaseOrderPage() {
                         <input
                           type="number"
                           min="0"
-                          step="0.01"
+                          step="1"
+                          placeholder="0"
                           className="cpo-table__input"
-                          value={item.unitPrice}
-                          onChange={(e) => handleItemChange(item.id, 'unitPrice', Number(e.target.value))}
+                          value={item.unitPrice === 0 ? '' : item.unitPrice}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            handleItemChange(item.id, 'unitPrice', val === '' ? 0 : Number(val));
+                          }}
                         />
                       </td>
                       <td>
@@ -952,16 +1006,16 @@ export default function CreatePurchaseOrderPage() {
               <button
                 className="cpo-btn cpo-btn--primary cpo-btn--full"
                 onClick={() => handleSubmit('Pending Approval')}
-                disabled={submitting}
+                disabled={submittingAction !== null}
               >
-                <Send size={16} /> Submit PO for Approval
+                <Send size={16} /> {submittingAction === 'submit' ? 'Submitting PO for Approval…' : 'Submit PO for Approval'}
               </button>
               <button
                 className="cpo-btn cpo-btn--outline cpo-btn--full"
                 onClick={() => handleSubmit('Draft')}
-                disabled={submitting}
+                disabled={submittingAction !== null}
               >
-                <Save size={16} /> Save as Draft
+                <Save size={16} /> {submittingAction === 'draft' ? 'Saving as Draft…' : 'Save as Draft'}
               </button>
             </div>
           </div>

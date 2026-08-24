@@ -6,19 +6,19 @@
 
 /* Header */
 .onb-page__header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
-.onb-page__header-left h1 { font-size: 24px; font-weight: 700; margin: 0 0 4px; }
+.onb-page__header-left h1 { font-size: 26px; font-weight: 700; margin: 0 0 4px; }
 .onb-page__header-left p { font-size: 14px; color: var(--text-secondary); margin: 0; }
 
 /* KPI Row */
 .onb-kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .onb-kpi-card {
-  padding: 18px 20px; border-radius: var(--radius-lg); background: var(--surface-card);
+  padding: 18px 20px; border-radius: 10px !important; background: var(--surface-card);
   border: 1px solid var(--border); box-shadow: var(--shadow-sm);
   display: flex; flex-direction: column; gap: 6px;
   transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s; cursor: default;
 }
 .onb-kpi-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-md); transform: translateY(-2px); }
-.onb-kpi-card__label { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.4px; }
+.onb-kpi-card__label { font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.4px; }
 .onb-kpi-card__value { font-size: 28px; font-weight: 800; line-height: 1.1; }
 .onb-kpi-card__value--blue { color: var(--primary-500); }
 [data-theme="dark"] .onb-kpi-card__value--blue { color: #4db1ff; }
@@ -80,8 +80,8 @@
   justify-content: center; color: #fff; flex-shrink: 0;
 }
 .onb-form-card__header-copy { min-width: 0; flex: 1; }
-.onb-form-card__header-title { font-size: 15px; font-weight: 700; color: #fff; margin: 0; }
-.onb-form-card__header-sub { font-size: 11px; color: rgba(255,255,255,0.7); margin: 2px 0 0; }
+.onb-form-card__header-title { font-size: 16px; font-weight: 700; color: #fff; margin: 0; }
+.onb-form-card__header-sub { font-size: 12.5px; color: rgba(255,255,255,0.7); margin: 2px 0 0; }
 
 .onb-form-card__expand-btn {
   width: 32px;
@@ -117,7 +117,7 @@
 /* Form Success */
 .onb-form-success {
   display: flex; align-items: center; gap: 8px; padding: 12px 16px;
-  border-radius: var(--radius-lg); font-size: 13px; font-weight: 600;
+  border-radius: var(--radius-lg); font-size: 13.5px; font-weight: 600;
   background: rgba(16,126,62,0.08); color: var(--success-500);
   border: 1px solid rgba(16,126,62,0.2);
   animation: onbFadeIn 0.3s ease;
@@ -127,7 +127,7 @@
 /* Form Fields */
 .onb-form-field { display: flex; flex-direction: column; gap: 6px; position: relative; }
 .onb-form-field__label {
-  font-size: 11px; font-weight: 700; color: var(--text-secondary);
+  font-size: 12px; font-weight: 700; color: var(--text-secondary);
   text-transform: uppercase; letter-spacing: 0.5px;
   display: flex;
   align-items: center;
@@ -158,7 +158,7 @@
 .onb-form-field__input {
   width: 100%; padding: 10px 14px 10px 40px; border: 1px solid var(--border);
   border-radius: var(--radius-md); background: var(--surface); color: var(--text-primary);
-  font-size: 14px; font-family: inherit; transition: border-color 0.2s, box-shadow 0.2s; outline: none;
+  font-size: 15px; font-family: inherit; transition: border-color 0.2s, box-shadow 0.2s; outline: none;
 }
 .onb-form-field__input::placeholder { color: var(--text-placeholder); }
 .onb-form-field__input:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(10,110,209,0.1); }
@@ -166,7 +166,7 @@
 .onb-form-field__textarea {
   width: 100%; padding: 10px 14px; border: 1px solid var(--border);
   border-radius: var(--radius-md); background: var(--surface); color: var(--text-primary);
-  font-size: 14px; font-family: inherit; resize: none; outline: none;
+  font-size: 15px; font-family: inherit; resize: none; outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 .onb-form-field__textarea::placeholder { color: var(--text-placeholder); }
@@ -181,7 +181,7 @@
 [data-theme="dark"] .onb-form-info { background: rgba(10,110,209,0.1); border-color: rgba(77,177,255,0.15); }
 .onb-form-info__icon { color: var(--primary-500); flex-shrink: 0; margin-top: 1px; }
 [data-theme="dark"] .onb-form-info__icon { color: #4db1ff; }
-.onb-form-info p { font-size: 12px; color: var(--primary-700); line-height: 1.5; margin: 0; }
+.onb-form-info p { font-size: 13px; color: var(--primary-700); line-height: 1.5; margin: 0; }
 [data-theme="dark"] .onb-form-info p { color: #93c5fd; }
 .onb-form-info strong { font-weight: 700; color: var(--primary-500); }
 [data-theme="dark"] .onb-form-info strong { color: #60a5fa; }
@@ -191,7 +191,7 @@
   display: flex; align-items: center; justify-content: center; gap: 8px;
   width: 100%; padding: 12px 22px; border-radius: var(--radius-md);
   border: none; background: linear-gradient(135deg, var(--primary-500), #6366f1);
-  color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit;
+  color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit;
   transition: transform 0.15s, box-shadow 0.2s, opacity 0.2s;
   box-shadow: 0 4px 14px rgba(10,110,209,0.35);
 }
@@ -241,13 +241,13 @@
   color: var(--text-secondary);
   flex-shrink: 0;
 }
-.onb-list-card__header h2 { font-size: 14px; font-weight: 700; margin: 0; }
+.onb-list-card__header h2 { font-size: 15px; font-weight: 700; margin: 0; }
 .onb-list-card__header-actions {
   display: flex; align-items: center; gap: 8px;
 }
 .onb-list-card__queue-link {
   display: inline-flex; align-items: center; gap: 4px;
-  font-size: 12px; font-weight: 700; color: #4db1ff; background: none;
+  font-size: 13.5px; font-weight: 700; color: #4db1ff; background: none;
   border: none; cursor: pointer; font-family: inherit; transition: opacity 0.2s;
 }
 .onb-list-card__queue-link:hover { opacity: 0.8; text-decoration: underline; }
@@ -306,7 +306,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-placeholder);
   margin-top: 1px;
   min-width: 0;
@@ -318,7 +318,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
   margin-top: 1px;
   min-width: 0;
@@ -350,7 +350,7 @@
   align-items: center;
   gap: 6px;
   margin-bottom: 8px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -375,7 +375,7 @@
   border-radius: 6px;
   background: var(--surface-card);
   border: 1px solid var(--border);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--text-primary);
   transition: border-color 0.15s, background 0.15s;
@@ -387,8 +387,8 @@
 
 /* Empty */
 .onb-list-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 56px 24px; color: var(--text-placeholder); }
-.onb-list-empty__title { font-size: 14px; font-weight: 600; margin-top: 12px; }
-.onb-list-empty__desc { font-size: 12px; margin-top: 4px; }
+.onb-list-empty__title { font-size: 15px; font-weight: 600; margin-top: 12px; }
+.onb-list-empty__desc { font-size: 13px; margin-top: 4px; }
 
 /* Items */
 .onb-list-items { }
@@ -417,18 +417,18 @@
 [data-theme="dark"] .onb-invite-item__icon-box--declined { background: rgba(187,0,0,0.15); }
 
 .onb-invite-item__details { display: flex; flex-direction: column; min-width: 0; }
-.onb-invite-item__name { font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.onb-invite-item__email { font-size: 12px; color: var(--text-secondary); }
-.onb-invite-item__contact { font-size: 11px; color: var(--text-placeholder); }
-.onb-invite-item__notes { font-size: 11px; color: var(--text-placeholder); font-style: italic; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.onb-invite-item__name { font-size: 15px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.onb-invite-item__email { font-size: 13px; color: var(--text-secondary); }
+.onb-invite-item__contact { font-size: 12px; color: var(--text-placeholder); }
+.onb-invite-item__notes { font-size: 12px; color: var(--text-placeholder); font-style: italic; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .onb-invite-item__meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
-.onb-invite-item__date { font-size: 10px; color: var(--text-placeholder); white-space: nowrap; }
+.onb-invite-item__date { font-size: 11.5px; color: var(--text-placeholder); white-space: nowrap; }
 
 /* Badge */
 .onb-invite-badge {
   display: inline-flex; align-items: center; gap: 4px;
-  padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; white-space: nowrap;
+  padding: 5px 12px; border-radius: 20px; font-size: 12.5px; font-weight: 800; white-space: nowrap;
 }
 .onb-invite-badge--pending { background: rgba(233,115,12,0.1); color: var(--warning-500); }
 [data-theme="dark"] .onb-invite-badge--pending { background: rgba(233,115,12,0.18); color: #fbbf24; }
@@ -449,7 +449,7 @@
   cursor: pointer; transition: background 0.15s, border-color 0.15s;
 }
 .onb-invite-code:hover { background: var(--surface-hover); border-color: var(--border-strong); }
-.onb-invite-code__text { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--text-primary); }
+.onb-invite-code__text { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--text-primary); }
 .onb-invite-code__copy { color: var(--text-placeholder); transition: color 0.15s; }
 .onb-invite-code:hover .onb-invite-code__copy { color: var(--text-primary); }
 .onb-invite-code__copied { color: var(--success-500); }
@@ -458,8 +458,8 @@
 
 .onb-invite-action {
   display: inline-flex; align-items: center; gap: 4px;
-  padding: 6px 12px; border-radius: var(--radius-md);
-  font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit;
+  padding: 7px 14px; border-radius: var(--radius-md);
+  font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit;
   border: 1px solid transparent; transition: background 0.15s, border-color 0.15s, transform 0.12s;
 }
 .onb-invite-action:hover { transform: translateY(-1px); }

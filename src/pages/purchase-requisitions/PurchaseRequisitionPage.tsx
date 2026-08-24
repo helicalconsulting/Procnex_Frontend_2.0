@@ -484,23 +484,29 @@ export default function PurchaseRequisitionPage() {
       });
 
       const pdf = new jsPDF('p', 'mm', 'a4');
-      const margin = 15; // mm
+      const margin = 10; // mm
       const pageWidth = 210; // A4 width mm
       const pageHeight = 297; // A4 height mm
-      const contentWidth = pageWidth - margin * 2;
+      const contentWidth = pageWidth - margin * 2; // 190 mm
 
       const imgData = canvas.toDataURL('image/png');
       const imgWidth = contentWidth;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      const usablePageHeight = pageHeight - margin * 2;
+      let calculatedImgHeight = (canvas.height * imgWidth) / canvas.width;
+      const usablePageHeight = pageHeight - margin * 2; // 277 mm
 
-      let remainingHeight = imgHeight;
+      // If document height is slightly over single page usable height (up to 20%), scale height down to fit on 1 single page
+      if (calculatedImgHeight > usablePageHeight && calculatedImgHeight <= usablePageHeight * 1.20) {
+        calculatedImgHeight = usablePageHeight;
+      }
+
+      let remainingHeight = calculatedImgHeight;
       let pageNum = 0;
 
-      while (remainingHeight > 0) {
+      // 8mm threshold prevents accidental blank 2nd page caused by tiny margin/footer pixel overflow
+      while (remainingHeight > 8) {
         if (pageNum > 0) pdf.addPage();
         const yOffset = margin - pageNum * usablePageHeight;
-        pdf.addImage(imgData, 'PNG', margin, yOffset, imgWidth, imgHeight, undefined, 'FAST');
+        pdf.addImage(imgData, 'PNG', margin, yOffset, imgWidth, calculatedImgHeight, undefined, 'FAST');
         remainingHeight -= usablePageHeight;
         pageNum++;
       }
@@ -543,6 +549,15 @@ export default function PurchaseRequisitionPage() {
       setPr(updatedPr);
       setValidationErrors({});
       setItemValidationErrors({});
+
+      // 🔔 Instant sync notification across open tabs and windows
+      window.dispatchEvent(new CustomEvent('heliflow:po-created', { detail: { poNumber: result?.createdPO?.poNumber || pr.poNumber, status: 'PENDING_APPROVAL' } }));
+      window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
+      try {
+        const bc = new BroadcastChannel('heliflow_sync');
+        bc.postMessage({ type: 'APPROVAL_SUBMITTED', poNumber: result?.createdPO?.poNumber || pr.poNumber, timestamp: Date.now() });
+        bc.close();
+      } catch {}
 
       if (result?.createdPO?.poNumber) {
         setPoCreated(true);
@@ -871,7 +886,7 @@ export default function PurchaseRequisitionPage() {
         {/* ── Vendor Details ── */}
         <section className="pr-section">
           <div className="pr-section__header"><Building2 size={16} /> Vendor Details</div>
-          {!isReadOnly && (
+          {!isReadOnly && !rfqId && !contractId && !(pr as any)?.rfqId && !(pr as any)?.contractId && (
             <div className="pr-field pr-field--wide" style={{ marginBottom: 16 }}>
               <label>Select Registered Vendor from Master</label>
               <select
@@ -1047,8 +1062,8 @@ export default function PurchaseRequisitionPage() {
                       </select>
                     </td>
                     <td className={`pr-td--num ${itemValidationErrors[idx]?.unitPrice ? 'pr-item__cell--error' : ''}`}>
-                      <input type="number" min="0" step="0.01" value={item.unitPrice} disabled={isReadOnly}
-                        onChange={e => { updateItem(idx, 'unitPrice', Math.max(0, Number(e.target.value))); clearItemError(idx, 'unitPrice'); }}
+                      <input type="number" min="0" step="1" placeholder="0" value={item.unitPrice === 0 ? '' : item.unitPrice} disabled={isReadOnly}
+                        onChange={e => { updateItem(idx, 'unitPrice', e.target.value === '' ? 0 : Math.max(0, Number(e.target.value))); clearItemError(idx, 'unitPrice'); }}
                       />
                       {itemValidationErrors[idx]?.unitPrice && <span className="pr-field__error-msg">{itemValidationErrors[idx].unitPrice}</span>}
                     </td>

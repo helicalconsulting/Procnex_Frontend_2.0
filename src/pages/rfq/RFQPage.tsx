@@ -42,7 +42,7 @@ export interface ColumnDef {
 // Column widths — fixed so layout never breaks regardless of which are visible
 // width + align per column
 const COL_META: Record<string, { width: string; align?: 'left'|'center'|'right' }> = {
-  rfqNumber:    { width: '160px', align: 'left'   },
+  rfqNumber:    { width: '210px', align: 'left'   },
   title:        { width: '220px', align: 'left'   },
   status:       { width: '160px', align: 'left'   },
   creator:      { width: '150px', align: 'left'   },
@@ -55,6 +55,7 @@ const COL_META: Record<string, { width: string; align?: 'left'|'center'|'right' 
   department:   { width: '120px', align: 'left'   },
   closingDate:  { width: '110px', align: 'left'   },
   currency:     { width:  '76px', align: 'center' },
+  rfqType:      { width: '100px', align: 'center' },
 };
 const COL_WIDTHS: Record<string, string> = Object.fromEntries(
   Object.entries(COL_META).map(([k, v]) => [k, v.width])
@@ -91,9 +92,20 @@ const ALL_COLUMNS: ColumnDef[] = [
     defaultVisible: true,
     render: (rfq) => {
       const isApprovedByMe = (rfq as any)._isApprovedByMe;
+      const isReturnedByMe = (rfq as any)._isReturnedByMe;
       const isPending = rfq.status === 'PENDING_APPROVAL';
-      let displayStatus: string = (rfq.status === 'SENT' || rfq.status === 'IN_PROGRESS' || rfq.status === 'ACCEPTED' || (isPending && isApprovedByMe)) ? 'APPROVED' : rfq.status;
-      const label = (displayStatus === 'APPROVED' || displayStatus === 'SENT') ? 'Approved' : displayStatus === 'ACCEPTED' ? 'Accepted' : (STATUS_LABELS[rfq.status as RFQStatus] || displayStatus);
+      let displayStatus: string = (rfq.status === 'SENT' || rfq.status === 'IN_PROGRESS' || rfq.status === 'ACCEPTED')
+        ? 'APPROVED'
+        : (isPending && isReturnedByMe)
+        ? 'RETURNED'
+        : (isPending && isApprovedByMe)
+        ? 'APPROVED'
+        : rfq.status;
+      const label = (displayStatus === 'APPROVED' || displayStatus === 'SENT')
+        ? 'Approved'
+        : displayStatus === 'ACCEPTED'
+        ? 'Accepted'
+        : (STATUS_LABELS[rfq.status as RFQStatus] || displayStatus);
       return (
         <span className={`rfq-badge rfq-badge--${displayStatus}`}>
           <span className="rfq-badge__dot" />
@@ -204,7 +216,7 @@ const ALL_COLUMNS: ColumnDef[] = [
 
 type StatusFilter = 'ALL' | RFQStatus | 'DRAFT_OR_PENDING';
 
-const STATUS_LABELS: Record<RFQStatus, string> = {
+const STATUS_LABELS: Record<string, string> = {
   DRAFT: 'Draft',
   PENDING_APPROVAL: 'Pending Approval',
   APPROVED: 'Approved',
@@ -213,6 +225,7 @@ const STATUS_LABELS: Record<RFQStatus, string> = {
   CLOSED: 'Closed',
   CANCELLED: 'Cancelled',
   REJECTED: 'Rejected',
+  RETURNED: 'Returned',
 };
 
 const PRIORITY_CLASS: Record<string, string> = {
@@ -255,6 +268,7 @@ export default function RFQPage() {
   // ── Approval Action State for RFQs ─────────────────────
   const [pendingApprovalsMap, setPendingApprovalsMap] = useState<Map<string, any>>(new Map());
   const [myApprovedMap, setMyApprovedMap] = useState<Set<string>>(new Set());
+  const [myReturnedMap, setMyReturnedMap] = useState<Set<string>>(new Set());
   const [approvalActionModal, setApprovalActionModal] = useState<{
     rfq: MockRFQ;
     action: 'approve' | 'reject' | 'return';
@@ -268,9 +282,10 @@ export default function RFQPage() {
 
   const fetchPendingApprovals = useCallback(async () => {
     try {
-      const [pendingRows, approvedRows] = await Promise.all([
+      const [pendingRows, approvedRows, returnedRows] = await Promise.all([
         approvalService.listTable({ module: 'RFQ', status: 'PENDING' }),
         approvalService.listTable({ module: 'RFQ', status: 'APPROVED' }),
+        approvalService.listTable({ module: 'RFQ', status: 'RETURNED' }),
       ]);
       const map = new Map<string, any>();
       pendingRows.forEach((r) => {
@@ -287,9 +302,18 @@ export default function RFQPage() {
         if (r.id) aSet.add(String(r.id));
       });
       setMyApprovedMap(aSet);
+
+      const rSet = new Set<string>();
+      returnedRows.forEach((r) => {
+        if (r.referenceId) rSet.add(String(r.referenceId));
+        if (r.referenceNumber) rSet.add(String(r.referenceNumber));
+        if (r.id) rSet.add(String(r.id));
+      });
+      setMyReturnedMap(rSet);
     } catch {
       setPendingApprovalsMap(new Map());
       setMyApprovedMap(new Set());
+      setMyReturnedMap(new Set());
     }
   }, []);
 
@@ -306,76 +330,63 @@ export default function RFQPage() {
     setActionReturnTarget('ORIGINATOR');
   }, [pendingApprovalsMap]);
 
-  const handleExecuteApprovalAction = useCallback(async () => {
+  const handleExecuteApprovalAction = useCallback(() => {
     if (!approvalActionModal) return;
     const { rfq, action, approvalId } = approvalActionModal;
-    setApprovalActionLoading(true);
-    setApprovalActionMessage(null);
-    try {
-      let res: any;
-      if (action === 'approve') {
-        res = await approvalService.approve(approvalId, approvalComment);
-        setActionSuccessData({
-          actionType: 'approve',
-          module: 'RFQ',
-          referenceNumber: rfq.rfqNumber,
-          title: rfq.title,
-          message: res?.message || `RFQ #${rfq.rfqNumber} Level approved successfully!`,
-          comment: approvalComment.trim() || undefined,
-          details: [
-            { label: 'Created By', value: rfq.creator },
-            { label: 'Department', value: rfq.department || 'Procurement' },
-          ],
-        });
-      } else if (action === 'reject') {
-        if (!approvalComment.trim()) {
-          setApprovalActionMessage({ type: 'error', text: 'Please enter a comment explaining the reason for rejection.' });
-          setApprovalActionLoading(false);
-          return;
-        }
-        res = await approvalService.reject(approvalId, approvalComment);
-        setActionSuccessData({
-          actionType: 'reject',
-          module: 'RFQ',
-          referenceNumber: rfq.rfqNumber,
-          title: rfq.title,
-          message: res?.message || `RFQ #${rfq.rfqNumber} Rejected.`,
-          comment: approvalComment.trim() || undefined,
-          details: [
-            { label: 'Created By', value: rfq.creator },
-            { label: 'Department', value: rfq.department || 'Procurement' },
-          ],
-        });
-      } else {
-        if (!approvalComment.trim()) {
-          setApprovalActionMessage({ type: 'error', text: 'Please enter a comment explaining the reason for return.' });
-          setApprovalActionLoading(false);
-          return;
-        }
-        res = await approvalService.return(approvalId, approvalComment, actionReturnTarget);
-        setActionSuccessData({
-          actionType: 'return',
-          module: 'RFQ',
-          referenceNumber: rfq.rfqNumber,
-          title: rfq.title,
-          message: res?.message || `RFQ #${rfq.rfqNumber} Returned for revision.`,
-          comment: approvalComment.trim() || undefined,
-          details: [
-            { label: 'Created By', value: rfq.creator },
-            { label: 'Department', value: rfq.department || 'Procurement' },
-          ],
-        });
-      }
+    const comment = approvalComment.trim();
 
-      setApprovalActionModal(null);
-      setApprovalComment('');
-      reload();
-      fetchPendingApprovals();
-    } catch (err) {
-      setApprovalActionMessage({ type: 'error', text: err instanceof Error ? err.message : 'Action failed' });
-    } finally {
-      setApprovalActionLoading(false);
+    if (action !== 'approve' && !comment) {
+      setApprovalActionMessage({
+        type: 'error',
+        text: action === 'reject' ? 'Please enter a comment explaining the reason for rejection.' : 'Please enter a comment explaining the reason for return.',
+      });
+      return;
     }
+
+    // ⚡ INSTANT 0ms Success Modal Popup!
+    const modalType = action === 'approve' ? 'approve' : action === 'reject' ? 'reject' : 'return';
+    const defaultMsg = action === 'approve'
+      ? `RFQ #${rfq.rfqNumber} Level approved successfully!`
+      : action === 'reject'
+      ? `RFQ #${rfq.rfqNumber} Rejected.`
+      : `RFQ #${rfq.rfqNumber} Returned for revision.`;
+
+    setActionSuccessData({
+      actionType: modalType,
+      module: 'RFQ',
+      referenceNumber: rfq.rfqNumber,
+      title: rfq.title,
+      message: defaultMsg,
+      comment: comment || undefined,
+      details: [
+        { label: 'Created By', value: rfq.creator },
+        { label: 'Department', value: rfq.department || 'Procurement' },
+      ],
+    });
+
+    setApprovalActionModal(null);
+    setApprovalComment('');
+    setApprovalActionLoading(false);
+
+    // ── Background API Execution & Table Sync ──
+    const apiCall = action === 'approve'
+      ? approvalService.approve(approvalId, comment)
+      : action === 'reject'
+      ? approvalService.reject(approvalId, comment)
+      : approvalService.return(approvalId, comment, actionReturnTarget);
+
+    apiCall
+      .then((res) => {
+        if (res?.message) {
+          setActionSuccessData((prev) => prev ? { ...prev, message: res.message } : null);
+        }
+        reload();
+        fetchPendingApprovals();
+      })
+      .catch((err) => {
+        setActionSuccessData(null);
+        setToast({ message: err instanceof Error ? err.message : 'Action failed', type: 'error' });
+      });
   }, [approvalActionModal, approvalComment, actionReturnTarget, reload, fetchPendingApprovals]);
 
   const anyModalOpen = !!(detailRFQ || deleteTarget || approvalActionModal || actionSuccessData);
@@ -727,7 +738,10 @@ export default function RFQPage() {
                 borderRadius: 'var(--radius-sm)', cursor: 'pointer',
                 display: 'inline-flex', alignItems: 'center', gap: 6
               }}
-              onClick={() => setShowBulkDeleteModal(true)}
+              onClick={(e) => {
+                (e.currentTarget as HTMLElement).blur();
+                setShowBulkDeleteModal(true);
+              }}
             >
               <Trash2 size={14} /> Delete Selected ({selectedRfqIds.length})
             </button>
@@ -809,10 +823,11 @@ export default function RFQPage() {
                 </thead>
                 <tbody>
                   {paginated.map((rfq) => {
-                    const isApprovedByMe = myApprovedMap.has(String(rfq.id)) || myApprovedMap.has(rfq.rfqNumber);
                     const pendingApproval = pendingApprovalsMap.get(String(rfq.id)) || pendingApprovalsMap.get(rfq.rfqNumber);
-                    const canAct = rfq.status === 'PENDING_APPROVAL' && !!pendingApproval;
-                    const enrichedRfq = { ...rfq, _isApprovedByMe: isApprovedByMe };
+                    const canAct = rfq.status === 'PENDING_APPROVAL' && !!pendingApproval && pendingApproval.canAct !== false;
+                    const isApprovedByMe = (myApprovedMap.has(String(rfq.id)) || myApprovedMap.has(rfq.rfqNumber)) && !canAct;
+                    const isReturnedByMe = (myReturnedMap.has(String(rfq.id)) || myReturnedMap.has(rfq.rfqNumber)) && !canAct;
+                    const enrichedRfq = { ...rfq, _isApprovedByMe: isApprovedByMe, _isReturnedByMe: isReturnedByMe };
                     const isSelected = selectedRfqIds.includes(String(rfq.id));
 
                     return (
@@ -881,12 +896,26 @@ export default function RFQPage() {
 
             {/* Mobile Card List */}
             <div className="rfq-mobile-list">
-              {paginated.map((rfq) => (
-                <div key={rfq.id} className="rfq-mobile-card" onClick={() => openDetail(rfq)}>
+              {paginated.map((rfq) => {
+                const pendingApproval = pendingApprovalsMap.get(String(rfq.id)) || pendingApprovalsMap.get(rfq.rfqNumber);
+                const canAct = rfq.status === 'PENDING_APPROVAL' && !!pendingApproval && pendingApproval.canAct !== false;
+                const isApprovedByMe = (myApprovedMap.has(String(rfq.id)) || myApprovedMap.has(rfq.rfqNumber)) && !canAct;
+                const isReturnedByMe = (myReturnedMap.has(String(rfq.id)) || myReturnedMap.has(rfq.rfqNumber)) && !canAct;
+                const enrichedRfq = { ...rfq, _isApprovedByMe: isApprovedByMe, _isReturnedByMe: isReturnedByMe };
+                const displayStatus = (rfq.status === 'SENT' || rfq.status === 'IN_PROGRESS' || rfq.status === 'ACCEPTED')
+                  ? 'APPROVED'
+                  : (rfq.status === 'PENDING_APPROVAL' && isReturnedByMe)
+                  ? 'RETURNED'
+                  : (rfq.status === 'PENDING_APPROVAL' && isApprovedByMe)
+                  ? 'APPROVED'
+                  : rfq.status;
+                const displayLabel = (displayStatus === 'APPROVED' || displayStatus === 'SENT') ? 'Approved' : displayStatus === 'ACCEPTED' ? 'Accepted' : (STATUS_LABELS[rfq.status] || displayStatus);
+                return (
+                  <div key={rfq.id} className="rfq-mobile-card" onClick={() => openDetail(enrichedRfq as any)}>
                   <div className="rfq-mobile-card__top">
                     <span className="rfq-mobile-card__num">{rfq.rfqNumber}</span>
-                    <span className={`rfq-badge rfq-badge--${rfq.status}`}>
-                      <span className="rfq-badge__dot" />{STATUS_LABELS[rfq.status]}
+                    <span className={`rfq-badge rfq-badge--${displayStatus}`}>
+                      <span className="rfq-badge__dot" />{displayLabel}
                     </span>
                   </div>
                   <div className="rfq-mobile-card__title">{rfq.title}</div>
@@ -912,7 +941,7 @@ export default function RFQPage() {
                       </span>
                     </div>
                     <div className="rfq-mobile-card__footer-actions" onClick={(e) => e.stopPropagation()}>
-                      {rfq.status === 'PENDING_APPROVAL' ? (
+                      {canAct ? (
                         <>
                           <button
                             className="rfq-table__action-btn rfq-table__action-btn--approve"
@@ -953,7 +982,8 @@ export default function RFQPage() {
                   </div>
                   <ChevronDown size={14} className="rfq-mobile-card__chevron" />
                 </div>
-              ))}
+              );
+            })}
             </div>
 
             {/* Pagination */}

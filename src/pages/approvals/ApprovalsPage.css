@@ -145,8 +145,8 @@
 [data-theme="dark"] .approvals-summary-card__icon--rejected{ background: rgba(187,0,0,0.2);    color: #f87171; border-color: rgba(248,113,113,0.3); }
 
 .approvals-summary-card__info { display: flex; flex-direction: column; gap: 2px; }
-.approvals-summary-card__value { font-size: 26px; font-weight: 700; line-height: 1.1; }
-.approvals-summary-card__label { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.4px; }
+.approvals-summary-card__value { font-size: 28px; font-weight: 800; line-height: 1.1; letter-spacing: -0.5px; }
+.approvals-summary-card__label { font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.6px; }
 
 /* ─── Toolbar (original) ─────────────────────────────────── */
 
@@ -163,7 +163,7 @@
   width: 100%; padding: 10px 12px 10px 40px;
   border: 1px solid var(--border); border-radius: var(--radius-md);
   background: var(--surface-card); color: var(--text-primary);
-  font-size: 14px; font-family: inherit;
+  font-size: 15px; font-family: inherit;
   transition: border-color 0.2s, box-shadow 0.2s; outline: none;
 }
 
@@ -200,7 +200,7 @@
   width: 100%;
   border-collapse: collapse;
   min-width: 750px;
-  font-size: 13px;
+  font-size: 14.5px;
 }
 
 /* Sticky column header — SAP style */
@@ -212,12 +212,12 @@
 
 .approvals-table th {
   text-align: left;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.6px;
   color: var(--text-secondary);
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-bottom: 2px solid var(--border);
   border-right: 1px solid var(--border);
   background: var(--surface-elevated);
@@ -228,8 +228,8 @@
 
 /* Body rows */
 .approvals-table td {
-  padding: 9px 12px;
-  font-size: 13px;
+  padding: 13px 14px;
+  font-size: 14.5px;
   color: var(--text-primary);
   border-bottom: 1px solid var(--border);
   border-right: 1px solid var(--border);
@@ -286,11 +286,11 @@
 [data-theme="dark"] .approvals-table__avatar--6 { background: linear-gradient(135deg,#d97706,#fbbf24); }
 
 .approvals-table__request-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.approvals-table__ref { font-size: 12px; font-weight: 700; color: var(--primary-500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
-.approvals-table__title { font-size: 12px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
-.approvals-table__requester { font-size: 11px; color: var(--text-secondary); }
-.approvals-table__amount { font-weight: 700; font-family: var(--font-mono); white-space: nowrap; }
-.approvals-table__date { white-space: nowrap; color: var(--text-secondary); font-size: 12px; }
+.approvals-table__ref { font-size: 15px; font-weight: 700; color: var(--primary-500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+.approvals-table__title { font-size: 14.5px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+.approvals-table__requester { font-size: 12.5px; color: var(--text-secondary); }
+.approvals-table__amount { font-size: 15px; font-weight: 700; font-family: var(--font-mono); white-space: nowrap; }
+.approvals-table__date { white-space: nowrap; color: var(--text-secondary); font-size: 13.5px; }
 
 /* ─── SAP Module Badge ─────────────────────────────────────── */
 
@@ -298,9 +298,9 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 3px 9px;
-  border-radius: 3px;
-  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12.5px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.4px;
@@ -324,7 +324,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.4px;
@@ -417,7 +417,7 @@
 }
 
 .approvals-level__text {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--text-secondary);
   white-space: nowrap;
@@ -428,26 +428,28 @@
 .approvals-badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 10px;
-  border-radius: 3px;
-  font-size: 11px;
-  font-weight: 700;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 14px;
+  font-size: 13.5px;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.4px;
   white-space: nowrap;
   border-left: 3px solid transparent;
 }
 
-.approvals-badge--PENDING  { background: rgba(233,115,12,0.08);  color: var(--warning-500); border-left-color: var(--warning-500); }
-.approvals-badge--APPROVED { background: rgba(16,126,62,0.08);   color: var(--success-500); border-left-color: var(--success-500); }
-.approvals-badge--REJECTED { background: rgba(187,0,0,0.06);     color: var(--danger-500);  border-left-color: var(--danger-500); }
-.approvals-badge--RETURNED { background: rgba(139,92,246,0.08);  color: #8b5cf6;            border-left-color: #8b5cf6; }
+.approvals-badge--PENDING      { background: rgba(233,115,12,0.08);  color: var(--warning-500); border-left-color: var(--warning-500); }
+.approvals-badge--APPROVED     { background: rgba(16,126,62,0.08);   color: var(--success-500); border-left-color: var(--success-500); }
+.approvals-badge--APPROVED_L1  { background: rgba(10,110,209,0.08);  color: #0a6ed1;            border-left-color: #0a6ed1; }
+.approvals-badge--REJECTED     { background: rgba(187,0,0,0.06);     color: var(--danger-500);  border-left-color: var(--danger-500); }
+.approvals-badge--RETURNED     { background: rgba(139,92,246,0.08);  color: #8b5cf6;            border-left-color: #8b5cf6; }
 
-[data-theme="dark"] .approvals-badge--PENDING  { background: rgba(233,115,12,0.14); }
-[data-theme="dark"] .approvals-badge--APPROVED { background: rgba(16,126,62,0.14); }
-[data-theme="dark"] .approvals-badge--REJECTED { background: rgba(187,0,0,0.12); }
-[data-theme="dark"] .approvals-badge--RETURNED { background: rgba(139,92,246,0.14); }
+[data-theme="dark"] .approvals-badge--PENDING     { background: rgba(233,115,12,0.14); }
+[data-theme="dark"] .approvals-badge--APPROVED    { background: rgba(16,126,62,0.14); }
+[data-theme="dark"] .approvals-badge--APPROVED_L1 { background: rgba(10,110,209,0.16); color: #60a5fa; border-left-color: #60a5fa; }
+[data-theme="dark"] .approvals-badge--REJECTED    { background: rgba(187,0,0,0.12); }
+[data-theme="dark"] .approvals-badge--RETURNED    { background: rgba(139,92,246,0.14); }
 
 /* ─── SAP Action Buttons ────────────────────────────────────── */
 

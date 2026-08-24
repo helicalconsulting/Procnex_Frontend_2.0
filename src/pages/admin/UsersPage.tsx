@@ -33,6 +33,7 @@ import {
   Zap,
   LayoutList,
   LayoutGrid,
+  CheckSquare,
 } from 'lucide-react';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
@@ -237,6 +238,9 @@ export default function UsersPage() {
   const [editPhone, setEditPhone] = useState('');
   const [editDepartment, setEditDepartment] = useState('');
   const [editRoleName, setEditRoleName] = useState('');
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [showBatchDeleteModal, setShowBatchDeleteModal] = useState(false);
+  const [batchDeleting, setBatchDeleting] = useState(false);
 
   // ── SAP Widget Toast state (must be declared before useBodyScrollLock) ──
   const [sapToast, setSapToast] = useState<{
@@ -249,7 +253,7 @@ export default function UsersPage() {
 
   const perPage = 8;
 
-  const anyModalOpen = !!(showModal || editingUser || deleteTarget || viewUser || sapToast?.visible);
+  const anyModalOpen = !!(showModal || editingUser || deleteTarget || viewUser || sapToast?.visible || showBatchDeleteModal);
   useBodyScrollLock(anyModalOpen);
 
   // ── Column state ────────────────────────────────────────────
@@ -326,6 +330,47 @@ export default function UsersPage() {
 
   const totalPages = Math.ceil(filtered.length / perPage);
   const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
+
+  // ── Batch selection ──
+  const isAllSelected = useMemo(() => {
+    const selectable = paginated.filter(u => u.role !== 'Super Admin');
+    if (selectable.length === 0) return false;
+    return selectable.every(u => selectedUserIds.includes(u.id));
+  }, [paginated, selectedUserIds]);
+
+  const handleToggleSelectAll = useCallback(() => {
+    if (isAllSelected) {
+      const paginatedIds = new Set(paginated.map(u => u.id));
+      setSelectedUserIds(prev => prev.filter(id => !paginatedIds.has(id)));
+    } else {
+      const newIds = paginated.filter(u => u.role !== 'Super Admin').map(u => u.id);
+      setSelectedUserIds(prev => Array.from(new Set([...prev, ...newIds])));
+    }
+  }, [isAllSelected, paginated]);
+
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedUserIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  }, []);
+
+  const handleBatchDeleteConfirm = useCallback(async () => {
+    if (selectedUserIds.length === 0) return;
+    setBatchDeleting(true);
+    try {
+      for (const id of selectedUserIds) {
+        await adminService.deleteUser(id).catch(() => {});
+      }
+      setPageMsg(`Successfully deleted ${selectedUserIds.length} user(s).`);
+      setSelectedUserIds([]);
+      setShowBatchDeleteModal(false);
+      await reload();
+    } catch (err) {
+      setPageMsg(err instanceof Error ? err.message : 'Failed to delete selected users');
+    } finally {
+      setBatchDeleting(false);
+    }
+  }, [selectedUserIds, reload]);
 
   const toggleActive = useCallback(async (id: string) => {
     setPageMsg(null);
@@ -680,6 +725,46 @@ export default function UsersPage() {
         </div>
       </div>
 
+      {/* ── Floating Bulk Action Banner ── */}
+      {selectedUserIds.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: 'var(--surface-card)', border: '1px solid var(--primary-500)',
+          padding: '12px 18px', borderRadius: 'var(--radius-md)', marginBottom: '16px',
+          boxShadow: '0 4px 14px rgba(0,0,0,0.12)', transition: 'all 0.2s ease'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+            <CheckSquare size={18} style={{ color: 'var(--primary-500)' }} />
+            <span><strong>{selectedUserIds.length}</strong> User(s) selected</span>
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              type="button"
+              className="users-modal__btn users-modal__btn--secondary"
+              style={{ padding: '7px 16px', fontSize: 13, fontWeight: 600 }}
+              onClick={() => setSelectedUserIds([])}
+            >
+              Cancel Selection
+            </button>
+            <button
+              type="button"
+              style={{
+                background: '#dc2626', color: '#ffffff', border: 'none',
+                padding: '7px 16px', fontSize: 13, fontWeight: 700,
+                borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: 6
+              }}
+              onClick={(e) => {
+                (e.currentTarget as HTMLElement).blur();
+                setShowBatchDeleteModal(true);
+              }}
+            >
+              <Trash2 size={14} /> Delete Selected ({selectedUserIds.length})
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Content ────────────────────────────────────────── */}
       {loading ? (
         <div className="users-table-card">
@@ -689,13 +774,22 @@ export default function UsersPage() {
         view === 'table' ? (
           <div className="users-table-card">
             <div className="users-table-wrap">
-              <table className="users-table" style={{ tableLayout: 'fixed', minWidth: '750px' }}>
+              <table className="users-table" style={{ tableLayout: 'fixed', minWidth: '800px' }}>
                 <colgroup>
+                  <col style={{ width: '44px' }} />
                   {visibleColumns.map((col) => (<col key={col.key} style={{ width: col.width || 'auto' }} />))}
-                  <col style={{ width: '110px' }} />
+                  <col style={{ width: '130px' }} />
                 </colgroup>
                 <thead>
                   <tr>
+                    <th style={{ width: 44, textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={isAllSelected}
+                        onChange={handleToggleSelectAll}
+                        style={{ cursor: 'pointer', width: 16, height: 16 }}
+                      />
+                    </th>
                     {visibleColumns.map((col) => (<th key={col.key}>{col.label}</th>))}
                     <th>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -715,6 +809,16 @@ export default function UsersPage() {
                 <tbody>
                   {paginated.map((user) => (
                     <tr key={user.id} className={`users-table__row users-table__row--${user.isActive ? 'active' : 'inactive'}`}>
+                      <td onClick={e => e.stopPropagation()} style={{ textAlign: 'center' }}>
+                        {user.role !== 'Super Admin' && (
+                          <input
+                            type="checkbox"
+                            checked={selectedUserIds.includes(user.id)}
+                            onChange={() => handleToggleSelect(user.id)}
+                            style={{ cursor: 'pointer', width: 16, height: 16 }}
+                          />
+                        )}
+                      </td>
                       {visibleColumns.map((col) => (<td key={col.key}>{col.render(user, formatDate, formatDateTime, toggleActive)}</td>))}
                       <td>
                         <div className="users-table__actions">
@@ -1223,6 +1327,30 @@ export default function UsersPage() {
                 opacity: widgetSaving ? 0.7 : 1,
               }}>
                 {widgetSaving ? 'Saving…' : 'Save & Apply'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Batch Delete Confirm Modal ────────────────────────── */}
+      {showBatchDeleteModal && (
+        <div className="users-modal-backdrop" onClick={() => !batchDeleting && setShowBatchDeleteModal(false)}>
+          <div className="users-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <div className="users-modal__header">
+              <span className="users-modal__title"><Trash2 size={20} /> Delete {selectedUserIds.length} Selected User(s)?</span>
+              <button type="button" className="users-modal__close" onClick={() => setShowBatchDeleteModal(false)} disabled={batchDeleting}><X size={18} /></button>
+            </div>
+            <div className="users-modal__body">
+              <p style={{ margin: 0 }}>
+                Are you sure you want to delete the <strong>{selectedUserIds.length} selected user(s)</strong>?
+                This action cannot be undone.
+              </p>
+            </div>
+            <div className="users-modal__footer">
+              <button autoFocus type="button" className="users-modal__btn users-modal__btn--secondary" onClick={() => setShowBatchDeleteModal(false)} disabled={batchDeleting}>Cancel</button>
+              <button type="button" className="users-modal__btn" style={{ background: '#dc2626', color: '#fff' }} onClick={handleBatchDeleteConfirm} disabled={batchDeleting}>
+                {batchDeleting ? 'Deleting…' : `Delete ${selectedUserIds.length} User(s)`}
               </button>
             </div>
           </div>

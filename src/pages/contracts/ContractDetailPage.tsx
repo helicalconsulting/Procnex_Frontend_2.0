@@ -13,6 +13,7 @@ import {
   ChevronLeft, ChevronUp, DollarSign, PieChart,
 } from 'lucide-react';
 import { downloadContractAsPdf } from '../../utils/pdfDownload';
+import { cleanDuplicateSignatures } from '../../utils/cleanSignatures';
 import { sseClient } from '../../services/sseClient';
 import { DetailSkeleton } from '../../components/shared/Skeleton';
 import './ContractDetailPage.css';
@@ -87,6 +88,7 @@ function SignModal({
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<'draw' | 'upload'>('draw');
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [penColor, setPenColor] = useState('#000000');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useBodyScrollLock(true);
@@ -96,11 +98,11 @@ function SignModal({
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    ctx.strokeStyle = '#1a1a2e';
+    ctx.strokeStyle = penColor;
     ctx.lineWidth = 2;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-  }, []);
+  }, [penColor]);
 
   const getCanvasPos = (e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current!;
@@ -115,6 +117,12 @@ function SignModal({
     setIsDrawing(true);
     setHasDrawn(true);
     const ctx = canvasRef.current?.getContext('2d');
+    if (ctx) {
+      ctx.strokeStyle = penColor;
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+    }
     const pos = getCanvasPos(e);
     if (ctx) { ctx.beginPath(); ctx.moveTo(pos.x, pos.y); }
   };
@@ -188,9 +196,46 @@ function SignModal({
             <input type="text" value={signerTitle} onChange={e => setSignerTitle(e.target.value)} placeholder="e.g. Procurement Manager" disabled={signing} />
           </div>
 
-          <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
-            <button className={`ctr-sign-modal__canvas-btn ${mode === 'draw' ? 'ctr-sign-modal__canvas-btn--primary' : ''}`} onClick={() => { setMode('draw'); clearCanvas(); }} disabled={signing}>Draw Signature</button>
-            <button className={`ctr-sign-modal__canvas-btn ${mode === 'upload' ? 'ctr-sign-modal__canvas-btn--primary' : ''}`} onClick={() => { setMode('upload'); clearCanvas(); fileInputRef.current?.click(); }} disabled={signing}>Upload Image</button>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className={`ctr-sign-modal__canvas-btn ${mode === 'draw' ? 'ctr-sign-modal__canvas-btn--primary' : ''}`} onClick={() => { setMode('draw'); clearCanvas(); }} disabled={signing}>Draw Signature</button>
+              <button className={`ctr-sign-modal__canvas-btn ${mode === 'upload' ? 'ctr-sign-modal__canvas-btn--primary' : ''}`} onClick={() => { setMode('upload'); clearCanvas(); fileInputRef.current?.click(); }} disabled={signing}>Upload Image</button>
+            </div>
+
+            {mode === 'draw' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Ink Color:</span>
+                {[
+                  { id: 'black', color: '#000000', label: 'Black Ink' },
+                  { id: 'navy', color: '#0a2342', label: 'Navy Blue' },
+                  { id: 'royal', color: '#0a6ed1', label: 'Royal Blue' },
+                  { id: 'red', color: '#dc2626', label: 'Red Ink' },
+                ].map(c => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => {
+                      setPenColor(c.color);
+                      const ctx = canvasRef.current?.getContext('2d');
+                      if (ctx) ctx.strokeStyle = c.color;
+                    }}
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: '50%',
+                      background: c.color,
+                      border: penColor === c.color ? '2px solid #0a6ed1' : '2px solid #ffffff',
+                      boxShadow: penColor === c.color ? '0 0 0 2px rgba(10,110,209,0.4)' : '0 1px 3px rgba(0,0,0,0.2)',
+                      cursor: 'pointer',
+                      padding: 0,
+                      transition: 'transform 0.15s, box-shadow 0.15s',
+                      transform: penColor === c.color ? 'scale(1.18)' : 'scale(1)',
+                    }}
+                    title={c.label}
+                  />
+                ))}
+              </div>
+            )}
           </div>
 
           {mode === 'draw' && (
@@ -249,6 +294,8 @@ export default function ContractDetailPage() {
   const [terminating, setTerminating] = useState(false);
   const [showTerminateConfirm, setShowTerminateConfirm] = useState(false);
   const [terminateReason, setTerminateReason] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [creatingPO, setCreatingPO] = useState(false);
   const [sendingToVendor, setSendingToVendor] = useState(false);
   const [completing, setCompleting] = useState(false);
@@ -257,7 +304,7 @@ export default function ContractDetailPage() {
   const [balanceLoading, setBalanceLoading] = useState(false);
   const poTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
-  useBodyScrollLock(showSignModal || showTerminateConfirm);
+  useBodyScrollLock(showSignModal || showTerminateConfirm || showDeleteConfirm);
 
   // Fetch contract
   const { data, loading, error, reload } = useServiceData(
@@ -372,6 +419,18 @@ export default function ContractDetailPage() {
       setTerminating(false);
     }
   }, [id, terminateReason, data?.contract?.contractNumber, reload]);
+
+  const handleDeleteContract = useCallback(async () => {
+    if (!id) return;
+    setDeleting(true);
+    try {
+      await contractService.deleteContract(id);
+      navigate('/contracts');
+    } catch (err) {
+      setPageMsg(err instanceof Error ? err.message : 'Failed to delete contract');
+      setDeleting(false);
+    }
+  }, [id, navigate]);
 
   // SSE real-time refresh — when a PO is created from this contract, update balance & data
   useEffect(() => {
@@ -543,6 +602,13 @@ export default function ContractDetailPage() {
                 <Plus size={14} /> {isLimitReached ? 'Limit Reached' : creatingPO ? 'Creating PO…' : 'Create Purchase Order'}
               </button>
             )}
+            <button
+              className="ctr-detail__action-btn ctr-detail__action-btn--danger"
+              onClick={() => setShowDeleteConfirm(true)}
+              title="Delete Contract"
+            >
+              <Trash2 size={14} /> Delete
+            </button>
           </div>
         </div>
         {/* Contract Balance Summary Card — shown when accepted */}
@@ -910,7 +976,7 @@ export default function ContractDetailPage() {
                 <p style={{ color: 'var(--text-secondary)', margin: '4px 0 0', fontSize: 13 }}>{contract.contractNumber}</p>
               </div>
               {contract.contentSnapshot ? (
-                <div dangerouslySetInnerHTML={{ __html: contract.contentSnapshot }} />
+                <div dangerouslySetInnerHTML={{ __html: cleanDuplicateSignatures(contract.contentSnapshot) }} />
               ) : (
                 <p style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 48 }}>
                   No generated document content available. The contract document will appear here after generation.
@@ -1070,6 +1136,30 @@ export default function ContractDetailPage() {
               <button className="ctr-modal__btn ctr-modal__btn--secondary" onClick={() => setShowTerminateConfirm(false)} disabled={terminating}>Cancel</button>
               <button className="ctr-modal__btn" style={{ background: '#dc2626', color: '#fff' }} onClick={handleTerminate} disabled={terminating}>
                 {terminating ? 'Terminating…' : 'Terminate Contract'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirm Modal */}
+      {showDeleteConfirm && (
+        <div className="ctr-modal-backdrop" onClick={() => !deleting && setShowDeleteConfirm(false)}>
+          <div className="ctr-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            <div className="ctr-modal__header">
+              <span className="ctr-modal__title"><Trash2 size={20} /> Delete Contract</span>
+              <button className="ctr-modal__close" onClick={() => setShowDeleteConfirm(false)} disabled={deleting}><X size={18} /></button>
+            </div>
+            <div className="ctr-modal__body">
+              <p style={{ margin: 0, fontSize: 14 }}>
+                Are you sure you want to delete <strong>{contract.contractNumber}</strong> — {contract.title}?
+                This action cannot be undone and will permanently remove this contract.
+              </p>
+            </div>
+            <div className="ctr-modal__footer">
+              <button className="ctr-modal__btn ctr-modal__btn--secondary" onClick={() => setShowDeleteConfirm(false)} disabled={deleting}>Cancel</button>
+              <button className="ctr-modal__btn" style={{ background: '#dc2626', color: '#fff' }} onClick={handleDeleteContract} disabled={deleting}>
+                {deleting ? 'Deleting…' : 'Delete Contract'}
               </button>
             </div>
           </div>

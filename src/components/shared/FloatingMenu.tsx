@@ -158,7 +158,7 @@ export default function FloatingMenu({
   // ── Build styles ─────────────────────────────────────────
   const s: React.CSSProperties = {
     position: 'fixed',
-    zIndex: zIndex ?? 9999,
+    zIndex: zIndex ?? 999999,
     maxHeight: '80vh',
     opacity: ready ? 1 : 0,
     pointerEvents: ready ? 'auto' : 'none',

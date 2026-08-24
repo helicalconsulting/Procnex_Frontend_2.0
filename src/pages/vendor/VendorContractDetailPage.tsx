@@ -11,6 +11,7 @@ import {
   Printer, Check, X, Building2, User, PenLine, Upload
 } from 'lucide-react';
 import { downloadContractAsPdf } from '../../utils/pdfDownload';
+import { cleanDuplicateSignatures } from '../../utils/cleanSignatures';
 import { sseClient } from '../../services/sseClient';
 import './VendorContractDetailPage.css';
 
@@ -26,10 +27,16 @@ const STATUS_LABELS: Record<string, string> = {
   COMPLETED: 'Completed',
   ACTIVE: 'Active',
   EXPIRING_SOON: 'Expiring Soon',
-  EXPIRED: 'Expired',
   CANCELLED: 'Cancelled',
   TERMINATED: 'Terminated',
 };
+
+const INK_COLORS = [
+  { id: 'black', color: '#000000', label: 'Black Ink' },
+  { id: 'navy', color: '#0a2342', label: 'Navy Blue' },
+  { id: 'royal', color: '#0a6ed1', label: 'Royal Blue' },
+  { id: 'red', color: '#dc2626', label: 'Red Ink' },
+];
 
 // ─── Component ──────────────────────────────────────────────
 
@@ -52,6 +59,7 @@ export default function VendorContractDetailPage() {
   const [fullPreview, setFullPreview] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [penColor, setPenColor] = useState('#000000');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch contract
@@ -111,11 +119,11 @@ export default function VendorContractDetailPage() {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    ctx.strokeStyle = '#0a6ed1';
+    ctx.strokeStyle = penColor;
     ctx.lineWidth = 2.5;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-  }, [mode, activeTab]);
+  }, [mode, activeTab, penColor]);
 
   const getCanvasPos = (e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current!;
@@ -136,6 +144,12 @@ export default function VendorContractDetailPage() {
     setIsDrawing(true);
     setHasDrawn(true);
     const ctx = canvasRef.current?.getContext('2d');
+    if (ctx) {
+      ctx.strokeStyle = penColor;
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+    }
     const pos = getCanvasPos(e);
     if (ctx) { ctx.beginPath(); ctx.moveTo(pos.x, pos.y); }
   };
@@ -464,7 +478,7 @@ export default function VendorContractDetailPage() {
             </div>
             <div className="vcd-doc-preview__body">
               {contract.contentSnapshot ? (
-                <div className="vcd-doc-content" dangerouslySetInnerHTML={{ __html: contract.contentSnapshot }} />
+                <div className="vcd-doc-content" dangerouslySetInnerHTML={{ __html: cleanDuplicateSignatures(contract.contentSnapshot) }} />
               ) : (
                 <div className="vcd-empty-doc">
                   <FileText size={48} />
@@ -573,6 +587,37 @@ export default function VendorContractDetailPage() {
                   <div className="vcd-signature-pad-card">
                     <div className="vcd-signature-pad-header">
                       <span className="vcd-signature-pad-title">Signature Studio</span>
+
+                      {mode === 'draw' && (
+                        <div className="vcd-color-picker" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Ink Color:</span>
+                          {INK_COLORS.map(c => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => {
+                                setPenColor(c.color);
+                                const ctx = canvasRef.current?.getContext('2d');
+                                if (ctx) ctx.strokeStyle = c.color;
+                              }}
+                              style={{
+                                width: 22,
+                                height: 22,
+                                borderRadius: '50%',
+                                background: c.color,
+                                border: penColor === c.color ? '2px solid var(--primary-500, #0a6ed1)' : '2px solid #ffffff',
+                                boxShadow: penColor === c.color ? '0 0 0 2px rgba(10,110,209,0.4)' : '0 1px 3px rgba(0,0,0,0.2)',
+                                cursor: 'pointer',
+                                padding: 0,
+                                transition: 'transform 0.15s, box-shadow 0.15s',
+                                transform: penColor === c.color ? 'scale(1.18)' : 'scale(1)',
+                              }}
+                              title={c.label}
+                            />
+                          ))}
+                        </div>
+                      )}
+
                       <div className="vcd-segmented-control">
                         <button
                           type="button"

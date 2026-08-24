@@ -14,7 +14,7 @@ import {
   ClipboardList, Search, ChevronDown, CheckCircle2,
   Clock, XCircle, TrendingUp, FileSpreadsheet, Shield, FileText,
   Eye, X, Minus, Maximize2, Minimize2, ChevronUp, ArrowRightLeft,
-  Download,
+  Download, Tag,
 } from 'lucide-react';
 import { downloadDocument } from '../../utils/download';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
@@ -31,12 +31,16 @@ import '../../pages/quotations/QuotationsPage.css';
 type QuotStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'RETURNED';
 
 interface VendorQuotation {
-  id: number;
+  id: number | string;
   rfqId: string;
   rfqNumber: string;
   rfqTitle: string;
+  versionNumber?: number;
+  qNo?: string;
+  vendorQuotationNumber?: string;
+  returnReason?: string | null;
   items: Array<{
-    id: number;
+    id: number | string;
     name: string;
     quantity: number;
     unit: string;
@@ -116,6 +120,10 @@ function mapRow(q: VendorQuotationRow): VendorQuotation {
     rfqId: q.rfqId,
     rfqNumber: q.rfq.rfqNumber,
     rfqTitle: q.rfq.title,
+    versionNumber: q.versionNumber,
+    qNo: q.qNo,
+    vendorQuotationNumber: q.vendorQuotationNumber,
+    returnReason: q.returnReason,
     items: q.items.map((i) => ({
       id: i.id,
       name: i.itemName,
@@ -428,12 +436,36 @@ export default function VendorQuotationsPage() {
                       <div className="vrfq-card__number">
                         <ClipboardList size={16} style={{ color: 'var(--vendor-primary)' }} />
                         <span className="vrfq-card__rfq-id">{quot.rfqNumber}</span>
+                        {(quot.qNo || quot.versionNumber) && (
+                          <span className="quot-compare__qno-pill quot-compare__qno-pill--latest" style={{ fontSize: 11, padding: '1px 6px' }}>
+                            {(quot.versionNumber && quot.versionNumber > 1) ? `Q${quot.versionNumber}` : (quot.qNo || `Q${quot.versionNumber}`)}
+                          </span>
+                        )}
                         <span className={`vendor-badge vendor-badge--${cfg.cls}`}>
                           {cfg.icon} {cfg.label}
                         </span>
+                        <span
+                          className="vendor-badge"
+                          style={{
+                            fontSize: 11,
+                            padding: '2px 8px',
+                            fontWeight: 600,
+                            background: 'rgba(10, 110, 209, 0.08)',
+                            color: 'var(--vendor-primary, #0a6ed1)',
+                            border: '1px solid rgba(10, 110, 209, 0.2)',
+                            borderRadius: 4,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}
+                          title="Vendor Quotation Ref Number"
+                        >
+                          <Tag size={11} />
+                          Ref: {quot.vendorQuotationNumber || `QTN-${String(quot.id).slice(-6).toUpperCase()}`}
+                        </span>
                       </div>
                       <span className="vrfq-card__title">
-                        {quot.rfqTitle} · {quot.items.length} line items · submitted {fmtDate(quot.submittedAt)}
+                        {quot.rfqTitle} · Quote Ref: {quot.vendorQuotationNumber || `QTN-${String(quot.id).slice(-6).toUpperCase()}`} · {quot.items.length} line items · submitted {fmtDate(quot.submittedAt)}
                       </span>
                     </div>
                     <div className="vrfq-card__right">

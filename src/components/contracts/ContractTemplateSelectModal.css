@@ -46,10 +46,47 @@
 }
 
 .ctsm-dialog--preview {
-  max-width: 700px;
+  max-width: 760px;
   z-index: 20005 !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.ctsm-dialog--fullscreen { max-width: 96vw; max-height: 96vh; }
+.ctsm-dialog--preview.ctsm-dialog--fullscreen {
+  width: 98vw !important;
+  height: 95vh !important;
+  max-width: 98vw !important;
+  max-height: 95vh !important;
+  margin: 0 auto;
+  border-radius: 14px !important;
+}
+
+/* Document Paper Canvas for Template Preview Modal */
+.ctsm-dialog--preview .ctsm-body {
+  padding: 24px !important;
+  background: var(--surface-elevated, #f1f5f9) !important;
+}
+
+[data-theme="dark"] .ctsm-dialog--preview .ctsm-body {
+  background: #0f172a !important;
+}
+
+.ctsm-dialog--preview .ctr-template-preview-content {
+  width: 100% !important;
+  max-width: 900px !important;
+  margin: 0 auto !important;
+  padding: 36px 44px !important;
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+  box-sizing: border-box !important;
+  color: #0f172a !important;
+  max-height: none !important;
+  overflow-y: visible !important;
+}
+
+.ctsm-dialog--preview .ctr-template-preview-content * {
+  color: #0f172a !important;
+}
 
 /* Header */
 .ctsm-header {

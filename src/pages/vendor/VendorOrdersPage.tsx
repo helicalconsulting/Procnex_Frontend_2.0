@@ -90,15 +90,29 @@ export default function VendorOrdersPage() {
   const [search, setSearch] = useState('');
   const [expandedOrder, setExpandedOrder] = useState<number | null>(null);
 
+  // Deduplicate orders list by RFQ number or PO number
+  const uniqueOrderList = useMemo(() => {
+    const map = new Map<string, VendorOrder>();
+    for (const o of orderList) {
+      const key = (o.rfqNumber && o.rfqNumber !== 'RFQ-N/A')
+        ? `rfq_${o.rfqNumber}`
+        : `po_${o.poNumber}`;
+      if (!map.has(key)) {
+        map.set(key, o);
+      }
+    }
+    return Array.from(map.values());
+  }, [orderList]);
+
   const summary = useMemo(() => ({
-    total: orderList.length,
-    active: orderList.filter(o => ['CONFIRMED', 'PROCESSING', 'SHIPPED'].includes(o.status)).length,
-    delivered: orderList.filter(o => o.status === 'DELIVERED').length,
-    cancelled: orderList.filter(o => o.status === 'CANCELLED').length,
-  }), [orderList]);
+    total: uniqueOrderList.length,
+    active: uniqueOrderList.filter(o => ['CONFIRMED', 'PROCESSING', 'SHIPPED'].includes(o.status)).length,
+    delivered: uniqueOrderList.filter(o => o.status === 'DELIVERED').length,
+    cancelled: uniqueOrderList.filter(o => o.status === 'CANCELLED').length,
+  }), [uniqueOrderList]);
 
   const filtered = useMemo(() => {
-    let orders = orderList;
+    let orders = uniqueOrderList;
     if (search.trim()) {
       const q = search.toLowerCase();
       orders = orders.filter(o =>
@@ -109,7 +123,7 @@ export default function VendorOrdersPage() {
       );
     }
     return orders;
-  }, [orderList, search]);
+  }, [uniqueOrderList, search]);
 
 
 

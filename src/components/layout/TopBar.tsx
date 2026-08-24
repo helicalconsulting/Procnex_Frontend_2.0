@@ -13,7 +13,9 @@ import {
   Home,
   ChevronRight,
   CalendarDays,
+  Globe,
 } from 'lucide-react';
+import { useLanguage } from '../../context/LanguageContext';
 import { isVendor } from '../../utils/rbac';
 import VendorNotificationBell from './VendorNotificationBell';
 import AdminNotificationBell from './AdminNotificationBell';
@@ -127,6 +129,7 @@ interface TopBarProps {
 export default function TopBar({ onMenuClick }: TopBarProps) {
   const { user, roles, logout } = useAuth();
   const { isDark, toggleTheme } = useTheme();
+  const { language, toggleLanguage } = useLanguage();
   const { companyName } = useBranding();
   const location = useLocation();
   const navigate = useNavigate();
@@ -196,14 +199,14 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
         </button>
 
         <nav className="topbar__breadcrumb">
-          <Home size={14} className="topbar__breadcrumb-home" />
+          <Home size={16} className="topbar__breadcrumb-home" />
           {section && (
             <>
-              <ChevronRight size={12} className="topbar__breadcrumb-sep" />
+              <ChevronRight size={14} className="topbar__breadcrumb-sep" />
               <span className="topbar__breadcrumb-section">{section}</span>
             </>
           )}
-          <ChevronRight size={12} className="topbar__breadcrumb-sep" />
+          <ChevronRight size={14} className="topbar__breadcrumb-sep" />
           <span className="topbar__breadcrumb-current">{pageTitle}</span>
         </nav>
       </div>
@@ -218,12 +221,24 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
             title="Open Laptop Calendar"
             aria-label="Toggle calendar"
           >
-            <CalendarDays size={17} />
+            <CalendarDays size={19} />
           </button>
           {isCalendarOpen && (
             <HeaderCalendarPopover onClose={() => setIsCalendarOpen(false)} />
           )}
         </div>
+
+        {/* Language toggle */}
+        <button
+          className="topbar__icon-btn"
+          onClick={toggleLanguage}
+          title={language === 'fr' ? 'Switch to English 🇺🇸' : 'Changer en Français 🇫🇷'}
+          aria-label="Toggle language"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '0 8px', fontSize: 12, fontWeight: 700 }}
+        >
+          <Globe size={16} />
+          <span>{language === 'fr' ? 'FR 🇫🇷' : 'EN 🇺🇸'}</span>
+        </button>
 
         {/* Theme toggle */}
         <button
@@ -232,7 +247,7 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
           title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
           aria-label="Toggle theme"
         >
-          {isDark ? <Sun size={17} /> : <Moon size={17} />}
+          {isDark ? <Sun size={19} /> : <Moon size={19} />}
         </button>
 
         {/* Notifications */}
@@ -252,7 +267,7 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
             <span className="topbar__user-role">{roles.join(', ')}</span>
           </div>
           <ChevronDown
-            size={14}
+            size={16}
             className={`topbar__chevron ${dropdownOpen ? 'topbar__chevron--open' : ''}`}
           />
 

@@ -1054,9 +1054,9 @@ export default function RFQDetailModal({
                   {approvalChainLoading ? (
                     <div style={{ fontSize: 13, color: 'var(--text-secondary)', padding: '24px 0', textAlign: 'center' }}>Loading approval history...</div>
                   ) : (() => {
-                    const displayList = (approvalChain?.levels && approvalChain.levels.length > 0)
-                      ? approvalChain.levels
-                      : (approvalChain?.history || []);
+                    const displayList = (approvalChain?.history && approvalChain.history.length > 0)
+                      ? approvalChain.history
+                      : (approvalChain?.levels || []);
                     return displayList.length > 0 ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                         {displayList.map((item: any, idx: number) => {
@@ -1069,8 +1069,10 @@ export default function RFQDetailModal({
                           const statusBg    = isApproved ? 'rgba(22, 163, 74, 0.08)' : isRejected ? 'rgba(220, 38, 38, 0.08)' : isReturned ? 'rgba(217, 119, 6, 0.08)' : isPending ? 'rgba(234, 179, 8, 0.08)' : 'rgba(156, 163, 175, 0.08)';
                           const statusBorder = isApproved ? 'rgba(22, 163, 74, 0.2)' : isRejected ? 'rgba(220, 38, 38, 0.2)' : isReturned ? 'rgba(217, 119, 6, 0.2)' : isPending ? 'rgba(234, 179, 8, 0.2)' : 'rgba(156, 163, 175, 0.2)';
 
-                          const statusLabel = item.status === 'NOT_STARTED' ? 'Awaiting Previous Level' : item.status;
-                          const actionByText = item.approverName || (isPending ? 'Awaiting Approval' : item.status === 'NOT_STARTED' ? 'Pending Previous Level' : rfq.creator || 'User');
+                          const statusLabel = item.status === 'NOT_STARTED'
+                            ? (item.levelNumber === 1 ? 'Pending Approval' : `Awaiting Level ${item.levelNumber - 1}`)
+                            : item.status;
+                          const actionByText = item.approverName || (isApproved ? (rfq.creator || 'System') : isPending ? 'Awaiting Approval' : item.levelNumber === 1 ? 'Pending Approval' : `Pending Level ${item.levelNumber - 1}`);
 
                           return (
                             <div
@@ -1149,13 +1151,13 @@ export default function RFQDetailModal({
                 </MessageStrip>
               )}
               <button type="button" className="rfq-modal__btn rfq-modal__btn--secondary" onClick={onClose}>Close</button>
-              {enableSend && (rfq.status === 'DRAFT' || (rfq.status === 'PENDING_APPROVAL' && String((rfq as any).createdBy || (rfq as any).creatorId || '') === String(user?.id || (user as any)?._id || ''))) && (
+              {enableSend && (rfq.status === 'DRAFT' || rfq.status === 'RETURNED' || (rfq.status === 'PENDING_APPROVAL' && String((rfq as any).createdBy || (rfq as any).creatorId || '') === String(user?.id || (user as any)?._id || ''))) && (
                 <button
                   type="button"
                   className="rfq-modal__btn rfq-modal__btn--primary"
                   onClick={() => navigate(`/rfq/edit/${rfq.id}`)}
                 >
-                  <FileText size={15} /> Edit {rfq.status === 'DRAFT' ? 'Draft' : 'RFQ'}
+                  <FileText size={15} /> {rfq.status === 'RETURNED' ? 'Edit & Resubmit RFQ' : rfq.status === 'DRAFT' ? 'Edit Draft' : 'Edit RFQ'}
                 </button>
               )}
             </div>

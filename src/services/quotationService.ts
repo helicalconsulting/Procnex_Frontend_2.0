@@ -16,7 +16,7 @@ function normalizeQuotation(q: Quotation): Quotation {
 
 async function list(includeAll = true): Promise<Quotation[]> {
   const params = includeAll ? '?limit=100&includeAll=true' : '?limit=100';
-  const data = await apiRequest<{ quotations: Quotation[] }>(`/quotations${params}`);
+  const data = await apiRequest<{ quotations: Quotation[] }>(`/quotations${params}`, { cacheTtlMs: 0 });
   const items = pickList<Quotation>(data, ['quotations']).map(normalizeQuotation);
   return items.filter((q) => {
     const rfqNum = (q as Quotation & { rfq?: { rfqNumber?: string }; rfqNumber?: string }).rfq?.rfqNumber || (q as any).rfqNumber;

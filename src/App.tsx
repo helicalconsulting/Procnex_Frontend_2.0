@@ -4,7 +4,8 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "./context/ThemeContext";
 import { BrandingProvider } from "./context/BrandingContext";
-import { AuthProvider, useAuth } from "./context/AuthContext";
+import { LanguageProvider } from "./context/LanguageContext";
+import { AuthProvider } from "./context/AuthContext";
 import { CurrencyProvider } from "./components/shared/CurrencyMaster";
 import { ProtectedRoute } from "./router/ProtectedRoute";
 import AppLayout from "./components/layout/AppLayout";
@@ -66,9 +67,6 @@ const NewOnboardingPage = lazy(
 const OnboardingQueuePage = lazy(
   () => import("./pages/onboarding/OnboardingQueuePage"),
 );
-const SalesOrdersPage = lazy(
-  () => import("./pages/sales-orders/SalesOrdersPage"),
-);
 const SignaturePage = lazy(() => import("./pages/signature/SignaturePage"));
 const ReportsPage = lazy(() => import("./pages/reports/ReportsPage"));
 const CompanySettingsPage = lazy(
@@ -112,9 +110,6 @@ function page(Component: ComponentType) {
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // Disabled to prevent bursts of 5+ requests when switching tabs back.
-      // Each page already fetches data on mount with a 5-min stale time,
-      // and SSE keeps real-time data fresh.
       refetchOnWindowFocus: false,
       retry: 2,
     },
@@ -126,136 +121,138 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <BrandingProvider>
-        <BrowserRouter>
-          <AuthProvider>
-            <CurrencyProviderWithAuth>
-            <Routes>
-            {/* Public */}
-            <Route path="/login" element={page(LoginPage)} />
-            <Route path="/vendor/login" element={page(VendorLoginPage)} />
-            <Route path="/set-password" element={page(SetPasswordPage)} />
-            <Route path="/auth/magic" element={page(VendorMagicLinkPage)} />
+          <LanguageProvider>
+            <BrowserRouter>
+              <AuthProvider>
+                <CurrencyProviderWithAuth>
+                  <Routes>
+                    {/* Public */}
+                    <Route path="/login" element={page(LoginPage)} />
+                    <Route path="/vendor/login" element={page(VendorLoginPage)} />
+                    <Route path="/set-password" element={page(SetPasswordPage)} />
+                    <Route path="/auth/magic" element={page(VendorMagicLinkPage)} />
 
-            {/* Vendor Portal Routes */}
-            <Route element={<ProtectedRoute requireVendor />}>
-              <Route element={<AppLayout />}>
-                <Route
-                  path="/vendor/dashboard"
-                  element={page(VendorDashboard)}
-                />
-                <Route path="/vendor/rfqs" element={page(VendorRFQsPage)} />
-                <Route
-                  path="/vendor/quotations"
-                  element={page(VendorQuotationsPage)}
-                />
-                <Route path="/vendor/orders" element={page(VendorOrdersPage)} />
-                <Route
-                  path="/vendor/invoices"
-                  element={page(VendorInvoicesPage)}
-                />
-                <Route
-                  path="/vendor/profile"
-                  element={page(VendorProfilePage)}
-                />
-                <Route
-                  path="/vendor/contracts"
-                  element={page(VendorContractsPage)}
-                />
-                <Route
-                  path="/vendor/contracts/:id"
-                  element={page(VendorContractDetailPage)}
-                />
-                <Route
-                  path="/vendor/agreements"
-                  element={page(VendorAgreementsPage)}
-                />
-              </Route>
-            </Route>
+                    {/* Vendor Portal Routes */}
+                    <Route element={<ProtectedRoute requireVendor />}>
+                      <Route element={<AppLayout />}>
+                        <Route
+                          path="/vendor/dashboard"
+                          element={page(VendorDashboard)}
+                        />
+                        <Route path="/vendor/rfqs" element={page(VendorRFQsPage)} />
+                        <Route
+                          path="/vendor/quotations"
+                          element={page(VendorQuotationsPage)}
+                        />
+                        <Route path="/vendor/orders" element={page(VendorOrdersPage)} />
+                        <Route
+                          path="/vendor/invoices"
+                          element={page(VendorInvoicesPage)}
+                        />
+                        <Route
+                          path="/vendor/profile"
+                          element={page(VendorProfilePage)}
+                        />
+                        <Route
+                          path="/vendor/contracts"
+                          element={page(VendorContractsPage)}
+                        />
+                        <Route
+                          path="/vendor/contracts/:id"
+                          element={page(VendorContractDetailPage)}
+                        />
+                        <Route
+                          path="/vendor/agreements"
+                          element={page(VendorAgreementsPage)}
+                        />
+                      </Route>
+                    </Route>
 
-            {/* Protected — wrapped in AppLayout (Sidebar + TopBar) */}
-            <Route element={<ProtectedRoute />}>
-              <Route element={<AppLayout />}>
-                <Route path="/profile" element={page(MyProfilePage)} />
-                <Route element={<PermissionGate />}>
-                  <Route path="/dashboard" element={page(DashboardPage)} />
-                  <Route path="/rfq" element={page(RFQPage)} />
-                  <Route path="/rfq/create" element={page(CreateRFQPage)} />
-                  <Route path="/rfq/edit/:id" element={page(CreateRFQPage)} />
-                  <Route path="/quotations" element={page(QuotationsPage)} />
-                  <Route path="/admin/users" element={page(UsersPage)} />
-                  <Route
-                    path="/admin/roles-permissions"
-                    element={page(RolesPermissionsPage)}
-                  />
-                  <Route
-                    path="/admin/approval-levels"
-                    element={page(ApprovalLevelsPage)}
-                  />
-                  <Route path="/approvals" element={page(ApprovalsPage)} />
-                  <Route
-                    path="/accounts-payable"
-                    element={page(AccountsPayablePage)}
-                  />
-                  <Route
-                    path="/procurement/create-purchase-invoice"
-                    element={page(CreatePurchaseInvoicePage)}
-                  />
-                  <Route
-                    path="/procurement/create-payment-voucher"
-                    element={page(CreatePaymentVoucherPage)}
-                  />
-                  <Route path="/payments" element={page(PaymentsPage)} />
-                  <Route path="/sales-orders" element={<Navigate to="/dashboard" replace />} />
-                  <Route path="/vendors" element={page(VendorsPage)} />
-                  <Route
-                    path="/onboarding/new"
-                    element={page(NewOnboardingPage)}
-                  />
-                  <Route element={<ProtectedRoute allowedRoles={[...ADMIN_ACCESS_ROLES]} />}>
-                    <Route path="/onboarding/queue" element={page(OnboardingQueuePage)} />
-                  </Route>
-                  <Route path="/signature" element={page(SignaturePage)} />
-                  <Route path="/reports" element={page(ReportsPage)} />
-                  <Route
-                    path="/admin/company-settings"
-                    element={page(CompanySettingsPage)}
-                  />
-                  <Route element={<ProtectedRoute allowedRoles={[...ADMIN_ACCESS_ROLES]} />}>
-                    <Route
-                      path="/admin/custom-form-builder"
-                      element={page(CustomFormBuilderPage)}
-                    />
-                    <Route
-                      path="/admin/form-responses"
-                      element={page(FormResponsesPage)}
-                    />
-                  </Route>
-                  <Route path="/forms" element={page(FormsPage)} />
-                  <Route path="/documents" element={page(DocumentsPage)} />
-                  <Route
-                    path="/notifications"
-                    element={page(NotificationsPage)}
-                  />
-                  <Route path="/contracts" element={page(ContractsPage)} />
-                  <Route path="/contracts/:id" element={page(ContractDetailPage)} />
-                  <Route path="/contracts/new" element={page(CreateContractPage)} />
-                  <Route path="/contracts/:id/edit" element={page(ContractDetailPage)} />
-                  <Route path="/purchase-orders" element={page(PurchaseOrdersPage)} />
-                  <Route path="/purchase-orders/new" element={page(CreatePurchaseOrderPage)} />
-                  <Route path="/procurement/create-purchase-order" element={page(CreatePurchaseOrderPage)} />
-                  <Route path="/procurement/purchase-requisitions" element={page(PurchaseRequisitionsListPage)} />
-                  <Route path="/procurement/purchase-requisition/:rfqId" element={page(PurchaseRequisitionPage)} />
-                  <Route path="/audit" element={page(AuditTrailPage)} />
-                </Route>
-              </Route>
-            </Route>
+                    {/* Protected — wrapped in AppLayout (Sidebar + TopBar) */}
+                    <Route element={<ProtectedRoute />}>
+                      <Route element={<AppLayout />}>
+                        <Route path="/profile" element={page(MyProfilePage)} />
+                        <Route element={<PermissionGate />}>
+                          <Route path="/dashboard" element={page(DashboardPage)} />
+                          <Route path="/rfq" element={page(RFQPage)} />
+                          <Route path="/rfq/create" element={page(CreateRFQPage)} />
+                          <Route path="/rfq/edit/:id" element={page(CreateRFQPage)} />
+                          <Route path="/quotations" element={page(QuotationsPage)} />
+                          <Route path="/admin/users" element={page(UsersPage)} />
+                          <Route
+                            path="/admin/roles-permissions"
+                            element={page(RolesPermissionsPage)}
+                          />
+                          <Route
+                            path="/admin/approval-levels"
+                            element={page(ApprovalLevelsPage)}
+                          />
+                          <Route path="/approvals" element={page(ApprovalsPage)} />
+                          <Route
+                            path="/accounts-payable"
+                            element={page(AccountsPayablePage)}
+                          />
+                          <Route
+                            path="/procurement/create-purchase-invoice"
+                            element={page(CreatePurchaseInvoicePage)}
+                          />
+                          <Route
+                            path="/procurement/create-payment-voucher"
+                            element={page(CreatePaymentVoucherPage)}
+                          />
+                          <Route path="/payments" element={page(PaymentsPage)} />
+                          <Route path="/sales-orders" element={<Navigate to="/dashboard" replace />} />
+                          <Route path="/vendors" element={page(VendorsPage)} />
+                          <Route
+                            path="/onboarding/new"
+                            element={page(NewOnboardingPage)}
+                          />
+                          <Route element={<ProtectedRoute allowedRoles={[...ADMIN_ACCESS_ROLES]} />}>
+                            <Route path="/onboarding/queue" element={page(OnboardingQueuePage)} />
+                          </Route>
+                          <Route path="/signature" element={page(SignaturePage)} />
+                          <Route path="/reports" element={page(ReportsPage)} />
+                          <Route
+                            path="/admin/company-settings"
+                            element={page(CompanySettingsPage)}
+                          />
+                          <Route element={<ProtectedRoute allowedRoles={[...ADMIN_ACCESS_ROLES]} />}>
+                            <Route
+                              path="/admin/custom-form-builder"
+                              element={page(CustomFormBuilderPage)}
+                            />
+                            <Route
+                              path="/admin/form-responses"
+                              element={page(FormResponsesPage)}
+                            />
+                          </Route>
+                          <Route path="/forms" element={page(FormsPage)} />
+                          <Route path="/documents" element={page(DocumentsPage)} />
+                          <Route
+                            path="/notifications"
+                            element={page(NotificationsPage)}
+                          />
+                          <Route path="/contracts" element={page(ContractsPage)} />
+                          <Route path="/contracts/:id" element={page(ContractDetailPage)} />
+                          <Route path="/contracts/new" element={page(CreateContractPage)} />
+                          <Route path="/contracts/:id/edit" element={page(ContractDetailPage)} />
+                          <Route path="/purchase-orders" element={page(PurchaseOrdersPage)} />
+                          <Route path="/purchase-orders/new" element={page(CreatePurchaseOrderPage)} />
+                          <Route path="/procurement/create-purchase-order" element={page(CreatePurchaseOrderPage)} />
+                          <Route path="/procurement/purchase-requisitions" element={page(PurchaseRequisitionsListPage)} />
+                          <Route path="/procurement/purchase-requisition/:rfqId" element={page(PurchaseRequisitionPage)} />
+                          <Route path="/audit" element={page(AuditTrailPage)} />
+                        </Route>
+                      </Route>
+                    </Route>
 
-            {/* Catch-all → redirect to dashboard (which guards itself) */}
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
-            </Routes>
-            </CurrencyProviderWithAuth>
-          </AuthProvider>
-        </BrowserRouter>
+                    {/* Catch-all → redirect to dashboard */}
+                    <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                  </Routes>
+                </CurrencyProviderWithAuth>
+              </AuthProvider>
+            </BrowserRouter>
+          </LanguageProvider>
         </BrandingProvider>
       </ThemeProvider>
     </QueryClientProvider>

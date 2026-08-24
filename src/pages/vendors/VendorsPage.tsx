@@ -936,6 +936,14 @@ export default function VendorsPage() {
                 <div className="v360-actions">
                   <button
                     type="button"
+                    className="v360-action-btn"
+                    onClick={() => setIsFullScreenDetail((prev) => !prev)}
+                    title={isFullScreenDetail ? 'Exit Fullscreen' : 'Fullscreen'}
+                  >
+                    {isFullScreenDetail ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                  </button>
+                  <button
+                    type="button"
                     className="v360-action-btn v360-action-btn--close"
                     onClick={() => { setDetailVendor(null); setIsFullScreenDetail(false); }}
                     title="Close"

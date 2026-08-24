@@ -91,4 +91,13 @@ export const purchaseOrderService = {
     return data;
   },
   createStandalonePO,
+  async delete(id: number | string): Promise<void> {
+    if (USE_MOCK) {
+      await new Promise(r => setTimeout(r, 200));
+      const idx = MOCK_PURCHASE_ORDERS.findIndex(p => String(p.id) === String(id));
+      if (idx !== -1) MOCK_PURCHASE_ORDERS.splice(idx, 1);
+      return;
+    }
+    await apiRequest(`/purchase-orders/${id}`, { method: 'DELETE' });
+  },
 };

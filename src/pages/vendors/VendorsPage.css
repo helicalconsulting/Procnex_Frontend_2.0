@@ -34,13 +34,13 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 22px;
+  padding: 10px 20px;
   border-radius: var(--radius-md);
   border: none;
   background: var(--primary-500);
   color: #fff;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
   cursor: pointer;
   font-family: inherit;
   transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
@@ -213,17 +213,18 @@
 }
 
 .vendors-summary-card__value {
-  font-size: 26px;
-  font-weight: 700;
+  font-size: 28px;
+  font-weight: 800;
   line-height: 1.1;
+  letter-spacing: -0.5px;
 }
 
 .vendors-summary-card__label {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.6px;
 }
 
 /* Toolbar */
@@ -256,7 +257,7 @@
   border-radius: var(--radius-md);
   background: var(--surface-card);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 15px;
   font-family: inherit;
   transition: border-color 0.2s, box-shadow 0.2s;
   outline: none;
@@ -286,8 +287,8 @@
   border-radius: var(--radius-md);
   background: var(--surface-card);
   color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
   font-family: inherit;
   transition: border-color 0.2s, color 0.2s;
@@ -349,7 +350,7 @@
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
@@ -368,7 +369,7 @@
 }
 
 .vendors-category-filter__count {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--text-secondary);
   background: var(--surface-elevated);
@@ -384,7 +385,7 @@
 
 .vendors-category-filter__empty {
   padding: 12px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
   text-align: center;
 }
@@ -458,12 +459,12 @@
 
 .vendors-table th {
   text-align: left;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.6px;
   color: var(--text-secondary);
-  padding: 11px 16px;
+  padding: 12px 16px;
   border-bottom: 2px solid var(--border);
   border-right: 1px solid var(--border);
   background: var(--surface-elevated);
@@ -474,8 +475,8 @@
 .vendors-table th:last-child { border-right: none; }
 
 .vendors-table td {
-  padding: 11px 16px;
-  font-size: 13px;
+  padding: 13px 16px;
+  font-size: 14.5px;
   color: var(--text-primary);
   border-bottom: 1px solid var(--border);
   border-right: 1px solid var(--border);
@@ -567,8 +568,8 @@
 }
 
 .vendors-table__name {
-  font-weight: 600;
-  font-size: 13px;
+  font-weight: 700;
+  font-size: 15px;
   line-height: 1.3;
   white-space: nowrap;
   overflow: hidden;
@@ -576,7 +577,7 @@
 }
 
 .vendors-table__email {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
   line-height: 1.3;
   white-space: nowrap;
@@ -592,21 +593,21 @@
   align-items: center;
   gap: 4px;
   overflow: hidden;
+  font-size: 13.5px;
 }
-
-
 
 /* Orders cell */
 .vendors-table__orders {
   font-weight: 700;
   text-align: left;
+  font-size: 14.5px;
 }
 
 /* Date cell */
 .vendors-table__date {
   white-space: nowrap;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 13.5px;
 }
 
 /* Category badge */
@@ -614,7 +615,7 @@
   display: inline-flex;
   padding: 4px 10px;
   border-radius: 12px;
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 700;
   background: rgba(10, 110, 209, 0.08);
   color: var(--primary-500);
@@ -957,8 +958,36 @@
   min-height: 0 !important;
   max-height: calc(100vh - 140px) !important;
   overflow-y: auto !important;
-  padding: 20px 24px 80px 24px !important;
+  padding: 24px 32px 80px 32px !important;
 }
+
+.vendors-modal--fullscreen .v360-identity__title { font-size: 32px !important; }
+.vendors-modal--fullscreen .v360-identity__subtitle { font-size: 14px !important; }
+.vendors-modal--fullscreen .v360-identity__meta { font-size: 14px !important; }
+.vendors-modal--fullscreen .v360-tag { font-size: 13px !important; padding: 5px 12px !important; }
+
+.vendors-modal--fullscreen .v360-card__header { font-size: 17px !important; padding: 14px 20px !important; }
+.vendors-modal--fullscreen .v360-badge { font-size: 13px !important; padding: 4px 12px !important; }
+
+.vendors-modal--fullscreen .v360-pie-chart-wrap { width: 150px !important; height: 150px !important; }
+.vendors-modal--fullscreen .v360-pie-label { font-size: 14.5px !important; }
+.vendors-modal--fullscreen .v360-pie-val { font-size: 15px !important; }
+.vendors-modal--fullscreen .v360-pie-weight { font-size: 13px !important; }
+
+.vendors-modal--fullscreen .v360-risk-label { font-size: 15px !important; width: 165px !important; }
+.vendors-modal--fullscreen .v360-risk-val { font-size: 14.5px !important; }
+.vendors-modal--fullscreen .v360-risk-bar-track { height: 10px !important; }
+
+.vendors-modal--fullscreen .v360-checklist--2col .v360-check-label { font-size: 15px !important; }
+.vendors-modal--fullscreen .v360-checklist--2col .v360-check-sub { font-size: 13px !important; }
+.vendors-modal--fullscreen .v360-checklist--2col .v360-check-item { padding: 12px 14px !important; }
+
+.vendors-modal--fullscreen .v360-detail-lbl { font-size: 14px !important; }
+.vendors-modal--fullscreen .v360-detail-val { font-size: 16.5px !important; }
+
+.vendors-modal--fullscreen .v360-tab-btn { font-size: 15px !important; padding: 11px 22px !important; }
+
+.vendors-modal--fullscreen .vendors-modal__footer .vendors-modal__btn { font-size: 15px !important; padding: 12px 26px !important; }
 
 /* ── Top Header Banner ── */
 .v360-header {
@@ -1474,7 +1503,7 @@
 }
 
 .v360-identity__meta {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-secondary);
   font-weight: 500;
   white-space: nowrap;
@@ -1484,8 +1513,8 @@
 .v360-kpi-strip {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 12px;
+  gap: 14px;
+  padding: 8px 16px;
   background: rgba(0, 0, 0, 0.15);
   border-radius: 8px;
   border: 1px solid var(--border);
@@ -1501,19 +1530,19 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
+  gap: 2px;
   flex-shrink: 0;
 }
 
 .v360-kpi-val {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 800;
   color: var(--text-primary);
   font-feature-settings: "tnum";
 }
 
 .v360-kpi-lbl {
-  font-size: 8.5px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--text-secondary);
   letter-spacing: 0.4px;
@@ -1542,8 +1571,8 @@
 }
 
 .v360-gauge-ring {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   border-radius: 50% !important;
   display: flex;
   align-items: center;
@@ -1557,7 +1586,7 @@
 .v360-gauge-ring--low { border-color: #ef4444; }
 
 .v360-gauge-score {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 900;
   color: var(--text-primary);
 }
@@ -1568,13 +1597,13 @@
 }
 
 .v360-gauge-title {
-  font-size: 12px;
+  font-size: 13.5px;
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .v360-gauge-subtitle {
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--text-secondary);
 }
 

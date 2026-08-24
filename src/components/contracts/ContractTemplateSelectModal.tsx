@@ -326,7 +326,15 @@ export default function ContractTemplateSelectModal({
                 </button>
               </div>
             </div>
-            <div className="ctsm-body" style={{ maxHeight: '65vh', overflowY: 'auto' }}>
+            <div
+              className="ctsm-body"
+              style={{
+                maxHeight: previewFullscreen ? 'calc(95vh - 130px)' : '65vh',
+                height: previewFullscreen ? 'calc(95vh - 130px)' : undefined,
+                overflowY: 'auto',
+                flex: previewFullscreen ? 1 : undefined,
+              }}
+            >
               {previewTemplate.content ? (
                 <div
                   className="ctr-template-preview-content"

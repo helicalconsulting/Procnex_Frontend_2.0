@@ -133,10 +133,10 @@
 /* ── SAP Fiori Status Badges ──────────────────────────────── */
 
 .pr-badge {
-  padding: 5px 14px;
-  border-radius: 12px;
-  font-size: 11px;
-  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 14px;
+  font-size: 13.5px;
+  font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   white-space: nowrap;
@@ -178,6 +178,20 @@
   background: rgba(34, 197, 94, 0.15);
   color: #4ade80;
   border-color: rgba(74, 222, 128, 0.3);
+}
+
+.pr-badge--REJECTED,
+.pr-badge--CANCELLED {
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+  border: 1px solid rgba(220, 38, 38, 0.2);
+}
+
+[data-theme="dark"] .pr-badge--REJECTED,
+[data-theme="dark"] .pr-badge--CANCELLED {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.3);
 }
 
 .pr-badge--SENT_TO_VENDOR,
@@ -1096,7 +1110,7 @@
   border-radius: var(--radius-md);
   background: var(--surface-card);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 15px;
   font-family: inherit;
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
@@ -1130,12 +1144,12 @@
 
 .pr-list-table thead th {
   text-align: left;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.6px;
   color: var(--text-secondary);
-  padding: 11px 14px;
+  padding: 12px 14px;
   border-bottom: 2px solid var(--border);
   border-right: 1px solid var(--border);
   background: var(--surface-elevated);
@@ -1159,8 +1173,8 @@
 }
 
 .pr-list-row td {
-  padding: 11px 14px;
-  font-size: 13px;
+  padding: 13px 14px;
+  font-size: 14.5px;
   color: var(--text-primary);
   border-bottom: 1px solid var(--border);
   border-right: 1px solid var(--border);
@@ -1197,13 +1211,13 @@
 
 .pr-list__po-num {
   font-weight: 700;
-  font-size: 13px;
+  font-size: 15px;
   color: var(--primary-500);
 }
 
 .pr-po-link {
   color: var(--primary-500);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 700;
   text-decoration: underline dotted;
   text-underline-offset: 3px;
@@ -1218,14 +1232,14 @@
 }
 
 .pr-list__vendor {
-  font-weight: 500;
-  font-size: 13px;
+  font-weight: 700;
+  font-size: 15px;
   color: var(--text-primary);
 }
 
 .pr-list__total {
   font-weight: 700;
-  font-size: 13px;
+  font-size: 15px;
   text-align: right;
   color: var(--text-primary);
   white-space: nowrap;
@@ -1343,22 +1357,189 @@
   line-height: 1.5;
 }
 
-/* ── Modals (Send / Type Select) ───────────────────────────── */
+/* ── Modals (Send / Type Select / Confirmation) ──────────── */
 
 .pr-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: var(--overlay);
-  backdrop-filter: blur(6px);
-  z-index: 500;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 9999;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 20px;
-  animation: prFadeIn 0.2s ease;
+  animation: prFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes prFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* Modern Enterprise Confirmation Modal Box */
+.pr-modal-box {
+  background: var(--surface-card, #ffffff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: var(--radius-lg, 16px);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: prModalSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+
+@keyframes prModalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+[data-theme="dark"] .pr-modal-box {
+  background: #1e293b;
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.pr-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border, #e2e8f0);
+  background: var(--surface-elevated, rgba(248, 250, 252, 0.8));
+}
+
+[data-theme="dark"] .pr-modal-header {
+  background: rgba(15, 23, 42, 0.5);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.pr-modal-header h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary, #0f172a);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+[data-theme="dark"] .pr-modal-header h3 {
+  color: #f8fafc;
+}
+
+.pr-modal-header--danger {
+  border-top: 4px solid #ef4444;
+}
+
+.pr-modal-header--danger svg {
+  color: #ef4444;
+  flex-shrink: 0;
+}
+
+.pr-modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, #64748b);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.pr-modal-close:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+
+.pr-modal-body {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  color: var(--text-primary, #334155);
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+
+[data-theme="dark"] .pr-modal-body {
+  color: #cbd5e1;
+}
+
+.pr-modal-body p {
+  margin: 0;
+}
+
+.pr-modal-body strong {
+  color: var(--text-primary, #0f172a);
+  font-weight: 700;
+}
+
+[data-theme="dark"] .pr-modal-body strong {
+  color: #f8fafc;
+}
+
+.pr-modal-warning {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.22);
+  color: #dc2626;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+[data-theme="dark"] .pr-modal-warning {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}
+
+.pr-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border, #e2e8f0);
+  background: var(--surface-elevated, rgba(248, 250, 252, 0.8));
+}
+
+[data-theme="dark"] .pr-modal-footer {
+  background: rgba(15, 23, 42, 0.5);
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+.pr-btn--danger {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+  color: #ffffff !important;
+  border: 1px solid #dc2626 !important;
+  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.35) !important;
+  font-weight: 700 !important;
+}
+
+.pr-btn--danger:hover:not(:disabled) {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 18px rgba(220, 38, 38, 0.45) !important;
+}
 
 .pr-send-modal,
 .po-type-modal {

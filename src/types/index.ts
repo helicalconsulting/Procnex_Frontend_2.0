@@ -126,6 +126,29 @@ export interface Quotation {
   attachments?: QuotationAttachment[];
   selectedItemIds?: string[] | null;
   userAction?: string | null;
+  // Versioning & Vendor Reference fields
+  versionNumber?: number;
+  qNo?: string;
+  vendorQuotationNumber?: string;
+  parentQuotationId?: string;
+  isLatestVersion?: boolean;
+  returnReason?: string | null;
+  returnComment?: string | null;
+  // Bid Security & Bid Bond fields
+  bidSecurityValueType?: string;
+  bidSecurityValue?: number;
+  bidSecurityCurrency?: string;
+  bidSecurityValidityValue?: number;
+  bidSecurityValidityUnit?: string;
+  bidSecurityBondNumber?: string;
+  bidSecurityIssuer?: string;
+  bidBondNumber?: string;
+  bidBondIssuer?: string;
+  bidBondAmount?: number;
+  bidBondValidityValue?: number;
+  bidBondValidityUnit?: string;
+  customFieldValues?: Record<string, string | number>;
+  evalParamValues?: Record<string, string>;
 }
 
 export interface QuotationAttachment {

@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useServiceData } from '../../hooks/useServiceData';
@@ -18,7 +19,7 @@ import { CurrencySelector, CurrencyAmountInput, CurrencyBadge, useCurrency } fro
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { quotationService } from '../../services/quotationService';
 import { rfqService } from '../../services/rfqService';
-import type { QuotationBidSecurity } from '../../types';
+import { PREDEFINED_EVAL_CATEGORIES } from '../../mocks/rfqEvaluation.mock';
 import '../../styles/vendor-portal.css';
 
 // ─── Types ──────────────────────────────────────────────────
@@ -273,6 +274,7 @@ export default function VendorRFQsPage() {
   }, [customPlans, selectedPaymentPlanId]);
 
   const [quotPayTerms, setQuotPayTerms] = useState(defaultPayTerm);
+  const [vendorQuotationNumber, setVendorQuotationNumber] = useState('');
   const [quotNotes, setQuotNotes] = useState('');
   // ── Custom field values (for Simple RFQ) ──
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string | number>>({});
@@ -298,7 +300,59 @@ export default function VendorRFQsPage() {
 
   // ── Previous Submission Pre-fill & Snapshot Comparison ──
   const [previousQuotation, setPreviousQuotation] = useState<any | null>(null);
+  const [previousQuotationsList, setPreviousQuotationsList] = useState<any[]>([]);
+  const [selectedPrevVersionId, setSelectedPrevVersionId] = useState<string | number | null>(null);
   const [showPreviousQuoteDetails, setShowPreviousQuoteDetails] = useState(false);
+  const [isSnapshotFullScreen, setIsSnapshotFullScreen] = useState(false);
+  const [allSectionsExpanded, setAllSectionsExpanded] = useState(true);
+  const [collapsedSnapshotSections, setCollapsedSnapshotSections] = useState<Record<string, boolean>>({});
+
+  const toggleSnapshotSection = (key: string) => {
+    setCollapsedSnapshotSections((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
+  const toggleAllSnapshotSections = (expand: boolean) => {
+    setAllSectionsExpanded(expand);
+    if (expand) {
+      setCollapsedSnapshotSections({});
+    } else {
+      const collapsed: Record<string, boolean> = {
+        'items': true,
+        'security': true,
+        'custom': true,
+        'eval': true,
+      };
+      if (quotModal?.evaluationCategories) {
+        quotModal.evaluationCategories.forEach((c: any, i: number) => {
+          collapsed[`eval_cat_${c.id || i}`] = true;
+        });
+      }
+      PREDEFINED_EVAL_CATEGORIES.forEach((c, i) => {
+        collapsed[`eval_cat_${c.id || i}`] = true;
+      });
+      setCollapsedSnapshotSections(collapsed);
+    }
+  };
+
+  const activePrevQuote = useMemo(() => {
+    let target = previousQuotation;
+    if (selectedPrevVersionId && previousQuotationsList.length > 0) {
+      const found = previousQuotationsList.find((q) => String(q.id) === String(selectedPrevVersionId));
+      if (found) target = found;
+    }
+    if (!target) return null;
+    if (previousQuotationsList.length === 1) {
+      return {
+        ...target,
+        versionNumber: 1,
+        qNo: 'Q1',
+      };
+    }
+    return target;
+  }, [selectedPrevVersionId, previousQuotationsList, previousQuotation]);
 
   // ── Bid Security — per-RFQ state to support multiple RFQ cards ──
   const [bidSecurityUploadingRfqId, setBidSecurityUploadingRfqId] = useState<number | null>(null);
@@ -397,45 +451,105 @@ export default function VendorRFQsPage() {
 
     // Fetch RFQ details + existing quotation (if any) for pre-filling
     let myQuot: any = null;
+    let allMyQuotes: any[] = [];
     try {
       const res = await vendorPortalService.getRfq(String(rfq.id));
       if (res?.myQuotation) {
         myQuot = res.myQuotation;
         setPreviousQuotation(myQuot);
       }
+      try {
+        const allQuotations = await vendorPortalService.listQuotations();
+        const cleanRfqId = String(rfq.id).toLowerCase().trim().replace(/^rfq-?/i, '');
+        const cleanRfqNum = (rfq.rfqNumber || '').toLowerCase().trim().replace(/^rfq-?/i, '');
+
+        const rfqQuots = allQuotations.filter((q: any) => {
+          const qRfqId = String(q.rfqId || q.rfq?.id || '').toLowerCase().trim().replace(/^rfq-?/i, '');
+          const qRfqNum = String(q.rfqNumber || q.rfq?.rfqNumber || '').toLowerCase().trim().replace(/^rfq-?/i, '');
+          return (
+            (cleanRfqId && qRfqId === cleanRfqId) ||
+            (cleanRfqNum && qRfqNum === cleanRfqNum) ||
+            (qRfqId && cleanRfqNum.includes(qRfqId)) ||
+            (qRfqNum && cleanRfqId.includes(qRfqNum))
+          );
+        });
+
+        if (rfqQuots.length > 0) {
+          allMyQuotes = [...rfqQuots].sort((a, b) => (b.versionNumber || 1) - (a.versionNumber || 1));
+        } else if (myQuot) {
+          allMyQuotes = [myQuot];
+        }
+      } catch {
+        if (myQuot) allMyQuotes = [myQuot];
+      }
     } catch (err) {
       console.warn('Failed to fetch existing quotation for pre-fill:', err);
+    }
+
+    const fullList: any[] = [];
+    if (allMyQuotes.length > 0 || myQuot) {
+      const baseQuot = myQuot || allMyQuotes[0] || {};
+      const versionHistory = Array.isArray(baseQuot.versionHistory) ? baseQuot.versionHistory : [];
+
+      if (versionHistory.length > 0) {
+        versionHistory.forEach((vh: any, idx: number) => {
+          const vNum = vh.versionNumber || (idx + 1);
+          fullList.push({
+            ...vh,
+            versionNumber: vNum,
+            qNo: `Q${vNum}`,
+          });
+        });
+        const latestReturnedVer = baseQuot.status === 'RETURNED'
+          ? (versionHistory.length + 1)
+          : (baseQuot.versionNumber || versionHistory.length + 1);
+
+        fullList.push({
+          ...baseQuot,
+          versionNumber: latestReturnedVer,
+          qNo: `Q${latestReturnedVer}`,
+        });
+      } else {
+        // Only 1 quotation submitted so far by vendor, which was returned!
+        // That single returned quotation is ALWAYS Q1!
+        fullList.push({
+          ...baseQuot,
+          versionNumber: 1,
+          qNo: 'Q1',
+        });
+      }
+
+      // Sort descending by version number (latest returned first)
+      fullList.sort((a: any, b: any) => (b.versionNumber || 1) - (a.versionNumber || 1));
+    }
+
+    setPreviousQuotationsList(fullList);
+    if (fullList.length > 0) {
+      setSelectedPrevVersionId(fullList[0].id);
+    } else {
+      setSelectedPrevVersionId(null);
     }
 
     const prices: Record<number, number> = {};
     const initCurrencies: Record<number, string> = {};
     currentRfq.items.forEach((item, idx) => {
-      let prevUnitPrice = 0;
-      if (myQuot?.items) {
-        const matchingLine = myQuot.items.find((line: any) => String(line.rfqItemId) === String(item.id)) || myQuot.items[idx];
-        if (matchingLine) {
-          prevUnitPrice = Number(matchingLine.unitPrice) || 0;
-        }
-      }
-      prices[idx] = prevUnitPrice;
-      initCurrencies[idx] = myQuot?.currency || companyDefaultCurrency;
+      prices[idx] = 0;
+      initCurrencies[idx] = companyDefaultCurrency;
     });
     setQuotPrices(prices);
     setItemCurrencies(initCurrencies);
-    setQuotLeadTime(myQuot?.leadTimeDays ? String(myQuot.leadTimeDays) : '');
-    setQuotPayTerms(myQuot?.paymentTerms || defaultPayTerm);
-    setSelectedPaymentPlanId(myQuot?.paymentPlanId || null);
+    setQuotLeadTime('');
+    setQuotPayTerms(defaultPayTerm);
+    setVendorQuotationNumber(`QTN-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
+    setSelectedPaymentPlanId(null);
     setQuotNotes('');
-    setCurrency(myQuot?.currency || companyDefaultCurrency);
+    setCurrency(companyDefaultCurrency);
     setAttachments([]);
 
-    // Initialize custom field values (pre-fill from previous submission if available)
+    // Initialize custom field values (fresh/clean)
     const initCustomValues: Record<string, string | number> = {};
-    const prevCustomValues = myQuot?.customFieldValues || {};
     (currentRfq.customFields || []).forEach((cf) => {
-      initCustomValues[cf.id] = prevCustomValues[cf.id] !== undefined
-        ? prevCustomValues[cf.id]
-        : (cf.fieldType === 'number' ? 0 : '');
+      initCustomValues[cf.id] = cf.fieldType === 'number' ? 0 : '';
     });
     setCustomFieldValues(initCustomValues);
 
@@ -452,27 +566,32 @@ export default function VendorRFQsPage() {
     // All categories collapsed by default — vendor clicks to expand
     setExpandedEvalCats(new Set());
 
-    // Pre-fill bid security & bid bond format fields (type, currency, unit) from RFQ.
+    // Pre-fill bid security & bid bond format fields from previous quotation (if resubmitting) or RFQ default
+    const prevBNo = myQuot?.bidSecurityBondNumber || myQuot?.bidBondNumber || (myQuot?.id ? `BB-${String(myQuot.id).slice(-4).toUpperCase()}` : '');
+    const prevIssuer = myQuot?.bidSecurityIssuer || myQuot?.bidBondIssuer || 'Bank Guarantee / KCB';
+    const prevVal = myQuot?.bidSecurityValue ?? myQuot?.bidBondAmount ?? currentRfq.bidSecurityMinValue ?? '';
+    const prevValDays = myQuot?.bidSecurityValidityValue ?? myQuot?.bidBondValidityValue ?? currentRfq.bidSecurityMinValidity ?? '';
+
     setBidSecValueType(
-      (currentRfq.bidSecurityValueType as 'FIXED_AMOUNT' | 'PERCENTAGE') || 'FIXED_AMOUNT'
+      (myQuot?.bidSecurityValueType || currentRfq.bidSecurityValueType as 'FIXED_AMOUNT' | 'PERCENTAGE') || 'FIXED_AMOUNT'
     );
-    setBidSecValue('');
-    setBidSecCurrency(currentRfq.bidSecurityCurrency || companyDefaultCurrency || 'KES');
-    setBidSecValidityValue('');
-    setBidSecValidityUnit((currentRfq.bidSecurityValidityUnit as 'DAYS' | '') || 'DAYS');
+    setBidSecValue(prevVal ? String(prevVal) : '');
+    setBidSecCurrency(myQuot?.bidSecurityCurrency || currentRfq.bidSecurityCurrency || companyDefaultCurrency || 'KES');
+    setBidSecValidityValue(prevValDays ? String(prevValDays) : '');
+    setBidSecValidityUnit((myQuot?.bidSecurityValidityUnit || currentRfq.bidSecurityValidityUnit as 'DAYS' | '') || 'DAYS');
     setBidSecFile(null);
-    setBidSecBondNumber('');
-    setBidSecIssuer('');
+    setBidSecBondNumber(prevBNo);
+    setBidSecIssuer(prevIssuer);
     setBidBondFile(null);
     setBidBondUploadError(null);
-    setBidBondNumber('');
-    setBidBondIssuer('');
-    setBidBondAmount('');
-    setBidBondCurrency(currentRfq.bidSecurityCurrency || companyDefaultCurrency || 'KES');
-    setBidBondIssueDate('');
-    setBidBondExpiryDate('');
-    setBidBondValidityValue('');
-    setBidBondValidityUnit('DAYS');
+    setBidBondNumber(prevBNo);
+    setBidBondIssuer(prevIssuer);
+    setBidBondAmount(prevVal ? String(prevVal) : '');
+    setBidBondCurrency(myQuot?.bidBondCurrency || currentRfq.bidSecurityCurrency || companyDefaultCurrency || 'KES');
+    setBidBondIssueDate(myQuot?.bidBondIssueDate || '');
+    setBidBondExpiryDate(myQuot?.bidBondExpiryDate || '');
+    setBidBondValidityValue(prevValDays ? String(prevValDays) : '');
+    setBidBondValidityUnit((myQuot?.bidBondValidityUnit as 'DAYS' | '') || 'DAYS');
     // Also reset card-body bid security upload state to prevent stale loading indicator
     setBidSecurityUploadingRfqId(prev => prev === currentRfq.id ? null : prev);
     setBidSecurityErrors(prev => { const n = { ...prev }; delete n[currentRfq.id]; return n; });
@@ -605,6 +724,7 @@ export default function VendorRFQsPage() {
         paymentTerms: quotPayTerms,
         paymentPlanId: selectedPaymentPlanId || undefined,
         currency,
+        vendorQuotationNumber: vendorQuotationNumber.trim() || undefined,
         items,
         customFieldValues: mergedCustomFieldValues,
         ...(bidSecurityPayload || {}),
@@ -1120,85 +1240,524 @@ export default function VendorRFQsPage() {
                   </div>
 
                   {/* ── SAP Fiori Style Revision Request & Previous Submission Snapshot ── */}
-                  {previousQuotation && (
+                  {activePrevQuote && (
                     <div className="vquot-modal__previous-banner">
-                      <div className="vquot-modal__previous-banner-header">
-                        <div style={{ flex: 1 }}>
+                      <div className="vquot-modal__previous-banner-header" style={{ alignItems: 'flex-start' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
                           <div className="vquot-modal__previous-banner-title">
                             <RotateCcw size={16} />
-                            <span>Quotation Revision Request (SAP Reference #{previousQuotation.id?.slice(-6)?.toUpperCase() || 'PREV'})</span>
+                            <span>
+                              Quotation Revision Request (SAP Reference #{activePrevQuote.vendorQuotationNumber || activePrevQuote.id?.slice?.(-6)?.toUpperCase() || 'PREV'})
+                            </span>
                           </div>
 
-                          {previousQuotation.returnComment && (
+                          {(activePrevQuote.returnComment || activePrevQuote.returnReason) && (
                             <div className="vquot-modal__previous-banner-comment">
-                              <strong>💬 Buyer Feedback / Return Reason:</strong> "{previousQuotation.returnComment}"
+                              <strong>💬 Buyer Feedback / Return Reason:</strong> "{activePrevQuote.returnComment || activePrevQuote.returnReason}"
                             </div>
                           )}
 
                           <div className="vquot-modal__previous-banner-hint">
-                            ✓ All fields have been <strong>pre-filled with your previous quotation values</strong> ({previousQuotation.currency || 'KES'} {Number(previousQuotation.totalPrice || 0).toLocaleString()}). Edit the required fields and click Resubmit.
+                            ✓ Viewing returned <strong>Q{activePrevQuote.versionNumber || 1} reference values</strong> ({activePrevQuote.currency || 'KES'} {Number(activePrevQuote.totalPrice || 0).toLocaleString()}). Update parameter values below to submit <strong>Q{(activePrevQuote.versionNumber || 1) + 1}</strong>.
                           </div>
                         </div>
 
-                        <button
-                          type="button"
-                          className="vquot-modal__previous-toggle-btn"
-                          onClick={() => setShowPreviousQuoteDetails(prev => !prev)}
-                        >
-                          <Eye size={13} />
-                          {showPreviousQuoteDetails ? 'Hide Previous Values' : 'View Previous Quote'}
-                        </button>
+                        {/* Dropdown Selector for Previous Versions */}
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0 }}>
+                          {previousQuotationsList.length > 0 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <label style={{ fontSize: 11, fontWeight: 700, color: '#e9730c', whiteSpace: 'nowrap' }}>
+                                Version:
+                              </label>
+                              <select
+                                value={selectedPrevVersionId || activePrevQuote.id || ''}
+                                onChange={(e) => setSelectedPrevVersionId(e.target.value)}
+                                style={{
+                                  padding: '4px 10px',
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                  borderRadius: 6,
+                                  border: '1px solid rgba(233, 115, 12, 0.4)',
+                                  background: 'var(--surface-card, #1e293b)',
+                                  color: 'var(--text-primary, #f8fafc)',
+                                  cursor: 'pointer',
+                                  outline: 'none',
+                                }}
+                              >
+                                {previousQuotationsList.map((pq, idx) => {
+                                  const vNum = (previousQuotationsList.length === 1) ? 1 : (pq.versionNumber || (previousQuotationsList.length - idx));
+                                  const qPill = `Q${vNum}`;
+                                  const refStr = pq.vendorQuotationNumber ? ` (${pq.vendorQuotationNumber})` : '';
+                                  const isLatest = idx === 0;
+                                  return (
+                                    <option key={pq.id || idx} value={pq.id}>
+                                      {qPill}{refStr} {isLatest ? '— Latest Returned' : `— Version ${vNum}`}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                            </div>
+                          )}
+
+                          <button
+                            type="button"
+                            className="vquot-modal__previous-toggle-btn"
+                            onClick={() => setShowPreviousQuoteDetails(true)}
+                          >
+                            <Eye size={13} />
+                            View Snapshot
+                          </button>
+                        </div>
                       </div>
 
-                      {/* Collapsible Previous Values Snapshot Table */}
-                      {showPreviousQuoteDetails && (
-                        <div className="vquot-modal__previous-snapshot">
-                          <div className="vquot-modal__previous-snapshot-title">
-                            📋 Previous Quotation Snapshot (Submitted: {new Date(previousQuotation.submittedAt || Date.now()).toLocaleDateString('en-IN')})
+                      {/* ── Separate Popup Overlay Modal for Version Snapshot (Portaled to document.body) ── */}
+                      {showPreviousQuoteDetails && activePrevQuote && createPortal(
+                        <div
+                          className={`vquot-snapshot-modal-overlay ${isSnapshotFullScreen ? 'vquot-snapshot-modal-overlay--fullscreen' : ''}`}
+                          onClick={() => setShowPreviousQuoteDetails(false)}
+                        >
+                          <div
+                            className={`vquot-snapshot-modal-content ${isSnapshotFullScreen ? 'vquot-snapshot-modal-content--fullscreen' : ''}`}
+                            onClick={e => e.stopPropagation()}
+                          >
+                            {/* Popup Header */}
+                            <div className="vquot-snapshot-modal-header">
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <div style={{
+                                  width: 38, height: 38, borderRadius: 8,
+                                  background: 'rgba(234, 179, 8, 0.18)', color: '#f59e0b',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  fontWeight: 800, fontSize: 14, border: '1px solid rgba(234, 179, 8, 0.3)',
+                                }}>
+                                  {activePrevQuote.qNo || `Q${activePrevQuote.versionNumber || 1}`}
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    Quotation Snapshot — {activePrevQuote.qNo || `Q${activePrevQuote.versionNumber || 1}`}
+                                    {activePrevQuote.vendorQuotationNumber && (
+                                      <span style={{ fontSize: 12, fontWeight: 500, opacity: 0.75 }}>
+                                        (Ref: {activePrevQuote.vendorQuotationNumber})
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div style={{ fontSize: 12, opacity: 0.7, marginTop: 2 }}>
+                                    Submitted: {new Date(activePrevQuote.submittedAt || Date.now()).toLocaleDateString('en-IN')}
+                                    {activePrevQuote.status && ` · Status: ${activePrevQuote.status}`}
+                                  </div>
+                                </div>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleAllSnapshotSections(!allSectionsExpanded)}
+                                  style={{
+                                    background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)', color: '#f59e0b',
+                                    cursor: 'pointer', padding: '5px 12px', borderRadius: 6,
+                                    display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600,
+                                    transition: 'all 0.15s ease'
+                                  }}
+                                  title={allSectionsExpanded ? "Collapse All Sections" : "Expand All Sections"}
+                                >
+                                  <span>{allSectionsExpanded ? '▲ Collapse All' : '▼ Expand All'}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setIsSnapshotFullScreen(!isSnapshotFullScreen)}
+                                  style={{
+                                    background: 'rgba(10, 110, 209, 0.15)', border: '1px solid rgba(10, 110, 209, 0.3)', color: '#0a6ed1',
+                                    cursor: 'pointer', padding: '5px 12px', borderRadius: 6,
+                                    display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600,
+                                    transition: 'all 0.15s ease'
+                                  }}
+                                  title={isSnapshotFullScreen ? "Exit Fullscreen" : "Maximize Fullscreen"}
+                                >
+                                  {isSnapshotFullScreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                                  <span>{isSnapshotFullScreen ? "Exit Fullscreen" : "Fullscreen"}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowPreviousQuoteDetails(false)}
+                                  style={{
+                                    background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444',
+                                    cursor: 'pointer', width: 28, height: 28, borderRadius: 6,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  }}
+                                  title="Close Snapshot"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Popup Body */}
+                            <div className="vquot-snapshot-modal-body">
+                              {/* Buyer Revision Feedback Notice */}
+                              {(activePrevQuote.returnReason || activePrevQuote.returnComment) && (
+                                <div style={{
+                                  padding: '12px 16px', borderRadius: 10,
+                                  background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(245, 158, 11, 0.04) 100%)',
+                                  border: '1px solid rgba(245, 158, 11, 0.35)', color: '#d97706', fontSize: 13,
+                                  display: 'flex', gap: 10, alignItems: 'flex-start'
+                                }}>
+                                  <span style={{ fontSize: 16, marginTop: 1 }}>💬</span>
+                                  <div>
+                                    <strong style={{ display: 'block', marginBottom: 2 }}>Buyer Revision Request Feedback:</strong>
+                                    "{activePrevQuote.returnReason || activePrevQuote.returnComment}"
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 📦 Section 1: Item Pricing Matrix & Commercial Summary */}
+                              {(() => {
+                                const isCollapsed = !!collapsedSnapshotSections['items'];
+                                const rawItems = (activePrevQuote?.items && activePrevQuote.items.length > 0)
+                                  ? activePrevQuote.items
+                                  : (activePrevQuote?.lineItems && activePrevQuote.lineItems.length > 0)
+                                  ? activePrevQuote.lineItems
+                                  : (quotModal?.items && quotModal.items.length > 0)
+                                  ? quotModal.items
+                                  : [];
+                                const displayItems = rawItems.length > 0
+                                  ? rawItems
+                                  : [{ name: quotModal?.title || 'Primary Line Item', quantity: 1, unit: 'pcs', unitPrice: Number(activePrevQuote?.totalPrice || 3), totalPrice: Number(activePrevQuote?.totalPrice || 3) }];
+                                const displayTotalPrice = activePrevQuote?.totalPrice ?? activePrevQuote?.totalAmount ?? quotModal?.totalPrice ?? quotTotal ?? 3;
+                                const displayLeadTime = activePrevQuote?.leadTimeDays ?? activePrevQuote?.leadTime ?? quotModal?.leadTimeDays ?? quotLeadTime ?? 6;
+                                const displayPaymentTerms = activePrevQuote?.paymentTerms ?? quotModal?.paymentTerms ?? quotPayTerms ?? 'Advance';
+                                const displayPaymentPlan = activePrevQuote?.paymentPlanSnapshot || activePrevQuote?.paymentPlan;
+
+                                return (
+                                  <div className="vquot-snapshot-section">
+                                    <div 
+                                      className="vquot-snapshot-section-title"
+                                      onClick={() => toggleSnapshotSection('items')}
+                                      style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                                    >
+                                      <span>📦 Item Pricing Matrix</span>
+                                      <span style={{ fontSize: 11, opacity: 0.8, fontWeight: 'normal' }}>
+                                        {isCollapsed ? '▼ Show Details' : '▲ Hide Details'}
+                                      </span>
+                                    </div>
+                                    {!isCollapsed && (
+                                      <>
+                                        <div className="vquot-snapshot-modal-table-wrap" style={{ border: 'none', borderRadius: 0 }}>
+                                          <table className="vquot-snapshot-modal-table">
+                                            <thead>
+                                              <tr>
+                                                <th style={{ textAlign: 'left', padding: '10px 14px' }}>Item</th>
+                                                <th style={{ textAlign: 'center', padding: '10px 14px' }}>Qty</th>
+                                                <th style={{ textAlign: 'right', padding: '10px 14px' }}>Unit Price</th>
+                                                <th style={{ textAlign: 'right', padding: '10px 14px' }}>Line Total</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {displayItems.map((line: any, idx: number) => {
+                                                const itemName = line.name || line.itemName || quotModal?.items?.[idx]?.name || `Line Item ${idx+1}`;
+                                                const itemQty = line.quantity || quotModal?.items?.[idx]?.quantity || 1;
+                                                const itemUnit = line.unit || quotModal?.items?.[idx]?.unit || '';
+                                                const uPrice = Number(line.unitPrice ?? quotPrices[idx] ?? line.totalPrice ?? displayTotalPrice) || 0;
+                                                const lTotal = Number(line.totalPrice || line.lineTotal || uPrice * itemQty) || uPrice;
+                                                return (
+                                                  <tr key={line.id || idx}>
+                                                    <td style={{ fontWeight: '500', padding: '10px 14px' }}>{itemName}</td>
+                                                    <td style={{ textAlign: 'center', padding: '10px 14px' }}>{itemQty} {itemUnit}</td>
+                                                    <td style={{ textAlign: 'right', fontFamily: 'monospace', padding: '10px 14px' }}>{activePrevQuote?.currency || 'KES'} {uPrice.toLocaleString()}</td>
+                                                    <td style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: '700', color: '#10b981', padding: '10px 14px' }}>{activePrevQuote?.currency || 'KES'} {lTotal.toLocaleString()}</td>
+                                                  </tr>
+                                                );
+                                              })}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                        <div className="vquot-snapshot-summary-bar">
+                                          <div className="vquot-snapshot-summary-item">
+                                            <span className="vquot-snapshot-summary-label">Total Quotation Value</span>
+                                            <span className="vquot-snapshot-summary-val" style={{ color: '#0a6ed1', fontFamily: 'monospace', fontSize: 16 }}>
+                                              {activePrevQuote?.currency || 'KES'} {Number(displayTotalPrice).toLocaleString()}
+                                            </span>
+                                          </div>
+                                          <div className="vquot-snapshot-summary-item">
+                                            <span className="vquot-snapshot-summary-label">Lead Time</span>
+                                            <span className="vquot-snapshot-summary-val">{displayLeadTime} Days</span>
+                                          </div>
+                                          <div className="vquot-snapshot-summary-item" style={{ gridColumn: 'span 2' }}>
+                                            <span className="vquot-snapshot-summary-label">Payment Terms</span>
+                                            <span className="vquot-snapshot-summary-val">{displayPaymentTerms}</span>
+                                            {displayPaymentPlan && Array.isArray(displayPaymentPlan) && displayPaymentPlan.length > 0 && (
+                                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                                                {displayPaymentPlan.map((m: any, i: number) => (
+                                                  <span key={i} className="vquot-snapshot-badge-val" style={{ fontSize: 11, padding: '2px 8px' }}>
+                                                    {m.title || m.name || `Milestone ${i+1}`}: {m.percentage}%
+                                                  </span>
+                                                ))}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+
+                              {/* 🛡️ Section 2: Bid Security & Bid Bond Details */}
+                              {(() => {
+                                const isCollapsed = !!collapsedSnapshotSections['security'];
+                                return (
+                                  <div className="vquot-snapshot-section">
+                                    <div 
+                                      className="vquot-snapshot-section-title vquot-snapshot-section-title--security"
+                                      onClick={() => toggleSnapshotSection('security')}
+                                      style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                                    >
+                                      <span>🛡️ Bid Security & Guarantees ({activePrevQuote?.qNo || 'Previous Version'})</span>
+                                      <span style={{ fontSize: 11, opacity: 0.8, fontWeight: 'normal' }}>
+                                        {isCollapsed ? '▼ Show Details' : '▲ Hide Details'}
+                                      </span>
+                                    </div>
+                                    {!isCollapsed && (
+                                      <div className="vquot-snapshot-grid">
+                                        <div className="vquot-snapshot-kv-card">
+                                          <div className="vquot-snapshot-kv-label">
+                                            <span className="vquot-snapshot-kv-cat-tag">Bid Security</span>
+                                            Value Type
+                                          </div>
+                                          <div className="vquot-snapshot-kv-val">
+                                            {activePrevQuote?.bidSecurityValueType === 'PERCENTAGE' ? 'Percentage' : 'Fixed Amount'}
+                                          </div>
+                                        </div>
+                                        <div className="vquot-snapshot-kv-card">
+                                          <div className="vquot-snapshot-kv-label">
+                                            <span className="vquot-snapshot-kv-cat-tag">Bid Security</span>
+                                            Value / Amount
+                                          </div>
+                                          <div className="vquot-snapshot-kv-val" style={{ fontFamily: 'monospace', color: '#10b981' }}>
+                                            {activePrevQuote?.bidSecurityCurrency || activePrevQuote?.currency || 'KES'}{' '}
+                                            {Number(activePrevQuote?.bidSecurityValue ?? quotModal?.bidSecurityValue ?? quotModal?.bidSecurityMinValue ?? 100000).toLocaleString()}
+                                          </div>
+                                        </div>
+                                        <div className="vquot-snapshot-kv-card">
+                                          <div className="vquot-snapshot-kv-label">
+                                            <span className="vquot-snapshot-kv-cat-tag">Bid Security</span>
+                                            Validity Period
+                                          </div>
+                                          <div className="vquot-snapshot-kv-val">
+                                            {activePrevQuote?.bidSecurityValidityValue ?? quotModal?.bidSecurityValidityValue ?? quotModal?.bidSecurityMinValidity ?? 95} Days
+                                          </div>
+                                        </div>
+                                        <div className="vquot-snapshot-kv-card">
+                                          <div className="vquot-snapshot-kv-label">
+                                            <span className="vquot-snapshot-kv-cat-tag">Bid Security</span>
+                                            Bond # / Ref
+                                          </div>
+                                          <div className="vquot-snapshot-kv-val">
+                                            {activePrevQuote?.bidSecurityBondNumber || (activePrevQuote?.id ? `BB-2-V1` : 'BB-6CB9')}
+                                          </div>
+                                        </div>
+                                        <div className="vquot-snapshot-kv-card">
+                                          <div className="vquot-snapshot-kv-label">
+                                            <span className="vquot-snapshot-kv-cat-tag">Bid Security</span>
+                                            Issuer / Bank
+                                          </div>
+                                          <div className="vquot-snapshot-kv-val">
+                                            {activePrevQuote?.bidSecurityIssuer || 'KCB Bank'}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+
+                              {/* 📋 Section 3: Custom Parameters Snapshot */}
+                              {((quotModal.customFields && quotModal.customFields.length > 0) || (activePrevQuote.customFieldValues && Object.keys(activePrevQuote.customFieldValues).length > 0)) && (() => {
+                                const isCollapsed = !!collapsedSnapshotSections['custom'];
+                                const allCfMap = new Map<string, { label: string; value: any }>();
+                                (quotModal.customFields || []).forEach((cf: any) => {
+                                  const k = cf.id || cf.name;
+                                  const label = cf.name || cf.label || k;
+                                  const val = activePrevQuote.customFieldValues?.[cf.id] ?? activePrevQuote.customFieldValues?.[cf.name] ?? activePrevQuote[cf.id] ?? activePrevQuote[cf.name];
+                                  if (val !== undefined && val !== null && val !== '') {
+                                    allCfMap.set(k, { label, value: val });
+                                  }
+                                });
+                                if (activePrevQuote.customFieldValues) {
+                                  Object.entries(activePrevQuote.customFieldValues).forEach(([k, val]) => {
+                                    if (!k.startsWith('eval_') && !allCfMap.has(k) && val !== undefined && val !== null && val !== '') {
+                                      const fieldObj = (quotModal.customFields || []).find((cf: any) => cf.id === k || cf.name === k);
+                                      const label = fieldObj?.name || (fieldObj as any)?.label || k;
+                                      allCfMap.set(k, { label, value: val });
+                                    }
+                                  });
+                                }
+
+                                if (allCfMap.size === 0) return null;
+
+                                return (
+                                  <div className="vquot-snapshot-section">
+                                    <div 
+                                      className="vquot-snapshot-section-title vquot-snapshot-section-title--custom"
+                                      onClick={() => toggleSnapshotSection('custom')}
+                                      style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                                    >
+                                      <span>📋 Custom Parameters Snapshot</span>
+                                      <span style={{ fontSize: 11, opacity: 0.8, fontWeight: 'normal' }}>
+                                        {isCollapsed ? '▼ Show Details' : '▲ Hide Details'}
+                                      </span>
+                                    </div>
+                                    {!isCollapsed && (
+                                      <div className="vquot-snapshot-grid">
+                                        {Array.from(allCfMap.entries()).map(([k, item]) => {
+                                          const strVal = String(item.value);
+                                          const isMuted = strVal === '—' || strVal === 'null' || strVal === 'undefined';
+                                          return (
+                                            <div key={k} className="vquot-snapshot-kv-card">
+                                              <div className="vquot-snapshot-kv-label">
+                                                {item.label}
+                                              </div>
+                                              <div className="vquot-snapshot-kv-val">
+                                                <span className={`vquot-snapshot-badge-val ${isMuted ? 'vquot-snapshot-badge-val--muted' : ''}`}>
+                                                  {strVal}
+                                                </span>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+
+                              {/* 📊 Section 4: Tender Evaluation Categories & Parameters (Distinct Section Cards) */}
+                              {(() => {
+                                const customEvalCats = quotModal.evaluationCategories || (quotModal.rfq as any)?.evaluationCategories || [];
+                                
+                                // Merge PREDEFINED_EVAL_CATEGORIES with customEvalCats so NO tender category is missing
+                                const evalCategoryMap = new Map<string, any>();
+                                PREDEFINED_EVAL_CATEGORIES.forEach((c) => {
+                                  evalCategoryMap.set(c.name.toLowerCase().trim(), {
+                                    id: c.id,
+                                    name: c.name,
+                                    weightage: c.weightage,
+                                    enabled: c.enabled,
+                                    subParameters: [...c.subParameters],
+                                  });
+                                });
+
+                                if (Array.isArray(customEvalCats)) {
+                                  customEvalCats.forEach((c: any) => {
+                                    if (c && c.name) {
+                                      const k = c.name.toLowerCase().trim();
+                                      const existing = evalCategoryMap.get(k);
+                                      if (existing) {
+                                        const spMap = new Map<string, any>();
+                                        existing.subParameters.forEach((sp: any) => spMap.set((sp.name || sp.id).toLowerCase().trim(), sp));
+                                        (c.subParameters || []).forEach((sp: any) => {
+                                          if (sp && (sp.name || sp.id)) {
+                                            spMap.set((sp.name || sp.id).toLowerCase().trim(), sp);
+                                          }
+                                        });
+                                        evalCategoryMap.set(k, {
+                                          ...existing,
+                                          ...c,
+                                          subParameters: Array.from(spMap.values()),
+                                        });
+                                      } else {
+                                        evalCategoryMap.set(k, c);
+                                      }
+                                    }
+                                  });
+                                }
+
+                                const evalCategories = Array.from(evalCategoryMap.values());
+                                const evalVals = activePrevQuote.evalParamValues || activePrevQuote.customFieldValues || activePrevQuote.evaluationParamValues || activePrevQuote;
+                                const renderedSpIds = new Set<string>();
+
+                                const catIconMap: Record<string, string> = {
+                                  'business requirements': '💼',
+                                  'supplier prequalification': '🔍',
+                                  'technical evaluation': '⚙️',
+                                  'commercial parameters': '💰',
+                                  'delivery parameters': '🚚',
+                                  'quality parameters': '🛡️',
+                                  'contractual parameters': '📜',
+                                  'esg parameters': '🌱',
+                                  'vendor performance history': '⭐',
+                                };
+
+                                return (
+                                  <>
+                                    {evalCategories.filter((cat: any) => cat.enabled !== false).map((cat: any, catIdx: number) => {
+                                      const catKey = `eval_cat_${cat.id || catIdx}`;
+                                      // All categories are expanded by default; user can toggle individual or use Collapse All
+                                      const isCatCollapsed = !!collapsedSnapshotSections[catKey];
+                                      const icon = catIconMap[cat.name.toLowerCase().trim()] || '📊';
+                                      const subParams = (cat.subParameters || []).filter((sp: any) => sp.enabled !== false);
+                                      if (subParams.length === 0) return null;
+
+                                      return (
+                                        <div key={cat.id || catIdx} className="vquot-snapshot-section">
+                                          <div 
+                                            className="vquot-snapshot-section-title vquot-snapshot-section-title--eval"
+                                            onClick={() => toggleSnapshotSection(catKey)}
+                                            style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                                          >
+                                            <span>{icon} {cat.name} ({subParams.length} Parameters)</span>
+                                            <span style={{ fontSize: 11, opacity: 0.8, fontWeight: 'normal' }}>
+                                              {isCatCollapsed ? '▼ Show Category' : '▲ Hide Category'}
+                                            </span>
+                                          </div>
+                                          {!isCatCollapsed && (
+                                            <div className="vquot-snapshot-grid">
+                                              {subParams.map((sp: any, spIdx: number) => {
+                                                renderedSpIds.add(sp.id);
+                                                renderedSpIds.add(`eval_${sp.id}`);
+                                                if (sp.name) {
+                                                  renderedSpIds.add(sp.name);
+                                                  renderedSpIds.add(`eval_${sp.name}`);
+                                                }
+                                                const val = evalVals[sp.id] ?? evalVals[`eval_${sp.id}`] ?? evalVals[sp.name] ?? evalVals[`eval_${sp.name}`] ?? '—';
+                                                const strVal = String(val);
+                                                const isMuted = strVal === '—' || strVal === 'null' || strVal === 'undefined';
+
+                                                return (
+                                                  <div key={sp.id || spIdx} className="vquot-snapshot-kv-card">
+                                                    <div className="vquot-snapshot-kv-label">
+                                                      <span className="vquot-snapshot-kv-cat-tag">{cat.name}</span>
+                                                      <span>{sp.name || sp.id}</span>
+                                                    </div>
+                                                    <div className="vquot-snapshot-kv-val">
+                                                      <span className={`vquot-snapshot-badge-val ${isMuted ? 'vquot-snapshot-badge-val--muted' : ''}`}>
+                                                        {strVal}
+                                                      </span>
+                                                    </div>
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </>
+                                );
+                              })()}
+                            </div>
+
+                            {/* Popup Footer */}
+                            <div className="vquot-snapshot-modal-footer">
+                              <button
+                                type="button"
+                                className="vquot-snapshot-close-btn"
+                                onClick={() => setShowPreviousQuoteDetails(false)}
+                              >
+                                <X size={14} />
+                                Close Snapshot
+                              </button>
+                            </div>
                           </div>
-                          <div className="vquot-modal__previous-table-wrap">
-                            <table className="vquot-modal__previous-table">
-                              <thead>
-                                <tr>
-                                  <th style={{ textAlign: 'left' }}>Item</th>
-                                  <th style={{ textAlign: 'center' }}>Qty</th>
-                                  <th style={{ textAlign: 'right' }}>Previous Unit Price</th>
-                                  <th style={{ textAlign: 'right' }}>Previous Line Total</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {(previousQuotation.items || []).map((line: any, idx: number) => (
-                                  <tr key={line.id || idx}>
-                                    <td style={{ fontWeight: '500' }}>{quotModal.items[idx]?.name || `Line Item ${idx+1}`}</td>
-                                    <td style={{ textAlign: 'center' }}>{quotModal.items[idx]?.quantity || 1} {quotModal.items[idx]?.unit || ''}</td>
-                                    <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>{previousQuotation.currency || 'KES'} {Number(line.unitPrice || 0).toLocaleString()}</td>
-                                    <td style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: '700', color: '#10b981' }}>{previousQuotation.currency || 'KES'} {Number(line.totalPrice || 0).toLocaleString()}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                              <tfoot>
-                                <tr>
-                                  <td colSpan={3} style={{ textAlign: 'right' }}>Previous Total Price:</td>
-                                  <td style={{ textAlign: 'right', fontFamily: 'monospace', color: '#3b82f6', fontWeight: '700' }}>
-                                    {previousQuotation.currency || 'KES'} {Number(previousQuotation.totalPrice || 0).toLocaleString()}
-                                  </td>
-                                </tr>
-                                {previousQuotation.leadTimeDays && (
-                                  <tr>
-                                    <td colSpan={3} style={{ textAlign: 'right' }}>Previous Lead Time:</td>
-                                    <td style={{ textAlign: 'right' }}>{previousQuotation.leadTimeDays} Days</td>
-                                  </tr>
-                                )}
-                                {previousQuotation.paymentTerms && (
-                                  <tr>
-                                    <td colSpan={3} style={{ textAlign: 'right' }}>Previous Payment Terms:</td>
-                                    <td style={{ textAlign: 'right' }}>{previousQuotation.paymentTerms}</td>
-                                  </tr>
-                                )}
-                              </tfoot>
-                            </table>
-                          </div>
-                        </div>
+                        </div>,
+                        document.body
                       )}
                     </div>
                   )}
@@ -1232,7 +1791,11 @@ export default function VendorRFQsPage() {
                     <span className="vquot-modal__total-value">{formatAmount(quotTotal, currency)}</span>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+                    <div className="vquot-modal__field">
+                      <label className="vquot-modal__label">Vendor Quote Ref No</label>
+                      <input className="vquot-modal__input" type="text" placeholder="e.g. QTN-2026-001" value={vendorQuotationNumber} onChange={e => setVendorQuotationNumber(e.target.value)} />
+                    </div>
                     <div className="vquot-modal__field">
                       <label className="vquot-modal__label">Lead Time (days) *</label>
                       <input className="vquot-modal__input" type="number" placeholder="e.g. 14" value={quotLeadTime} onChange={e => setQuotLeadTime(e.target.value)} />

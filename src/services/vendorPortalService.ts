@@ -21,6 +21,7 @@ export interface SubmitQuotationPayload {
   paymentTerms?: string;
   paymentPlanId?: string;
   currency?: string;
+  vendorQuotationNumber?: string;
   items: Array<{
     rfqItemId: string;
     unitPrice: number;
@@ -90,11 +91,31 @@ async function mockVendorQuotations(): Promise<VendorQuotationRow[]> {
     id: q.id,
     rfqId: q.rfqId,
     totalPrice: q.totalPrice,
+    currency: q.currency,
     leadTimeDays: q.leadTimeDays ?? null,
     paymentTerms: q.paymentTerms ?? null,
     score: q.score ?? null,
     status: q.status,
     submittedAt: q.submittedAt,
+    versionNumber: q.versionNumber,
+    qNo: q.qNo,
+    vendorQuotationNumber: q.vendorQuotationNumber,
+    returnReason: q.returnReason,
+    returnComment: q.returnComment || q.returnReason,
+    bidSecurityValueType: q.bidSecurityValueType,
+    bidSecurityValue: q.bidSecurityValue,
+    bidSecurityCurrency: q.bidSecurityCurrency,
+    bidSecurityValidityValue: q.bidSecurityValidityValue,
+    bidSecurityValidityUnit: q.bidSecurityValidityUnit,
+    bidSecurityBondNumber: q.bidSecurityBondNumber || q.bidBondNumber,
+    bidSecurityIssuer: q.bidSecurityIssuer || q.bidBondIssuer,
+    bidBondNumber: q.bidBondNumber || q.bidSecurityBondNumber,
+    bidBondIssuer: q.bidBondIssuer || q.bidSecurityIssuer,
+    bidBondAmount: q.bidBondAmount || q.bidSecurityValue,
+    bidBondValidityValue: q.bidBondValidityValue || q.bidSecurityValidityValue,
+    bidBondValidityUnit: q.bidBondValidityUnit || q.bidSecurityValidityUnit,
+    customFieldValues: q.customFieldValues ?? null,
+    evalParamValues: q.evalParamValues ?? null,
     rfq: {
       id: q.rfqId,
       rfqNumber: `RFQ-${q.rfqId}`,
@@ -122,9 +143,27 @@ export interface VendorQuotationRow {
   paymentTerms: string | null;
   paymentPlanSnapshot?: Array<{ title: string; percentage: number }> | null;
   customFieldValues?: Record<string, string | number> | null;
+  evalParamValues?: Record<string, string> | null;
   score: number | null;
   status: string;
   submittedAt: string;
+  versionNumber?: number;
+  qNo?: string;
+  vendorQuotationNumber?: string;
+  returnReason?: string | null;
+  returnComment?: string | null;
+  bidSecurityValueType?: string;
+  bidSecurityValue?: number;
+  bidSecurityCurrency?: string;
+  bidSecurityValidityValue?: number;
+  bidSecurityValidityUnit?: string;
+  bidSecurityBondNumber?: string;
+  bidSecurityIssuer?: string;
+  bidBondNumber?: string;
+  bidBondIssuer?: string;
+  bidBondAmount?: number;
+  bidBondValidityValue?: number;
+  bidBondValidityUnit?: string;
   selectedItemIds?: string[] | null;
   rfq: { id: string; rfqNumber: string; title: string; status: string; closingDate?: string | null };
   items: Array<{
@@ -240,12 +279,113 @@ async function apiDeleteAllNotifications(): Promise<void> {
   }
 }
 
-async function mockSubmitQuotation(): Promise<{ id: string } | void> {
+async function mockSubmitQuotation(rfqId: string, payload: SubmitQuotationPayload): Promise<{ id: string } | void> {
   await new Promise((r) => setTimeout(r, 300));
+  const newId = `q-${Date.now()}`;
+  const matchedRfq = MOCK_RFQS.find((r: any) => String(r.id) === String(rfqId) || r.rfqNumber === rfqId);
+  const rfqNum = matchedRfq?.rfqNumber || (rfqId.startsWith('RFQ-') ? rfqId : `RFQ-${rfqId}`);
+
+  MOCK_QUOTATIONS.push({
+    id: newId,
+    rfqId,
+    vendorId: '1',
+    totalPrice: payload.totalPrice,
+    leadTimeDays: payload.leadTimeDays || 30,
+    paymentTerms: payload.paymentTerms || 'Net 30',
+    score: 4.5,
+    status: 'SUBMITTED',
+    submittedAt: new Date().toISOString(),
+    vendor: MOCK_VENDORS[0],
+    rfq: matchedRfq || { id: rfqId, rfqNumber: rfqNum, title: rfqNum },
+    items: payload.items.map((it, idx) => ({
+      id: `item-${idx + 1}`,
+      quotationId: newId,
+      rfqItemId: it.rfqItemId,
+      unitPrice: it.unitPrice,
+      totalPrice: it.unitPrice * (it.quantity || 1),
+      notes: it.notes || '',
+    })),
+    versionNumber: 1,
+    qNo: 'Q1',
+    vendorQuotationNumber: payload.vendorQuotationNumber || `ACM-QT-${Date.now().toString().slice(-4)}`,
+    isLatestVersion: true,
+  });
+  return { id: newId };
 }
 
-async function mockResubmitQuotation(): Promise<{ id: string } | void> {
+async function mockResubmitQuotation(rfqId: string, payload: SubmitQuotationPayload): Promise<{ id: string } | void> {
   await new Promise((r) => setTimeout(r, 300));
+  const cleanId = String(rfqId).toLowerCase().trim().replace(/^rfq-?/i, '');
+  const existing = MOCK_QUOTATIONS.filter(q => {
+    const qRfqId = String(q.rfqId || (q as any).rfq?.id || '').toLowerCase().trim().replace(/^rfq-?/i, '');
+    const qRfqNum = String((q as any).rfqNumber || (q as any).rfq?.rfqNumber || '').toLowerCase().trim().replace(/^rfq-?/i, '');
+    return qRfqId === cleanId || qRfqNum === cleanId || (qRfqId && cleanId.includes(qRfqId)) || (qRfqNum && cleanId.includes(qRfqNum));
+  });
+  const maxVersion = existing.reduce((max, q) => Math.max(max, q.versionNumber || 1), 1);
+  const newVersion = maxVersion + 1;
+  const newId = `q-${rfqId}-v${newVersion}`;
+
+  const matchedRfq = MOCK_RFQS.find((r: any) => String(r.id) === String(rfqId) || r.rfqNumber === rfqId);
+  const rfqNum = matchedRfq?.rfqNumber || (rfqId.startsWith('RFQ-') ? rfqId : `RFQ-${rfqId}`);
+
+  // Create historical snapshot array of all past versions
+  const prevQuote = existing.length > 0 ? existing[existing.length - 1] : null;
+  const prevHistory = prevQuote && Array.isArray((prevQuote as any).versionHistory) ? [...(prevQuote as any).versionHistory] : [];
+
+  if (prevQuote) {
+    const oldSnapshot = {
+      id: `${prevQuote.id}-v${prevQuote.versionNumber || (prevHistory.length + 1)}`,
+      versionNumber: prevQuote.versionNumber || (prevHistory.length + 1),
+      qNo: `Q${prevQuote.versionNumber || (prevHistory.length + 1)}`,
+      totalPrice: prevQuote.totalPrice,
+      currency: prevQuote.currency,
+      leadTimeDays: prevQuote.leadTimeDays,
+      paymentTerms: prevQuote.paymentTerms,
+      items: prevQuote.items ? JSON.parse(JSON.stringify(prevQuote.items)) : [],
+      customFieldValues: prevQuote.customFieldValues ? JSON.parse(JSON.stringify(prevQuote.customFieldValues)) : null,
+      evalParamValues: prevQuote.evalParamValues ? JSON.parse(JSON.stringify(prevQuote.evalParamValues)) : null,
+      submittedAt: prevQuote.submittedAt || new Date().toISOString(),
+      status: 'RETURNED',
+      returnReason: prevQuote.returnReason || 'Quotation returned for revision by procurement team.',
+      returnComment: prevQuote.returnComment || prevQuote.returnReason,
+    };
+    prevHistory.push(oldSnapshot);
+  }
+
+  existing.forEach(q => {
+    q.isLatestVersion = false;
+    (q as any).versionHistory = prevHistory;
+  });
+
+  const newQuotation: Quotation & { versionHistory?: any[] } = {
+    id: newId,
+    rfqId,
+    vendorId: '1',
+    totalPrice: payload.totalPrice,
+    leadTimeDays: payload.leadTimeDays || 30,
+    paymentTerms: payload.paymentTerms || 'Net 30',
+    score: 4.5,
+    status: 'SUBMITTED',
+    submittedAt: new Date().toISOString(),
+    vendor: MOCK_VENDORS[0],
+    rfq: matchedRfq || { id: rfqId, rfqNumber: rfqNum, title: rfqNum },
+    items: payload.items.map((it, idx) => ({
+      id: `item-${idx + 1}`,
+      quotationId: newId,
+      rfqItemId: it.rfqItemId,
+      unitPrice: it.unitPrice,
+      totalPrice: it.unitPrice * (it.quantity || 1),
+      notes: it.notes || '',
+    })),
+    versionNumber: newVersion,
+    qNo: `Q${newVersion}`,
+    vendorQuotationNumber: payload.vendorQuotationNumber || `ACM-QT-V${newVersion}`,
+    isLatestVersion: true,
+    versionHistory: prevHistory,
+  };
+
+  MOCK_QUOTATIONS.push(newQuotation);
+  return { id: newId };
 }
 
 async function apiResubmitQuotation(rfqId: string, payload: SubmitQuotationPayload, bidBondDocument?: File): Promise<{ id: string } | void> {

@@ -30,6 +30,7 @@ import { useBranding } from '../../context/BrandingContext';
 import heliflowLogo from '../../assets/heliflow.png';
 import { useNavigationMenu } from '../../hooks/useRoleAccess';
 import { useRoutePrefetch } from '../../hooks/useRoutePrefetch';
+import { useLanguage } from '../../context/LanguageContext';
 import './Sidebar.css';
 
 // ─── Navigation config ──────────────────────────────────────
@@ -85,6 +86,47 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   'Form Responses': <BarChart3 size={19} />,
 };
 
+const FR_NAV_MAP: Record<string, string> = {
+  Dashboard: 'Tableau de bord',
+  'Vendor Dashboard': 'Tableau de bord',
+  'RFQ Management': 'Demandes de prix (RFQ)',
+  'My RFQs': 'Mes demandes (RFQ)',
+  Quotations: 'Devis & Offres',
+  'My Quotations': 'Mes devis',
+  'PO Creation': 'Bons de commande',
+  'Purchase Orders': 'Bons de commande',
+  'My Orders': 'Mes commandes',
+  'Accounts Payable': 'Comptes fournisseurs',
+  'My Invoices': 'Mes factures',
+  Payments: 'Paiements',
+  Vendors: 'Fournisseurs',
+  Contracts: 'Contrats',
+  'My Contracts': 'Mes contrats',
+  Agreements: 'Accords & Contrats',
+  Documents: 'Documents',
+  Notifications: 'Notifications',
+  'Audit Trail': "Journal d'audit",
+  Reports: 'Rapports',
+  'Company Settings': "Paramètres de l'entreprise",
+  'User Management': 'Gestion des utilisateurs',
+  'Roles & Permissions': 'Rôles & Permissions',
+  'Approval Levels': "Niveaux d'approbation",
+  'Purchase Requisitions': "Demandes d'achat",
+  Signature: 'Signature numérique',
+  Forms: 'Formulaires',
+  'My Profile': 'Mon profil',
+};
+
+const FR_SECTION_MAP: Record<string, string> = {
+  Main: 'Principal',
+  Procurement: 'Achats & Approvisionnement',
+  Approvals: 'Approbations',
+  'Orders & Payments': 'Commandes & Paiements',
+  Account: 'Compte',
+  Governance: 'Gouvernance & Fournisseurs',
+  Admin: 'Administration',
+};
+
 // ─── Component ──────────────────────────────────────────────
 
 interface SidebarProps {
@@ -104,6 +146,7 @@ export default function Sidebar({
   const menuItems = useNavigationMenu();
   const prefetch = useRoutePrefetch();
   const { companyName, logoUrl } = useBranding();
+  const { isFrench } = useLanguage();
 
   // Convert menu items to nav sections
   const NAV_SECTIONS: NavSection[] = [
@@ -236,12 +279,16 @@ export default function Sidebar({
         <nav className="sidebar__nav">
           {NAV_SECTIONS.map((section) => (
             <div key={section.title} className="sidebar__section">
-              <span className="sidebar__section-label">{section.title}</span>
+              <span className="sidebar__section-label">
+                {isFrench ? (FR_SECTION_MAP[section.title] || section.title) : section.title}
+              </span>
               {section.items.map((item) => {
                 const isActive =
                   item.path === '/dashboard' || item.path === '/vendor/dashboard'
                     ? location.pathname === item.path
                     : location.pathname.startsWith(item.path);
+
+                const displayLabel = isFrench ? (FR_NAV_MAP[item.label] || item.label) : item.label;
 
                 return (
                   <NavLink
@@ -254,8 +301,8 @@ export default function Sidebar({
                     onMouseEnter={prefetch(item.path)}
                   >
                     <span className="sidebar__item-icon">{item.icon}</span>
-                    <span className="sidebar__item-label">{item.label}</span>
-                    <span className="sidebar__item-tooltip">{item.label}</span>
+                    <span className="sidebar__item-label">{displayLabel}</span>
+                    <span className="sidebar__item-tooltip">{displayLabel}</span>
                   </NavLink>
                 );
               })}

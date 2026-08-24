@@ -96,7 +96,7 @@ export const localDataService = {
       try {
         const data = await apiRequest<{ payments: Array<Record<string, any>> }>('/payments');
         if (!data.payments || data.payments.length === 0) {
-          return PAYMENTS_MOCK;
+          return [];
         }
         return data.payments.map((p, idx) => ({
           id: typeof p.id === 'number' ? p.id : idx + 1,
@@ -111,11 +111,11 @@ export const localDataService = {
           remarks: p.remarks || p.comments || '',
         })) as Payment[];
       } catch (_err) {
-        return PAYMENTS_MOCK;
+        return [];
       }
     }
     await delay();
-    return PAYMENTS_MOCK;
+    return [];
   },
   getSalesOrders: async () => {
     if (!USE_MOCK) {

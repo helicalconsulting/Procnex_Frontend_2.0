@@ -6,13 +6,13 @@
 
 /* Header */
 .alvl-page__header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
-.alvl-page__header-left h1 { font-size: 24px; font-weight: 700; margin: 0 0 4px; }
-.alvl-page__header-left p { font-size: 14px; color: var(--text-secondary); margin: 0; }
+.alvl-page__header-left h1 { font-size: 26px; font-weight: 700; margin: 0 0 4px; }
+.alvl-page__header-left p { font-size: 15px; color: var(--text-secondary); margin: 0; }
 
 .alvl-page__add-btn {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 10px 22px; border-radius: var(--radius-md); border: none;
-  background: var(--primary-500); color: #fff; font-size: 14px; font-weight: 600;
+  background: var(--primary-500); color: #fff; font-size: 15px; font-weight: 700;
   cursor: pointer; font-family: inherit;
   transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
   box-shadow: 0 2px 8px rgba(10,110,209,0.25);
@@ -45,22 +45,22 @@
 [data-theme="dark"] .alvl-summary-card__icon--max     { background: rgba(16,126,62,0.18); }
 
 .alvl-summary-card__info { display: flex; flex-direction: column; gap: 2px; }
-.alvl-summary-card__value { font-size: 26px; font-weight: 700; line-height: 1.1; }
-.alvl-summary-card__label { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.4px; }
+.alvl-summary-card__value { font-size: 28px; font-weight: 700; line-height: 1.1; }
+.alvl-summary-card__label { font-size: 13px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.4px; }
 
 /* Module Filter */
 .alvl-module-filter { display: flex; gap: 8px; flex-wrap: wrap; }
 
 .alvl-module-pill {
   display: flex; align-items: center; gap: 6px;
-  padding: 7px 14px; border-radius: 20px; font-size: 13px; font-weight: 600;
+  padding: 8px 16px; border-radius: 20px; font-size: 14.5px; font-weight: 700;
   cursor: pointer; border: 1px solid transparent;
   background: var(--surface-elevated); color: var(--text-secondary);
   transition: all 0.2s; font-family: inherit;
 }
 .alvl-module-pill:hover { color: var(--text-primary); background: var(--surface-hover); }
 .alvl-module-pill--active { border-color: var(--primary-500); color: var(--primary-500); background: rgba(10,110,209,0.06); }
-.alvl-module-pill__count { font-weight: 700; font-size: 12px; }
+.alvl-module-pill__count { font-weight: 700; font-size: 13px; }
 
 /* ─── System Toggle ──────────────────────────────────────── */
 
@@ -79,7 +79,7 @@
   border: 2px solid var(--border);
   background: var(--surface-card);
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   cursor: pointer;
   font-family: inherit;
@@ -244,14 +244,14 @@
 .alvl-chain-card__module-icon--sales      { background: linear-gradient(135deg,#2563eb,#38bdf8); }
 .alvl-chain-card__module-icon--approvals  { background: linear-gradient(135deg,#059669,#34d399); }
 
-.alvl-chain-card__module-name { font-size: 16px; font-weight: 700; display: block; }
-.alvl-chain-card__level-count { font-size: 12px; color: var(--text-secondary); font-weight: 500; display: block; margin-top: 2px; }
+.alvl-chain-card__module-name { font-size: 18px; font-weight: 700; display: block; }
+.alvl-chain-card__level-count { font-size: 13px; color: var(--text-secondary); font-weight: 500; display: block; margin-top: 2px; }
 
 .alvl-chain-card__add-btn {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 6px 14px; border-radius: var(--radius-md);
   border: 1px solid var(--primary-500); background: transparent;
-  color: var(--primary-500); font-size: 12px; font-weight: 600;
+  color: var(--primary-500); font-size: 13.5px; font-weight: 700;
   cursor: pointer; font-family: inherit; transition: all 0.2s;
 }
 .alvl-chain-card__add-btn:hover { background: var(--primary-500); color: #fff; }
@@ -314,8 +314,8 @@
 .alvl-pipeline__role-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
 
 .alvl-pipeline__role-info { display: flex; flex-direction: column; gap: 2px; }
-.alvl-pipeline__level-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); }
-.alvl-pipeline__role-name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.alvl-pipeline__level-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); }
+.alvl-pipeline__role-name { font-size: 15px; font-weight: 700; color: var(--text-primary); }
 
 .alvl-pipeline__actions { display: flex; gap: 2px; }
 

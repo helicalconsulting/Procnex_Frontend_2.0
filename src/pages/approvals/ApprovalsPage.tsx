@@ -43,9 +43,10 @@ type PriorityType = 'HIGH' | 'MEDIUM' | 'LOW';
 
 type ApprovalRequest = ApprovalTableRow;
 
-const STATUS_LABELS: Record<ApprovalStatusType, string> = {
+const STATUS_LABELS: Record<string, string> = {
   PENDING: 'Pending',
   APPROVED: 'Approved',
+  APPROVED_L1: 'L1 Approved',
   REJECTED: 'Rejected',
   RETURNED: 'Returned',
 };
@@ -147,8 +148,25 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
     },
   },
   {
-    key: 'status', label: 'Status', defaultVisible: true, width: '110px',
-    render: (req) => <span className={`approvals-badge approvals-badge--${req.status}`}>{STATUS_LABELS[req.status]}</span>,
+    key: 'status', label: 'Status', defaultVisible: true, width: '120px',
+    render: (req) => {
+      // Role-aware status determination:
+      // If user can act on the pending level (e.g. Level 2 approver), status is PENDING for them.
+      // If level 1 is done and user cannot act (e.g. Level 1 approver), status is APPROVED for them.
+      let effectiveStatus = req.status;
+      if (req.status === 'PENDING') {
+        if (req.canAct) {
+          effectiveStatus = 'PENDING';
+        } else if ((req.currentLevel || 1) > 1) {
+          effectiveStatus = 'APPROVED';
+        }
+      }
+      return (
+        <span className={`approvals-badge approvals-badge--${effectiveStatus}`}>
+          {STATUS_LABELS[effectiveStatus] || effectiveStatus}
+        </span>
+      );
+    },
   },
   {
     key: 'submitted', label: 'Submitted', defaultVisible: true, width: '130px',
@@ -416,31 +434,94 @@ export default function ApprovalsPage() {
   });
 
   const [statusFilter, setStatusFilter] = useState<string>(initialStatus || 'ALL');
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
 
-  const { data: approvals, loading, error, reload } = useServiceData(
+  const { data: approvals, loading, error, reload, forceRefresh } = useServiceData(
     () => approvalService.listTable({
       module: moduleFilter !== 'ALL' ? (CANONICAL_MODULE[moduleFilter] || moduleFilter) : undefined,
-      status: statusFilter !== 'ALL' ? statusFilter : undefined,
+      // Do NOT filter status at API level so KPI summary cards stay rock-solid and stable when switching filter cards
     }),
-    [moduleFilter, statusFilter] as any[],
+    [] as ApprovalTableRow[],
+    [moduleFilter],
     { cacheTtlMs: 0 }
   );
 
-  // SSE real-time refresh — listen for approval and PO creation events
+  // Real-time sync & auto-refresh (SSE + BroadcastChannel + Window Events + 5s Polling Fallback + Tab Focus)
   useEffect(() => {
-    const unsubLevel = sseClient.on('approval_level_complete', () => reload());
-    const unsubChain = sseClient.on('approval_chain_complete', () => reload());
-    const unsubForwarded = sseClient.on('approval_auto_forwarded', () => reload());
-    const unsubPoCreated = sseClient.on('po_created', () => reload());
-    const unsubApprovalInit = sseClient.on('approval_initiated', () => reload());
+    const refreshAll = () => forceRefresh();
+
+    // 1. SSE Events
+    const unsubLevel = sseClient.on('approval_level_complete', refreshAll);
+    const unsubChain = sseClient.on('approval_chain_complete', refreshAll);
+    const unsubForwarded = sseClient.on('approval_auto_forwarded', refreshAll);
+    const unsubPoStatus = sseClient.on('po_status_changed', refreshAll);
+    const unsubReq = sseClient.on('approval_required', refreshAll);
+    const unsubNotif = sseClient.on('notification', refreshAll);
+    const unsubApprovalInit = sseClient.on('approval_initiated', refreshAll);
+    const unsubPoCreated = sseClient.on('po_created', (data: any) => {
+      if (data?.action === 'deleted' && (data?.poId || data?.poNumber)) {
+        setDeletedIds((prev) => {
+          const next = new Set(prev);
+          if (data.poId) next.add(data.poId);
+          if (data.poNumber) next.add(data.poNumber);
+          return next;
+        });
+      }
+      refreshAll();
+    });
+
+    // 2. Custom Window Events (Instant same-window sync)
+    const handlePoDeleted = (e: Event) => {
+      const { poId, poNumber } = (e as CustomEvent).detail || {};
+      if (poId || poNumber) {
+        setDeletedIds((prev) => {
+          const next = new Set(prev);
+          if (poId) next.add(poId);
+          if (poNumber) next.add(poNumber);
+          return next;
+        });
+      }
+      refreshAll();
+    };
+
+    window.addEventListener('heliflow:po-deleted', handlePoDeleted);
+    window.addEventListener('heliflow:po-created', refreshAll);
+    window.addEventListener('heliflow:approval-updated', refreshAll);
+    window.addEventListener('heliflow:po-updated', refreshAll);
+    window.addEventListener('focus', refreshAll);
+
+    // 3. BroadcastChannel (Instant multi-tab sync across browser)
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('heliflow_sync');
+      bc.onmessage = () => {
+        refreshAll();
+      };
+    } catch {}
+
+    // 4. Background Fast Polling (Every 5 seconds fallback so approver NEVER has to reload F5!)
+    const pollInterval = setInterval(() => {
+      refreshAll();
+    }, 5000);
+
     return () => {
       unsubLevel();
       unsubChain();
       unsubForwarded();
+      unsubPoStatus();
+      unsubReq();
+      unsubNotif();
       unsubPoCreated();
       unsubApprovalInit();
+      window.removeEventListener('heliflow:po-deleted', handlePoDeleted);
+      window.removeEventListener('heliflow:po-created', refreshAll);
+      window.removeEventListener('heliflow:approval-updated', refreshAll);
+      window.removeEventListener('heliflow:po-updated', refreshAll);
+      window.removeEventListener('focus', refreshAll);
+      if (bc) bc.close();
+      clearInterval(pollInterval);
     };
-  }, [reload]);
+  }, [forceRefresh]);
 
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -475,18 +556,20 @@ export default function ApprovalsPage() {
 
   // Module & Search filtered list (used for summary metrics so counts stay steady while filtering)
   const moduleFiltered = useMemo(() => {
-    let list = approvals.map((a) => {
-      const opt = optimisticMap[a.id];
-      if (opt) {
-        const isApproved = opt.status === 'APPROVED';
-        return {
-          ...a,
-          status: opt.status,
-          currentLevel: opt.currentLevel ?? (isApproved ? (a.totalLevels || 1) : a.currentLevel),
-        };
-      }
-      return a;
-    });
+    let list = approvals
+      .filter((a) => !deletedIds.has(a.id) && !deletedIds.has(a.referenceId) && !deletedIds.has(a.referenceNumber))
+      .map((a) => {
+        const opt = optimisticMap[a.id];
+        if (opt) {
+          const isApproved = opt.status === 'APPROVED';
+          return {
+            ...a,
+            status: opt.status,
+            currentLevel: opt.currentLevel ?? (isApproved ? (a.totalLevels || 1) : a.currentLevel),
+          };
+        }
+        return a;
+      });
     if (moduleFilter !== 'ALL') {
       const filterLower = moduleFilter.toLowerCase();
       list = list.filter((a) => {
@@ -507,19 +590,37 @@ export default function ApprovalsPage() {
     return list;
   }, [approvals, optimisticMap, moduleFilter, search]);
 
+  // Helper to determine effective status from user's perspective
+  const getEffectiveStatus = useCallback((a: ApprovalRequest): ApprovalStatusType => {
+    if (a.status === 'APPROVED') return 'APPROVED';
+    if (a.status === 'REJECTED') return 'REJECTED';
+    if (a.status === 'RETURNED') return 'RETURNED';
+
+    if (a.status === 'PENDING') {
+      if (a.canAct) {
+        return 'PENDING';
+      }
+      if ((a.currentLevel || 1) > 1) {
+        return 'APPROVED';
+      }
+      return 'PENDING';
+    }
+    return a.status;
+  }, []);
+
   // Final table list (also filtered by statusFilter)
   const filtered = useMemo(() => {
     if (statusFilter === 'ALL') return moduleFiltered;
-    return moduleFiltered.filter((a) => a.status === statusFilter);
-  }, [moduleFiltered, statusFilter]);
+    return moduleFiltered.filter((a) => getEffectiveStatus(a) === statusFilter);
+  }, [moduleFiltered, statusFilter, getEffectiveStatus]);
 
   // Summary calculated based on moduleFiltered list
   const summary = useMemo(() => ({
     total: moduleFiltered.length,
-    pending: moduleFiltered.filter((a) => a.status === 'PENDING').length,
-    approved: moduleFiltered.filter((a) => a.status === 'APPROVED').length,
-    rejected: moduleFiltered.filter((a) => a.status === 'REJECTED').length,
-  }), [moduleFiltered]);
+    pending: moduleFiltered.filter((a) => getEffectiveStatus(a) === 'PENDING').length,
+    approved: moduleFiltered.filter((a) => getEffectiveStatus(a) === 'APPROVED').length,
+    rejected: moduleFiltered.filter((a) => getEffectiveStatus(a) === 'REJECTED').length,
+  }), [moduleFiltered, getEffectiveStatus]);
 
   // Pagination
   const totalPages = Math.ceil(filtered.length / perPage);
@@ -537,7 +638,10 @@ export default function ApprovalsPage() {
     setActionModal(null);
     setActionComment('');
 
-    const newStatus: ApprovalStatusType = actionType === 'approve' ? 'APPROVED' : actionType === 'reject' ? 'REJECTED' : 'RETURNED';
+    const isFinalLevel = (req.currentLevel || 1) >= (req.totalLevels || 1);
+    const newStatus: ApprovalStatusType = actionType === 'approve'
+      ? (isFinalLevel ? 'APPROVED' : 'APPROVED')
+      : actionType === 'reject' ? 'REJECTED' : 'RETURNED';
     const targetLevel = actionType === 'approve' ? ((req.currentLevel || 1) + 1) : req.currentLevel;
 
     // 1. INSTANT OPTIMISTIC TABLE ROW STATUS UPDATE (0ms delay!)
@@ -580,7 +684,8 @@ export default function ApprovalsPage() {
       if (res?.message) {
         setActionSuccessData((prev) => (prev ? { ...prev, message: res.message } : null));
       }
-      reload();
+      await forceRefresh();
+      setOptimisticMap({});
     } catch (err) {
       setOptimisticMap((prev) => {
         const next = { ...prev };
@@ -589,9 +694,9 @@ export default function ApprovalsPage() {
       });
       setActionSuccessData(null);
       setToast({ message: err instanceof Error ? err.message : 'Action failed.', type: 'error' });
-      reload();
+      await forceRefresh();
     }
-  }, [actionModal, actionComment, actionReturnTarget, reload]);
+  }, [actionModal, actionComment, actionReturnTarget, forceRefresh]);
 
   const openAction = useCallback((request: ApprovalRequest, action: 'approve' | 'reject' | 'return') => {
     setActionModal({ request, action });

@@ -9,7 +9,7 @@ import {
   FileText, Search, Plus, Eye, Edit3, X, ChevronLeft, ChevronRight,
   LayoutList, LayoutGrid, Calendar, DollarSign, AlertTriangle,
   Clock, CheckCircle2, XCircle, FileSignature, Trash2, Download,
-  Ban, Printer, Bell, ArrowRight,
+  Ban, Printer, Bell, ArrowRight, CheckSquare,
 } from 'lucide-react';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import '../../components/shared/ColumnCustomizer.css';
@@ -121,9 +121,12 @@ export default function ContractsPage() {
   const [terminateTarget, setTerminateTarget] = useState<ContractRow | null>(null);
   const [terminating, setTerminating] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [selectedContractIds, setSelectedContractIds] = useState<string[]>([]);
+  const [showBatchDeleteModal, setShowBatchDeleteModal] = useState(false);
+  const [batchDeleting, setBatchDeleting] = useState(false);
   const [operating, setOperating] = useState<string | null>(null); // id being acted upon
   const [pageMsg, setPageMsg] = useState<string | null>(null);
-  useBodyScrollLock(!!deleteTarget || !!terminateTarget);
+  useBodyScrollLock(!!deleteTarget || !!terminateTarget || showBatchDeleteModal);
   const perPage = 10;
 
   // ── Recently signed contract banner state ──────────────────
@@ -322,6 +325,46 @@ export default function ContractsPage() {
   const formatDate = useCallback((d: string) =>
     new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
   []);
+
+  // ─── Batch selection ────────────────────────────────────────
+  const isAllSelected = useMemo(() => {
+    if (paginated.length === 0) return false;
+    return paginated.every(r => selectedContractIds.includes(r.id));
+  }, [paginated, selectedContractIds]);
+
+  const handleToggleSelectAll = useCallback(() => {
+    if (isAllSelected) {
+      const paginatedIds = new Set(paginated.map(r => r.id));
+      setSelectedContractIds(prev => prev.filter(id => !paginatedIds.has(id)));
+    } else {
+      const newIds = paginated.map(r => r.id);
+      setSelectedContractIds(prev => Array.from(new Set([...prev, ...newIds])));
+    }
+  }, [isAllSelected, paginated]);
+
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedContractIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  }, []);
+
+  const handleBatchDeleteConfirm = useCallback(async () => {
+    if (selectedContractIds.length === 0) return;
+    setBatchDeleting(true);
+    try {
+      for (const id of selectedContractIds) {
+        await contractService.deleteContract(id).catch(() => {});
+      }
+      setPageMsg(`Successfully deleted ${selectedContractIds.length} contract(s).`);
+      setSelectedContractIds([]);
+      setShowBatchDeleteModal(false);
+      await reload();
+    } catch (err) {
+      setPageMsg(err instanceof Error ? err.message : 'Failed to delete selected contracts');
+    } finally {
+      setBatchDeleting(false);
+    }
+  }, [selectedContractIds, reload]);
 
   // Navigate to RFQ's purchase-requisition page with contractId pre-fill
   const handleNavigateToPO = useCallback((contractId: string) => {
@@ -600,29 +643,6 @@ export default function ContractsPage() {
           />
         </div>
         <div className="ctr-toolbar__right">
-          <select
-            className="ctr-toolbar__filter-select"
-            value={typeFilter}
-            onChange={e => { setTypeFilter(e.target.value); setCurrentPage(1); }}
-          >
-            <option value="ALL">All Types</option>
-            {contractTypes.map(t => (
-              <option key={t} value={t}>{contractTypeLabels[t] || t}</option>
-            ))}
-          </select>
-          <select
-            className="ctr-toolbar__filter-select"
-            value={statusFilter}
-            onChange={e => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-            style={{ minWidth: '160px' }}
-          >
-            <option value="ALL">All Statuses</option>
-            <option value="VENDOR_SIGNED_GROUP">Vendor Signed (All)</option>
-            <option value="PENDING_SIGNATURE_GROUP">Pending Signature (All)</option>
-            {(['DRAFT', 'PENDING_VENDOR_SIGNATURE', 'VENDOR_SIGNED', 'ACCEPTED', 'COMPLETED', 'CANCELLED', 'TERMINATED'] as const).map(s => (
-              <option key={s} value={s}>{STATUS_LABELS[s] || s}</option>
-            ))}
-          </select>
           <div className="ctr-toolbar__view-toggle">
             <button
               className={`ctr-toolbar__view-btn ${view === 'table' ? 'ctr-toolbar__view-btn--active' : ''}`}
@@ -636,6 +656,46 @@ export default function ContractsPage() {
         </div>
       </div>
 
+      {/* ── Floating Bulk Action Banner ── */}
+      {selectedContractIds.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: 'var(--surface-card)', border: '1px solid var(--primary-500)',
+          padding: '12px 18px', borderRadius: 'var(--radius-md)', marginBottom: '16px',
+          boxShadow: '0 4px 14px rgba(0,0,0,0.12)', transition: 'all 0.2s ease'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+            <CheckSquare size={18} style={{ color: 'var(--primary-500)' }} />
+            <span><strong>{selectedContractIds.length}</strong> Contract(s) selected</span>
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              type="button"
+              className="ctr-modal__btn ctr-modal__btn--secondary"
+              style={{ padding: '7px 16px', fontSize: 13, fontWeight: 600 }}
+              onClick={() => setSelectedContractIds([])}
+            >
+              Cancel Selection
+            </button>
+            <button
+              type="button"
+              style={{
+                background: '#dc2626', color: '#ffffff', border: 'none',
+                padding: '7px 16px', fontSize: 13, fontWeight: 700,
+                borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: 6
+              }}
+              onClick={(e) => {
+                (e.currentTarget as HTMLElement).blur();
+                setShowBatchDeleteModal(true);
+              }}
+            >
+              <Trash2 size={14} /> Delete Selected ({selectedContractIds.length})
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Content */}
       {loading ? (
         <div className="ctr-table-card">
@@ -645,13 +705,22 @@ export default function ContractsPage() {
         view === 'table' ? (
           <div className="ctr-table-card">
             <div className="ctr-table-wrap">
-              <table className="ctr-table" style={{ tableLayout: 'fixed', minWidth: '800px' }}>
+              <table className="ctr-table" style={{ tableLayout: 'fixed', minWidth: '850px' }}>
                 <colgroup>
+                  <col style={{ width: '44px' }} />
                   {visibleColumns.map(col => <col key={col.key} style={{ width: col.width || 'auto' }} />)}
                   <col style={{ width: '200px' }} />
                 </colgroup>
                 <thead>
                   <tr>
+                    <th style={{ width: '44px', textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={isAllSelected}
+                        onChange={handleToggleSelectAll}
+                        style={{ cursor: 'pointer', width: 16, height: 16 }}
+                      />
+                    </th>
                     {visibleColumns.map(col => <th key={col.key}>{col.label}</th>)}
                     <th>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -687,6 +756,14 @@ export default function ContractsPage() {
                 <tbody>
                   {paginated.map(r => (
                     <tr key={r.id} className={`ctr-table__row ctr-table__row--${(r.status || '').toLowerCase()}`} onClick={() => handleView(r.id)}>
+                      <td onClick={e => e.stopPropagation()} style={{ textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedContractIds.includes(r.id)}
+                          onChange={() => handleToggleSelect(r.id)}
+                          style={{ cursor: 'pointer', width: 16, height: 16 }}
+                        />
+                      </td>
                       {visibleColumns.map(col => <td key={col.key}>{col.render(r, formatDate)}</td>)}
                       <td onClick={e => e.stopPropagation()}>
                         <div className="ctr-table__actions">
@@ -744,14 +821,12 @@ export default function ContractsPage() {
                             ><Ban size={15} /></button>
                           )}
 
-                          {/* Delete — Draft only */}
-                          {r.status === 'DRAFT' && (
-                            <button
-                              className="ctr-table__action-btn ctr-table__action-btn--danger"
-                              title="Delete contract"
-                              onClick={() => setDeleteTarget(r)}
-                            ><Trash2 size={15} /></button>
-                          )}
+                          {/* Delete */}
+                          <button
+                            className="ctr-table__action-btn ctr-table__action-btn--danger"
+                            title="Delete contract"
+                            onClick={() => setDeleteTarget(r)}
+                          ><Trash2 size={15} /></button>
                         </div>
                       </td>
                     </tr>
@@ -895,6 +970,40 @@ export default function ContractsPage() {
                 onClick={handleTerminateConfirm}
               >
                 {terminating ? 'Terminating…' : 'Terminate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Delete Confirmation Modal */}
+      {showBatchDeleteModal && (
+        <div className="ctr-modal-backdrop" onClick={() => !batchDeleting && setShowBatchDeleteModal(false)}>
+          <div className="ctr-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            <div className="ctr-modal__header">
+              <span className="ctr-modal__title"><Trash2 size={20} /> Delete {selectedContractIds.length} Selected Contract(s)?</span>
+              <button className="ctr-modal__close" onClick={() => setShowBatchDeleteModal(false)} disabled={batchDeleting}><X size={18} /></button>
+            </div>
+            <div className="ctr-modal__body">
+              <p style={{ margin: 0, fontSize: 14 }}>
+                Are you sure you want to delete the <strong>{selectedContractIds.length} selected contract(s)</strong>?
+                This action cannot be undone and will permanently remove these contract records.
+              </p>
+            </div>
+            <div className="ctr-modal__footer">
+              <button
+                autoFocus
+                className="ctr-modal__btn ctr-modal__btn--secondary"
+                disabled={batchDeleting}
+                onClick={() => setShowBatchDeleteModal(false)}
+              >Cancel</button>
+              <button
+                className="ctr-modal__btn ctr-modal__btn--primary"
+                style={{ background: '#dc2626' }}
+                disabled={batchDeleting}
+                onClick={handleBatchDeleteConfirm}
+              >
+                {batchDeleting ? 'Deleting…' : `Delete ${selectedContractIds.length} Contract(s)`}
               </button>
             </div>
           </div>

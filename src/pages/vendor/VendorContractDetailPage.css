@@ -31,8 +31,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 14.5px;
+  font-weight: 700;
   color: var(--text-secondary);
   background: none;
   border: none;
@@ -74,7 +74,7 @@
 }
 
 .vcd-summary__title {
-  font-size: 22px;
+  font-size: 26px;
   font-weight: 800;
   margin: 0;
   color: var(--text-primary);
@@ -82,7 +82,7 @@
 }
 
 .vcd-summary__number {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--primary-500, #0a6ed1);
   font-family: var(--font-mono, monospace);
@@ -95,6 +95,69 @@
   flex-wrap: wrap;
 }
 
+/* ─── Status Badges ───────────────────────────────────────── */
+
+.vc-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.vc-status--AWAITING_VENDOR_SIGNATURE,
+.vc-status--PENDING_VENDOR_SIGNATURE {
+  background: rgba(139, 92, 246, 0.12);
+  color: #7c3aed;
+  border: 1px solid rgba(139, 92, 246, 0.25);
+}
+
+.vc-status--ACTIVE,
+.vc-status--ACCEPTED,
+.vc-status--APPROVED,
+.vc-status--VENDOR_SIGNED,
+.vc-status--COMPLETED {
+  background: rgba(16, 126, 62, 0.12);
+  color: #107e3e;
+  border: 1px solid rgba(16, 126, 62, 0.25);
+}
+
+.vc-status--DRAFT {
+  background: rgba(100, 116, 139, 0.12);
+  color: #64748b;
+  border: 1px solid rgba(100, 116, 139, 0.25);
+}
+
+.vc-status--AWAITING_CUSTOMER_SIGNATURE {
+  background: rgba(217, 119, 6, 0.12);
+  color: #d97706;
+  border: 1px solid rgba(217, 119, 6, 0.25);
+}
+
+.vc-status--EXPIRING_SOON {
+  background: rgba(217, 119, 6, 0.12);
+  color: #d97706;
+  border: 1px solid rgba(217, 119, 6, 0.25);
+}
+
+.vc-status--EXPIRED {
+  background: rgba(100, 116, 139, 0.1);
+  color: #94a3b8;
+  border: 1px solid rgba(100, 116, 139, 0.2);
+}
+
+.vc-status--TERMINATED,
+.vc-status--CANCELLED {
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+  border: 1px solid rgba(220, 38, 38, 0.2);
+}
+
 /* ─── Action Buttons ──────────────────────────────────────── */
 
 .vcd-action-btn {
@@ -102,10 +165,10 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 8px 16px;
+  padding: 10px 20px;
   border: none;
   border-radius: var(--radius-md);
-  font-size: 13px;
+  font-size: 14.5px;
   font-weight: 700;
   cursor: pointer;
   transition: transform 0.15s, box-shadow 0.15s, background-color 0.15s;
@@ -237,7 +300,7 @@
 }
 
 .vcd-summary__item-label {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -245,7 +308,7 @@
 }
 
 .vcd-summary__item-value {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -269,8 +332,8 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 20px;
-  font-size: 13px;
+  padding: 14px 22px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text-secondary);
   background: none;
@@ -337,7 +400,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 800;
   color: var(--text-primary);
   margin: 0 0 4px;
@@ -356,7 +419,7 @@
   gap: 12px;
   padding: 8px 0;
   border-bottom: 1px dashed var(--border);
-  font-size: 13px;
+  font-size: 14.5px;
 }
 
 .vcd-field-row:last-child {
@@ -370,6 +433,7 @@
 
 .vcd-field-value {
   color: var(--text-primary);
+  font-size: 15.5px;
   font-weight: 700;
   text-align: right;
 }
@@ -793,6 +857,13 @@
   background: rgba(52, 211, 153, 0.18) !important;
   color: #34d399 !important;
   border-color: rgba(52, 211, 153, 0.35) !important;
+}
+
+[data-theme="dark"] .vc-status--AWAITING_VENDOR_SIGNATURE,
+[data-theme="dark"] .vc-status--PENDING_VENDOR_SIGNATURE {
+  background: rgba(167, 139, 250, 0.18) !important;
+  color: #a78bfa !important;
+  border-color: rgba(167, 139, 250, 0.35) !important;
 }
 
 [data-theme="dark"] .vcd-comp-item--yes {

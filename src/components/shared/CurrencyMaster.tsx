@@ -594,6 +594,7 @@ interface CurrencySelectorProps {
   className?: string;
   style?: React.CSSProperties;
   showRefresh?: boolean;
+  zIndex?: number;
 }
 
 export function CurrencySelector({
@@ -605,6 +606,7 @@ export function CurrencySelector({
   className = '',
   style,
   showRefresh = false,
+  zIndex = 999999,
 }: CurrencySelectorProps) {
   const { currencies, loading, refresh } = useCurrency();
   const [open, setOpen] = useState(false);
@@ -715,6 +717,7 @@ export function CurrencySelector({
         placement="bottom-start"
         preventFlip={true}
         animation="slide"
+        zIndex={zIndex}
       >
         <div className="cur-selector__search">
           <Search size={14} className="cur-selector__search-icon" />

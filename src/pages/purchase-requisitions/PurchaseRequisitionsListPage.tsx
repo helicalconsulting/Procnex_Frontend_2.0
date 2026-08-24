@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { purchaseRequisitionService, type PurchaseRequisition } from '../../services/purchaseRequisitionService';
-import { ShoppingCart, Eye, Pencil, Trash2, Loader2, AlertTriangle, FileText, Search, X, CheckCircle, Clock, Plus } from 'lucide-react';
+import { sseClient } from '../../services/sseClient';
+import { ShoppingCart, Eye, Pencil, Trash2, Loader2, AlertTriangle, FileText, Search, X, CheckCircle, Clock, Plus, CheckSquare, XCircle } from 'lucide-react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import ColumnCustomizer, { type ColumnDef } from '../../components/shared/ColumnCustomizer';
@@ -22,6 +23,9 @@ function getStatusLabel(status: string): string {
     PENDING_APPROVAL: 'Pending Approval',
     APPROVED: 'Approved & Released',
     COMPLETED: 'Approved & Released',
+    REJECTED: 'Rejected',
+    CANCELLED: 'Rejected',
+    RETURNED: 'Returned for Revision',
     SENT_TO_VENDOR: 'Sent to Vendor',
   };
   return labels[status] || status.replace(/_/g, ' ');
@@ -58,6 +62,9 @@ export default function PurchaseRequisitionsListPage() {
   const [error, setError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PurchaseRequisition | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [selectedPrIds, setSelectedPrIds] = useState<string[]>([]);
+  const [showBatchDeleteModal, setShowBatchDeleteModal] = useState(false);
+  const [batchDeleting, setBatchDeleting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   // Search & Filter State
@@ -72,7 +79,7 @@ export default function PurchaseRequisitionsListPage() {
   const [showColPanel, setShowColPanel] = useState(false);
   const colBtnRef = useRef<HTMLButtonElement>(null);
 
-  useBodyScrollLock(!!deleteTarget);
+  useBodyScrollLock(!!deleteTarget || showBatchDeleteModal);
 
   const fetchRequisitions = async () => {
     setLoading(true);
@@ -89,30 +96,43 @@ export default function PurchaseRequisitionsListPage() {
 
   useEffect(() => {
     fetchRequisitions();
+
+    // Real-time: when a PO status changes (approved/rejected in approvals page),
+    // refresh this list so the status updates automatically
+    const unsubStatus = sseClient.on('po_status_changed', () => {
+      fetchRequisitions();
+    });
+    const unsubCreated = sseClient.on('po_created', () => {
+      fetchRequisitions();
+    });
+
+    return () => {
+      unsubStatus();
+      unsubCreated();
+    };
   }, []);
 
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
     const targetId = deleteTarget.id || deleteTarget.rfqId;
+    const deletedPoNumber = deleteTarget.poNumber;
     setDeleting(true);
     try {
       await purchaseRequisitionService.delete(targetId);
       setRequisitions((prev) => prev.filter((r) => r.id !== deleteTarget.id && r.rfqId !== deleteTarget.rfqId));
       setToast({ message: `Document ${deleteTarget.poNumber || ''} deleted successfully.`, type: 'success' });
       setDeleteTarget(null);
+
+      // 🔔 Instantly notify ApprovalsPage (and any other listener) without SSE
+      window.dispatchEvent(new CustomEvent('heliflow:po-deleted', {
+        detail: { poId: targetId, poNumber: deletedPoNumber },
+      }));
     } catch (err: any) {
       setToast({ message: err?.message || 'Failed to delete document', type: 'error' });
     } finally {
       setDeleting(false);
     }
   };
-
-  // Metrics calculation
-  const draftCount = requisitions.filter(r => r.status === 'DRAFT').length;
-  const pendingCount = requisitions.filter(r => r.status === 'PENDING_APPROVAL').length;
-  const draftAndPendingCount = draftCount + pendingCount;
-  const activeCount = requisitions.filter(r => ['APPROVED', 'COMPLETED', 'SENT_TO_VENDOR', 'PO_CREATED'].includes(r.status)).length;
-  const totalValue = requisitions.reduce((acc, r) => acc + (r.grandTotal || 0), 0);
 
   // Filtered List
   const filteredRequisitions = useMemo(() => {
@@ -122,6 +142,8 @@ export default function PurchaseRequisitionsListPage() {
         if (r.status !== 'DRAFT' && r.status !== 'PENDING_APPROVAL') return false;
       } else if (statusFilter === 'APPROVED') {
         if (!['APPROVED', 'COMPLETED', 'SENT_TO_VENDOR', 'PO_CREATED'].includes(r.status)) return false;
+      } else if (statusFilter === 'REJECTED') {
+        if (!['REJECTED', 'CANCELLED'].includes(r.status)) return false;
       }
 
       // Search term filter
@@ -135,6 +157,54 @@ export default function PurchaseRequisitionsListPage() {
       );
     });
   }, [requisitions, searchTerm, statusFilter]);
+
+  // ── Batch selection ──
+  const isAllSelected = useMemo(() => {
+    if (filteredRequisitions.length === 0) return false;
+    return filteredRequisitions.every(p => selectedPrIds.includes(String(p.id || p.rfqId)));
+  }, [filteredRequisitions, selectedPrIds]);
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      const pageIds = new Set(filteredRequisitions.map(p => String(p.id || p.rfqId)));
+      setSelectedPrIds(prev => prev.filter(id => !pageIds.has(id)));
+    } else {
+      const newIds = filteredRequisitions.map(p => String(p.id || p.rfqId));
+      setSelectedPrIds(prev => Array.from(new Set([...prev, ...newIds])));
+    }
+  };
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedPrIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleBatchDeleteConfirm = async () => {
+    if (selectedPrIds.length === 0) return;
+    setBatchDeleting(true);
+    try {
+      for (const id of selectedPrIds) {
+        await purchaseRequisitionService.delete(id).catch(() => {});
+      }
+      setToast({ message: `Successfully deleted ${selectedPrIds.length} PO/PR(s).`, type: 'success' });
+      setSelectedPrIds([]);
+      setShowBatchDeleteModal(false);
+      await fetchRequisitions();
+    } catch (err: any) {
+      setToast({ message: err?.message || 'Failed to delete selected items.', type: 'error' });
+    } finally {
+      setBatchDeleting(false);
+    }
+  };
+
+  // Metrics calculation
+  const draftCount = requisitions.filter(r => r.status === 'DRAFT').length;
+  const pendingCount = requisitions.filter(r => r.status === 'PENDING_APPROVAL').length;
+  const draftAndPendingCount = draftCount + pendingCount;
+  const activeCount = requisitions.filter(r => ['APPROVED', 'COMPLETED', 'SENT_TO_VENDOR', 'PO_CREATED'].includes(r.status)).length;
+  const rejectedCount = requisitions.filter(r => ['REJECTED', 'CANCELLED'].includes(r.status)).length;
+  const totalValue = requisitions.reduce((acc, r) => acc + (r.grandTotal || 0), 0);
 
   const visibleColumns = useMemo(
     () => columnOrder.map((k) => ALL_COLUMNS.find((c) => c.key === k)!).filter((c) => c && visibleKeys.has(c.key)),
@@ -182,29 +252,26 @@ export default function PurchaseRequisitionsListPage() {
           {toast.message}
         </MessageStrip>
       )}
-      {/* Clean Page Title Header */}
       <div className="pr-page__header" style={{ marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+          <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
             PO Creation & Orders
           </h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13.5, color: 'var(--text-secondary, #64748b)' }}>
+          <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--text-secondary, #64748b)' }}>
             Manage purchase orders, requisitions and vendor release documents
           </p>
         </div>
         <button
           className="pr-btn pr-btn--primary"
           onClick={() => navigate('/procurement/create-purchase-order')}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 8, fontSize: 13.5, fontWeight: 600, background: 'linear-gradient(135deg, #0a6ed1, #0856a4)', color: '#fff', border: 'none', cursor: 'pointer', boxShadow: '0 4px 12px rgba(10, 110, 209, 0.25)' }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 8, fontSize: 15, fontWeight: 700, background: 'linear-gradient(135deg, #0a6ed1, #0856a4)', color: '#fff', border: 'none', cursor: 'pointer', boxShadow: '0 4px 12px rgba(10, 110, 209, 0.25)' }}
         >
           <Plus size={16} /> New PO
         </button>
       </div>
 
-      {/* KPI Metric Summary Cards */}
       {requisitions.length > 0 && (
-        <div className="pr-kpi-summary">
-          {/* Card 1: Total Documents */}
+        <div className="pr-kpi-summary" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
           <div
             className={`pr-kpi-card ${statusFilter === null ? 'pr-kpi-card--active' : ''}`}
             onClick={() => setStatusFilter(null)}
@@ -219,7 +286,6 @@ export default function PurchaseRequisitionsListPage() {
             </div>
           </div>
 
-          {/* Card 2: Draft & Pending */}
           <div
             className={`pr-kpi-card ${statusFilter === 'DRAFT_PENDING' ? 'pr-kpi-card--active' : ''}`}
             onClick={() => setStatusFilter(prev => prev === 'DRAFT_PENDING' ? null : 'DRAFT_PENDING')}
@@ -234,7 +300,6 @@ export default function PurchaseRequisitionsListPage() {
             </div>
           </div>
 
-          {/* Card 3: Approved & Released */}
           <div
             className={`pr-kpi-card ${statusFilter === 'APPROVED' ? 'pr-kpi-card--active' : ''}`}
             onClick={() => setStatusFilter(prev => prev === 'APPROVED' ? null : 'APPROVED')}
@@ -249,7 +314,20 @@ export default function PurchaseRequisitionsListPage() {
             </div>
           </div>
 
-          {/* Card 4: Total Volume */}
+          <div
+            className={`pr-kpi-card ${statusFilter === 'REJECTED' ? 'pr-kpi-card--active' : ''}`}
+            onClick={() => setStatusFilter(prev => prev === 'REJECTED' ? null : 'REJECTED')}
+            style={{ cursor: 'pointer' }}
+          >
+            <div className="pr-kpi-icon" style={{ background: 'rgba(220,38,38,0.1)', color: '#dc2626' }}>
+              <XCircle size={20} />
+            </div>
+            <div className="pr-kpi-info">
+              <span className="pr-kpi-label">REJECTED</span>
+              <span className="pr-kpi-value" style={{ color: rejectedCount > 0 ? '#dc2626' : undefined }}>{rejectedCount}</span>
+            </div>
+          </div>
+
           <div className="pr-kpi-card">
             <div className="pr-kpi-icon pr-kpi-icon--grand">
               <FileText size={20} />
@@ -264,7 +342,6 @@ export default function PurchaseRequisitionsListPage() {
         </div>
       )}
 
-      {/* Search Input Bar */}
       {requisitions.length > 0 && (
         <div className="pr-search-bar-wrap">
           <div style={{ position: 'relative', width: '100%' }}>
@@ -299,6 +376,45 @@ export default function PurchaseRequisitionsListPage() {
         </div>
       )}
 
+      {selectedPrIds.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: 'var(--surface-card)', border: '1px solid var(--primary-500)',
+          padding: '12px 18px', borderRadius: 'var(--radius-md)', marginBottom: '16px',
+          boxShadow: '0 4px 14px rgba(0,0,0,0.12)', transition: 'all 0.2s ease'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+            <CheckSquare size={18} style={{ color: 'var(--primary-500)' }} />
+            <span><strong>{selectedPrIds.length}</strong> Document(s) selected</span>
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              type="button"
+              className="pr-btn pr-btn--outline"
+              style={{ padding: '7px 16px', fontSize: 13, fontWeight: 600 }}
+              onClick={() => setSelectedPrIds([])}
+            >
+              Cancel Selection
+            </button>
+            <button
+              type="button"
+              style={{
+                background: '#dc2626', color: '#ffffff', border: 'none',
+                padding: '7px 16px', fontSize: 13, fontWeight: 700,
+                borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: 6
+              }}
+              onClick={(e) => {
+                (e.currentTarget as HTMLElement).blur();
+                setShowBatchDeleteModal(true);
+              }}
+            >
+              <Trash2 size={14} /> Delete Selected ({selectedPrIds.length})
+            </button>
+          </div>
+        </div>
+      )}
+
       {requisitions.length === 0 ? (
         <div className="pr-empty">
           <div className="pr-empty__icon-wrapper">
@@ -326,6 +442,7 @@ export default function PurchaseRequisitionsListPage() {
         <div className="pr-list-table-wrap">
           <table className="pr-list-table">
             <colgroup>
+              <col style={{ width: '44px' }} />
               {[
                 ...visibleColumns.map((col) => (
                   <col key={col.key} style={{ width: COL_WIDTHS[col.key] || 'auto' }} />
@@ -335,6 +452,14 @@ export default function PurchaseRequisitionsListPage() {
             </colgroup>
             <thead>
               <tr>
+                <th style={{ width: 44, textAlign: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={isAllSelected}
+                    onChange={handleToggleSelectAll}
+                    style={{ cursor: 'pointer', width: 16, height: 16 }}
+                  />
+                </th>
                 {visibleColumns.map((col) => (
                   <th
                     key={col.key}
@@ -397,6 +522,14 @@ export default function PurchaseRequisitionsListPage() {
                     className={`pr-list-row pr-list-row--${(pr.status || '').toLowerCase()}`}
                     onClick={() => openPO('view')}
                   >
+                    <td onClick={e => e.stopPropagation()} style={{ textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedPrIds.includes(String(pr.id || pr.rfqId))}
+                        onChange={() => handleToggleSelect(String(pr.id || pr.rfqId))}
+                        style={{ cursor: 'pointer', width: 16, height: 16 }}
+                      />
+                    </td>
                     {visibleColumns.map((col) => {
                       if (col.key === 'poNumber') {
                         return (
@@ -465,49 +598,31 @@ export default function PurchaseRequisitionsListPage() {
         </div>
       )}
 
-      {/* SAP Fiori Delete Confirmation Modal */}
+      {/* Delete Confirmation Modal */}
       {deleteTarget && (
         <div className="pr-modal-backdrop" onClick={() => !deleting && setDeleteTarget(null)}>
-          <div className="sap-dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="sap-dialog__header">
-              <div className="sap-dialog__title-wrap">
-                <div className="sap-dialog__icon-badge sap-dialog__icon-badge--danger">
-                  <Trash2 size={18} />
-                </div>
-                <div className="sap-dialog__title-group">
-                  <h3 className="sap-dialog__title">Delete PO Document</h3>
-                  <span className="sap-dialog__subtitle">Confirmation Required</span>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="sap-dialog__close-btn"
-                onClick={() => setDeleteTarget(null)}
-                disabled={deleting}
-                aria-label="Close"
-              >
-                <X size={15} />
+          <div className="pr-modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="pr-modal-header pr-modal-header--danger">
+              <h3>
+                <AlertTriangle size={20} />
+                <span>Delete Purchase Order?</span>
+              </h3>
+              <button className="pr-modal-close" onClick={() => setDeleteTarget(null)} disabled={deleting} title="Close">
+                <X size={16} />
               </button>
             </div>
-
-            <div className="sap-dialog__body">
-              <div className="sap-dialog__callout sap-dialog__callout--danger">
-                <AlertTriangle size={20} className="sap-dialog__callout-icon" />
-                <div className="sap-dialog__callout-content">
-                  <p className="sap-dialog__message">
-                    Are you sure you want to delete PO Document{' '}
-                    <strong>{deleteTarget.poNumber || deleteTarget.vendorName}</strong>?
-                  </p>
-                  <p className="sap-dialog__submessage">
-                    This action will permanently remove the PO record from the system and cannot be undone.
-                  </p>
-                </div>
+            <div className="pr-modal-body">
+              <p>
+                Are you sure you want to delete PO{' '}
+                <strong>{deleteTarget.poNumber || deleteTarget.rfqId}</strong>?
+              </p>
+              <div className="pr-modal-warning">
+                <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+                <span>This action is permanent and cannot be undone. All items and linked data will be deleted.</span>
               </div>
             </div>
-
-            <div className="sap-dialog__footer">
+            <div className="pr-modal-footer">
               <button
-                type="button"
                 className="pr-btn pr-btn--outline"
                 onClick={() => setDeleteTarget(null)}
                 disabled={deleting}
@@ -515,12 +630,66 @@ export default function PurchaseRequisitionsListPage() {
                 Cancel
               </button>
               <button
-                type="button"
-                className="pr-btn sap-btn--danger"
+                className="pr-btn pr-btn--danger"
                 onClick={handleDeleteConfirm}
                 disabled={deleting}
               >
-                {deleting ? 'Deleting…' : 'Delete Document'}
+                {deleting ? (
+                  <>
+                    <Loader2 size={14} className="pr-spin" /> Deleting…
+                  </>
+                ) : (
+                  'Delete PO'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Delete Confirmation Modal */}
+      {showBatchDeleteModal && (
+        <div className="pr-modal-backdrop" onClick={() => !batchDeleting && setShowBatchDeleteModal(false)}>
+          <div className="pr-modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="pr-modal-header pr-modal-header--danger">
+              <h3>
+                <AlertTriangle size={20} />
+                <span>Delete {selectedPrIds.length} Selected Document(s)?</span>
+              </h3>
+              <button className="pr-modal-close" onClick={() => setShowBatchDeleteModal(false)} disabled={batchDeleting} title="Close">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="pr-modal-body">
+              <p>
+                Are you sure you want to delete the <strong>{selectedPrIds.length} selected document(s)</strong>?
+              </p>
+              <div className="pr-modal-warning">
+                <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+                <span>This action is permanent and cannot be undone.</span>
+              </div>
+            </div>
+            <div className="pr-modal-footer">
+              <button
+                autoFocus
+                className="pr-btn pr-btn--outline"
+                onClick={() => setShowBatchDeleteModal(false)}
+                disabled={batchDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                className="pr-btn pr-btn--danger"
+                onClick={handleBatchDeleteConfirm}
+                disabled={batchDeleting}
+              >
+                {batchDeleting ? (
+                  <>
+                    <Loader2 size={14} className="pr-spin" /> Deleting…
+                  </>
+                ) : (
+                  `Delete ${selectedPrIds.length} Document(s)`
+                )}
               </button>
             </div>
           </div>

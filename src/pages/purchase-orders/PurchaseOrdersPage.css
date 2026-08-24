@@ -8,9 +8,9 @@
 .po-page__header-left h1 { font-size: 24px; font-weight: 700; margin: 0 0 4px; }
 .po-page__header-left p { font-size: 14px; color: var(--text-secondary); margin: 0; }
 .po-page__add-btn {
-  display: inline-flex; align-items: center; gap: 8px; padding: 10px 22px;
+  display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px;
   border-radius: var(--radius-md); border: none; background: var(--primary-500);
-  color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit;
+  color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit;
   transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
   box-shadow: 0 2px 8px rgba(10,110,209,0.25);
 }
@@ -107,17 +107,17 @@
 [data-theme="dark"] .po-summary-card__icon--value   { background: rgba(139,92,246,0.25); color: #c084fc; border-color: rgba(192,132,252,0.3); }
 .po-summary-card__info { display: flex; flex-direction: column; gap: 2px; }
 .po-summary-card__value { font-size: 28px; font-weight: 800; line-height: 1.1; letter-spacing: -0.5px; }
-.po-summary-card__label { font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.6px; }
+.po-summary-card__label { font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.6px; }
 
 /* Toolbar */
 .po-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .po-toolbar__search { flex: 1; min-width: 240px; position: relative; }
 .po-toolbar__search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-placeholder); pointer-events: none; }
-.po-toolbar__search input { width: 100%; padding: 10px 12px 10px 40px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-card); color: var(--text-primary); font-size: 14px; font-family: inherit; transition: border-color 0.2s, box-shadow 0.2s; outline: none; }
+.po-toolbar__search input { width: 100%; padding: 10px 12px 10px 40px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-card); color: var(--text-primary); font-size: 15px; font-family: inherit; transition: border-color 0.2s, box-shadow 0.2s; outline: none; }
 .po-toolbar__search input::placeholder { color: var(--text-placeholder); }
 .po-toolbar__search input:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(10,110,209,0.1); }
 .po-toolbar__right { display: flex; align-items: center; gap: 8px; }
-.po-toolbar__filter { display: inline-flex; align-items: center; gap: 6px; padding: 10px 16px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-card); color: var(--text-secondary); font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: border-color 0.2s, color 0.2s; white-space: nowrap; }
+.po-toolbar__filter { display: inline-flex; align-items: center; gap: 6px; padding: 10px 16px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-card); color: var(--text-secondary); font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; transition: border-color 0.2s, color 0.2s; white-space: nowrap; }
 .po-toolbar__filter:hover { border-color: var(--border-strong); color: var(--text-primary); }
 .po-toolbar__view-toggle { display: flex; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
 .po-toolbar__view-btn { padding: 9px 12px; border: none; background: var(--surface-card); color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; transition: background 0.15s, color 0.15s; }
@@ -144,9 +144,9 @@
 }
 .po-table-wrap { overflow-x: auto; }
 .po-table { width: 100%; border-collapse: collapse; min-width: 950px; }
-.po-table th { text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-secondary); padding: 11px 16px; border-bottom: 2px solid var(--border); border-right: 1px solid var(--border); background: var(--surface-elevated); white-space: nowrap; }
+.po-table th { text-align: left; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-secondary); padding: 12px 16px; border-bottom: 2px solid var(--border); border-right: 1px solid var(--border); background: var(--surface-elevated); white-space: nowrap; }
 .po-table th:last-child { border-right: none; }
-.po-table td { padding: 11px 16px; font-size: 13px; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); vertical-align: middle; color: var(--text-primary); }
+.po-table td { padding: 13px 16px; font-size: 14.5px; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); vertical-align: middle; color: var(--text-primary); }
 .po-table td:last-child { border-right: none; }
 .po-table tr:last-child td { border-bottom: 1px solid var(--border); }
 .po-table tbody tr { transition: background 0.15s; border-left: 3px solid transparent; background: var(--surface-card); }
@@ -177,9 +177,9 @@
 }
 
 .po-table__po-info { display: flex; flex-direction: column; gap: 2px; }
-.po-table__po-number { font-size: 13px; font-weight: 700; color: var(--primary-500); }
-.po-table__rfq-link { font-size: 11px; color: var(--text-secondary); font-weight: 500; }
-.po-table__meta { font-size: 11px; color: var(--text-placeholder); }
+.po-table__po-number { font-size: 15px; font-weight: 700; color: var(--primary-500); }
+.po-table__rfq-link { font-size: 12.5px; color: var(--text-secondary); font-weight: 500; }
+.po-table__meta { font-size: 12.5px; color: var(--text-placeholder); }
 
 .po-table__vendor { display: flex; align-items: center; gap: 10px; }
 .po-table__avatar { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; border: 1px solid transparent; transition: background 0.25s ease, color 0.25s ease, border-color 0.25s ease; }
@@ -200,13 +200,13 @@
 [data-theme="dark"] .po-table__avatar--4 { background: linear-gradient(135deg,#059669,#34d399); }
 [data-theme="dark"] .po-table__avatar--5 { background: linear-gradient(135deg,#dc2626,#f87171); }
 [data-theme="dark"] .po-table__avatar--6 { background: linear-gradient(135deg,#d97706,#fbbf24); }
-.po-table__vendor-name { font-weight: 600; white-space: nowrap; }
-.po-table__amount { font-weight: 700; font-family: var(--font-mono); white-space: nowrap; }
-.po-table__items { font-weight: 700; text-align: center; }
-.po-table__date { white-space: nowrap; color: var(--text-secondary); font-size: 12px; display: flex; align-items: center; gap: 5px; }
+.po-table__vendor-name { font-size: 15px; font-weight: 700; white-space: nowrap; }
+.po-table__amount { font-size: 15px; font-weight: 700; font-family: var(--font-mono); white-space: nowrap; }
+.po-table__items { font-weight: 700; text-align: center; font-size: 14.5px; }
+.po-table__date { white-space: nowrap; color: var(--text-secondary); font-size: 13.5px; display: flex; align-items: center; gap: 5px; }
 
 /* Priority */
-.po-priority { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 12px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; }
+.po-priority { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 12px; font-size: 12.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; }
 .po-priority--high   { background: rgba(187,0,0,0.08);  color: var(--danger-500); }
 .po-priority--medium { background: rgba(233,115,12,0.1); color: var(--warning-500); }
 .po-priority--low    { background: rgba(100,116,139,0.1); color: #64748b; }
@@ -215,7 +215,7 @@
 [data-theme="dark"] .po-priority--low    { background: rgba(100,116,139,0.12); color: #94a3b8; }
 
 /* Status badge */
-.po-badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; }
+.po-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 14px; font-size: 13.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; }
 .po-badge--DRAFT             { background: rgba(100,116,139,0.1); color: #64748b; }
 .po-badge--PENDING_APPROVAL  { background: rgba(233,115,12,0.1); color: var(--warning-500); }
 .po-badge--APPROVED          { background: rgba(16,126,62,0.1);  color: var(--success-500); }

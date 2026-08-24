@@ -34,9 +34,9 @@
 .rfq-page__header-left h1 { font-size: 22px; font-weight: 700; margin: 0 0 2px; line-height: 1.2; }
 .rfq-page__header-left p  { font-size: 13px; color: var(--text-secondary); margin: 0; }
 .rfq-page__create-btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 10px 18px; border-radius: var(--radius-md); border: none;
-  background: var(--primary-500); color: #fff; font-size: 14px; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 20px; border-radius: var(--radius-md); border: none;
+  background: var(--primary-500); color: #fff; font-size: 15px; font-weight: 700;
   cursor: pointer; white-space: nowrap; flex-shrink: 0; font-family: inherit;
   transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
   box-shadow: 0 2px 8px rgba(10,110,209,0.25);
@@ -51,12 +51,11 @@
   width: 100%; padding: 10px 12px 10px 38px;
   border: 1px solid var(--border); border-radius: var(--radius-md);
   background: var(--surface-card); color: var(--text-primary);
-  font-size: 14px; font-family: inherit; outline: none;
+  font-size: 15px; font-family: inherit; outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 .rfq-toolbar__search input::placeholder { color: var(--text-placeholder); }
 .rfq-toolbar__search input:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(10,110,209,0.1); }
-
 
 /* ─── KPI Summary Cards (Glassmorphism) ──────────────────── */
 .rfq-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; width: 100%; padding: 4px; margin: -4px; overflow: visible; }
@@ -66,7 +65,7 @@
 .rfq-summary-card {
   position: relative;
   padding: 20px;
-  border-radius: 14px !important;
+  border-radius: 10px !important;
   background: rgba(255, 255, 255, 0.72) !important;
   backdrop-filter: blur(16px) saturate(180%);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
@@ -169,10 +168,10 @@
 
 .rfq-summary-card__info { display: flex; flex-direction: column; gap: 2px; }
 .rfq-summary-card__value { font-size: 28px; font-weight: 800; color: var(--text-primary); line-height: 1.1; letter-spacing: -0.5px; }
-.rfq-summary-card__label { font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.6px; }
+.rfq-summary-card__label { font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.6px; }
 
 /* ─── Badge ──────────────────────────────────────────────── */
-.rfq-badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; }
+.rfq-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 14px; font-size: 13.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; }
 .rfq-badge__dot { width: 6px; height: 6px; border-radius: 50%; }
 .rfq-badge--DRAFT            { background: rgba(148,163,184,0.12); color: #64748b; }
 .rfq-badge--DRAFT .rfq-badge__dot { background: #64748b; }
@@ -184,6 +183,8 @@
 .rfq-badge--ACCEPTED .rfq-badge__dot { background: var(--success-500); }
 .rfq-badge--REJECTED         { background: rgba(187,0,0,0.08); color: var(--danger-500); }
 .rfq-badge--REJECTED .rfq-badge__dot { background: var(--danger-500); }
+.rfq-badge--RETURNED         { background: rgba(217,119,6,0.12); color: #d97706; }
+.rfq-badge--RETURNED .rfq-badge__dot { background: #d97706; }
 .rfq-badge--SENT             { background: rgba(16,126,62,0.12); color: var(--success-500); }
 .rfq-badge--SENT .rfq-badge__dot { background: var(--success-500); }
 .rfq-badge--IN_PROGRESS      { background: rgba(16,126,62,0.12); color: var(--success-500); }
@@ -196,12 +197,14 @@
 [data-theme="dark"] .rfq-badge--DRAFT .rfq-badge__dot { background: #94a3b8; }
 [data-theme="dark"] .rfq-badge--PENDING_APPROVAL { background: rgba(234,179,8,0.18); color: #facc15; }
 [data-theme="dark"] .rfq-badge--PENDING_APPROVAL .rfq-badge__dot { background: #facc15; }
+[data-theme="dark"] .rfq-badge--RETURNED { background: rgba(245,158,11,0.18); color: #f59e0b; }
+[data-theme="dark"] .rfq-badge--RETURNED .rfq-badge__dot { background: #f59e0b; }
 
 /* ── RFQ Type Badge ─────────────────────────────────────── */
 .rfq-type-badge {
   display: inline-flex; align-items: center; gap: 4px;
-  padding: 3px 10px; border-radius: 12px;
-  font-size: 11px; font-weight: 700;
+  padding: 4px 10px; border-radius: 12px;
+  font-size: 13px; font-weight: 700;
   letter-spacing: 0.3px; white-space: nowrap;
   border: 1px solid transparent;
 }
@@ -255,9 +258,9 @@
 
 .rfq-table th {
   text-align: left;
-  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  font-size: 13px; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.6px; color: var(--text-secondary);
-  padding: 11px 14px;
+  padding: 12px 14px;
   border-bottom: 2px solid var(--border);
   border-right: 1px solid var(--border);
   background: var(--surface-elevated);
@@ -271,8 +274,8 @@
 /* All tds: clip overflow, vertical border dividers */
 .rfq-table td,
 .rfq-td {
-  padding: 11px 14px;
-  font-size: 13px;
+  padding: 13px 14px;
+  font-size: 14.5px;
   color: var(--text-primary);
   border-bottom: 1px solid var(--border);
   border-right: 1px solid var(--border);
@@ -313,7 +316,7 @@
 /* RFQ number link */
 .rfq-table__num-btn {
   background: none; border: none; padding: 0; cursor: pointer;
-  font-family: inherit; font-size: 13px; font-weight: 700; color: var(--primary-500);
+  font-family: inherit; font-size: 15px; font-weight: 700; color: var(--primary-500);
   text-decoration: underline; text-underline-offset: 3px; text-decoration-style: dashed;
   white-space: nowrap; transition: color 0.15s, text-decoration-style 0.15s;
 }
@@ -325,23 +328,23 @@
   min-width: 0; /* allow text-overflow to work */
 }
 .rfq-table__title {
-  font-size: 13px; font-weight: 500;
+  font-size: 15px; font-weight: 700;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   display: block; color: var(--text-primary);
 }
 .rfq-table__desc {
-  font-size: 11px; color: var(--text-secondary);
+  font-size: 12.5px; color: var(--text-secondary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   display: block;
 }
 
 /* Creator */
 .rfq-table__creator { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.rfq-table__creator-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+.rfq-table__creator-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14.5px; }
 .rfq-table__avatar {
-  width: 28px; height: 28px; border-radius: 50%;
+  width: 32px; height: 32px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 700;
+  font-size: 12px; font-weight: 700;
   flex-shrink: 0;
   border: 1px solid transparent;
   transition: background 0.25s ease, color 0.25s ease, border-color 0.25s ease;
@@ -362,24 +365,24 @@
 }
 
 /* Date, misc text */
-.rfq-table__date     { white-space: nowrap; color: var(--text-secondary); font-size: 13px; }
-.rfq-table__cell-text { color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.rfq-table__date     { white-space: nowrap; color: var(--text-secondary); font-size: 13.5px; }
+.rfq-table__cell-text { color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; font-size: 14.5px; }
 
 /* Numbers — display:block so text-align on td applies */
-.rfq-table__num-cell { font-size: 13px; font-weight: 600; display: block; }
-.rfq-table__estimate { font-size: 13px; font-weight: 700; white-space: nowrap; display: block; }
+.rfq-table__num-cell { font-size: 14.5px; font-weight: 600; display: block; }
+.rfq-table__estimate { font-size: 15px; font-weight: 700; white-space: nowrap; display: block; }
 
 /* Vendors — inline-flex centered */
 .rfq-table__vendors-cell {
   display: inline-flex; align-items: center; justify-content: center;
-  gap: 4px; color: var(--text-secondary); font-size: 13px; white-space: nowrap;
+  gap: 4px; color: var(--text-secondary); font-size: 13.5px; white-space: nowrap;
 }
 .rfq-table__vendors-icon { opacity: 0.55; flex-shrink: 0; }
 /* legacy */
-.rfq-table__vendors { display: inline-flex; align-items: center; gap: 5px; color: var(--text-secondary); font-size: 13px; white-space: nowrap; }
+.rfq-table__vendors { display: inline-flex; align-items: center; gap: 5px; color: var(--text-secondary); font-size: 13.5px; white-space: nowrap; }
 
 /* Priority chip */
-.rfq-table__priority-chip { display: inline-block; padding: 3px 9px; border-radius: 8px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.rfq-table__priority-chip { display: inline-block; padding: 4px 10px; border-radius: 8px; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
 .rfq-table__priority-chip--low      { background: rgba(100,116,139,0.1); color: #475569; }
 .rfq-table__priority-chip--medium   { background: rgba(10,110,209,0.1);  color: var(--primary-500); }
 .rfq-table__priority-chip--high     { background: rgba(233,115,12,0.1);  color: var(--warning-500); }

@@ -180,7 +180,7 @@ export default function LoginPage() {
           </form>
 
           <p className="sap-login__form-footer">
-            <a href="/vendor/login" style={{ color: 'var(--primary-500)', fontSize: 13, textDecoration: 'none' }}>
+            <a href="/vendor/login" style={{ color: 'var(--primary-500)', fontSize: 16, fontWeight: 600, textDecoration: 'none' }}>
               {PORTAL_NAMES.secondary}? Sign in here
             </a>
           </p>

@@ -82,18 +82,18 @@ export const CreatorLevelPromptModal: React.FC<CreatorLevelPromptModalProps> = (
 
             <div className="prompt-modal__field">
               <label className="prompt-modal__label">
-                Quotation Approval Mode (X-Logic)
+                Quotation Approval Mode (N-Logic)
               </label>
               <select
                 className="prompt-modal__select"
                 value={quotationApprovalMode}
                 onChange={(e) => setQuotationApprovalMode(e.target.value as 'DIRECT_X_ONLY' | 'FULL_CHAIN')}
               >
-                <option value="DIRECT_X_ONLY">Direct X Only (Single-level Review)</option>
-                <option value="FULL_CHAIN">Full Approval Chain (L1 → L2 → L3...)</option>
+                <option value="DIRECT_X_ONLY">Single-level Review</option>
+                <option value="FULL_CHAIN">Multi-level Review</option>
               </select>
               <span className="prompt-modal__hint">
-                Choose whether incoming vendor bids go directly to X (L1/Originator) or full level chain.
+                Choose whether incoming vendor bids go through Single-level Review or Multi-level Review chain.
               </span>
             </div>
           </div>

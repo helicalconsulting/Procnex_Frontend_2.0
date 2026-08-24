@@ -99,23 +99,23 @@
 [data-theme="dark"] .ctr-summary-card__icon--value   { background: rgba(139,92,246,0.25); color: #c084fc; border-color: rgba(192,132,252,0.3); }
 .ctr-summary-card__info { display: flex; flex-direction: column; gap: 2px; }
 .ctr-summary-card__value { font-size: 28px; font-weight: 800; line-height: 1.1; font-feature-settings: "tnum", "cv05"; letter-spacing: -0.5px; }
-.ctr-summary-card__label { font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.6px; }
+.ctr-summary-card__label { font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.6px; }
 
 /* Toolbar */
 .ctr-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .ctr-toolbar__search { flex: 1; min-width: 240px; position: relative; }
 .ctr-toolbar__search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-placeholder); pointer-events: none; }
 .ctr-toolbar__search input {
-  width: 100%; padding: 9px 12px 9px 40px; border: 1px solid var(--border);
+  width: 100%; padding: 10px 12px 10px 40px; border: 1px solid var(--border);
   border-radius: 4px; background: var(--surface-card); color: var(--text-primary);
-  font-size: 13px; font-family: var(--font-sans) !important; transition: border-color 0.2s, box-shadow 0.2s; outline: none;
+  font-size: 15px; font-family: var(--font-sans) !important; transition: border-color 0.2s, box-shadow 0.2s; outline: none;
 }
 .ctr-toolbar__search input::placeholder { color: var(--text-placeholder); }
 .ctr-toolbar__search input:focus { border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(10,110,209,0.15); }
 .ctr-toolbar__right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ctr-toolbar__filter-select {
   padding: 9px 32px 9px 14px; border: 1px solid var(--border); border-radius: 4px;
-  background: var(--surface-card); color: var(--text-primary); font-size: 13px; font-weight: 500;
+  background: var(--surface-card); color: var(--text-primary); font-size: 14px; font-weight: 600;
   cursor: pointer; font-family: var(--font-sans) !important; outline: none; appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right 12px center; min-width: 140px;
@@ -124,7 +124,7 @@
 .ctr-toolbar__status-filters { display: flex; gap: 4px; }
 .ctr-toolbar__status-btn {
   padding: 7px 14px; border: 1px solid var(--border); border-radius: 4px;
-  background: var(--surface-card); color: var(--text-secondary); font-size: 12px;
+  background: var(--surface-card); color: var(--text-secondary); font-size: 13px;
   font-weight: 600; cursor: pointer; font-family: var(--font-sans) !important; white-space: nowrap;
   transition: all 0.15s;
 }
@@ -157,12 +157,12 @@
 .ctr-table { width: 100%; border-collapse: collapse; }
 .ctr-table th {
   text-align: left;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.6px;
   color: var(--text-secondary);
-  padding: 11px 16px;
+  padding: 12px 16px;
   border-bottom: 2px solid var(--border);
   border-right: 1px solid var(--border);
   background: var(--surface-elevated);
@@ -172,8 +172,8 @@
 .ctr-table th:last-child { border-right: none; }
 
 .ctr-table td {
-  padding: 11px 16px;
-  font-size: 13px;
+  padding: 13px 16px;
+  font-size: 14.5px;
   border-bottom: 1px solid var(--border);
   border-right: 1px solid var(--border);
   vertical-align: middle;
@@ -224,16 +224,16 @@
 }
 
 .ctr-table__contract-info { display: flex; flex-direction: column; gap: 2px; }
-.ctr-table__contract-number { font-size: 13px; font-weight: 700; color: var(--primary-500); font-family: var(--font-sans) !important; }
-.ctr-table__contract-title { font-size: 13px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; font-family: var(--font-sans) !important; }
-.ctr-table__meta { font-size: 11px; color: var(--text-placeholder); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ctr-table__vendor-name { font-weight: 600; font-family: var(--font-sans) !important; }
-.ctr-table__amount { font-weight: 700; font-family: var(--font-sans) !important; font-feature-settings: "tnum", "cv05"; white-space: nowrap; }
-.ctr-table__owner { font-size: 12px; color: var(--text-secondary); font-family: var(--font-sans) !important; }
-.ctr-table__date { white-space: nowrap; color: var(--text-secondary); font-size: 12px; display: flex; align-items: center; gap: 5px; font-family: var(--font-sans) !important; }
+.ctr-table__contract-number { font-size: 15px; font-weight: 700; color: var(--primary-500); font-family: var(--font-sans) !important; }
+.ctr-table__contract-title { font-size: 14.5px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; font-family: var(--font-sans) !important; }
+.ctr-table__meta { font-size: 12.5px; color: var(--text-placeholder); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctr-table__vendor-name { font-size: 15px; font-weight: 700; font-family: var(--font-sans) !important; }
+.ctr-table__amount { font-size: 15px; font-weight: 700; font-family: var(--font-sans) !important; font-feature-settings: "tnum", "cv05"; white-space: nowrap; }
+.ctr-table__owner { font-size: 13.5px; color: var(--text-secondary); font-family: var(--font-sans) !important; }
+.ctr-table__date { white-space: nowrap; color: var(--text-secondary); font-size: 13.5px; display: flex; align-items: center; gap: 5px; font-family: var(--font-sans) !important; }
 
 /* Status Badges — SAP Fiori ObjectStatus */
-.ctr-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; border: 1px solid transparent; font-family: var(--font-sans) !important; }
+.ctr-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 14px; font-size: 13.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; border: 1px solid transparent; font-family: var(--font-sans) !important; }
 .ctr-badge--DRAFT                      { background: rgba(100,116,139,0.1); color: #64748b; border-color: rgba(100,116,139,0.25); }
 .ctr-badge--AWAITING_CUSTOMER_SIGNATURE,
 .ctr-badge--PENDING_VENDOR_SIGNATURE   { background: rgba(233,115,12,0.1); color: #e9730c; border-color: rgba(233,115,12,0.25); }

@@ -16,7 +16,7 @@ import {
   Crown, GitCompareArrows, ArrowDownNarrowWide, X, RotateCcw,
   MessageSquare, AlertTriangle, ArrowRightLeft, Shield, Check, X as XIcon,
   Maximize2, Minimize2, Minus, ChevronUp, BarChart3, Loader2, LayoutGrid, LayoutList,
-  Download, FileCheck, ShoppingCart,
+  Download, FileCheck, ShoppingCart, GitBranch,
 } from 'lucide-react';
 import { downloadDocument } from '../../utils/download';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
@@ -52,7 +52,7 @@ interface QuotationAttachment {
 }
 
 interface MockQuotation {
-  id: number; rfqId: number; rfqNumber: string; rfqTitle?: string; vendorName: string; vendorEmail: string;
+  id: number | string; rfqId: number | string; rfqNumber: string; rfqTitle?: string; vendorName: string; vendorEmail: string;
   vendorInitials: string; avatarMod: string; totalPrice: string;
   totalPriceNum: number; currency?: string; leadTimeDays: number; paymentTerms: string;
   paymentPlanSnapshot?: Array<{ title: string; percentage: number }> | null;
@@ -67,6 +67,12 @@ interface MockQuotation {
   hasPO?: boolean;
   hasContract?: boolean;
   postAwardDecision?: string;
+  // Versioning & Vendor Quotation Number fields
+  versionNumber?: number;
+  qNo?: string;
+  vendorQuotationNumber?: string;
+  parentQuotationId?: string;
+  isLatestVersion?: boolean;
 }
 
 interface QuotColDef {
@@ -77,6 +83,7 @@ interface QuotColDef {
 
 const ALL_QUOT_COLS: QuotColDef[] = [
   { key: 'vendor',       label: 'Vendor',        required: true },
+  { key: 'qNo',          label: 'Q.No'         },
   { key: 'totalPrice',   label: 'Total Price'  },
   { key: 'leadTime',     label: 'Lead Time'    },
   { key: 'paymentTerms', label: 'Payment Terms'},
@@ -121,6 +128,26 @@ const ALL_LISTING_COLUMNS: ListingColumnDef[] = [
         </div>
       </div>
     ),
+  },
+  {
+    key: 'version', label: 'Version', defaultVisible: true, width: '90px',
+    render: (q) => {
+      const displayQ = q.qNo || (q.versionNumber ? `Q${q.versionNumber}` : 'Q1');
+      return (
+        <span
+          className={`quot-compare__qno-pill ${
+            q.status === 'RETURNED'
+              ? 'quot-compare__qno-pill--returned'
+              : q.versionNumber && q.versionNumber > 1
+              ? 'quot-compare__qno-pill--latest'
+              : 'quot-compare__qno-pill--history'
+          }`}
+          title={`Quotation Version: ${displayQ}`}
+        >
+          {displayQ}
+        </span>
+      );
+    },
   },
   {
     key: 'rfq', label: 'RFQ', defaultVisible: true, width: '140px',
@@ -240,6 +267,8 @@ function mapQuotationToRow(q: Quotation): MockQuotation {
   const rawScore = q.score ?? 0;
   const score = rawScore <= 5 ? Math.round(rawScore * 20) : Math.round(rawScore);
   const price = computeSelectedTotalPrice(q);
+  const vNum = (q as any).versionNumber || (q as any).version_number || (q as any).version || undefined;
+  const qNumber = (vNum && vNum > 1) ? `Q${vNum}` : ((q as any).qNo || (q as any).quotationNumber || (vNum ? `Q${vNum}` : undefined));
   return {
     id: q.id,
     rfqId: q.rfqId,
@@ -250,6 +279,7 @@ function mapQuotationToRow(q: Quotation): MockQuotation {
     quotationXUserRole: (rfqObj as any)?.quotationXUserRole || (q as any).quotationXUserRole || null,
     currentLevelRole: (q as any).currentLevelRole || null,
     rfqCreatedBy: (rfqObj as any)?.createdBy || (q as any).rfqCreatedBy || (q as any).createdBy || null,
+    vendorId: q.vendorId || vendor?.id || (q as any).vendor_id,
     vendorName: name,
     vendorEmail: vendor?.email || '',
     vendorInitials: initials,
@@ -273,6 +303,9 @@ function mapQuotationToRow(q: Quotation): MockQuotation {
     hasPO: Boolean((q as any).hasPO),
     hasContract: Boolean((q as any).hasContract),
     postAwardDecision: (q as any).postAwardDecision || (rfqObj as any)?.postAwardDecision || null,
+    qNo: qNumber,
+    versionNumber: vNum,
+    vendorQuotationNumber: (q as any).vendorQuotationNumber || (q as any).quotationNumber || (q as any).vendorQuoteNumber,
   };
 }
 
@@ -286,19 +319,19 @@ function getScoreClass(s: number) { return s >= 80 ? 'high' : s >= 60 ? 'mid' : 
 
 function checkIsDirectXMode(q: any): boolean {
   if (!q) return false;
-  const quotMode = q.quotationApprovalMode || q.rfq?.quotationApprovalMode;
   const rfqStart = q.rfqApprovalStartPoint || q.rfq?.rfqApprovalStartPoint;
+  const quotMode = q.quotationApprovalMode || q.rfq?.quotationApprovalMode;
 
-  // If Quotation Approval Mode is explicitly FULL_CHAIN, it is NEVER Direct X mode (it is multi-level chain mode)
-  if (quotMode === 'FULL_CHAIN') return false;
-
-  // If Quotation Approval Mode is explicitly DIRECT_X_ONLY, it is Direct X mode
-  if (quotMode === 'DIRECT_X_ONLY') return true;
-
-  // If RFQ Start Point is explicitly ORIGINATOR and quotMode is not FULL_CHAIN, it is Direct X mode
+  // If RFQ Start Point is explicitly ORIGINATOR, it is always Originator direct approval!
   if (rfqStart === 'ORIGINATOR') return true;
 
-  return false;
+  // If Quotation Approval Mode is explicitly DIRECT_X_ONLY or not set, it is Direct X mode
+  if (quotMode === 'DIRECT_X_ONLY' || !quotMode) return true;
+
+  // If Quotation Approval Mode is explicitly FULL_CHAIN, it is multi-level chain mode
+  if (quotMode === 'FULL_CHAIN') return false;
+
+  return true;
 }
 
 /**
@@ -1922,6 +1955,11 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
 function canActionQuotation(s: MockQuotation | null | undefined, user: any, roles: string[]): boolean {
   if (!s) return false;
 
+  const currentStatus = getDisplayStatus(s);
+  if (currentStatus === 'RETURNED' || currentStatus === 'ACCEPTED' || currentStatus === 'REJECTED' || s.status === 'RETURNED') {
+    return false;
+  }
+
   const currentUserId = String(user?.id || '');
   const rfqCreatorId = String(s.rfqCreatedBy || (s as any).rfq?.createdBy || (s as any).createdBy || '');
   const isOriginatorUser = !!currentUserId && !!rfqCreatorId && currentUserId === rfqCreatorId;
@@ -1970,36 +2008,37 @@ function canPerformPostAward(s: MockQuotation | null | undefined, user: any, rol
   // For FULL_CHAIN quotations, post-award actions (Create PO & Create Contract) are ONLY available if the full chain is completed
   if (isFullChain && (s as any).isChainComplete === false) return false;
 
-  const isSuperAdmin = Array.isArray(roles) && (
-    roles.includes('Super Admin') || roles.includes('Administrator') || roles.includes('SUPER_ADMIN') || user?.role === 'SUPER_ADMIN' || String(user?.id) === '1'
-  );
+  const userRoles: string[] = Array.isArray(roles) ? roles : [];
+
+  // Super Admin / System Administrator access
+  const isSuperAdmin = userRoles.some(r => {
+    const norm = (r || '').toLowerCase();
+    return norm === 'super admin' || norm === 'administrator' || norm === 'super_admin';
+  }) || user?.role === 'SUPER_ADMIN' || String(user?.id) === '1';
   if (isSuperAdmin) return true;
 
   const currentUserId = String(user?.id || '');
   const rfqCreatorId = String(s.rfqCreatedBy || (s as any).rfq?.createdBy || (s as any).createdBy || '');
   const isCreator = !!currentUserId && !!rfqCreatorId && currentUserId === rfqCreatorId;
 
-  if (!isFullChain) {
-    // In DIRECT_X_ONLY mode (X = ORIGINATOR): ONLY the RFQ Originator (creator) acts as Final Approver for Post Award
-    return isCreator;
-  }
+  // 1. Explicit final approver flag set during workflow completion
+  if ((s as any).isFinalApprover === true) return true;
 
-  // In FULL_CHAIN mode: ONLY the Final Approver (user who completed final level or has final level role, or Originator if chain is complete)
-  const isFinalApprover = (s as any).isFinalApprover === true;
-  if (isFinalApprover) return true;
+  // 2. Final Approver Roles ONLY (e.g. Purchase Manager, L2 User, Procurement Manager, Approver 2, Level 2 User)
+  // Intermediate roles like "Purchase Clerk" / "L1 User" / "Buyer" are EXCLUDED.
+  const finalApproverRoleKeywords = ['manager', 'l2', 'l3', 'approver 2', 'approver 3', 'level 2', 'level 3'];
+  const isFinalApproverRole = userRoles.some(r => {
+    const norm = (r || '').toLowerCase();
+    return finalApproverRoleKeywords.some(keyword => norm.includes(keyword));
+  });
 
-  if (isCreator && (s as any).isChainComplete !== false) return true;
+  if (isFinalApproverRole) return true;
 
-  const finalLevelRole = (s as any).finalLevelRole || (s as any).totalLevelsRole;
-  if (finalLevelRole) {
-    const normalizedFinalRole = String(finalLevelRole).toLowerCase();
-    const userRoles: string[] = Array.isArray(roles) ? roles : [];
-    const hasFinalRole = userRoles.some((r) => {
-      const norm = r.toLowerCase();
-      return norm === normalizedFinalRole || norm.includes(normalizedFinalRole) || normalizedFinalRole.includes(norm);
-    });
-    if (hasFinalRole) return true;
-  }
+  // 3. For DIRECT_X_ONLY mode (single level review by Originator): RFQ Creator is the Final Approver
+  if (!isFullChain && isCreator) return true;
+
+  // 4. For FULL_CHAIN completed items: Creator can view post-award actions after final approval is finished
+  if (isFullChain && isCreator && (s as any).isChainComplete !== false) return true;
 
   return false;
 }
@@ -2469,7 +2508,9 @@ export default function QuotationsPage() {
 
   const { data: serverQuotations, loading, error, reload, forceRefresh } = useServiceData(
     () => quotationService.list(false).then((list) => list.map(mapQuotationToRow)),
-    [] as MockQuotation[]
+    [] as MockQuotation[],
+    [],
+    { cacheTtlMs: 0 }
   );
   const [quotations, setQuotations] = useState<MockQuotation[]>([]);
   const quotationsRef = useRef(quotations);
@@ -2477,15 +2518,18 @@ export default function QuotationsPage() {
     quotationsRef.current = quotations;
   }, [quotations]);
   useEffect(() => {
-    // Re-apply isFinalApprover flag for quotations tracked in the ref
-    // (survives reload so the final approver sees actual status)
-    setQuotations(
-      serverQuotations.map(q =>
+    if (!serverQuotations) return;
+    setQuotations(prev => {
+      const next = serverQuotations.map(q =>
         finalApproverIdsRef.current.has(q.id)
           ? { ...q, isFinalApprover: true }
           : q
-      )
-    );
+      );
+      if (prev.length === next.length && prev.every((item, idx) => item.id === next[idx].id && item.status === next[idx].status)) {
+        return prev;
+      }
+      return next;
+    });
   }, [serverQuotations]);
 
   // Separate data for Supplier Comparison — bypasses approval-level visibility filter
@@ -2493,6 +2537,8 @@ export default function QuotationsPage() {
   const { data: serverAllQuotations, reload: reloadAllQuotations } = useServiceData(
     () => quotationService.listAll().then((list) => list.map(mapQuotationToRow)),
     [] as MockQuotation[],
+    [],
+    { cacheTtlMs: 0 }
   );
 
   const [allQuotations, setAllQuotations] = useState<MockQuotation[]>([]);
@@ -2558,6 +2604,14 @@ export default function QuotationsPage() {
       window.removeEventListener('rfq_deleted', handleRfqDeleted);
     };
   }, [reload, reloadAllQuotations]);
+
+  // Force fresh refetch whenever Active Quotation Comparison modal is opened
+  useEffect(() => {
+    if (compareModalOpen) {
+      reloadAllQuotations();
+      reload();
+    }
+  }, [compareModalOpen, reloadAllQuotations, reload]);
 
   const [statusFilter, setStatusFilter]             = useState<string | null>(null);
   const [search, setSearch]                           = useState('');
@@ -2919,7 +2973,21 @@ export default function QuotationsPage() {
 
   const compareSuppliers = useMemo(() => {
     if (!selectedRFQ) return [];
-    const group = compareSource.filter(q => q.rfqNumber === selectedRFQ);
+    const cleanSelectedRfq = selectedRFQ.toLowerCase().trim();
+    const rawRfqDigits = cleanSelectedRfq.replace(/^rfq-?/i, '');
+    const group = compareSource.filter(q => {
+      const qRfqNum = (q.rfqNumber || '').toLowerCase().trim();
+      const qRfqIdStr = String(q.rfqId || '').toLowerCase().trim();
+      const cleanQRfqNum = qRfqNum.replace(/^rfq-?/i, '');
+      return (
+        qRfqNum === cleanSelectedRfq ||
+        cleanQRfqNum === rawRfqDigits ||
+        qRfqIdStr === rawRfqDigits ||
+        qRfqIdStr === cleanSelectedRfq ||
+        (qRfqNum && cleanSelectedRfq.includes(qRfqNum)) ||
+        (cleanQRfqNum && cleanSelectedRfq.includes(cleanQRfqNum))
+      );
+    });
     if (!group.length) return group;
 
     const scored = group.map((q) => {
@@ -3297,6 +3365,192 @@ export default function QuotationsPage() {
   }
 
   const [expandedRfqNumbers, setExpandedRfqNumbers] = useState<Set<string>>(new Set());
+  const [expandedVendorIds, setExpandedVendorIds] = useState<Set<string>>(new Set());
+
+  const toggleVendorExpand = useCallback((vendorKey: string) => {
+    setExpandedVendorIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(vendorKey)) next.delete(vendorKey);
+      else next.add(vendorKey);
+      return next;
+    });
+  }, []);
+
+  // ── Per-Vendor Version Grouping for Active Quotation Comparison ──
+  const vendorGroups = useMemo(() => {
+    if (!selectedRFQ) return [];
+
+    const sourceData = evaluatedSuppliers.length > 0
+      ? evaluatedSuppliers
+      : (compareSource.length > 0 ? compareSource : quotations);
+
+    const rfqQuotations = sourceData.filter((q) => {
+      if (!selectedRFQ) return false;
+      const s = selectedRFQ.toLowerCase().trim();
+      const qNum = (q.rfqNumber || '').toLowerCase().trim();
+      const qId = String(q.rfqId || '').toLowerCase().trim();
+
+      if (qNum && (s === qNum || s.includes(qNum) || qNum.includes(s))) return true;
+      if (qId && (s === qId || s.includes(qId) || qId.includes(s))) return true;
+
+      const cleanS = s.replace(/^rfq-?/i, '');
+      const cleanNum = qNum.replace(/^rfq-?/i, '');
+      if (cleanNum && (cleanS.includes(cleanNum) || cleanNum.includes(cleanS))) return true;
+
+      return false;
+    });
+
+    if (!rfqQuotations.length) return [];
+
+    const map = new Map<string, MockQuotation[]>();
+    for (const q of rfqQuotations) {
+      const vendorIdStr = (q.vendorId && String(q.vendorId) !== '0' && String(q.vendorId) !== 'undefined') ? String(q.vendorId).trim() : '';
+      const emailStr = (q.vendorEmail || '').toLowerCase().trim();
+      const nameStr = (q.vendorName || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+
+      const key = vendorIdStr
+        ? `id-${vendorIdStr}`
+        : emailStr
+        ? `email-${emailStr}`
+        : nameStr
+        ? `name-${nameStr}`
+        : `raw-${q.id}`;
+
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(q);
+    }
+
+    const result: Array<{
+      vendorKey: string;
+      latest: MockQuotation;
+      history: MockQuotation[];
+      all: MockQuotation[];
+    }> = [];
+
+    for (const [vendorKey, quots] of map.entries()) {
+      const sorted = [...quots].sort((a, b) => {
+        const vA = a.versionNumber ?? (typeof a.id === 'number' ? a.id : 1);
+        const vB = b.versionNumber ?? (typeof b.id === 'number' ? b.id : 1);
+        if (vB !== vA) return vB - vA;
+        const timeDiff = new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime();
+        if (timeDiff !== 0) return timeDiff;
+        return (typeof b.id === 'number' && typeof a.id === 'number') ? b.id - a.id : 0;
+      });
+
+      const latestRaw = sorted[0];
+      const hasHistoryArray = Array.isArray((latestRaw as any).versionHistory) && (latestRaw as any).versionHistory.length > 0;
+      const maxVersionNum = (hasHistoryArray || sorted.length > 1)
+        ? Math.max(
+            latestRaw.versionNumber || 1,
+            quots.length,
+            ...quots.map((q) => q.versionNumber || 1)
+          )
+        : (latestRaw.status === 'RETURNED' && !hasHistoryArray && sorted.length === 1 ? 1 : (latestRaw.versionNumber || 1));
+
+      // 1. Collect all actual distinct quotation records from sorted array (Q3, Q2, Q1...)
+      const history: MockQuotation[] = sorted.slice(1).map((h, idx) => {
+        const vNum = h.versionNumber || (maxVersionNum - 1 - idx);
+        const priceVal = Number(h.totalPriceNum ?? h.totalPrice ?? 0);
+        return {
+          ...h,
+          totalPrice: priceVal,
+          totalPriceNum: priceVal,
+          qNo: h.qNo || `Q${vNum}`,
+          isLatestVersion: false,
+        };
+      });
+
+      // 2. Extract snapshots from versionHistory if present on latestRaw
+      const vHistory = Array.isArray((latestRaw as any).versionHistory) ? (latestRaw as any).versionHistory : [];
+      vHistory.forEach((vh: any) => {
+        if (vh && (vh.versionNumber || vh.qNo)) {
+          const vNum = vh.versionNumber || parseInt(String(vh.qNo).replace(/\D/g, ''), 10) || 1;
+          if (!history.some(h => (h.versionNumber || 1) === vNum)) {
+            const priceVal = Number(vh.totalPriceNum ?? vh.totalPrice ?? 0);
+            history.push({
+              ...latestRaw,
+              ...vh,
+              totalPrice: priceVal,
+              totalPriceNum: priceVal,
+              id: vh.id || `${latestRaw.id}-v${vNum}`,
+              versionNumber: vNum,
+              qNo: `Q${vNum}`,
+              status: vh.status || 'RETURNED',
+              isLatestVersion: false,
+            });
+          }
+        }
+      });
+
+      // 3. Ensure all previous version numbers (Q1, Q2...) exist in history array when versionNumber > 1
+      const existingVersionNums = new Set(history.map((q) => q.versionNumber || 1));
+      existingVersionNums.add(latestRaw.versionNumber || 1);
+
+      for (let v = maxVersionNum - 1; v >= 1; v--) {
+        if (!existingVersionNums.has(v)) {
+          const syntheticId = `${latestRaw.id}-v${v}-history`;
+          history.push({
+            ...latestRaw,
+            id: syntheticId,
+            versionNumber: v,
+            qNo: `Q${v}`,
+            status: 'RETURNED',
+            returnReason: latestRaw.returnReason || 'Quotation returned for revision by procurement team.',
+            submittedAt: latestRaw.submittedAt,
+            isLatestVersion: false,
+          });
+        }
+      }
+
+      // Sort history descending by version number (Q2, Q1...)
+      history.sort((a, b) => (b.versionNumber || 1) - (a.versionNumber || 1));
+
+      const totalVersionNum = Math.max(maxVersionNum, history.length + 1);
+
+      const evalMatch = evaluatedSuppliers.find(
+        (s) => s.id === latestRaw.id || (s.vendorEmail && s.vendorEmail.toLowerCase() === vendorKey)
+      );
+
+      const latest: MockQuotation = {
+        ...latestRaw,
+        ...(evalMatch || {}),
+        versionNumber: totalVersionNum,
+        qNo: totalVersionNum > 1 ? `Q${totalVersionNum}` : `Q${totalVersionNum}`,
+        vendorQuotationNumber: latestRaw.vendorQuotationNumber || (evalMatch as any)?.vendorQuotationNumber,
+        isLatestVersion: true,
+      };
+
+      result.push({
+        vendorKey,
+        latest,
+        history,
+        all: [latest, ...history],
+      });
+    }
+
+    return result.sort(
+      (a, b) =>
+        (b.latest.recommendationScore || b.latest.score || 0) -
+        (a.latest.recommendationScore || a.latest.score || 0)
+    );
+  }, [selectedRFQ, compareSource, evaluatedSuppliers]);
+
+  // Auto-expand vendor version histories so Q2, Q1, Q3 are immediately open & visible under the vendor
+  useEffect(() => {
+    if (vendorGroups.length > 0) {
+      setExpandedVendorIds((prev) => {
+        const next = new Set(prev);
+        let changed = false;
+        vendorGroups.forEach((g) => {
+          if (g.history.length > 0 && !next.has(g.vendorKey)) {
+            next.add(g.vendorKey);
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+    }
+  }, [vendorGroups]);
 
   const rfqGroups = useMemo<RfqGroup[]>(() => {
     const map = new Map<string, MockQuotation[]>();
@@ -3504,23 +3758,45 @@ export default function QuotationsPage() {
     setQuotations(prev => prev.map(updateItem));
     setAllQuotations(prev => prev.map(updateItem));
 
-    try {
-      const response = await quotationService.updateStatus(id, apiStatus, comment, startLevelNumber, returnTarget);
-      if (type === 'accept') {
-        if (response?.nextLevel === true) {
-          // Intermediate level approval (Level 1 in FULL_CHAIN mode)
-          const updateIntermediate = (q: MockQuotation): MockQuotation => {
-            if (q.id === id) {
-              return { ...q, status: 'UNDER_REVIEW', userAction: 'APPROVED_L1', isChainComplete: false };
-            }
-            return q;
-          };
-          setQuotations(prev => prev.map(updateIntermediate));
-          setAllQuotations(prev => prev.map(updateIntermediate));
+    // ⚡ INSTANT 0ms Success Modal Popup for User!
+    if (type === 'accept') {
+      setAcceptedModalData({
+        quotation: { ...modalQuotation, status: isDirectXMode ? 'ACCEPTED' : 'UNDER_REVIEW', isChainComplete: isDirectXMode, isFinalApprover: isDirectXMode },
+        isNextLevel: !isDirectXMode,
+        message: isDirectXMode ? 'Quotation accepted and vendor awarded successfully.' : 'Quotation approved at current level and forwarded to next level approver.',
+      });
+    } else if (type === 'return') {
+      setActionSuccessModalData({
+        actionType: 'return',
+        module: 'Quotation',
+        referenceNumber: modalQuotation.rfqNumber ? `Quotation for ${modalQuotation.rfqNumber}` : `Quotation #${id}`,
+        title: modalQuotation.vendorName ? `Quotation by ${modalQuotation.vendorName}` : undefined,
+        message: 'Quotation returned for revision successfully.',
+        comment: comment,
+        details: [
+          { label: 'Vendor', value: modalQuotation.vendorName },
+          { label: 'Total Price', value: `${modalQuotation.currency || ''} ${modalQuotation.totalPriceNum}` },
+        ],
+      });
+    } else {
+      setActionSuccessModalData({
+        actionType: 'reject',
+        module: 'Quotation',
+        referenceNumber: modalQuotation.rfqNumber ? `Quotation for ${modalQuotation.rfqNumber}` : `Quotation #${id}`,
+        title: modalQuotation.vendorName ? `Quotation by ${modalQuotation.vendorName}` : undefined,
+        message: 'Quotation rejected successfully.',
+        comment: comment,
+        details: [
+          { label: 'Vendor', value: modalQuotation.vendorName },
+          { label: 'Total Price', value: `${modalQuotation.currency || ''} ${modalQuotation.totalPriceNum}` },
+        ],
+      });
+    }
 
-          setAcceptedModalData({ quotation: { ...modalQuotation, status: 'UNDER_REVIEW', isChainComplete: false }, isNextLevel: true, message: response?.message });
-        } else {
-          // Final approval complete! Ensure winning quote is ACCEPTED & competing quotes REJECTED
+    // ── Asynchronous Background Backend Sync ──
+    quotationService.updateStatus(id, apiStatus, comment, startLevelNumber, returnTarget)
+      .then((response) => {
+        if (type === 'accept' && response?.nextLevel === false) {
           const updateFinalAccepted = (q: MockQuotation): MockQuotation => {
             if (q.id === id) {
               return { ...q, status: 'ACCEPTED', userAction: 'APPROVED', isChainComplete: true, isFinalApprover: true };
@@ -3532,49 +3808,23 @@ export default function QuotationsPage() {
           };
           setQuotations(prev => prev.map(updateFinalAccepted));
           setAllQuotations(prev => prev.map(updateFinalAccepted));
-
           setAcceptedModalData({ quotation: { ...modalQuotation, status: 'ACCEPTED', isChainComplete: true, isFinalApprover: true }, isNextLevel: false, message: response?.message });
+        } else if (response?.message) {
+          if (type === 'accept') {
+            setAcceptedModalData(prev => prev ? { ...prev, message: response.message } : null);
+          } else {
+            setActionSuccessModalData(prev => prev ? { ...prev, message: response.message } : null);
+          }
         }
         reload();
         reloadAllQuotations();
-      } else if (type === 'return') {
-        setActionSuccessModalData({
-          actionType: 'return',
-          module: 'Quotation',
-          referenceNumber: modalQuotation.rfqNumber ? `Quotation for ${modalQuotation.rfqNumber}` : `Quotation #${id}`,
-          title: modalQuotation.vendorName ? `Quotation by ${modalQuotation.vendorName}` : undefined,
-          message: response?.message || 'Quotation returned for revision successfully.',
-          comment: comment,
-          details: [
-            { label: 'Vendor', value: modalQuotation.vendorName },
-            { label: 'Total Price', value: `${modalQuotation.currency || ''} ${modalQuotation.totalPriceNum}` },
-          ],
-        });
-        reload();
-        reloadAllQuotations();
-      } else {
-        setActionSuccessModalData({
-          actionType: 'reject',
-          module: 'Quotation',
-          referenceNumber: modalQuotation.rfqNumber ? `Quotation for ${modalQuotation.rfqNumber}` : `Quotation #${id}`,
-          title: modalQuotation.vendorName ? `Quotation by ${modalQuotation.vendorName}` : undefined,
-          message: response?.message || 'Quotation rejected successfully.',
-          comment: comment,
-          details: [
-            { label: 'Vendor', value: modalQuotation.vendorName },
-            { label: 'Total Price', value: `${modalQuotation.currency || ''} ${modalQuotation.totalPriceNum}` },
-          ],
-        });
-        reload();
-        reloadAllQuotations();
-      }
-    } catch (err) {
-      console.error('Failed to update quotation status:', err);
-      // Revert local state on error
-      setQuotations(prev => prev.map(q => q.id === id ? { ...q, status: previousStatus, userAction: null } : q));
-      setAllQuotations(prev => prev.map(q => q.id === id ? { ...q, status: previousStatus, userAction: null } : q));
-      setToast({ message: err instanceof Error ? err.message : 'Failed to update quotation status', type: 'error' });
-    }
+      })
+      .catch((err) => {
+        console.error('Failed to update quotation status:', err);
+        setQuotations(prev => prev.map(q => q.id === id ? { ...q, status: previousStatus, userAction: null } : q));
+        setAllQuotations(prev => prev.map(q => q.id === id ? { ...q, status: previousStatus, userAction: null } : q));
+        setToast({ message: err instanceof Error ? err.message : 'Failed to update quotation status', type: 'error' });
+      });
   };
 
   const handleStartLevelConfirm = async (startLevelNumber: number) => {
@@ -3613,6 +3863,7 @@ export default function QuotationsPage() {
   const renderTh = (key: string) => {
     switch (key) {
       case 'vendor':       return <div className="quot-compare__param-inner"><ArrowDownNarrowWide size={13} /> Vendor</div>;
+      case 'qNo':          return <div className="quot-compare__col-inner"><span className="quot-compare__param-icon quot-compare__param-icon--qno"><GitBranch size={13}/></span>Q.No</div>;
       case 'totalPrice':   return <div className="quot-compare__col-inner"><span className="quot-compare__param-icon quot-compare__param-icon--price"><TrendingDown size={13}/></span>Total Price</div>;
       case 'leadTime':     return <div className="quot-compare__col-inner"><span className="quot-compare__param-icon quot-compare__param-icon--lead"><Clock size={13}/></span>Lead Time</div>;
       case 'paymentTerms': return <div className="quot-compare__col-inner"><span className="quot-compare__param-icon quot-compare__param-icon--terms"><FileText size={13}/></span>Payment Terms</div>;
@@ -3649,6 +3900,8 @@ export default function QuotationsPage() {
 
   // ── Supplier Comparison Panel Renderer (shared between inline and modal) ───
   const renderComparisonPanel = (inModal: boolean = false) => {
+    const hasSuppliers = vendorGroups.length > 0 || evaluatedSuppliers.length > 0;
+
     return (
       <>
         {/* RFQ Dropdown */}
@@ -3676,7 +3929,7 @@ export default function QuotationsPage() {
               )}
               <ChevronDown size={14} className={`quot-compare__chevron ${compareDropdownOpen ? 'quot-compare__chevron--open' : ''}`}/>
             </button>
-            {/* Compare RFQ dropdown — simple absolute positioning (no FloatingMenu to avoid zoom/fixed conflict) */}
+            {/* Compare RFQ dropdown */}
             {compareDropdownOpen && (
               <div className="quot-compare__dropdown-menu" ref={compareDropdownMenuRef}>
                 {/* Active / Inactive Filter Tabs */}
@@ -3758,7 +4011,9 @@ export default function QuotationsPage() {
               <span className={`quot-compare__rfq-status-tag ${isRfqInactive(selectedRFQ) ? 'quot-compare__rfq-status-tag--inactive' : 'quot-compare__rfq-status-tag--active'}`}>
                 {isRfqInactive(selectedRFQ) ? 'Inactive (Vendor Chosen)' : 'Active (Evaluating)'}
               </span>
-              <span className="quot-compare__rfq-count">{evaluatedSuppliers.length} suppliers</span>
+              <span className="quot-compare__rfq-count">
+                {vendorGroups.length || evaluatedSuppliers.length} suppliers
+              </span>
               <div className="quot-compare__view-toggle">
                 <button
                   className={`quot-compare__toggle-btn ${viewMode === 'table' ? 'quot-compare__toggle-btn--active' : ''}`}
@@ -3785,13 +4040,14 @@ export default function QuotationsPage() {
             vendorScores={chartVendorScores}
             vendorNames={chartVendorNames}
           />
-        ) : selectedRFQ && evaluatedSuppliers.length > 0 ? (
+        ) : selectedRFQ && hasSuppliers ? (
           <div className="quot-compare__matrix-wrap">
             <table className="quot-compare__matrix">
               <thead>
                 <tr>
                   {visibleCols.map(key => {
                     const colClass = key === 'vendor' ? 'quot-compare__vendor-col-header' : 
+                      key === 'qNo' ? 'quot-compare__col-header--qno' :
                       key === 'totalPrice' ? 'quot-compare__col-header--price' :
                       key === 'leadTime' ? 'quot-compare__col-header--lead' :
                       key === 'paymentTerms' ? 'quot-compare__col-header--payment' :
@@ -3835,12 +4091,56 @@ export default function QuotationsPage() {
                 </tr>
               </thead>
               <tbody>
-                {evaluatedSuppliers.map(s => (
-                  <tr key={s.id} className={`quot-compare__vendor-row ${s.isRecommended ? 'quot-compare__vendor-row--recommended' : ''}`}>
-                    {visibleCols.map(key => renderCell(key, s))}
-                    <td />
-                  </tr>
-                ))}
+                {vendorGroups.length > 0 ? (
+                  vendorGroups.map((group) => {
+                    const mainQuot = group.latest;
+                    const history = group.history;
+                    const vendorKey = group.vendorKey;
+                    const versionNum = mainQuot.versionNumber || 1;
+                    const hasHistory = history.length > 0 || versionNum > 1;
+                    const isExpanded = expandedVendorIds.has(vendorKey);
+                    const vendorCtx = {
+                      hasHistory,
+                      isExpanded,
+                      versionCount: Math.max(group.all.length, versionNum),
+                      onToggle: () => toggleVendorExpand(vendorKey),
+                    };
+
+                    return (
+                      <React.Fragment key={vendorKey}>
+                        {/* Latest Active Quotation Row */}
+                        <tr className={`quot-compare__vendor-row ${mainQuot.isRecommended ? 'quot-compare__vendor-row--recommended' : ''}`}>
+                          {visibleCols.map(key => renderCell(key, mainQuot, vendorCtx))}
+                          <td />
+                        </tr>
+
+                        {/* Collapsible History Sub-rows (Q2, Q1...) */}
+                        {isExpanded && history.map(h => (
+                          <tr key={h.id} className="quot-compare__vendor-row quot-compare__vendor-row--history">
+                            {visibleCols.map(key => renderCell(key, h, { ...vendorCtx, isHistoryRow: true }))}
+                            <td />
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    );
+                  })
+                ) : (
+                  evaluatedSuppliers.map(s => {
+                    const vNum = s.versionNumber || 1;
+                    const fallbackCtx = {
+                      hasHistory: vNum > 1,
+                      isExpanded: expandedVendorIds.has(String(s.id)),
+                      versionCount: vNum,
+                      onToggle: () => toggleVendorExpand(String(s.id)),
+                    };
+                    return (
+                      <tr key={s.id} className={`quot-compare__vendor-row ${s.isRecommended ? 'quot-compare__vendor-row--recommended' : ''}`}>
+                        {visibleCols.map(key => renderCell(key, s, fallbackCtx))}
+                        <td />
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
@@ -3862,15 +4162,106 @@ export default function QuotationsPage() {
   };
 
   // ── Cell renderer ───────────────────────────────────────────
-  const renderCell = (key: string, s: MockQuotation) => {
+  const renderCell = (
+    key: string,
+    s: MockQuotation,
+    vendorCtx?: {
+      hasHistory: boolean;
+      isExpanded: boolean;
+      versionCount: number;
+      onToggle: () => void;
+      isHistoryRow?: boolean;
+    }
+  ) => {
     switch (key) {
-      case 'vendor':
+      case 'qNo': {
+        const versionNum = s.versionNumber || 1;
+        const displayQNo = (s.versionNumber && s.versionNumber > 1) ? `Q${s.versionNumber}` : (s.qNo || `Q${versionNum}`);
+        return (
+          <td key={key} className="quot-compare__value">
+            <div className="quot-compare__qno-cell">
+              <span
+                className={`quot-compare__qno-pill ${
+                  s.status === 'RETURNED'
+                    ? 'quot-compare__qno-pill--returned'
+                    : s.isLatestVersion
+                    ? 'quot-compare__qno-pill--latest'
+                    : 'quot-compare__qno-pill--history'
+                }`}
+              >
+                {displayQNo}
+              </span>
+            </div>
+          </td>
+        );
+      }
+      case 'vendor': {
+        if (vendorCtx?.isHistoryRow) {
+          return (
+            <td key={key} className="quot-compare__vendor-cell quot-compare__vendor-cell--history">
+              <div className="quot-compare__supplier-card quot-compare__supplier-card--history">
+                <span className="quot-compare__history-tree-icon">
+                  <GitBranch size={13} />
+                </span>
+                <div className="quot-compare__supplier-info">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span className="quot-compare__history-version-tag">
+                      {s.qNo || `Q${s.versionNumber}`} (Previous Version)
+                    </span>
+                  </div>
+                  <span className="quot-compare__supplier-email">
+                    {formatDate(s.submittedAt)}{' '}
+                    {s.returnReason ? `· Returned: "${s.returnReason}"` : ''}
+                  </span>
+                </div>
+              </div>
+            </td>
+          );
+        }
+
         return (
           <td key={key} className="quot-compare__vendor-cell">
             <div className="quot-compare__supplier-card">
-              <span className={`quot-compare__avatar quot-table__vendor-avatar--${s.avatarMod}`}>{s.vendorInitials}</span>
+              {vendorCtx?.hasHistory && (
+                <button
+                  type="button"
+                  className={`quot-compare__vendor-toggle-btn ${
+                    vendorCtx.isExpanded ? 'quot-compare__vendor-toggle-btn--expanded' : ''
+                  }`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    vendorCtx.onToggle();
+                  }}
+                  title={vendorCtx.isExpanded ? 'Collapse previous versions' : 'Expand previous versions (Q1, Q2...)'}
+                >
+                  <ChevronDown
+                    size={14}
+                    className={`quot-compare__vendor-chevron ${
+                      vendorCtx.isExpanded ? 'quot-compare__vendor-chevron--open' : ''
+                    }`}
+                  />
+                </button>
+              )}
+              <span className={`quot-compare__avatar quot-table__vendor-avatar--${s.avatarMod}`}>
+                {s.vendorInitials}
+              </span>
               <div className="quot-compare__supplier-info">
-                <span className="quot-compare__supplier-name">{s.vendorName}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span className="quot-compare__supplier-name">{s.vendorName}</span>
+                  {vendorCtx?.hasHistory && (
+                    <button
+                      type="button"
+                      className="quot-compare__version-count-pill"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        vendorCtx.onToggle();
+                      }}
+                      title="Click to expand previous quotation versions"
+                    >
+                      {vendorCtx.versionCount} versions ({s.qNo || `Q${s.versionNumber}`})
+                    </button>
+                  )}
+                </div>
                 <span className="quot-compare__supplier-email">{s.vendorEmail}</span>
                 {s.isRecommended && (
                   <span className="quot-compare__recommended-chip" title={s.recommendationReason}>
@@ -3881,8 +4272,10 @@ export default function QuotationsPage() {
             </div>
           </td>
         );
+      }
       case 'totalPrice': {
-        const { converted, original } = convertPrice(s.totalPriceNum, s.currency || DEFAULT_CURRENCY);
+        const priceVal = Number(s.totalPriceNum || s.totalPrice || 0);
+        const { converted, original } = convertPrice(priceVal, s.currency || DEFAULT_CURRENCY);
         const isBest = original === bestValues.price;
         const isConverted = activeDisplayCurrency && activeDisplayCurrency !== (s.currency || DEFAULT_CURRENCY);
         return (
@@ -3971,8 +4364,9 @@ export default function QuotationsPage() {
       case 'actions': {
         const displaySt = getDisplayStatus(s);
         const isAccepted = displaySt === 'ACCEPTED';
-        const canUserAction = canActionQuotation(s, user, roles);
-        const actionable = displaySt !== 'ACCEPTED' && displaySt !== 'REJECTED' && canUserAction;
+        const isHistory = vendorCtx?.isHistoryRow === true;
+        const canUserAction = !isHistory && canActionQuotation(s, user, roles);
+        const actionable = displaySt !== 'ACCEPTED' && displaySt !== 'REJECTED' && displaySt !== 'RETURNED' && canUserAction;
         const hasPostAwardAccess = canPerformPostAward(s, user, roles);
         return (
           <td key={key} className="quot-compare__value" style={{ textAlign: 'center' }}>
@@ -4094,7 +4488,7 @@ export default function QuotationsPage() {
             onClick={() => setCompareModalOpen(true)}
             title="Open active quotation comparison"
           >
-            <GitCompareArrows size={16} />
+            <GitCompareArrows size={18} />
             <span>Active Quotation Comparison</span>
           </button>
           {/* Currency Converter Widget */}

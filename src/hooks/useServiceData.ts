@@ -47,12 +47,13 @@ export function useServiceData<T>(
 
   const fetcherKey = useMemo(() => fetcher.toString(), [fetcher]);
   const userKey = useMemo(() => getUserToken(), []);
+  const depsHash = useMemo(() => JSON.stringify(deps), [deps]);
   const queryKey = useMemo(
     () => (options.cacheKey
       ? ['svc', userKey, options.cacheKey]
-      : ['svc', userKey, hashKey(JSON.stringify(deps) + '|' + fetcherKey)]
+      : ['svc', userKey, hashKey(depsHash + '|' + fetcherKey)]
     ),
-    [options.cacheKey, deps, fetcherKey, userKey]
+    [options.cacheKey, userKey, depsHash, fetcherKey]
   );
 
   const cacheDisabled = options.cacheTtlMs === 0;
@@ -75,10 +76,9 @@ export function useServiceData<T>(
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
     // Keep previous data when refetching — avoids showing empty [] on navigation back
     placeholderData: (prev: T | undefined) => prev ?? initial as NonNullable<T> | undefined,
-    // refetchOnWindowFocus is disabled globally in QueryClient.
-    // Keeping refetchOnReconnect active so stale data refreshes after
-    // network interruptions without user action.
-    refetchOnWindowFocus: false,
+    // refetchOnWindowFocus: enabled when cache is disabled so pages like Approvals
+    // always show fresh data when the user switches back to the browser tab.
+    refetchOnWindowFocus: cacheDisabled ? true : false,
     refetchOnReconnect: !cacheDisabled,
   });
 

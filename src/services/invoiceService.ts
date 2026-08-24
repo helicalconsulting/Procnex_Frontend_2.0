@@ -1,6 +1,5 @@
 import { USE_MOCK } from '../config/mock';
 import { apiRequest } from '../api/client';
-import { AP_INVOICES_MOCK } from '../mocks/invoicePage.mock';
 
 export interface APInvoice {
   id: string;
@@ -18,14 +17,14 @@ export interface APInvoice {
 
 async function mockList(): Promise<APInvoice[]> {
   await new Promise((r) => setTimeout(r, 300));
-  return AP_INVOICES_MOCK;
+  return [];
 }
 
 async function apiList(): Promise<APInvoice[]> {
   try {
     const data = await apiRequest<{ invoices: Record<string, unknown>[]; total?: number }>('/invoices');
     if (!data.invoices || data.invoices.length === 0) {
-      return AP_INVOICES_MOCK;
+      return [];
     }
     return data.invoices.map((inv) => ({
       id: String(inv.id),
@@ -41,7 +40,7 @@ async function apiList(): Promise<APInvoice[]> {
       paymentTerms: inv.paymentTerms ? String(inv.paymentTerms) : undefined,
     }));
   } catch (_err) {
-    return AP_INVOICES_MOCK;
+    return [];
   }
 }
 

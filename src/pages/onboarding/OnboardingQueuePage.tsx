@@ -306,39 +306,51 @@ export default function OnboardingQueuePage() {
       </header>
 
       <div className="oq-stats">
-        <button
-          type="button"
-          className={`oq-stat oq-stat--pending ${activeFilter === 'pending' ? 'oq-stat--active' : ''}`}
+        <div
+          className={`oq-stat ${activeFilter === 'pending' ? 'oq-stat--active' : ''}`}
           onClick={() => setActiveFilter('pending')}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveFilter('pending'); } }}
         >
-          <span className="oq-stat__icon">
-            <Clock size={20} />
-          </span>
-          <span className="oq-stat__value">{counts.pending}</span>
-          <span className="oq-stat__label">Pending</span>
-        </button>
-        <button
-          type="button"
-          className={`oq-stat oq-stat--approved ${activeFilter === 'approved' ? 'oq-stat--active' : ''}`}
+          <div className="oq-stat__icon oq-stat__icon--pending">
+            <Clock size={22} />
+          </div>
+          <div className="oq-stat__info">
+            <span className="oq-stat__value">{counts.pending}</span>
+            <span className="oq-stat__label">Pending Review</span>
+          </div>
+        </div>
+        <div
+          className={`oq-stat ${activeFilter === 'approved' ? 'oq-stat--active' : ''}`}
           onClick={() => setActiveFilter('approved')}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveFilter('approved'); } }}
         >
-          <span className="oq-stat__icon">
-            <CheckCircle2 size={20} />
-          </span>
-          <span className="oq-stat__value">{counts.approved}</span>
-          <span className="oq-stat__label">Approved</span>
-        </button>
-        <button
-          type="button"
-          className={`oq-stat oq-stat--rejected ${activeFilter === 'rejected' ? 'oq-stat--active' : ''}`}
+          <div className="oq-stat__icon oq-stat__icon--approved">
+            <CheckCircle2 size={22} />
+          </div>
+          <div className="oq-stat__info">
+            <span className="oq-stat__value">{counts.approved}</span>
+            <span className="oq-stat__label">Approved</span>
+          </div>
+        </div>
+        <div
+          className={`oq-stat ${activeFilter === 'rejected' ? 'oq-stat--active' : ''}`}
           onClick={() => setActiveFilter('rejected')}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveFilter('rejected'); } }}
         >
-          <span className="oq-stat__icon">
-            <XCircle size={20} />
-          </span>
-          <span className="oq-stat__value">{counts.rejected}</span>
-          <span className="oq-stat__label">Rejected</span>
-        </button>
+          <div className="oq-stat__icon oq-stat__icon--rejected">
+            <XCircle size={22} />
+          </div>
+          <div className="oq-stat__info">
+            <span className="oq-stat__value">{counts.rejected}</span>
+            <span className="oq-stat__label">Rejected</span>
+          </div>
+        </div>
       </div>
 
       <section className="oq-table-section">
