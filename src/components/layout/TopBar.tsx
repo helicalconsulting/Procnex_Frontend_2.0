@@ -186,6 +186,8 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
         .slice(0, 2)
     : 'U';
 
+  const dashboardPath = isVendor(roles) ? '/vendor/dashboard' : '/dashboard';
+
   return (
     <header className="topbar">
       {/* Left — Breadcrumb */}
@@ -199,11 +201,22 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
         </button>
 
         <nav className="topbar__breadcrumb">
-          <Home size={16} className="topbar__breadcrumb-home" />
+          <Home
+            size={16}
+            className="topbar__breadcrumb-home"
+            onClick={() => navigate(dashboardPath)}
+            title="Go to Dashboard"
+          />
           {section && (
             <>
               <ChevronRight size={14} className="topbar__breadcrumb-sep" />
-              <span className="topbar__breadcrumb-section">{section}</span>
+              <span
+                className="topbar__breadcrumb-section"
+                onClick={() => navigate(dashboardPath)}
+                title="Go to Dashboard"
+              >
+                {section}
+              </span>
             </>
           )}
           <ChevronRight size={14} className="topbar__breadcrumb-sep" />

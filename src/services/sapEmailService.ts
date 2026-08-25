@@ -449,4 +449,48 @@ export const sapEmailService = {
     sendRealSmtpEmail(newLog.recipientEmail, newLog.subject, newLog.bodyHtml).catch(() => {});
     return 1;
   },
+
+  /**
+   * Dispatch Document Renewal Request Email to Vendor
+   */
+  async dispatchVendorDocumentRenewalEmail(params: {
+    vendorEmail: string;
+    vendorName: string;
+    docName: string;
+    docType: string;
+    expiryLabel: string;
+  }): Promise<boolean> {
+    const currentLogs = getStoredSapEmails();
+    const cName = await getEffectiveCompanyName();
+    const subject = `[${cName}] ⚠️ Document Renewal Required: ${params.docName}`;
+    const html = generateSapEmailHtml({
+      recipientName: params.vendorName,
+      headline: `⚠️ Compliance Document Renewal Required`,
+      messageText: `Your document <strong>"${params.docName}" (${params.docType})</strong> is marked as <strong>${params.expiryLabel}</strong>. Please upload the updated/renewed document file to keep your vendor profile fully active.`,
+      formTitle: params.docName,
+      workflowAttached: false,
+      totalLevels: 0,
+      currentLevelInfo: params.expiryLabel,
+      priority: 'High',
+      actionUrl: 'http://localhost:5173/vendor/portal',
+      actionButtonText: 'Upload Renewed Document',
+      companyName: cName,
+    });
+
+    const newLog: SapEmailLog = {
+      id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      recipientEmail: params.vendorEmail,
+      recipientName: params.vendorName,
+      subject,
+      bodyHtml: html,
+      sentAt: new Date().toISOString(),
+      formTitle: params.docName,
+      category: 'APPROVAL_REQUEST',
+      status: 'DELIVERED',
+    };
+
+    saveSapEmails([newLog, ...currentLogs]);
+    sendRealSmtpEmail(newLog.recipientEmail, newLog.subject, newLog.bodyHtml).catch(() => {});
+    return true;
+  },
 };

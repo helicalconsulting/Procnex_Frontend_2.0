@@ -557,9 +557,7 @@ export default function CompanySettingsPage() {
   const [brandingCompanyEmail, setBrandingCompanyEmail] = useState('');
   const [brandingDirty, setBrandingDirty] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
-  const [uploadingFavicon, setUploadingFavicon] = useState(false);
   const [removingLogo, setRemovingLogo] = useState(false);
-  const [removingFavicon, setRemovingFavicon] = useState(false);
   const [savingBranding, setSavingBranding] = useState(false);
   const brandingInitialized = useRef(false);
 
@@ -585,8 +583,10 @@ export default function CompanySettingsPage() {
     try {
       const payload: Record<string, unknown> = {};
       if (brandingName !== (profile?.companyName || '')) payload.companyName = brandingName;
-      if (brandingLogoUrl !== (profile?.logoUrl || '')) payload.logoUrl = brandingLogoUrl;
-      if (brandingFaviconUrl !== (profile?.faviconUrl || '')) payload.faviconUrl = brandingFaviconUrl;
+      if (brandingLogoUrl !== (profile?.logoUrl || '')) {
+        payload.logoUrl = brandingLogoUrl;
+        payload.faviconUrl = brandingLogoUrl;
+      }
       if (brandingColor !== (profile?.primaryColor || '#0a6ed1')) payload.primaryColor = brandingColor;
       if (brandingLoginText !== (profile?.loginText || '')) payload.loginText = brandingLoginText;
       if (brandingSupportEmail !== (profile?.supportEmail || '')) payload.supportEmail = brandingSupportEmail;
@@ -608,7 +608,7 @@ export default function CompanySettingsPage() {
     } finally {
       setSavingBranding(false);
     }
-  }, [brandingDirty, brandingName, brandingLogoUrl, brandingFaviconUrl, brandingColor, brandingLoginText, brandingSupportEmail, brandingCompanyPhone, brandingCompanyEmail, profile, refreshBranding]);
+  }, [brandingDirty, brandingName, brandingLogoUrl, brandingColor, brandingLoginText, brandingSupportEmail, brandingCompanyPhone, brandingCompanyEmail, profile, refreshBranding]);
 
   const markBrandingDirty = useCallback(() => {
     if (!brandingDirty) setBrandingDirty(true);
@@ -616,28 +616,24 @@ export default function CompanySettingsPage() {
 
   // ── Image Cropper (after branding so all variables are declared) ──
   const [cropFile, setCropFile] = useState<File | null>(null);
-  const [cropType, setCropType] = useState<'logo' | 'favicon'>('logo');
+  const [cropType, setCropType] = useState<'logo'>('logo');
 
   const handleCropAndUpload = useCallback(async (blob: Blob) => {
-    const type = cropType;
     setCropFile(null);
-    if (type === 'logo') setUploadingLogo(true);
-    else setUploadingFavicon(true);
+    setUploadingLogo(true);
     try {
-      const file = new File([blob], `${type}-${Date.now()}.png`, { type: 'image/png' });
-      const result = await companySettingsService.uploadBrandingImage(type, file);
-      if (type === 'logo') {
-        setBrandingLogoUrl(result.url);
-      } else {
-        setBrandingFaviconUrl(result.url);
-        // Apply favicon immediately to browser tab
-        const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]') || document.createElement('link');
-        link.rel = 'icon';
-        link.href = result.url;
-        if (!link.parentNode) document.head.appendChild(link);
-      }
+      const file = new File([blob], `logo-${Date.now()}.png`, { type: 'image/png' });
+      const result = await companySettingsService.uploadBrandingImage('logo', file);
+      setBrandingLogoUrl(result.url);
+      setBrandingFaviconUrl(result.url);
+      // Apply favicon immediately to browser tab
+      const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]') || document.createElement('link');
+      link.rel = 'icon';
+      link.href = result.url;
+      if (!link.parentNode) document.head.appendChild(link);
+
       setProfile(result.profile);
-      setPageMsg(`${type === 'logo' ? 'Logo' : 'Favicon'} uploaded successfully!`);
+      setPageMsg('Logo uploaded successfully!');
       // Bust the GET cache for /company-settings/profile so refreshBranding()
       // fetches fresh data (uploadBrandingImage uses raw fetch, not apiRequest)
       invalidateApiCache('/company-settings/profile');
@@ -645,10 +641,9 @@ export default function CompanySettingsPage() {
     } catch (err) {
       setPageMsg(err instanceof Error ? err.message : 'Upload failed');
     } finally {
-      if (type === 'logo') setUploadingLogo(false);
-      else setUploadingFavicon(false);
+      setUploadingLogo(false);
     }
-  }, [cropType, refreshBranding]);
+  }, [refreshBranding]);
 
   // Modal state
   const [showDeptModal, setShowDeptModal] = useState(false);
@@ -2604,10 +2599,13 @@ export default function CompanySettingsPage() {
                         onClick={async () => {
                           try {
                             setRemovingLogo(true);
-                            const updated = await companySettingsService.updateCompanyProfile({ logoUrl: '' });
+                            const updated = await companySettingsService.updateCompanyProfile({ logoUrl: '', faviconUrl: '' });
                             setBrandingLogoUrl('');
+                            setBrandingFaviconUrl('');
                             setProfile(updated);
                             setPageMsg('Logo removed');
+                            const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+                            if (link) link.href = '/favicon.png';
                             refreshBranding();
                           } catch (err) {
                             setPageMsg(err instanceof Error ? err.message : 'Failed to remove logo');
@@ -2621,63 +2619,7 @@ export default function CompanySettingsPage() {
                       </button>
                     )}
                   </div>
-                  <span className="cs-field-hint">Recommended: 200×60px PNG with transparent background. Max 2MB.</span>
-                </div>
-
-                {/* Favicon Upload */}
-                <div className="company-settings__field">
-                  <label>Favicon</label>
-                  <div className="cs-upload-row">
-                    {brandingFaviconUrl && (
-                      <div className="cs-favicon-preview">
-                        <img src={brandingFaviconUrl} alt="Favicon" className="cs-favicon-preview__img" />
-                      </div>
-                    )}
-                    <label className="cs-upload-btn">
-                      <input
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif,image/x-icon"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          setCropType('favicon');
-                          setCropFile(file);
-                          e.target.value = '';
-                        }}
-                        style={{ display: 'none' }}
-                        id="favicon-upload-input"
-                      />
-                      <span className="cs-upload-btn__label">
-                        <Image size={16} />
-                        {uploadingFavicon ? 'Uploading…' : 'Choose Favicon'}
-                      </span>
-                    </label>
-                    {brandingFaviconUrl && (
-                      <button
-                        className="company-settings__icon-btn company-settings__icon-btn--danger"
-                        onClick={async () => {
-                          try {
-                            setRemovingFavicon(true);
-                            const updated = await companySettingsService.updateCompanyProfile({ faviconUrl: '' });
-                            setBrandingFaviconUrl('');
-                            setProfile(updated);
-                            setPageMsg('Favicon removed');
-                            const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
-                            if (link) link.href = '/favicon.svg';
-                            refreshBranding();
-                          } catch (err) {
-                            setPageMsg(err instanceof Error ? err.message : 'Failed to remove favicon');
-                          } finally {
-                            setRemovingFavicon(false);
-                          }
-                        }}
-                        title="Remove favicon"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </div>
-                  <span className="cs-field-hint">Browser tab icon. Recommended: 32×32px PNG or ICO. Max 2MB.</span>
+                  <span className="cs-field-hint">Recommended: 200×60px PNG with transparent background. Max 2MB. (This logo will also be used as the website favicon)</span>
                 </div>
 
                 {/* Login Text */}

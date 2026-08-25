@@ -399,7 +399,7 @@ export default function RolesPermissionsPage() {
       {/* ── Summary Cards ──────────────────────────────────── */}
       <div className="roles-summary">
         <div
-          className={`roles-summary-card ${roleFilter === 'all' ? 'roles-summary-card--active' : ''}`}
+          className={`roles-summary-card ${roleFilter === 'all' && !showModulesList ? 'roles-summary-card--active' : ''}`}
           onClick={() => { setRoleFilter('all'); setShowModulesList(false); }}
           role="button"
           tabIndex={0}
@@ -415,7 +415,7 @@ export default function RolesPermissionsPage() {
           </div>
         </div>
         <div
-          className={`roles-summary-card ${roleFilter === 'all' ? 'roles-summary-card--active' : ''}`}
+          className={`roles-summary-card ${showModulesList ? 'roles-summary-card--active' : ''}`}
           onClick={() => setShowModulesList((prev) => !prev)}
           role="button"
           tabIndex={0}

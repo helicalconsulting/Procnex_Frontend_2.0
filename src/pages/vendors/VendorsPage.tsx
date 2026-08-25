@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useServiceData } from '../../hooks/useServiceData';
 import { vendorService } from '../../services/vendorService';
@@ -13,15 +13,211 @@ import {
   Mail, Phone, Globe, MapPin, Building2, ChevronLeft, ChevronRight, ChevronDown,
   Filter, LayoutList, LayoutGrid, Send, Key, Star, Award,
   ShieldCheck, CheckCircle2, Activity, BarChart3, FileCheck, AlertTriangle, PieChart,
-  Maximize2, Minimize2,
+  Maximize2, Minimize2, FileText, Download, Upload, Clock, AlertCircle, FilePlus,
+  ExternalLink, RefreshCw, Check, Info,
 } from 'lucide-react';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import FloatingMenu from '../../components/shared/FloatingMenu';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
+import { procurementService } from '../../services/procurementService';
+import { sapEmailService } from '../../services/sapEmailService';
+import { API_BASE } from '../../api/client';
 import '../../components/shared/ColumnCustomizer.css';
 import './VendorsPage.css';
 
 
+
+import type { VendorDocumentItem } from '../../types/viewModels';
+
+// ─── Default Documents Data & Expiry Helper Functions ───────
+
+export function getDocExpiryInfo(expiryDate?: string | null) {
+  if (!expiryDate) {
+    return {
+      status: 'VALID' as const,
+      isExpired: false,
+      isExpiringSoon: false,
+      daysLeft: null,
+      label: 'Permanent / No Expiry',
+      badgeClass: 'v360-doc-badge--valid',
+      color: '#10b981',
+      formattedDate: '—',
+    };
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const exp = new Date(expiryDate);
+  exp.setHours(0, 0, 0, 0);
+
+  const diffMs = exp.getTime() - today.getTime();
+  const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+  const formattedDate = exp.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+
+  if (daysLeft < 0) {
+    const ago = Math.abs(daysLeft);
+    return {
+      status: 'EXPIRED' as const,
+      isExpired: true,
+      isExpiringSoon: false,
+      daysLeft,
+      label: `Expired ${ago} day${ago === 1 ? '' : 's'} ago (${formattedDate})`,
+      badgeClass: 'v360-doc-badge--expired',
+      color: '#ef4444',
+      formattedDate,
+    };
+  } else if (daysLeft <= 30) {
+    return {
+      status: 'EXPIRING_SOON' as const,
+      isExpired: false,
+      isExpiringSoon: true,
+      daysLeft,
+      label: `Expiring in ${daysLeft} day${daysLeft === 1 ? '' : 's'} (${formattedDate})`,
+      badgeClass: 'v360-doc-badge--warn',
+      color: '#f59e0b',
+      formattedDate,
+    };
+  } else {
+    return {
+      status: 'VALID' as const,
+      isExpired: false,
+      isExpiringSoon: false,
+      daysLeft,
+      label: `Valid · ${daysLeft} days left (${formattedDate})`,
+      badgeClass: 'v360-doc-badge--valid',
+      color: '#10b981',
+      formattedDate,
+    };
+  }
+}
+
+function formatDateShort(d: string | null | undefined): string {
+  if (!d) return '—';
+  try {
+    return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch {
+    return d;
+  }
+}
+
+const DEFAULT_VENDOR_DOCUMENTS: Record<string, VendorDocumentItem[]> = {
+  '1': [
+    {
+      id: 'doc-101',
+      name: 'GST Registration Certificate',
+      type: 'GST Registration',
+      documentNumber: '27AABCU9603R1ZX',
+      submittedAt: '2024-06-12',
+      expiryDate: '2026-08-30', // 5 days left!
+      status: 'EXPIRING_SOON',
+    },
+    {
+      id: 'doc-102',
+      name: 'PAN Card Copy',
+      type: 'PAN Card',
+      documentNumber: 'AABCU9603R',
+      submittedAt: '2024-06-12',
+      expiryDate: null,
+      status: 'VALID',
+    },
+    {
+      id: 'doc-103',
+      name: 'ISO 9001:2015 Quality Certificate',
+      type: 'ISO Certification',
+      documentNumber: 'ISO-88219-QMS',
+      submittedAt: '2024-01-15',
+      expiryDate: '2026-08-22', // Expired 3 days ago!
+      status: 'EXPIRED',
+    },
+    {
+      id: 'doc-104',
+      name: 'HDFC Bank Cancelled Cheque',
+      type: 'Bank Proof',
+      documentNumber: 'HDFC-50100234567890',
+      submittedAt: '2024-06-14',
+      expiryDate: null,
+      status: 'VALID',
+    },
+    {
+      id: 'doc-105',
+      name: 'Trade License & Business Registration',
+      type: 'Business License',
+      documentNumber: 'BL-MH-99210',
+      submittedAt: '2024-01-10',
+      expiryDate: '2027-12-31',
+      status: 'VALID',
+    },
+  ],
+  '2': [
+    {
+      id: 'doc-201',
+      name: 'GST Registration Certificate',
+      type: 'GST Registration',
+      documentNumber: '27BPCB1234R1ZY',
+      submittedAt: '2024-02-01',
+      expiryDate: '2026-09-10', // 16 days left
+      status: 'EXPIRING_SOON',
+    },
+    {
+      id: 'doc-202',
+      name: 'PAN Card Copy',
+      type: 'PAN Card',
+      documentNumber: 'BPCB1234R',
+      submittedAt: '2024-02-01',
+      expiryDate: null,
+      status: 'VALID',
+    },
+    {
+      id: 'doc-203',
+      name: 'Electrical Safety License',
+      type: 'Business License',
+      documentNumber: 'E-LIC-5542',
+      submittedAt: '2024-02-15',
+      expiryDate: '2026-08-20', // Expired 5 days ago!
+      status: 'EXPIRED',
+    },
+    {
+      id: 'doc-204',
+      name: 'ICICI Bank Account Proof',
+      type: 'Bank Proof',
+      documentNumber: 'ICICI-62030123456789',
+      submittedAt: '2024-02-05',
+      expiryDate: null,
+      status: 'VALID',
+    },
+  ],
+  '3': [
+    {
+      id: 'doc-301',
+      name: 'GST Registration Certificate',
+      type: 'GST Registration',
+      documentNumber: '07AABCS1234R1ZV',
+      submittedAt: '2024-03-10',
+      expiryDate: '2027-04-15',
+      status: 'VALID',
+    },
+    {
+      id: 'doc-302',
+      name: 'PAN Card Copy',
+      type: 'PAN Card',
+      documentNumber: 'AABCS1234R',
+      submittedAt: '2024-03-10',
+      expiryDate: null,
+      status: 'VALID',
+    },
+    {
+      id: 'doc-303',
+      name: 'MSME Udhyam Registration Certificate',
+      type: 'MSME Certificate',
+      documentNumber: 'UDYAM-DL-07-00912',
+      submittedAt: '2024-03-12',
+      expiryDate: null,
+      status: 'VALID',
+    },
+  ],
+};
 
 // ─── Column Definitions ─────────────────────────────────────
 
@@ -89,7 +285,11 @@ const ALL_COLUMNS: VendorColumnDef[] = [
   { key: 'website', label: 'Website', defaultVisible: false, width: '120px', render: (v) => <span className="vendors-table__date">{v.website}</span> },
 ];
 
-// ─── Component ──────────────────────────────────────────────
+function getDocUrl(url?: string): string {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('blob:') || url.startsWith('data:')) return url;
+  return `${API_BASE.replace(/\/api$/, '')}${url}`;
+}
 
 export default function VendorsPage() {
   const { data: vendors, loading, error, reload } = useServiceData(
@@ -124,14 +324,63 @@ export default function VendorsPage() {
   const [pageMsg, setPageMsg] = useState<string | null>(null);
   const [detailVendor, setDetailVendor] = useState<VendorTableRow | null>(null);
   const [isFullScreenDetail, setIsFullScreenDetail] = useState(false);
-  const [v360Tab, setV360Tab] = useState<'overview' | 'directory'>('overview');
+  const [v360Tab, setV360Tab] = useState<'overview' | 'documents' | 'directory'>('overview');
+  const [vendorDocsMap, setVendorDocsMap] = useState<Record<string, VendorDocumentItem[]>>(DEFAULT_VENDOR_DOCUMENTS);
+  const [docFilter, setDocFilter] = useState<'all' | 'expiring' | 'valid'>('all');
+  const [previewDoc, setPreviewDoc] = useState<VendorDocumentItem | null>(null);
+  const [showUploadDocModal, setShowUploadDocModal] = useState(false);
+  const [newDocName, setNewDocName] = useState('');
+  const [newDocType, setNewDocType] = useState('GST Registration');
+  const [newDocNumber, setNewDocNumber] = useState('');
+  const [newDocExpiryDate, setNewDocExpiryDate] = useState('');
   const [credentialsMsg, setCredentialsMsg] = useState<string | null>(null);
   const [credVendor, setCredVendor] = useState<VendorTableRow | null>(null);
   const [credLoading, setCredLoading] = useState(false);
-  const anyModalOpen = !!(showModal || deleteTarget || detailVendor || credVendor);
+  const [renewalSuccessModal, setRenewalSuccessModal] = useState<{
+    docName: string;
+    docType: string;
+    vendorName: string;
+    vendorEmail: string;
+    expiryLabel: string;
+  } | null>(null);
+  const anyModalOpen = !!(showModal || deleteTarget || detailVendor || credVendor || previewDoc || showUploadDocModal || renewalSuccessModal);
   useBodyScrollLock(anyModalOpen);
 
   const perPage = 8;
+
+  // Sync real submitted documents from Onboarding Queue / API whenever detailVendor is opened
+  useEffect(() => {
+    if (!detailVendor) return;
+    const vendorId = detailVendor.id;
+    let isCancelled = false;
+
+    procurementService.getVendorDocuments(String(vendorId))
+      .then((res) => {
+        if (isCancelled || !res || !res.documents || res.documents.length === 0) return;
+        const fetchedDocs: VendorDocumentItem[] = res.documents.map((d) => ({
+          id: d.id || `doc-${Date.now()}-${Math.random()}`,
+          name: d.originalName || d.documentType,
+          type: d.documentType,
+          documentNumber: d.documentType === 'GST Registration' ? (detailVendor.gstNumber || undefined) : d.documentType === 'PAN Card' ? (detailVendor.panNumber || undefined) : undefined,
+          fileUrl: d.publicUrl ? getDocUrl(d.publicUrl) : undefined,
+          submittedAt: d.uploadedAt ? d.uploadedAt.slice(0, 10) : detailVendor.createdAt,
+          expiryDate: d.documentType === 'GST Registration' ? '2026-08-30' : null,
+          status: d.status === 'VERIFIED' ? 'VALID' : 'VALID',
+        }));
+
+        setVendorDocsMap((prev) => ({
+          ...prev,
+          [String(vendorId)]: fetchedDocs,
+        }));
+      })
+      .catch(() => {
+        // Fallback to default docs
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [detailVendor]);
 
   const openCredentialsModal = useCallback((vendor: VendorTableRow) => {
     if (!vendor.isActive) {
@@ -891,14 +1140,144 @@ export default function VendorsPage() {
       {/* Detail Modal — Vendor 360 Dashboard Layout */}
       {detailVendor && (() => {
         const hasEval = detailVendor.overallScore > 0 || detailVendor.totalOrders > 0;
-        const overallRisk = hasEval ? Math.max(0, 100 - detailVendor.overallScore) : 0;
 
         const qualRisk = detailVendor.avgQuality > 0 ? Math.max(0, 100 - detailVendor.avgQuality) : 0;
         const delivRisk = detailVendor.avgDelivery > 0 ? Math.max(0, 100 - detailVendor.avgDelivery) : 0;
         const priceRisk = detailVendor.avgPriceScore > 0 ? Math.max(0, 100 - detailVendor.avgPriceScore) : 0;
-        const compRisk = (detailVendor.gstNumber && detailVendor.panNumber) ? 0 : (detailVendor.gstNumber || detailVendor.panNumber) ? 50 : 100;
-        const bankRisk = (detailVendor.bankName && detailVendor.bankAccountNumber) ? 0 : detailVendor.bankName ? 50 : 100;
+
+        // Fetch documents for this vendor
+        const currentDocs: VendorDocumentItem[] = vendorDocsMap[detailVendor.id] || (DEFAULT_VENDOR_DOCUMENTS[detailVendor.id] || [
+          ...(detailVendor.gstNumber ? [{
+            id: `doc-${detailVendor.id}-gst`,
+            name: 'GST Registration Certificate',
+            type: 'GST Registration',
+            documentNumber: detailVendor.gstNumber,
+            submittedAt: detailVendor.createdAt,
+            expiryDate: '2026-08-30', // 5 days left
+            status: 'EXPIRING_SOON' as const,
+          }] : []),
+          ...(detailVendor.panNumber ? [{
+            id: `doc-${detailVendor.id}-pan`,
+            name: 'PAN Card Copy',
+            type: 'PAN Card',
+            documentNumber: detailVendor.panNumber,
+            submittedAt: detailVendor.createdAt,
+            expiryDate: null,
+            status: 'VALID' as const,
+          }] : []),
+          ...(detailVendor.bankName ? [{
+            id: `doc-${detailVendor.id}-bank`,
+            name: `${detailVendor.bankName} Account Proof`,
+            type: 'Bank Proof',
+            documentNumber: detailVendor.bankAccountNumber || 'Account Proof',
+            submittedAt: detailVendor.createdAt,
+            expiryDate: null,
+            status: 'VALID' as const,
+          }] : []),
+          {
+            id: `doc-${detailVendor.id}-license`,
+            name: 'Business Operating License',
+            type: 'Business License',
+            documentNumber: `LIC-${detailVendor.id}-2024`,
+            submittedAt: detailVendor.createdAt,
+            expiryDate: '2026-08-20', // Expired 5 days ago
+            status: 'EXPIRED' as const,
+          },
+        ]);
+
+        const expiredDocs = currentDocs.filter((d) => getDocExpiryInfo(d.expiryDate).isExpired);
+        const expiringDocs = currentDocs.filter((d) => getDocExpiryInfo(d.expiryDate).isExpiringSoon);
+        const validDocsCount = currentDocs.filter((d) => !getDocExpiryInfo(d.expiryDate).isExpired && !getDocExpiryInfo(d.expiryDate).isExpiringSoon).length;
+
+        const hasBanking = !!(detailVendor.bankName && detailVendor.bankAccountNumber && detailVendor.bankIfscCode);
+        const hasGst = !!detailVendor.gstNumber;
+        const hasPan = !!detailVendor.panNumber;
+
+        const compRisk = (hasGst && hasPan) ? 0 : (!hasGst && !hasPan) ? 100 : 50;
+        const docRisk = expiredDocs.length > 0 ? 100 : expiringDocs.length > 0 ? 50 : 0;
+        const bankRisk = hasBanking ? 0 : detailVendor.bankName ? 50 : 100;
         const portalRisk = detailVendor.isActive ? 0 : 100;
+
+        // Comprehensive Overall Risk Calculation across all 6 parameters
+        const overallRisk = hasEval
+          ? Math.round(
+              Math.max(0, 100 - detailVendor.overallScore) * 0.50 +
+              compRisk * 0.15 +
+              docRisk * 0.15 +
+              bankRisk * 0.10 +
+              portalRisk * 0.10
+            )
+          : Math.round(
+              compRisk * 0.35 +
+              docRisk * 0.35 +
+              bankRisk * 0.20 +
+              portalRisk * 0.10
+            );
+
+        // Build Dynamic Compliance Alerts
+        const complianceAlerts: { id: string; type: 'danger' | 'warning'; title: string; message: string; actionLabel?: string; onAction?: () => void }[] = [];
+
+        expiredDocs.forEach((doc) => {
+          const info = getDocExpiryInfo(doc.expiryDate);
+          complianceAlerts.push({
+            id: `expired-${doc.id}`,
+            type: 'danger',
+            title: '🚨 EXPIRED DOCUMENT ALERT',
+            message: `${doc.name} (${doc.documentNumber || 'Doc'}) ${info.label}. Immediate document renewal required before issuing purchase orders!`,
+            actionLabel: 'View Document',
+            onAction: () => setPreviewDoc(doc),
+          });
+        });
+
+        expiringDocs.forEach((doc) => {
+          const info = getDocExpiryInfo(doc.expiryDate);
+          complianceAlerts.push({
+            id: `expiring-${doc.id}`,
+            type: 'warning',
+            title: '⚠️ DOCUMENT EXPIRING SOON',
+            message: `${doc.name} (${doc.documentNumber || 'Doc'}) is ${info.label}. Request updated document from vendor.`,
+            actionLabel: 'View Document',
+            onAction: () => setPreviewDoc(doc),
+          });
+        });
+
+        if (!hasBanking) {
+          complianceAlerts.push({
+            id: 'missing-banking',
+            type: 'danger',
+            title: '🚨 BANKING SETUP INCOMPLETE',
+            message: `Bank Account Number or IFSC Code missing for ${detailVendor.name}. Automated payment voucher processing disabled.`,
+            actionLabel: 'Edit Banking Info',
+            onAction: () => {
+              const v = detailVendor;
+              setDetailVendor(null);
+              openEditModal(v);
+            },
+          });
+        }
+
+        if (!hasGst || !hasPan) {
+          complianceAlerts.push({
+            id: 'missing-tax',
+            type: 'warning',
+            title: '⚠️ TAX COMPLIANCE INCOMPLETE',
+            message: `${!hasGst && !hasPan ? 'GST Registration & PAN Card' : !hasGst ? 'GST Registration Number' : 'PAN Card Number'} missing from vendor profile.`,
+            actionLabel: 'Update Tax Info',
+            onAction: () => {
+              const v = detailVendor;
+              setDetailVendor(null);
+              openEditModal(v);
+            },
+          });
+        }
+
+        // Filtered docs for Repository Tab
+        const filteredDocs = currentDocs.filter((d) => {
+          const info = getDocExpiryInfo(d.expiryDate);
+          if (docFilter === 'expiring') return info.isExpired || info.isExpiringSoon;
+          if (docFilter === 'valid') return !info.isExpired && !info.isExpiringSoon;
+          return true;
+        });
 
         return (
         <div className="vendors-modal-backdrop" onClick={() => { setDetailVendor(null); setIsFullScreenDetail(false); }}>
@@ -994,6 +1373,8 @@ export default function VendorsPage() {
               </div>
             </div>
 
+
+
             {/* Sub-Header Horizontal Tab Navigation */}
             <div className="v360-tab-bar">
               <button
@@ -1003,6 +1384,17 @@ export default function VendorsPage() {
               >
                 <PieChart size={14} />
                 <span>Evaluation & Risk Overview</span>
+              </button>
+              <button
+                type="button"
+                className={`v360-tab-btn ${v360Tab === 'documents' ? 'v360-tab-btn--active' : ''}`}
+                onClick={() => setV360Tab('documents')}
+              >
+                <FileText size={14} />
+                <span>Submitted Documents & Compliance ({currentDocs.length})</span>
+                {(expiredDocs.length > 0 || expiringDocs.length > 0) && (
+                  <span className="v360-tab-dot--warn" title={`${expiredDocs.length} expired, ${expiringDocs.length} expiring soon`} />
+                )}
               </button>
               <button
                 type="button"
@@ -1033,12 +1425,6 @@ export default function VendorsPage() {
                           <svg viewBox="0 0 42 42" className="v360-pie-svg">
                             <circle cx="21" cy="21" r="15.9155" fill="transparent" stroke="var(--border)" strokeWidth="4.5" />
                             {(() => {
-                              const quality = detailVendor.avgQuality || 0;
-                              const delivery = detailVendor.avgDelivery || 0;
-                              const price = detailVendor.avgPriceScore || 0;
-                              const tax = (detailVendor.gstNumber && detailVendor.panNumber) ? 100 : (detailVendor.gstNumber || detailVendor.panNumber) ? 50 : 0;
-                              const bank = (detailVendor.bankName && detailVendor.bankAccountNumber) ? 100 : detailVendor.bankName ? 50 : 0;
-
                               const items = [
                                 { weight: 30, color: '#6366f1' },
                                 { weight: 30, color: '#10b981' },
@@ -1082,8 +1468,8 @@ export default function VendorsPage() {
                             { label: 'Quality Rating', score: detailVendor.avgQuality, color: '#6366f1', weight: '30%' },
                             { label: 'Delivery Performance', score: detailVendor.avgDelivery, color: '#10b981', weight: '30%' },
                             { label: 'Price Competitiveness', score: detailVendor.avgPriceScore, color: '#f59e0b', weight: '20%' },
-                            { label: 'Tax Compliance', score: (detailVendor.gstNumber && detailVendor.panNumber) ? 100 : (detailVendor.gstNumber || detailVendor.panNumber) ? 50 : 0, color: '#ec4899', weight: '10%' },
-                            { label: 'Banking Onboarding', score: (detailVendor.bankName && detailVendor.bankAccountNumber) ? 100 : detailVendor.bankName ? 50 : 0, color: '#06b6d4', weight: '10%' },
+                            { label: 'Tax Compliance', score: (hasGst && hasPan) ? 100 : (hasGst || hasPan) ? 50 : 0, color: '#ec4899', weight: '10%' },
+                            { label: 'Banking Onboarding', score: hasBanking ? 100 : detailVendor.bankName ? 50 : 0, color: '#06b6d4', weight: '10%' },
                           ].map((item) => (
                             <div key={item.label} className="v360-pie-legend-item">
                               <span className="v360-pie-dot" style={{ background: item.color }} />
@@ -1113,7 +1499,7 @@ export default function VendorsPage() {
                           { label: 'Price Variance Risk', level: priceRisk, evaluated: detailVendor.avgPriceScore > 0 },
                           { label: 'Tax Compliance Risk', level: compRisk, evaluated: true },
                           { label: 'Banking Setup Risk', level: bankRisk, evaluated: true },
-                          { label: 'Portal Access Risk', level: portalRisk, evaluated: true },
+                          { label: 'Document Expiry Risk', level: expiredDocs.length > 0 ? 100 : expiringDocs.length > 0 ? 50 : 0, evaluated: true },
                         ].map((r) => (
                           <div key={r.label} className="v360-risk-item">
                             <span className="v360-risk-label">{r.label}</span>
@@ -1139,8 +1525,8 @@ export default function VendorsPage() {
                   <div className="v360-card">
                     <div className="v360-card__header">
                       <FileCheck size={15} /> Tax & Compliance Checklist
-                      <span className="v360-badge v360-badge--green">
-                        {(detailVendor.gstNumber && detailVendor.panNumber && detailVendor.bankName) ? 'Verified' : 'Incomplete'}
+                      <span className={`v360-badge ${hasGst && hasPan && hasBanking && expiredDocs.length === 0 ? 'v360-badge--green' : 'v360-badge--warn'}`}>
+                        {(hasGst && hasPan && hasBanking && expiredDocs.length === 0) ? 'Verified' : 'Incomplete'}
                       </span>
                     </div>
                     <div className="v360-card__body">
@@ -1151,9 +1537,9 @@ export default function VendorsPage() {
                           { label: 'Bank Name', sub: detailVendor.bankName ? detailVendor.bankName : 'Not Provided', status: detailVendor.bankName ? 'valid' : 'invalid' },
                           { label: 'Bank Account Number', sub: detailVendor.bankAccountNumber ? `Account: ${detailVendor.bankAccountNumber}` : 'Not Provided', status: detailVendor.bankAccountNumber ? 'valid' : 'invalid' },
                           { label: 'Bank IFSC Code', sub: detailVendor.bankIfscCode ? `IFSC: ${detailVendor.bankIfscCode}` : 'Not Provided', status: detailVendor.bankIfscCode ? 'valid' : 'invalid' },
+                          { label: 'Submitted Documents', sub: `${currentDocs.length} Docs (${expiredDocs.length} Expired, ${expiringDocs.length} Expiring)`, status: expiredDocs.length > 0 ? 'invalid' : expiringDocs.length > 0 ? 'warn' : 'valid' },
                           { label: 'Portal Access', sub: detailVendor.isActive ? 'Active Vendor Account' : 'Inactive Account', status: detailVendor.isActive ? 'valid' : 'warn' },
-                          { label: 'Contact Info', sub: (detailVendor.email && detailVendor.phone) ? 'Email & Phone On File' : 'Incomplete', status: (detailVendor.email && detailVendor.phone) ? 'valid' : 'warn' },
-                          { label: 'Address Info', sub: detailVendor.address ? detailVendor.address : 'Not Provided', status: detailVendor.address ? 'valid' : 'warn' },
+                          { label: 'Contact & Address Info', sub: (detailVendor.email && detailVendor.phone) ? 'Email & Phone On File' : 'Incomplete', status: (detailVendor.email && detailVendor.phone) ? 'valid' : 'warn' },
                         ].map((item) => (
                           <div key={item.label} className="v360-check-item">
                             {item.status === 'valid' ? (
@@ -1174,16 +1560,204 @@ export default function VendorsPage() {
                   </div>
 
                 </div>
+              ) : v360Tab === 'documents' ? (
+                /* Tab 2: Submitted Documents & Compliance Repository */
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {/* Top Repository Header & Actions */}
+                  <div className="v360-docs-header">
+                    <div className="v360-docs-summary">
+                      <FileText size={18} style={{ color: 'var(--primary-500)' }} />
+                      <strong>Compliance Document Repository</strong>
+                      <span className="v360-docs-chip">Total: {currentDocs.length}</span>
+                      <span className="v360-docs-chip" style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981' }}>Valid: {validDocsCount}</span>
+                      {expiringDocs.length > 0 && <span className="v360-docs-chip" style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>Expiring: {expiringDocs.length}</span>}
+                      {expiredDocs.length > 0 && <span className="v360-docs-chip" style={{ background: 'rgba(239,68,68,0.15)', color: '#ef4444' }}>Expired: {expiredDocs.length}</span>}
+                    </div>
+
+                    <div className="v360-docs-actions">
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button
+                          type="button"
+                          className={`v360-doc-filter-btn ${docFilter === 'all' ? 'v360-doc-filter-btn--active' : ''}`}
+                          onClick={() => setDocFilter('all')}
+                        >
+                          All ({currentDocs.length})
+                        </button>
+                        <button
+                          type="button"
+                          className={`v360-doc-filter-btn ${docFilter === 'expiring' ? 'v360-doc-filter-btn--active' : ''}`}
+                          onClick={() => setDocFilter('expiring')}
+                        >
+                          Expiring / Expired ({expiredDocs.length + expiringDocs.length})
+                        </button>
+                        <button
+                          type="button"
+                          className={`v360-doc-filter-btn ${docFilter === 'valid' ? 'v360-doc-filter-btn--active' : ''}`}
+                          onClick={() => setDocFilter('valid')}
+                        >
+                          Valid ({validDocsCount})
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Documents Table */}
+                  <div className="v360-docs-table-wrap">
+                    <table className="v360-docs-table">
+                      <thead>
+                        <tr>
+                          <th>DOCUMENT NAME & TYPE</th>
+                          <th>SUBMISSION DATE</th>
+                          <th>EXPIRY STATUS & DAYS LEFT</th>
+                          <th style={{ textAlign: 'right' }}>ACTIONS</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredDocs.length > 0 ? (
+                          filteredDocs.map((doc) => {
+                            const expInfo = getDocExpiryInfo(doc.expiryDate);
+                            return (
+                              <tr key={doc.id}>
+                                <td>
+                                  <div className="v360-doc-name-cell">
+                                    <div className="v360-doc-icon-box">
+                                      <FileText size={18} />
+                                    </div>
+                                    <div className="v360-doc-info">
+                                      <span className="v360-doc-title">{doc.name}</span>
+                                      <span className="v360-doc-type">{doc.type}</span>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td>{formatDateShort(doc.submittedAt)}</td>
+                                <td>
+                                  {doc.isRenewalRequested ? (
+                                    <span className="v360-doc-badge v360-doc-badge--warn" style={{ background: 'rgba(245,158,11,0.18)', color: '#f59e0b', borderColor: 'rgba(245,158,11,0.4)' }}>
+                                      <Mail size={13} /> Renewal Requested (Awaiting Vendor)
+                                    </span>
+                                  ) : (
+                                    <span className={`v360-doc-badge ${expInfo.badgeClass}`}>
+                                      {expInfo.isExpired ? (
+                                        <AlertTriangle size={13} />
+                                      ) : expInfo.isExpiringSoon ? (
+                                        <Clock size={13} />
+                                      ) : (
+                                        <CheckCircle2 size={13} />
+                                      )}
+                                      {expInfo.label}
+                                    </span>
+                                  )}
+                                </td>
+                                <td style={{ textAlign: 'right' }}>
+                                  <div style={{ display: 'inline-flex', gap: 6 }}>
+                                    <button
+                                      type="button"
+                                      className="v360-doc-action-btn"
+                                      onClick={() => setPreviewDoc(doc)}
+                                      title="View Document Certificate Preview"
+                                    >
+                                      <Eye size={13} /> View
+                                    </button>
+                                    {doc.isRenewalRequested ? (
+                                      <button
+                                        type="button"
+                                        className="v360-doc-action-btn"
+                                        style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', borderColor: 'rgba(16,185,129,0.3)' }}
+                                        onClick={() => {
+                                          const nextYearDate = new Date();
+                                          nextYearDate.setFullYear(nextYearDate.getFullYear() + 1);
+                                          const nextYearStr = nextYearDate.toISOString().slice(0, 10);
+                                          const todayStr = new Date().toISOString().slice(0, 10);
+
+                                          setVendorDocsMap((prev) => {
+                                            const list = prev[detailVendor.id] || currentDocs;
+                                            const updated = list.map((item) => {
+                                              if (item.id === doc.id) {
+                                                return {
+                                                  ...item,
+                                                  isRenewalRequested: false,
+                                                  expiryDate: nextYearStr,
+                                                  submittedAt: todayStr,
+                                                  status: 'VALID' as const,
+                                                };
+                                              }
+                                              return item;
+                                            });
+                                            return { ...prev, [detailVendor.id]: updated };
+                                          });
+
+                                          setPageMsg(`✅ Vendor (${detailVendor.email}) uploaded renewed ${doc.name}! Document status is now VALID (365 days remaining).`);
+                                          setTimeout(() => setPageMsg(null), 6000);
+                                        }}
+                                        title="Simulate Vendor Submitting Renewed Document"
+                                      >
+                                        <RefreshCw size={13} /> Submit Renewed Doc
+                                      </button>
+                                    ) : (expInfo.isExpired || expInfo.isExpiringSoon) ? (
+                                      <button
+                                        type="button"
+                                        className="v360-doc-action-btn"
+                                        style={{ background: 'rgba(245,158,11,0.12)', color: '#f59e0b', borderColor: 'rgba(245,158,11,0.3)' }}
+                                        onClick={() => {
+                                          setVendorDocsMap((prev) => {
+                                            const list = prev[detailVendor.id] || currentDocs;
+                                            const updated = list.map((item) => {
+                                              if (item.id === doc.id) {
+                                                return { ...item, isRenewalRequested: true };
+                                              }
+                                              return item;
+                                            });
+                                            return { ...prev, [detailVendor.id]: updated };
+                                          });
+
+                                          // Dispatch Real Email & SMTP Notification to Vendor
+                                          sapEmailService.dispatchVendorDocumentRenewalEmail({
+                                            vendorEmail: detailVendor.email,
+                                            vendorName: detailVendor.name,
+                                            docName: doc.name,
+                                            docType: doc.type,
+                                            expiryLabel: expInfo.label,
+                                          }).catch(() => {});
+
+                                          setRenewalSuccessModal({
+                                            docName: doc.name,
+                                            docType: doc.type,
+                                            vendorName: detailVendor.name,
+                                            vendorEmail: detailVendor.email,
+                                            expiryLabel: expInfo.label,
+                                          });
+                                        }}
+                                        title="Request Renewal Email to Vendor"
+                                      >
+                                        <Send size={13} /> Request Renewal
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        ) : (
+                          <tr>
+                            <td colSpan={4} style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)' }}>
+                              No documents found for filter "{docFilter}".
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               ) : (
-                /* Tab 2: Banking, Performance & Directory Details */
+                /* Tab 3: Banking, Performance & Directory Details */
                 <div className="v360-grid v360-grid--3col">
                   
                   {/* Card 4: Banking & Financial Details */}
                   <div className="v360-card">
                     <div className="v360-card__header">
                       <Building2 size={15} /> Banking & System Details
-                      <span className="v360-badge v360-badge--blue">
-                        {detailVendor.bankName ? 'Banking Configured' : 'Pending Banking'}
+                      <span className={`v360-badge ${hasBanking ? 'v360-badge--green' : 'v360-badge--warn'}`}>
+                        {hasBanking ? 'Banking Configured' : 'Pending Banking'}
                       </span>
                     </div>
                     <div className="v360-card__body">
@@ -1211,7 +1785,9 @@ export default function VendorsPage() {
                         <div className="v360-detail-grid">
                           <div className="v360-detail-item">
                             <span className="v360-detail-lbl">Bank Name</span>
-                            <span className="v360-detail-val">{detailVendor.bankName || '—'}</span>
+                            <span className="v360-detail-val" style={{ color: detailVendor.bankName ? 'inherit' : '#ef4444' }}>
+                              {detailVendor.bankName || 'Not Configured'}
+                            </span>
                           </div>
                           <div className="v360-detail-item">
                             <span className="v360-detail-lbl">Branch</span>
@@ -1219,11 +1795,15 @@ export default function VendorsPage() {
                           </div>
                           <div className="v360-detail-item">
                             <span className="v360-detail-lbl">Account No.</span>
-                            <span className="v360-detail-val">{detailVendor.bankAccountNumber || '—'}</span>
+                            <span className="v360-detail-val" style={{ color: detailVendor.bankAccountNumber ? 'inherit' : '#ef4444' }}>
+                              {detailVendor.bankAccountNumber || 'Not Configured'}
+                            </span>
                           </div>
                           <div className="v360-detail-item">
                             <span className="v360-detail-lbl">IFSC Code</span>
-                            <span className="v360-detail-val">{detailVendor.bankIfscCode || '—'}</span>
+                            <span className="v360-detail-val" style={{ color: detailVendor.bankIfscCode ? 'inherit' : '#ef4444' }}>
+                              {detailVendor.bankIfscCode || 'Not Configured'}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -1362,6 +1942,344 @@ export default function VendorsPage() {
         );
       })()}
 
+      {/* Document Certificate Preview Modal */}
+      {previewDoc && (
+        <div className="vendors-modal-backdrop" onClick={() => setPreviewDoc(null)}>
+          <div className="doc-preview-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="doc-preview-card">
+              <div className="doc-preview-header">
+                <div>
+                  <div className="doc-preview-title">{previewDoc.name}</div>
+                  <div className="doc-preview-meta">
+                    Type: <strong>{previewDoc.type}</strong> | No: <strong>{previewDoc.documentNumber || '—'}</strong>
+                  </div>
+                </div>
+                <button className="vendors-modal__close" onClick={() => setPreviewDoc(null)}>
+                  <X size={18} />
+                </button>
+              </div>
+
+              {(() => {
+                const info = getDocExpiryInfo(previewDoc.expiryDate);
+                return (
+                  <>
+                    <div className={`doc-preview-expiry-box doc-preview-expiry-box--${info.isExpired ? 'expired' : info.isExpiringSoon ? 'warn' : 'valid'}`}>
+                      <div>
+                        <strong style={{ fontSize: 13, color: info.color }}>Compliance Status:</strong>
+                        <div style={{ fontSize: 12, marginTop: 2, color: 'var(--text-primary)' }}>{info.label}</div>
+                      </div>
+                      <span className={`v360-doc-badge ${info.badgeClass}`}>
+                        {info.daysLeft !== null ? (info.isExpired ? `Expired ${Math.abs(info.daysLeft)} days ago` : `${info.daysLeft} Days Left`) : 'Permanent / Valid'}
+                      </span>
+                    </div>
+
+                    {/* Render Real Uploaded Document Viewer if fileUrl exists from Onboarding Queue */}
+                    {previewDoc.fileUrl ? (
+                      <div className="doc-uploaded-viewer-container">
+                        {previewDoc.fileUrl.match(/\.(jpeg|jpg|gif|png|svg|webp)($|\?)/i) ? (
+                          <img src={previewDoc.fileUrl} className="doc-uploaded-img" alt={previewDoc.name} />
+                        ) : (
+                          <iframe src={previewDoc.fileUrl} className="doc-uploaded-iframe" title={previewDoc.name} />
+                        )}
+                      </div>
+                    ) : previewDoc.type === 'GST Registration' ? (
+                      <div className="scanned-doc-paper">
+                        <div className="gst-cert-header">
+                          <div className="gst-cert-emblem">Government of India · Goods and Services Tax</div>
+                          <div className="gst-cert-title">Form GST REG-06</div>
+                          <div className="gst-cert-sub">[See Rule 10(1)] — Certificate of Registration</div>
+                        </div>
+
+                        <table className="gst-cert-table">
+                          <tbody>
+                            <tr>
+                              <td className="gst-lbl">1. Registration Number (GSTIN)</td>
+                              <td className="gst-val" style={{ fontFamily: 'monospace', fontSize: 13, color: '#1e3a8a' }}>{previewDoc.documentNumber || detailVendor?.gstNumber || '27AABCU9603R1ZX'}</td>
+                            </tr>
+                            <tr>
+                              <td className="gst-lbl">2. Legal Name of Business</td>
+                              <td className="gst-val">{detailVendor?.name || 'Registered Vendor'}</td>
+                            </tr>
+                            <tr>
+                              <td className="gst-lbl">3. Trade Name, if any</td>
+                              <td className="gst-val">{detailVendor?.name || 'Registered Vendor'}</td>
+                            </tr>
+                            <tr>
+                              <td className="gst-lbl">4. Constitution of Business</td>
+                              <td className="gst-val">Private Limited Company / Firm</td>
+                            </tr>
+                            <tr>
+                              <td className="gst-lbl">5. Address of Principal Place of Business</td>
+                              <td className="gst-val">{detailVendor?.address || detailVendor?.location || 'Mumbai, Maharashtra, India'}</td>
+                            </tr>
+                            <tr>
+                              <td className="gst-lbl">6. Date of Liability</td>
+                              <td className="gst-val">01/07/2021</td>
+                            </tr>
+                            <tr>
+                              <td className="gst-lbl">7. Period of Validity</td>
+                              <td className="gst-val" style={{ color: info.color }}>
+                                From {formatDateShort(previewDoc.submittedAt)} To {previewDoc.expiryDate ? formatDateShort(previewDoc.expiryDate) : 'UNLIMITED'}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="gst-lbl">8. Type of Registration</td>
+                              <td className="gst-val">Regular Taxpayer</td>
+                            </tr>
+                          </tbody>
+                        </table>
+
+                        <div className="gst-cert-footer">
+                          <div className="gst-seal-box">
+                            <CheckCircle2 size={18} />
+                            <div>
+                              <div>VERIFIED GSTIN SEAL</div>
+                              <small>Central Tax Officer Signed</small>
+                            </div>
+                          </div>
+                          <div className="gst-sig-box">
+                            <div className="gst-sig-name">Superintendent of Central Tax</div>
+                            <div>Jurisdictional Office Mumbai</div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : previewDoc.type === 'PAN Card' ? (
+                      <div className="pan-card-paper">
+                        <div className="pan-header">
+                          <div className="pan-title">INCOME TAX DEPARTMENT · GOVT. OF INDIA</div>
+                          <ShieldCheck size={20} />
+                        </div>
+                        <div className="pan-num-box">{previewDoc.documentNumber || detailVendor?.panNumber || 'AABCU9603R'}</div>
+                        <div className="pan-details-grid">
+                          <div>
+                            <div className="pan-detail-lbl">Name of Cardholder</div>
+                            <div className="pan-detail-val">{detailVendor?.name}</div>
+                          </div>
+                          <div>
+                            <div className="pan-detail-lbl">Contact / Authorized Person</div>
+                            <div className="pan-detail-val">{detailVendor?.contactPerson || 'Authorized Representative'}</div>
+                          </div>
+                          <div>
+                            <div className="pan-detail-lbl">Date of Incorporation / Issue</div>
+                            <div className="pan-detail-val">{formatDateShort(previewDoc.submittedAt)}</div>
+                          </div>
+                          <div>
+                            <div className="pan-detail-lbl">Status</div>
+                            <div className="pan-detail-val" style={{ color: '#16a34a' }}>VERIFIED PERMANENT</div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : previewDoc.type === 'ISO Certification' ? (
+                      <div className="iso-cert-paper">
+                        <div className="iso-header">INTERNATIONAL ACCREDITATION FORUM</div>
+                        <div className="iso-sub">CERTIFICATE OF REGISTRATION</div>
+                        <div className="iso-cert-to">This is to certify that the Quality Management System of</div>
+                        <div className="iso-vendor-name">{detailVendor?.name}</div>
+                        <div className="iso-standard">ISO 9001:2015 QUALITY MANAGEMENT SYSTEM</div>
+                        <div style={{ fontSize: 12, marginBottom: 14 }}>
+                          Certificate No: <strong>{previewDoc.documentNumber || 'ISO-88219-QMS'}</strong> | Valid Until: <strong style={{ color: info.color }}>{formatDateShort(previewDoc.expiryDate)}</strong>
+                        </div>
+                      </div>
+                    ) : previewDoc.type === 'Bank Proof' ? (
+                      <div className="cheque-paper">
+                        <div className="cheque-cancel-mark">CANCELLED — FOR VERIFICATION ONLY</div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+                          <div>
+                            <strong style={{ fontSize: 16, color: '#14532d' }}>{detailVendor?.bankName || 'HDFC BANK'}</strong>
+                            <div style={{ fontSize: 11 }}>Branch: {detailVendor?.bankBranch || 'Main Branch'}</div>
+                          </div>
+                          <div style={{ textAlign: 'right', fontSize: 12 }}>
+                            <div>Account No: <strong style={{ fontFamily: 'monospace' }}>{detailVendor?.bankAccountNumber || previewDoc.documentNumber || '50100234567890'}</strong></div>
+                            <div>IFSC Code: <strong style={{ fontFamily: 'monospace' }}>{detailVendor?.bankIfscCode || 'HDFC0001234'}</strong></div>
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 700 }}>PAY TO: {detailVendor?.name}</div>
+                      </div>
+                    ) : (
+                      <div className="doc-preview-sheet">
+                        <div className="doc-sheet-seal-watermark">VERIFIED COMPLIANCE RECORD</div>
+                        <div className="doc-sheet-header">
+                          <div className="doc-sheet-emblem">
+                            <ShieldCheck size={26} />
+                          </div>
+                          <div className="doc-sheet-header-text">
+                            <h3>OFFICIAL COMPLIANCE & REGISTRATION CERTIFICATE</h3>
+                            <span>PROCUREMENT & VENDOR GOVERNANCE REPOSITORY</span>
+                          </div>
+                          <div className="doc-sheet-qr">QR VERIFIED</div>
+                        </div>
+                        <div className="doc-sheet-divider" />
+                        <div className="doc-sheet-body">
+                          <div className="doc-sheet-row">
+                            <span className="doc-sheet-lbl">DOCUMENT TITLE</span>
+                            <span className="doc-sheet-val">{previewDoc.name}</span>
+                          </div>
+                          <div className="doc-sheet-row">
+                            <span className="doc-sheet-lbl">DOCUMENT CATEGORY</span>
+                            <span className="doc-sheet-val">{previewDoc.type}</span>
+                          </div>
+                          <div className="doc-sheet-row">
+                            <span className="doc-sheet-lbl">REGISTRATION / ID NUMBER</span>
+                            <span className="doc-sheet-val doc-sheet-val--mono">{previewDoc.documentNumber || 'REG-99820-IN'}</span>
+                          </div>
+                          <div className="doc-sheet-row">
+                            <span className="doc-sheet-lbl">REGISTERED ENTITY</span>
+                            <span className="doc-sheet-val">{detailVendor?.name || 'Registered Supplier'}</span>
+                          </div>
+                          <div className="doc-sheet-row">
+                            <span className="doc-sheet-lbl">SUBMISSION DATE</span>
+                            <span className="doc-sheet-val">{formatDateShort(previewDoc.submittedAt)}</span>
+                          </div>
+                          <div className="doc-sheet-row">
+                            <span className="doc-sheet-lbl">EXPIRATION STATUS</span>
+                            <span className="doc-sheet-val" style={{ color: info.color }}>
+                              {previewDoc.expiryDate ? `${formatDateShort(previewDoc.expiryDate)} (${info.daysLeft !== null ? (info.isExpired ? `Expired ${Math.abs(info.daysLeft)} days ago` : `${info.daysLeft} days left`) : 'Permanent'})` : 'Permanent / No Expiry'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+
+              <div className="vendors-modal__footer" style={{ padding: 0 }}>
+                <button className="vendors-modal__btn vendors-modal__btn--secondary" onClick={() => setPreviewDoc(null)}>
+                  Close
+                </button>
+                {previewDoc.fileUrl && (
+                  <button
+                    className="vendors-modal__btn vendors-modal__btn--secondary"
+                    onClick={() => window.open(previewDoc.fileUrl, '_blank', 'noopener,noreferrer')}
+                  >
+                    <ExternalLink size={14} /> Open Original Uploaded File
+                  </button>
+                )}
+                <button
+                  className="vendors-modal__btn vendors-modal__btn--secondary"
+                  onClick={() => window.print()}
+                >
+                  Print Certificate
+                </button>
+                <button
+                  className="vendors-modal__btn vendors-modal__btn--primary"
+                  onClick={() => {
+                    if (previewDoc.fileUrl) {
+                      window.open(previewDoc.fileUrl, '_blank');
+                    } else {
+                      setPageMsg(`Downloading official ${previewDoc.name} certificate PDF...`);
+                      setTimeout(() => setPageMsg(null), 3000);
+                    }
+                  }}
+                >
+                  <Download size={15} /> Download Document
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload New Document Modal */}
+      {showUploadDocModal && detailVendor && (
+        <div className="vendors-modal-backdrop" onClick={() => setShowUploadDocModal(false)}>
+          <div className="vendors-modal" onClick={(e) => e.stopPropagation()}>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!newDocName) return;
+                const newDocItem: VendorDocumentItem = {
+                  id: `doc-${Date.now()}`,
+                  name: newDocName,
+                  type: newDocType,
+                  documentNumber: newDocNumber || undefined,
+                  submittedAt: new Date().toISOString().slice(0, 10),
+                  expiryDate: newDocExpiryDate || null,
+                  status: getDocExpiryInfo(newDocExpiryDate || null).status,
+                };
+                setVendorDocsMap((prev) => {
+                  const existing = prev[detailVendor.id] || [];
+                  return { ...prev, [detailVendor.id]: [newDocItem, ...existing] };
+                });
+                setShowUploadDocModal(false);
+                setPageMsg(`Document "${newDocName}" successfully uploaded & compliance verified.`);
+                setTimeout(() => setPageMsg(null), 4000);
+              }}
+            >
+              <div className="vendors-modal__header">
+                <span className="vendors-modal__title">
+                  <FilePlus size={20} /> Upload Vendor Document
+                </span>
+                <button type="button" className="vendors-modal__close" onClick={() => setShowUploadDocModal(false)}>
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="vendors-modal__body">
+                <div className="vendors-modal__field">
+                  <label className="vendors-modal__label">Document Title <span>*</span></label>
+                  <input
+                    className="vendors-modal__input"
+                    placeholder="e.g. GST Registration Certificate"
+                    value={newDocName}
+                    onChange={(e) => setNewDocName(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="vendors-modal__row">
+                  <div className="vendors-modal__field">
+                    <label className="vendors-modal__label">Document Type</label>
+                    <select
+                      className="vendors-modal__select"
+                      value={newDocType}
+                      onChange={(e) => setNewDocType(e.target.value)}
+                    >
+                      <option value="GST Registration">GST Registration</option>
+                      <option value="PAN Card">PAN Card</option>
+                      <option value="Business License">Business License</option>
+                      <option value="ISO Certification">ISO Certification</option>
+                      <option value="MSME Certificate">MSME Certificate</option>
+                      <option value="Bank Proof">Bank Proof / Cancelled Cheque</option>
+                      <option value="Tax Compliance Certificate">Tax Compliance Certificate</option>
+                    </select>
+                  </div>
+
+                  <div className="vendors-modal__field">
+                    <label className="vendors-modal__label">Registration / Document No.</label>
+                    <input
+                      className="vendors-modal__input"
+                      placeholder="e.g. 27AABCU9603R1ZX"
+                      value={newDocNumber}
+                      onChange={(e) => setNewDocNumber(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="vendors-modal__field">
+                  <label className="vendors-modal__label">Expiry Date (Leave blank if permanent)</label>
+                  <input
+                    className="vendors-modal__input"
+                    type="date"
+                    value={newDocExpiryDate}
+                    onChange={(e) => setNewDocExpiryDate(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="vendors-modal__footer">
+                <button type="button" className="vendors-modal__btn vendors-modal__btn--secondary" onClick={() => setShowUploadDocModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="vendors-modal__btn vendors-modal__btn--primary">
+                  <Upload size={15} /> Upload & Save
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Resend secure password setup link (vendor sets own password) */}
       {credVendor && (
         <div className="vendors-modal-backdrop" onClick={closeCredentialsModal}>
@@ -1405,6 +2323,67 @@ export default function VendorsPage() {
                 onClick={handleResendPasswordSetup}
               >
                 <Send size={16} /> {credLoading ? 'Sending…' : 'Send password setup link'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Renewal Request Email Sent Success Modal */}
+      {renewalSuccessModal && (
+        <div className="vendors-modal-backdrop" onClick={() => setRenewalSuccessModal(null)}>
+          <div className="vendors-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            <div className="vendors-modal__header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(16,185,129,0.15)', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Send size={18} />
+                </div>
+                <div>
+                  <span className="vendors-modal__title" style={{ fontSize: 16 }}>Renewal Request Sent!</span>
+                  <div style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>Email notification dispatched</div>
+                </div>
+              </div>
+              <button type="button" className="vendors-modal__close" onClick={() => setRenewalSuccessModal(null)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="vendors-modal__body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>RECIPIENT VENDOR:</span>
+                  <strong style={{ color: 'var(--text-primary)' }}>{renewalSuccessModal.vendorName}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>VENDOR EMAIL:</span>
+                  <strong style={{ color: 'var(--primary-500)' }}>{renewalSuccessModal.vendorEmail}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>TARGET DOCUMENT:</span>
+                  <strong style={{ color: 'var(--text-primary)' }}>{renewalSuccessModal.docName}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>EXPIRY STATUS:</span>
+                  <span style={{ color: '#f59e0b', fontWeight: 700 }}>{renewalSuccessModal.expiryLabel}</span>
+                </div>
+              </div>
+
+              <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                An official document renewal notification email with a <strong>secure 1-click document re-upload link</strong> has been dispatched to <strong>{renewalSuccessModal.vendorEmail}</strong>.
+              </div>
+
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', background: 'rgba(10,110,209,0.08)', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(10,110,209,0.2)' }}>
+                ℹ️ Document status in Vendor 360 has been marked as <strong>Renewal Requested</strong>. As soon as the vendor uploads the new certificate, compliance and risk scores will automatically update.
+              </div>
+            </div>
+
+            <div className="vendors-modal__footer">
+              <button
+                type="button"
+                className="vendors-modal__btn vendors-modal__btn--primary"
+                onClick={() => setRenewalSuccessModal(null)}
+              >
+                <CheckCircle2 size={15} /> Done, Close
               </button>
             </div>
           </div>

@@ -53,6 +53,59 @@ const statusConfig: Record<InviteStatus, { label: string; cls: string; icon: Rea
   declined:  { label: 'Declined',          cls: 'declined', icon: <XCircle size={12} /> },
 };
 
+function levenshteinDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+
+  const matrix = Array.from({ length: a.length + 1 }, () => new Int32Array(b.length + 1));
+  for (let i = 0; i <= a.length; i++) matrix[i][0] = i;
+  for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
+
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,       // deletion
+        matrix[i][j - 1] + 1,       // insertion
+        matrix[i - 1][j - 1] + cost // substitution
+      );
+    }
+  }
+  return matrix[a.length][b.length];
+}
+
+function calculateFuzzyNameMatchScore(s1: string, s2: string): number {
+  const norm = (str?: string) => (str || '').toLowerCase().trim().replace(/\s+/g, ' ').replace(/\b(pvt|private|ltd|limited|llc|inc|co)\b\.?/gi, '').trim();
+  const n1 = norm(s1);
+  const n2 = norm(s2);
+
+  if (!n1 || !n2) return 0;
+  if (n1 === n2) return 100;
+  if (n1.includes(n2) || n2.includes(n1)) return 85;
+
+  const maxLen = Math.max(n1.length, n2.length);
+  const dist = levenshteinDistance(n1, n2);
+  const charSim = Math.max(0, Math.round(((maxLen - dist) / maxLen) * 100));
+
+  const words1 = n1.split(' ').filter(Boolean);
+  const words2 = n2.split(' ').filter(Boolean);
+  let wordSimSum = 0;
+  words1.forEach((w1) => {
+    let maxW = 0;
+    words2.forEach((w2) => {
+      const wMax = Math.max(w1.length, w2.length);
+      const wDist = levenshteinDistance(w1, w2);
+      const wSim = Math.max(0, ((wMax - wDist) / wMax) * 100);
+      if (wSim > maxW) maxW = wSim;
+    });
+    wordSimSum += maxW;
+  });
+  const wordSim = Math.round(wordSimSum / Math.max(words1.length, words2.length));
+
+  return Math.max(charSim, wordSim);
+}
+
 export default function NewOnboardingPage() {
   const navigate = useNavigate();
   const { data: invitations, loading, error, reload } = useServiceData(
@@ -216,6 +269,7 @@ export default function NewOnboardingPage() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasShownDuplicateRef = useRef(false);
   const continuedAsNewRef = useRef(false);
+  const [continuedAsNew, setContinuedAsNew] = useState(false);
 
   // Debounced vendor search
   useEffect(() => {
@@ -228,6 +282,7 @@ export default function NewOnboardingPage() {
     }
 
     if (continuedAsNewRef.current) {
+      setSearchResults([]);
       setShowSuggestions(false);
       return;
     }
@@ -504,6 +559,7 @@ export default function NewOnboardingPage() {
     setShowDuplicateAlert(false);
     hasShownDuplicateRef.current = true;
     continuedAsNewRef.current = true;
+    setContinuedAsNew(true);
     setShowSuggestions(false);
     setSearchResults([]);
   }, []);
@@ -518,47 +574,50 @@ export default function NewOnboardingPage() {
 
   const handleDuplicateCancel = useCallback(() => {
     setShowDuplicateAlert(false);
-    hasShownDuplicateRef.current = true; // Don't re-prompt for this session
+    // Do NOT set continuedAsNew = true;
+    // Keeps warning user until they explicitly click "Create New Anyway"
   }, []);
 
   const handleDuplicateCreateAnyway = useCallback(() => {
     setShowDuplicateAlert(false);
     setSelectedSearchVendor(null);
     setShowVendorDetail(false);
-    hasShownDuplicateRef.current = true; // Prevent showing again
     continuedAsNewRef.current = true;
+    setContinuedAsNew(true);
     setShowSuggestions(false);
     setSearchResults([]);
   }, []);
 
-  // When company name changes, keep predictive analysis disabled if user already clicked Continue with New Vendor
+  // When company name changes
   const handleCompanyNameChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newVal = e.target.value;
     setCompanyName(newVal);
-    hasShownDuplicateRef.current = false;
   }, []);
+
+  // Helper to trigger potential duplicate alert modal (persists until user clicks Create New Anyway)
+  const checkAndShowDuplicateAlert = useCallback(() => {
+    if (continuedAsNew || continuedAsNewRef.current) return;
+    if (
+      companyName.trim().length >= 2 &&
+      !showVendorDetail &&
+      !showDuplicateAlert
+    ) {
+      const bestMatch = searchResults.find((v) => v.score >= 50) || searchResults[0];
+      if (bestMatch && bestMatch.score >= 50) {
+        setSelectedSearchVendor(bestMatch);
+        setShowDuplicateAlert(true);
+      }
+    }
+  }, [companyName, searchResults, showVendorDetail, showDuplicateAlert, continuedAsNew]);
 
   // Handle blur on company name field — if there's an exact/high match, show duplicate alert
   const handleCompanyNameBlur = useCallback(() => {
+    if (continuedAsNew || continuedAsNewRef.current) return;
     // Delay to let the suggestion click handler fire first
     setTimeout(() => {
-      const hasHighMatch = searchResults.some((v) => v.score >= 80);
-      if (
-        companyName.trim().length >= 2 &&
-        hasHighMatch &&
-        !hasShownDuplicateRef.current &&
-        !continuedAsNewRef.current &&
-        !showVendorDetail
-      ) {
-        const bestMatch = searchResults.find((v) => v.score >= 80);
-        if (bestMatch) {
-          setSelectedSearchVendor(bestMatch);
-          setShowDuplicateAlert(true);
-          hasShownDuplicateRef.current = true;
-        }
-      }
-    }, 200);
-  }, [companyName, searchResults, showVendorDetail]);
+      checkAndShowDuplicateAlert();
+    }, 150);
+  }, [checkAndShowDuplicateAlert, continuedAsNew]);
 
   const handleSendInviteClick = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -605,11 +664,8 @@ export default function NewOnboardingPage() {
       
       const cleanPhoneDigits = (raw?: string) => {
         if (!raw) return '';
-        let d = raw.replace(/\D/g, '').replace(/^0+/, '');
-        if (d.length > 10) {
-          return d.slice(-10);
-        }
-        return d;
+        const digits = raw.replace(/\D/g, '');
+        return digits.length >= 7 ? digits.slice(-10) : digits;
       };
 
       let bestScore = 0;
@@ -617,16 +673,17 @@ export default function NewOnboardingPage() {
       let bestBreakdown = { nameScore: 0, emailScore: 0, personScore: 0, phoneScore: 0 };
 
       candidates.forEach((cand) => {
-        // 1. Company Name Match (25% weight)
-        const inName = norm(currentInput.companyName);
-        const exName = norm(cand.companyName);
-        let nameScore = 0;
-        if (inName && exName) {
-          if (inName === exName) nameScore = 100;
-          else if (inName.includes(exName) || exName.includes(inName)) nameScore = 80;
+        let totalWeights = 0;
+        let weightedScoreSum = 0;
+
+        // 1. Company Name Match
+        const nameScore = calculateFuzzyNameMatchScore(currentInput.companyName, cand.companyName);
+        if (currentInput.companyName) {
+          totalWeights += 1;
+          weightedScoreSum += nameScore;
         }
 
-        // 2. Email Match (25% weight)
+        // 2. Email Match
         const inEmail = norm(currentInput.contactEmail);
         const exEmail = norm(cand.contactEmail);
         let emailScore = 0;
@@ -635,9 +692,11 @@ export default function NewOnboardingPage() {
           else if (inEmail.split('@')[1] && inEmail.split('@')[1] === exEmail.split('@')[1] && !['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com'].includes(inEmail.split('@')[1])) {
             emailScore = 60;
           }
+          totalWeights += 1;
+          weightedScoreSum += emailScore;
         }
 
-        // 3. Contact Person Match (25% weight)
+        // 3. Contact Person Match
         const inPerson = norm(currentInput.contactPerson);
         const exPerson = norm(cand.contactPerson);
         let personScore = 0;
@@ -649,20 +708,26 @@ export default function NewOnboardingPage() {
             const exWords = exPerson.split(/\s+/);
             if (inWords.some(w => exWords.includes(w) && w.length >= 3)) personScore = 50;
           }
+          totalWeights += 1;
+          weightedScoreSum += personScore;
         }
 
-        // 4. Phone Match (25% weight) - Strict Binary Match (100% if same, 0% if different/missing)
+        // 4. Phone Match - Normalized Digit Comparison (Last 10 Digits & Country Code Handling)
         const inPhoneDigits = cleanPhoneDigits(currentInput.contactPhone);
         const exPhoneDigits = cleanPhoneDigits(cand.contactPhone);
         let phoneScore = 0;
-        if (inPhoneDigits && exPhoneDigits && inPhoneDigits === exPhoneDigits) {
-          phoneScore = 100;
-        } else {
-          phoneScore = 0;
+        if (inPhoneDigits && exPhoneDigits) {
+          if (inPhoneDigits === exPhoneDigits || inPhoneDigits.endsWith(exPhoneDigits) || exPhoneDigits.endsWith(inPhoneDigits)) {
+            phoneScore = 100;
+          } else {
+            phoneScore = 0;
+          }
+          totalWeights += 1;
+          weightedScoreSum += phoneScore;
         }
 
-        // Equal 25% weightage calculation
-        const total = Math.round(nameScore * 0.25 + emailScore * 0.25 + personScore * 0.25 + phoneScore * 0.25);
+        // Dynamically weighted score based on active provided field pairs
+        const total = totalWeights > 0 ? Math.round(weightedScoreSum / totalWeights) : 0;
 
         if (total > bestScore) {
           bestScore = total;
@@ -740,6 +805,7 @@ export default function NewOnboardingPage() {
       setSelectedSearchVendor(null);
       hasShownDuplicateRef.current = false;
       continuedAsNewRef.current = false;
+      setContinuedAsNew(false);
       reload();
       if (!emailSent) {
         setFormError(
@@ -1038,6 +1104,9 @@ export default function NewOnboardingPage() {
                     type="email"
                     value={contactEmail}
                     onChange={(e) => setContactEmail(e.target.value)}
+                    onFocus={() => {
+                      checkAndShowDuplicateAlert();
+                    }}
                     placeholder="vendor@company.com"
                     required
                     className={`onb-form-field__input ${isEmailInvalid ? 'onb-form-field__input--error' : ''}`}
@@ -1059,6 +1128,9 @@ export default function NewOnboardingPage() {
                     type="text"
                     value={contactPerson}
                     onChange={(e) => setContactPerson(e.target.value)}
+                    onFocus={() => {
+                      checkAndShowDuplicateAlert();
+                    }}
                     placeholder="Full name"
                     className="onb-form-field__input"
                   />

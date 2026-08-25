@@ -637,18 +637,41 @@ body.vnd-is-dragging * { cursor: grabbing !important; }
   display: flex;
   gap: 14px;
   padding: 16px;
-  border-radius: var(--radius-lg);
-  background: var(--surface-card);
-  border: 1px solid var(--border);
+  border-radius: 14px !important;
+  background: rgba(255, 255, 255, 0.72) !important;
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.08), inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
   cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s ease;
   text-align: left;
   text-decoration: none;
+  position: relative;
+  overflow: hidden;
+}
+
+[data-theme="dark"] .vnd-kpi {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.65) 0%, rgba(15, 23, 42, 0.75) 100%) !important;
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.35), inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
 }
 
 .vnd-kpi:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+  transform: translateY(-3px) scale(1.015);
+  border-color: rgba(56, 139, 253, 0.45) !important;
+  box-shadow: 0 0 20px rgba(56, 139, 253, 0.3), 0 12px 36px 0 rgba(0, 0, 0, 0.45) !important;
+}
+
+.vnd-kpi--active,
+[data-theme="dark"] .vnd-kpi--active,
+.vnd-kpi.active,
+[data-theme="dark"] .vnd-kpi.active {
+  border: 1.5px solid #388bfd !important;
+  box-shadow: 0 0 0 1.5px #388bfd, 0 0 28px rgba(56, 139, 253, 0.8), 0 0 12px rgba(56, 139, 253, 0.95), inset 0 0 16px rgba(56, 139, 253, 0.22) !important;
+  background: rgba(56, 139, 253, 0.16) !important;
 }
 
 .vnd-kpi__icon {

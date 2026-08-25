@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   FileText,
@@ -31,6 +31,8 @@ import heliflowLogo from '../../assets/heliflow.png';
 import { useNavigationMenu } from '../../hooks/useRoleAccess';
 import { useRoutePrefetch } from '../../hooks/useRoutePrefetch';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
+import { isVendor } from '../../utils/rbac';
 import './Sidebar.css';
 
 // ─── Navigation config ──────────────────────────────────────
@@ -143,10 +145,14 @@ export default function Sidebar({
   onMobileClose,
 }: SidebarProps) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { roles } = useAuth();
   const menuItems = useNavigationMenu();
   const prefetch = useRoutePrefetch();
   const { companyName, logoUrl } = useBranding();
   const { isFrench } = useLanguage();
+
+  const dashboardPath = isVendor(roles) ? '/vendor/dashboard' : '/dashboard';
 
   // Convert menu items to nav sections
   const NAV_SECTIONS: NavSection[] = [
@@ -266,7 +272,22 @@ export default function Sidebar({
 
       <aside className={sidebarClasses}>
         {/* Logo */}
-        <div className="sidebar__logo">
+        <div
+          className="sidebar__logo"
+          onClick={() => {
+            navigate(dashboardPath);
+            onMobileClose();
+          }}
+          title="Go to Dashboard"
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              navigate(dashboardPath);
+              onMobileClose();
+            }
+          }}
+        >
           <img
             src={logoUrl || heliflowLogo}
             alt={companyName}

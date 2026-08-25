@@ -251,7 +251,7 @@ async function mockGetCompanyProfile(): Promise<CompanyProfile> {
     id: '1', companyCode: 'HFL', defaultCurrency: 'KES',
     invitationExpiryHours: 168, resubmissionDeadlineHours: 72,
     createdAt: '', updatedAt: '',
-    companyName: null, logoUrl: null, faviconUrl: null,
+    companyName: null, logoUrl: '/Procnex-logo.jpeg', faviconUrl: '/Procnex-logo.jpeg',
     primaryColor: '#0a6ed1', loginText: null, supportEmail: null,
   };
 }

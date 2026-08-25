@@ -71,6 +71,18 @@ export interface RFQQuotationSummary {
   currency?: string;
 }
 
+export interface VendorDocumentItem {
+  id: string;
+  name: string;
+  type: string;
+  documentNumber?: string;
+  fileUrl?: string;
+  submittedAt: string;
+  expiryDate?: string | null;
+  status?: 'VALID' | 'EXPIRING_SOON' | 'EXPIRED' | 'PENDING_VERIFICATION' | 'NOT_PROVIDED';
+  isRenewalRequested?: boolean;
+}
+
 export interface VendorTableRow {
   id: string;
   name: string;
@@ -99,6 +111,7 @@ export interface VendorTableRow {
   bankAccountNumber?: string;
   bankIfscCode?: string;
   bankBranch?: string;
+  documents?: VendorDocumentItem[];
 }
 
 export interface ApprovalTableRow {

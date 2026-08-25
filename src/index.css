@@ -880,15 +880,15 @@ body.modal-open .app-layout__content {
    ═══════════════════════════════════════════════════════════ */
 
 :root {
-  --card-glow-border: var(--primary-500);
-  --card-glow-shadow: 0 2px 8px rgba(10, 110, 209, 0.15);
-  --card-glow-bg: rgba(10, 110, 209, 0.04);
+  --card-glow-border: #388bfd;
+  --card-glow-shadow: 0 0 0 1.5px #388bfd, 0 0 28px rgba(56, 139, 253, 0.8), 0 0 12px rgba(56, 139, 253, 0.95), inset 0 0 16px rgba(56, 139, 253, 0.22);
+  --card-glow-bg: rgba(56, 139, 253, 0.16);
 }
 
 [data-theme="dark"] {
-  --card-glow-border: #4db1ff;
-  --card-glow-shadow: 0 2px 10px rgba(77, 177, 255, 0.2);
-  --card-glow-bg: rgba(77, 177, 255, 0.08);
+  --card-glow-border: #388bfd;
+  --card-glow-shadow: 0 0 0 1.5px #388bfd, 0 0 28px rgba(56, 139, 253, 0.8), 0 0 12px rgba(56, 139, 253, 0.95), inset 0 0 16px rgba(56, 139, 253, 0.22);
+  --card-glow-bg: rgba(56, 139, 253, 0.16);
 }
 
 /* Master Active / Selected Card Glow Selector */
