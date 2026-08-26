@@ -14,6 +14,7 @@ export interface User {
   department?: string;
   phone?: string;
   isActive: boolean;
+  isMobileAccessEnabled?: boolean;
   lastLoginAt?: string;
   createdAt: string;
 }

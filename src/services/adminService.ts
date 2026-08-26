@@ -254,6 +254,23 @@ async function apiToggleUserStatus(id: string): Promise<{ isActive: boolean }> {
   return res;
 }
 
+async function mockToggleUserMobileAccess(id: string): Promise<{ isMobileAccessEnabled: boolean }> {
+  const u = ALL_MOCK_USERS.find((x) => x.id === id) as any;
+  if (!u) throw new Error('User not found');
+  u.isMobileAccessEnabled = !u.isMobileAccessEnabled;
+  return { isMobileAccessEnabled: u.isMobileAccessEnabled };
+}
+
+async function apiToggleUserMobileAccess(id: string): Promise<{ isMobileAccessEnabled: boolean }> {
+  const res = await apiRequest<{ isMobileAccessEnabled: boolean }>(`/admin/users/${id}/toggle-mobile-access`, {
+    method: 'PUT',
+    body: JSON.stringify({}),
+  });
+  invalidateApiCache('/admin/users');
+  invalidateApiCache('/admin/roles');
+  return res;
+}
+
 // ─── Roles ───────────────────────────────────────────────────────────────────
 
 export interface RolePermissionPayload {
@@ -591,6 +608,7 @@ export const adminService = {
   updateUser: USE_MOCK ? mockUpdateUser : apiUpdateUser,
   deleteUser: USE_MOCK ? mockDeleteUser : apiDeleteUser,
   toggleUserStatus: USE_MOCK ? mockToggleUserStatus : apiToggleUserStatus,
+  toggleUserMobileAccess: USE_MOCK ? mockToggleUserMobileAccess : apiToggleUserMobileAccess,
   listRoles: USE_MOCK ? mockListRoles : apiListRoles,
   createRole: USE_MOCK ? mockCreateRole : apiCreateRole,
   updateRole: USE_MOCK ? mockUpdateRole : apiUpdateRole,

@@ -34,6 +34,7 @@ import {
   LayoutList,
   LayoutGrid,
   CheckSquare,
+  Smartphone,
 } from 'lucide-react';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
@@ -56,13 +57,14 @@ interface MockUser {
   role: string;
   apiRoleName: string;
   isActive: boolean;
+  isMobileAccessEnabled: boolean;
   lastLoginAt: string | null;
   createdAt: string;
   avatarMod: string;
   initials: string;
 }
 
-function mapUser(u: User & { roles?: string[] }): MockUser {
+function mapUser(u: User & { roles?: string[]; isMobileAccessEnabled?: boolean }): MockUser {
   const rawRole = u.roles?.[0] || 'Staff';
   const role = rawRole;
   const initials = u.fullName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
@@ -77,6 +79,7 @@ function mapUser(u: User & { roles?: string[] }): MockUser {
     role,
     apiRoleName: rawRole,
     isActive: u.isActive,
+    isMobileAccessEnabled: u.isMobileAccessEnabled ?? false,
     lastLoginAt: u.lastLoginAt || null,
     createdAt: u.createdAt.slice(0, 10),
     avatarMod: String((u.id % 6) + 1),
@@ -114,7 +117,7 @@ const WIDGET_LIST = [
 
 interface UserColumnDef {
   key: string; label: string; defaultVisible: boolean; required?: boolean;
-  width?: string;  render: (u: MockUser, fmtDate: (d: string) => string, fmtDT: (d: string | null) => string, toggle: (id: string) => void) => React.ReactNode;
+  width?: string;  render: (u: MockUser, fmtDate: (d: string) => string, fmtDT: (d: string | null) => string, toggle: (id: string) => void, toggleMobile?: (id: string) => void) => React.ReactNode;
 }
 
 const ALL_COLUMNS: UserColumnDef[] = [
@@ -159,6 +162,27 @@ const ALL_COLUMNS: UserColumnDef[] = [
       );
     },
   },
+  {
+    key: 'mobileAccess', label: 'Mobile App Access', defaultVisible: true, width: '150px',
+    render: (u, _fd, _fdt, _toggle, toggleMobile) => {
+      return (
+        <div
+          className="users-status-toggle"
+          onClick={() => toggleMobile && toggleMobile(u.id)}
+          title="Toggle Mobile App Access"
+          style={{ cursor: 'pointer' }}
+        >
+          <div className={`users-status-toggle__track ${u.isMobileAccessEnabled ? 'users-status-toggle__track--active' : ''}`}>
+            <div className="users-status-toggle__knob" />
+          </div>
+          <span className={`users-status-toggle__label users-status-toggle__label--${u.isMobileAccessEnabled ? 'active' : 'inactive'}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600 }}>
+            <Smartphone size={16} strokeWidth={2.2} style={{ flexShrink: 0 }} />
+            {u.isMobileAccessEnabled ? 'Enabled' : 'Disabled'}
+          </span>
+        </div>
+      );
+    },
+  },
   { key: 'lastLogin', label: 'Last Login', defaultVisible: true, width: '130px', render: (u, _fd, fmtDT) => <span className="users-table__date">{fmtDT(u.lastLoginAt)}</span> },
   { key: 'joined', label: 'Joined', defaultVisible: true, width: '110px', render: (u, fmtDate) => <span className="users-table__date">{fmtDate(u.createdAt)}</span> },
   { key: 'phone', label: 'Phone', defaultVisible: false, width: '140px', render: (u) => <span className="users-table__date">{u.phone}</span> },
@@ -197,6 +221,7 @@ export default function UsersPage() {
 
   // ── Optimistic status toggle state ──────────────────────────
   const [pendingStatus, setPendingStatus] = useState<Map<string, boolean>>(new Map());
+  const [pendingMobileStatus, setPendingMobileStatus] = useState<Map<string, boolean>>(new Map());
 
   const assignableRoles = useMemo(
     () => roleRecords.map((r) => r.roleName).sort(),
@@ -238,6 +263,7 @@ export default function UsersPage() {
   const [editPhone, setEditPhone] = useState('');
   const [editDepartment, setEditDepartment] = useState('');
   const [editRoleName, setEditRoleName] = useState('');
+  const [editMobileAccess, setEditMobileAccess] = useState(false);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [showBatchDeleteModal, setShowBatchDeleteModal] = useState(false);
   const [batchDeleting, setBatchDeleting] = useState(false);
@@ -251,9 +277,16 @@ export default function UsersPage() {
   } | null>(null);
   const [widgetSaving, setWidgetSaving] = useState(false);
 
+  // ── Mobile Access Success Modal state ──
+  const [mobileSuccessModal, setMobileSuccessModal] = useState<{
+    visible: boolean;
+    userName: string;
+    isEnabled: boolean;
+  } | null>(null);
+
   const perPage = 8;
 
-  const anyModalOpen = !!(showModal || editingUser || deleteTarget || viewUser || sapToast?.visible || showBatchDeleteModal);
+  const anyModalOpen = !!(showModal || editingUser || deleteTarget || viewUser || sapToast?.visible || showBatchDeleteModal || mobileSuccessModal?.visible);
   useBodyScrollLock(anyModalOpen);
 
   // ── Column state ────────────────────────────────────────────
@@ -281,6 +314,7 @@ export default function UsersPage() {
   const [newRole, setNewRole] = useState<string>('');
   const [newDepartment, setNewDepartment] = useState('');
   const [newPosition, setNewPosition] = useState('');
+  const [newMobileAccess, setNewMobileAccess] = useState(true);
 
   // Document uploads
   const [docAadhaar, setDocAadhaar] = useState<File | null>(null);
@@ -296,10 +330,15 @@ export default function UsersPage() {
   const displayUsers = useMemo(
     () =>
       users.map((u) => {
-        const override = pendingStatus.get(u.id);
-        return override !== undefined ? { ...u, isActive: override } : u;
+        const activeOverride = pendingStatus.get(u.id);
+        const mobileOverride = pendingMobileStatus.get(u.id);
+        return {
+          ...u,
+          isActive: activeOverride !== undefined ? activeOverride : u.isActive,
+          isMobileAccessEnabled: mobileOverride !== undefined ? mobileOverride : u.isMobileAccessEnabled,
+        };
       }),
-    [users, pendingStatus]
+    [users, pendingStatus, pendingMobileStatus]
   );
 
   // Summary
@@ -413,6 +452,43 @@ export default function UsersPage() {
     }
   }, [reload, users]);
 
+  const toggleMobileActive = useCallback(async (id: string) => {
+    setPageMsg(null);
+    const user = users.find((u) => u.id === id);
+    if (!user) return;
+
+    const newStatus = !user.isMobileAccessEnabled;
+
+    // Set optimistic status immediately - no flicker!
+    setPendingMobileStatus((prev) => {
+      const next = new Map(prev);
+      next.set(id, newStatus);
+      return next;
+    });
+
+    try {
+      await adminService.toggleUserMobileAccess(id);
+
+      // Show Success Modal Box instead of toast
+      setMobileSuccessModal({
+        visible: true,
+        userName: user.fullName,
+        isEnabled: newStatus,
+      });
+
+      // Reload in background (pendingMobileStatus keeps override until server data arrives)
+      await reload();
+    } catch (err) {
+      // Revert optimistic override on error
+      setPendingMobileStatus((prev) => {
+        const next = new Map(prev);
+        next.delete(id);
+        return next;
+      });
+      setPageMsg(err instanceof Error ? err.message : 'Could not update mobile access status');
+    }
+  }, [reload, users]);
+
   const openAddModal = useCallback(() => {
     setModalStep(1);
     setSelectedUserType(null);
@@ -458,6 +534,7 @@ export default function UsersPage() {
         companyCode: 'HFL',
         roleName,
         userType: selectedUserType || undefined,
+        isMobileAccessEnabled: newMobileAccess,
         documents: {
           aadhaar: docAadhaar || undefined,
           pan: docPan || undefined,
@@ -509,6 +586,7 @@ export default function UsersPage() {
     }
     setEditDepartment(user.department === '—' ? '' : user.department);
     setEditRoleName(user.apiRoleName);
+    setEditMobileAccess(user.isMobileAccessEnabled);
   }, []);
 
   const handleSaveEdit = useCallback(async () => {
@@ -523,6 +601,7 @@ export default function UsersPage() {
         phone: editPhone.trim() ? `${editCountryCode}${editPhone.trim()}` : undefined,
         department: editDepartment.trim() || undefined,
         roleName: editRoleName || undefined,
+        isMobileAccessEnabled: editMobileAccess,
       });
       setPageMsg(`User "${updated.fullName}" updated successfully.`);
       setEditingUser(null);
@@ -532,7 +611,7 @@ export default function UsersPage() {
     } finally {
       setActionLoading(false);
     }
-  }, [editingUser, editFullName, editEmail, editPhone, editCountryCode, editDepartment, editRoleName, reload]);
+  }, [editingUser, editFullName, editEmail, editPhone, editCountryCode, editDepartment, editRoleName, editMobileAccess, reload]);
 
   const handleConfirmDelete = useCallback(async () => {
     if (!deleteTarget) return;
@@ -819,7 +898,7 @@ export default function UsersPage() {
                           />
                         )}
                       </td>
-                      {visibleColumns.map((col) => (<td key={col.key}>{col.render(user, formatDate, formatDateTime, toggleActive)}</td>))}
+                      {visibleColumns.map((col) => (<td key={col.key}>{col.render(user, formatDate, formatDateTime, toggleActive, toggleMobileActive)}</td>))}
                       <td>
                         <div className="users-table__actions">
                           <button type="button" className="users-table__action-btn" title="View" onClick={() => openViewUser(user)}><Eye size={15} /></button>
@@ -1061,6 +1140,20 @@ export default function UsersPage() {
                       </div>
                     </div>
                   )}
+                  <div className="users-modal__field" style={{ marginTop: 12, padding: '10px 14px', background: 'var(--surface-elevated, #f8fafc)', borderRadius: 8, border: '1px solid var(--border, #e2e8f0)' }}>
+                    <label className="users-modal__label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', margin: 0 }}>
+                      <span style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 8 }}><Smartphone size={18} strokeWidth={2} style={{ color: 'var(--primary-500, #0a6ed1)' }} /> Allow Mobile App Access</span>
+                      <input
+                        type="checkbox"
+                        checked={newMobileAccess}
+                        onChange={(e) => setNewMobileAccess(e.target.checked)}
+                        style={{ width: 18, height: 18, cursor: 'pointer' }}
+                      />
+                    </label>
+                    <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
+                      Allow this user to log in to the Mobile App.
+                    </p>
+                  </div>
                   <div className="users-modal__docs-section">
                     <h4 className="users-modal__docs-title"><FileText size={15} /> Optional Documents</h4>
                     <p className="users-modal__docs-hint">Upload if available; this is not required to create the user.</p>
@@ -1128,7 +1221,10 @@ export default function UsersPage() {
                 <div className="users-modal__field"><label className="users-modal__label">Department</label><p style={{ margin: 0 }}>{viewUser.department}</p></div>
                 <div className="users-modal__field"><label className="users-modal__label">Status</label><p style={{ margin: 0 }}>{viewUser.isActive ? 'Active' : 'Inactive'}</p></div>
               </div>
-              <div className="users-modal__field"><label className="users-modal__label">Last Login</label><p style={{ margin: 0 }}>{formatDateTime(viewUser.lastLoginAt)}</p></div>
+              <div className="users-modal__row">
+                <div className="users-modal__field"><label className="users-modal__label">Mobile App Access</label><p style={{ margin: 0, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Smartphone size={15} strokeWidth={2} /> {viewUser.isMobileAccessEnabled ? 'Enabled' : 'Disabled'}</p></div>
+                <div className="users-modal__field"><label className="users-modal__label">Last Login</label><p style={{ margin: 0 }}>{formatDateTime(viewUser.lastLoginAt)}</p></div>
+              </div>
             </div>
             <div className="users-modal__footer">
               <button type="button" className="users-modal__btn users-modal__btn--secondary" onClick={() => setViewUser(null)}>Close</button>
@@ -1184,6 +1280,20 @@ export default function UsersPage() {
                     {positionRoleOptions.map((r) => (<option key={r} value={r}>{r}</option>))}
                   </select>
                 </div>
+              </div>
+              <div className="users-modal__field" style={{ marginTop: 12, padding: '10px 14px', background: 'var(--surface-elevated, #f8fafc)', borderRadius: 8, border: '1px solid var(--border, #e2e8f0)' }}>
+                <label className="users-modal__label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', margin: 0 }}>
+                  <span style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 8 }}><Smartphone size={18} strokeWidth={2} style={{ color: 'var(--primary-500, #0a6ed1)' }} /> Allow Mobile App Access</span>
+                  <input
+                    type="checkbox"
+                    checked={editMobileAccess}
+                    onChange={(e) => setEditMobileAccess(e.target.checked)}
+                    style={{ width: 18, height: 18, cursor: 'pointer' }}
+                  />
+                </label>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
+                  When enabled, this user can log in to the Mobile App.
+                </p>
               </div>
               <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--text-placeholder)' }}>
                 Username: @{editingUser.username} (cannot be changed here)
@@ -1353,6 +1463,118 @@ export default function UsersPage() {
                 {batchDeleting ? 'Deleting…' : `Delete ${selectedUserIds.length} User(s)`}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Mobile Access Success Modal ────────────────────── */}
+      {mobileSuccessModal?.visible && (
+        <div className="users-modal-backdrop" onClick={() => setMobileSuccessModal(null)}>
+          <div
+            className="users-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: 400,
+              padding: '28px 24px 24px',
+              textAlign: 'center',
+              borderRadius: 16,
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08)',
+              position: 'relative',
+            }}
+          >
+            {/* Header Close */}
+            <button
+              type="button"
+              onClick={() => setMobileSuccessModal(null)}
+              style={{
+                position: 'absolute',
+                top: 14,
+                right: 14,
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '50%',
+                width: 28,
+                height: 28,
+                display: 'flex',
+                alignItems: 'center',
+                justify: 'center',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+            >
+              <X size={15} />
+            </button>
+
+            {/* Icon Badge */}
+            <div
+              style={{
+                width: 76,
+                height: 76,
+                borderRadius: '50%',
+                background: mobileSuccessModal.isEnabled
+                  ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.22), rgba(16, 185, 129, 0.1))'
+                  : 'linear-gradient(135deg, rgba(239, 68, 68, 0.22), rgba(225, 29, 72, 0.1))',
+                border: `1.5px solid ${mobileSuccessModal.isEnabled ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`,
+                boxShadow: `0 0 28px ${mobileSuccessModal.isEnabled ? 'rgba(34, 197, 94, 0.25)' : 'rgba(239, 68, 68, 0.25)'}`,
+                display: 'flex',
+                alignItems: 'center',
+                justify: 'center',
+                margin: '0 auto 20px',
+              }}
+            >
+              <Smartphone size={38} strokeWidth={2} color={mobileSuccessModal.isEnabled ? '#22c55e' : '#ef4444'} />
+            </div>
+
+            {/* Title */}
+            <h3
+              style={{
+                margin: '0 0 8px',
+                fontSize: 19,
+                fontWeight: 700,
+                color: 'var(--text-primary)',
+                letterSpacing: '-0.01em',
+              }}
+            >
+              Mobile Access {mobileSuccessModal.isEnabled ? 'Enabled' : 'Disabled'}
+            </h3>
+
+            {/* Subtitle */}
+            <p
+              style={{
+                margin: '0 0 24px',
+                fontSize: 14,
+                color: 'var(--text-secondary)',
+                lineHeight: 1.55,
+              }}
+            >
+              Mobile App access for <strong style={{ color: 'var(--text-primary)' }}>{mobileSuccessModal.userName}</strong> has been {mobileSuccessModal.isEnabled ? 'granted successfully.' : 'revoked.'}
+            </p>
+
+            {/* Button */}
+            <button
+              type="button"
+              onClick={() => setMobileSuccessModal(null)}
+              style={{
+                width: '100%',
+                padding: '11px 0',
+                borderRadius: 10,
+                border: 'none',
+                background: mobileSuccessModal.isEnabled
+                  ? 'linear-gradient(135deg, #16a34a, #15803d)'
+                  : 'linear-gradient(135deg, #dc2626, #b91c1c)',
+                color: '#ffffff',
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: 'pointer',
+                boxShadow: mobileSuccessModal.isEnabled
+                  ? '0 4px 14px rgba(22, 163, 74, 0.35)'
+                  : '0 4px 14px rgba(220, 38, 38, 0.35)',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              Got it
+            </button>
           </div>
         </div>
       )}
