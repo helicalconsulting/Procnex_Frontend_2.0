@@ -307,12 +307,64 @@ export default function ContractDetailPage() {
   useBodyScrollLock(showSignModal || showTerminateConfirm || showDeleteConfirm);
 
   // Fetch contract
-  const { data, loading, error, reload } = useServiceData(
+  const { data, loading, error, reload, forceRefresh } = useServiceData(
     () => contractService.getContract(id!).then(r => r),
     null as { contract: Contract; activity: unknown[] } | null,
     [id],
     { cacheKey: `contract:${id}`, cacheTtlMs: 0 }
   );
+
+  // Refresh contract data and balance instantly
+  const refreshAll = useCallback(async () => {
+    await forceRefresh();
+    if (id) {
+      contractService.getContractBalance(id).then(setContractBalance).catch(() => {});
+    }
+  }, [forceRefresh, id]);
+
+  // Real-time updates & cross-tab sync listeners
+  useEffect(() => {
+    if (!id) return;
+
+    // 1. SSE Events
+    const unsubPoCreated = sseClient.on('po_created', refreshAll);
+    const unsubPoStatus = sseClient.on('po_status_changed', refreshAll);
+    const unsubApprovalInit = sseClient.on('approval_initiated', refreshAll);
+    const unsubApprovalUpdated = sseClient.on('approval_updated', refreshAll);
+
+    // 2. Custom Window Events (Instant same-window sync)
+    const handlePoCreated = () => refreshAll();
+    const handleApprovalUpdated = () => refreshAll();
+    const handleFocus = () => refreshAll();
+
+    window.addEventListener('heliflow:po-created', handlePoCreated);
+    window.addEventListener('heliflow:approval-updated', handleApprovalUpdated);
+    window.addEventListener('heliflow:po-updated', handlePoCreated);
+    window.addEventListener('focus', handleFocus);
+
+    // 3. BroadcastChannel cross-tab sync
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('heliflow_sync');
+      bc.onmessage = (event) => {
+        if (event.data?.type === 'APPROVAL_SUBMITTED' || event.data?.type === 'PO_CREATED') {
+          refreshAll();
+        }
+      };
+    } catch {}
+
+    return () => {
+      unsubPoCreated();
+      unsubPoStatus();
+      unsubApprovalInit();
+      unsubApprovalUpdated();
+      window.removeEventListener('heliflow:po-created', handlePoCreated);
+      window.removeEventListener('heliflow:approval-updated', handleApprovalUpdated);
+      window.removeEventListener('heliflow:po-updated', handlePoCreated);
+      window.removeEventListener('focus', handleFocus);
+      if (bc) bc.close();
+    };
+  }, [id, refreshAll]);
 
   // Check if we should open sign modal from query param
   useEffect(() => {
@@ -359,23 +411,12 @@ export default function ContractDetailPage() {
     } catch {}
   }, [id]);
 
-  const handleCreatePO = useCallback(async () => {
-    if (!id) return;
+  const handleCreatePO = useCallback(() => {
+    if (!id || !data?.contract) return;
     if (contractBalance && contractBalance.remainingValue <= 0) return;
-    setCreatingPO(true);
-    setPageMsg(null);
-    try {
-      const result = await contractService.createPOFromContract(id);
-      setPageMsg(`Purchase Order ${result.poNumber} created successfully.`);
-      await reload();
-      await refreshBalance();
-      setActiveTab('purchase-orders');
-    } catch (err) {
-      setPageMsg(err instanceof Error ? err.message : 'Failed to create PO');
-    } finally {
-      setCreatingPO(false);
-    }
-  }, [id, contractBalance, reload, refreshBalance]);
+    const targetRfqId = data.contract.rfqId || `contract-${id}`;
+    navigate(`/procurement/purchase-requisition/${targetRfqId}?contractId=${id}`);
+  }, [id, data?.contract, contractBalance, navigate]);
 
   const handleSendToVendor = useCallback(async () => {
     if (!id) return;
@@ -517,10 +558,10 @@ export default function ContractDetailPage() {
   const canSign = contract.status === 'DRAFT' || contract.status === 'AWAITING_CUSTOMER_SIGNATURE';
   const canSendToVendor = contract.status === 'DRAFT';
   const canComplete = contract.status === 'VENDOR_SIGNED' || contract.status === 'ACCEPTED' || contract.status === 'ACTIVE';
-  const canCreatePO = ['ACCEPTED', 'VENDOR_SIGNED', 'COMPLETED', 'ACTIVE'].includes(contract.status) && !hasPO;
+  const isLimitReached = contractBalance ? contractBalance.remainingValue <= 0 : false;
+  const canCreatePO = ['ACCEPTED', 'VENDOR_SIGNED', 'COMPLETED', 'ACTIVE'].includes(contract.status) && !isLimitReached;
   const canTerminate = ['ACCEPTED', 'VENDOR_SIGNED', 'COMPLETED', 'ACTIVE', 'EXPIRING_SOON'].includes(contract.status);
   const canEdit = contract.status === 'DRAFT';
-  const isLimitReached = contractBalance ? contractBalance.remainingValue <= 0 : false;
 
   const handlePrint = () => {
     const win = window.open('', '_blank');

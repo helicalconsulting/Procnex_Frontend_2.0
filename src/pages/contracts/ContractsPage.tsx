@@ -400,20 +400,9 @@ export default function ContractsPage() {
     navigate(`/contracts/${id}?action=sign`);
   }, [navigate]);
 
-  const handleCreatePO = useCallback(async (id: string) => {
-    setOperating(id);
-    setPageMsg(null);
-    try {
-      const result = await contractService.createPOFromContract(id);
-      setPageMsg(`Purchase Order ${result.poNumber} created successfully.`);
-      await reload();
-      navigate(`/contracts/${id}?tab=orders`);
-    } catch (err) {
-      setPageMsg(err instanceof Error ? err.message : 'Failed to create PO');
-    } finally {
-      setOperating(null);
-    }
-  }, [reload, navigate]);
+  const handleCreatePO = useCallback((id: string) => {
+    handleNavigateToPO(id);
+  }, [handleNavigateToPO]);
 
   const handleDownload = useCallback(async (r: ContractRow) => {
     try {
@@ -801,8 +790,8 @@ export default function ContractsPage() {
                             ><Download size={15} /></button>
                           )}
 
-                          {/* Create PO — Accepted, Active, Vendor Signed, or Expiring Soon (ONLY if PO not yet created) */}
-                          {['ACCEPTED', 'ACTIVE', 'VENDOR_SIGNED', 'EXPIRING_SOON'].includes(r.status) && !r.hasPO && (
+                          {/* Create PO — Accepted, Active, Vendor Signed, or Expiring Soon */}
+                          {['ACCEPTED', 'ACTIVE', 'VENDOR_SIGNED', 'EXPIRING_SOON'].includes(r.status) && (
                             <button
                               className="ctr-table__action-btn"
                               title="Create Purchase Order"

@@ -145,9 +145,16 @@ export default function PurchaseRequisitionPage() {
           } catch {}
         }
 
-        // Fetch RFQ details to pre-fill
-        const rfq = await rfqService.getById(rfqId);
-        const rfqData = rfq as Record<string, any>;
+        // Fetch RFQ details to pre-fill (safely handle contract-only flow or missing RFQ)
+        let rfqData: Record<string, any> = {};
+        if (rfqId && !rfqId.startsWith('contract-')) {
+          try {
+            const rfq = await rfqService.getById(rfqId);
+            if (rfq) rfqData = rfq as Record<string, any>;
+          } catch {
+            /* Fallback to contract details if RFQ load fails */
+          }
+        }
 
         // Fetch company profile
         let profile: Record<string, any> = {};
@@ -182,14 +189,14 @@ export default function PurchaseRequisitionPage() {
 
         // Prefer contract items if available
         const useContractItems = contract?.items && contract.items.length > 0;
-        const items: PurchaseRequisitionItem[] = useContractItems 
+        let items: PurchaseRequisitionItem[] = useContractItems 
           ? contract.items.map((ci: any, idx: number) => ({
               itemNo: idx + 1,
               description: ci.itemName || `Item ${idx + 1}`,
               quantity: ci.quantity || 1,
               unit: ci.unit || 'Pcs',
               unitPrice: Number(ci.unitPrice) || 0,
-              taxPercent: Number(ci.tax) > 0 ? Math.round((Number(ci.tax) / (Number(ci.unitPrice) * Number(ci.quantity))) * 100) : 18,
+              taxPercent: Number(ci.tax) > 0 ? Math.round((Number(ci.tax) / (Number(ci.unitPrice) * Number(ci.quantity))) * 100) : (contract?.taxPercentage || 18),
               discount: 0,
               total: 0,
             }))
@@ -206,10 +213,28 @@ export default function PurchaseRequisitionPage() {
                 total: 0,
               };
             });
+
+        // Fallback for contract POs with no pre-defined items array
+        if (contract && items.length === 0 && (contract.contractValue || contractBalance?.remainingValue)) {
+          const availValue = contractBalance?.remainingValue ?? contract.contractValue;
+          items = [
+            {
+              itemNo: 1,
+              description: contract.title || `Contract Items (${contract.contractNumber})`,
+              quantity: 1,
+              unit: 'Lot',
+              unitPrice: availValue,
+              taxPercent: contract.taxPercentage || 18,
+              discount: 0,
+              total: 0,
+            }
+          ];
+        }
+
         // Recalc totals
         items.forEach(i => { i.total = calcItemTotal(i); });
 
-        const vendor = quotation?.vendor || rfqData.vendors?.[0] || {};
+        const vendor = quotation?.vendor || rfqData.vendors?.[0] || contract?.vendor || {};
         const subtotal = items.reduce((s, i) => s + (i.quantity * i.unitPrice), 0);
         const taxTotal = items.reduce((s, i) => {
           const net = i.quantity * i.unitPrice;
@@ -232,11 +257,11 @@ export default function PurchaseRequisitionPage() {
           companyPhone: branding.companyPhone || profile?.phone || '',
           companyEmail: branding.companyEmail || profile?.email || '',
           companyWebsite: profile?.website || '',
-          vendorName: vendor?.name || vendor?.companyName || '',
-          vendorAddress: vendor?.address || vendor?.registeredAddress || '',
-          vendorContactPerson: vendor?.contactPerson || vendor?.name || '',
-          vendorPhone: vendor?.phone || vendor?.contactPhone || '',
-          vendorEmail: vendor?.email || '',
+          vendorName: vendor?.name || vendor?.companyName || contract?.vendor?.name || '',
+          vendorAddress: vendor?.address || vendor?.registeredAddress || contract?.vendor?.address || '',
+          vendorContactPerson: vendor?.contactPerson || vendor?.name || contract?.vendor?.contactPerson || '',
+          vendorPhone: vendor?.phone || vendor?.contactPhone || contract?.vendor?.phone || '',
+          vendorEmail: vendor?.email || contract?.vendor?.email || '',
           vendorGstVat: vendor?.gstVat || vendor?.gstNumber || '',
           shipToCompany: branding.companyName,
           shipToWarehouse: '',
@@ -1051,8 +1076,8 @@ export default function PurchaseRequisitionPage() {
                     <td className="pr-td--no">{item.itemNo}</td>
                     <td className="pr-td--desc"><input value={item.description} disabled={isReadOnly} onChange={e => updateItem(idx, 'description', e.target.value)} placeholder="Item description" /></td>
                     <td className={`pr-td--num ${itemValidationErrors[idx]?.quantity ? 'pr-item__cell--error' : ''}`}>
-                      <input type="number" min="1" value={item.quantity} disabled={isReadOnly}
-                        onChange={e => { updateItem(idx, 'quantity', Math.max(1, Number(e.target.value))); clearItemError(idx, 'quantity'); }}
+                      <input type="number" min="1" value={item.quantity === 0 ? '' : item.quantity} disabled={isReadOnly}
+                        onChange={e => { updateItem(idx, 'quantity', e.target.value === '' ? 0 : Math.max(0, Number(e.target.value))); clearItemError(idx, 'quantity'); }}
                       />
                       {itemValidationErrors[idx]?.quantity && <span className="pr-field__error-msg">{itemValidationErrors[idx].quantity}</span>}
                     </td>

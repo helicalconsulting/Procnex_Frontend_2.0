@@ -998,7 +998,7 @@ export default function CompanySettingsPage() {
     setConfirmModalConfig({
       isOpen: true,
       title: 'Reset Contract Template?',
-      message: 'Reset this template content to its default state? Unsaved changes will be discarded.',
+      message: 'Reset this contract template content and clear uploaded files? Unsaved changes will be discarded.',
       confirmText: 'Reset Content',
       cancelText: 'Cancel',
       variant: 'warning',
@@ -1007,16 +1007,36 @@ export default function CompanySettingsPage() {
         setPageMsg(null);
         try {
           const tmpl = contractTemplates.find(t => t.type === selectedContractType);
-          const result = await companySettingsService.getContractTemplate(selectedContractType);
-          const defaultContent = result?.defaultContent || result?.template?.content || tmpl?.content || '';
-          setEditedContractContent(defaultContent);
+          const typeLabel = tmpl?.name || selectedContractType;
+          const defaultHtml = `<h1>${typeLabel}</h1><p>Template for {{contractType}}.</p>`;
+
+          setEditedContractContent(defaultHtml);
           if (tmpl) {
-            setEditedContractName(tmpl.name || selectedContractType);
-            setEditedContractDescription(tmpl.description || '');
-            setEditedContractIsActive(tmpl.isActive ?? true);
+            setEditedContractName(typeLabel);
+            setEditedContractDescription('');
+            setEditedContractIsActive(true);
           }
+
+          // Clear file & OCR state locally
+          setContractTemplates(prev => prev.map(t =>
+            t.type === selectedContractType
+              ? { ...t, content: defaultHtml, fileUrl: null, fileName: null, fileType: null, ocrStatus: null, ocrText: null, ocrProcessedAt: null }
+              : t
+          ));
+
+          // Persist reset to backend
+          await companySettingsService.saveContractTemplate(selectedContractType, {
+            name: typeLabel,
+            content: defaultHtml,
+            description: null,
+            isActive: true,
+            fileUrl: null,
+            fileName: null,
+            fileType: null,
+          });
+
           setContractTemplateDirty(false);
-          setPageMsg('Template content reset to default.');
+          setPageMsg('Template content and uploaded files reset to default.');
         } catch (err) {
           setPageMsg(err instanceof Error ? err.message : 'Failed to reset template');
         } finally {
@@ -1164,7 +1184,7 @@ export default function CompanySettingsPage() {
               // Convert plain text with layout to HTML for the rich text editor
               setEditedContractContent(textToHtml(status.ocrText));
               setContractTemplateDirty(true);
-              setPageMsg('OCR completed! Text extracted and applied as template content.');
+              setPageMsg('OCR completed! Extracted text loaded into editor. Review the text and click "Save" to apply changes.');
             } else if (status.ocrStatus === 'FAILED') {
               setPageMsg('OCR failed. The uploaded file may contain no readable text.');
             }
