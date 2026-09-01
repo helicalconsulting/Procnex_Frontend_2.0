@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   Heliflow — Create Standalone Purchase Order Page
+   Heliflow — Create Direct Purchase Order Page
    ═══════════════════════════════════════════════════════════ */
 
 .cpo-page {
@@ -445,4 +445,299 @@
   .cpo-grid--4 { grid-template-columns: 1fr; }
   .cpo-field--span-2 { grid-column: span 1; }
   .cpo-header { flex-direction: column; align-items: flex-start; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   OFFICIAL A4 PRINTABLE DIGITAL DOCUMENT STYLES
+   ═══════════════════════════════════════════════════════════ */
+.grn-print-document {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 15mm;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Reset container wrappers for print */
+  #root,
+  .app-layout,
+  .main-content,
+  .cpo-page {
+    display: block !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Hide ONLY Web Application UI Chrome */
+  #root > div > header,
+  #root > div > aside,
+  .cpo-header,
+  .cpo-body,
+  .cpo-header__actions,
+  .MessageStrip,
+  button,
+  header,
+  nav,
+  aside,
+  .sidebar,
+  .top-nav {
+    display: none !important;
+  }
+
+  /* Display Official A4 Digital Document */
+  .grn-print-document {
+    display: block !important;
+    width: 100% !important;
+    max-width: 800px !important;
+    margin: 0 auto !important;
+    padding: 10px 0 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  .gpd-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 14px;
+  }
+
+  .gpd-brand {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .gpd-logo-placeholder {
+    width: 48px;
+    height: 48px;
+    background: linear-gradient(135deg, #0a6ed1, #0856a4);
+    color: #ffffff;
+    font-size: 22px;
+    font-weight: 800;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .gpd-company-title {
+    font-size: 18px;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0;
+    letter-spacing: -0.3px;
+  }
+
+  .gpd-company-sub {
+    font-size: 11.5px;
+    color: #475569;
+    margin: 2px 0 0 0;
+  }
+
+  .gpd-company-detail {
+    font-size: 10px;
+    color: #64748b;
+    margin: 2px 0 0 0;
+  }
+
+  .gpd-doc-badge {
+    text-align: right;
+  }
+
+  .gpd-doc-type {
+    font-size: 16px;
+    font-weight: 800;
+    color: #0a6ed1;
+    margin: 0;
+    letter-spacing: 0.5px;
+  }
+
+  .gpd-doc-num {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #0f172a;
+    margin-top: 3px;
+  }
+
+  .gpd-doc-date {
+    font-size: 11px;
+    color: #64748b;
+    margin-top: 2px;
+  }
+
+  .gpd-divider {
+    height: 2px;
+    background: #0a6ed1;
+    margin: 12px 0 16px 0;
+  }
+
+  .gpd-parties-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 18px;
+  }
+
+  .gpd-party-box {
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 10px 12px;
+    background: #f8fafc;
+  }
+
+  .gpd-party-label {
+    font-size: 9.5px;
+    font-weight: 800;
+    color: #0a6ed1;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 6px;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 4px;
+  }
+
+  .gpd-party-name {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 3px;
+  }
+
+  .gpd-party-detail {
+    font-size: 10.5px;
+    color: #334155;
+    margin-top: 2px;
+  }
+
+  .gpd-items-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 18px;
+    font-size: 10.5px;
+  }
+
+  .gpd-items-table th {
+    background: #0f172a !important;
+    color: #ffffff !important;
+    padding: 9px 10px;
+    font-weight: 700;
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: 1px solid #0f172a;
+  }
+
+  .gpd-items-table td {
+    padding: 8px 10px;
+    border: 1px solid #cbd5e1;
+    color: #0f172a;
+  }
+
+  .gpd-items-table tr:nth-child(even) td {
+    background: #f8fafc;
+  }
+
+  .gpd-summary-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 30px;
+  }
+
+  .gpd-notes-box {
+    flex: 1;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 10px 12px;
+    background: #f8fafc;
+  }
+
+  .gpd-notes-label {
+    font-size: 9.5px;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .gpd-notes-text {
+    font-size: 10.5px;
+    color: #334155;
+  }
+
+  .gpd-totals-box {
+    width: 260px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .gpd-total-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 7px 12px;
+    font-size: 10.5px;
+    color: #334155;
+  }
+
+  .gpd-total-row--grand {
+    background: #0f172a !important;
+    color: #ffffff !important;
+    font-weight: 800;
+    font-size: 12.5px;
+  }
+
+  .gpd-signatures-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-top: 45px;
+    margin-bottom: 20px;
+  }
+
+  .gpd-sig-box {
+    text-align: center;
+  }
+
+  .gpd-sig-line {
+    border-top: 1px solid #64748b;
+    margin-bottom: 6px;
+  }
+
+  .gpd-sig-role {
+    font-size: 9.5px;
+    font-weight: 700;
+    color: #0f172a;
+  }
+
+  .gpd-sig-sub {
+    font-size: 8.5px;
+    color: #64748b;
+  }
+
+  .gpd-footer {
+    text-align: center;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 8px;
+    font-size: 8.5px;
+    color: #94a3b8;
+  }
 }

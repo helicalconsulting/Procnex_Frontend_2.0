@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
 import { vendorService } from '../../services/vendorService';
+import { apiRequest } from '../../api/client';
 import {
   ArrowLeft,
   CreditCard,
@@ -14,7 +15,8 @@ import {
   X,
   Receipt,
   Landmark,
-  FileCheck2
+  FileCheck2,
+  PackageCheck
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyMaster';
@@ -44,12 +46,11 @@ export default function CreatePaymentVoucherPage() {
         }))
       ),
     [] as VendorOption[],
-    [],
-    { cacheTtlMs: 60000 }
+    []
   );
 
   // Form State
-  const [voucherNumber, setVoucherNumber] = useState<string>(() => `VOU-2026-${Math.floor(1000 + Math.random() * 9000)}`);
+  const [voucherNumber] = useState<string>(() => `VOU-2026-${Math.floor(1000 + Math.random() * 9000)}`);
   const [paymentMethod, setPaymentMethod] = useState<string>('NEFT');
   const [selectedVendorId, setSelectedVendorId] = useState<string>('');
   const [vendorName, setVendorName] = useState<string>('');
@@ -58,7 +59,7 @@ export default function CreatePaymentVoucherPage() {
   const [scheduledDate, setScheduledDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [currency, setCurrency] = useState<string>(companyDefaultCurrency);
 
-  // Bank & Beneficiary Details
+  // Bank & Beneficiary Details (as per diagram)
   const [bankName, setBankName] = useState<string>('');
   const [accountNumber, setAccountNumber] = useState<string>('');
   const [ifscCode, setIfscCode] = useState<string>('');
@@ -117,12 +118,8 @@ export default function CreatePaymentVoucherPage() {
   // Validation
   const validateForm = (): boolean => {
     setErrorMsg(null);
-    if (!voucherNumber.trim()) {
-      setErrorMsg('Voucher Number is required.');
-      return false;
-    }
     if (!vendorName.trim() && !selectedVendorId) {
-      setErrorMsg('Please select or specify a Vendor.');
+      setErrorMsg('Please select or specify a Supplier / Beneficiary.');
       return false;
     }
     if (!grossAmount || grossAmount <= 0) {
@@ -132,32 +129,36 @@ export default function CreatePaymentVoucherPage() {
     return true;
   };
 
-  // Actions
-  const handleSaveDraft = async () => {
+  // Submission API Call (Triggers Payments Workflow)
+  const submitVoucher = async () => {
     if (!validateForm()) return;
-    setSavingDraft(true);
-    setErrorMsg(null);
-    try {
-      await new Promise((r) => setTimeout(r, 600));
-      setSuccessMsg(`Payment Voucher #${voucherNumber} saved as draft successfully.`);
-      setTimeout(() => navigate('/payments'), 1500);
-    } catch {
-      setErrorMsg('Failed to save draft voucher.');
-    } finally {
-      setSavingDraft(false);
-    }
-  };
 
-  const handleSubmit = async () => {
-    if (!validateForm()) return;
     setSubmitting(true);
     setErrorMsg(null);
+
     try {
-      await new Promise((r) => setTimeout(r, 800));
-      setSuccessMsg(`Payment Voucher #${voucherNumber} submitted for finance approval!`);
+      await apiRequest('/payments', {
+        method: 'POST',
+        body: JSON.stringify({
+          vendorId: selectedVendorId || undefined,
+          vendorName,
+          invoiceRef,
+          amount: netPayable,
+          currency,
+          method: paymentMethod,
+          scheduledAt: scheduledDate,
+          comments: remarks || purpose || undefined,
+          bankName,
+          accountNumber,
+          ifscCode,
+          beneficiaryName,
+        }),
+      });
+
+      setSuccessMsg(`Payment Voucher #${voucherNumber} created & submitted for payment workflow approval!`);
       setTimeout(() => navigate('/payments'), 1500);
-    } catch {
-      setErrorMsg('Failed to submit payment voucher.');
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Failed to submit payment voucher.');
     } finally {
       setSubmitting(false);
     }
@@ -165,7 +166,7 @@ export default function CreatePaymentVoucherPage() {
 
   return (
     <div className="cpo-page">
-      {/* Message Notifications */}
+      {/* Notifications */}
       {errorMsg && (
         <MessageStrip type="error" onClose={() => setErrorMsg(null)}>
           {errorMsg}
@@ -177,7 +178,7 @@ export default function CreatePaymentVoucherPage() {
         </MessageStrip>
       )}
 
-      {/* Top Header matching New PO design */}
+      {/* Header */}
       <div className="cpo-header">
         <div className="cpo-header__left">
           <button className="cpo-back-btn" onClick={() => navigate('/payments')}>
@@ -185,45 +186,32 @@ export default function CreatePaymentVoucherPage() {
           </button>
           <div className="cpo-header__title-wrap">
             <h1>Create Payment Voucher</h1>
-            <p>Generate a new vendor payment disbursement voucher for finance authorization</p>
+            <p>Generate vendor payment disbursement voucher with Bank Details & Payment Workflow</p>
           </div>
         </div>
         <div className="cpo-header__actions">
           <button
-            className="cpo-btn cpo-btn--outline"
-            onClick={handleSaveDraft}
-            disabled={savingDraft || submitting}
-          >
-            <Save size={15} /> {savingDraft ? 'Saving…' : 'Save Draft'}
-          </button>
-          <button
             className="cpo-btn cpo-btn--primary"
-            onClick={handleSubmit}
+            onClick={submitVoucher}
             disabled={savingDraft || submitting}
           >
-            <Send size={15} /> {submitting ? 'Submitting…' : 'Submit Voucher'}
+            <Send size={15} /> {submitting ? 'Submitting…' : 'Submit Voucher for Approval'}
           </button>
         </div>
       </div>
 
-      {/* Form Body matching New PO Sections */}
+      {/* Form Body */}
       <div className="cpo-body">
-        {/* ── Section 01: Identification & Timing ── */}
+        {/* Section 01: Identification & Timing */}
         <div className="cpo-section">
           <div className="cpo-section__header">
             <span className="cpo-section__num">01</span>
             <span className="cpo-section__title">Voucher Identification & Schedule</span>
-            <span className="cpo-section__hint">System voucher & date references</span>
           </div>
           <div className="cpo-grid cpo-grid--4">
             <div className="cpo-field">
-              <label>VOUCHER NUMBER *</label>
-              <input
-                type="text"
-                value={voucherNumber}
-                onChange={(e) => setVoucherNumber(e.target.value)}
-                placeholder="e.g. VOU-2026-0182"
-              />
+              <label>VOUCHER NUMBER (AUTO)</label>
+              <input type="text" value={voucherNumber} readOnly className="cpo-input--readonly" />
               <span className="cpo-field__sub">Unique payment voucher ID</span>
             </div>
             <div className="cpo-field">
@@ -234,9 +222,7 @@ export default function CreatePaymentVoucherPage() {
                 <option value="IMPS">IMPS (Immediate Payment Service)</option>
                 <option value="Cheque">Cheque</option>
                 <option value="Wire Transfer">Wire Transfer / SWIFT</option>
-                <option value="UPI">UPI</option>
               </select>
-              <span className="cpo-field__sub">Banking transfer channel</span>
             </div>
             <div className="cpo-field">
               <label>VOUCHER DATE *</label>
@@ -245,7 +231,6 @@ export default function CreatePaymentVoucherPage() {
                 value={voucherDate}
                 onChange={(e) => setVoucherDate(e.target.value)}
               />
-              <span className="cpo-field__sub">Voucher generation date</span>
             </div>
             <div className="cpo-field">
               <label>SCHEDULED PAYMENT DATE *</label>
@@ -254,46 +239,44 @@ export default function CreatePaymentVoucherPage() {
                 value={scheduledDate}
                 onChange={(e) => setScheduledDate(e.target.value)}
               />
-              <span className="cpo-field__sub">Bank clearance date</span>
             </div>
           </div>
         </div>
 
-        {/* ── Section 02: Beneficiary & Bank Details ── */}
-        <div className="cpo-section">
+        {/* Section 02: Vendor & Bank Account Details (as per diagram) */}
+        <div className="cpo-section" style={{ borderLeft: '4px solid #10b981' }}>
           <div className="cpo-section__header">
             <span className="cpo-section__num">02</span>
-            <span className="cpo-section__title">Vendor & Bank Account Details</span>
-            <span className="cpo-section__hint">Beneficiary bank account info</span>
+            <span className="cpo-section__title">Supplier & Bank Details (for Bank Transfer)</span>
+            <span className="cpo-section__hint">Auto-populates supplier banking details</span>
           </div>
           <div className="cpo-grid cpo-grid--4">
             <div className="cpo-field cpo-field--span-2">
-              <label>VENDOR / BENEFICIARY *</label>
+              <label>SUPPLIER NAME / BENEFICIARY *</label>
               <select
                 value={selectedVendorId}
                 onChange={(e) => handleVendorSelect(e.target.value)}
               >
-                <option value="">Select Vendor from Database Master...</option>
+                <option value="">Select Supplier from Database Master...</option>
                 {vendorsList.map((v) => (
                   <option key={v.id} value={v.id}>
                     {v.name} ({v.category})
                   </option>
                 ))}
               </select>
-              <span className="cpo-field__sub">Beneficiary account for funds transfer</span>
             </div>
             <div className="cpo-field cpo-field--span-2">
-              <label>MATCHED INVOICE REFERENCE</label>
+              <label>REFERENCE (PO & INVOICE NUMBERS)</label>
               <input
                 type="text"
                 value={invoiceRef}
                 onChange={(e) => setInvoiceRef(e.target.value)}
-                placeholder="e.g. INV-2026-0042 or Multiple"
+                placeholder="e.g. PO-001, PO-002, INV-2026-0042"
               />
-              <span className="cpo-field__sub">Settled invoice number</span>
+              <span className="cpo-field__sub">Linked PO & Purchase Invoice numbers</span>
             </div>
             <div className="cpo-field">
-              <label>BENEFICIARY NAME</label>
+              <label>BENEFICIARY ACCOUNT NAME</label>
               <input
                 type="text"
                 value={beneficiaryName}
@@ -331,13 +314,12 @@ export default function CreatePaymentVoucherPage() {
           </div>
         </div>
 
-        {/* ── Section 03: Purpose & Remarks (Split Grid Layout) ── */}
+        {/* Section 03: Summary & Workflow Notice */}
         <div className="cpo-grid cpo-grid--split">
-          {/* Notes & Supporting Documents */}
           <div className="cpo-section">
             <div className="cpo-section__header">
               <span className="cpo-section__num">03</span>
-              <span className="cpo-section__title">Purpose & Audit Documents</span>
+              <span className="cpo-section__title">Purpose & Remarks</span>
             </div>
             <div className="cpo-grid cpo-grid--1" style={{ gap: 16 }}>
               <div className="cpo-field">
@@ -346,56 +328,27 @@ export default function CreatePaymentVoucherPage() {
                   type="text"
                   value={purpose}
                   onChange={(e) => setPurpose(e.target.value)}
-                  placeholder="e.g. Q1 Hardware & IT Infrastructure vendor disbursement"
+                  placeholder="e.g. PO settlement disbursement to vendor"
                 />
-                <span className="cpo-field__sub">Audit description for accounts log</span>
               </div>
               <div className="cpo-field">
-                <label>INTERNAL FINANCE REMARKS</label>
+                <label>REMARKS</label>
                 <textarea
                   rows={3}
                   value={remarks}
                   onChange={(e) => setRemarks(e.target.value)}
-                  placeholder="Add notes for finance VP, approver verification, or bank clearance details..."
+                  placeholder="Add notes for finance approvers..."
                 />
-              </div>
-
-              {/* Upload Dropzone */}
-              <div className="cpo-field">
-                <label>SUPPORTING PAYMENT DOCUMENTS</label>
-                <label className="cpi-upload-dropzone" style={{ padding: '16px', background: 'var(--surface-elevated)', border: '1px dashed var(--border)', borderRadius: 8, textAlign: 'center', cursor: 'pointer', display: 'block' }}>
-                  <Upload size={20} style={{ color: 'var(--primary-500)', marginBottom: 4 }} />
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Upload bank advice or invoice payment proof</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Supports PDF, PNG, JPG (Max 10MB)</div>
-                  <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg" onChange={handleFileUpload} hidden />
-                </label>
-
-                {attachments.length > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
-                    {attachments.map((att) => (
-                      <div key={att.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <Paperclip size={13} style={{ color: 'var(--primary-500)' }} />
-                          <span style={{ fontWeight: 600 }}>{att.name}</span>
-                          <span style={{ color: 'var(--text-secondary)' }}>({att.size})</span>
-                        </div>
-                        <button type="button" onClick={() => handleRemoveAttachment(att.id)} style={{ background: 'none', border: 'none', color: 'var(--danger-500)', cursor: 'pointer' }}>
-                          <X size={14} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
           </div>
 
-          {/* Amount & Calculation Panel */}
           <div className="cpo-section cpo-totals-card">
             <div className="cpo-section__header">
               <span className="cpo-section__num">04</span>
-              <span className="cpo-section__title">Disbursement Summary</span>
+              <span className="cpo-section__title">Disbursement Amount & Workflow</span>
             </div>
+
             <div className="cpo-totals">
               <div className="cpo-field" style={{ marginBottom: 12 }}>
                 <label>CURRENCY</label>
@@ -403,7 +356,7 @@ export default function CreatePaymentVoucherPage() {
               </div>
 
               <div className="cpo-field" style={{ marginBottom: 14 }}>
-                <label>GROSS PAYMENT AMOUNT *</label>
+                <label>GROSS AMOUNT *</label>
                 <input
                   type="number"
                   min="0"
@@ -415,19 +368,6 @@ export default function CreatePaymentVoucherPage() {
                   }
                 />
               </div>
-
-              <div className="cpo-field" style={{ marginBottom: 14 }}>
-                <label>TDS / WITHHOLDING TAX %</label>
-                <select value={tdsPercent} onChange={(e) => setTdsPercent(parseFloat(e.target.value) || 0)}>
-                  <option value={0}>0% (No Tax Deduction)</option>
-                  <option value={1}>1% (TDS 194C - Contractors)</option>
-                  <option value={2}>2% (TDS 194I - Plant & Machinery)</option>
-                  <option value={5}>5% (TDS 194J - Professional Services)</option>
-                  <option value={10}>10% (TDS 194J - Technical Fees / Royalties)</option>
-                </select>
-              </div>
-
-              <div className="cpo-totals__divider" />
 
               <div className="cpo-totals__row">
                 <span>Gross Amount</span>
@@ -442,24 +382,22 @@ export default function CreatePaymentVoucherPage() {
 
               <div className="cpo-totals__grand">
                 <span>Net Disbursement</span>
-                <span style={{ color: 'var(--primary-500)' }}>{formatAmount(netPayable, currency)}</span>
+                <span style={{ color: '#10b981' }}>{formatAmount(netPayable, currency)}</span>
+              </div>
+
+              <div style={{ marginTop: 12, padding: '10px 12px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.25)', borderRadius: 8, color: '#10b981', fontSize: 12.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <PackageCheck size={16} />
+                <span>Yaha Workflow Ayega — Triggers Payments Approval Chain</span>
               </div>
             </div>
 
             <div className="cpo-action-panel">
               <button
                 className="cpo-btn cpo-btn--primary cpo-btn--full"
-                onClick={handleSubmit}
+                onClick={submitVoucher}
                 disabled={savingDraft || submitting}
               >
                 <Send size={16} /> {submitting ? 'Submitting…' : 'Submit Payment Voucher'}
-              </button>
-              <button
-                className="cpo-btn cpo-btn--secondary cpo-btn--full"
-                onClick={handleSaveDraft}
-                disabled={savingDraft || submitting}
-              >
-                <Save size={16} /> {savingDraft ? 'Saving…' : 'Save Voucher Draft'}
               </button>
             </div>
           </div>

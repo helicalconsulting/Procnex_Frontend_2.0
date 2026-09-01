@@ -19,14 +19,50 @@ async function mockList(): Promise<ListResult> {
 }
 
 async function apiList(params?: { page?: number; limit?: number }): Promise<ListResult> {
+  const userStr = localStorage.getItem('heliflow_user');
+  const user = userStr ? JSON.parse(userStr) : null;
+  const rolesStr = localStorage.getItem('heliflow_roles');
+  const roles: string[] = rolesStr ? JSON.parse(rolesStr) : (user?.roles || []);
+  const isVendorAccount = roles.some((r: string) => typeof r === 'string' && r.toLowerCase().includes('vendor')) || !!localStorage.getItem('heliflow_vendor_token') || !!localStorage.getItem('heliflow_vendor');
+
+  if (isVendorAccount) {
+    try {
+      const { vendorPortalService } = await import('./vendorPortalService');
+      const vOrders = await vendorPortalService.listOrders();
+      const orders: any[] = vOrders.map((vo) => ({
+        id: vo.id,
+        poNumber: vo.poNumber,
+        totalAmount: Number(vo.totalAmount || vo.grandTotal || 0),
+        status: vo.status || 'CONFIRMED',
+        createdAt: vo.orderDate || new Date().toISOString(),
+        vendor: {
+          id: 'vendor_me',
+          name: vo.vendorName || user?.fullName || 'Vendor',
+          email: vo.vendorEmail || user?.email || '',
+        },
+        items: (vo.items || []).map((it: any) => ({
+          itemName: it.name || it.itemName || 'Line Item',
+          quantity: Number(it.quantity || 1),
+          unit: it.unit || 'Pcs',
+          unitPrice: Number(it.unitPrice || 0),
+          totalPrice: Number(it.total || (it.unitPrice || 0) * (it.quantity || 1)),
+        })),
+      }));
+      return { orders, total: orders.length };
+    } catch {
+      // Fallback to standard endpoint
+    }
+  }
+
   const query = new URLSearchParams();
   if (params?.page) query.set('page', String(params.page));
   if (params?.limit) query.set('limit', String(params.limit || 50));
   const qs = query.toString();
-  const data = await apiRequest<{ purchaseOrders?: PurchaseOrder[]; pos?: PurchaseOrder[]; total: number }>(
+  const data = await apiRequest<{ purchaseOrders?: PurchaseOrder[]; pos?: PurchaseOrder[]; orders?: PurchaseOrder[]; total: number }>(
     `/purchase-orders${qs ? `?${qs}` : ''}`
   );
-  const orders = (data.purchaseOrders || data.pos || []).map(normalizePO);
+  const rawList = data.purchaseOrders || data.pos || data.orders || [];
+  const orders = rawList.map(normalizePO);
   return {
     orders,
     total: data.total || orders.length,

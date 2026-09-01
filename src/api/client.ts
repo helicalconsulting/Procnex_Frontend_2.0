@@ -1,6 +1,15 @@
 import { USE_MOCK } from '../config/mock';
 
-export const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+function getApiBase(): string {
+  let url = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').trim();
+  url = url.replace(/\/+$/, '');
+  if (!url.endsWith('/api')) {
+    url = `${url}/api`;
+  }
+  return url;
+}
+
+export const API_BASE = getApiBase();
 const TOKEN_KEY = 'heliflow_token';
 const CLIENT_INSTANCE_KEY = 'heliflow_client_instance_id';
 
@@ -54,7 +63,7 @@ export function getClientInstanceId(): string {
 }
 
 export function authHeaders(extra?: Record<string, string>): HeadersInit {
-  const token = localStorage.getItem(TOKEN_KEY);
+  const token = localStorage.getItem(TOKEN_KEY) || localStorage.getItem('heliflow_vendor_token');
   return {
     'Content-Type': 'application/json',
     'X-Client-Instance-Id': getClientInstanceId(),

@@ -44,7 +44,7 @@ export interface ColumnDef {
 const COL_META: Record<string, { width: string; align?: 'left'|'center'|'right' }> = {
   rfqNumber:    { width: '210px', align: 'left'   },
   title:        { width: '220px', align: 'left'   },
-  status:       { width: '160px', align: 'left'   },
+  status:       { width: '190px', align: 'left'   },
   creator:      { width: '150px', align: 'left'   },
   createdAt:    { width: '110px', align: 'left'   },
   itemCount:    { width:  '70px', align: 'center' },

@@ -74,18 +74,29 @@ export interface FormPublishPayload {
 
 // ─── Role Matching ───────────────────────────────────────────
 
-export function isRoleMatching(requiredRole: string, userRole: string | string[], userId?: string): boolean {
+export function isRoleMatching(requiredRole: string, userRole: any, userId?: string): boolean {
   if (!requiredRole || !userRole) return false;
 
   if (Array.isArray(userRole)) {
     return userRole.some((r) => isRoleMatching(requiredRole, r, userId));
   }
 
+  let rawRoleStr = '';
+  if (typeof userRole === 'string') {
+    rawRoleStr = userRole;
+  } else if (typeof userRole === 'object' && userRole !== null) {
+    rawRoleStr = userRole.roleName || userRole.name || userRole.role?.roleName || userRole.role?.name || String(userRole || '');
+  } else {
+    rawRoleStr = String(userRole || '');
+  }
+
+  if (!rawRoleStr || typeof rawRoleStr !== 'string') return false;
+
   // Strip level number prefixes like "Level 2 of 2: Finance Approver" -> "Finance Approver"
-  const stripPrefix = (str: string) => str.replace(/^level\s*\d+(\s*of\s*\d+)?\s*:\s*/i, '').trim();
+  const stripPrefix = (str: string) => typeof str === 'string' ? str.replace(/^level\s*\d+(\s*of\s*\d+)?\s*:\s*/i, '').trim() : '';
 
   const req = stripPrefix(requiredRole).toLowerCase();
-  const usr = stripPrefix(userRole).toLowerCase();
+  const usr = stripPrefix(rawRoleStr).toLowerCase();
 
   const reqClean = req.replace(/[\s_-]+/g, '');
   const usrClean = usr.replace(/[\s_-]+/g, '');

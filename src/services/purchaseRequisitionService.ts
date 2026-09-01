@@ -84,11 +84,11 @@ function generateMockPR(rfqId: string): PurchaseRequisition {
     poNumber: `PR-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`,
     status: 'DRAFT',
 
-    companyName: 'Heliflow Industries Ltd',
+    companyName: 'Procnex',
     companyAddress: '123 Business Park, Sector 62, Noida, UP 201301',
     companyPhone: '+91-120-4567890',
-    companyEmail: 'procurement@heliflow.com',
-    companyWebsite: 'www.heliflow.com',
+    companyEmail: 'procurement@procnex.com',
+    companyWebsite: 'www.procnex.com',
 
     vendorName: 'Fabricast Limited',
     vendorAddress: '456 Industrial Area, Chennai, TN 600001',
@@ -97,7 +97,7 @@ function generateMockPR(rfqId: string): PurchaseRequisition {
     vendorEmail: 'info@fabricast.com',
     vendorGstVat: 'GST-33ABCDE1234F1Z5',
 
-    shipToCompany: 'Heliflow Industries Ltd',
+    shipToCompany: 'Procnex',
     shipToWarehouse: 'Warehouse A - Noida',
     shipToAddress: '123 Business Park, Sector 62, Noida, UP 201301',
     shipToContact: 'Warehouse Manager',

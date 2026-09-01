@@ -190,7 +190,7 @@ export async function dispatchFormSubmissionEmail(sub: FormSubmissionInstance, a
       companyName: cName,
     });
 
-    sendSystemEmail('admin@heliflow.com', `[${cName} Notification] Direct Submission Received: ${sub.formTitle} (${sub.assignedUserName})`, html).catch(() => {});
+    sendSystemEmail('admin@procnex.com', `[${cName} Notification] Direct Submission Received: ${sub.formTitle} (${sub.assignedUserName})`, html).catch(() => {});
     return 1;
   } else {
     const level1Step = sub.approvalLevels ? sub.approvalLevels[0] : null;

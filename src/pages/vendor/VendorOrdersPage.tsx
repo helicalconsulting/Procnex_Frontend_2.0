@@ -394,8 +394,13 @@ export default function VendorOrdersPage() {
                         >
                           <Download size={15} /> Download PO (PDF)
                         </button>
+                        {order.status !== 'CANCELLED' && (
+                          <Link to={`/procurement/create-grn?poId=${order.id}`} className="vendor-btn vendor-btn--primary" style={{ textDecoration: 'none', background: 'linear-gradient(135deg, #10b981, #059669)', borderColor: '#10b981' }}>
+                            <Truck size={15} /> Generate GRN / Dispatch Note
+                          </Link>
+                        )}
                         {order.status === 'DELIVERED' && (
-                          <Link to="/vendor/invoices" className="vendor-btn vendor-btn--primary" style={{ textDecoration: 'none' }}>
+                          <Link to={`/vendor/create-invoice?poId=${order.id}`} className="vendor-btn vendor-btn--primary" style={{ textDecoration: 'none' }}>
                             <Upload size={15} /> Upload Invoice
                           </Link>
                         )}

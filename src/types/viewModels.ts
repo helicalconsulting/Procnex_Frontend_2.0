@@ -87,12 +87,14 @@ export interface VendorTableRow {
   id: string;
   name: string;
   email: string;
+  supplierCode?: string;
   phone: string;
   contactPerson: string;
   category: string;
   location: string;
   website: string;
   isActive: boolean;
+  isMobileAccessEnabled?: boolean;
   initials: string;
   avatarMod: string;
   avgQuality: number;

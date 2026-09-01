@@ -1,11 +1,11 @@
-import { useState, useMemo, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useServiceData } from '../../hooks/useServiceData';
 import { vendorPortalService } from '../../services/vendorPortalService';
 import type { VendorInvoiceMock } from '../../mocks/vendorPortal.mock';
 import {
   Receipt, Search, CheckCircle2, Clock,
-  XCircle,  AlertTriangle, Calendar, FileText,
+  XCircle,  AlertTriangle, Calendar, FileText, Plus
 } from 'lucide-react';
 import { useCurrency, CurrencySelector, CurrencyBadge } from '../../components/shared/CurrencyMaster';
 import '../../styles/vendor-portal.css';
@@ -66,7 +66,10 @@ export default function VendorInvoicesPage() {
             <h1>My Invoices 🧾</h1>
             <p>Track your invoices and payment status</p>
           </div>
-          <div className="vendor-header__actions">
+          <div className="vendor-header__actions" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <Link to="/vendor/create-invoice" className="vendor-btn vendor-btn--primary" style={{ textDecoration: 'none' }}>
+              <Plus size={15} /> Create & Send Invoice
+            </Link>
             <CurrencySelector value={displayCurrency} onChange={setDisplayCurrency} size="sm" />
           </div>
         </div>

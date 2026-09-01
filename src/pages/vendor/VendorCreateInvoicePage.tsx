@@ -1,40 +1,35 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { isVendor } from '../../utils/rbac';
 import { useServiceData } from '../../hooks/useServiceData';
-import { vendorService } from '../../services/vendorService';
+import { vendorPortalService } from '../../services/vendorPortalService';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
 import { grnService, type GoodsReceivedNote } from '../../services/grnService';
-import { invoiceService, type APInvoice } from '../../services/invoiceService';
 import { companySettingsService } from '../../services/companySettingsService';
-import { apiRequest } from '../../api/client';
 import {
   ArrowLeft,
   Receipt,
   Plus,
   Trash2,
-  Save,
   Send,
   Upload,
-  Calendar,
+  Paperclip,
+  X,
   Building2,
   ShoppingCart,
   FileText,
-  Paperclip,
-  X,
-  CreditCard,
-  Tag,
-  PackageCheck,
+  Save,
+  CheckCircle2,
   Printer
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
+import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
 import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyMaster';
 import { useBranding } from '../../context/BrandingContext';
 import defaultHeliflowLogo from '../../assets/heliflow.png';
 import '../purchase-orders/CreatePurchaseOrderPage.css';
 import '../../components/purchase-orders/PurchaseOrderDocument.css';
-import './CreatePurchaseInvoicePage.css';
+import '../../styles/vendor-portal.css';
 
 interface LineItem {
   id: number | string;
@@ -43,75 +38,37 @@ interface LineItem {
   description: string;
   poQty: number;
   grnQty: number;
-  supplierQty: number | '';
+  invoicedQty: number | '';
   unitPrice: number | '';
   taxPercent: number;
 }
 
-interface VendorOption {
-  id: string;
-  name: string;
-  email: string;
-  category: string;
-}
-
-export default function CreatePurchaseInvoicePage() {
+export default function VendorCreateInvoicePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const poIdParam = searchParams.get('poId');
   const grnIdParam = searchParams.get('grnId');
 
-  const { roles } = useAuth();
+  const { user } = useAuth();
   const { companyDefaultCurrency, formatAmount } = useCurrency();
   const { companyName, companyPhone, companyEmail, logoUrl } = useBranding();
 
-  // Vendor Role Redirect to Vendor Create Invoice Page
-  useEffect(() => {
-    if (isVendor(roles)) {
-      navigate(`/vendor/create-invoice${window.location.search}`, { replace: true });
-    }
-  }, [roles, navigate]);
-
-  // Load vendors list
-  const { data: vendorsList } = useServiceData(
-    () =>
-      vendorService.list().then((rows) =>
-        rows.map((v) => ({
-          id: v.id,
-          name: v.name,
-          email: v.email,
-          category: v.category,
-        }))
-      ),
-    [] as VendorOption[],
-    []
-  );
-
-  // Load Purchase Orders
-  const { data: poData } = useServiceData(
+  // Load Vendor's assigned Purchase Orders
+  const { data: poData, loading: poLoading } = useServiceData(
     () => purchaseOrderService.list({ limit: 100 }),
     { orders: [], total: 0 },
     []
   );
   const poList = poData.orders || [];
 
-  // Load departments
-  const { data: departments } = useServiceData(
-    () => companySettingsService.listDepartments().then((deps) => deps.map((d) => d.name)),
-    [] as string[],
-    []
-  );
-
-  // Cascade State: Supplier -> PO -> GRN
-  const [selectedVendorId, setSelectedVendorId] = useState<string>('');
+  // Form State - initialize state directly from URL query parameters if present
   const [selectedPoId, setSelectedPoId] = useState<string>(() => poIdParam || '');
   const [selectedGrnId, setSelectedGrnId] = useState<string>(() => grnIdParam || '');
   const [grnOptions, setGrnOptions] = useState<GoodsReceivedNote[]>([]);
-  const [invoiceOptions, setInvoiceOptions] = useState<APInvoice[]>([]);
 
-  // Form Details
-  const [invoiceNumber, setInvoiceNumber] = useState<string>(() => `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`);
-  const [vendorName, setVendorName] = useState<string>('');
+  const [invoiceNumber, setInvoiceNumber] = useState<string>(
+    () => `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`
+  );
   const [invoiceDate, setInvoiceDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState<string>(() => {
     const d = new Date();
@@ -119,59 +76,24 @@ export default function CreatePurchaseInvoicePage() {
     return d.toISOString().slice(0, 10);
   });
   const [paymentTerms, setPaymentTerms] = useState<string>('Net 30');
-  const [department, setDepartment] = useState<string>('');
   const [currency, setCurrency] = useState<string>(companyDefaultCurrency);
+  const [buyerName, setBuyerName] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
 
-  // Line items state with 3-Quantity matching (PO Qty, GRN Qty, Supplier Qty)
+  // Line items state
   const [lineItems, setLineItems] = useState<LineItem[]>([
-    { id: 1, itemCode: 'ITM-001', itemName: '', description: '', poQty: 0, grnQty: 0, supplierQty: 1, unitPrice: '', taxPercent: 18 },
+    { id: 1, itemCode: 'ITM-001', itemName: '', description: '', poQty: 0, grnQty: 0, invoicedQty: 1, unitPrice: '', taxPercent: 18 },
   ]);
 
   // Attachments state
   const [attachments, setAttachments] = useState<{ id: string; name: string; size: string }[]>([]);
 
-  // UI state
-  const [savingDraft, setSavingDraft] = useState(false);
+  // UI State
   const [submitting, setSubmitting] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-
-  // Combine vendors from Vendor API and Purchase Orders so Supplier List is NEVER empty
-  const allSuppliers = useMemo(() => {
-    const map = new Map<string, { id: string; name: string; category?: string }>();
-
-    (vendorsList || []).forEach((v) => {
-      if (v.id) map.set(String(v.id), { id: String(v.id), name: v.name, category: v.category || 'Vendor' });
-    });
-
-    (poList || []).forEach((po) => {
-      const vId = po.vendorId || po.vendor?.id;
-      const vName = po.vendor?.name;
-      if (vName && (!vId || !map.has(String(vId)))) {
-        const key = String(vId || vName);
-        if (!map.has(key)) {
-          map.set(key, { id: key, name: vName, category: 'Supplier' });
-        }
-      }
-    });
-
-    return Array.from(map.values());
-  }, [vendorsList, poList]);
-
-  // Filter POs by selected Vendor
-  const availablePOs = useMemo(() => {
-    if (!selectedVendorId) return poList;
-    const filtered = poList.filter((po) => {
-      const pVendorId = String(po.vendorId || po.vendor?.id || '');
-      const pVendorName = String(po.vendor?.name || '').toLowerCase();
-      const sId = String(selectedVendorId).toLowerCase();
-
-      return pVendorId === String(selectedVendorId) || pVendorName === sId || pVendorName.includes(sId);
-    });
-
-    return filtered.length > 0 ? filtered : poList;
-  }, [poList, selectedVendorId]);
+  const [actionSuccessModalData, setActionSuccessModalData] = useState<ActionSuccessModalData | null>(null);
 
   // Selected PO details
   const selectedPO = useMemo(() => {
@@ -208,165 +130,117 @@ export default function CreatePurchaseInvoicePage() {
     return selectedPoId || 'Select Purchase Order';
   }, [selectedPO, poList, selectedPoId, grnOptions, poIdParam]);
 
-  // Human-readable GRN / Invoice Number formatter
+  // Human-readable GRN Number formatter (never display raw 24-hex Mongo ID)
   const displayGrnNumber = useMemo(() => {
-    const cleanGrnId = selectedGrnId.replace(/^grn_/, '').replace(/^inv_/, '');
     const matchInGrn = grnOptions.find(
-      (g) => String(g.id) === String(cleanGrnId) || String(g.grnNumber) === String(cleanGrnId)
+      (g) => String(g.id) === String(selectedGrnId) || String(g.grnNumber) === String(selectedGrnId)
     );
-    if (matchInGrn?.grnNumber) return `GRN: ${matchInGrn.grnNumber}`;
+    if (matchInGrn?.grnNumber) return matchInGrn.grnNumber;
 
-    const matchInInv = invoiceOptions.find(
-      (i) => String(i.id) === String(cleanGrnId) || String(i.invoiceNumber) === String(cleanGrnId)
-    );
-    if (matchInInv?.invoiceNumber) return `Invoice: ${matchInInv.invoiceNumber}`;
+    if (grnIdParam && grnIdParam.startsWith('GRN-')) return grnIdParam;
+    if (selectedGrnId && selectedGrnId.startsWith('GRN-')) return selectedGrnId;
 
-    if (grnIdParam && (grnIdParam.startsWith('GRN-') || grnIdParam.startsWith('INV-'))) return grnIdParam;
-    if (cleanGrnId && (cleanGrnId.startsWith('GRN-') || cleanGrnId.startsWith('INV-'))) return cleanGrnId;
-
-    if (cleanGrnId && /^[0-9a-fA-F]{24}$/.test(cleanGrnId)) {
-      return `Ref: ${cleanGrnId.slice(-6).toUpperCase()}`;
+    if (selectedGrnId && /^[0-9a-fA-F]{24}$/.test(selectedGrnId)) {
+      return `GRN-${selectedGrnId.slice(-6).toUpperCase()}`;
     }
 
-    return selectedGrnId || 'Select GRN or Vendor Invoice';
-  }, [grnOptions, invoiceOptions, selectedGrnId, grnIdParam]);
+    return selectedGrnId || 'Direct PO Billing / Select GRN';
+  }, [grnOptions, selectedGrnId, grnIdParam]);
 
-  // Pre-fill query params if present
+  // Sync PO query parameter when poList loads
   useEffect(() => {
     if (poIdParam) {
-      const foundPO = poList.find(
+      const match = poList.find(
         (p) => String(p.id) === String(poIdParam) || String(p.poNumber) === String(poIdParam)
       );
-      if (foundPO) {
-        setSelectedPoId(String(foundPO.id));
-        if (foundPO.vendorId) setSelectedVendorId(String(foundPO.vendorId));
-        if (foundPO.vendor?.name) setVendorName(foundPO.vendor.name);
+      if (match) {
+        setSelectedPoId(String(match.id));
       } else {
         setSelectedPoId(poIdParam);
       }
+    } else if (!selectedPoId && poList.length > 0) {
+      setSelectedPoId(String(poList[0].id));
     }
   }, [poIdParam, poList]);
 
-  // Pre-select GRN / Vendor Invoice once grnOptions / invoiceOptions load
+  // Pre-select GRN when grnOptions finish loading
   useEffect(() => {
-    if (grnIdParam && (grnOptions.length > 0 || invoiceOptions.length > 0)) {
+    const targetGrn = grnIdParam || selectedGrnId;
+    if (targetGrn && grnOptions.length > 0) {
       const matchGrn = grnOptions.find(
-        (g) => String(g.id) === String(grnIdParam) || String(g.grnNumber) === String(grnIdParam)
+        (g) => String(g.id) === String(targetGrn) || String(g.grnNumber) === String(targetGrn)
       );
       if (matchGrn) {
-        setSelectedGrnId(`grn_${matchGrn.id}`);
+        setSelectedGrnId(String(matchGrn.id));
       } else {
-        const matchInv = invoiceOptions.find(
-          (i) => String(i.id) === String(grnIdParam) || String(i.invoiceNumber) === String(grnIdParam)
-        );
-        if (matchInv) {
-          setSelectedGrnId(`inv_${matchInv.id}`);
-        } else {
-          setSelectedGrnId(grnIdParam);
-        }
+        setSelectedGrnId(targetGrn);
       }
     }
-  }, [grnIdParam, grnOptions, invoiceOptions]);
+  }, [grnIdParam, grnOptions]);
 
-  // Fetch GRNs & Vendor Invoices when selected PO changes
+  // Fetch GRNs and update line items when PO selection or parameters change
   useEffect(() => {
-    if (selectedPoId) {
-      const foundPO = poList.find(
-        (p) => String(p.id) === String(selectedPoId) || String(p.poNumber) === String(selectedPoId)
+    const targetPoId = selectedPO?.id || selectedPoId || poIdParam;
+    const targetPoNum = selectedPO?.poNumber || selectedPoId || poIdParam;
+
+    if (!targetPoId && !targetPoNum) return;
+
+    if (selectedPO?.items && selectedPO.items.length > 0) {
+      setLineItems(
+        selectedPO.items.map((item: any, idx: number) => ({
+          id: `item_${idx}_${Date.now()}`,
+          itemCode: item.itemCode || `ITM-00${idx + 1}`,
+          itemName: item.itemName || item.name || 'Line Item',
+          description: item.description || '',
+          poQty: Number(item.quantity || 1),
+          grnQty: Number(item.quantity || 1),
+          invoicedQty: Number(item.quantity || 1),
+          unitPrice: Number(item.unitPrice || 0),
+          taxPercent: 18,
+        }))
       );
-      const targetId = foundPO ? String(foundPO.id) : selectedPoId;
-
-      grnService
-        .getByPO(targetId)
-        .then((grns) => {
-          if (grns && grns.length > 0) {
-            setGrnOptions(grns);
-          } else if (foundPO?.poNumber) {
-            grnService.getByPO(foundPO.poNumber).then((grns2) => {
-              if (grns2 && grns2.length > 0) {
-                setGrnOptions(grns2);
-              } else {
-                grnService.list({ limit: 100 }).then((res) => {
-                  const list = res.grns || [];
-                  const matched = list.filter(
-                    (g) =>
-                      String(g.poId) === String(targetId) ||
-                      String(g.poId) === String(selectedPoId) ||
-                      String(g.purchaseOrder?.id) === String(targetId) ||
-                      String(g.purchaseOrder?.poNumber) === String(foundPO?.poNumber)
-                  );
-                  setGrnOptions(matched.length > 0 ? matched : list);
-                });
-              }
-            });
-          } else {
-            grnService.list({ limit: 100 }).then((res) => setGrnOptions(res.grns || []));
-          }
-        })
-        .catch(() => {
-          grnService
-            .list({ limit: 100 })
-            .then((res) => setGrnOptions(res.grns || []))
-            .catch(() => setGrnOptions([]));
-        });
-
-      // Load Vendor Invoices for this PO
-      invoiceService
-        .list()
-        .then((invs) => {
-          const matchingInvs = (invs || []).filter((inv) => {
-            const poNum = foundPO?.poNumber || selectedPoId;
-            return (
-              String(inv.poNumber) === String(poNum) ||
-              String(inv.id) === String(selectedPoId) ||
-              (vendorName && String(inv.vendorName).toLowerCase() === String(vendorName).toLowerCase())
-            );
-          });
-          setInvoiceOptions(matchingInvs.length > 0 ? matchingInvs : invs || []);
-        })
-        .catch(() => setInvoiceOptions([]));
-
-      if (foundPO) {
-        if (foundPO.vendorId) setSelectedVendorId(String(foundPO.vendorId));
-        if (foundPO.vendor?.name) setVendorName(foundPO.vendor.name);
-
-        // Pre-populate items from PO
-        if (foundPO.items && foundPO.items.length > 0) {
-          setLineItems(
-            foundPO.items.map((item: any, idx: number) => ({
-              id: `po_item_${idx}_${Date.now()}`,
-              itemCode: item.itemCode || `ITM-00${idx + 1}`,
-              itemName: item.itemName || item.name || 'PO Line Item',
-              description: item.description || '',
-              poQty: Number(item.quantity || 1),
-              grnQty: Number(item.quantity || 1),
-              supplierQty: Number(item.quantity || 1),
-              unitPrice: Number(item.unitPrice || 0),
-              taxPercent: 18,
-            }))
-          );
-        }
-      }
     }
-  }, [selectedPoId, poList, vendorName]);
 
-  // When selected GRN or Vendor Invoice changes, populate form & item details
+    const queryKey = String(targetPoId || targetPoNum);
+    grnService
+      .getByPO(queryKey)
+      .then((grns) => {
+        if (grns && grns.length > 0) {
+          setGrnOptions(grns);
+        } else {
+          grnService.list({ limit: 100 }).then((res) => {
+            const list = res.grns || [];
+            const matched = list.filter(
+              (g) =>
+                String(g.poId) === String(targetPoId) ||
+                String(g.poId) === String(targetPoNum) ||
+                String(g.purchaseOrder?.id) === String(targetPoId) ||
+                String(g.purchaseOrder?.poNumber) === String(targetPoNum)
+            );
+            setGrnOptions(matched.length > 0 ? matched : list);
+          });
+        }
+      })
+      .catch(() => {
+        grnService.list({ limit: 100 }).then((res) => setGrnOptions(res.grns || [])).catch(() => setGrnOptions([]));
+      });
+  }, [selectedPO, selectedPoId, poIdParam]);
+
+  // Update line items when GRN selection changes
   useEffect(() => {
-    if (!selectedGrnId) return;
+    if (selectedGrnId && grnOptions.length > 0) {
+      const foundGRN = grnOptions.find(
+        (g) => String(g.id) === String(selectedGrnId) || String(g.grnNumber) === String(selectedGrnId)
+      );
 
-    const foundPO = poList.find(
-      (p) => String(p.id) === String(selectedPoId) || String(p.poNumber) === String(selectedPoId)
-    );
-
-    const resolveItemsForSelection = (foundInv: any, foundGRN: any, poObj: any) => {
-      // 1. Try GRN items if available
-      const activeGRN = foundGRN || (grnOptions && grnOptions.length > 0 ? grnOptions[0] : null);
-      if (activeGRN && activeGRN.items && activeGRN.items.length > 0) {
-        return activeGRN.items.map((gi: any, idx: number) => {
-          const poMatch = poObj?.items?.[idx] || poObj?.rfq?.items?.[idx];
+      if (foundGRN && foundGRN.items && foundGRN.items.length > 0) {
+        const updatedLineItems = foundGRN.items.map((gi: any, idx: number) => {
+          const poMatch =
+            selectedPO?.items?.[idx] ||
+            selectedPO?.items?.find((pi: any) => (pi.itemName || pi.name) === gi.itemName);
           const poQty = Number(gi.orderedQty || poMatch?.quantity || 1);
           const grnQty = Number(gi.receivedQty ?? gi.acceptedQty ?? 1);
-          const unitPrice = Number(poMatch?.unitPrice || gi.unitPrice || (foundInv?.amount ? foundInv.amount / grnQty : 0));
+          const unitPrice = Number(poMatch?.unitPrice || gi.unitPrice || 0);
 
           return {
             id: gi.id || `grn_item_${idx}_${Date.now()}`,
@@ -375,104 +249,42 @@ export default function CreatePurchaseInvoicePage() {
             description: gi.remarks || poMatch?.description || '',
             poQty: poQty,
             grnQty: grnQty,
-            supplierQty: grnQty,
+            invoicedQty: grnQty,
             unitPrice: unitPrice,
             taxPercent: 18,
           };
         });
-      }
 
-      // 2. Try PO items (or RFQ items) if available
-      const poItems = poObj?.items || poObj?.rfq?.items || poObj?.rfq?.selectedQuotation?.items;
-      if (poItems && poItems.length > 0) {
-        return poItems.map((item: any, idx: number) => {
-          const qty = Number(item.quantity || item.orderedQty || 1);
-          const price = Number(item.unitPrice || (foundInv?.amount ? foundInv.amount / qty : 0));
-          return {
-            id: `po_item_${idx}_${Date.now()}`,
-            itemCode: item.itemCode || `ITM-00${idx + 1}`,
-            itemName: item.itemName || item.name || 'Line Item',
-            description: item.description || '',
-            poQty: qty,
-            grnQty: qty,
-            supplierQty: qty,
-            unitPrice: price,
-            taxPercent: 18,
-          };
-        });
-      }
-
-      // 3. Fallback: Use Invoice amount (e.g. 100,000) or PO total amount
-      const totalAmount = Number(foundInv?.amount || poObj?.totalAmount || 0);
-      if (totalAmount > 0) {
-        return [
-          {
-            id: `inv_item_fallback_${Date.now()}`,
-            itemCode: 'ITM-001',
-            itemName: poObj?.poNumber ? `Line Items for ${poObj.poNumber}` : 'Vendor Tax Invoice Item',
-            description: 'Vendor Invoice Line Item',
-            poQty: 1,
-            grnQty: 1,
-            supplierQty: 1,
-            unitPrice: totalAmount,
-            taxPercent: 18,
-          },
-        ];
-      }
-
-      return null;
-    };
-
-    if (selectedGrnId.startsWith('inv_') || invoiceOptions.some(i => `inv_${i.id}` === selectedGrnId || String(i.invoiceNumber) === String(selectedGrnId))) {
-      const invId = selectedGrnId.replace('inv_', '');
-      const foundInv = invoiceOptions.find(
-        (i) => String(i.id) === String(invId) || String(i.invoiceNumber) === String(invId) || String(i.invoiceNumber) === String(selectedGrnId)
-      );
-      if (foundInv) {
-        if (foundInv.invoiceNumber) setInvoiceNumber(foundInv.invoiceNumber);
-        if (foundInv.submittedAt || foundInv.invoiceDate) {
-          const dateVal = foundInv.submittedAt || foundInv.invoiceDate;
-          setInvoiceDate(typeof dateVal === 'string' ? dateVal.slice(0, 10) : new Date(dateVal).toISOString().slice(0, 10));
-        }
-        if (foundInv.dueDate) {
-          const dueVal = foundInv.dueDate;
-          setDueDate(typeof dueVal === 'string' ? dueVal.slice(0, 10) : new Date(dueVal).toISOString().slice(0, 10));
-        }
-        if (foundInv.paymentTerms) setPaymentTerms(foundInv.paymentTerms);
-        if (foundInv.department) setDepartment(foundInv.department);
-
-        const foundGRN = grnOptions.find((g) => String(g.id) === String(foundInv.grnId) || String(g.grnNumber) === String(foundInv.grnId)) || (grnOptions && grnOptions[0]);
-
-        const resolved = resolveItemsForSelection(foundInv, foundGRN, foundPO);
-        if (resolved) {
-          setLineItems(resolved);
-        }
-      }
-    } else {
-      const rawGrnId = selectedGrnId.replace('grn_', '');
-      const foundGRN = grnOptions.find(
-        (g) => String(g.id) === String(rawGrnId) || String(g.grnNumber) === String(rawGrnId) || String(g.id) === String(selectedGrnId)
-      );
-
-      const resolved = resolveItemsForSelection(null, foundGRN, foundPO);
-      if (resolved) {
-        setLineItems(resolved);
+        setLineItems(updatedLineItems);
       }
     }
-  }, [selectedGrnId, grnOptions, invoiceOptions, poList, selectedPoId]);
+  }, [selectedGrnId, grnOptions, selectedPO]);
 
-  // Handle vendor selection change
-  const handleVendorSelect = (vId: string) => {
-    setSelectedVendorId(vId);
-    setSelectedPoId('');
-    setSelectedGrnId('');
-    const found = vendorsList.find((v) => v.id === vId);
-    if (found) {
-      setVendorName(found.name);
+  // Populate Buyer/Client Name ONLY if explicitly set on PO; otherwise keep completely blank (no auto text)
+  useEffect(() => {
+    if (selectedPO) {
+      const explicitBuyer =
+        (selectedPO as any).buyerName ||
+        (selectedPO as any).clientName ||
+        (selectedPO as any).companyName ||
+        (selectedPO as any).buyerCompany ||
+        (selectedPO as any).buyer?.name;
+
+      if (explicitBuyer && String(explicitBuyer).toUpperCase() !== 'VENDOR') {
+        setBuyerName(String(explicitBuyer));
+        return;
+      }
     }
-  };
+    setBuyerName('');
+  }, [selectedPO]);
 
-  // Add Line Item
+  // Update Line Item Values
+  const handleUpdateLineItem = useCallback((id: number | string, field: keyof LineItem, value: any) => {
+    setLineItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
+    );
+  }, []);
+
   const handleAddLineItem = useCallback(() => {
     setLineItems((prev) => [
       ...prev,
@@ -483,45 +295,18 @@ export default function CreatePurchaseInvoicePage() {
         description: '',
         poQty: 0,
         grnQty: 0,
-        supplierQty: 1,
+        invoicedQty: 1,
         unitPrice: '',
         taxPercent: 18,
       },
     ]);
   }, []);
 
-  // Remove Line Item
   const handleRemoveLineItem = useCallback((id: number | string) => {
     setLineItems((prev) => (prev.length > 1 ? prev.filter((item) => item.id !== id) : prev));
   }, []);
 
-  // Update Line Item
-  const handleUpdateLineItem = useCallback((id: number | string, field: keyof LineItem, value: any) => {
-    setLineItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
-    );
-  }, []);
-
-  // Calculations
-  const calculations = useMemo(() => {
-    let subtotal = 0;
-    let totalTax = 0;
-
-    lineItems.forEach((item) => {
-      const qty = typeof item.supplierQty === 'number' ? item.supplierQty : 0;
-      const price = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
-      const lineSubtotal = qty * price;
-      const lineTax = lineSubtotal * ((item.taxPercent || 0) / 100);
-
-      subtotal += lineSubtotal;
-      totalTax += lineTax;
-    });
-
-    const grandTotal = subtotal + totalTax;
-    return { subtotal, totalTax, grandTotal };
-  }, [lineItems]);
-
-  // Attach File Mock
+  // Handle File Uploads
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const newFiles = Array.from(e.target.files).map((file, idx) => ({
@@ -537,33 +322,41 @@ export default function CreatePurchaseInvoicePage() {
     setAttachments((prev) => prev.filter((a) => a.id !== attId));
   };
 
-  // Validation
+  // Calculations
+  const calculations = useMemo(() => {
+    let subtotal = 0;
+    let totalTax = 0;
+
+    lineItems.forEach((item) => {
+      const qty = typeof item.invoicedQty === 'number' ? item.invoicedQty : 0;
+      const price = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
+      const lineSubtotal = qty * price;
+      const lineTax = lineSubtotal * ((item.taxPercent || 0) / 100);
+
+      subtotal += lineSubtotal;
+      totalTax += lineTax;
+    });
+
+    const grandTotal = subtotal + totalTax;
+    return { subtotal, totalTax, grandTotal };
+  }, [lineItems]);
+
+  // Form Validation
   const validateForm = (): boolean => {
     setErrorMsg(null);
     if (!invoiceNumber.trim()) {
       setErrorMsg('Invoice Number is required.');
       return false;
     }
-    if (!selectedVendorId && !vendorName.trim()) {
-      setErrorMsg('Please select a Supplier.');
-      return false;
-    }
     if (!selectedPoId) {
-      setErrorMsg('Please select a linked Purchase Order (PO Selection).');
-      return false;
-    }
-    const validItems = lineItems.filter(
-      (item) => item.itemName.trim() && typeof item.supplierQty === 'number' && item.supplierQty > 0
-    );
-    if (validItems.length === 0) {
-      setErrorMsg('Please add at least one line item with a valid item name and supplier quantity.');
+      setErrorMsg('Please select a Purchase Order.');
       return false;
     }
     return true;
   };
 
-  // Submission (API call & Approval Workflow Trigger)
-  const submitInvoiceToAPI = async (isDraft: boolean) => {
+  // Submit Invoice to Buyer
+  const handleSubmitInvoice = async (isDraft: boolean) => {
     if (!validateForm()) return;
 
     if (isDraft) setSavingDraft(true);
@@ -572,36 +365,49 @@ export default function CreatePurchaseInvoicePage() {
     setErrorMsg(null);
 
     try {
-      const selectedPO = poList.find((p) => String(p.id) === String(selectedPoId));
+      const payload = {
+        invoiceNumber,
+        poId: selectedPoId,
+        grnId: selectedGrnId ? selectedGrnId.replace(/^grn_/, '').replace(/^inv_/, '') : null,
+        vendorId: user?.id || selectedPO?.vendorId || selectedPO?.vendor?.id,
+        buyerName,
+        invoiceDate,
+        dueDate,
+        paymentTerms,
+        currency,
+        amount: calculations.grandTotal,
+        notes,
+        isDraft,
+      };
 
+      const { apiRequest } = await import('../../api/client');
       await apiRequest('/invoices/manual', {
         method: 'POST',
-        body: JSON.stringify({
-          invoiceNumber,
-          vendorId: selectedVendorId || selectedPO?.vendorId,
-          poId: selectedPoId,
-          grnId: selectedGrnId || null,
-          invoiceDate,
-          dueDate,
-          paymentTerms,
-          department,
-          currency,
-          amount: calculations.grandTotal,
-          comments: notes,
-          isDraft,
-          lineItems,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (isDraft) {
-        setSuccessMsg(`Invoice #${invoiceNumber} saved as draft successfully.`);
+        setSuccessMsg(`Draft invoice #${invoiceNumber} saved successfully.`);
+        setTimeout(() => navigate('/procurement/grns'), 1500);
       } else {
-        setSuccessMsg(`Purchase Invoice #${invoiceNumber} submitted for approval successfully! Workflow initiated.`);
+        setActionSuccessModalData({
+          actionType: 'sent',
+          module: 'Purchase Invoice',
+          referenceNumber: invoiceNumber,
+          title: `Tax Invoice Sent to Buyer`,
+          actionTitle: `Purchase Invoice Sent`,
+          badgeText: `SENT`,
+          message: `Tax Invoice #${invoiceNumber} has been sent to Buyer successfully! Buyer notification & approval workflow initiated.`,
+          details: [
+            { label: 'PO Reference', value: displayPoNumber },
+            { label: 'GRN Reference', value: displayGrnNumber },
+            { label: 'Total Value', value: formatAmount(calculations.grandTotal, currency) },
+            ...(buyerName ? [{ label: 'Buyer Name', value: buyerName }] : []),
+          ],
+        });
       }
-
-      setTimeout(() => navigate('/accounts-payable'), 1500);
     } catch (err: any) {
-      setErrorMsg(err?.message || 'Failed to submit Purchase Invoice.');
+      setErrorMsg(err?.message || 'Failed to send Invoice to Buyer.');
     } finally {
       setSavingDraft(false);
       setSubmitting(false);
@@ -609,7 +415,7 @@ export default function CreatePurchaseInvoicePage() {
   };
 
   return (
-    <div className="cpo-page">
+    <div className="cpo-page vendor-portal">
       {/* Notifications */}
       {errorMsg && (
         <MessageStrip type="error" onClose={() => setErrorMsg(null)}>
@@ -625,12 +431,12 @@ export default function CreatePurchaseInvoicePage() {
       {/* Header */}
       <div className="cpo-header">
         <div className="cpo-header__left">
-          <button className="cpo-back-btn" onClick={() => navigate('/accounts-payable')}>
+          <button className="cpo-back-btn" onClick={() => navigate(-1)}>
             <ArrowLeft size={16} /> Back
           </button>
           <div className="cpo-header__title-wrap">
-            <h1>Create Purchase Invoice Entry</h1>
-            <p>Enter vendor invoice with 3-way quantity matching (PO Qty, GRN Qty, Supplier Qty) & Approval Workflow</p>
+            <h1>Submit Invoice to Buyer 🧾</h1>
+            <p>Create & dispatch your tax invoice directly to the buyer for PO #{selectedPO?.poNumber || 'Order'}</p>
           </div>
         </div>
         <div className="cpo-header__actions">
@@ -643,131 +449,97 @@ export default function CreatePurchaseInvoicePage() {
           </button>
           <button
             className="cpo-btn cpo-btn--outline"
-            onClick={() => submitInvoiceToAPI(true)}
+            onClick={() => handleSubmitInvoice(true)}
             disabled={savingDraft || submitting}
           >
             <Save size={15} /> {savingDraft ? 'Saving…' : 'Save Draft'}
           </button>
           <button
             className="cpo-btn cpo-btn--primary"
-            onClick={() => submitInvoiceToAPI(false)}
+            onClick={() => handleSubmitInvoice(false)}
             disabled={savingDraft || submitting}
           >
-            <Send size={15} /> {submitting ? 'Submitting…' : 'Submit Invoice for Approval'}
+            <Send size={15} /> {submitting ? 'Sending Invoice…' : 'Send Invoice to Buyer'}
           </button>
         </div>
       </div>
 
-      {/* Form Content */}
+      {/* Form Body */}
       <div className="cpo-body">
-        {/* ── Section 01: Supplier, PO & GRN Cascade Selection (as per diagram) ── */}
-        <div className="cpo-section" style={{ borderLeft: '4px solid var(--primary-500)' }}>
+        {/* Section 01: Order & Invoice Details */}
+        <div className="cpo-section">
           <div className="cpo-section__header">
             <span className="cpo-section__num">01</span>
-            <span className="cpo-section__title">Supplier, PO & GRN Selection Cascade</span>
-            <span className="cpo-section__hint">Hierarchical reference selection</span>
+            <span className="cpo-section__title">Purchase Order & Invoice Details</span>
+            <span className="cpo-section__hint">Auto-loaded from confirmed Purchase Order</span>
           </div>
 
-          <div className="cpo-grid cpo-grid--3">
-            {/* 1. Supplier Selection */}
-            <div className="cpo-field">
-              <label>1. SUPPLIER SELECTION *</label>
-              <select
-                value={selectedVendorId}
-                onChange={(e) => handleVendorSelect(e.target.value)}
-              >
-                <option value="">-- Select Supplier (e.g. Telematics) --</option>
-                {allSuppliers.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name} ({v.category || 'Supplier'})
-                  </option>
-                ))}
-              </select>
-              <span className="cpo-field__sub">Filters available Purchase Orders</span>
-            </div>
-
-            {/* 2. PO Selection */}
-            <div className="cpo-field">
-              <label>2. PO SELECTION *</label>
+          <div className="cpo-grid cpo-grid--4">
+            <div className="cpo-field cpo-field--span-2">
+              <label>SELECT PURCHASE ORDER *</label>
               <select
                 value={selectedPoId}
                 onChange={(e) => {
                   setSelectedPoId(e.target.value);
                   setSelectedGrnId('');
                 }}
+                disabled={poLoading}
               >
-                <option value="">-- Select PO (001, 002, 003, 004) --</option>
-                {availablePOs.map((po) => (
+                <option value="">-- Select Purchase Order --</option>
+                {poList.map((po) => (
                   <option key={po.id} value={po.id}>
-                    {po.poNumber} — {formatAmount(po.totalAmount, currency)}
+                    {po.poNumber} — ({formatAmount(po.totalAmount, currency)})
                   </option>
                 ))}
-                {selectedPoId && !availablePOs.some((po) => String(po.id) === String(selectedPoId)) && (
+                {selectedPoId && !poList.some((po) => String(po.id) === String(selectedPoId)) && (
                   <option value={selectedPoId}>
                     {displayPoNumber}
                   </option>
                 )}
               </select>
-              <span className="cpo-field__sub">Auto-loads PO items & linked GRNs</span>
             </div>
 
-            {/* 3. GRN / Vendor Invoice Selection */}
             <div className="cpo-field">
-              <label>3. GRN / VENDOR INVOICE SELECTION</label>
+              <label>LINKED GRN / DISPATCH NOTE</label>
               <select
                 value={selectedGrnId}
                 onChange={(e) => setSelectedGrnId(e.target.value)}
                 disabled={!selectedPoId}
               >
-                <option value="">-- Select GRN or Vendor Invoice --</option>
-                {grnOptions.length > 0 && (
-                  <optgroup label="📄 Goods Received Notes (GRNs)">
-                    {grnOptions.map((g) => (
-                      <option key={`grn_${g.id}`} value={`grn_${g.id}`}>
-                        GRN: {g.grnNumber} (Received: {new Date(g.receivedDate).toLocaleDateString()})
-                      </option>
-                    ))}
-                  </optgroup>
+                <option value="">-- Direct PO Billing / Select GRN --</option>
+                {grnOptions.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.grnNumber} (Received: {new Date(g.receivedDate).toLocaleDateString()})
+                  </option>
+                ))}
+                {selectedGrnId && !grnOptions.some((g) => String(g.id) === String(selectedGrnId)) && (
+                  <option value={selectedGrnId}>
+                    {displayGrnNumber}
+                  </option>
                 )}
-                {invoiceOptions.length > 0 && (
-                  <optgroup label="🧾 Vendor Invoices">
-                    {invoiceOptions.map((inv) => (
-                      <option key={`inv_${inv.id}`} value={`inv_${inv.id}`}>
-                        Invoice: {inv.invoiceNumber} — Ksh {inv.amount ? inv.amount.toLocaleString() : '0'} ({inv.submittedAt || inv.dueDate || 'Recent'})
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-                {selectedGrnId &&
-                  !grnOptions.some((g) => String(g.id) === String(selectedGrnId) || `grn_${g.id}` === selectedGrnId) &&
-                  !invoiceOptions.some((i) => String(i.id) === String(selectedGrnId) || `inv_${i.id}` === selectedGrnId) && (
-                    <option value={selectedGrnId}>
-                      {displayGrnNumber}
-                    </option>
-                  )}
               </select>
-              <span className="cpo-field__sub">Auto-populates items from GRN or Vendor Invoice</span>
+            </div>
+
+            <div className="cpo-field">
+              <label>BUYER / CLIENT NAME</label>
+              <input
+                type="text"
+                value={buyerName}
+                onChange={(e) => setBuyerName(e.target.value)}
+                placeholder="Enter Buyer / Client Name"
+              />
             </div>
           </div>
-        </div>
 
-        {/* ── Section 02: Invoice Meta ── */}
-        <div className="cpo-section">
-          <div className="cpo-section__header">
-            <span className="cpo-section__num">02</span>
-            <span className="cpo-section__title">Invoice Dates & Cost Center</span>
-          </div>
-
-          <div className="cpo-grid cpo-grid--4">
+          <div className="cpo-grid cpo-grid--4" style={{ marginTop: 16 }}>
             <div className="cpo-field">
-              <label>INVOICE NUMBER *</label>
+              <label>VENDOR INVOICE NUMBER *</label>
               <input
                 type="text"
                 value={invoiceNumber}
                 onChange={(e) => setInvoiceNumber(e.target.value)}
-                placeholder="e.g. INV-2026-0042"
+                placeholder="e.g. INV-2026-9005"
               />
-              <span className="cpo-field__sub">Vendor invoice reference</span>
             </div>
 
             <div className="cpo-field">
@@ -791,7 +563,6 @@ export default function CreatePurchaseInvoicePage() {
             <div className="cpo-field">
               <label>PAYMENT TERMS</label>
               <select value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)}>
-                <option value="Immediate">Immediate</option>
                 <option value="Net 15">Net 15</option>
                 <option value="Net 30">Net 30</option>
                 <option value="Net 45">Net 45</option>
@@ -801,12 +572,12 @@ export default function CreatePurchaseInvoicePage() {
           </div>
         </div>
 
-        {/* ── Section 03: Items Table with 3-Quantity Matching (as per diagram) ── */}
+        {/* Section 02: Line Items & Invoiced Quantities */}
         <div className="cpo-section">
           <div className="cpo-section__header cpo-section__header--flex">
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span className="cpo-section__num">03</span>
-              <span className="cpo-section__title">Items Listing & 3-Quantity Matching</span>
+              <span className="cpo-section__num">02</span>
+              <span className="cpo-section__title">Line Items & Invoiced Quantities</span>
             </div>
             <button className="cpo-btn cpo-btn--outline cpo-btn--sm" onClick={handleAddLineItem}>
               <Plus size={14} /> Add Line Item
@@ -818,9 +589,9 @@ export default function CreatePurchaseInvoicePage() {
               <thead>
                 <tr>
                   <th style={{ width: '220px' }}>Item Name / Description *</th>
-                  <th style={{ width: '100px', background: 'rgba(10, 110, 209, 0.08)' }}>PO Quantity</th>
-                  <th style={{ width: '100px', background: 'rgba(16, 185, 129, 0.08)' }}>GRN Quantity</th>
-                  <th style={{ width: '120px', background: 'rgba(234, 179, 8, 0.12)' }}>Supplier Qty *</th>
+                  <th style={{ width: '100px', background: 'rgba(10, 110, 209, 0.08)' }}>PO Qty</th>
+                  <th style={{ width: '100px', background: 'rgba(16, 185, 129, 0.08)' }}>GRN Qty</th>
+                  <th style={{ width: '120px', background: 'rgba(234, 179, 8, 0.12)' }}>Invoiced Qty *</th>
                   <th style={{ width: '130px' }}>Unit Price ({currency})</th>
                   <th style={{ width: '80px' }}>Tax %</th>
                   <th style={{ width: '140px', textAlign: 'right' }}>Total ({currency})</th>
@@ -829,7 +600,7 @@ export default function CreatePurchaseInvoicePage() {
               </thead>
               <tbody>
                 {lineItems.map((item) => {
-                  const qty = typeof item.supplierQty === 'number' ? item.supplierQty : 0;
+                  const qty = typeof item.invoicedQty === 'number' ? item.invoicedQty : 0;
                   const price = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
                   const lineTotal = qty * price * (1 + (item.taxPercent || 0) / 100);
 
@@ -844,30 +615,27 @@ export default function CreatePurchaseInvoicePage() {
                           onChange={(e) => handleUpdateLineItem(item.id, 'itemName', e.target.value)}
                         />
                       </td>
-                      {/* PO Quantity (Auto-populated from PO) */}
                       <td style={{ background: 'rgba(10, 110, 209, 0.03)' }}>
                         <span style={{ display: 'inline-block', padding: '6px 12px', background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: 6, fontWeight: 700, color: 'var(--primary-500)' }}>
                           {item.poQty}
                         </span>
                       </td>
-                      {/* GRN Quantity (Auto-populated from GRN) */}
                       <td style={{ background: 'rgba(16, 185, 129, 0.03)' }}>
                         <span style={{ display: 'inline-block', padding: '6px 12px', background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: 6, fontWeight: 700, color: '#10b981' }}>
                           {item.grnQty}
                         </span>
                       </td>
-                      {/* Supplier Quantity (Editable input from vendor invoice) */}
                       <td style={{ background: 'rgba(234, 179, 8, 0.04)' }}>
                         <input
                           type="number"
                           min="1"
                           className="cpo-table__input"
                           style={{ fontWeight: 800, borderColor: '#eab308' }}
-                          value={item.supplierQty}
+                          value={item.invoicedQty}
                           onChange={(e) =>
                             handleUpdateLineItem(
                               item.id,
-                              'supplierQty',
+                              'invoicedQty',
                               e.target.value === '' ? '' : Math.max(1, parseInt(e.target.value) || 1)
                             )
                           }
@@ -927,30 +695,31 @@ export default function CreatePurchaseInvoicePage() {
           </div>
         </div>
 
-        {/* ── Section 04: Summary & Workflow Notice ── */}
+        {/* Section 03 & Section 04 */}
         <div className="cpo-grid cpo-grid--split">
+          {/* Remarks & Physical Invoice Attachment */}
           <div className="cpo-section">
             <div className="cpo-section__header">
-              <span className="cpo-section__num">04</span>
-              <span className="cpo-section__title">Remarks & Attachments</span>
+              <span className="cpo-section__num">03</span>
+              <span className="cpo-section__title">Remarks & Physical Invoice PDF</span>
             </div>
             <div className="cpo-grid cpo-grid--1" style={{ gap: 16 }}>
               <div className="cpo-field">
-                <label>INTERNAL NOTES FOR APPROVERS</label>
+                <label>INVOICE NOTES / REMARKS FOR BUYER</label>
                 <textarea
                   rows={3}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Add notes for finance approvers regarding quantity discrepancies or invoice notes..."
+                  placeholder="Add delivery notes, tax calculation comments, or payment details for buyer..."
                 />
               </div>
 
               <div className="cpo-field">
-                <label>ATTACH VENDOR INVOICE PDF</label>
-                <label className="cpi-upload-dropzone" style={{ padding: '36px 20px', background: 'var(--surface-elevated)', border: '2px dashed rgba(10, 110, 209, 0.4)', borderRadius: 10, textAlign: 'center', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'all 0.2s ease' }}>
+                <label>ATTACH VENDOR TAX INVOICE PDF</label>
+                <label style={{ padding: '36px 20px', background: 'var(--surface-elevated)', border: '2px dashed rgba(10, 110, 209, 0.4)', borderRadius: 10, textAlign: 'center', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'all 0.2s ease' }}>
                   <Upload size={28} style={{ color: 'var(--primary-500)' }} />
                   <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.4px' }}>CLICK TO UPLOAD PHYSICAL VENDOR BILL PDF</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Drag and drop your invoice PDF here, or click to browse files</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Drag and drop your signed tax invoice PDF here, or click to browse files</div>
                   <input type="file" multiple accept=".pdf,.png,.jpg" onChange={handleFileUpload} hidden />
                 </label>
                 {attachments.length > 0 && (
@@ -973,10 +742,11 @@ export default function CreatePurchaseInvoicePage() {
             </div>
           </div>
 
+          {/* Totals Summary */}
           <div className="cpo-section cpo-totals-card">
             <div className="cpo-section__header">
-              <span className="cpo-section__num">05</span>
-              <span className="cpo-section__title">Final Value & Workflow</span>
+              <span className="cpo-section__num">04</span>
+              <span className="cpo-section__title">Invoice Value Summary</span>
             </div>
 
             <div className="cpo-totals">
@@ -1000,25 +770,28 @@ export default function CreatePurchaseInvoicePage() {
                 <span>Final Value</span>
                 <span style={{ color: 'var(--primary-500)' }}>{formatAmount(calculations.grandTotal, currency)}</span>
               </div>
-
-              <div style={{ marginTop: 12, padding: '10px 12px', background: 'rgba(10, 110, 209, 0.1)', border: '1px solid rgba(10, 110, 209, 0.25)', borderRadius: 8, color: 'var(--primary-500)', fontSize: 12.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <PackageCheck size={16} />
-                <span>Triggers AccountsPayable Approval Workflow</span>
-              </div>
             </div>
 
             <div className="cpo-action-panel">
               <button
                 className="cpo-btn cpo-btn--primary cpo-btn--full"
-                onClick={() => submitInvoiceToAPI(false)}
+                onClick={() => handleSubmitInvoice(false)}
                 disabled={savingDraft || submitting}
               >
-                <Send size={16} /> {submitting ? 'Submitting…' : 'Submit Purchase Invoice'}
+                <Send size={16} /> {submitting ? 'Sending Invoice…' : 'Send Invoice to Buyer'}
               </button>
             </div>
           </div>
         </div>
       </div>
+
+      <ActionSuccessModal
+        data={actionSuccessModalData}
+        onClose={() => {
+          setActionSuccessModalData(null);
+          navigate('/procurement/grns');
+        }}
+      />
 
       {/* Official A4 Digital TAX INVOICE Document (Visible ONLY during window.print()) */}
       <div className="grn-print-document po-document">
@@ -1072,16 +845,16 @@ export default function CreatePurchaseInvoicePage() {
         <div className="po-doc__parties">
           <div className="po-doc__party-box">
             <h3 className="po-doc__party-heading">VENDOR / SUPPLIER</h3>
-            <p className="po-doc__party-name">{vendorName || selectedPO?.vendor?.name || selectedPO?.vendorName || 'Embedded'}</p>
-            <p className="po-doc__party-detail">Contact: {selectedPO?.vendor?.contactPerson || selectedPO?.vendorContactPerson || 'Nischal Agarwal'}</p>
+            <p className="po-doc__party-name">{user?.fullName || selectedPO?.vendor?.name || selectedPO?.vendorName || 'Embedded'}</p>
+            <p className="po-doc__party-detail">Contact: {selectedPO?.vendor?.contactPerson || selectedPO?.vendorContactPerson || user?.fullName || 'Nischal Agarwal'}</p>
             <p className="po-doc__party-detail">Address: {selectedPO?.vendor?.address || selectedPO?.vendorAddress || '232,Sahukara Bareilly 232'}</p>
             <p className="po-doc__party-detail">Phone: {selectedPO?.vendor?.phone || selectedPO?.vendorPhone || '+918272811866'}</p>
-            <p className="po-doc__party-detail">Email: {selectedPO?.vendor?.email || selectedPO?.vendorEmail || 'nischalagarwal674@gmail.com'}</p>
+            <p className="po-doc__party-detail">Email: {user?.email || selectedPO?.vendor?.email || selectedPO?.vendorEmail || 'nischalagarwal674@gmail.com'}</p>
             <p className="po-doc__party-detail">GST/VAT: {selectedPO?.vendor?.gstVat || selectedPO?.vendorGstVat || 'VAT60707070706'}</p>
           </div>
           <div className="po-doc__party-box">
             <h3 className="po-doc__party-heading">BILL TO (BUYER / CLIENT)</h3>
-            <p className="po-doc__party-name">{companyName && !companyName.includes('Procnex') ? companyName : 'Procnex'}</p>
+            <p className="po-doc__party-name">{buyerName || companyName || 'Procnex'}</p>
             <p className="po-doc__party-detail">Warehouse: {selectedPO?.shipToWarehouse || 'Central Warehouse'}</p>
             <p className="po-doc__party-detail">Address: {selectedPO?.shipToAddress || '232,Sahukara Bareilly 232'}</p>
             <p className="po-doc__party-detail">Contact: {selectedPO?.shipToContact || 'Nischal Agarwal'}</p>
@@ -1096,7 +869,7 @@ export default function CreatePurchaseInvoicePage() {
             <span className="po-doc__info-value">{displayPoNumber}</span>
           </div>
           <div className="po-doc__info-item">
-            <span className="po-doc__info-label">Linked GRN / Invoice</span>
+            <span className="po-doc__info-label">Linked GRN</span>
             <span className="po-doc__info-value">{displayGrnNumber}</span>
           </div>
           <div className="po-doc__info-item">
@@ -1113,7 +886,7 @@ export default function CreatePurchaseInvoicePage() {
           </div>
           <div className="po-doc__info-item">
             <span className="po-doc__info-label">Status</span>
-            <span className="po-doc__info-value">SUBMITTED FOR APPROVAL</span>
+            <span className="po-doc__info-value">SUBMITTED</span>
           </div>
         </div>
 
@@ -1135,7 +908,7 @@ export default function CreatePurchaseInvoicePage() {
                 <th className="po-doc__th--no">#</th>
                 <th className="po-doc__th--desc">Description</th>
                 <th className="po-doc__th--qty">PO Qty</th>
-                <th className="po-doc__th--qty">Sup Qty</th>
+                <th className="po-doc__th--qty">Inv Qty</th>
                 <th className="po-doc__th--price">Unit Price</th>
                 <th className="po-doc__th--tax">Tax %</th>
                 <th className="po-doc__th--disc">Disc %</th>
@@ -1144,16 +917,16 @@ export default function CreatePurchaseInvoicePage() {
             </thead>
             <tbody>
               {lineItems.map((item, index) => {
-                const supQty = typeof item.supplierQty === 'number' ? item.supplierQty : 0;
+                const invQty = typeof item.invoicedQty === 'number' ? item.invoicedQty : 0;
                 const price = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
-                const lineTotal = supQty * price * (1 + (item.taxPercent || 0) / 100);
+                const lineTotal = invQty * price * (1 + (item.taxPercent || 0) / 100);
 
                 return (
                   <tr key={item.id}>
                     <td className="po-doc__td--no">{index + 1}</td>
                     <td className="po-doc__td--desc">{item.itemName || item.description || 'Line Item'}</td>
                     <td className="po-doc__td--qty">{item.poQty}</td>
-                    <td className="po-doc__td--qty">{supQty}</td>
+                    <td className="po-doc__td--qty">{invQty}</td>
                     <td className="po-doc__td--price">{formatAmount(price, currency)}</td>
                     <td className="po-doc__td--tax">{item.taxPercent}%</td>
                     <td className="po-doc__td--disc">—</td>
@@ -1177,7 +950,7 @@ export default function CreatePurchaseInvoicePage() {
               <span className="po-doc__total-value">{formatAmount(0, currency)}</span>
             </div>
             <div className="po-doc__total-row">
-              <span className="po-doc__total-row">Tax Total</span>
+              <span className="po-doc__total-label">Tax Total</span>
               <span className="po-doc__total-value">{formatAmount(calculations.totalTax, currency)}</span>
             </div>
             <div className="po-doc__total-row">
@@ -1200,12 +973,12 @@ export default function CreatePurchaseInvoicePage() {
         <div className="po-doc__divider" />
         <div className="po-doc__notes">
           <div className="po-doc__notes-col">
-            <h4 className="po-doc__notes-heading">Purchase Invoice Notes</h4>
-            <p className="po-doc__notes-text">{notes || '3-way quantity matching verified. Invoice entered for Accounts Payable approval.'}</p>
+            <h4 className="po-doc__notes-heading">Invoice Notes / Remarks</h4>
+            <p className="po-doc__notes-text">{notes || 'Tax invoice dispatched to buyer for payment processing.'}</p>
           </div>
           <div className="po-doc__notes-col">
-            <h4 className="po-doc__notes-heading">Approval & Payment Terms</h4>
-            <p className="po-doc__notes-text">Payment will be scheduled upon L2 Accounts Payable approval under agreed payment terms ({paymentTerms}).</p>
+            <h4 className="po-doc__notes-heading">Payment Instructions</h4>
+            <p className="po-doc__notes-text">Please remit payment as per agreed payment terms ({paymentTerms}).</p>
           </div>
         </div>
 
@@ -1213,7 +986,7 @@ export default function CreatePurchaseInvoicePage() {
         <div className="po-doc__footer">
           <div className="po-doc__footer-divider" />
           <p className="po-doc__footer-text">
-            {companyName}
+            {buyerName || companyName}
             {companyPhone && <span> &nbsp;|&nbsp; Phone: {companyPhone}</span>}
             {companyEmail && <span> &nbsp;|&nbsp; Email: {companyEmail}</span>}
           </p>

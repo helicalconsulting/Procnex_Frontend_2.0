@@ -308,12 +308,6 @@ export const VENDOR_NAVIGATION_MENU: MenuItem[] = [
     roles: [RoleName.VENDOR],
   },
   {
-    id: 'vendor-invoices',
-    label: 'My Invoices',
-    path: '/vendor/invoices',
-    roles: [RoleName.VENDOR],
-  },
-  {
     id: 'vendor-agreements',
     label: 'Agreements',
     path: '/vendor/agreements',
@@ -446,20 +440,42 @@ export function getVendorAccessibleMenuItems(roles: string[]): MenuItem[] {
 
 // ─── Helper: Check if user is vendor ────────────────────────
 
-export function isVendor(roles: string[]): boolean {
-  return roles.includes(RoleName.VENDOR);
+function toRoleString(r: any): string {
+  if (typeof r === 'string') return r;
+  if (typeof r === 'object' && r !== null) {
+    return r.roleName || r.name || r.role?.roleName || r.role?.name || String(r);
+  }
+  return String(r || '');
 }
 
-export function isAdmin(roles: string[]): boolean {
-  return ADMIN_ACCESS_ROLES.some((r) => roles.includes(r));
+export function isVendor(roles: any): boolean {
+  if (!roles) return false;
+  const list = Array.isArray(roles) ? roles : [roles];
+  return list.some((r) => toRoleString(r) === RoleName.VENDOR || toRoleString(r).toLowerCase().includes('vendor'));
 }
 
-export function hasApprovalRole(roles: string[]): boolean {
-  return roles.includes(RoleName.PROCUREMENT_MANAGER) || roles.includes(RoleName.FINANCE_MANAGER) || roles.includes(RoleName.FINANCE_APPROVER);
+export function isAdmin(roles: any): boolean {
+  if (!roles) return false;
+  const list = Array.isArray(roles) ? roles : [roles];
+  return list.some((r) => {
+    const str = toRoleString(r);
+    return ADMIN_ACCESS_ROLES.some((adminRole) => str.toLowerCase().includes(adminRole.toLowerCase()));
+  });
 }
 
-export function isL2OrHigherUser(roles: string[]): boolean {
-  if (!roles || roles.length === 0) return false;
+export function hasApprovalRole(roles: any): boolean {
+  if (!roles) return false;
+  const list = Array.isArray(roles) ? roles : [roles];
+  return list.some((r) => {
+    const str = toRoleString(r);
+    return str === RoleName.PROCUREMENT_MANAGER || str === RoleName.FINANCE_MANAGER || str === RoleName.FINANCE_APPROVER;
+  });
+}
+
+export function isL2OrHigherUser(roles: any): boolean {
+  if (!roles) return false;
+  const list = Array.isArray(roles) ? roles : [roles];
+  if (list.length === 0) return false;
   const l2Roles = [
     RoleName.SUPER_ADMIN,
     RoleName.ADMINISTRATOR,
@@ -475,5 +491,8 @@ export function isL2OrHigherUser(roles: string[]): boolean {
     'purchase_manager',
     'purchase manager',
   ];
-  return roles.some((r) => l2Roles.some((l2) => r.toLowerCase().includes(l2.toLowerCase())));
+  return list.some((r) => {
+    const str = toRoleString(r);
+    return l2Roles.some((l2) => str.toLowerCase().includes(l2.toLowerCase()));
+  });
 }

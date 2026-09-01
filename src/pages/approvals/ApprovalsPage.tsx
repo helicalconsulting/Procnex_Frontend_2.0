@@ -49,6 +49,7 @@ const STATUS_LABELS: Record<string, string> = {
   APPROVED_L1: 'L1 Approved',
   REJECTED: 'Rejected',
   RETURNED: 'Returned',
+  AUTO_FORWARDED: 'Auto Forwarded',
 };
 
 const MODULE_ICONS: Record<ModuleType, React.ReactNode> = {
@@ -148,7 +149,7 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
     },
   },
   {
-    key: 'status', label: 'Status', defaultVisible: true, width: '120px',
+    key: 'status', label: 'Status', defaultVisible: true, width: '170px', align: 'left',
     render: (req) => {
       // Role-aware status determination:
       // If user can act on the pending level (e.g. Level 2 approver), status is PENDING for them.
@@ -163,7 +164,7 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
       }
       return (
         <span className={`approvals-badge approvals-badge--${effectiveStatus}`}>
-          {STATUS_LABELS[effectiveStatus] || effectiveStatus}
+          {STATUS_LABELS[effectiveStatus] || effectiveStatus.replace(/_/g, ' ')}
         </span>
       );
     },

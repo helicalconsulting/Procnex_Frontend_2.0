@@ -1451,4 +1451,55 @@ export const companySettingsService = {
   saveContractOcrText: USE_MOCK ? mockSaveContractOcrText : apiSaveContractOcrText,
   // Branding Image Upload — always uses real API (no mock)
   uploadBrandingImage: apiUploadBrandingImage,
+  // Document Serialization Sequences
+  listSequenceSettings: apiListSequenceSettings,
+  updateSequenceSetting: apiUpdateSequenceSetting,
+  generateNextSequence: apiGenerateNextSequence,
+  backfillSupplierCodes: apiBackfillSupplierCodes,
 };
+
+export interface SequenceSetting {
+  id?: string;
+  companyCode?: string;
+  entityType: 'SUPPLIER_CODE' | 'PURCHASE_ORDER' | 'RFQ' | string;
+  prefix: string;
+  suffix?: string | null;
+  nextNumber: number;
+  paddingLength: number;
+  resetFrequency: 'NEVER' | 'YEARLY' | 'MONTHLY' | string;
+}
+
+async function apiListSequenceSettings(): Promise<SequenceSetting[]> {
+  try {
+    const data = await apiRequest<{ settings: SequenceSetting[] }>('/company-settings/sequences');
+    return data.settings || [];
+  } catch {
+    return [
+      { entityType: 'SUPPLIER_CODE', prefix: 'SUP-', suffix: '', nextNumber: 1001, paddingLength: 4, resetFrequency: 'NEVER' },
+      { entityType: 'PURCHASE_ORDER', prefix: 'PO-2026-', suffix: '', nextNumber: 770952, paddingLength: 6, resetFrequency: 'YEARLY' },
+      { entityType: 'RFQ', prefix: 'RFQ-2026-', suffix: '', nextNumber: 101, paddingLength: 4, resetFrequency: 'YEARLY' },
+    ];
+  }
+}
+
+async function apiUpdateSequenceSetting(payload: SequenceSetting): Promise<SequenceSetting> {
+  const data = await apiRequest<{ setting: SequenceSetting }>('/company-settings/sequences', {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+  return data.setting;
+}
+
+async function apiGenerateNextSequence(entityType: string): Promise<{ formattedCode: string; nextNumber: number }> {
+  const data = await apiRequest<{ formattedCode: string; nextNumber: number }>(`/company-settings/sequences/next/${entityType}`, {
+    method: 'POST',
+  });
+  return data;
+}
+
+async function apiBackfillSupplierCodes(): Promise<{ updated: number; nextCounter: number }> {
+  const data = await apiRequest<{ updated: number; nextCounter: number }>('/company-settings/sequences/backfill/suppliers', {
+    method: 'POST',
+  });
+  return data;
+}

@@ -49,13 +49,13 @@ interface APColumnDef {
 }
 
 const STATUS_MAP: Record<APStatus, { label: string; cls: string; icon: React.ReactNode }> = {
-  PENDING:  { label: 'Pending',  cls: 'pending',  icon: <Clock size={13} /> },
-  OVERDUE:  { label: 'Overdue',  cls: 'overdue',  icon: <AlertTriangle size={13} /> },
-  PAID:     { label: 'Paid',     cls: 'paid',     icon: <CheckCircle2 size={13} /> },
-  PARTIAL:  { label: 'Partial',  cls: 'partial',  icon: <IndianRupee size={13} /> },
-  APPROVED: { label: 'Approved', cls: 'approved', icon: <CheckCircle2 size={13} /> },
-  REJECTED: { label: 'Rejected', cls: 'rejected', icon: <X size={13} /> },
-  RETURNED: { label: 'Returned', cls: 'returned', icon: <RotateCcw size={13} /> },
+  PENDING:  { label: 'Pending',  cls: 'pending',  icon: <Clock size={14} /> },
+  OVERDUE:  { label: 'Overdue',  cls: 'overdue',  icon: <AlertTriangle size={14} /> },
+  PAID:     { label: 'Paid',     cls: 'paid',     icon: <CheckCircle2 size={14} /> },
+  PARTIAL:  { label: 'Partial',  cls: 'partial',  icon: <IndianRupee size={14} /> },
+  APPROVED: { label: 'Approved', cls: 'approved', icon: <CheckCircle2 size={14} /> },
+  REJECTED: { label: 'Rejected', cls: 'rejected', icon: <X size={14} /> },
+  RETURNED: { label: 'Returned', cls: 'returned', icon: <RotateCcw size={14} /> },
 };
 
 const ALL_COLUMNS: APColumnDef[] = [
@@ -64,7 +64,7 @@ const ALL_COLUMNS: APColumnDef[] = [
     label: 'Invoice',
     defaultVisible: true,
     required: true,
-    width: '140px',
+    width: '160px',
     render: (inv) => <span className="fin-table__ref">{inv.invoiceNumber}</span>,
   },
   {
@@ -72,7 +72,7 @@ const ALL_COLUMNS: APColumnDef[] = [
     label: 'Vendor',
     defaultVisible: true,
     required: true,
-    width: '200px',
+    width: '230px',
     render: (inv) => (
       <div className="fin-table__vendor">
         <div className={`fin-table__avatar fin-table__avatar--${inv.avatarMod}`}>{inv.vendorInitials}</div>
@@ -87,14 +87,14 @@ const ALL_COLUMNS: APColumnDef[] = [
     key: 'poNumber',
     label: 'PO Ref',
     defaultVisible: true,
-    width: '130px',
+    width: '170px',
     render: (inv) => <span className="fin-table__secondary">{inv.poNumber}</span>,
   },
   {
     key: 'amount',
     label: 'Amount',
     defaultVisible: true,
-    width: '120px',
+    width: '140px',
     align: 'right',
     render: (inv, fmt) => <span className="fin-table__amount">{fmt(inv.amount)}</span>,
   },
@@ -102,7 +102,7 @@ const ALL_COLUMNS: APColumnDef[] = [
     key: 'paid',
     label: 'Paid',
     defaultVisible: true,
-    width: '110px',
+    width: '130px',
     align: 'right',
     render: (inv, fmt) => <span className="fin-table__amount fin-table__amount--success">{fmt(inv.paidAmount)}</span>,
   },
@@ -110,7 +110,7 @@ const ALL_COLUMNS: APColumnDef[] = [
     key: 'balance',
     label: 'Balance',
     defaultVisible: true,
-    width: '110px',
+    width: '140px',
     align: 'right',
     render: (inv, fmt) => <span className="fin-table__amount fin-table__amount--bold">{fmt(inv.amount - inv.paidAmount)}</span>,
   },
@@ -118,14 +118,14 @@ const ALL_COLUMNS: APColumnDef[] = [
     key: 'dueDate',
     label: 'Due Date',
     defaultVisible: true,
-    width: '110px',
+    width: '130px',
     render: (inv, _fmt, fmtDate) => <span className="fin-table__date">{fmtDate(inv.dueDate)}</span>,
   },
   {
     key: 'status',
     label: 'Status',
     defaultVisible: true,
-    width: '110px',
+    width: '150px',
     render: (inv) => {
       const cfg = STATUS_MAP[inv.status];
       return <span className={`fin-badge fin-badge--${cfg.cls}`}>{cfg.icon}{cfg.label}</span>;

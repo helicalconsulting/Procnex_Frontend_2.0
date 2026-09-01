@@ -45,6 +45,9 @@ const VendorOrdersPage = lazy(() => import("./pages/vendor/VendorOrdersPage"));
 const VendorInvoicesPage = lazy(
   () => import("./pages/vendor/VendorInvoicesPage"),
 );
+const VendorCreateInvoicePage = lazy(
+  () => import("./pages/vendor/VendorCreateInvoicePage"),
+);
 const VendorProfilePage = lazy(
   () => import("./pages/vendor/VendorProfilePage"),
 );
@@ -60,6 +63,8 @@ const CreatePurchaseInvoicePage = lazy(
 const CreatePaymentVoucherPage = lazy(
   () => import("./pages/payments/CreatePaymentVoucherPage"),
 );
+const CreateGRNPage = lazy(() => import("./pages/grn/CreateGRNPage"));
+const GRNListPage = lazy(() => import("./pages/grn/GRNListPage"));
 const PaymentsPage = lazy(() => import("./pages/payments/PaymentsPage"));
 const NewOnboardingPage = lazy(
   () => import("./pages/onboarding/NewOnboardingPage"),
@@ -147,7 +152,11 @@ export default function App() {
                         <Route path="/vendor/orders" element={page(VendorOrdersPage)} />
                         <Route
                           path="/vendor/invoices"
-                          element={page(VendorInvoicesPage)}
+                          element={<Navigate to="/procurement/grns" replace />}
+                        />
+                        <Route
+                          path="/vendor/create-invoice"
+                          element={page(VendorCreateInvoicePage)}
                         />
                         <Route
                           path="/vendor/profile"
@@ -198,6 +207,22 @@ export default function App() {
                           />
                           <Route
                             path="/procurement/create-payment-voucher"
+                            element={page(CreatePaymentVoucherPage)}
+                          />
+                          <Route
+                            path="/procurement/create-purchase-order"
+                            element={page(CreatePurchaseOrderPage)}
+                          />
+                          <Route
+                            path="/procurement/grns"
+                            element={page(GRNListPage)}
+                          />
+                          <Route
+                            path="/procurement/create-grn"
+                            element={page(CreateGRNPage)}
+                          />
+                          <Route
+                            path="/payments/create-voucher"
                             element={page(CreatePaymentVoucherPage)}
                           />
                           <Route path="/payments" element={page(PaymentsPage)} />

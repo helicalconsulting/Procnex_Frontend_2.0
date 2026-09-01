@@ -81,7 +81,7 @@ const BrandingContext = createContext<BrandingContextType | undefined>(undefined
 // ─── Defaults ───────────────────────────────────────────────
 
 const DEFAULT_PRIMARY = '#0a6ed1';
-const DEFAULT_NAME = 'Heliflow Consulting';
+const DEFAULT_NAME = 'Procnex — Procurement Automation Software';
 
 // ─── Color shade generation ─────────────────────────────────
 
@@ -153,7 +153,12 @@ function applyFavicon(faviconUrl: string | null, logoUrl: string | null = null) 
 
 /** Apply document title — persists to localStorage so it survives refreshes */
 function applyTitle(name: string | null) {
-  const title = name || DEFAULT_NAME;
+  let title = name || DEFAULT_NAME;
+  if (!title || title === 'Heliflow Consulting' || title === 'Heliflow' || title.includes('SAP Enterprise Suite')) {
+    title = DEFAULT_NAME;
+  } else if (!title.includes('— Procurement Automation Software') && title !== DEFAULT_NAME) {
+    title = `${title} — Procurement Automation Software`;
+  }
   document.title = title;
   writeCachedTitle(title);
 }
@@ -189,14 +194,16 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
       applyPrimaryColor(color);
       applyFavicon(p.faviconUrl || null, p.logoUrl || null);
 
-      // Tab title = company name (from branding settings), falls back to "Heliflow"
+      // Tab title = company name (from branding settings), falls back to "Procnex — Procurement Automation Software"
       const name = p.companyName || DEFAULT_NAME;
       applyTitle(name);
     } catch {
       // Silently fall back — keep cached title if it exists, otherwise DEFAULT_NAME
       applyPrimaryColor(DEFAULT_PRIMARY);
       const savedTitle = readCachedTitle();
-      document.title = savedTitle || DEFAULT_NAME;
+      const title = (savedTitle && !savedTitle.includes('Heliflow') && !savedTitle.includes('SAP Enterprise Suite')) ? savedTitle : DEFAULT_NAME;
+      document.title = title;
+      writeCachedTitle(title);
     } finally {
       setLoaded(true);
     }
@@ -204,13 +211,12 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
 
   // Apply cached branding to DOM immediately (before async refresh completes)
   useEffect(() => {
-    // 1. Restore tab title from its dedicated cache first — ensures it persists
-    //    even if the profile cache is cleared or the API temporarily drops the field.
-    //    Setting `document.title` directly here (not `applyTitle`) avoids writing
-    //    back to cache when restoring — refresh() will apply the freshest value.
     const savedTitle = readCachedTitle();
-    if (savedTitle) {
+    if (savedTitle && !savedTitle.includes('Heliflow') && !savedTitle.includes('SAP Enterprise Suite')) {
       document.title = savedTitle;
+    } else {
+      document.title = DEFAULT_NAME;
+      writeCachedTitle(DEFAULT_NAME);
     }
 
     // 2. Apply cached branding profile

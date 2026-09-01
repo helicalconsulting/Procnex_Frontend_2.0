@@ -15,6 +15,7 @@ export interface CreateVendorPayload {
   categoryId?: string;
   location?: string;
   website?: string;
+  isMobileAccessEnabled?: boolean;
 }
 
 export interface UpdateVendorPayload {
@@ -27,6 +28,7 @@ export interface UpdateVendorPayload {
   location?: string;
   website?: string;
   isActive?: boolean;
+  isMobileAccessEnabled?: boolean;
 }
 
 async function mockList(): Promise<VendorTableRow[]> {
@@ -158,6 +160,24 @@ async function apiChangePassword(
   });
 }
 
+async function mockToggleVendorMobileAccess(id: string): Promise<{ isMobileAccessEnabled: boolean }> {
+  await new Promise((r) => setTimeout(r, 200));
+  const idStr = String(id);
+  const v = VENDORS_PAGE_MOCK.find((v) => String(v.id) === idStr);
+  if (v) {
+    v.isMobileAccessEnabled = !v.isMobileAccessEnabled;
+    return { isMobileAccessEnabled: v.isMobileAccessEnabled };
+  }
+  return { isMobileAccessEnabled: true };
+}
+
+async function apiToggleVendorMobileAccess(id: string): Promise<{ isMobileAccessEnabled: boolean }> {
+  return apiRequest<{ isMobileAccessEnabled: boolean }>(`/vendors/${id}/toggle-mobile-access`, {
+    method: 'PUT',
+    body: JSON.stringify({}),
+  });
+}
+
 export const vendorService = {
   list: USE_MOCK ? mockList : apiList,
   listTyped: USE_MOCK ? mockListTyped : apiListTyped,
@@ -166,4 +186,5 @@ export const vendorService = {
   remove: USE_MOCK ? mockRemove : apiRemove,
   resendPasswordSetup: USE_MOCK ? mockResendPasswordSetup : apiResendPasswordSetup,
   changePassword: USE_MOCK ? mockChangePassword : apiChangePassword,
+  toggleMobileAccess: USE_MOCK ? mockToggleVendorMobileAccess : apiToggleVendorMobileAccess,
 };

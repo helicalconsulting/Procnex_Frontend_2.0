@@ -423,19 +423,20 @@ const LOCALE_BY_CURRENCY: Record<string, string> = {
   NZD: 'en-NZ',
 };
 
-function formatAmount(amount: number, currency: string): string {
+function formatAmount(amount: any, currency: any): string {
+  const safeNum = typeof amount === 'number' && !isNaN(amount) ? amount : (Number(amount) || 0);
+  const safeCurr = typeof currency === 'string' && currency ? currency : 'KES';
   try {
-    const locale = LOCALE_BY_CURRENCY[currency] || 'en-US';
+    const locale = LOCALE_BY_CURRENCY[safeCurr] || 'en-US';
     return new Intl.NumberFormat(locale, {
       style: 'currency',
-      currency,
+      currency: safeCurr,
       minimumFractionDigits: 0,
       maximumFractionDigits: 2,
-    }).format(amount);
+    }).format(safeNum);
   } catch {
-    // Fallback if currency not supported by Intl
-    const sym = getSymbol(currency);
-    return `${sym}${amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+    const sym = getSymbol(safeCurr);
+    return `${sym}${safeNum.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
   }
 }
 

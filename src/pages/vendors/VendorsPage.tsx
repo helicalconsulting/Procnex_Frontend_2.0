@@ -14,7 +14,7 @@ import {
   Filter, LayoutList, LayoutGrid, Send, Key, Star, Award,
   ShieldCheck, CheckCircle2, Activity, BarChart3, FileCheck, AlertTriangle, PieChart,
   Maximize2, Minimize2, FileText, Download, Upload, Clock, AlertCircle, FilePlus,
-  ExternalLink, RefreshCw, Check, Info,
+  ExternalLink, RefreshCw, Check, Info, Smartphone,
 } from 'lucide-react';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import FloatingMenu from '../../components/shared/FloatingMenu';
@@ -223,7 +223,7 @@ const DEFAULT_VENDOR_DOCUMENTS: Record<string, VendorDocumentItem[]> = {
 
 interface VendorColumnDef {
   key: string; label: string; defaultVisible: boolean; required?: boolean;
-  width?: string; render: (v: VendorTableRow, fmtDate: (d: string) => string, toggle: (id: number) => void) => React.ReactNode;
+  width?: string; render: (v: VendorTableRow, fmtDate: (d: string) => string, toggle: (id: string) => void, toggleMobile?: (id: string) => void) => React.ReactNode;
 }
 
 const ALL_COLUMNS: VendorColumnDef[] = [
@@ -274,6 +274,28 @@ const ALL_COLUMNS: VendorColumnDef[] = [
         </div>
         <span className={`vendors-status-toggle__label vendors-status-toggle__label--${v.isActive ? 'active' : 'inactive'}`}>
           {v.isActive ? 'Active' : 'Inactive'}
+        </span>
+      </div>
+    ),
+  },
+  {
+    key: 'mobileAccess', label: 'Mobile App Access', defaultVisible: true, width: '150px',
+    render: (v, _fd, _toggle, toggleMobile) => (
+      <div
+        className="vendors-status-toggle"
+        onClick={(e) => { e.stopPropagation(); toggleMobile && toggleMobile(v.id); }}
+        title="Toggle Mobile App Access"
+        style={{ cursor: 'pointer' }}
+      >
+        <div className={`vendors-status-toggle__track ${v.isMobileAccessEnabled ? 'vendors-status-toggle__track--active' : ''}`}>
+          <div className="vendors-status-toggle__knob" />
+        </div>
+        <span
+          className={`vendors-status-toggle__label vendors-status-toggle__label--${v.isMobileAccessEnabled ? 'active' : 'inactive'}`}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600 }}
+        >
+          <Smartphone size={16} strokeWidth={2.2} style={{ flexShrink: 0 }} />
+          {v.isMobileAccessEnabled ? 'Enabled' : 'Disabled'}
         </span>
       </div>
     ),
@@ -343,7 +365,16 @@ export default function VendorsPage() {
     vendorEmail: string;
     expiryLabel: string;
   } | null>(null);
-  const anyModalOpen = !!(showModal || deleteTarget || detailVendor || credVendor || previewDoc || showUploadDocModal || renewalSuccessModal);
+
+  // ── Optimistic Mobile Access state ──
+  const [pendingMobileStatus, setPendingMobileStatus] = useState<Map<string, boolean>>(new Map());
+  const [mobileSuccessModal, setMobileSuccessModal] = useState<{
+    visible: boolean;
+    vendorName: string;
+    isEnabled: boolean;
+  } | null>(null);
+
+  const anyModalOpen = !!(showModal || deleteTarget || detailVendor || credVendor || previewDoc || showUploadDocModal || renewalSuccessModal || mobileSuccessModal?.visible);
   useBodyScrollLock(anyModalOpen);
 
   const perPage = 8;
@@ -441,16 +472,27 @@ export default function VendorsPage() {
   const nameInputRef = useRef<HTMLInputElement>(null);
   const [fLocation, setFLocation] = useState('');
   const [fWebsite, setFWebsite] = useState('');
+  const [fMobileAccess, setFMobileAccess] = useState(false);
+
+  const displayVendors = useMemo(() => {
+    return vendors.map((v) => {
+      const override = pendingMobileStatus.get(String(v.id));
+      return {
+        ...v,
+        isMobileAccessEnabled: override !== undefined ? override : Boolean(v.isMobileAccessEnabled),
+      };
+    });
+  }, [vendors, pendingMobileStatus]);
 
   // Summary
   const summary = useMemo(() => ({
-    total: vendors.length,
-    active: vendors.filter((v) => v.isActive).length,
-    inactive: vendors.filter((v) => !v.isActive).length,
-  }), [vendors]);
+    total: displayVendors.length,
+    active: displayVendors.filter((v) => v.isActive).length,
+    inactive: displayVendors.filter((v) => !v.isActive).length,
+  }), [displayVendors]);
 
   // Top rated count: vendors with overallScore >= 80
-  const topRatedCount = useMemo(() => vendors.filter((v) => v.overallScore >= 80).length, [vendors]);
+  const topRatedCount = useMemo(() => displayVendors.filter((v) => v.overallScore >= 80).length, [displayVendors]);
 
   const availableCategories = useMemo(() => {
     const names = new Set<string>();
@@ -458,15 +500,15 @@ export default function VendorsPage() {
       const cName = typeof c?.name === 'string' ? c.name : (c?.name ? String(c.name) : '');
       if (cName) names.add(cName);
     });
-    vendors.forEach((v) => {
+    displayVendors.forEach((v) => {
       const vCat = typeof v?.category === 'string' ? v.category : (v?.category ? String(v.category) : '');
       if (vCat) names.add(vCat);
     });
     return Array.from(names).sort((a, b) => String(a).localeCompare(String(b)));
-  }, [categories, vendors]);
+  }, [categories, displayVendors]);
 
   const categoryCounts = useMemo(() => {
-    let list = vendors;
+    let list = displayVendors;
     if (filterMode === 'active') list = list.filter((v) => v.isActive);
     else if (filterMode === 'inactive') list = list.filter((v) => !v.isActive);
     else if (filterMode === 'top-rated') list = list.filter((v) => v.overallScore >= 80);
@@ -476,13 +518,13 @@ export default function VendorsPage() {
       counts[cName] = (counts[cName] || 0) + 1;
     }
     return counts;
-  }, [vendors, filterMode]);
+  }, [displayVendors, filterMode]);
 
   // Category filter dropdown now uses FloatingMenu (no outside click handler needed)
 
   // Filter — summary filter, category, then search text
   const filtered = useMemo(() => {
-    let list = vendors;
+    let list = displayVendors;
     if (filterMode === 'active') list = list.filter((v) => v.isActive);
     else if (filterMode === 'inactive') list = list.filter((v) => !v.isActive);
     else if (filterMode === 'top-rated') {
@@ -500,17 +542,18 @@ export default function VendorsPage() {
         String(v.contactPerson || '').toLowerCase().includes(q) ||
         String(v.location || '').toLowerCase().includes(q)
     );
-  }, [vendors, filterMode, categoryFilter, search]);
+  }, [displayVendors, filterMode, categoryFilter, search]);
 
   const totalPages = Math.ceil(filtered.length / perPage);
   const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
 
   const queryClient = useQueryClient();
 
-  const toggleActive = useCallback(async (id: number) => {
-    const v = vendors.find((x) => x.id === id);
-    if (!v) return;
+  const toggleActive = useCallback(async (id: string | number) => {
     setPageMsg(null);
+    const idStr = String(id);
+    const v = vendors.find((x) => String(x.id) === idStr);
+    if (!v) return;
 
     const newActive = !v.isActive;
 
@@ -520,15 +563,14 @@ export default function VendorsPage() {
       (old) => {
         if (!old) return old;
         return old.map((vendor) =>
-          vendor.id === id ? { ...vendor, isActive: newActive } : vendor
+          String(vendor.id) === idStr ? { ...vendor, isActive: newActive } : vendor
         );
       }
     );
 
     try {
-      await vendorService.update(id, { isActive: newActive });
+      await vendorService.update(idStr, { isActive: newActive });
       reload(); // background refetch to sync with server
-      // Also invalidate vendor cache for other pages (e.g. CreateRFQPage)
       queryClient.invalidateQueries({ queryKey: ['svc'] });
     } catch (err) {
       // Rollback on failure
@@ -537,7 +579,7 @@ export default function VendorsPage() {
         (old) => {
           if (!old) return old;
           return old.map((vendor) =>
-            vendor.id === id ? { ...vendor, isActive: !newActive } : vendor
+            String(vendor.id) === idStr ? { ...vendor, isActive: !newActive } : vendor
           );
         }
       );
@@ -545,10 +587,57 @@ export default function VendorsPage() {
     }
   }, [vendors, reload, queryClient]);
 
+  const toggleMobileActive = useCallback(async (id: string | number) => {
+    setPageMsg(null);
+    const idStr = String(id);
+    const v = displayVendors.find((x) => String(x.id) === idStr);
+    if (!v) return;
+
+    const newStatus = !v.isMobileAccessEnabled;
+
+    // Set optimistic status immediately - no flicker!
+    setPendingMobileStatus((prev) => {
+      const next = new Map(prev);
+      next.set(idStr, newStatus);
+      return next;
+    });
+
+    queryClient.setQueriesData<VendorTableRow[]>(
+      { queryKey: ['svc'], type: 'active' },
+      (old) => {
+        if (!old) return old;
+        return old.map((vendor) =>
+          String(vendor.id) === idStr ? { ...vendor, isMobileAccessEnabled: newStatus } : vendor
+        );
+      }
+    );
+
+    try {
+      await vendorService.toggleMobileAccess(idStr);
+
+      setMobileSuccessModal({
+        visible: true,
+        vendorName: v.name,
+        isEnabled: newStatus,
+      });
+
+      await reload();
+      queryClient.invalidateQueries({ queryKey: ['svc'] });
+    } catch (err) {
+      setPendingMobileStatus((prev) => {
+        const next = new Map(prev);
+        next.delete(idStr);
+        return next;
+      });
+      setPageMsg(err instanceof Error ? err.message : 'Could not update vendor mobile access status');
+    }
+  }, [displayVendors, reload, queryClient]);
+
   const openAddModal = useCallback(() => {
     setEditingVendor(null);
     setFName(''); setFEmail(''); setFCountryCode('+254'); setFPhone(''); setFContact('');
     setFCategory(''); setFCategoryId(undefined); setFLocation(''); setFWebsite('');
+    setFMobileAccess(false);
     setPageMsg(null);
     setShowModal(true);
   }, []);
@@ -574,9 +663,10 @@ export default function VendorsPage() {
     setFCategoryId(matchedCat?.id);
     setFLocation(vendor.location === '—' ? '' : vendor.location);
     setFWebsite(vendor.website === '—' ? '' : vendor.website);
+    setFMobileAccess(Boolean(vendor.isMobileAccessEnabled));
     setPageMsg(null);
     setShowModal(true);
-  }, []);
+  }, [categories]);
 
   // Reliably focus the name input when the modal opens
   // useLayoutEffect fires synchronously after DOM commit, before browser paint
@@ -607,6 +697,7 @@ export default function VendorsPage() {
           categoryId: fCategoryId,
           location: fLocation.trim(),
           website: fWebsite.trim(),
+          isMobileAccessEnabled: fMobileAccess,
         });
         if (detailVendor?.id === editingVendor.id) setDetailVendor(updated);
         setPageMsg(`Vendor "${updated.name}" updated.`);
@@ -620,6 +711,7 @@ export default function VendorsPage() {
           categoryId: fCategoryId,
           location: fLocation.trim(),
           website: fWebsite.trim(),
+          isMobileAccessEnabled: fMobileAccess,
         });
         setPageMsg(`Vendor created.`);
       }
@@ -846,7 +938,7 @@ export default function VendorsPage() {
                 <tbody>
                   {paginated.map((v) => (
                     <tr key={v.id} className={`vendors-table__row vendors-table__row--${v.status ? v.status.toLowerCase() : (v.isActive ? 'active' : 'inactive')}`} onClick={() => setDetailVendor(v)}>
-                      {visibleColumns.map((col) => (<td key={col.key}>{col.render(v, formatDate, toggleActive)}</td>))}
+                      {visibleColumns.map((col) => (<td key={col.key}>{col.render(v, formatDate, toggleActive, toggleMobileActive)}</td>))}
                       <td onClick={(e) => e.stopPropagation()}>
                         <div className="vendors-table__actions">
                           <button className="vendors-table__action-btn" title="View profile" onClick={() => setDetailVendor(v)}><Eye size={15} /></button>
@@ -1074,6 +1166,20 @@ export default function VendorsPage() {
                       autoComplete="off"
                     />
                   </div>
+                </div>
+                <div className="vendors-modal__field" style={{ marginTop: 12, padding: '10px 14px', background: 'var(--surface-elevated, #f8fafc)', borderRadius: 8, border: '1px solid var(--border, #e2e8f0)' }}>
+                  <label className="vendors-modal__label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', margin: 0 }}>
+                    <span style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 8 }}><Smartphone size={18} strokeWidth={2} style={{ color: 'var(--primary-500, #0a6ed1)' }} /> Allow Mobile App Access</span>
+                    <input
+                      type="checkbox"
+                      checked={fMobileAccess}
+                      onChange={(e) => setFMobileAccess(e.target.checked)}
+                      style={{ width: 18, height: 18, cursor: 'pointer' }}
+                    />
+                  </label>
+                  <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
+                    Allow this vendor to log in to the Mobile App.
+                  </p>
                 </div>
               </div>
               {editingVendor && (
@@ -2386,6 +2492,118 @@ export default function VendorsPage() {
                 <CheckCircle2 size={15} /> Done, Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Mobile Access Success Modal ────────────────────── */}
+      {mobileSuccessModal?.visible && (
+        <div className="vendors-modal-backdrop" onClick={() => setMobileSuccessModal(null)}>
+          <div
+            className="vendors-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: 400,
+              padding: '28px 24px 24px',
+              textAlign: 'center',
+              borderRadius: 16,
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08)',
+              position: 'relative',
+            }}
+          >
+            {/* Header Close */}
+            <button
+              type="button"
+              onClick={() => setMobileSuccessModal(null)}
+              style={{
+                position: 'absolute',
+                top: 14,
+                right: 14,
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '50%',
+                width: 28,
+                height: 28,
+                display: 'flex',
+                alignItems: 'center',
+                justify: 'center',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+            >
+              <X size={15} />
+            </button>
+
+            {/* Icon Badge */}
+            <div
+              style={{
+                width: 76,
+                height: 76,
+                borderRadius: '50%',
+                background: mobileSuccessModal.isEnabled
+                  ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.22), rgba(16, 185, 129, 0.1))'
+                  : 'linear-gradient(135deg, rgba(239, 68, 68, 0.22), rgba(225, 29, 72, 0.1))',
+                border: `1.5px solid ${mobileSuccessModal.isEnabled ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`,
+                boxShadow: `0 0 28px ${mobileSuccessModal.isEnabled ? 'rgba(34, 197, 94, 0.25)' : 'rgba(239, 68, 68, 0.25)'}`,
+                display: 'flex',
+                alignItems: 'center',
+                justify: 'center',
+                margin: '0 auto 20px',
+              }}
+            >
+              <Smartphone size={38} strokeWidth={2} color={mobileSuccessModal.isEnabled ? '#22c55e' : '#ef4444'} />
+            </div>
+
+            {/* Title */}
+            <h3
+              style={{
+                margin: '0 0 8px',
+                fontSize: 19,
+                fontWeight: 700,
+                color: 'var(--text-primary)',
+                letterSpacing: '-0.01em',
+              }}
+            >
+              Mobile Access {mobileSuccessModal.isEnabled ? 'Enabled' : 'Disabled'}
+            </h3>
+
+            {/* Subtitle */}
+            <p
+              style={{
+                margin: '0 0 24px',
+                fontSize: 14,
+                color: 'var(--text-secondary)',
+                lineHeight: 1.55,
+              }}
+            >
+              Mobile App access for <strong style={{ color: 'var(--text-primary)' }}>{mobileSuccessModal.vendorName}</strong> has been {mobileSuccessModal.isEnabled ? 'granted successfully.' : 'revoked.'}
+            </p>
+
+            {/* Button */}
+            <button
+              type="button"
+              onClick={() => setMobileSuccessModal(null)}
+              style={{
+                width: '100%',
+                padding: '11px 0',
+                borderRadius: 10,
+                border: 'none',
+                background: mobileSuccessModal.isEnabled
+                  ? 'linear-gradient(135deg, #16a34a, #15803d)'
+                  : 'linear-gradient(135deg, #dc2626, #b91c1c)',
+                color: '#ffffff',
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: 'pointer',
+                boxShadow: mobileSuccessModal.isEnabled
+                  ? '0 4px 14px rgba(22, 163, 74, 0.35)'
+                  : '0 4px 14px rgba(220, 38, 38, 0.35)',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              Got it
+            </button>
           </div>
         </div>
       )}

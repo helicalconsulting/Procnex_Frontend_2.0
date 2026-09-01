@@ -189,6 +189,7 @@ export interface Vendor {
   bankBranch?: string | null;
   createdBy: string;
   isActive: boolean;
+  isMobileAccessEnabled?: boolean;
   performance?: VendorPerformance;
 }
 

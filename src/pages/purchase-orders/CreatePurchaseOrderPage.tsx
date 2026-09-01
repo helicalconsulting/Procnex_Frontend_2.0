@@ -3,10 +3,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ShoppingCart, ArrowLeft, Plus, Trash2, Download, Save, Send,
   Building2, FileText, Calendar, IndianRupee, Tag, UserCheck, ShieldCheck,
-  CheckCircle2, AlertCircle, Clock
+  CheckCircle2, AlertCircle, Clock, Search, X
 } from 'lucide-react';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
 import { purchaseRequisitionService } from '../../services/purchaseRequisitionService';
+import { companySettingsService } from '../../services/companySettingsService';
 import { apiRequest } from '../../api/client';
 import { downloadPurchaseOrderAsPdf } from '../../utils/pdfDownload';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
@@ -18,6 +19,7 @@ interface VendorOption {
   id: string;
   name: string;
   email: string;
+  supplierCode?: string;
   phone?: string;
   contactPerson?: string;
   category?: string;
@@ -46,10 +48,30 @@ export default function CreatePurchaseOrderPage() {
   const { companyName: brandingCompanyName, companyPhone: brandingPhone, companyEmail: brandingEmail } = useBranding();
 
   // ── Form State ──
-  const [poNumber, setPoNumber] = useState(`PO-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`);
+  const [poNumber, setPoNumber] = useState('');
+  const [poNumberLoading, setPoNumberLoading] = useState(!editId); // only load for new POs
   const [revisionNo, setRevisionNo] = useState('0');
   const [poDate, setPoDate] = useState(new Date().toISOString().slice(0, 10));
   const [status, setStatus] = useState<string>('Draft');
+
+  // Auto-generate PO number from sequence (new PO only)
+  useEffect(() => {
+    if (editId) return; // editing existing PO — don't overwrite
+    let cancelled = false;
+    setPoNumberLoading(true);
+    companySettingsService.generateNextSequence('PURCHASE_ORDER')
+      .then(({ formattedCode }) => {
+        if (!cancelled && formattedCode) setPoNumber(formattedCode);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPoNumber(`PO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
+        }
+      })
+      .finally(() => { if (!cancelled) setPoNumberLoading(false); });
+    return () => { cancelled = true; };
+  }, [editId]);
+
 
   // Supplier Info
   const [vendors, setVendors] = useState<VendorOption[]>([]);
@@ -65,6 +87,21 @@ export default function CreatePurchaseOrderPage() {
   const [contactPerson, setContactPerson] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactPhone, setContactPhone] = useState('');
+
+  // Predictive Vendor Search State & Ref
+  const [vendorSearchQuery, setVendorSearchQuery] = useState('');
+  const [isVendorDropdownOpen, setIsVendorDropdownOpen] = useState(false);
+  const vendorSearchRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (vendorSearchRef.current && !vendorSearchRef.current.contains(e.target as Node)) {
+        setIsVendorDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // ── Fetch Categories dynamically from Company Settings DB ──
   useEffect(() => {
@@ -122,44 +159,47 @@ export default function CreatePurchaseOrderPage() {
       .finally(() => setLoadingVendors(false));
   }, []);
 
-  // ── Filter Vendors by Selected Category ──
-  const filteredVendors = useMemo(() => {
-    if (!supplierType) return vendors;
-    const matches = vendors.filter((v) => {
-      const cat = (v as any).category || (v as any).categoryName || (v as any).supplierType || '';
-      if (!cat) return false;
-      return cat.toLowerCase().trim() === supplierType.toLowerCase().trim();
+  // ── Predictive Vendor Filter (by Code, Name, Email, Phone, Category) ──
+  const searchedVendors = useMemo(() => {
+    if (!vendorSearchQuery.trim()) return vendors;
+    const q = vendorSearchQuery.toLowerCase().trim();
+    return vendors.filter((v) => {
+      const name = (v.name || '').toLowerCase();
+      const code = ((v as any).supplierCode || (v as any).code || `SUP-${v.id.slice(-5).toUpperCase()}`).toLowerCase();
+      const email = (v.email || '').toLowerCase();
+      const phone = (v.phone || '').toLowerCase();
+      const cat = ((v as any).category || (v as any).categoryName || (v as any).supplierType || '').toLowerCase();
+      return name.includes(q) || code.includes(q) || email.includes(q) || phone.includes(q) || cat.includes(q);
     });
-    return matches;
-  }, [vendors, supplierType]);
+  }, [vendors, vendorSearchQuery]);
 
-  // ── Auto-select first vendor when category changes ──
-  useEffect(() => {
-    if (editId) return; // Don't override vendor if editing existing PO
-    if (filteredVendors.length > 0) {
-      const alreadyIncluded = filteredVendors.some((v) => v.id === selectedVendorId);
-      if (!alreadyIncluded) {
-        const v = filteredVendors[0];
-        setSelectedVendorId(v.id);
-        setSupplierCode(`SUP-${v.id.slice(-5).toUpperCase()}`);
-        setSupplierName(v.name);
-        setSupplierAddress(v.address || '');
-        setSupplierTaxId(v.gstNumber || v.panNumber || '');
-        setContactPerson(v.contactPerson || '');
-        setContactEmail(v.email || '');
-        setContactPhone(v.phone || '');
-      }
-    } else {
-      setSelectedVendorId('');
-      setSupplierCode('');
-      setSupplierName('');
-      setSupplierAddress('');
-      setSupplierTaxId('');
-      setContactPerson('');
-      setContactEmail('');
-      setContactPhone('');
+  const handleSelectVendorOption = (v: VendorOption) => {
+    const code = (v as any).supplierCode || (v as any).code || `SUP-${v.id.slice(-5).toUpperCase()}`;
+    setSelectedVendorId(v.id);
+    setSupplierCode(code);
+    setSupplierName(v.name);
+    setSupplierAddress(v.address || '');
+    setSupplierTaxId(v.gstNumber || v.panNumber || '');
+    setContactPerson(v.contactPerson || '');
+    setContactEmail(v.email || '');
+    setContactPhone(v.phone || '');
+    if ((v as any).category || (v as any).categoryName || (v as any).supplierType) {
+      setSupplierType((v as any).category || (v as any).categoryName || (v as any).supplierType);
     }
-  }, [filteredVendors, editId]);
+    setVendorSearchQuery(`${code} — ${v.name}`);
+    setIsVendorDropdownOpen(false);
+  };
+
+  // ── Sync Vendor Search Input when Vendor is selected or in Edit mode ──
+  useEffect(() => {
+    if (selectedVendorId && vendors.length > 0) {
+      const v = vendors.find((vendor) => vendor.id === selectedVendorId);
+      if (v) {
+        const code = (v as any).supplierCode || (v as any).code || `SUP-${v.id.slice(-5).toUpperCase()}`;
+        setVendorSearchQuery(`${code} — ${v.name}`);
+      }
+    }
+  }, [selectedVendorId, vendors]);
 
   // ── Load Existing PO Data if editId is provided in URL ──
   useEffect(() => {
@@ -236,7 +276,8 @@ export default function CreatePurchaseOrderPage() {
       if (matchedVendor) {
         const cat = (matchedVendor as any).category || (matchedVendor as any).categoryName || (matchedVendor as any).supplierType || '';
         if (!supplierType && cat) setSupplierType(cat);
-        if (!supplierCode) setSupplierCode(`SUP-${matchedVendor.id.slice(-5).toUpperCase()}`);
+        const code = matchedVendor.supplierCode || (matchedVendor as any).code || `SUP-${matchedVendor.id.slice(-5).toUpperCase()}`;
+        if (!supplierCode) setSupplierCode(code);
       }
     } else if (supplierName) {
       const matchedVendor = vendors.find(
@@ -246,7 +287,8 @@ export default function CreatePurchaseOrderPage() {
         setSelectedVendorId(matchedVendor.id);
         const cat = (matchedVendor as any).category || (matchedVendor as any).categoryName || (matchedVendor as any).supplierType || '';
         if (!supplierType && cat) setSupplierType(cat);
-        if (!supplierCode) setSupplierCode(`SUP-${matchedVendor.id.slice(-5).toUpperCase()}`);
+        const code = matchedVendor.supplierCode || (matchedVendor as any).code || `SUP-${matchedVendor.id.slice(-5).toUpperCase()}`;
+        if (!supplierCode) setSupplierCode(code);
       }
     }
   }, [vendors, selectedVendorId, supplierName, contactEmail, supplierType, supplierCode]);
@@ -256,7 +298,8 @@ export default function CreatePurchaseOrderPage() {
     setSelectedVendorId(id);
     const v = vendors.find((vendor) => vendor.id === id);
     if (v) {
-      setSupplierCode(`SUP-${v.id.slice(-5).toUpperCase()}`);
+      const code = v.supplierCode || (v as any).code || `SUP-${v.id.slice(-5).toUpperCase()}`;
+      setSupplierCode(code);
       setSupplierName(v.name);
       setSupplierAddress(v.address || 'Standard Registered Address');
       setSupplierTaxId(v.gstNumber || v.panNumber || 'GB123456789');
@@ -549,7 +592,7 @@ export default function CreatePurchaseOrderPage() {
           </button>
           <div className="cpo-header__title-wrap">
             <div style={{ display: 'flex', alignItems: 'center' }}>
-              <h1>{editId ? `Purchase Order #${poNumber}` : 'Create Standalone Purchase Order'}</h1>
+              <h1>{editId ? `Purchase Order #${poNumber}` : 'Create Direct Purchase Order'}</h1>
               {status === 'Approved' && (
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', background: 'rgba(16, 126, 62, 0.15)', color: '#107e3e', border: '1px solid rgba(16, 126, 62, 0.3)', borderRadius: 16, fontSize: 12, fontWeight: 700, marginLeft: 10 }}>
                   <CheckCircle2 size={13} /> Approved
@@ -597,8 +640,15 @@ export default function CreatePurchaseOrderPage() {
           <div className="cpo-grid cpo-grid--3">
             <div className="cpo-field">
               <label>PURCHASE ORDER NO.</label>
-              <input type="text" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} />
-              <span className="cpo-field__sub">Auto-generated unique PO number</span>
+              <input
+                type="text"
+                value={poNumberLoading ? '' : poNumber}
+                onChange={(e) => setPoNumber(e.target.value)}
+                placeholder={poNumberLoading ? 'Generating...' : ''}
+                disabled={poNumberLoading}
+                style={poNumberLoading ? { opacity: 0.5 } : undefined}
+              />
+              <span className="cpo-field__sub">Auto-generated from sequence settings</span>
             </div>
             <div className="cpo-field">
               <label>REVISION NO.</label>
@@ -618,133 +668,10 @@ export default function CreatePurchaseOrderPage() {
           </div>
         </div>
 
-        {/* ── Section 02: Supplier Information ── */}
+        {/* ── Section 02: Source References ── */}
         <div className="cpo-section">
           <div className="cpo-section__header">
             <span className="cpo-section__num">02</span>
-            <span className="cpo-section__title">Supplier Information</span>
-            <span className="cpo-section__hint">Vendor Master Database</span>
-          </div>
-
-          <div className="cpo-vendor-picker-banner" style={{
-            background: 'linear-gradient(135deg, rgba(10, 110, 209, 0.12), rgba(16, 185, 129, 0.12))',
-            border: '1px solid rgba(10, 110, 209, 0.3)',
-            borderRadius: '10px',
-            padding: '16px 20px',
-            marginBottom: '20px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '16px'
-          }}>
-            <Building2 size={24} style={{ color: 'var(--primary-500, #0a6ed1)', flexShrink: 0 }} />
-            <div style={{ flex: 1 }}>
-              <label style={{
-                display: 'block',
-                fontSize: '12.5px',
-                fontWeight: 800,
-                letterSpacing: '0.6px',
-                textTransform: 'uppercase',
-                color: 'var(--primary-500, #0a6ed1)',
-                marginBottom: '6px'
-              }}>
-                SELECT VENDOR FROM DATABASE MASTER *
-              </label>
-              <select
-                value={selectedVendorId}
-                onChange={(e) => handleVendorSelect(e.target.value)}
-                disabled={loadingVendors}
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  background: 'var(--surface-card, #ffffff)',
-                  border: '2px solid var(--primary-500, #0a6ed1)',
-                  color: 'var(--text-primary)',
-                  fontSize: '15.5px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  outline: 'none',
-                  boxShadow: '0 4px 12px rgba(10, 110, 209, 0.15)'
-                }}
-              >
-                <option value="">
-                  {filteredVendors.length > 0
-                    ? '-- Select Vendor from Database Master --'
-                    : supplierType
-                    ? `-- No vendors found for category "${supplierType}" --`
-                    : '-- Click here to select Vendor --'}
-                </option>
-                {filteredVendors.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name} {v.email ? `(${v.email})` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="cpo-field" style={{ minWidth: '220px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)' }}>SUPPLIER TYPE (CATEGORY)</label>
-              <select value={supplierType} onChange={(e) => setSupplierType(e.target.value)} style={{ padding: '11px 15px', borderRadius: '8px', fontSize: '15px' }}>
-                {categoriesList.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="cpo-grid cpo-grid--4">
-            <div className="cpo-field">
-              <label>SUPPLIER CODE</label>
-              <input type="text" value={supplierCode} onChange={(e) => setSupplierCode(e.target.value)} placeholder="SUP-00000" />
-              <span className="cpo-field__sub">Unique vendor master ID</span>
-            </div>
-            <div className="cpo-field cpo-field--span-2">
-              <label>SUPPLIER NAME *</label>
-              <input type="text" value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder="e.g. Acme Industrial Supplies Ltd." />
-              <span className="cpo-field__sub">Registered vendor name</span>
-            </div>
-            <div className="cpo-field">
-              <label>SUPPLIER RATING</label>
-              <select value={supplierRating} onChange={(e) => setSupplierRating(e.target.value)}>
-                <option value="A - Preferred">A - Preferred</option>
-                <option value="B - Approved">B - Approved</option>
-                <option value="C - Conditional">C - Conditional</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="cpo-grid cpo-grid--4" style={{ marginTop: 12 }}>
-            <div className="cpo-field cpo-field--span-2">
-              <label>SUPPLIER ADDRESS</label>
-              <input type="text" value={supplierAddress} onChange={(e) => setSupplierAddress(e.target.value)} placeholder="Street, City, Country" />
-            </div>
-            <div className="cpo-field cpo-field--span-2">
-              <label>SUPPLIER TAX ID / VAT NO.</label>
-              <input type="text" value={supplierTaxId} onChange={(e) => setSupplierTaxId(e.target.value)} placeholder="e.g. GB123456789 / GSTIN" />
-            </div>
-          </div>
-
-          <div className="cpo-grid cpo-grid--3" style={{ marginTop: 12 }}>
-            <div className="cpo-field">
-              <label>CONTACT PERSON</label>
-              <input type="text" value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} placeholder="Full name" />
-            </div>
-            <div className="cpo-field">
-              <label>CONTACT EMAIL</label>
-              <input type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="name@supplier.com" />
-            </div>
-            <div className="cpo-field">
-              <label>CONTACT PHONE</label>
-              <input type="text" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="+1 000 000 0000" />
-            </div>
-          </div>
-        </div>
-
-        {/* ── Section 03: Source References ── */}
-        <div className="cpo-section">
-          <div className="cpo-section__header">
-            <span className="cpo-section__num">03</span>
             <span className="cpo-section__title">Source References</span>
             <div className="cpo-section__hint-group">
               <span className="cpo-optional-pill">OPTIONAL</span>
@@ -794,6 +721,227 @@ export default function CreatePurchaseOrderPage() {
               <label>FRAMEWORK AGREEMENT</label>
               <input type="text" value={frameworkAgreement} onChange={(e) => setFrameworkAgreement(e.target.value)} placeholder="FA-00000" />
               <span className="cpo-field__sub">Agreement reference</span>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Section 03: Supplier Information ── */}
+        <div className="cpo-section">
+          <div className="cpo-section__header">
+            <span className="cpo-section__num">03</span>
+            <span className="cpo-section__title">Supplier Information</span>
+            <span className="cpo-section__hint">Vendor Master Database</span>
+          </div>
+
+          <div className="cpo-vendor-picker-banner" style={{
+            background: 'linear-gradient(135deg, rgba(10, 110, 209, 0.12), rgba(16, 185, 129, 0.12))',
+            border: '1px solid rgba(10, 110, 209, 0.3)',
+            borderRadius: '10px',
+            padding: '16px 20px',
+            marginBottom: '20px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px'
+          }}>
+            <label style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '12.5px',
+              fontWeight: 800,
+              letterSpacing: '0.6px',
+              textTransform: 'uppercase',
+              color: 'var(--primary-500, #0a6ed1)',
+            }}>
+              <Building2 size={18} />
+              SEARCH & SELECT VENDOR (BY CODE OR NAME) *
+            </label>
+
+            <div ref={vendorSearchRef} style={{ position: 'relative', width: '100%' }}>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <Search size={18} style={{ position: 'absolute', left: 14, color: 'var(--primary-500, #0a6ed1)', pointerEvents: 'none' }} />
+                <input
+                  type="text"
+                  value={vendorSearchQuery}
+                  onChange={(e) => {
+                    setVendorSearchQuery(e.target.value);
+                    setIsVendorDropdownOpen(true);
+                  }}
+                  onFocus={() => setIsVendorDropdownOpen(true)}
+                  placeholder="Search by Supplier Code (e.g. SUP-F472F), Vendor Name, or Email..."
+                  style={{
+                    width: '100%',
+                    padding: '12px 40px 12px 42px',
+                    borderRadius: '8px',
+                    background: 'var(--surface-card, #ffffff)',
+                    border: '2px solid var(--primary-500, #0a6ed1)',
+                    color: 'var(--text-primary)',
+                    fontSize: '15px',
+                    fontWeight: 600,
+                    outline: 'none',
+                    boxShadow: '0 4px 12px rgba(10, 110, 209, 0.15)'
+                  }}
+                />
+                {vendorSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVendorSearchQuery('');
+                      setSelectedVendorId('');
+                      setSupplierCode('');
+                      setSupplierName('');
+                      setSupplierAddress('');
+                      setSupplierTaxId('');
+                      setContactPerson('');
+                      setContactEmail('');
+                      setContactPhone('');
+                      setIsVendorDropdownOpen(true);
+                    }}
+                    style={{
+                      position: 'absolute',
+                      right: 12,
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      padding: 4,
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                    title="Clear Selection"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+
+              {/* Predictive Search Suggestions Dropdown */}
+              {isVendorDropdownOpen && (
+                <div style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 6px)',
+                  left: 0,
+                  right: 0,
+                  maxHeight: '280px',
+                  overflowY: 'auto',
+                  background: 'var(--surface-card, #1e293b)',
+                  border: '1px solid var(--primary-500, #0a6ed1)',
+                  borderRadius: '8px',
+                  boxShadow: '0 10px 25px rgba(0,0,0,0.3)',
+                  zIndex: 100,
+                  padding: '6px 0'
+                }}>
+                  {loadingVendors ? (
+                    <div style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontSize: '13.5px' }}>
+                      Loading vendors from master database...
+                    </div>
+                  ) : searchedVendors.length === 0 ? (
+                    <div style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontSize: '13.5px' }}>
+                      No matching vendors found for "{vendorSearchQuery}"
+                    </div>
+                  ) : (
+                    searchedVendors.map((v) => {
+                      const code = (v as any).supplierCode || (v as any).code || `SUP-${v.id.slice(-5).toUpperCase()}`;
+                      const isSelected = v.id === selectedVendorId;
+                      return (
+                        <div
+                          key={v.id}
+                          onClick={() => handleSelectVendorOption(v)}
+                          style={{
+                            padding: '10px 16px',
+                            cursor: 'pointer',
+                            background: isSelected ? 'rgba(10, 110, 209, 0.2)' : 'transparent',
+                            borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '12px',
+                            transition: 'background 0.15s ease'
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!isSelected) e.currentTarget.style.background = 'rgba(10, 110, 209, 0.1)';
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!isSelected) e.currentTarget.style.background = 'transparent';
+                          }}
+                        >
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ fontWeight: 700, fontSize: '14.5px', color: 'var(--text-primary)' }}>
+                                {v.name}
+                              </span>
+                              <span style={{
+                                padding: '2px 7px',
+                                borderRadius: '4px',
+                                background: 'rgba(10, 110, 209, 0.18)',
+                                color: 'var(--primary-500, #0a6ed1)',
+                                fontSize: '11.5px',
+                                fontWeight: 800,
+                                letterSpacing: '0.5px'
+                              }}>
+                                {code}
+                              </span>
+                            </div>
+                            <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                              {v.email || 'No email registered'} {v.phone ? `• ${v.phone}` : ''} {(v as any).category || (v as any).categoryName ? `• ${(v as any).category || (v as any).categoryName}` : ''}
+                            </span>
+                          </div>
+                          {isSelected && (
+                            <CheckCircle2 size={16} style={{ color: 'var(--primary-500, #0a6ed1)', flexShrink: 0 }} />
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="cpo-grid cpo-grid--4">
+            <div className="cpo-field">
+              <label>SUPPLIER CODE</label>
+              <input type="text" value={supplierCode} onChange={(e) => setSupplierCode(e.target.value)} placeholder="SUP-00000" />
+              <span className="cpo-field__sub">Unique vendor master ID</span>
+            </div>
+            <div className="cpo-field cpo-field--span-2">
+              <label>SUPPLIER NAME *</label>
+              <input type="text" value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder="e.g. Acme Industrial Supplies Ltd." />
+              <span className="cpo-field__sub">Registered vendor name</span>
+            </div>
+            <div className="cpo-field">
+              <label>SUPPLIER RATING</label>
+              <select value={supplierRating} onChange={(e) => setSupplierRating(e.target.value)}>
+                <option value="A - Preferred">A - Preferred</option>
+                <option value="B - Approved">B - Approved</option>
+                <option value="C - Conditional">C - Conditional</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="cpo-grid cpo-grid--4" style={{ marginTop: 12 }}>
+            <div className="cpo-field cpo-field--span-2">
+              <label>SUPPLIER ADDRESS</label>
+              <input type="text" value={supplierAddress} onChange={(e) => setSupplierAddress(e.target.value)} placeholder="Street, City, Country" />
+            </div>
+            <div className="cpo-field cpo-field--span-2">
+              <label>SUPPLIER TAX ID / VAT NO.</label>
+              <input type="text" value={supplierTaxId} onChange={(e) => setSupplierTaxId(e.target.value)} placeholder="e.g. GB123456789 / GSTIN" />
+            </div>
+          </div>
+
+          <div className="cpo-grid cpo-grid--3" style={{ marginTop: 12 }}>
+            <div className="cpo-field">
+              <label>CONTACT PERSON</label>
+              <input type="text" value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} placeholder="Full name" />
+            </div>
+            <div className="cpo-field">
+              <label>CONTACT EMAIL</label>
+              <input type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="name@supplier.com" />
+            </div>
+            <div className="cpo-field">
+              <label>CONTACT PHONE</label>
+              <input type="text" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="+1 000 000 0000" />
             </div>
           </div>
         </div>

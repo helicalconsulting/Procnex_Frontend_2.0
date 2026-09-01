@@ -4,7 +4,7 @@ import { CheckCircle2, XCircle, RotateCcw, X, ShoppingCart, FileText } from 'luc
 import './ActionSuccessModal.css';
 
 export interface ActionSuccessModalData {
-  actionType: 'approve' | 'reject' | 'return' | 'accept';
+  actionType: 'approve' | 'reject' | 'return' | 'accept' | 'sent' | 'submit';
   module: 'Quotation' | 'RFQ' | 'Purchase Order' | 'Contract' | string;
   referenceNumber?: string;
   title?: string;
@@ -14,6 +14,8 @@ export interface ActionSuccessModalData {
   onNavigatePo?: () => void;
   onNavigateContract?: () => void;
   onNavigateDetails?: () => void;
+  badgeText?: string;
+  actionTitle?: string;
 }
 
 interface ActionSuccessModalProps {
@@ -35,19 +37,22 @@ export function ActionSuccessModal({ data, onClose }: ActionSuccessModalProps) {
 
   if (!data) return null;
 
+  const isSent = data.actionType === 'sent' || data.actionType === 'submit';
   const isApprove = data.actionType === 'approve' || data.actionType === 'accept';
   const isReject = data.actionType === 'reject';
   const isReturn = data.actionType === 'return';
 
-  const typeClass = isApprove ? 'approve' : isReject ? 'reject' : 'return';
+  const typeClass = (isApprove || isSent) ? 'approve' : isReject ? 'reject' : 'return';
 
-  const displayActionTitle = isApprove
+  const displayActionTitle = data.actionTitle || (isSent
+    ? `${data.module} Sent`
+    : isApprove
     ? `${data.module} Approved`
     : isReject
     ? `${data.module} Rejected`
-    : `${data.module} Returned for Revision`;
+    : `${data.module} Returned for Revision`);
 
-  const badgeText = isApprove ? 'APPROVED' : isReject ? 'REJECTED' : 'RETURNED';
+  const badgeText = data.badgeText || (isSent ? 'SENT' : isApprove ? 'APPROVED' : isReject ? 'REJECTED' : 'RETURNED');
 
   const defaultMessage = isApprove
     ? `The ${data.module} request has been approved successfully. Email notifications and workflow updates have been sent.`

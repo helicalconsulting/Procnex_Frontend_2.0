@@ -1,12 +1,12 @@
 import { useState, useCallback, useEffect, useRef, useMemo, createElement } from 'react';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
-import { companySettingsService, ALLOWED_CONTRACT_UPLOAD_EXTENSIONS, type Department, type Category, type Unit, type Position, type PaymentTerm, type CompanyProfile, type EmailTemplate, type RequiredDocument, type DocumentTemplate, type DocumentTemplateInput, type ContractTemplate, type ContractTemplateInput, type FormFieldConfig } from '../../services/companySettingsService';
+import { companySettingsService, ALLOWED_CONTRACT_UPLOAD_EXTENSIONS, type Department, type Category, type Unit, type Position, type PaymentTerm, type CompanyProfile, type EmailTemplate, type RequiredDocument, type DocumentTemplate, type DocumentTemplateInput, type ContractTemplate, type ContractTemplateInput, type FormFieldConfig, type SequenceSetting } from '../../services/companySettingsService';
 import { invalidateApiCache } from '../../api/client';
 import {
   Plus, X, Edit3, Building2, Tag, ChevronDown, ChevronRight, ChevronUp, Search,
   Save, Settings, DollarSign, Trash2, Ruler, Users, CreditCard, Mail, FileText, RotateCcw, Clock,
-  Palette, Image, FileSignature, Eye, Upload, Loader2, ArrowRight, Sparkles, AlertTriangle, CheckCircle2, Info, FileCheck, Globe,
+  Palette, Image, FileSignature, Eye, Upload, Loader2, ArrowRight, Sparkles, AlertTriangle, CheckCircle2, Info, FileCheck, Globe, Hash,
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import ImageCropperModal from '../../components/shared/ImageCropperModal';
@@ -262,7 +262,7 @@ function textToHtml(text: string): string {
 
 // ─── Tab Definitions ────────────────────────────────────────
 
-type TabKey = 'general' | 'branding' | 'departments' | 'positions' | 'forms' | 'form-documents' | 'email-templates' | 'documents-contracts';
+type TabKey = 'general' | 'branding' | 'departments' | 'positions' | 'forms' | 'form-documents' | 'email-templates' | 'documents-contracts' | 'doc-serialization';
 
 interface TabDef {
   key: TabKey;
@@ -279,6 +279,7 @@ const TABS: TabDef[] = [
   { key: 'form-documents',      label: 'Required Documents',     icon: <FileCheck size={15} /> },
   { key: 'email-templates',     label: 'Email Templates',        icon: <Mail size={15} /> },
   { key: 'documents-contracts', label: 'Documents & Contracts',  icon: <FileSignature size={15} /> },
+  { key: 'doc-serialization',   label: 'Document Serialization', icon: <Hash size={15} /> },
 ];
 
 // ─── Email Template Labels & Placeholders ───────────────────
@@ -427,6 +428,145 @@ export default function CompanySettingsPage() {
   // UI state
   const [activeTab, setActiveTab] = useState<TabKey>('general');
   const [docContractSubTab, setDocContractSubTab] = useState<'contracts' | 'doc-templates'>('contracts');
+
+  // ── Document Serialization Sequences ──
+  const [sequences, setSequences] = useState<SequenceSetting[]>([]);
+  const [seqLoading, setSeqLoading] = useState(false);
+  const [seqSaving, setSeqSaving] = useState<string | null>(null);
+  const [seqErrMsg, setSeqErrMsg] = useState<string | null>(null);
+  const [seqSuccessInfo, setSeqSuccessInfo] = useState<{ label: string; preview: string } | null>(null);
+  const [seqEdits, setSeqEdits] = useState<Record<string, Partial<SequenceSetting>>>({});
+
+  const fetchSequences = useCallback(async () => {
+    setSeqLoading(true);
+    try {
+      const list = await companySettingsService.listSequenceSettings();
+      setSequences(list);
+      // Initialize edits from fetched data
+      const edits: Record<string, Partial<SequenceSetting>> = {};
+      list.forEach((s) => { edits[s.entityType] = { ...s }; });
+      setSeqEdits(edits);
+    } catch {
+      // ignore
+    } finally {
+      setSeqLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'doc-serialization') fetchSequences();
+  }, [activeTab, fetchSequences]);
+
+  const handleSeqFieldChange = useCallback((entityType: string, field: keyof SequenceSetting, value: string | number) => {
+    setSeqEdits((prev) => ({
+      ...prev,
+      [entityType]: { ...prev[entityType], [field]: value },
+    }));
+  }, []);
+
+  const handleSeqSave = useCallback(async (entityType: string) => {
+    const edit = seqEdits[entityType];
+    if (!edit) return;
+    setSeqSaving(entityType);
+    setSeqErrMsg(null);
+    setSeqSuccessInfo(null);
+    try {
+      const updated = await companySettingsService.updateSequenceSetting({
+        entityType,
+        prefix: String(edit.prefix ?? ''),
+        suffix: String(edit.suffix ?? ''),
+        nextNumber: Number(edit.nextNumber ?? 1),
+        paddingLength: Number(edit.paddingLength ?? 4),
+        resetFrequency: String(edit.resetFrequency ?? 'NEVER'),
+      });
+      setSequences((prev) => prev.map((s) => s.entityType === entityType ? { ...s, ...updated } : s));
+      const meta = { SUPPLIER_CODE: 'Supplier Code', PURCHASE_ORDER: 'Purchase Order No.', RFQ: 'RFQ Number' } as Record<string, string>;
+      const prefix = resolvePlaceholders(String(edit.prefix ?? ''));
+      const suffix = resolvePlaceholders(String(edit.suffix ?? ''));
+      const num = Number(edit.nextNumber ?? 1);
+      const pad = Number(edit.paddingLength ?? 4);
+      const preview = `${prefix}${String(num).padStart(pad, '0')}${suffix ? '-' + suffix : ''}`;
+      setSeqSuccessInfo({ label: meta[entityType] ?? entityType, preview });
+
+    } catch (err) {
+      setSeqErrMsg(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setSeqSaving(null);
+    }
+  }, [seqEdits]);
+
+  const [isBackfilling, setIsBackfilling] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<{ updated: number; nextCounter: number } | null>(null);
+  const [showBackfillSuccess, setShowBackfillSuccess] = useState(false);
+
+  const runBackfill = useCallback(async () => {
+    setIsBackfilling(true);
+    setBackfillResult(null);
+    try {
+      const result = await companySettingsService.backfillSupplierCodes();
+      setBackfillResult(result);
+      setShowBackfillSuccess(true);
+      // Reload sequences so counter reflects the new value
+      const settings = await companySettingsService.listSequenceSettings();
+      if (settings?.settings) {
+        setSequences(settings.settings);
+        const edits: Record<string, any> = {};
+        for (const s of settings.settings) edits[s.entityType] = { ...s };
+        setSeqEdits(edits);
+      }
+    } catch (err) {
+      setConfirmModalConfig({
+        isOpen: true,
+        title: 'Backfill Failed',
+        message: err instanceof Error ? err.message : 'Something went wrong. Please try again.',
+        variant: 'danger',
+        confirmText: 'OK',
+        onConfirm: () => setConfirmModalConfig(null),
+      });
+    } finally {
+      setIsBackfilling(false);
+    }
+  }, []);
+
+  const handleBackfillSuppliers = useCallback(() => {
+    setConfirmModalConfig({
+      isOpen: true,
+      title: 'Assign Supplier Codes',
+      message: 'This will assign sequential supplier codes to all existing vendors that do not have one. New vendors will continue from the next counter. Continue?',
+      variant: 'primary',
+      confirmText: 'Yes, Assign Codes',
+      cancelText: 'Cancel',
+      onConfirm: runBackfill,
+    });
+  }, [runBackfill]);
+
+  // ── Resolve dynamic placeholders ({YYYY} {YY} {MM} {DD}) ──────────────
+  const resolvePlaceholders = useCallback((template: string): string => {
+    const now = new Date();
+    const yyyy = String(now.getFullYear());
+    return template
+      .replace(/\{YYYY\}/g, yyyy)
+      .replace(/\{YY\}/g,   yyyy.slice(-2))
+      .replace(/\{MM\}/g,   String(now.getMonth() + 1).padStart(2, '0'))
+      .replace(/\{DD\}/g,   String(now.getDate()).padStart(2, '0'));
+  }, []);
+
+  const getSeqPreview = useCallback((entityType: string): string => {
+    const e = seqEdits[entityType];
+    if (!e) return '—';
+    const num = Number(e.nextNumber ?? 1);
+    const pad = Number(e.paddingLength ?? 4);
+    const prefix = resolvePlaceholders(String(e.prefix ?? ''));
+    const suffix = resolvePlaceholders(String(e.suffix ?? ''));
+    return `${prefix}${String(num).padStart(pad, '0')}${suffix ? '-' + suffix : ''}`;
+  }, [seqEdits, resolvePlaceholders]);
+
+
+  const ENTITY_LABELS: Record<string, { label: string; desc: string }> = {
+    SUPPLIER_CODE: { label: 'Supplier Code', desc: 'Auto-generated code assigned when a new supplier is created.' },
+    PURCHASE_ORDER: { label: 'Purchase Order No.', desc: 'Sequential number assigned to each new Purchase Order.' },
+    RFQ: { label: 'RFQ Number', desc: 'Sequential number assigned to each new Request for Quotation.' },
+  };
   const [search, setSearch] = useState('');
   const [expandedDept, setExpandedDept] = useState<Set<number>>(new Set());
   const [pageMsg, setPageMsg] = useState<string | null>(null);
@@ -4550,6 +4690,80 @@ export default function CompanySettingsPage() {
         </div>
       )}
 
+      {/* ── Backfill Success Modal ── */}
+      {showBackfillSuccess && backfillResult !== null && (
+        <div className="company-settings__backdrop" onClick={() => setShowBackfillSuccess(false)}>
+          <div
+            className="company-settings__modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 420, textAlign: 'center', padding: 0, overflow: 'hidden' }}
+          >
+            {/* Top gradient bar */}
+            <div style={{ height: 5, background: 'linear-gradient(90deg, #0a6ed1, #4795e8)' }} />
+
+            <div style={{ padding: '32px 32px 24px' }}>
+              {/* Animated checkmark circle */}
+              <div style={{
+                width: 72, height: 72, borderRadius: '50%',
+                background: 'linear-gradient(135deg, #e8f5e9, #c8e6c9)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                margin: '0 auto 20px',
+                boxShadow: '0 4px 16px rgba(46,125,50,0.18)',
+              }}>
+                <CheckCircle2 size={36} color="#2e7d32" />
+              </div>
+
+              <h3 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>
+                {backfillResult.updated > 0 ? 'Codes Assigned!' : 'Already Up to Date'}
+              </h3>
+              <p style={{ margin: '0 0 24px', fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                {backfillResult.updated > 0
+                  ? `Sequential supplier codes have been successfully assigned to ${backfillResult.updated} existing vendor(s).`
+                  : 'All existing vendors already have a supplier code assigned. No changes were made.'}
+              </p>
+
+              {/* Stats */}
+              <div style={{
+                display: 'flex', gap: 12, marginBottom: 24,
+              }}>
+                <div style={{
+                  flex: 1, background: 'var(--surface-elevated, #f8fafc)',
+                  border: '1px solid var(--border, #e2e8f0)',
+                  borderRadius: 10, padding: '14px 12px',
+                }}>
+                  <div style={{ fontSize: 28, fontWeight: 800, color: '#0a6ed1', lineHeight: 1 }}>
+                    {backfillResult.updated}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+                    Vendors Updated
+                  </div>
+                </div>
+                <div style={{
+                  flex: 1, background: 'var(--surface-elevated, #f8fafc)',
+                  border: '1px solid var(--border, #e2e8f0)',
+                  borderRadius: 10, padding: '14px 12px',
+                }}>
+                  <div style={{ fontSize: 28, fontWeight: 800, color: '#107e3e', lineHeight: 1 }}>
+                    {backfillResult.nextCounter}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+                    Next Counter
+                  </div>
+                </div>
+              </div>
+
+              <button
+                className="company-settings__btn company-settings__btn--primary"
+                style={{ width: '100%', justifyContent: 'center' }}
+                onClick={() => setShowBackfillSuccess(false)}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Unit Modal ── */}
       {showUnitModal && (
         <div className="company-settings__backdrop" onClick={() => !actionLoading && setShowUnitModal(false)}>
@@ -4765,6 +4979,265 @@ export default function CompanySettingsPage() {
                 <Save size={16} /> {actionLoading ? 'Saving…' : editingCat ? 'Update' : 'Create'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* -------------------------------------------------------
+          TAB: Document Serialization
+          ------------------------------------------------------- */}
+      {activeTab === 'doc-serialization' && (
+        <div className="cs-tab-panel" role="tabpanel">
+          <div className="cs-section-card">
+            <div className="cs-section-header">
+              <div className="cs-section-header__left">
+                <h2><Hash size={17} /> Document Serialization</h2>
+                <p>
+                  Configure auto-generated number formats for Supplier Codes, Purchase Orders, and RFQs.
+                  Changes apply to all newly created records — existing records are not affected.
+                </p>
+              </div>
+            </div>
+
+            <div className="cs-section-body">
+              {seqLoading ? (
+                <TableSkeleton rows={3} />
+              ) : (
+                <>
+                  {seqErrMsg && (
+                    <div style={{ marginBottom: '16px' }}>
+                      <MessageStrip type="error" onClose={() => setSeqErrMsg(null)}>
+                        {seqErrMsg}
+                      </MessageStrip>
+                    </div>
+                  )}
+
+                  <div className="cs-seq-grid">
+                    {(['SUPPLIER_CODE', 'PURCHASE_ORDER', 'RFQ'] as const).map((entityType) => {
+                      const meta = ENTITY_LABELS[entityType] ?? { label: entityType, desc: '' };
+                      const edit = seqEdits[entityType] ?? {};
+                      const isSaving = seqSaving === entityType;
+                      const preview = getSeqPreview(entityType);
+                      const isLoaded = sequences.some(s => s.entityType === entityType);
+
+                      return (
+                        <div key={entityType} className="cs-seq-card">
+                          {/* Card Header */}
+                          <div className="cs-seq-card__header">
+                            <div className="cs-seq-card__title-row">
+                              <Hash size={14} className="cs-seq-card__icon" />
+                              <span className="cs-seq-card__title">{meta.label}</span>
+                              <span className="cs-seq-card__badge">{entityType}</span>
+                            </div>
+                            <p className="cs-seq-card__desc">{meta.desc}</p>
+                          </div>
+
+                          {/* Live Preview */}
+                          <div className="cs-seq-preview">
+                            <span className="cs-seq-preview__label">Live Preview</span>
+                            <span className="cs-seq-preview__value">{isLoaded ? preview : '—'}</span>
+                          </div>
+
+                          {/* Form Fields */}
+                          <div className="cs-seq-fields">
+                            <div className="cs-seq-field-row">
+                              <div className="cs-seq-field">
+                                <label className="cs-seq-label">Prefix</label>
+                                <input
+                                  className="cs-seq-input"
+                                  type="text"
+                                  placeholder="e.g. PO-{YYYY}-"
+                                  value={String(edit.prefix ?? '')}
+                                  onChange={(e) => handleSeqFieldChange(entityType, 'prefix', e.target.value)}
+                                />
+                              </div>
+                              <div className="cs-seq-field">
+                                <label className="cs-seq-label">Suffix <span className="cs-seq-optional">(optional)</span></label>
+                                <input
+                                  className="cs-seq-input"
+                                  type="text"
+                                  placeholder="e.g. -{YYYY}"
+                                  value={String(edit.suffix ?? '')}
+                                  onChange={(e) => handleSeqFieldChange(entityType, 'suffix', e.target.value)}
+                                />
+                              </div>
+                            </div>
+
+                            {/* Clickable placeholder tokens */}
+                            {(() => {
+                              const now = new Date();
+                              const tokens = [
+                                { token: '{YYYY}', label: '4-digit Year', example: String(now.getFullYear()) },
+                                { token: '{YY}',   label: '2-digit Year', example: String(now.getFullYear()).slice(-2) },
+                                { token: '{MM}',   label: 'Month',        example: String(now.getMonth() + 1).padStart(2, '0') },
+                                { token: '{DD}',   label: 'Day',          example: String(now.getDate()).padStart(2, '0') },
+                              ];
+                              return (
+                                <div className="cs-seq-token-hint">
+                                  <span className="cs-seq-token-hint__label">Click to add to Prefix:</span>
+                                  {tokens.map(({ token, label, example }) => (
+                                    <button
+                                      key={token}
+                                      type="button"
+                                      className="cs-seq-token cs-seq-token--btn"
+                                      title={`${label} → inserts "${example}" when generating codes`}
+                                      onClick={() => handleSeqFieldChange(
+                                        entityType,
+                                        'prefix',
+                                        String((seqEdits[entityType]?.prefix ?? '')) + token
+                                      )}
+                                    >
+                                      {token}
+                                      <span className="cs-seq-token__eg">= {example}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              );
+                            })()}
+
+
+                            <div className="cs-seq-field-row">
+                              <div className="cs-seq-field">
+                                <label className="cs-seq-label">Digit Padding</label>
+                                <select
+                                  className="cs-seq-input"
+                                  value={Number(edit.paddingLength ?? 4)}
+                                  onChange={(e) => handleSeqFieldChange(entityType, 'paddingLength', Number(e.target.value))}
+                                >
+                                  <option value={3}>3 digits (001)</option>
+                                  <option value={4}>4 digits (0001)</option>
+                                  <option value={5}>5 digits (00001)</option>
+                                  <option value={6}>6 digits (000001)</option>
+                                </select>
+                              </div>
+                              <div className="cs-seq-field">
+                                <label className="cs-seq-label">Reset Frequency</label>
+                                <select
+                                  className="cs-seq-input"
+                                  value={String(edit.resetFrequency ?? 'NEVER')}
+                                  onChange={(e) => handleSeqFieldChange(entityType, 'resetFrequency', e.target.value)}
+                                >
+                                  <option value="NEVER">Never Reset</option>
+                                  <option value="YEARLY">Reset Yearly (Jan 1)</option>
+                                  <option value="MONTHLY">Reset Monthly</option>
+                                </select>
+                              </div>
+                            </div>
+
+                            <div className="cs-seq-field-row">
+                              <div className="cs-seq-field cs-seq-field--full">
+                                <label className="cs-seq-label">
+                                  Next Counter Number
+                                  <span className="cs-seq-optional"> (next record will use this number)</span>
+                                </label>
+                                <input
+                                  className="cs-seq-input"
+                                  type="number"
+                                  min={1}
+                                  step={1}
+                                  value={Number(edit.nextNumber ?? 1)}
+                                  onFocus={(e) => e.target.select()}
+                                  onChange={(e) => {
+                                    const parsed = parseInt(e.target.value, 10);
+                                    handleSeqFieldChange(entityType, 'nextNumber', isNaN(parsed) ? 1 : Math.max(1, parsed));
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Save Button */}
+                          <div className="cs-seq-card__footer">
+                            <button
+                              className="company-settings__btn company-settings__btn--primary cs-seq-save-btn"
+                              disabled={isSaving || !isLoaded}
+                              onClick={() => handleSeqSave(entityType)}
+                            >
+                              {isSaving ? (
+                                <><Loader2 size={14} className="cs-spin" /> Saving…</>
+                              ) : (
+                                <><Save size={14} /> Save {meta.label}</>
+                              )}
+                            </button>
+
+                            {/* Backfill button — only for Supplier Code */}
+                            {entityType === 'SUPPLIER_CODE' && (
+                              <button
+                                className="company-settings__btn company-settings__btn--primary"
+                                disabled={isBackfilling}
+                                onClick={handleBackfillSuppliers}
+                                title="Assign sequential supplier codes to all existing vendors who don't have one"
+                              >
+                                {isBackfilling ? (
+                                  <><Loader2 size={14} className="cs-spin" /> Assigning…</>
+                                ) : (
+                                  <>Assign Existing Vendors</>
+                                )}
+                              </button>
+                            )}
+
+                            {/* Backfill success handled by modal */}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Info Note */}
+                  <div className="cs-seq-note">
+                    <Info size={14} />
+                    <span>
+                      Changing <strong>Next Counter Number</strong> does not affect existing records.
+                      Yearly/Monthly reset automatically resets the counter on the first day of the period.
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* ── Document Serialization: Save Success Modal ── */}
+      {seqSuccessInfo && (
+        <div
+          className="cs-seq-success-backdrop"
+          onClick={() => setSeqSuccessInfo(null)}
+          role="presentation"
+        >
+          <div
+            className="cs-seq-success-modal"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            {/* Icon */}
+            <div className="cs-seq-success-modal__icon-wrap">
+              <CheckCircle2 size={40} className="cs-seq-success-modal__icon" />
+            </div>
+
+            {/* Heading */}
+            <h2 className="cs-seq-success-modal__title">Sequence Saved</h2>
+            <p className="cs-seq-success-modal__subtitle">
+              <strong>{seqSuccessInfo.label}</strong> settings have been updated successfully.
+            </p>
+
+            {/* Preview pill */}
+            <div className="cs-seq-success-modal__preview-box">
+              <span className="cs-seq-success-modal__preview-label">Next Generated Code</span>
+              <span className="cs-seq-success-modal__preview-val">{seqSuccessInfo.preview}</span>
+            </div>
+
+            {/* OK button */}
+            <button
+              className="cs-seq-success-modal__ok"
+              onClick={() => setSeqSuccessInfo(null)}
+              autoFocus
+            >
+              OK
+            </button>
           </div>
         </div>
       )}

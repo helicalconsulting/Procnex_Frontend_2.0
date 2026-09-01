@@ -25,6 +25,7 @@ import {
   ChevronLeft,
   ChevronRight,
   FormInput,
+  Truck,
 } from 'lucide-react';
 import { useBranding } from '../../context/BrandingContext';
 import heliflowLogo from '../../assets/heliflow.png';
@@ -201,9 +202,15 @@ export default function Sidebar({
         ...menuItems
           .filter((item) => item.id === 'vendor-orders')
           .map((item) => ({ label: item.label, icon: ICON_MAP[item.label] || <Package size={19} />, path: item.path })),
-        ...menuItems
-          .filter((item) => item.id === 'vendor-invoices')
-          .map((item) => ({ label: item.label, icon: ICON_MAP[item.label] || <Receipt size={19} />, path: item.path })),
+        ...(isVendor(roles)
+          ? [
+              {
+                label: 'My Invoices & GRN',
+                icon: <Truck size={19} />,
+                path: '/procurement/grns',
+              },
+            ]
+          : []),
         ...menuItems
           .filter((item) => item.id === 'vendor-contracts')
           .map((item) => ({ label: 'Contracts', icon: ICON_MAP[item.label] || <FileText size={19} />, path: item.path })),

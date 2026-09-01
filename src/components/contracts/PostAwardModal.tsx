@@ -144,7 +144,7 @@ export default function PostAwardModal({
                 <div className="ctr-award-modal__btn-info">
                   <span className="ctr-award-modal__btn-title">Create Purchase Order</span>
                   <span className="ctr-award-modal__btn-desc">
-                    Create a standalone purchase order linked to this RFQ
+                    Create a direct purchase order linked to this RFQ
                   </span>
                 </div>
                 {saving === 'PO_CREATED' && <Clock size={16} className="ctr-award-modal__spinner" />}

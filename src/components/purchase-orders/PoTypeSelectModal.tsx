@@ -69,9 +69,9 @@ export default function PoTypeSelectModal({
                 <ShoppingCart size={24} />
               </div>
               <div className="po-type-modal__option-info">
-                <span className="po-type-modal__option-title">General PO</span>
+                <span className="po-type-modal__option-title">Direct PO</span>
                 <span className="po-type-modal__option-desc">
-                  Create a standard purchase order using the existing workflow. The PO will be created and submitted for approval.
+                  Create a direct purchase order using the existing workflow. The PO will be created and submitted for approval.
                 </span>
               </div>
               <div className="po-type-modal__option-radio">
