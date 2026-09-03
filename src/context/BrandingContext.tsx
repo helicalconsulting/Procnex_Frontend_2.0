@@ -15,6 +15,8 @@ const TITLE_CACHE_KEY = 'heliflow_tab_title';
 
 function readCachedProfile(): CompanyProfile | null {
   try {
+    const token = localStorage.getItem('heliflow_token') || localStorage.getItem('heliflow_vendor_token');
+    if (!token) return null;
     const raw = localStorage.getItem(BRANDING_CACHE_KEY);
     if (!raw) return null;
     return JSON.parse(raw) as CompanyProfile;
@@ -50,7 +52,7 @@ function writeCachedTitle(title: string): void {
 // ─── Types ──────────────────────────────────────────────────
 
 interface BrandingContextType {
-  /** Company display name (defaults to "Heliflow") */
+  /** Company display name (defaults to "Procnex") */
   companyName: string;
   /** Company phone number from branding settings */
   companyPhone: string | null;
@@ -81,7 +83,7 @@ const BrandingContext = createContext<BrandingContextType | undefined>(undefined
 // ─── Defaults ───────────────────────────────────────────────
 
 const DEFAULT_PRIMARY = '#0a6ed1';
-const DEFAULT_NAME = 'Procnex — Procurement Automation Software';
+const DEFAULT_TITLE = 'Procnex — Digital Procurement Platform';
 
 // ─── Color shade generation ─────────────────────────────────
 
@@ -142,7 +144,7 @@ function applyFavicon(faviconUrl: string | null, logoUrl: string | null = null) 
   }
   const rawTarget = faviconUrl || logoUrl;
   const isValidUrl = rawTarget && (rawTarget.startsWith('http://') || rawTarget.startsWith('https://') || rawTarget.startsWith('data:') || rawTarget.startsWith('/'));
-  const targetUrl = isValidUrl ? rawTarget : (heliflowLogo || '/favicon.ico');
+  const targetUrl = isValidUrl ? rawTarget : '/Procnex-logo.jpeg';
   if (targetUrl.endsWith('.svg')) {
     link.type = 'image/svg+xml';
   } else {
@@ -153,10 +155,10 @@ function applyFavicon(faviconUrl: string | null, logoUrl: string | null = null) 
 
 /** Apply document title — persists to localStorage so it survives refreshes */
 function applyTitle(name: string | null) {
-  let title = name || DEFAULT_NAME;
+  let title = name || DEFAULT_TITLE;
   if (!title || title === 'Heliflow Consulting' || title === 'Heliflow' || title.includes('SAP Enterprise Suite')) {
-    title = DEFAULT_NAME;
-  } else if (!title.includes('— Procurement Automation Software') && title !== DEFAULT_NAME) {
+    title = DEFAULT_TITLE;
+  } else if (title !== DEFAULT_TITLE && !title.includes('— Procurement Automation Software') && !title.includes('— Digital Procurement Platform')) {
     title = `${title} — Procurement Automation Software`;
   }
   document.title = title;
@@ -166,17 +168,28 @@ function applyTitle(name: string | null) {
 // ─── Provider ───────────────────────────────────────────────
 
 export function BrandingProvider({ children }: { children: ReactNode }) {
-  // Initialize from localStorage first so branding is immediately available
+  // Initialize from localStorage first if token exists
   const [profile, setProfile] = useState<CompanyProfile | null>(() => readCachedProfile());
   const [loaded, setLoaded] = useState(false);
 
   const refresh = useCallback(async () => {
+    const token = localStorage.getItem('heliflow_token') || localStorage.getItem('heliflow_vendor_token');
+    if (!token) {
+      // User is logged out / on login page: instant reset to Procnex default!
+      localStorage.removeItem(BRANDING_CACHE_KEY);
+      localStorage.removeItem(TITLE_CACHE_KEY);
+      setProfile(null);
+      applyPrimaryColor(DEFAULT_PRIMARY);
+      applyFavicon('/Procnex-logo.jpeg');
+      document.title = DEFAULT_TITLE;
+      writeCachedTitle(DEFAULT_TITLE);
+      setLoaded(true);
+      return;
+    }
+
     try {
       let p = await companySettingsService.getCompanyProfile();
 
-      // Guard: don't let an incomplete API response overwrite richer cached data.
-      // Only restore from cache when the field is truly MISSING (undefined),
-      // not when it's explicitly null/empty (intentional removal by user).
       const existing = readCachedProfile();
       if (existing) {
         if (p.logoUrl === undefined && existing.logoUrl) p = { ...p, logoUrl: existing.logoUrl };
@@ -194,60 +207,46 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
       applyPrimaryColor(color);
       applyFavicon(p.faviconUrl || null, p.logoUrl || null);
 
-      // Tab title = company name (from branding settings), falls back to "Procnex — Procurement Automation Software"
-      const name = p.companyName || DEFAULT_NAME;
+      const name = p.companyName || DEFAULT_TITLE;
       applyTitle(name);
     } catch {
-      // Silently fall back — keep cached title if it exists, otherwise DEFAULT_NAME
       applyPrimaryColor(DEFAULT_PRIMARY);
-      const savedTitle = readCachedTitle();
-      const title = (savedTitle && !savedTitle.includes('Heliflow') && !savedTitle.includes('SAP Enterprise Suite')) ? savedTitle : DEFAULT_NAME;
-      document.title = title;
-      writeCachedTitle(title);
+      applyFavicon('/Procnex-logo.jpeg');
+      document.title = DEFAULT_TITLE;
+      writeCachedTitle(DEFAULT_TITLE);
     } finally {
       setLoaded(true);
     }
   }, []);
 
-  // Apply cached branding to DOM immediately (before async refresh completes)
-  useEffect(() => {
-    const savedTitle = readCachedTitle();
-    if (savedTitle && !savedTitle.includes('Heliflow') && !savedTitle.includes('SAP Enterprise Suite')) {
-      document.title = savedTitle;
-    } else {
-      document.title = DEFAULT_NAME;
-      writeCachedTitle(DEFAULT_NAME);
-    }
-
-    // 2. Apply cached branding profile
-    const cached = readCachedProfile();
-    if (cached) {
-      const color = cached.primaryColor || DEFAULT_PRIMARY;
-      applyPrimaryColor(color);
-      applyFavicon(cached.faviconUrl || null, cached.logoUrl || null);
-
-      // Apply title from cached company name if not already restored from dedicated cache
-      if (!savedTitle) {
-        applyTitle(cached.companyName || null);
-      }
-    }
-  }, []);
-
+  // Sync initial state and listen for login/logout events for instant updating without page reload
   useEffect(() => {
     refresh();
+
+    const handleAuthChange = () => {
+      refresh();
+    };
+
+    window.addEventListener('heliflow_auth_change', handleAuthChange);
+    return () => {
+      window.removeEventListener('heliflow_auth_change', handleAuthChange);
+    };
   }, [refresh]);
 
+  const token = typeof window !== 'undefined' ? (localStorage.getItem('heliflow_token') || localStorage.getItem('heliflow_vendor_token')) : null;
+  const isLoggedOut = !token;
+
   const value: BrandingContextType = {
-    companyName: profile?.companyName || DEFAULT_NAME,
-    companyPhone: profile?.companyPhone || null,
-    companyEmail: profile?.companyEmail || null,
-    logoUrl: profile?.logoUrl || null,
-    faviconUrl: profile?.faviconUrl || null,
-    primaryColor: profile?.primaryColor || DEFAULT_PRIMARY,
-    loginText: profile?.loginText || null,
-    supportEmail: profile?.supportEmail || null,
-    primaryPortalName: profile?.primaryPortalName || 'Employee',
-    profile,
+    companyName: (!isLoggedOut && profile?.companyName && profile.companyName !== 'HFL') ? profile.companyName : 'Procnex',
+    companyPhone: !isLoggedOut ? (profile?.companyPhone || null) : null,
+    companyEmail: !isLoggedOut ? (profile?.companyEmail || null) : null,
+    logoUrl: !isLoggedOut ? (profile?.logoUrl || '/Procnex-logo.jpeg') : '/Procnex-logo.jpeg',
+    faviconUrl: !isLoggedOut ? (profile?.faviconUrl || '/Procnex-logo.jpeg') : '/Procnex-logo.jpeg',
+    primaryColor: !isLoggedOut ? (profile?.primaryColor || DEFAULT_PRIMARY) : DEFAULT_PRIMARY,
+    loginText: !isLoggedOut ? (profile?.loginText || null) : null,
+    supportEmail: !isLoggedOut ? (profile?.supportEmail || null) : null,
+    primaryPortalName: !isLoggedOut ? (profile?.primaryPortalName || 'Employee') : 'Employee',
+    profile: !isLoggedOut ? profile : null,
     loaded,
     refresh,
   };

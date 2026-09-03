@@ -97,15 +97,12 @@ export function useDashboardWidgets(): UseDashboardWidgetsReturn {
   //   Role/permission check is NOT used as a separate source — admin controls the gallery.
   //   If admin hasn't set any preferences yet (empty prefs), user sees nothing.
   const availableWidgets = useMemo(() => {
-    // Super Admin bypasses backend isEnabled — unko sab dikhega
-    if (roles.includes('Super Admin')) return allowedByRoleAndPermission;
+    // Super Admin or admin role bypasses backend isEnabled — gets all allowed widgets
+    const isUserAdmin = roles.some((r) => ['Super Admin', 'admin', 'Administrator'].includes(r));
+    if (isUserAdmin) return allowedByRoleAndPermission;
 
-    if (!enabledWidgetIds) return [];
-    // Admin ne koi widget enable nahi kiya — empty dikhao, fallback nahi
-    if (enabledWidgetIds.size === 0) return [];
+    if (!enabledWidgetIds || enabledWidgetIds.size === 0) return allowedByRoleAndPermission;
 
-    // ONLY admin-enabled widgets — NOT a union with role-allowed widgets.
-    // Admin controls the gallery. User doesn't see widgets just because their role allows them.
     return WIDGET_REGISTRY.filter((widget) => enabledWidgetIds.has(widget.id));
   }, [WIDGET_REGISTRY, allowedByRoleAndPermission, enabledWidgetIds, roles]);
 
@@ -135,16 +132,12 @@ export function useDashboardWidgets(): UseDashboardWidgetsReturn {
 
     if (backendPrefs.length > 0) {
       const sortedActive = backendPrefs
-        .filter((p) => p.isEnabled && p.isUserActive && availableIds.has(p.widgetId))
+        .filter((p) => p.isEnabled !== false && p.isUserActive && availableIds.has(p.widgetId))
         .sort((a, b) => a.sortOrder - b.sortOrder)
         .map((p) => p.widgetId);
 
-      // Always use backend data directly — no merge with prev.
-      // The merge was re-adding widgets the user removed when stale cached backend
-      // data was shown before a background refetch completed.
       setActiveWidgets(sortedActive);
     } else {
-      // Backend returns no prefs — empty dashboard
       setActiveWidgets([]);
     }
   }, [availableIds, backendPrefs, prefsLoading, user?.id]);

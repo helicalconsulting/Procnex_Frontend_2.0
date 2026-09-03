@@ -188,26 +188,197 @@ function mapServiceInvoice(inv: ServiceAPInvoice): APInvoice {
   };
 }
 
-const ACTIONABLE: APStatus[] = ['PENDING', 'OVERDUE'];
+import { approvalService } from '../../services/approvalService';
+import { sseClient } from '../../services/sseClient';
+import type { ApprovalTableRow } from '../../types/viewModels';
+import { useAuth } from '../../context/AuthContext';
+
+interface APInvoice {
+  id: string;
+  approvalId?: string;
+  invoiceNumber: string;
+  poNumber: string;
+  vendorName: string;
+  vendorInitials: string;
+  avatarMod: string;
+  amount: number;
+  paidAmount: number;
+  dueDate: string;
+  invoiceDate: string;
+  status: APStatus;
+  paymentTerms: string;
+  department: string;
+  currentLevel: number;
+  totalLevels: number;
+  requiredRole: string;
+  canAct: boolean;
+  comments?: string;
+}
+
+const isRoleMatching = (requiredRole?: string, userRoles?: string[]): boolean => {
+  if (!requiredRole || !userRoles || userRoles.length === 0) return false;
+  const stripPrefix = (str: string) => str.replace(/^level\s*\d+(\s*of\s*\d+)?\s*:\s*/i, '').trim().toLowerCase().replace(/[\s_-]+/g, '');
+  const reqClean = stripPrefix(requiredRole);
+
+  const aliases: Record<string, string[]> = {
+    purchasemanager: ['purchasemanager', 'purchase_manager', 'procurementmanager', 'procurement_manager', 'l1user', 'l1_user', 'l1', 'approver1', 'level1user', 'level1', 'procurement', 'buyer'],
+    l1user: ['l1user', 'l1_user', 'l1', 'approver1', 'level1user', 'level1', 'purchasemanager', 'purchase_manager', 'procurementmanager', 'procurement_manager', 'procurement', 'purchaseclerk', 'buyer'],
+    financeapprover: ['financeapprover', 'financemanager', 'finance_approver', 'finance_manager', 'finance', 'l2user', 'l2_user', 'l2', 'approver2', 'level2user', 'level2'],
+    l2user: ['l2user', 'l2_user', 'l2', 'approver2', 'level2user', 'level2', 'financeapprover', 'financemanager', 'finance_approver', 'finance_manager', 'finance'],
+  };
+
+  return userRoles.some((r) => {
+    const usrClean = stripPrefix(r);
+    if (reqClean === usrClean) return true;
+    if (aliases[reqClean] && aliases[reqClean].includes(usrClean)) return true;
+    if (aliases[usrClean] && aliases[usrClean].includes(reqClean)) return true;
+    return false;
+  });
+};
 
 // ─── Component ──────────────────────────────────────────────
 
 export default function AccountsPayablePage() {
-  const { data: serverInvoices, loading, error } = useServiceData(
-    () => invoiceService.list().then((list) => list.map(mapServiceInvoice)),
-    [] as APInvoice[]
-  );
-  // Optimistic overlay for local actions (no API persistence)
-  const [pendingActions, setPendingActions] = useState<Record<number, APInvoice>>({});
-  const invoices = useMemo(() => {
-    if (Object.keys(pendingActions).length === 0) return serverInvoices;
-    return serverInvoices.map(inv => pendingActions[inv.id] ?? inv);
-  }, [serverInvoices, pendingActions]);
+  const { roles: authRoles } = useAuth();
+  const [invoicesList, setInvoicesList] = useState<APInvoice[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchInvoicesData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Fetch real approval records for AccountsPayable (Purchase Invoice)
+      const [approvalRows, rawInvoices] = await Promise.all([
+        approvalService.listTable({ module: 'AccountsPayable' }).catch(() => [] as ApprovalTableRow[]),
+        invoiceService.list().catch(() => [] as ServiceAPInvoice[]),
+      ]);
+
+      const approvalMap = new Map<string, ApprovalTableRow>();
+      approvalRows.forEach((a) => {
+        if (a.referenceId) approvalMap.set(a.referenceId, a);
+        if (a.referenceNumber) approvalMap.set(a.referenceNumber, a);
+      });
+
+      const merged: APInvoice[] = [];
+
+      // Process approvalRows first
+      approvalRows.forEach((app, idx) => {
+        const matchingRaw = rawInvoices.find(
+          (inv) => inv.id === app.referenceId || inv.invoiceNumber === app.referenceNumber
+        );
+
+        const invNo = app.referenceNumber || matchingRaw?.invoiceNumber || `INV-${app.id.slice(-6)}`;
+        const vName = matchingRaw?.vendorName || app.requestedBy || 'Vendor';
+        const initials = vName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() || 'VN';
+
+        const statusMap: Record<string, APStatus> = {
+          PENDING: 'PENDING',
+          APPROVED: 'APPROVED',
+          REJECTED: 'REJECTED',
+          RETURNED: 'RETURNED',
+        };
+        const status = statusMap[app.status] || 'PENDING';
+        const amt = typeof app.amount === 'number' ? app.amount : parseFloat(String(app.amount).replace(/[^0-9.]/g, '')) || matchingRaw?.amount || 0;
+        const reqRole = app.requiredRole || 'Purchase Manager';
+        const effectiveCanAct = app.canAct || isRoleMatching(reqRole, authRoles);
+
+        merged.push({
+          id: matchingRaw?.id || app.referenceId || app.id,
+          approvalId: app.id,
+          invoiceNumber: invNo,
+          poNumber: matchingRaw?.poNumber || (app.title ? app.title.split('(PO: ')[1]?.replace(')', '') : '') || '—',
+          vendorName: vName,
+          vendorInitials: initials,
+          avatarMod: String((idx % 6) + 1),
+          amount: amt,
+          paidAmount: status === 'PAID' ? amt : 0,
+          dueDate: matchingRaw?.dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          invoiceDate: app.submittedAt || matchingRaw?.submittedAt || new Date().toISOString(),
+          status,
+          paymentTerms: matchingRaw?.paymentTerms || 'Net 30',
+          department: app.department || matchingRaw?.department || 'Finance',
+          currentLevel: app.currentLevel || 1,
+          totalLevels: app.totalLevels || 1,
+          requiredRole: reqRole,
+          canAct: effectiveCanAct,
+          comments: app.comments,
+        });
+      });
+
+      // Add any standalone raw invoices not present in approvalRows
+      rawInvoices.forEach((inv, idx) => {
+        const alreadyIn = merged.some(
+          (m) => m.id === inv.id || m.invoiceNumber === inv.invoiceNumber
+        );
+        if (!alreadyIn) {
+          const initials = inv.vendorName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() || 'VN';
+          const statusMap: Record<string, APStatus> = {
+            PENDING_APPROVAL: 'PENDING',
+            PENDING: 'PENDING',
+            APPROVED: 'APPROVED',
+            PAID: 'PAID',
+            PARTIAL: 'PARTIAL',
+            OVERDUE: 'OVERDUE',
+            REJECTED: 'REJECTED',
+            RETURNED: 'RETURNED',
+            DRAFT: 'PENDING',
+          };
+          const status = statusMap[inv.status] || 'PENDING';
+          const effectiveCanAct = isRoleMatching('Purchase Manager', authRoles);
+
+          merged.push({
+            id: inv.id,
+            invoiceNumber: inv.invoiceNumber,
+            poNumber: inv.poNumber || '—',
+            vendorName: inv.vendorName,
+            vendorInitials: initials,
+            avatarMod: String(((idx + merged.length) % 6) + 1),
+            amount: inv.amount,
+            paidAmount: status === 'PAID' ? inv.amount : 0,
+            dueDate: inv.dueDate,
+            invoiceDate: inv.submittedAt || new Date().toISOString(),
+            status,
+            paymentTerms: inv.paymentTerms || 'Net 30',
+            department: inv.department || 'Finance',
+            currentLevel: 1,
+            totalLevels: 1,
+            requiredRole: 'Purchase Manager',
+            canAct: effectiveCanAct,
+          });
+        }
+      });
+
+      setInvoicesList(merged);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load purchase invoices');
+    } finally {
+      setLoading(false);
+    }
+  }, [authRoles]);
+
+  useEffect(() => {
+    fetchInvoicesData();
+
+    // SSE Realtime events for automatic page refresh
+    const unsub1 = sseClient.on('approval_level_complete', fetchInvoicesData);
+    const unsub2 = sseClient.on('approval_chain_complete', fetchInvoicesData);
+    const unsub3 = sseClient.on('notification', fetchInvoicesData);
+
+    return () => {
+      unsub1();
+      unsub2();
+      unsub3();
+    };
+  }, [fetchInvoicesData]);
+
   const [search, setSearch]               = useState('');
   const [statusFilter, setStatusFilter]   = useState<string>('ALL');
   const [detailInvoice, setDetailInvoice] = useState<APInvoice | null>(null);
   const [actionModal, setActionModal]     = useState<{ invoice: APInvoice; action: 'approve' | 'reject' | 'return' } | null>(null);
   const [actionComment, setActionComment] = useState('');
+  const [actionSaving, setActionSaving]   = useState(false);
   useBodyScrollLock(!!(actionModal || detailInvoice));
   const { formatAmount, companyDefaultCurrency } = useCurrency();
   const [displayCurrency, setDisplayCurrency] = useState(companyDefaultCurrency);
@@ -244,15 +415,32 @@ export default function AccountsPayablePage() {
 
   // ── KPIs (reactive) ──
   const summary = useMemo(() => ({
-    totalPayable:  invoices.reduce((s, i) => s + (i.amount - i.paidAmount), 0),
-    overdue:       invoices.filter(i => i.status === 'OVERDUE').length,
-    dueThisMonth:  invoices.filter(i => i.status === 'PENDING').length,
-    paidThisMonth: invoices.filter(i => i.status === 'PAID' || i.status === 'APPROVED').length,
-  }), [invoices]);
+    totalPayable:  invoicesList.reduce((s, i) => s + (i.amount - i.paidAmount), 0),
+    overdue:       invoicesList.filter(i => i.status === 'OVERDUE').length,
+    dueThisMonth:  invoicesList.filter(i => i.status === 'PENDING').length,
+    paidThisMonth: invoicesList.filter(i => i.status === 'PAID' || i.status === 'APPROVED').length,
+  }), [invoicesList]);
+
+  // Check if logged-in user is an Admin (Super Admin / Administrator)
+  const isAdmin = useMemo(() => {
+    if (!authRoles || authRoles.length === 0) return false;
+    return authRoles.some((r) =>
+      r === 'Super Admin' || r === 'Administrator' || r.toLowerCase().includes('admin')
+    );
+  }, [authRoles]);
 
   // ── Filtered list ──
   const filtered = useMemo(() => {
-    let list = invoices;
+    let list = invoicesList;
+    // Sequential Queue Rule: Non-admin users MUST ONLY see pending invoices if they are the designated approver for the CURRENT pending level (canAct === true)!
+    if (!isAdmin) {
+      list = list.filter((i) => {
+        if (i.status === 'PENDING' && !i.canAct) {
+          return false;
+        }
+        return true;
+      });
+    }
     if (statusFilter !== 'ALL') {
       list = list.filter(i => i.status === statusFilter);
     }
@@ -265,25 +453,33 @@ export default function AccountsPayablePage() {
       );
     }
     return list;
-  }, [invoices, search, statusFilter]);
+  }, [invoicesList, search, statusFilter, isAdmin]);
 
-  // ── Action handler ──
-  const handleAction = useCallback(() => {
-    if (!actionModal) return;
-    const newStatus: APStatus =
-      actionModal.action === 'approve' ? 'APPROVED' :
-      actionModal.action === 'reject'  ? 'REJECTED' : 'RETURNED';
-    setPendingActions(prev => ({
-      ...prev,
-      [actionModal.invoice.id]: {
-        ...actionModal.invoice,
-        status: newStatus,
-        comments: actionComment.trim() || undefined,
-      },
-    }));
-    setActionModal(null);
-    setActionComment('');
-  }, [actionModal, actionComment]);
+  // ── Action handler (connects to real backend workflow) ──
+  const handleAction = useCallback(async () => {
+    if (!actionModal || !actionModal.invoice.approvalId) return;
+    setActionSaving(true);
+    try {
+      const approvalId = actionModal.invoice.approvalId;
+      const comment = actionComment.trim() || undefined;
+
+      if (actionModal.action === 'approve') {
+        await approvalService.approve(approvalId, comment);
+      } else if (actionModal.action === 'reject') {
+        await approvalService.reject(approvalId, comment);
+      } else {
+        await approvalService.return(approvalId, comment, 'ORIGINATOR');
+      }
+
+      setActionModal(null);
+      setActionComment('');
+      await fetchInvoicesData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Action failed');
+    } finally {
+      setActionSaving(false);
+    }
+  }, [actionModal, actionComment, fetchInvoicesData]);
 
   const openAction = useCallback((invoice: APInvoice, action: 'approve' | 'reject' | 'return') => {
     setActionModal({ invoice, action });
@@ -294,7 +490,7 @@ export default function AccountsPayablePage() {
   const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
   const actionColor = actionModal?.action === 'approve' ? 'approve' : actionModal?.action === 'reject' ? 'reject' : 'return';
-  const actionTitle = actionModal?.action === 'approve' ? 'Approve Invoice' : actionModal?.action === 'reject' ? 'Reject Invoice' : 'Return Invoice';
+  const actionTitle = actionModal?.action === 'approve' ? 'Approve Purchase Invoice' : actionModal?.action === 'reject' ? 'Reject Purchase Invoice' : 'Return Purchase Invoice';
 
   return (
     <div className="fin-page">
@@ -304,7 +500,7 @@ export default function AccountsPayablePage() {
       <div className="fin-page__header">
         <div>
           <h1>Purchase Invoice Approval</h1>
-          <p>Track outstanding invoices and manage vendor payments</p>
+          <p>Review, approve, or reject pending purchase invoices in sequential levels</p>
         </div>
       </div>
 
@@ -329,14 +525,14 @@ export default function AccountsPayablePage() {
           onClick={() => setStatusFilter(prev => prev === 'PENDING' ? 'ALL' : 'PENDING')}
         >
           <div className="fin-kpi__icon fin-kpi__icon--warning"><Clock size={20} /></div>
-          <div><span className="fin-kpi__value">{summary.dueThisMonth}</span><span className="fin-kpi__label">Due This Month</span></div>
+          <div><span className="fin-kpi__value">{summary.dueThisMonth}</span><span className="fin-kpi__label">Pending Approval</span></div>
         </div>
         <div
-          className={`fin-kpi${statusFilter === 'PAID' ? ' fin-kpi--active' : ''}`}
-          onClick={() => setStatusFilter(prev => prev === 'PAID' ? 'ALL' : 'PAID')}
+          className={`fin-kpi${statusFilter === 'APPROVED' ? ' fin-kpi--active' : ''}`}
+          onClick={() => setStatusFilter(prev => prev === 'APPROVED' ? 'ALL' : 'APPROVED')}
         >
           <div className="fin-kpi__icon fin-kpi__icon--success"><CheckCircle2 size={20} /></div>
-          <div><span className="fin-kpi__value">{summary.paidThisMonth}</span><span className="fin-kpi__label">Paid / Approved</span></div>
+          <div><span className="fin-kpi__value">{summary.paidThisMonth}</span><span className="fin-kpi__label">Approved</span></div>
         </div>
       </div>
 
@@ -344,7 +540,7 @@ export default function AccountsPayablePage() {
       <div className="fin-toolbar">
         <div className="fin-toolbar__search">
           <Search size={16} className="fin-toolbar__search-icon" />
-          <input placeholder="Search invoices..." value={search} onChange={e => setSearch(e.target.value)} />
+          <input placeholder="Search invoices by number, vendor, PO..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
       </div>
 
@@ -404,7 +600,6 @@ export default function AccountsPayablePage() {
             </thead>
             <tbody>
               {filtered.map(inv => {
-                const actionable = ACTIONABLE.includes(inv.status);
                 return (
                   <tr key={inv.id} className={`fin-table__row fin-table__row--${inv.status.toLowerCase()}`}>
                     {visibleColumns.map((col) => (
@@ -414,7 +609,7 @@ export default function AccountsPayablePage() {
                     ))}
                     <td>
                       <div className="approvals-table__actions">
-                        {/* View */}
+                        {/* View Details */}
                         <button
                           className="approvals-table__action-btn"
                           title="View Details"
@@ -422,8 +617,8 @@ export default function AccountsPayablePage() {
                         >
                           <Eye size={15} />
                         </button>
-                        {/* Approve / Reject / Return — only for actionable statuses */}
-                        {actionable && (
+                        {/* Approve / Reject / Return — ONLY if status is PENDING AND canAct is true */}
+                        {inv.status === 'PENDING' && inv.canAct ? (
                           <>
                             <button
                               className="approvals-table__action-btn approvals-table__action-btn--approve"
@@ -447,7 +642,11 @@ export default function AccountsPayablePage() {
                               <RotateCcw size={15} />
                             </button>
                           </>
-                        )}
+                        ) : inv.status === 'PENDING' ? (
+                          <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontStyle: 'italic', padding: '2px 6px', background: 'var(--surface-elevated, #f0f2f5)', borderRadius: 4, border: '1px solid var(--border)' }} title={`Awaiting Level ${inv.currentLevel} approval by ${inv.requiredRole}`}>
+                            L{inv.currentLevel} ({inv.requiredRole})
+                          </span>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -457,7 +656,7 @@ export default function AccountsPayablePage() {
           </table>
         </div>
         {filtered.length === 0 && (
-          <div className="fin-empty"><span>💰</span><p>No invoices found</p></div>
+          <div className="fin-empty"><span>💰</span><p>No purchase invoices found</p></div>
         )}
           </>
         )}
@@ -478,7 +677,7 @@ export default function AccountsPayablePage() {
             <div className="approvals-modal__body">
               <div className="approvals-modal__request-summary">
                 <div className="approvals-modal__summary-row">
-                  <span className="approvals-modal__summary-label">Invoice</span>
+                  <span className="approvals-modal__summary-label">Invoice No.</span>
                   <span className="approvals-modal__summary-value">{actionModal.invoice.invoiceNumber}</span>
                 </div>
                 <div className="approvals-modal__summary-row">
@@ -486,18 +685,16 @@ export default function AccountsPayablePage() {
                   <span className="approvals-modal__summary-value">{actionModal.invoice.vendorName}</span>
                 </div>
                 <div className="approvals-modal__summary-row">
+                  <span className="approvals-modal__summary-label">PO Reference</span>
+                  <span className="approvals-modal__summary-value">{actionModal.invoice.poNumber}</span>
+                </div>
+                <div className="approvals-modal__summary-row">
                   <span className="approvals-modal__summary-label">Amount</span>
                   <span className="approvals-modal__summary-value approvals-modal__summary-value--amount">{formatAmount(actionModal.invoice.amount, displayCurrency)}</span>
                 </div>
                 <div className="approvals-modal__summary-row">
-                  <span className="approvals-modal__summary-label">Balance Due</span>
-                  <span className="approvals-modal__summary-value approvals-modal__summary-value--amount">
-                    {formatAmount(actionModal.invoice.amount - actionModal.invoice.paidAmount, displayCurrency)}
-                  </span>
-                </div>
-                <div className="approvals-modal__summary-row">
-                  <span className="approvals-modal__summary-label">Due Date</span>
-                  <span className="approvals-modal__summary-value">{fmtDate(actionModal.invoice.dueDate)}</span>
+                  <span className="approvals-modal__summary-label">Approval Level</span>
+                  <span className="approvals-modal__summary-value">Level {actionModal.invoice.currentLevel} of {actionModal.invoice.totalLevels} ({actionModal.invoice.requiredRole})</span>
                 </div>
               </div>
 
@@ -509,7 +706,7 @@ export default function AccountsPayablePage() {
                 <textarea
                   className="approvals-modal__textarea"
                   rows={4}
-                  placeholder={actionModal.action === 'approve' ? 'Optional comments...' : 'Provide a reason...'}
+                  placeholder={actionModal.action === 'approve' ? 'Optional approval comments...' : 'Provide reason...'}
                   value={actionComment}
                   onChange={e => setActionComment(e.target.value)}
                 />
@@ -517,14 +714,20 @@ export default function AccountsPayablePage() {
             </div>
 
             <div className="approvals-modal__footer">
-              <button className="approvals-modal__btn approvals-modal__btn--secondary" onClick={() => setActionModal(null)}>Cancel</button>
+              <button className="approvals-modal__btn approvals-modal__btn--secondary" onClick={() => setActionModal(null)} disabled={actionSaving}>Cancel</button>
               <button
                 className={`approvals-modal__btn approvals-modal__btn--${actionColor}`}
-                disabled={actionModal.action !== 'approve' && !actionComment.trim()}
+                disabled={actionSaving || (actionModal.action !== 'approve' && !actionComment.trim())}
                 onClick={handleAction}
               >
-                {actionModal.action === 'approve' ? <ThumbsUp size={16} /> : actionModal.action === 'reject' ? <ThumbsDown size={16} /> : <RotateCcw size={16} />}
-                {actionModal.action === 'approve' ? 'Approve' : actionModal.action === 'reject' ? 'Reject' : 'Return'}
+                {actionSaving ? (
+                  <span>Processing…</span>
+                ) : (
+                  <>
+                    {actionModal.action === 'approve' ? <ThumbsUp size={16} /> : actionModal.action === 'reject' ? <ThumbsDown size={16} /> : <RotateCcw size={16} />}
+                    <span>{actionModal.action === 'approve' ? 'Approve' : actionModal.action === 'reject' ? 'Reject' : 'Return'}</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -536,7 +739,7 @@ export default function AccountsPayablePage() {
         <div className="approvals-modal-backdrop" onClick={() => setDetailInvoice(null)}>
           <div className="approvals-modal approvals-modal--detail" onClick={e => e.stopPropagation()}>
             <div className="approvals-modal__header">
-              <div className="approvals-modal__title"><Eye size={20} /><span>Invoice Details</span></div>
+              <div className="approvals-modal__title"><Eye size={20} /><span>Purchase Invoice Details</span></div>
               <button className="approvals-modal__close" onClick={() => setDetailInvoice(null)}><X size={18} /></button>
             </div>
 
@@ -548,12 +751,11 @@ export default function AccountsPayablePage() {
                   { label: 'Vendor',        value: detailInvoice.vendorName },
                   { label: 'Department',    value: detailInvoice.department },
                   { label: 'Amount',        value: formatAmount(detailInvoice.amount, displayCurrency) },
-                  { label: 'Paid',          value: formatAmount(detailInvoice.paidAmount, displayCurrency) },
-                  { label: 'Balance',       value: formatAmount(detailInvoice.amount - detailInvoice.paidAmount, displayCurrency) },
+                  { label: 'Approval Level', value: `Level ${detailInvoice.currentLevel} of ${detailInvoice.totalLevels} (${detailInvoice.requiredRole})` },
                   { label: 'Payment Terms', value: detailInvoice.paymentTerms },
                   { label: 'Invoice Date',  value: fmtDate(detailInvoice.invoiceDate) },
                   { label: 'Due Date',      value: fmtDate(detailInvoice.dueDate) },
-                  { label: 'Status',        value: STATUS_MAP[detailInvoice.status].label },
+                  { label: 'Status',        value: STATUS_MAP[detailInvoice.status]?.label || detailInvoice.status },
                 ].map(item => (
                   <div key={item.label} className="approvals-detail-grid__item">
                     <span className="approvals-detail-grid__label">{item.label}</span>
@@ -571,7 +773,7 @@ export default function AccountsPayablePage() {
 
             <div className="approvals-modal__footer">
               <button className="approvals-modal__btn approvals-modal__btn--secondary" onClick={() => setDetailInvoice(null)}>Close</button>
-              {ACTIONABLE.includes(detailInvoice.status) && (
+              {detailInvoice.status === 'PENDING' && detailInvoice.canAct && (
                 <>
                   <button
                     className="approvals-modal__btn approvals-modal__btn--approve"

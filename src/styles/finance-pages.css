@@ -70,26 +70,13 @@
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45), inset 0 1px 0 0 rgba(255, 255, 255, 0.12);
 }
 
-/* ── Active (clicked) state — neon blue glow ── */
-.fin-kpi--active {
-  border-color: rgba(10, 110, 209, 0.6) !important;
-  box-shadow:
-    0 0 0 2px rgba(10, 110, 209, 0.25),
-    0 0 18px 4px rgba(10, 110, 209, 0.35),
-    0 8px 32px rgba(10, 110, 209, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
-  transform: translateY(-2px) scale(1.01);
-  cursor: pointer;
-}
-
+.fin-kpi--active,
 [data-theme="dark"] .fin-kpi--active {
-  border-color: rgba(77, 177, 255, 0.7) !important;
-  box-shadow:
-    0 0 0 2px rgba(56, 189, 248, 0.3),
-    0 0 24px 6px rgba(56, 189, 248, 0.4),
-    0 8px 40px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
-  background: linear-gradient(135deg, rgba(30, 58, 92, 0.8) 0%, rgba(15, 33, 65, 0.9) 100%) !important;
+  border-color: #2563eb !important;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.15) !important;
+  background: rgba(37, 99, 235, 0.08) !important;
+  transform: translateY(-2px);
+  cursor: pointer;
 }
 
 .fin-kpi {

@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect, type ReactNode } from 'react
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useServiceData } from '../../hooks/useServiceData';
 import { adminService, type AdminRoleRecord } from '../../services/adminService';
-import { companySettingsService, type Position } from '../../services/companySettingsService';
+import { useAuth } from '../../context/AuthContext';
 import type { ApprovalLevel } from '../../types';
 import {
   Layers,
@@ -82,15 +82,6 @@ const MODULE_DEFS: ApprovalModuleDef[] = [
     icon: <Wallet size={16} />,
   },
   { key: 'Payments', label: 'Payment Voucher Approval', system: 'heliflow', color: 'payments', aliases: ['Payments', 'Payment Voucher Approval'], icon: <CreditCard size={16} /> },
-  {
-    key: 'SalesOrders',
-    label: 'Sales Orders',
-    system: 'heliflow',
-    color: 'sales',
-    aliases: ['Sales Orders', 'SalesOrder'],
-    icon: <TrendingUp size={16} />,
-  },
-  { key: 'Approvals', label: 'Approvals', system: 'heliflow', color: 'approvals', icon: <CheckSquare size={16} /> },
 ];
 
 const MODULES = MODULE_DEFS.map((m) => m.key);
@@ -137,6 +128,7 @@ function mapLevel(l: ApprovalLevel): ApprovalLevelData {
 // ─── Component ──────────────────────────────────────────────
 
 export default function ApprovalLevelsPage() {
+  const { hasPermission } = useAuth();
   const { companyDefaultCurrency } = useCurrency();
   const { data: levels, loading, error, reload } = useServiceData(
     () => adminService.listApprovalLevels().then((list) => list.map(mapLevel)),
@@ -203,8 +195,22 @@ export default function ApprovalLevelsPage() {
     return map;
   }, [levels]);
 
-  // Filtered modules
-  const displayModules = selectedModule === 'ALL' ? MODULES : [selectedModule];
+  // Filtered & sorted modules: Active system modules appear FIRST at the top
+  const displayModules = useMemo(() => {
+    const base = selectedModule === 'ALL' ? MODULES : [selectedModule];
+    return [...base].sort((a, b) => {
+      const sysA = MODULE_BY_KEY[a]?.system === activeSystem ? 0 : 1;
+      const sysB = MODULE_BY_KEY[b]?.system === activeSystem ? 0 : 1;
+      return sysA - sysB;
+    });
+  }, [selectedModule, activeSystem]);
+
+  const handleSystemToggle = useCallback((sys: SystemType) => {
+    setActiveSystem(sys);
+    if (selectedModule !== 'ALL' && MODULE_BY_KEY[selectedModule]?.system !== sys) {
+      setSelectedModule('ALL');
+    }
+  }, [selectedModule]);
 
   // Format time for display
   const formatTimeLimit = (hours: number) => {
@@ -321,7 +327,13 @@ export default function ApprovalLevelsPage() {
           <h1>Approval Levels</h1>
           <p>Configure multi-level approval chains for each module</p>
         </div>
-        <button className="alvl-page__add-btn" onClick={() => openAddModal()}>
+        <button
+          className={`alvl-page__add-btn ${!hasPermission('Approval Levels', 'canCreate') ? 'alvl-page__add-btn--disabled' : ''}`}
+          onClick={hasPermission('Approval Levels', 'canCreate') ? () => openAddModal() : undefined}
+          disabled={!hasPermission('Approval Levels', 'canCreate')}
+          title={!hasPermission('Approval Levels', 'canCreate') ? 'You do not have permission to add approval levels' : 'Add new approval level'}
+          style={!hasPermission('Approval Levels', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+        >
           <Plus size={18} />
           Add Level
         </button>
@@ -371,7 +383,7 @@ export default function ApprovalLevelsPage() {
       <div className="alvl-system-toggle">
         <button
           className={`alvl-system-toggle__btn alvl-system-toggle__btn--rfq ${activeSystem === 'rfq' ? 'alvl-system-toggle__btn--active' : ''}`}
-          onClick={() => setActiveSystem('rfq')}
+          onClick={() => handleSystemToggle('rfq')}
         >
           <ShoppingCart size={15} />
           RFQ System
@@ -379,11 +391,11 @@ export default function ApprovalLevelsPage() {
         </button>
         <button
           className={`alvl-system-toggle__btn alvl-system-toggle__btn--heliflow ${activeSystem === 'heliflow' ? 'alvl-system-toggle__btn--active' : ''}`}
-          onClick={() => setActiveSystem('heliflow')}
+          onClick={() => handleSystemToggle('heliflow')}
         >
           <Zap size={15} />
           Procnex System
-          <span className="alvl-system-toggle__sub">PO, AP, Payments & Sales</span>
+          <span className="alvl-system-toggle__sub">PO, AP & Payments</span>
         </button>
       </div>
 

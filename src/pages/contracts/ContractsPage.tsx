@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { contractService, type Contract } from '../../services/contractService';
@@ -81,6 +82,7 @@ interface ContractColumnDef {
 
 export default function ContractsPage() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
   const { formatAmount, companyDefaultCurrency: displayCurrency } = useCurrency();
 
   // ─── Contract types from Company Settings ──
@@ -577,6 +579,15 @@ export default function ContractsPage() {
           <h1><FileText size={24} /> Contracts</h1>
           <p>Manage contracts, track signatures, and create purchase orders</p>
         </div>
+        <button
+          className="ctr-page__add-btn"
+          onClick={hasPermission('Contracts', 'canCreate') ? () => navigate('/contracts/create') : undefined}
+          disabled={!hasPermission('Contracts', 'canCreate')}
+          title={!hasPermission('Contracts', 'canCreate') ? 'You do not have permission to create contracts' : 'Create new contract'}
+          style={!hasPermission('Contracts', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+        >
+          <Plus size={18} /> Create Contract
+        </button>
       </div>
 
       {/* Summary */}

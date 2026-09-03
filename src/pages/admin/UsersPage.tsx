@@ -1,5 +1,6 @@
 import React from 'react';
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { useServiceData } from '../../hooks/useServiceData';
 import { adminService } from '../../services/adminService';
 import { companySettingsService } from '../../services/companySettingsService';
@@ -192,6 +193,7 @@ const ALL_COLUMNS: UserColumnDef[] = [
 // ─── Component ──────────────────────────────────────────────
 
 export default function UsersPage() {
+  const { hasPermission } = useAuth();
   const { data: users, loading, error, reload } = useServiceData(
     () => adminService.listUsers().then((list) => list.map(mapUser)),
     [] as MockUser[],
@@ -218,6 +220,21 @@ export default function UsersPage() {
     [],
     { cacheKey: 'users:positions' }
   );
+
+  // ── Company User Limit ──
+  const [maxUsersAllowed, setMaxUsersAllowed] = useState<number>(50);
+  useEffect(() => {
+    (async () => {
+      try {
+        const prof = await companySettingsService.getCompanyProfile();
+        if (prof?.maxUsers) {
+          setMaxUsersAllowed(prof.maxUsers);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+  }, []);
 
   // ── Optimistic status toggle state ──────────────────────────
   const [pendingStatus, setPendingStatus] = useState<Map<string, boolean>>(new Map());
@@ -314,7 +331,7 @@ export default function UsersPage() {
   const [newRole, setNewRole] = useState<string>('');
   const [newDepartment, setNewDepartment] = useState('');
   const [newPosition, setNewPosition] = useState('');
-  const [newMobileAccess, setNewMobileAccess] = useState(true);
+  const [newMobileAccess, setNewMobileAccess] = useState(false);
 
   // Document uploads
   const [docAadhaar, setDocAadhaar] = useState<File | null>(null);
@@ -501,6 +518,7 @@ export default function UsersPage() {
     setNewRole('');
     setNewDepartment('');
     setNewPosition('');
+    setNewMobileAccess(false);
     setDocAadhaar(null);
     setDocPan(null);
     setDocOffer(null);
@@ -516,6 +534,10 @@ export default function UsersPage() {
         : (newRole || 'Staff');
 
     if (!newFullName.trim() || !newUsername.trim() || !newPassword.trim() || !newEmail.trim()) return;
+    if (isNewEmailInvalid) {
+      setCreateModalError('Please enter a complete valid email address (e.g. user@domain.com)');
+      return;
+    }
     if (selectedUserType === 'heliflow' && !newRole) return;
     if (selectedUserType === 'rfq' && !newPosition) return;
 
@@ -592,6 +614,10 @@ export default function UsersPage() {
   const handleSaveEdit = useCallback(async () => {
     if (!editingUser) return;
     if (!editFullName.trim() || !editEmail.trim()) return;
+    if (isEditEmailInvalid) {
+      setPageMsg('Please enter a complete valid email address (e.g. user@domain.com)');
+      return;
+    }
     setActionLoading(true);
     setPageMsg(null);
     try {
@@ -696,16 +722,32 @@ export default function UsersPage() {
     newEmail.trim() &&
     (selectedUserType === 'rfq' ? !!newPosition : !!newRole);
 
+  const isNewEmailInvalid = useMemo(() => {
+    if (!newEmail.trim()) return false;
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return !emailRegex.test(newEmail.trim());
+  }, [newEmail]);
+
+  const isEditEmailInvalid = useMemo(() => {
+    if (!editEmail.trim()) return false;
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return !emailRegex.test(editEmail.trim());
+  }, [editEmail]);
+
   const createUserMissingFields = useMemo(() => {
     const missing: string[] = [];
     if (!newFullName.trim()) missing.push('Full name');
     if (!newUsername.trim()) missing.push('Username');
     if (newPassword.trim().length < 8) missing.push('Password (minimum 8 characters)');
-    if (!newEmail.trim()) missing.push('Email');
+    if (!newEmail.trim()) {
+      missing.push('Email');
+    } else if (isNewEmailInvalid) {
+      missing.push('Valid email (e.g. user@domain.com)');
+    }
     if (selectedUserType === 'rfq' && !newPosition) missing.push('Position');
     if (selectedUserType === 'heliflow' && !newRole) missing.push('Role');
     return missing;
-  }, [newFullName, newUsername, newPassword, newEmail, newPosition, newRole, selectedUserType]);
+  }, [newFullName, newUsername, newPassword, newEmail, isNewEmailInvalid, newPosition, newRole, selectedUserType]);
 
   const canProceedStep1 = selectedUserType !== null;
 
@@ -717,6 +759,10 @@ export default function UsersPage() {
     const date = new Date(d);
     return `${date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}, ${date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
   };
+
+  const isUserLimitReached = useMemo(() => {
+    return summary.active >= maxUsersAllowed;
+  }, [summary.active, maxUsersAllowed]);
 
   return (
     <div className="users-page">
@@ -737,11 +783,43 @@ export default function UsersPage() {
           <h1>User Management</h1>
           <p>Manage users, assign roles, and control access</p>
         </div>
-        <button className="users-page__add-btn" onClick={openAddModal}>
-          <Plus size={18} />
-          Add User
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '8px 14px',
+            borderRadius: 'var(--radius-md, 8px)',
+            background: isUserLimitReached ? 'rgba(239, 68, 68, 0.12)' : 'var(--surface-hover)',
+            border: isUserLimitReached ? '1px solid #ef4444' : '1px solid var(--border)',
+            color: isUserLimitReached ? '#ef4444' : 'var(--text-primary)',
+            fontSize: '13px',
+            fontWeight: 700,
+          }}>
+            <Users size={16} />
+            <span>Active Users: {summary.active} / {maxUsersAllowed} Limit</span>
+          </div>
+
+          <button
+            className="users-page__add-btn"
+            onClick={(!isUserLimitReached && hasPermission('User Management', 'canCreate')) ? openAddModal : undefined}
+            disabled={isUserLimitReached || !hasPermission('User Management', 'canCreate')}
+            title={!hasPermission('User Management', 'canCreate') ? 'You do not have permission to add users' : isUserLimitReached ? 'Company user limit reached. Please contact Procnex Support to upgrade.' : 'Add new staff user'}
+            style={(isUserLimitReached || !hasPermission('User Management', 'canCreate')) ? { opacity: 0.6, cursor: 'not-allowed', pointerEvents: 'auto' } : {}}
+          >
+            <Plus size={18} />
+            Add User
+          </button>
+        </div>
       </div>
+
+      {isUserLimitReached && (
+        <div style={{ marginBottom: '16px' }}>
+          <MessageStrip type="warning">
+            ⚠️ <strong>Company User Limit Reached:</strong> Your organization has reached its maximum active user limit ({summary.active} / {maxUsersAllowed} active users). Please contact your service provider (Procnex Support) to upgrade your user limit.
+          </MessageStrip>
+        </div>
+      )}
 
       {/* ── Summary Cards ──────────────────────────────────── */}
       <div className="users-summary">
@@ -1042,7 +1120,7 @@ export default function UsersPage() {
                     <div className={`users-modal__type-card ${selectedUserType === 'heliflow' ? 'users-modal__type-card--selected' : ''}`} onClick={() => setSelectedUserType('heliflow')}>
                       <div className="users-modal__type-card-icon users-modal__type-card-icon--heliflow"><Zap size={28} /></div>
                       <div className="users-modal__type-card-check">{selectedUserType === 'heliflow' && <CheckCircle2 size={22} />}</div>
-                      <h3>Heliflow User</h3>
+                      <h3>Procnex User</h3>
                       <p>Platform user with full access. Requires document verification.</p>
                     </div>
                   </div>
@@ -1065,7 +1143,7 @@ export default function UsersPage() {
                   )}
                   <div className="users-modal__type-badge">
                     {selectedUserType === 'rfq' ? <ShoppingCart size={14} /> : <Zap size={14} />}
-                    {selectedUserType === 'rfq' ? 'RFQ User' : 'Heliflow User'}
+                    {selectedUserType === 'rfq' ? 'RFQ User' : 'Procnex User'}
                   </div>
                   <div className="users-modal__field">
                     <label className="users-modal__label">Full Name <span>*</span></label>
@@ -1091,7 +1169,18 @@ export default function UsersPage() {
                   <div className="users-modal__row">
                     <div className="users-modal__field">
                       <label className="users-modal__label"><Mail size={13} style={{ marginRight: 4 }} />Email <span>*</span></label>
-                      <input className="users-modal__input" type="email" placeholder="user@heliflow.in" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
+                      <input
+                        className={`users-modal__input ${isNewEmailInvalid ? 'users-modal__input--invalid' : ''}`}
+                        type="email"
+                        placeholder="user@procnex.com"
+                        value={newEmail}
+                        onChange={(e) => setNewEmail(e.target.value)}
+                      />
+                      {isNewEmailInvalid && (
+                        <p className="users-modal__field-hint" style={{ color: '#ef4444' }}>
+                          Please enter a complete valid email (e.g. name@domain.com)
+                        </p>
+                      )}
                     </div>
                     <div className="users-modal__field">
                       <label className="users-modal__label"><Phone size={13} style={{ marginRight: 4 }} />Phone</label>
@@ -1252,7 +1341,17 @@ export default function UsersPage() {
               <div className="users-modal__row">
                 <div className="users-modal__field">
                   <label className="users-modal__label">Email <span>*</span></label>
-                  <input className="users-modal__input" type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} />
+                  <input
+                    className={`users-modal__input ${isEditEmailInvalid ? 'users-modal__input--invalid' : ''}`}
+                    type="email"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                  />
+                  {isEditEmailInvalid && (
+                    <p className="users-modal__field-hint" style={{ color: '#ef4444' }}>
+                      Please enter a complete valid email (e.g. name@domain.com)
+                    </p>
+                  )}
                 </div>
                 <div className="users-modal__field">
                   <label className="users-modal__label">Phone</label>

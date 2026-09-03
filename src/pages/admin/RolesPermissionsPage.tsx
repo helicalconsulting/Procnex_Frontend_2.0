@@ -27,6 +27,8 @@ import {
   Type,
   AlignLeft,
   Trash2,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import {
   MODULE_CAPABILITIES,
@@ -171,7 +173,7 @@ function PermissionMatrixRow({
     <div className={`${p}__row ${striped ? `${p}__row--striped` : ''}`}>
       <div className={`${p}__module-col`}>
         <span className={`${p}__module-name`}>{perm.module}</span>
-        {hint && <span className="roles-perm-matrix__module-hint">{hint}</span>}
+        {hint && <span className={`${p}__module-hint`}>{hint}</span>}
       </div>
       {(['canView', 'canCreate', 'canApprove'] as PermissionField[]).map((field) => (
         <div key={field} className={`${p}__perm-col`}>
@@ -210,7 +212,7 @@ const ROLE_CLASS_MAP: Record<RoleName, string> = {
 // ─── Component ──────────────────────────────────────────────
 
 export default function RolesPermissionsPage() {
-  const { roles: authRoles } = useAuth();
+  const { roles: authRoles, hasPermission } = useAuth();
   const canDeleteRoles = authRoles.includes('Super Admin');
 
   const { data: roles, loading, error, reload } = useServiceData(
@@ -225,6 +227,7 @@ export default function RolesPermissionsPage() {
   const [expandedRole, setExpandedRole] = useState<number | null>(null);
   const [editingRole, setEditingRole] = useState<RoleData | null>(null);
   const [editPermissions, setEditPermissions] = useState<ModulePermission[]>([]);
+  const [isFullScreen, setIsFullScreen] = useState(false);
 
   // Modules list inline expand
   const [showModulesList, setShowModulesList] = useState(false);
@@ -283,6 +286,7 @@ export default function RolesPermissionsPage() {
     setSaveError(null);
     setEditingRole(role);
     setEditPermissions(role.permissions.map((p) => ({ ...p })));
+    setIsFullScreen(true);
   }, []);
 
   // Toggle a permission in the edit modal
@@ -342,6 +346,7 @@ export default function RolesPermissionsPage() {
     setNewRoleName('');
     setNewRoleDesc('');
     setNewRolePerms(buildDefaultPermissions());
+    setIsFullScreen(true);
     setShowCreateModal(true);
   }, []);
 
@@ -390,7 +395,13 @@ export default function RolesPermissionsPage() {
           <h1>Roles & Permissions</h1>
           <p>Manage roles, define access levels, and configure module permissions</p>
         </div>
-        <button className="roles-page__add-btn" onClick={openCreateModal}>
+        <button
+          className={`roles-page__add-btn ${!hasPermission('Roles & Permissions', 'canCreate') ? 'roles-page__add-btn--disabled' : ''}`}
+          onClick={hasPermission('Roles & Permissions', 'canCreate') ? openCreateModal : undefined}
+          disabled={!hasPermission('Roles & Permissions', 'canCreate')}
+          title={!hasPermission('Roles & Permissions', 'canCreate') ? 'You do not have permission to create roles' : 'Create new role'}
+          style={!hasPermission('Roles & Permissions', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+        >
           <Plus size={18} />
           Create Role
         </button>
@@ -674,16 +685,26 @@ export default function RolesPermissionsPage() {
 
       {/* ── Edit Permissions Modal ──────────────────────────── */}
       {editingRole && (
-        <div className="roles-modal-backdrop" onClick={() => setEditingRole(null)}>
-          <div className="roles-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="roles-modal-backdrop" onClick={() => { setEditingRole(null); setIsFullScreen(false); }}>
+          <div className={`roles-modal ${isFullScreen ? 'roles-modal--fullscreen' : ''}`} onClick={(e) => e.stopPropagation()}>
             <div className="roles-modal__header">
               <div className="roles-modal__title">
                 <Shield size={20} />
                 <span>Edit Permissions — {editingRole.roleName}</span>
               </div>
-              <button className="roles-modal__close" onClick={() => setEditingRole(null)}>
-                <X size={18} />
-              </button>
+              <div className="roles-modal__header-actions">
+                <button
+                  type="button"
+                  className="roles-modal__fullscreen-btn"
+                  onClick={() => setIsFullScreen((prev) => !prev)}
+                  title={isFullScreen ? 'Exit Full Screen' : 'Full Screen'}
+                >
+                  {isFullScreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                </button>
+                <button className="roles-modal__close" onClick={() => { setEditingRole(null); setIsFullScreen(false); }}>
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             <div className="roles-modal__info-bar">
@@ -742,16 +763,26 @@ export default function RolesPermissionsPage() {
 
       {/* ── Create Role Modal ───────────────────────────────── */}
       {showCreateModal && (
-        <div className="roles-modal-backdrop" onClick={() => setShowCreateModal(false)}>
-          <div className="roles-modal roles-modal--create" onClick={(e) => e.stopPropagation()}>
+        <div className="roles-modal-backdrop" onClick={() => { setShowCreateModal(false); setIsFullScreen(false); }}>
+          <div className={`roles-modal roles-modal--create ${isFullScreen ? 'roles-modal--fullscreen' : ''}`} onClick={(e) => e.stopPropagation()}>
             <div className="roles-modal__header">
               <div className="roles-modal__title">
                 <ShieldPlus size={20} />
                 <span>Create New Role</span>
               </div>
-              <button className="roles-modal__close" onClick={() => setShowCreateModal(false)}>
-                <X size={18} />
-              </button>
+              <div className="roles-modal__header-actions">
+                <button
+                  type="button"
+                  className="roles-modal__fullscreen-btn"
+                  onClick={() => setIsFullScreen((prev) => !prev)}
+                  title={isFullScreen ? 'Exit Full Screen' : 'Full Screen'}
+                >
+                  {isFullScreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                </button>
+                <button className="roles-modal__close" onClick={() => { setShowCreateModal(false); setIsFullScreen(false); }}>
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             <div className="roles-modal__body">

@@ -663,11 +663,15 @@ export default function RFQPage() {
           <h1>RFQs</h1>
           <p>Manage procurement requests</p>
         </div>
-        {hasPermission('RFQ', 'canCreate') && (
-          <button className="rfq-page__create-btn" onClick={() => navigate('/rfq/create')}>
-            <Plus size={18} /> New RFQ
-          </button>
-        )}
+        <button
+          className={`rfq-page__create-btn ${!hasPermission('RFQ', 'canCreate') ? 'rfq-page__create-btn--disabled' : ''}`}
+          onClick={hasPermission('RFQ', 'canCreate') ? () => navigate('/rfq/create') : undefined}
+          disabled={!hasPermission('RFQ', 'canCreate')}
+          title={!hasPermission('RFQ', 'canCreate') ? 'You do not have permission to create RFQs' : 'Create new RFQ'}
+          style={!hasPermission('RFQ', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+        >
+          <Plus size={18} /> New RFQ
+        </button>
       </div>
 
       {/* ── KPI Cards ──────────────────────────────────────── */}

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo, type ChangeEvent, type KeyboardEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { Phone, Search, ChevronDown, Check } from 'lucide-react';
 import { COUNTRY_CODES } from '../../config/countryCodes';
 import './PhoneInput.css';
@@ -18,24 +19,6 @@ interface PhoneInputProps {
   hasError?: boolean;
 }
 
-/**
- * Reusable phone input with a searchable country code dropdown.
- *
- * The dropdown supports typing to filter countries by name, dial code, or ISO code.
- *
- * Usage:
- * ```tsx
- * const [countryCode, setCountryCode] = useState('+254');
- * const [phone, setPhone] = useState('');
- *
- * <PhoneInput
- *   countryCode={countryCode}
- *   onCountryCodeChange={setCountryCode}
- *   value={phone}
- *   onChange={setPhone}
- * />
- * ```
- */
 export default function PhoneInput({
   countryCode,
   onCountryCodeChange,
@@ -49,6 +32,41 @@ export default function PhoneInput({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+
+  // Floating coordinates for Portal
+  const [coords, setCoords] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 280 });
+
+  useEffect(() => {
+    if (!dropdownOpen || !triggerRef.current) return;
+
+    const updateCoords = () => {
+      if (!triggerRef.current) return;
+      const rect = triggerRef.current.getBoundingClientRect();
+      const dropdownWidth = Math.max(280, rect.width);
+
+      // Determine if dropdown should open downwards or upwards
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const opensUpwards = spaceBelow < 250 && rect.top > 250;
+
+      const top = opensUpwards
+        ? Math.max(10, rect.top - 246)
+        : Math.min(window.innerHeight - 250, rect.bottom + 4);
+
+      setCoords({
+        top,
+        left: Math.max(10, Math.min(rect.left, window.innerWidth - dropdownWidth - 10)),
+        width: dropdownWidth,
+      });
+    };
+
+    updateCoords();
+    window.addEventListener('resize', updateCoords);
+    window.addEventListener('scroll', updateCoords, true);
+    return () => {
+      window.removeEventListener('resize', updateCoords);
+      window.removeEventListener('scroll', updateCoords, true);
+    };
+  }, [dropdownOpen]);
 
   // Find the currently selected country
   const selectedCountry = useMemo(
@@ -159,7 +177,7 @@ export default function PhoneInput({
   };
 
   return (
-    <div className="phone-input-wrap">
+    <div className={`phone-input-wrap ${dropdownOpen ? 'phone-input-wrap--open' : ''}`}>
       {/* Country code trigger button */}
       <button
         ref={triggerRef}
@@ -178,13 +196,20 @@ export default function PhoneInput({
         <ChevronDown size={12} className={`phone-input-trigger-arrow ${dropdownOpen ? 'phone-input-trigger-arrow--open' : ''}`} />
       </button>
 
-      {/* Dropdown */}
-      {dropdownOpen && (
+      {/* Dropdown via Portal */}
+      {dropdownOpen && createPortal(
         <div
           ref={dropdownRef}
           className="phone-input-dropdown"
           role="listbox"
           aria-label="Select country code"
+          style={{
+            position: 'fixed',
+            top: `${coords.top}px`,
+            left: `${coords.left}px`,
+            width: `${coords.width}px`,
+            zIndex: 999999,
+          }}
         >
           <div className="phone-input-search-wrap">
             <Search size={14} className="phone-input-search-icon" />
@@ -223,7 +248,8 @@ export default function PhoneInput({
               <div className="phone-input-no-results">No countries found</div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Phone number input */}

@@ -32,6 +32,7 @@ interface FormBuilderCanvasProps {
   onUpdateFormHeader: (title: string, description: string) => void;
   onDropField: (type: FieldType, defaultConfig: Partial<FormField>, targetIndex?: number) => void;
   onMoveField: (index: number, direction: 'up' | 'down') => void;
+  onReorderFields: (fromIndex: number, toIndex: number) => void;
   onDuplicateField: (fieldId: string) => void;
   onDeleteField: (fieldId: string) => void;
   onClearCanvas: () => void;
@@ -49,6 +50,7 @@ export default function FormBuilderCanvas({
   onUpdateFormHeader,
   onDropField,
   onMoveField,
+  onReorderFields,
   onDuplicateField,
   onDeleteField,
   onClearCanvas,
@@ -61,28 +63,53 @@ export default function FormBuilderCanvas({
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [gridCols, setGridCols] = useState<1 | 2>(2);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
   const handleDragOver = (e: React.DragEvent, index?: number) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
-    if (index !== undefined) {
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = draggedIndex !== null ? 'move' : 'copy';
+    if (index !== undefined && index !== dragOverIndex) {
       setDragOverIndex(index);
     }
   };
 
+  const handleCanvasFieldDragStart = (e: React.DragEvent, index: number) => {
+    e.stopPropagation();
+    setDraggedIndex(index);
+    e.dataTransfer.setData('text/plain', String(index));
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
   const handleDrop = (e: React.DragEvent, targetIndex?: number) => {
     e.preventDefault();
+    e.stopPropagation();
+    const targetIdx = targetIndex ?? form.fields.length;
     setDragOverIndex(null);
+
+    if (draggedIndex !== null) {
+      if (draggedIndex !== targetIdx) {
+        onReorderFields(draggedIndex, targetIdx);
+      }
+      setDraggedIndex(null);
+      return;
+    }
+
     const data = e.dataTransfer.getData('application/json');
     if (!data) return;
     try {
       const { type, defaultConfig } = JSON.parse(data);
       if (type) {
-        onDropField(type, defaultConfig, targetIndex);
+        onDropField(type, defaultConfig, targetIdx);
       }
     } catch (err) {
       console.error('Drop error:', err);
     }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
   };
 
   return (
@@ -227,10 +254,14 @@ export default function FormBuilderCanvas({
                 return (
                   <div
                     key={field.id}
-                    className={`fbc-field-wrapper ${isSectionType ? 'fbc-field-wrapper--section' : ''} ${isFullWidth ? 'fbc-field-wrapper--full' : 'fbc-field-wrapper--half'} ${isSelected ? 'fbc-field-wrapper--selected' : ''} ${isPreviewMode ? 'fbc-field-wrapper--preview' : ''}`}
+                    className={`fbc-field-wrapper ${isSectionType ? 'fbc-field-wrapper--section' : ''} ${isFullWidth ? 'fbc-field-wrapper--full' : 'fbc-field-wrapper--half'} ${isSelected ? 'fbc-field-wrapper--selected' : ''} ${draggedIndex === index ? 'fbc-field-wrapper--dragging' : ''} ${dragOverIndex === index ? 'fbc-field-wrapper--drag-over' : ''} ${isPreviewMode ? 'fbc-field-wrapper--preview' : ''}`}
+                    draggable={!isPreviewMode}
+                    onDragStart={(e) => handleCanvasFieldDragStart(e, index)}
                     onClick={() => !isPreviewMode && onSelectField(field.id)}
                     onDragOver={(e) => handleDragOver(e, index)}
+                    onDragLeave={() => setDragOverIndex(null)}
                     onDrop={(e) => handleDrop(e, index)}
+                    onDragEnd={handleDragEnd}
                   >
                     {!isPreviewMode && (
                       <div className="fbc-field-toolbar">

@@ -216,6 +216,7 @@ export interface CompanyProfile {
   id: string;
   companyCode: string;
   defaultCurrency: string;
+  maxUsers?: number;
   invitationExpiryHours: number;
   resubmissionDeadlineHours: number;
   createdAt: string;
@@ -243,6 +244,7 @@ export interface UpdateBrandingPayload {
   loginText?: string;
   supportEmail?: string;
   primaryPortalName?: string;
+  maxUsers?: number;
 }
 
 async function mockGetCompanyProfile(): Promise<CompanyProfile> {
@@ -1456,6 +1458,11 @@ export const companySettingsService = {
   updateSequenceSetting: apiUpdateSequenceSetting,
   generateNextSequence: apiGenerateNextSequence,
   backfillSupplierCodes: apiBackfillSupplierCodes,
+  // Passcode Security
+  getSettingsPasswordStatus: apiGetSettingsPasswordStatus,
+  verifySettingsPassword: apiVerifySettingsPassword,
+  updateSettingsPassword: apiUpdateSettingsPassword,
+  removeSettingsPassword: apiRemoveSettingsPassword,
 };
 
 export interface SequenceSetting {
@@ -1502,4 +1509,31 @@ async function apiBackfillSupplierCodes(): Promise<{ updated: number; nextCounte
     method: 'POST',
   });
   return data;
+}
+
+// ─── Company Settings Access Passcode API ────────────────────────────────────
+
+async function apiGetSettingsPasswordStatus(): Promise<{ isPasswordProtected: boolean }> {
+  return apiRequest<{ isPasswordProtected: boolean }>('/company-settings/access-password/status', { cacheTtlMs: 0 });
+}
+
+async function apiVerifySettingsPassword(password: string): Promise<{ verified: boolean; isPasswordProtected: boolean }> {
+  return apiRequest<{ verified: boolean; isPasswordProtected: boolean }>('/company-settings/verify-access-password', {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  });
+}
+
+async function apiUpdateSettingsPassword(newPassword: string, currentPassword?: string): Promise<{ isPasswordProtected: boolean }> {
+  return apiRequest<{ isPasswordProtected: boolean }>('/company-settings/access-password', {
+    method: 'PUT',
+    body: JSON.stringify({ newPassword, currentPassword }),
+  });
+}
+
+async function apiRemoveSettingsPassword(currentPassword: string): Promise<{ isPasswordProtected: boolean }> {
+  return apiRequest<{ isPasswordProtected: boolean }>('/company-settings/access-password', {
+    method: 'DELETE',
+    body: JSON.stringify({ currentPassword }),
+  });
 }

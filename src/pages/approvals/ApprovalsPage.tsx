@@ -26,6 +26,7 @@ import {
   FileSignature,
   ExternalLink,
   Minus,
+  Wallet,
 } from 'lucide-react';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import '../../components/shared/ColumnCustomizer.css';
@@ -33,12 +34,13 @@ import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TableSkeleton } from '../../components/shared/Skeleton';
 import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
 import { apiRequest } from '../../api/client';
+import { useAuth } from '../../context/AuthContext';
 import './ApprovalsPage.css';
 
 // ─── Types ──────────────────────────────────────────────────
 
 type ApprovalStatusType = 'PENDING' | 'APPROVED' | 'REJECTED' | 'RETURNED';
-type ModuleType = 'RFQ' | 'Purchase Order' | 'Quotation' | 'Contract';
+type ModuleType = 'RFQ' | 'Purchase Order' | 'Purchase Invoice' | 'Quotation' | 'Contract';
 type PriorityType = 'HIGH' | 'MEDIUM' | 'LOW';
 
 type ApprovalRequest = ApprovalTableRow;
@@ -55,6 +57,7 @@ const STATUS_LABELS: Record<string, string> = {
 const MODULE_ICONS: Record<ModuleType, React.ReactNode> = {
   RFQ: <FileText size={15} />,
   'Purchase Order': <ShoppingCart size={15} />,
+  'Purchase Invoice': <Wallet size={15} />,
   Quotation: <ClipboardList size={15} />,
   Contract: <FileSignature size={15} />,
 };
@@ -409,6 +412,7 @@ function ApprovalChainView({ module, referenceId, onClose }: { module: string; r
 // but the backend expects canonical names (e.g. 'PurchaseOrders', 'Quotations')
 const CANONICAL_MODULE: Record<string, string> = {
   'Purchase Order': 'PurchaseOrders',
+  'Purchase Invoice': 'AccountsPayable',
   'Quotation': 'Quotations',
   'Contract': 'Contracts',
   'RFQ': 'RFQ',
@@ -426,6 +430,7 @@ export default function ApprovalsPage() {
   const [moduleFilter, setModuleFilter] = useState<string>(() => {
     if (!initialModule) return 'Purchase Order';
     const m = initialModule.toLowerCase();
+    if (m.includes('invoice') || m.includes('ap') || m.includes('accounts')) return 'Purchase Invoice';
     if (m.includes('po') || m.includes('purchase')) return 'Purchase Order';
     if (m.includes('quotation')) return 'Quotation';
     if (m.includes('rfq')) return 'RFQ';
@@ -609,11 +614,30 @@ export default function ApprovalsPage() {
     return a.status;
   }, []);
 
+  const { user, roles: authRoles, hasPermission } = useAuth();
+  const canApprovePO = hasPermission('Purchase Order Approval', 'canApprove');
+  const isAdmin = useMemo(() => {
+    if (!authRoles || authRoles.length === 0) return false;
+    return authRoles.some((r) =>
+      r === 'Super Admin' || r === 'Administrator' || r.toLowerCase().includes('admin')
+    );
+  }, [authRoles]);
+
   // Final table list (also filtered by statusFilter)
   const filtered = useMemo(() => {
-    if (statusFilter === 'ALL') return moduleFiltered;
-    return moduleFiltered.filter((a) => getEffectiveStatus(a) === statusFilter);
-  }, [moduleFiltered, statusFilter, getEffectiveStatus]);
+    let list = moduleFiltered;
+    // Sequential Queue Rule: Non-admin users MUST ONLY see pending requests if they can act (canAct === true) or if they created it!
+    if (!isAdmin) {
+      list = list.filter((a) => {
+        if (a.status === 'PENDING' && !a.canAct && a.createdById !== user?.id) {
+          return false;
+        }
+        return true;
+      });
+    }
+    if (statusFilter === 'ALL') return list;
+    return list.filter((a) => getEffectiveStatus(a) === statusFilter);
+  }, [moduleFiltered, statusFilter, getEffectiveStatus, isAdmin, user?.id]);
 
   // Summary calculated based on moduleFiltered list
   const summary = useMemo(() => ({
@@ -861,13 +885,31 @@ export default function ApprovalsPage() {
                         </button>
                         {req.status === 'PENDING' && req.canAct ? (
                           <>
-                            <button className="approvals-table__action-btn approvals-table__action-btn--approve" title="Approve" onClick={() => openAction(req, 'approve')}>
+                            <button
+                              className={`approvals-table__action-btn approvals-table__action-btn--approve ${!canApprovePO ? 'approvals-table__action-btn--disabled' : ''}`}
+                              title={!canApprovePO ? 'You do not have permission to approve items' : 'Approve'}
+                              onClick={canApprovePO ? () => openAction(req, 'approve') : undefined}
+                              disabled={!canApprovePO}
+                              style={!canApprovePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                            >
                               <ThumbsUp size={15} />
                             </button>
-                            <button className="approvals-table__action-btn approvals-table__action-btn--reject" title="Reject" onClick={() => openAction(req, 'reject')}>
+                            <button
+                              className={`approvals-table__action-btn approvals-table__action-btn--reject ${!canApprovePO ? 'approvals-table__action-btn--disabled' : ''}`}
+                              title={!canApprovePO ? 'You do not have permission to reject items' : 'Reject'}
+                              onClick={canApprovePO ? () => openAction(req, 'reject') : undefined}
+                              disabled={!canApprovePO}
+                              style={!canApprovePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                            >
                               <ThumbsDown size={15} />
                             </button>
-                            <button className="approvals-table__action-btn approvals-table__action-btn--return" title="Return" onClick={() => openAction(req, 'return')}>
+                            <button
+                              className={`approvals-table__action-btn approvals-table__action-btn--return ${!canApprovePO ? 'approvals-table__action-btn--disabled' : ''}`}
+                              title={!canApprovePO ? 'You do not have permission to return items' : 'Return'}
+                              onClick={canApprovePO ? () => openAction(req, 'return') : undefined}
+                              disabled={!canApprovePO}
+                              style={!canApprovePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                            >
                               <RotateCcw size={15} />
                             </button>
                           </>
@@ -1090,10 +1132,22 @@ export default function ApprovalsPage() {
               <button className="approvals-modal__btn approvals-modal__btn--secondary" onClick={() => setDetailRequest(null)}>Close</button>
               {detailRequest.status === 'PENDING' && detailRequest.canAct && (
                 <>
-                  <button className="approvals-modal__btn approvals-modal__btn--approve" onClick={() => { setDetailRequest(null); openAction(detailRequest, 'approve'); }}>
+                  <button
+                    className="approvals-modal__btn approvals-modal__btn--approve"
+                    onClick={canApprovePO ? () => { setDetailRequest(null); openAction(detailRequest, 'approve'); } : undefined}
+                    disabled={!canApprovePO}
+                    title={!canApprovePO ? 'You do not have permission to approve items' : 'Approve'}
+                    style={!canApprovePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                  >
                     <ThumbsUp size={16} /> Approve
                   </button>
-                  <button className="approvals-modal__btn approvals-modal__btn--reject" onClick={() => { setDetailRequest(null); openAction(detailRequest, 'reject'); }}>
+                  <button
+                    className="approvals-modal__btn approvals-modal__btn--reject"
+                    onClick={canApprovePO ? () => { setDetailRequest(null); openAction(detailRequest, 'reject'); } : undefined}
+                    disabled={!canApprovePO}
+                    title={!canApprovePO ? 'You do not have permission to reject items' : 'Reject'}
+                    style={!canApprovePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                  >
                     <ThumbsDown size={16} /> Reject
                   </button>
                 </>

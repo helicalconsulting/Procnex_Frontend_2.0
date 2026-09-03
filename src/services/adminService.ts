@@ -92,8 +92,8 @@ async function apiListUsers(): Promise<UserWithRoles[]> {
       roles: u.roles && u.roles.length > 0 ? u.roles : u.role ? [u.role] : [],
     }));
   } catch (err) {
-    console.warn('apiListUsers forbidden or failed, fallback to mock users:', err);
-    return mockListUsers();
+    console.warn('apiListUsers failed:', err);
+    return [];
   }
 }
 

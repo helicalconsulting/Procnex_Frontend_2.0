@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { purchaseRequisitionService, type PurchaseRequisition } from '../../services/purchaseRequisitionService';
 import { sseClient } from '../../services/sseClient';
 import { ShoppingCart, Eye, Pencil, Trash2, Loader2, AlertTriangle, FileText, Search, X, CheckCircle, Clock, Plus, CheckSquare, XCircle } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import ColumnCustomizer, { type ColumnDef } from '../../components/shared/ColumnCustomizer';
@@ -57,6 +58,7 @@ const COL_WIDTHS: Record<string, string> = {
 
 export default function PurchaseRequisitionsListPage() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
   const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -263,8 +265,25 @@ export default function PurchaseRequisitionsListPage() {
         </div>
         <button
           className="pr-btn pr-btn--primary"
-          onClick={() => navigate('/procurement/create-purchase-order')}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 8, fontSize: 15, fontWeight: 700, background: 'linear-gradient(135deg, #0a6ed1, #0856a4)', color: '#fff', border: 'none', cursor: 'pointer', boxShadow: '0 4px 12px rgba(10, 110, 209, 0.25)' }}
+          onClick={hasPermission('PO Creation', 'canCreate') ? () => navigate('/procurement/create-purchase-order') : undefined}
+          disabled={!hasPermission('PO Creation', 'canCreate')}
+          title={!hasPermission('PO Creation', 'canCreate') ? 'You do not have permission to create Purchase Orders' : 'Create new Purchase Order'}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '10px 20px',
+            borderRadius: 8,
+            fontSize: 15,
+            fontWeight: 700,
+            background: hasPermission('PO Creation', 'canCreate') ? 'linear-gradient(135deg, #0a6ed1, #0856a4)' : 'var(--bg-disabled, #cbd5e1)',
+            color: hasPermission('PO Creation', 'canCreate') ? '#fff' : 'var(--text-disabled, #64748b)',
+            border: 'none',
+            cursor: hasPermission('PO Creation', 'canCreate') ? 'pointer' : 'not-allowed',
+            opacity: hasPermission('PO Creation', 'canCreate') ? 1 : 0.6,
+            pointerEvents: 'auto',
+            boxShadow: hasPermission('PO Creation', 'canCreate') ? '0 4px 12px rgba(10, 110, 209, 0.25)' : 'none',
+          }}
         >
           <Plus size={16} /> New PO
         </button>

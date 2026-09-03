@@ -10,6 +10,11 @@
   position: relative;
 }
 
+.phone-input-wrap--open {
+  position: relative;
+  z-index: 1000 !important;
+}
+
 /* ─── Trigger Button (replaces native <select>) ──────────── */
 
 .phone-input-trigger {
@@ -77,15 +82,16 @@
   position: absolute;
   left: 0;
   top: calc(100% + 4px);
-  z-index: 9999;
+  z-index: 10001 !important;
   width: 280px;
-  max-height: 320px;
+  max-width: 90vw;
+  max-height: 240px;
   display: flex;
   flex-direction: column;
-  background: var(--surface-card);
+  background: var(--surface-card, #1e293b);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4);
   animation: phoneDropdownIn 0.18s cubic-bezier(0.32, 0.72, 0, 1);
   transform-origin: top center;
 }

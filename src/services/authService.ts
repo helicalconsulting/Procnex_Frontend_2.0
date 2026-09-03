@@ -258,6 +258,8 @@ function clearSession(): void {
   localStorage.removeItem(ROLES_KEY);
   localStorage.removeItem(PERMISSIONS_KEY);
   localStorage.removeItem(VENDOR_TOKEN_KEY);
+  localStorage.removeItem('heliflow_branding_cache');
+  localStorage.removeItem('heliflow_tab_title');
 }
 
 function getToken(): string | null {
@@ -300,14 +302,21 @@ async function migrateMockToken(): Promise<AuthResponse | null> {
 
 export const authService = {
   login: async (payload: LoginPayload): Promise<AuthResponse> => {
+    clearAllApiCache();
     const data = USE_MOCK ? await mockLogin(payload) : await apiLogin(payload);
     saveSession(data);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('heliflow_auth_change'));
+    }
     return data;
   },
 
   vendorLogin: async (payload: LoginPayload): Promise<AuthResponse> => {
     const data = USE_MOCK ? await mockVendorLogin(payload) : await apiVendorLogin(payload);
     saveSession(data, { vendorPortal: true });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('heliflow_auth_change'));
+    }
     return data;
   },
 
@@ -319,6 +328,10 @@ export const authService = {
     // Clear in-memory API response cache to prevent stale data showing
     // when the next user logs in from the same browser tab.
     clearAllApiCache();
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('heliflow_auth_change'));
+    }
 
     // Fire-and-forget: notify backend in background (don't block the user)
     if (!USE_MOCK && token) {

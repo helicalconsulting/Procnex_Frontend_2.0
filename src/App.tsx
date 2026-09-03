@@ -11,6 +11,7 @@ import { ProtectedRoute } from "./router/ProtectedRoute";
 import AppLayout from "./components/layout/AppLayout";
 import { PermissionGate } from "./router/PermissionGate";
 
+const HelicalConsultingPage = lazy(() => import("./pages/auth/HelicalConsultingPage"));
 const LoginPage = lazy(() => import("./pages/auth/LoginPage"));
 const VendorLoginPage = lazy(() => import("./pages/auth/VendorLoginPage"));
 const SetPasswordPage = lazy(() => import("./pages/auth/SetPasswordPage"));
@@ -132,6 +133,7 @@ export default function App() {
                 <CurrencyProviderWithAuth>
                   <Routes>
                     {/* Public */}
+                    <Route path="/helicalconsulting" element={page(HelicalConsultingPage)} />
                     <Route path="/login" element={page(LoginPage)} />
                     <Route path="/vendor/login" element={page(VendorLoginPage)} />
                     <Route path="/set-password" element={page(SetPasswordPage)} />

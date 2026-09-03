@@ -37,18 +37,39 @@ export function hasModulePermission(
   module: string,
   action: PermissionField = 'canView'
 ): boolean {
+  if (module === 'Documents' || module === 'Notifications') return true;
   if (!permissions || Object.keys(permissions).length === 0) return false;
   if (Boolean(permissions[module]?.[action])) return true;
 
   const aliases: Record<string, string[]> = {
-    'Purchase Orders': ['Purchase Orders', 'PurchaseOrder', 'Purchase Order', 'PurchaseOrders', 'PO'],
-    PurchaseOrder: ['Purchase Orders', 'PurchaseOrder', 'Purchase Order', 'PurchaseOrders', 'PO'],
+    'RFQ Management': ['RFQ Management', 'RFQ', 'RFQs', 'rfq'],
+    RFQ: ['RFQ Management', 'RFQ', 'RFQs', 'rfq'],
+    'PO Creation': ['PO Creation', 'Purchase Orders', 'PurchaseOrder', 'Purchase Order', 'PurchaseOrders', 'PO'],
+    'Purchase Orders': ['PO Creation', 'Purchase Orders', 'PurchaseOrder', 'Purchase Order', 'PurchaseOrders', 'PO'],
+    PurchaseOrder: ['PO Creation', 'Purchase Orders', 'PurchaseOrder', 'Purchase Order', 'PurchaseOrders', 'PO'],
     Contracts: ['Contracts', 'Contract'],
     Contract: ['Contracts', 'Contract'],
-    RFQ: ['RFQ', 'RFQs', 'rfq'],
-    Quotations: ['Quotations', 'Quotation', 'QUOTATION'],
-    Approvals: ['Approvals', 'ApprovalManagement', 'Approval Management'],
+    'Create Purchase Invoice': ['Create Purchase Invoice', 'Accounts Payable', 'Purchase Invoice Approval', 'Approvals'],
+    'Create Payment Voucher': ['Create Payment Voucher', 'Payments', 'Payment Voucher Approval', 'Approvals'],
+    'Quotation Approval': ['Quotation Approval', 'Quotations', 'Quotation', 'QUOTATION'],
+    Quotations: ['Quotation Approval', 'Quotations', 'Quotation', 'QUOTATION'],
+    'Purchase Order Approval': ['Purchase Order Approval', 'Approvals', 'ApprovalManagement', 'Approval Management'],
+    Approvals: ['Purchase Order Approval', 'Approvals', 'ApprovalManagement', 'Approval Management'],
+    'Purchase Invoice Approval': ['Purchase Invoice Approval', 'Accounts Payable', 'AccountsPayable', 'Approvals'],
+    'Accounts Payable': ['Purchase Invoice Approval', 'Accounts Payable', 'AccountsPayable', 'Approvals'],
+    'Payment Voucher Approval': ['Payment Voucher Approval', 'Payments', 'PaymentVoucher', 'Approvals'],
+    Payments: ['Payment Voucher Approval', 'Payments', 'PaymentVoucher', 'Approvals'],
     Vendors: ['Vendors', 'Vendor'],
+    Vendor: ['Vendors', 'Vendor'],
+    'New Onboarding': ['New Onboarding', 'Vendors', 'Vendor'],
+    'Onboarding Queue': ['Onboarding Queue', 'Vendors', 'Vendor'],
+    Signature: ['Signature', 'Documents'],
+    'User Management': ['User Management', 'Users', 'UserManagement'],
+    'Roles & Permissions': ['Roles & Permissions', 'Roles', 'RolesPermissions'],
+    'Approval Levels': ['Approval Levels', 'ApprovalLevels'],
+    'Company Settings': ['Company Settings', 'CompanySettings', 'User Management'],
+    'Custom Form Builder': ['Custom Form Builder', 'CustomFormBuilder', 'User Management'],
+    'Form Responses': ['Form Responses', 'FormResponses', 'User Management'],
   };
 
   const list = aliases[module] || [module, `${module}s`, module.replace(/s$/, '')];

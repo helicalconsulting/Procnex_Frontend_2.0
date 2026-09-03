@@ -473,8 +473,14 @@ export default function NewOnboardingPage() {
     });
   }, [detailInvitation, availableDocs]);
 
-  const pendingCount = useMemo(() => invitations.filter((i) => i.status === 'pending').length, [invitations]);
-  const inQueueCount = useMemo(() => invitations.filter((i) => i.status === 'in_queue').length, [invitations]);
+  const visibleInvitations = useMemo(
+    () => invitations.filter((inv) => !deletingIds.has(inv.id)),
+    [invitations, deletingIds]
+  );
+
+  const pendingCount = useMemo(() => visibleInvitations.filter((i) => i.status === 'pending').length, [visibleInvitations]);
+  const inQueueCount = useMemo(() => visibleInvitations.filter((i) => i.status === 'in_queue').length, [visibleInvitations]);
+  const sentCount = useMemo(() => visibleInvitations.length, [visibleInvitations]);
 
   const isPhoneInvalid = useMemo(() => {
     if (!contactPhone.trim()) return false;
@@ -945,11 +951,12 @@ export default function NewOnboardingPage() {
                 <RefreshCw size={12} /> Resend Email
               </button>
             )}
-            {inv.status === 'pending' && (
+            {inv.status !== 'approved' && (
               <button
                 type="button"
                 className="onb-invite-action onb-invite-action--delete"
                 onClick={(e) => { e.stopPropagation(); handleDelete(inv.id); }}
+                title="Delete Invitation"
               >
                 <Trash2 size={12} />
               </button>
@@ -959,11 +966,6 @@ export default function NewOnboardingPage() {
       </div>
     );
   };
-
-  const visibleInvitations = useMemo(
-    () => invitations.filter((inv) => !deletingIds.has(inv.id)),
-    [invitations, deletingIds]
-  );
 
   const sentInvitationsContent = loading ? (
     <div className="onb-list-empty">
@@ -1015,7 +1017,7 @@ export default function NewOnboardingPage() {
 
       <div className="onb-kpi-row">
         {[
-          { label: 'Invitations Sent', value: invitations.length, cls: 'blue' },
+          { label: 'Invitations Sent', value: sentCount, cls: 'blue' },
           { label: 'Waiting for user response', value: pendingCount, cls: 'amber' },
           { label: 'In Approval Queue', value: inQueueCount, cls: 'green' },
         ].map((k) => (

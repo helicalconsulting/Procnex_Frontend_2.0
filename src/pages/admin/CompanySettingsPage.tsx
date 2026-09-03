@@ -7,6 +7,7 @@ import {
   Plus, X, Edit3, Building2, Tag, ChevronDown, ChevronRight, ChevronUp, Search,
   Save, Settings, DollarSign, Trash2, Ruler, Users, CreditCard, Mail, FileText, RotateCcw, Clock,
   Palette, Image, FileSignature, Eye, Upload, Loader2, ArrowRight, Sparkles, AlertTriangle, CheckCircle2, Info, FileCheck, Globe, Hash,
+  Lock, Unlock, ShieldCheck, Key, EyeOff, Check,
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import ImageCropperModal from '../../components/shared/ImageCropperModal';
@@ -598,6 +599,7 @@ export default function CompanySettingsPage() {
   const [resubmissionDeadlineHours, setResubmissionDeadlineHours] = useState(72);
   const [pendingInvitationExpiry, setPendingInvitationExpiry] = useState<number | null>(null);
   const [pendingResubmissionDeadline, setPendingResubmissionDeadline] = useState<number | null>(null);
+  const [pendingMaxUsers, setPendingMaxUsers] = useState<number | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -613,6 +615,121 @@ export default function CompanySettingsPage() {
     })();
   }, []);
 
+  // ── Passcode Protection State (Default to locked for instant password prompt) ──
+  const [isPasscodeProtected, setIsPasscodeProtected] = useState<boolean>(true);
+  const [isUnlocked, setIsUnlocked] = useState<boolean>(false);
+  const [checkingPasscodeStatus, setCheckingPasscodeStatus] = useState<boolean>(true);
+  const [lockPasscode, setLockPasscode] = useState<string>('');
+  const [lockError, setLockError] = useState<string | null>(null);
+  const [verifyingLock, setVerifyingLock] = useState<boolean>(false);
+  const [showPasscodeModal, setShowPasscodeModal] = useState<boolean>(false);
+  const [passcodeModalMode, setPasscodeModalMode] = useState<'set' | 'change' | 'remove'>('set');
+
+  // Passcode Modal Form State
+  const [passcodeCurrent, setPasscodeCurrent] = useState<string>('');
+  const [passcodeNew, setPasscodeNew] = useState<string>('');
+  const [passcodeConfirm, setPasscodeConfirm] = useState<string>('');
+  const [passcodeError, setPasscodeError] = useState<string | null>(null);
+  const [passcodeSaving, setPasscodeSaving] = useState<boolean>(false);
+  const [showPasscodeText, setShowPasscodeText] = useState<boolean>(false);
+  const [showCurrentPasscodeText, setShowCurrentPasscodeText] = useState<boolean>(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setCheckingPasscodeStatus(true);
+        const res = await companySettingsService.getSettingsPasswordStatus();
+        setIsPasscodeProtected(res.isPasswordProtected);
+        if (res.isPasswordProtected) {
+          setIsUnlocked(false);
+        } else {
+          setIsUnlocked(true);
+        }
+      } catch {
+        setIsUnlocked(true);
+        setIsPasscodeProtected(false);
+      } finally {
+        setCheckingPasscodeStatus(false);
+      }
+    })();
+  }, []);
+
+  const handleUnlock = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!lockPasscode.trim()) return;
+    setVerifyingLock(true);
+    setLockError(null);
+    try {
+      const res = await companySettingsService.verifySettingsPassword(lockPasscode.trim());
+      if (res.verified) {
+        setIsUnlocked(true);
+        setLockPasscode('');
+      } else {
+        setLockError('Incorrect Security Passcode. Access Denied.');
+      }
+    } catch (err) {
+      setLockError(err instanceof Error ? err.message : 'Incorrect Security Passcode');
+    } finally {
+      setVerifyingLock(false);
+    }
+  }, [lockPasscode]);
+
+  const handleSavePasscode = useCallback(async () => {
+    if (passcodeModalMode === 'remove') {
+      if (!passcodeCurrent.trim()) {
+        setPasscodeError('Current passcode is required to disable protection');
+        return;
+      }
+      setPasscodeSaving(true);
+      setPasscodeError(null);
+      try {
+        await companySettingsService.removeSettingsPassword(passcodeCurrent.trim());
+        setIsPasscodeProtected(false);
+        setIsUnlocked(true);
+        setShowPasscodeModal(false);
+        setPasscodeCurrent('');
+        setPasscodeNew('');
+        setPasscodeConfirm('');
+        setPageMsg('Company Settings Security Passcode disabled.');
+      } catch (err) {
+        setPasscodeError(err instanceof Error ? err.message : 'Incorrect passcode. Could not disable protection.');
+      } finally {
+        setPasscodeSaving(false);
+      }
+      return;
+    }
+
+    if (passcodeNew.length < 4) {
+      setPasscodeError('New passcode must be at least 4 characters');
+      return;
+    }
+    if (passcodeNew !== passcodeConfirm) {
+      setPasscodeError('Passcodes do not match');
+      return;
+    }
+    if (isPasscodeProtected && passcodeModalMode === 'change' && !passcodeCurrent.trim()) {
+      setPasscodeError('Current passcode is required');
+      return;
+    }
+
+    setPasscodeSaving(true);
+    setPasscodeError(null);
+    try {
+      await companySettingsService.updateSettingsPassword(passcodeNew.trim(), isPasscodeProtected ? passcodeCurrent.trim() : undefined);
+      setIsPasscodeProtected(true);
+      setIsUnlocked(true);
+      setShowPasscodeModal(false);
+      setPasscodeCurrent('');
+      setPasscodeNew('');
+      setPasscodeConfirm('');
+      setPageMsg('Company Settings Security Passcode updated successfully.');
+    } catch (err) {
+      setPasscodeError(err instanceof Error ? err.message : 'Failed to save passcode');
+    } finally {
+      setPasscodeSaving(false);
+    }
+  }, [passcodeModalMode, passcodeCurrent, passcodeNew, passcodeConfirm, isPasscodeProtected]);
+
   // The currently saved currency from the backend
   const savedCurrency = profile?.defaultCurrency || ctxDefaultCurrency;
   // Effective display value: use pending if different from saved, else saved
@@ -625,6 +742,7 @@ export default function CompanySettingsPage() {
   }, []);
 
   const hasPortalNameChange = pendingPortalName !== null && pendingPortalName !== portalName;
+  const hasMaxUsersChange = pendingMaxUsers !== null && pendingMaxUsers !== (profile?.maxUsers ?? 50);
 
   const hasTimeLimitChanges = (pendingInvitationExpiry !== null && pendingInvitationExpiry !== invitationExpiryHours) ||
     (pendingResubmissionDeadline !== null && pendingResubmissionDeadline !== resubmissionDeadlineHours);
@@ -635,7 +753,7 @@ export default function CompanySettingsPage() {
     const resubDeadline = pendingResubmissionDeadline !== null ? pendingResubmissionDeadline : resubmissionDeadlineHours;
     const nameToSave = pendingPortalName !== null ? pendingPortalName : portalName;
 
-    if (!hasPendingChange && !hasTimeLimitChanges && !hasPortalNameChange) return;
+    if (!hasPendingChange && !hasTimeLimitChanges && !hasPortalNameChange && !hasMaxUsersChange) return;
 
     setSavingCurrency(true);
     setPageMsg(null);
@@ -650,6 +768,9 @@ export default function CompanySettingsPage() {
       if (hasPortalNameChange) {
         payload.primaryPortalName = nameToSave;
       }
+      if (hasMaxUsersChange) {
+        payload.maxUsers = pendingMaxUsers;
+      }
       const updated = await companySettingsService.updateCompanyProfile(payload);
       setProfile(updated);
       setCompanyDefaultCurrency(currencyToSave);
@@ -660,6 +781,7 @@ export default function CompanySettingsPage() {
       setPendingInvitationExpiry(null);
       setPendingResubmissionDeadline(null);
       setPendingPortalName(null);
+      setPendingMaxUsers(null);
 
       // Refresh branding context so login pages reflect the change immediately
       if (hasPortalNameChange) {
@@ -1752,7 +1874,7 @@ export default function CompanySettingsPage() {
     }
   }, [selectedDocTemplate, selectedDocId, editedDocName, editedDocContent]);
 
-  const anyModalOpen = !!(showDeptModal || showCatModal || showUnitModal || showPositionModal || showPaymentTermModal || deleteTarget || cropFile || confirmModalConfig?.isOpen);
+  const anyModalOpen = !!(showDeptModal || showCatModal || showUnitModal || showPositionModal || showPaymentTermModal || deleteTarget || cropFile || confirmModalConfig?.isOpen || showPasscodeModal);
   useBodyScrollLock(anyModalOpen);
 
 
@@ -2363,6 +2485,133 @@ export default function CompanySettingsPage() {
           ------------------------------------------------------- */}
       {activeTab === 'general' && (
         <div className="cs-tab-panel" role="tabpanel">
+          {/* ── Company Settings Passcode Security ── */}
+          <div className="cs-section-card">
+            <div className="cs-section-header">
+              <div className="cs-section-header__left">
+                <h2><Lock size={17} /> Company Settings Access Passcode</h2>
+                <p>Restrict access to the Company Settings tab with a security passcode. Anyone visiting this tab will be prompted for the passcode.</p>
+              </div>
+            </div>
+            <div className="cs-section-body">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: '50%',
+                    background: isPasscodeProtected ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                    border: isPasscodeProtected ? '1px solid #10b981' : '1px solid #f59e0b',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: isPasscodeProtected ? '#10b981' : '#f59e0b',
+                  }}>
+                    {isPasscodeProtected ? <ShieldCheck size={22} /> : <Lock size={22} />}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      Status: {isPasscodeProtected ? 'Passcode Protection Active 🔒' : 'Passcode Not Set (Open Access)'}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                      {isPasscodeProtected
+                        ? 'Company Settings is secured. Unlocked for your current session.'
+                        : 'Set a security passcode to lock Company Settings tab from unauthorized access.'}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 10 }}>
+                  {isPasscodeProtected ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPasscodeModalMode('change');
+                          setPasscodeError(null);
+                          setPasscodeCurrent('');
+                          setPasscodeNew('');
+                          setPasscodeConfirm('');
+                          setShowPasscodeModal(true);
+                        }}
+                        style={{
+                          padding: '9px 16px',
+                          borderRadius: 6,
+                          border: '1px solid var(--primary-500, #0a6ed1)',
+                          background: 'rgba(10, 110, 209, 0.1)',
+                          color: 'var(--primary-500, #0a6ed1)',
+                          fontWeight: 700,
+                          fontSize: 13,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                        }}
+                      >
+                        <Key size={15} />
+                        Change Passcode
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPasscodeModalMode('remove');
+                          setPasscodeError(null);
+                          setPasscodeCurrent('');
+                          setShowPasscodeModal(true);
+                        }}
+                        style={{
+                          padding: '9px 16px',
+                          borderRadius: 6,
+                          border: '1px solid rgba(239, 68, 68, 0.4)',
+                          background: 'rgba(239, 68, 68, 0.1)',
+                          color: '#ef4444',
+                          fontWeight: 700,
+                          fontSize: 13,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                        }}
+                      >
+                        <Unlock size={15} />
+                        Disable Passcode
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPasscodeModalMode('set');
+                        setPasscodeError(null);
+                        setPasscodeCurrent('');
+                        setPasscodeNew('');
+                        setPasscodeConfirm('');
+                        setShowPasscodeModal(true);
+                      }}
+                      style={{
+                        padding: '10px 20px',
+                        borderRadius: 6,
+                        border: 'none',
+                        background: 'var(--primary-500, #0a6ed1)',
+                        color: '#fff',
+                        fontWeight: 700,
+                        fontSize: 13,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        boxShadow: 'var(--shadow-sm)',
+                      }}
+                    >
+                      <Lock size={15} />
+                      Set Security Passcode
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="cs-section-card">
             <div className="cs-section-header">
               <div className="cs-section-header__left">
@@ -2481,6 +2730,48 @@ export default function CompanySettingsPage() {
                   Shown on the employee login page (e.g. "Employee Sign In"). Default: "Employee".
                   The vendor portal name is fixed as "Vendor".
                 </span>
+              </div>
+            </div>
+          </div>
+          {/* ── User Limit Configuration ── */}
+          <div className="cs-section-card">
+            <div className="cs-section-header">
+              <div className="cs-section-header__left">
+                <h2><Users size={17} /> Company Active Users Quota</h2>
+                <p>View your organization's maximum active user seat limit allocated by your service provider (Procnex).</p>
+              </div>
+            </div>
+            <div className="cs-section-body">
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '16px 20px',
+                borderRadius: '8px',
+                background: 'var(--surface-hover)',
+                border: '1px solid var(--border)',
+                flexWrap: 'wrap',
+                gap: 16
+              }}>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    Current User Seat Limit: <span style={{ color: 'var(--primary-500)', fontSize: 18, fontWeight: 800 }}>{profile?.maxUsers ?? 50} Active Users</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+                    Managed by Platform Provider (Procnex). User creation is blocked when this limit is reached.
+                  </div>
+                </div>
+                <div style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: 'var(--text-secondary)',
+                  background: 'var(--surface-card)',
+                  padding: '8px 14px',
+                  borderRadius: 6,
+                  border: '1px dashed var(--border)'
+                }}>
+                  📞 Need more user seats? Contact Procnex Support to upgrade.
+                </div>
               </div>
             </div>
           </div>
@@ -5251,6 +5542,228 @@ export default function CompanySettingsPage() {
           onCrop={handleCropAndUpload}
           onClose={() => setCropFile(null)}
         />
+      )}
+
+      {/* ── Passcode Lock Screen Overlay (Instant Prompt) ── */}
+      {isPasscodeProtected && !isUnlocked && (
+        <div className="cs-lock-overlay">
+          <div className="cs-lock-card">
+            <div className="cs-lock-badge">
+              <Lock size={34} />
+            </div>
+
+            <h2 className="cs-lock-title">
+              Company Settings Security Lock
+            </h2>
+            <p className="cs-lock-subtitle">
+              Access to Company Settings is passcode protected by Super Admin. Please enter your passcode to unlock.
+            </p>
+
+            {lockError && (
+              <div style={{ marginBottom: 18, textAlign: 'left' }}>
+                <MessageStrip type="error" compact>
+                  {lockError}
+                </MessageStrip>
+              </div>
+            )}
+
+            <form onSubmit={handleUnlock} className="cs-lock-form">
+              <div className="cs-passcode-input-group">
+                <label className="cs-passcode-label" htmlFor="settings-lock-passcode">
+                  Security Passcode <span className="cs-passcode-label__req">*</span>
+                </label>
+                <div className="cs-passcode-input-wrapper">
+                  <input
+                    id="settings-lock-passcode"
+                    type={showPasscodeText ? 'text' : 'password'}
+                    className="cs-passcode-input"
+                    placeholder="Enter passcode"
+                    value={lockPasscode}
+                    onChange={(e) => setLockPasscode(e.target.value)}
+                    autoFocus
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="cs-passcode-toggle-btn"
+                    onClick={() => setShowPasscodeText(!showPasscodeText)}
+                    tabIndex={-1}
+                  >
+                    {showPasscodeText ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="cs-lock-submit-btn"
+                disabled={verifyingLock || !lockPasscode.trim()}
+              >
+                {verifyingLock ? (
+                  <span>Verifying Passcode…</span>
+                ) : (
+                  <>
+                    <Key size={18} />
+                    <span>Unlock Company Settings</span>
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Passcode Configuration Modal ── */}
+      {/* ── Passcode Configuration Modal ── */}
+      {showPasscodeModal && (
+        <div className="cs-passcode-modal-backdrop" onClick={() => setShowPasscodeModal(false)}>
+          <div className="cs-passcode-modal-box" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="cs-passcode-modal-header">
+              <div className="cs-passcode-modal-header__title">
+                <div className="cs-passcode-modal-header__icon">
+                  <Lock size={20} />
+                </div>
+                <div className="cs-passcode-modal-header__text">
+                  <h3>
+                    {passcodeModalMode === 'set' && 'Set Security Passcode'}
+                    {passcodeModalMode === 'change' && 'Change Security Passcode'}
+                    {passcodeModalMode === 'remove' && 'Disable Passcode Protection'}
+                  </h3>
+                  <p>
+                    {passcodeModalMode === 'set' && 'Protect Company Settings from unauthorized access'}
+                    {passcodeModalMode === 'change' && 'Update your existing Company Settings passcode'}
+                    {passcodeModalMode === 'remove' && 'Remove security lock from Company Settings'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="cs-passcode-modal-close"
+                onClick={() => setShowPasscodeModal(false)}
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="cs-passcode-modal-body">
+              {passcodeError && (
+                <MessageStrip type="error" compact>
+                  {passcodeError}
+                </MessageStrip>
+              )}
+
+              {passcodeModalMode === 'remove' ? (
+                <p style={{ margin: 0, fontSize: 13.5, color: 'var(--text-secondary, #94a3b8)', lineHeight: 1.6 }}>
+                  Are you sure you want to disable passcode protection? Anyone with Admin permissions will be able to access Company Settings directly without entering a passcode.
+                </p>
+              ) : null}
+
+              {isPasscodeProtected && (passcodeModalMode === 'change' || passcodeModalMode === 'remove') && (
+                <div className="cs-passcode-input-group">
+                  <label className="cs-passcode-label">
+                    Current Security Passcode <span className="cs-passcode-label__req">*</span>
+                  </label>
+                  <div className="cs-passcode-input-wrapper">
+                    <input
+                      type={showCurrentPasscodeText ? 'text' : 'password'}
+                      className="cs-passcode-input"
+                      placeholder="Enter current passcode"
+                      value={passcodeCurrent}
+                      onChange={(e) => setPasscodeCurrent(e.target.value)}
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="cs-passcode-toggle-btn"
+                      onClick={() => setShowCurrentPasscodeText(!showCurrentPasscodeText)}
+                      tabIndex={-1}
+                    >
+                      {showCurrentPasscodeText ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {passcodeModalMode !== 'remove' && (
+                <>
+                  <div className="cs-passcode-input-group">
+                    <label className="cs-passcode-label">
+                      New Security Passcode <span className="cs-passcode-label__req">*</span>
+                    </label>
+                    <div className="cs-passcode-input-wrapper">
+                      <input
+                        type={showPasscodeText ? 'text' : 'password'}
+                        className="cs-passcode-input"
+                        placeholder="Min 4 characters"
+                        value={passcodeNew}
+                        onChange={(e) => setPasscodeNew(e.target.value)}
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="cs-passcode-toggle-btn"
+                        onClick={() => setShowPasscodeText(!showPasscodeText)}
+                        tabIndex={-1}
+                      >
+                        {showPasscodeText ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="cs-passcode-input-group">
+                    <label className="cs-passcode-label">
+                      Confirm New Security Passcode <span className="cs-passcode-label__req">*</span>
+                    </label>
+                    <div className="cs-passcode-input-wrapper">
+                      <input
+                        type={showPasscodeText ? 'text' : 'password'}
+                        className="cs-passcode-input"
+                        placeholder="Re-enter new passcode"
+                        value={passcodeConfirm}
+                        onChange={(e) => setPasscodeConfirm(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="cs-passcode-modal-footer">
+              <button
+                type="button"
+                className="cs-passcode-btn-cancel"
+                onClick={() => setShowPasscodeModal(false)}
+                disabled={passcodeSaving}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={`cs-passcode-btn-submit ${passcodeModalMode === 'remove' ? 'cs-passcode-btn-submit--danger' : ''}`}
+                onClick={handleSavePasscode}
+                disabled={passcodeSaving}
+              >
+                {passcodeSaving ? (
+                  <span>Saving…</span>
+                ) : (
+                  <>
+                    <Check size={16} />
+                    <span>
+                      {passcodeModalMode === 'set' && 'Set Passcode'}
+                      {passcodeModalMode === 'change' && 'Update Passcode'}
+                      {passcodeModalMode === 'remove' && 'Disable Passcode'}
+                    </span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

@@ -217,6 +217,21 @@ export default function CustomFormBuilderPage() {
     setSelectedFieldId(newField.id);
   };
 
+  const handleReorderFields = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= activeForm.fields.length) return;
+    const newFields = [...activeForm.fields];
+    const [moved] = newFields.splice(fromIndex, 1);
+    newFields.splice(toIndex, 0, moved);
+
+    const updated = {
+      ...activeForm,
+      fields: newFields,
+      updatedAt: new Date().toISOString(),
+    };
+
+    pushHistory(updated);
+  };
+
   const handleMoveField = (index: number, direction: 'up' | 'down') => {
     const targetIdx = direction === 'up' ? index - 1 : index + 1;
     if (targetIdx < 0 || targetIdx >= activeForm.fields.length) return;
@@ -396,6 +411,7 @@ export default function CustomFormBuilderPage() {
         onUpdateFormHeader={handleUpdateFormHeader}
         onDropField={handleDropField}
         onMoveField={handleMoveField}
+        onReorderFields={handleReorderFields}
         onDuplicateField={handleDuplicateField}
         onDeleteField={handleDeleteField}
         onClearCanvas={handleClearCanvas}
