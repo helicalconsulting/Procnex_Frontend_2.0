@@ -200,6 +200,10 @@ export default function HelicalConsultingPage() {
   const handleConfirmDeleteCompany = async () => {
     if (!deleteConfirmCompany) return;
     const { code, name } = deleteConfirmCompany;
+    const codeUpper = code.trim().toUpperCase();
+
+    // Instant optimistic state update — removes card from UI immediately (0ms delay)
+    setCompaniesList((prev) => prev.filter((c) => c.companyCode.toUpperCase() !== codeUpper));
     setIsDeletingCompany(true);
     try {
       const res = await fetch(`${API_BASE}/auth/company/${code}`, {
@@ -216,6 +220,7 @@ export default function HelicalConsultingPage() {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
       setDeleteConfirmCompany(null);
+      await fetchCompaniesOverview();
     } finally {
       setIsDeletingCompany(false);
     }

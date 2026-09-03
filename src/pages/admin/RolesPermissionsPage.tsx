@@ -85,15 +85,25 @@ function mapRole(r: {
 }): RoleData {
   const roleName = r.displayRoleName || r.roleName;
   const iconRole = ROLE_NAME_ALIASES[roleName] ?? ROLE_NAME_ALIASES[r.roleName] ?? 'Staff';
-  const isSystem = r.isSystem ?? (roleName === 'Super Admin' || roleName === 'Administrator');
+  const isSuperAdmin = roleName === 'Super Admin' || r.roleName === 'Super Admin';
+  const isSystem = r.isSystem ?? (isSuperAdmin || roleName === 'Administrator');
 
   const permissions = PERMISSION_MODULE_NAMES.map((module) => {
+    if (isSuperAdmin) {
+      return sanitizeModulePermission({
+        module,
+        canView: true,
+        canCreate: true,
+        canApprove: true,
+      });
+    }
+
     const fromApi = r.permissions?.find((p) => p.module === module);
     if (fromApi) return sanitizeModulePermission(fromApi);
     return sanitizeModulePermission(
       buildDefaultPermissions({
         canView: isSystem,
-        canCreate: isSystem && roleName === 'Super Admin',
+        canCreate: false,
         canApprove: isSystem,
       }).find((p) => p.module === module)!
     );
@@ -215,7 +225,7 @@ export default function RolesPermissionsPage() {
   const { roles: authRoles, hasPermission } = useAuth();
   const canDeleteRoles = authRoles.includes('Super Admin');
 
-  const { data: roles, loading, error, reload } = useServiceData(
+  const { data: roles, loading, error, forceRefresh } = useServiceData(
     () => adminService.listRoles().then((list) => list.map(mapRole)),
     [] as RoleData[],
     [],
@@ -315,13 +325,13 @@ export default function RolesPermissionsPage() {
     try {
       await adminService.updateRolePermissions(editingRole.id, sanitized);
       setEditingRole(null);
-      await reload();
+      await forceRefresh();
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : 'Failed to save permissions');
     } finally {
       setSaving(false);
     }
-  }, [editingRole, editPermissions, reload]);
+  }, [editingRole, editPermissions, forceRefresh]);
 
   // Toggle a permission in the create modal
   const toggleNewPerm = useCallback((moduleIndex: number, field: PermissionField) => {
@@ -355,36 +365,43 @@ export default function RolesPermissionsPage() {
     if (!newRoleName.trim()) return;
     setSaving(true);
     setSaveError(null);
+    const name = newRoleName.trim();
+    const desc = newRoleDesc.trim() || `Custom role: ${name}`;
+    const perms = newRolePerms.map(sanitizeModulePermission);
+
+    setShowCreateModal(false);
     try {
       await adminService.createRole({
-        roleName: newRoleName.trim(),
-        description: newRoleDesc.trim() || `Custom role: ${newRoleName.trim()}`,
-        permissions: newRolePerms.map(sanitizeModulePermission),
+        roleName: name,
+        description: desc,
+        permissions: perms,
       });
-      setShowCreateModal(false);
-      await reload();
+      await forceRefresh();
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : 'Failed to create role');
+      await forceRefresh();
     } finally {
       setSaving(false);
     }
-  }, [newRoleName, newRoleDesc, newRolePerms, reload]);
+  }, [newRoleName, newRoleDesc, newRolePerms, forceRefresh]);
 
   const handleDeleteRole = useCallback(async () => {
     if (!deleteTarget) return;
     setSaving(true);
     setSaveError(null);
+    const targetId = deleteTarget.id;
+    setDeleteTarget(null);
+    if (expandedRole === targetId) setExpandedRole(null);
     try {
-      await adminService.deleteRole(deleteTarget.id);
-      setDeleteTarget(null);
-      if (expandedRole === deleteTarget.id) setExpandedRole(null);
-      await reload();
+      await adminService.deleteRole(String(targetId));
+      await forceRefresh();
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : 'Failed to delete role');
+      await forceRefresh();
     } finally {
       setSaving(false);
     }
-  }, [deleteTarget, expandedRole, reload]);
+  }, [deleteTarget, expandedRole, forceRefresh]);
 
   return (
     <div className="roles-page">

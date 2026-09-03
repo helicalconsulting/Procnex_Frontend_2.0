@@ -96,8 +96,8 @@ export function useServiceData<T>(
   }, [queryKey, queryClient]);
 
   const forceRefresh = useCallback(async () => {
-    queryClient.invalidateQueries({ queryKey });
-    await queryClient.refetchQueries({ queryKey });
+    await queryClient.invalidateQueries({ queryKey, exact: false });
+    await queryClient.refetchQueries({ queryKey, exact: false, type: 'active' });
   }, [queryKey, queryClient]);
 
   return {

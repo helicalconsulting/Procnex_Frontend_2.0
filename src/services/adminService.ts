@@ -351,6 +351,7 @@ async function apiCreateRole(payload: CreateRolePayload): Promise<AdminRoleRecor
     method: 'POST',
     body: JSON.stringify(payload),
   });
+  invalidateApiCache('/admin/roles');
   return normalizeAdminRole(created);
 }
 
@@ -372,6 +373,7 @@ async function apiUpdateRolePermissions(
     method: 'PUT',
     body: JSON.stringify({ permissions }),
   });
+  invalidateApiCache('/admin/roles');
   return normalizeAdminRole(updated);
 }
 
@@ -391,6 +393,7 @@ async function apiUpdateRole(id: string, payload: UpdateRolePayload): Promise<Ad
     method: 'PUT',
     body: JSON.stringify(payload),
   });
+  invalidateApiCache('/admin/roles');
   return normalizeAdminRole(updated);
 }
 
@@ -402,6 +405,7 @@ async function mockDeleteRole(id: string): Promise<void> {
 
 async function apiDeleteRole(id: string): Promise<void> {
   await apiRequest(`/admin/roles/${id}`, { method: 'DELETE' });
+  invalidateApiCache('/admin/roles');
 }
 
 const STORAGE_APPROVAL_LEVELS_KEY = 'heliflow_approval_levels_v1';

@@ -193,7 +193,7 @@ const ALL_COLUMNS: UserColumnDef[] = [
 // ─── Component ──────────────────────────────────────────────
 
 export default function UsersPage() {
-  const { hasPermission } = useAuth();
+  const { hasPermission, companyCode: userCompanyCode } = useAuth();
   const { data: users, loading, error, reload } = useServiceData(
     () => adminService.listUsers().then((list) => list.map(mapUser)),
     [] as MockUser[],
@@ -553,7 +553,7 @@ export default function UsersPage() {
         phone: newPhone.trim() ? `${newCountryCode}${newPhone.trim()}` : undefined,
         department: newDepartment || (selectedUserType === 'rfq' ? 'Procurement' : 'General'),
         position: selectedUserType === 'rfq' ? newPosition : undefined,
-        companyCode: 'HFL',
+        companyCode: userCompanyCode || undefined,
         roleName,
         userType: selectedUserType || undefined,
         isMobileAccessEnabled: newMobileAccess,
