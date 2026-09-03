@@ -222,9 +222,7 @@ export default function HelicalConsultingPage() {
   };
 
   useEffect(() => {
-    if (isUnlocked) {
-      fetchCompaniesOverview();
-    }
+    fetchCompaniesOverview();
   }, [isUnlocked]);
 
   // Filtered companies based on search
@@ -365,6 +363,9 @@ export default function HelicalConsultingPage() {
         email: email.trim().toLowerCase(),
         passwordText: password,
       });
+
+      // Refresh overview list immediately
+      fetchCompaniesOverview();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);

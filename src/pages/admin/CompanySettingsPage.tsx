@@ -5,7 +5,7 @@ import { companySettingsService, ALLOWED_CONTRACT_UPLOAD_EXTENSIONS, type Depart
 import { invalidateApiCache } from '../../api/client';
 import {
   Plus, X, Edit3, Building2, Tag, ChevronDown, ChevronRight, ChevronUp, Search,
-  Save, Settings, DollarSign, Trash2, Ruler, Users, CreditCard, Mail, FileText, RotateCcw, Clock,
+  Save, Settings, DollarSign, Trash2, Ruler, Users, CreditCard, Mail, FileText, RotateCcw, Clock, Calendar,
   Palette, Image, FileSignature, Eye, Upload, Loader2, ArrowRight, Sparkles, AlertTriangle, CheckCircle2, Info, FileCheck, Globe, Hash,
   Lock, Unlock, ShieldCheck, Key, EyeOff, Check,
 } from 'lucide-react';
@@ -479,6 +479,8 @@ export default function CompanySettingsPage() {
         nextNumber: Number(edit.nextNumber ?? 1),
         paddingLength: Number(edit.paddingLength ?? 4),
         resetFrequency: String(edit.resetFrequency ?? 'NEVER'),
+        periodStartDate: edit.periodStartDate ? String(edit.periodStartDate) : null,
+        periodEndDate: edit.periodEndDate ? String(edit.periodEndDate) : null,
       });
       setSequences((prev) => prev.map((s) => s.entityType === entityType ? { ...s, ...updated } : s));
       const meta = { SUPPLIER_CODE: 'Supplier Code', PURCHASE_ORDER: 'Purchase Order No.', RFQ: 'RFQ Number' } as Record<string, string>;
@@ -615,8 +617,8 @@ export default function CompanySettingsPage() {
     })();
   }, []);
 
-  // ── Passcode Protection State (Default to locked for instant password prompt) ──
-  const [isPasscodeProtected, setIsPasscodeProtected] = useState<boolean>(true);
+  // ── Passcode Protection State (Default to false until status is verified from backend) ──
+  const [isPasscodeProtected, setIsPasscodeProtected] = useState<boolean>(false);
   const [isUnlocked, setIsUnlocked] = useState<boolean>(false);
   const [checkingPasscodeStatus, setCheckingPasscodeStatus] = useState<boolean>(true);
   const [lockPasscode, setLockPasscode] = useState<string>('');
@@ -941,6 +943,9 @@ export default function CompanySettingsPage() {
   // Delete confirmation state
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'department' | 'category' | 'unit' | 'position' | 'paymentTerm' | 'requiredDocument'; id: number; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Financial Year Configuration Modal State
+  const [fyModalEntity, setFyModalEntity] = useState<string | null>(null);
 
   // Custom confirmation modal state
   const [confirmModalConfig, setConfirmModalConfig] = useState<{
@@ -5407,14 +5412,39 @@ export default function CompanySettingsPage() {
                                 <select
                                   className="cs-seq-input"
                                   value={String(edit.resetFrequency ?? 'NEVER')}
-                                  onChange={(e) => handleSeqFieldChange(entityType, 'resetFrequency', e.target.value)}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    handleSeqFieldChange(entityType, 'resetFrequency', val);
+                                    if (val === 'YEARLY' || val === 'FISCAL_YEAR') {
+                                      setFyModalEntity(entityType);
+                                    }
+                                  }}
                                 >
                                   <option value="NEVER">Never Reset</option>
-                                  <option value="YEARLY">Reset Yearly (Jan 1)</option>
+                                  <option value="YEARLY">Reset Yearly / Financial Year (Custom Dates)</option>
                                   <option value="MONTHLY">Reset Monthly</option>
                                 </select>
                               </div>
                             </div>
+
+                            {/* Financial Year / Sequence Period Start & End Dates Badge Trigger */}
+                            {(edit.resetFrequency === 'YEARLY' || edit.resetFrequency === 'FISCAL_YEAR' || edit.resetFrequency === 'CUSTOM_PERIOD') && (
+                              <div style={{ marginTop: '2px', marginBottom: '6px' }}>
+                                <button
+                                  type="button"
+                                  className="cs-fy-chip-badge"
+                                  onClick={() => setFyModalEntity(entityType)}
+                                >
+                                  <Calendar size={14} />
+                                  <span>
+                                    {edit.periodStartDate && edit.periodEndDate
+                                      ? `${edit.periodStartDate} → ${edit.periodEndDate}`
+                                      : 'Configure Financial Year Dates (Open/Close)'}
+                                  </span>
+                                  <Settings size={12} style={{ opacity: 0.8 }} />
+                                </button>
+                              </div>
+                            )}
 
                             <div className="cs-seq-field-row">
                               <div className="cs-seq-field cs-seq-field--full">
@@ -5544,8 +5574,8 @@ export default function CompanySettingsPage() {
         />
       )}
 
-      {/* ── Passcode Lock Screen Overlay (Instant Prompt) ── */}
-      {isPasscodeProtected && !isUnlocked && (
+      {/* ── Passcode Lock Screen Overlay (Only shown if passcode protection is enabled by admin and locked) ── */}
+      {!checkingPasscodeStatus && isPasscodeProtected && !isUnlocked && (
         <div className="cs-lock-overlay">
           <div className="cs-lock-card">
             <div className="cs-lock-badge">
@@ -5765,6 +5795,150 @@ export default function CompanySettingsPage() {
           </div>
         </div>
       )}
+
+      {/* ── Financial Year Configuration Modal ── */}
+      {fyModalEntity && (() => {
+        const entityType = fyModalEntity;
+        const meta = ENTITY_LABELS[entityType] ?? { label: entityType, desc: '' };
+        const edit = seqEdits[entityType] ?? {};
+        const startDate = String(edit.periodStartDate ?? '');
+        const endDate = String(edit.periodEndDate ?? '');
+        const yr = new Date().getFullYear();
+
+        return (
+          <div className="cs-fy-modal-backdrop" onClick={() => setFyModalEntity(null)}>
+            <div className="cs-fy-modal-box" onClick={(e) => e.stopPropagation()}>
+              {/* Modal Header */}
+              <div className="cs-fy-modal-header">
+                <div className="cs-fy-modal-header__title">
+                  <div className="cs-fy-modal-header__icon">
+                    <Calendar size={22} />
+                  </div>
+                  <div className="cs-fy-modal-header__text">
+                    <h3>Financial Year & Sequence Dates</h3>
+                    <p>Configure open & close dates for {meta.label} sequence reset</p>
+                  </div>
+                </div>
+                <button className="cs-passcode-modal-close" onClick={() => setFyModalEntity(null)}>
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="cs-fy-modal-body">
+                {/* Preset Cards */}
+                <div>
+                  <label className="cs-fy-section-label">
+                    Quick Select Regional Financial Year
+                  </label>
+                  <div className="cs-fy-preset-grid">
+                    {/* Apr - Mar */}
+                    <div
+                      className={`cs-fy-preset-card ${startDate === `${yr}-04-01` && endDate === `${yr + 1}-03-31` ? 'cs-fy-preset-card--active' : ''}`}
+                      onClick={() => {
+                        handleSeqFieldChange(entityType, 'periodStartDate', `${yr}-04-01`);
+                        handleSeqFieldChange(entityType, 'periodEndDate', `${yr + 1}-03-31`);
+                      }}
+                    >
+                      <div className="cs-fy-preset-title">🇮🇳 🇬🇧 Apr 01 – Mar 31</div>
+                      <div className="cs-fy-preset-dates">{yr}-04-01 → {yr + 1}-03-31</div>
+                      <div className="cs-fy-preset-region">India, UK, South Africa, Japan</div>
+                    </div>
+
+                    {/* Jan - Dec */}
+                    <div
+                      className={`cs-fy-preset-card ${startDate === `${yr}-01-01` && endDate === `${yr}-12-31` ? 'cs-fy-preset-card--active' : ''}`}
+                      onClick={() => {
+                        handleSeqFieldChange(entityType, 'periodStartDate', `${yr}-01-01`);
+                        handleSeqFieldChange(entityType, 'periodEndDate', `${yr}-12-31`);
+                      }}
+                    >
+                      <div className="cs-fy-preset-title">🌐 Jan 01 – Dec 31</div>
+                      <div className="cs-fy-preset-dates">{yr}-01-01 → {yr}-12-31</div>
+                      <div className="cs-fy-preset-region">Calendar Year / Global Standard</div>
+                    </div>
+
+                    {/* Oct - Sep */}
+                    <div
+                      className={`cs-fy-preset-card ${startDate === `${yr}-10-01` && endDate === `${yr + 1}-09-30` ? 'cs-fy-preset-card--active' : ''}`}
+                      onClick={() => {
+                        handleSeqFieldChange(entityType, 'periodStartDate', `${yr}-10-01`);
+                        handleSeqFieldChange(entityType, 'periodEndDate', `${yr + 1}-09-30`);
+                      }}
+                    >
+                      <div className="cs-fy-preset-title">🇺🇸 Oct 01 – Sep 30</div>
+                      <div className="cs-fy-preset-dates">{yr}-10-01 → {yr + 1}-09-30</div>
+                      <div className="cs-fy-preset-region">US Federal & Institutional FY</div>
+                    </div>
+
+                    {/* Jul - Jun */}
+                    <div
+                      className={`cs-fy-preset-card ${startDate === `${yr}-07-01` && endDate === `${yr + 1}-06-30` ? 'cs-fy-preset-card--active' : ''}`}
+                      onClick={() => {
+                        handleSeqFieldChange(entityType, 'periodStartDate', `${yr}-07-01`);
+                        handleSeqFieldChange(entityType, 'periodEndDate', `${yr + 1}-06-30`);
+                      }}
+                    >
+                      <div className="cs-fy-preset-title">🇦🇺 🇰🇪 Jul 01 – Jun 30</div>
+                      <div className="cs-fy-preset-dates">{yr}-07-01 → {yr + 1}-06-30</div>
+                      <div className="cs-fy-preset-region">Australia, Kenya, Egypt, NZ</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Custom Date Pickers */}
+                <div className="cs-fy-date-row">
+                  <div className="cs-fy-date-field">
+                    <label>Sequence Open Date (Start)</label>
+                    <input
+                      type="date"
+                      className="cs-fy-date-input"
+                      value={startDate}
+                      onChange={(e) => handleSeqFieldChange(entityType, 'periodStartDate', e.target.value)}
+                    />
+                  </div>
+                  <div className="cs-fy-date-field">
+                    <label>Sequence Close Date (End)</label>
+                    <input
+                      type="date"
+                      className="cs-fy-date-input"
+                      value={endDate}
+                      onChange={(e) => handleSeqFieldChange(entityType, 'periodEndDate', e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* Summary Banner */}
+                <div className="cs-fy-summary-banner">
+                  <Info size={18} style={{ color: '#38bdf8', flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    Active sequence period: <strong>{startDate || 'Not Set'}</strong> to <strong>{endDate || 'Not Set'}</strong>.
+                    Document serial counter resets to <strong>#0001</strong> as soon as this sequence period closes.
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="cs-fy-modal-footer">
+                <button
+                  type="button"
+                  className="company-settings__btn company-settings__btn--secondary"
+                  onClick={() => setFyModalEntity(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="company-settings__btn company-settings__btn--primary"
+                  onClick={() => setFyModalEntity(null)}
+                >
+                  <Check size={16} /> Apply & Done
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );

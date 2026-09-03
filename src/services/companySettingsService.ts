@@ -1473,7 +1473,9 @@ export interface SequenceSetting {
   suffix?: string | null;
   nextNumber: number;
   paddingLength: number;
-  resetFrequency: 'NEVER' | 'YEARLY' | 'MONTHLY' | string;
+  resetFrequency: 'NEVER' | 'YEARLY' | 'FISCAL_YEAR' | 'MONTHLY' | string;
+  periodStartDate?: string | null;
+  periodEndDate?: string | null;
 }
 
 async function apiListSequenceSettings(): Promise<SequenceSetting[]> {

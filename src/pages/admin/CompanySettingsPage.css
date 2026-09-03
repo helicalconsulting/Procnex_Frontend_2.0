@@ -5278,3 +5278,368 @@
   box-shadow: none;
   color: #94a3b8;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Financial Year Configuration Modal (Light & Dark Responsive)
+   ═══════════════════════════════════════════════════════════ */
+
+.cs-fy-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: csModalBackdropFade 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: 'Poppins', system-ui, -apple-system, sans-serif;
+}
+
+.cs-fy-modal-box {
+  background: #ffffff;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 20px;
+  max-width: 640px;
+  width: 100%;
+  padding: 0;
+  box-shadow: 0 24px 60px -12px rgba(15, 23, 42, 0.2), 0 0 0 1px rgba(10, 110, 209, 0.1);
+  overflow: hidden;
+  animation: csModalPopUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: 'Poppins', system-ui, -apple-system, sans-serif;
+}
+
+.cs-fy-modal-header {
+  padding: 24px 28px;
+  background: linear-gradient(135deg, rgba(10, 110, 209, 0.06) 0%, rgba(59, 130, 246, 0.02) 100%);
+  border-bottom: 1px solid var(--border, #e2e8f0);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cs-fy-modal-header__title {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.cs-fy-modal-header__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(10, 110, 209, 0.12) 0%, rgba(56, 189, 248, 0.12) 100%);
+  border: 1px solid rgba(10, 110, 209, 0.2);
+  color: #0a6ed1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 14px rgba(10, 110, 209, 0.1);
+}
+
+.cs-fy-modal-header__text h3 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+  font-family: 'Poppins', sans-serif;
+}
+
+.cs-fy-modal-header__text p {
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-weight: 400;
+  color: #64748b;
+  font-family: 'Poppins', sans-serif;
+}
+
+.cs-fy-modal-body {
+  padding: 26px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  font-family: 'Poppins', sans-serif;
+  background: #ffffff;
+}
+
+.cs-fy-section-label {
+  font-size: 15px;
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: 10px;
+  display: block;
+  font-family: 'Poppins', sans-serif;
+}
+
+.cs-fy-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.cs-fy-preset-card {
+  padding: 14px 16px;
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  text-align: left;
+  font-family: 'Poppins', sans-serif;
+}
+
+.cs-fy-preset-card:hover {
+  background: rgba(10, 110, 209, 0.05);
+  border-color: rgba(10, 110, 209, 0.35);
+  transform: translateY(-2px);
+}
+
+.cs-fy-preset-card--active {
+  background: linear-gradient(135deg, rgba(10, 110, 209, 0.08) 0%, rgba(56, 189, 248, 0.04) 100%);
+  border-color: #0a6ed1 !important;
+  box-shadow: 0 0 16px rgba(10, 110, 209, 0.15);
+}
+
+.cs-fy-preset-title {
+  font-size: 15.5px;
+  font-weight: 700;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Poppins', sans-serif;
+}
+
+.cs-fy-preset-dates {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0284c7;
+  font-family: 'Roboto Mono', 'Poppins', monospace;
+  letter-spacing: 0.02em;
+}
+
+.cs-fy-preset-region {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #64748b;
+  font-family: 'Poppins', sans-serif;
+}
+
+.cs-fy-date-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.cs-fy-date-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cs-fy-date-field label {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #334155;
+  font-family: 'Poppins', sans-serif;
+}
+
+.cs-fy-date-input {
+  width: 100%;
+  padding: 12px 14px;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 500;
+  color: #0f172a;
+  outline: none;
+  font-family: 'Poppins', sans-serif;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+.cs-fy-date-input:focus {
+  border-color: #0a6ed1;
+  box-shadow: 0 0 0 3.5px rgba(10, 110, 209, 0.15);
+}
+
+.cs-fy-summary-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(10, 110, 209, 0.06) 0%, rgba(56, 189, 248, 0.03) 100%);
+  border: 1px solid rgba(10, 110, 209, 0.2);
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #334155;
+  line-height: 1.6;
+  font-family: 'Poppins', sans-serif;
+}
+
+.cs-fy-summary-banner strong {
+  color: #0284c7;
+  font-weight: 700;
+}
+
+.cs-fy-modal-footer {
+  padding: 20px 28px;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  font-family: 'Poppins', sans-serif;
+}
+
+.cs-fy-modal-footer .company-settings__btn {
+  font-family: 'Poppins', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 11px 22px;
+  border-radius: 10px;
+}
+
+.cs-fy-chip-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 16px;
+  background: rgba(10, 110, 209, 0.08);
+  border: 1px solid rgba(10, 110, 209, 0.25);
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #0a6ed1;
+  margin-top: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: fit-content;
+  font-family: 'Poppins', sans-serif;
+}
+
+.cs-fy-chip-badge:hover {
+  background: rgba(10, 110, 209, 0.15);
+  border-color: #0a6ed1;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(10, 110, 209, 0.15);
+}
+
+/* ── Dark Mode Overrides ── */
+[data-theme="dark"] .cs-fy-modal-backdrop {
+  background: rgba(15, 23, 42, 0.82);
+}
+
+[data-theme="dark"] .cs-fy-modal-box {
+  background: var(--surface-card, #1e293b);
+  border-color: var(--border-strong, rgba(255, 255, 255, 0.16));
+  box-shadow: 0 28px 70px -15px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(14, 165, 233, 0.3);
+}
+
+[data-theme="dark"] .cs-fy-modal-header {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.14) 0%, rgba(59, 130, 246, 0.05) 100%);
+  border-bottom-color: rgba(255, 255, 255, 0.09);
+}
+
+[data-theme="dark"] .cs-fy-modal-header__icon {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.25) 0%, rgba(10, 110, 209, 0.25) 100%);
+  border-color: rgba(56, 189, 248, 0.35);
+  color: #38bdf8;
+}
+
+[data-theme="dark"] .cs-fy-modal-header__text h3 {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .cs-fy-modal-header__text p {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .cs-fy-modal-body {
+  background: var(--surface-card, #1e293b);
+}
+
+[data-theme="dark"] .cs-fy-section-label {
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .cs-fy-preset-card {
+  background: rgba(255, 255, 255, 0.035);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .cs-fy-preset-card:hover {
+  background: rgba(14, 165, 233, 0.1);
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+[data-theme="dark"] .cs-fy-preset-card--active {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.2) 0%, rgba(10, 110, 209, 0.12) 100%);
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.25);
+}
+
+[data-theme="dark"] .cs-fy-preset-title {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .cs-fy-preset-dates {
+  color: #38bdf8;
+}
+
+[data-theme="dark"] .cs-fy-preset-region {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .cs-fy-date-field label {
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .cs-fy-date-input {
+  background: rgba(15, 23, 42, 0.65);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .cs-fy-date-input:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25);
+}
+
+[data-theme="dark"] .cs-fy-summary-banner {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.12) 0%, rgba(59, 130, 246, 0.06) 100%);
+  border-color: rgba(56, 189, 248, 0.3);
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .cs-fy-summary-banner strong {
+  color: #38bdf8;
+}
+
+[data-theme="dark"] .cs-fy-modal-footer {
+  background: rgba(15, 23, 42, 0.45);
+  border-top-color: rgba(255, 255, 255, 0.09);
+}
+
+[data-theme="dark"] .cs-fy-chip-badge {
+  background: rgba(14, 165, 233, 0.12);
+  border-color: rgba(56, 189, 248, 0.35);
+  color: #38bdf8;
+}
+
+[data-theme="dark"] .cs-fy-chip-badge:hover {
+  background: rgba(14, 165, 233, 0.22);
+  border-color: #38bdf8;
+}
+
+
