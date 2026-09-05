@@ -16,10 +16,14 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
+import { useAuth } from '../../context/AuthContext';
 import './GRNListPage.css';
 
 export default function GRNListPage() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  const canCreateGRN = hasPermission('PO Creation', 'canCreate') || hasPermission('Goods Received Note', 'canCreate') || hasPermission('GRN', 'canCreate');
+  const canCreateInvoice = hasPermission('Create Purchase Invoice', 'canCreate') || hasPermission('Purchase Invoice', 'canCreate') || hasPermission('Invoices', 'canCreate') || hasPermission('Accounts Payable', 'canCreate');
   const { companyDefaultCurrency, formatAmount } = useCurrency();
 
   const [search, setSearch] = useState('');
@@ -122,8 +126,8 @@ export default function GRNListPage() {
       {/* Header */}
       <div className="grn-header">
         <div>
-          <h1>My Invoices & GRN 📦</h1>
-          <p>View all purchase orders, generate GRNs, and manage received delivery notes</p>
+          <h1>My Invoices & Dispatches 📦</h1>
+          <p>View all purchase orders, generate dispatch notes, and manage received delivery notes</p>
         </div>
       </div>
 
@@ -144,32 +148,32 @@ export default function GRNListPage() {
           </div>
         </div>
 
-        {/* Card 2: Orders Pending GRN */}
+        {/* Card 2: Orders Pending Dispatch Note */}
         <div
           className={`grn-kpi-card ${kpiFilter === 'PENDING' ? 'grn-kpi-card--active-warning' : ''}`}
           onClick={() => setKpiFilter('PENDING')}
-          title="Click to view orders pending GRN"
+          title="Click to view orders pending dispatch note"
         >
           <div className="grn-kpi-icon" style={{ background: 'rgba(234, 179, 8, 0.1)', color: '#eab308' }}>
             <Truck size={22} />
           </div>
           <div>
-            <div className="grn-kpi-label">Orders Pending GRN</div>
+            <div className="grn-kpi-label">Orders Pending Dispatch</div>
             <div className="grn-kpi-value">{kpis.pendingGrns}</div>
           </div>
         </div>
 
-        {/* Card 3: Recorded GRNs */}
+        {/* Card 3: Recorded Dispatch Notes */}
         <div
           className={`grn-kpi-card ${kpiFilter === 'GRN' ? 'grn-kpi-card--active-success' : ''}`}
           onClick={() => setKpiFilter('GRN')}
-          title="Click to view recorded GRNs"
+          title="Click to view recorded dispatch notes"
         >
           <div className="grn-kpi-icon" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981' }}>
             <PackageCheck size={22} />
           </div>
           <div>
-            <div className="grn-kpi-label">Recorded GRNs</div>
+            <div className="grn-kpi-label">Recorded Dispatches</div>
             <div className="grn-kpi-value">{kpis.recordedGrns}</div>
           </div>
         </div>
@@ -183,7 +187,7 @@ export default function GRNListPage() {
             type="text"
             placeholder={
               kpiFilter === 'GRN'
-                ? 'Search across recorded GRNs by GRN number, PO number, or supplier...'
+                ? 'Search across recorded dispatch notes by dispatch note number, PO number, or supplier...'
                 : 'Search across all approved orders by PO number or supplier name in full length...'
             }
             value={search}
@@ -224,7 +228,7 @@ export default function GRNListPage() {
                   <td colSpan={6} style={{ textAlign: 'center', padding: '48px' }}>
                     <div style={{ fontSize: 32, marginBottom: 8 }}>🛒</div>
                     <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>
-                      {kpiFilter === 'PENDING' ? 'No Orders Pending GRN' : 'No Purchase Orders Found'}
+                      {kpiFilter === 'PENDING' ? 'No Orders Pending Dispatch Note' : 'No Purchase Orders Found'}
                     </div>
                     <div style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 4 }}>
                       {search ? 'Try adjusting your full length search query.' : 'Once purchase orders are generated, they will appear here.'}
@@ -251,13 +255,19 @@ export default function GRNListPage() {
                       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                         <button
                           className="grn-action-btn-generate"
-                          onClick={() => navigate(`/procurement/create-grn?poId=${po.id}`)}
+                          onClick={() => canCreateGRN && navigate(`/procurement/create-grn?poId=${po.id}`)}
+                          disabled={!canCreateGRN}
+                          style={!canCreateGRN ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                          title={!canCreateGRN ? "Admin has not allowed this action. You do not have permission to generate dispatch notes." : undefined}
                         >
-                          <Truck size={14} /> Generate GRN
+                          <Truck size={14} /> Generate Dispatch Note
                         </button>
                         <button
                           className="grn-action-btn-invoice"
-                          onClick={() => navigate(`/procurement/create-purchase-invoice?poId=${po.id}`)}
+                          onClick={() => canCreateInvoice && navigate(`/procurement/create-purchase-invoice?poId=${po.id}`)}
+                          disabled={!canCreateInvoice}
+                          style={!canCreateInvoice ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                          title={!canCreateInvoice ? "Admin has not allowed this action. You do not have permission to create purchase invoices." : undefined}
                         >
                           <Receipt size={14} /> Create Invoice
                         </button>
@@ -276,7 +286,7 @@ export default function GRNListPage() {
           <table className="grn-table">
             <thead>
               <tr>
-                <th>GRN Number</th>
+                <th>Dispatch Note Number</th>
                 <th>Linked PO Number</th>
                 <th>Supplier / Vendor</th>
                 <th>Received Date</th>
@@ -289,16 +299,16 @@ export default function GRNListPage() {
               {grnLoading ? (
                 <tr>
                   <td colSpan={7} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-secondary)' }}>
-                    Loading Goods Received Notes…
+                    Loading Dispatch Notes…
                   </td>
                 </tr>
               ) : filteredGRNs.length === 0 ? (
                 <tr>
                   <td colSpan={7} style={{ textAlign: 'center', padding: '48px' }}>
                     <div style={{ fontSize: 32, marginBottom: 8 }}>📦</div>
-                    <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>No GRNs Recorded Yet</div>
+                    <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>No Dispatch Notes Recorded Yet</div>
                     <div style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 4 }}>
-                      Click "Total Approved Orders" card above to select an order and generate a GRN.
+                      Click "Total Approved Orders" card above to select an order and generate a dispatch note.
                     </div>
                   </td>
                 </tr>
@@ -353,10 +363,14 @@ export default function GRNListPage() {
                             <button
                               className="grn-btn-create-invoice"
                               onClick={() => {
+                                if (!canCreateInvoice) return;
                                 const targetPo = grn.purchaseOrder?.poNumber || grn.poId || grn.purchaseOrder?.id;
                                 const targetGrn = grn.grnNumber || grn.id;
                                 navigate(`/procurement/create-purchase-invoice?poId=${targetPo}&grnId=${targetGrn}`);
                               }}
+                              disabled={!canCreateInvoice}
+                              style={!canCreateInvoice ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                              title={!canCreateInvoice ? "Admin has not allowed this action. You do not have permission to create purchase invoices." : undefined}
                             >
                               <Receipt size={14} /> Create Invoice <ArrowRight size={13} />
                             </button>
@@ -452,7 +466,7 @@ export default function GRNListPage() {
                 if (isModalGrnInvoiced) {
                   return (
                     <button className="grn-btn-invoiced" disabled style={{ padding: '9px 18px', fontSize: '13.5px' }}>
-                      <CheckCircle2 size={16} /> Invoice Sent for this GRN
+                      <CheckCircle2 size={16} /> Invoice Sent for this Dispatch Note
                     </button>
                   );
                 }
@@ -467,7 +481,7 @@ export default function GRNListPage() {
                       navigate(`/procurement/create-purchase-invoice?poId=${targetPo}&grnId=${targetGrn}`);
                     }}
                   >
-                    <Receipt size={15} /> Create Purchase Invoice for this GRN
+                    <Receipt size={15} /> Create Purchase Invoice for this Dispatch Note
                   </button>
                 );
               })()}

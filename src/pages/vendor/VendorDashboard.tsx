@@ -673,7 +673,7 @@ export default function VendorDashboard() {
                 {[
                   { id: 'submit-quote', label: 'Submit Quotation', desc: 'Respond to open RFQs', icon: FileText, path: '/vendor/rfqs', accent: '#0a6ed1' },
                   { id: 'track-orders', label: 'Track Orders', desc: 'View shipment status', icon: Package, path: '/vendor/orders', accent: '#e9730c' },
-                  { id: 'manage-invoices', label: 'My Invoices & GRN', desc: 'Upload & track invoices & GRNs', icon: Receipt, path: '/procurement/grns', accent: '#8b5cf6' },
+                  { id: 'manage-invoices', label: 'My Invoices & Dispatches', desc: 'Upload & track invoices & dispatch notes', icon: Receipt, path: '/procurement/grns', accent: '#8b5cf6' },
                   { id: 'my-contracts', label: 'My Contracts', desc: 'View & sign agreements', icon: CheckCircle2, path: '/vendor/contracts', accent: '#0891b2' },
                   { id: 'company-profile', label: 'Company Profile', desc: 'Documents & compliance', icon: Building2, path: '/vendor/profile', accent: '#059669' },
                   { id: 'notifications', label: 'Notifications', desc: 'View system alerts', icon: Zap, path: '/notifications', accent: '#ec4899' },

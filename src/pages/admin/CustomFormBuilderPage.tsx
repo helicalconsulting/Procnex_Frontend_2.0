@@ -9,6 +9,7 @@ import FormPublishSuccessModal from '../../components/form-builder/FormPublishSu
 import { formWorkflowService, type AudienceType } from '../../services/formWorkflowService';
 import type { FormDefinition, FormField, FieldType } from '../../types/formBuilder';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
+import { useAuth } from '../../context/AuthContext';
 import './CustomFormBuilderPage.css';
 
 const STORAGE_KEY = 'heliflow_custom_forms';
@@ -24,6 +25,8 @@ const INITIAL_NEW_FORM: FormDefinition = {
 };
 
 export default function CustomFormBuilderPage() {
+  const { hasPermission } = useAuth();
+  const canCreateForm = hasPermission('Custom Form Builder', 'canCreate') || hasPermission('Form Builder', 'canCreate') || hasPermission('Forms', 'canCreate');
   const [forms, setForms] = useState<FormDefinition[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -401,6 +404,7 @@ export default function CustomFormBuilderPage() {
         onAddField={handleAddField}
         sidebarTab={sidebarTab}
         setSidebarTab={setSidebarTab}
+        canCreateForm={canCreateForm}
       />
 
       {/* Center Builder Canvas & Toolbar */}
@@ -420,6 +424,7 @@ export default function CustomFormBuilderPage() {
         canRedo={redoStack.length > 0}
         onUndo={handleUndo}
         onRedo={handleRedo}
+        canCreateForm={canCreateForm}
       />
 
       {/* Right Properties Panel */}
@@ -427,6 +432,7 @@ export default function CustomFormBuilderPage() {
         selectedField={selectedField}
         onUpdateField={handleUpdateField}
         onClose={() => setSelectedFieldId(null)}
+        canCreateForm={canCreateForm}
       />
 
       {/* Save Workflow Modal */}

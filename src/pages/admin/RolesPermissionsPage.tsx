@@ -326,6 +326,9 @@ export default function RolesPermissionsPage() {
       await adminService.updateRolePermissions(editingRole.id, sanitized);
       setEditingRole(null);
       await forceRefresh();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('heliflow_auth_change'));
+      }
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : 'Failed to save permissions');
     } finally {
@@ -416,7 +419,7 @@ export default function RolesPermissionsPage() {
           className={`roles-page__add-btn ${!hasPermission('Roles & Permissions', 'canCreate') ? 'roles-page__add-btn--disabled' : ''}`}
           onClick={hasPermission('Roles & Permissions', 'canCreate') ? openCreateModal : undefined}
           disabled={!hasPermission('Roles & Permissions', 'canCreate')}
-          title={!hasPermission('Roles & Permissions', 'canCreate') ? 'You do not have permission to create roles' : 'Create new role'}
+          title={!hasPermission('Roles & Permissions', 'canCreate') ? 'Admin has not allowed this action. You do not have permission to create roles.' : 'Create new role'}
           style={!hasPermission('Roles & Permissions', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
         >
           <Plus size={18} />
@@ -598,23 +601,29 @@ export default function RolesPermissionsPage() {
                     <>
                       <button
                         className="roles-card__action-btn"
-                        title="Edit Permissions"
+                        title={hasPermission('Roles & Permissions', 'canCreate') ? "Edit Permissions" : "Admin has not allowed this action. You do not have permission to edit roles."}
                         onClick={(e) => {
                           e.stopPropagation();
-                          openEditModal(role);
+                          if (hasPermission('Roles & Permissions', 'canCreate')) openEditModal(role);
                         }}
+                        disabled={!hasPermission('Roles & Permissions', 'canCreate')}
+                        style={!hasPermission('Roles & Permissions', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                       >
                         <Edit3 size={15} />
                       </button>
                       {role.roleName !== 'Super Admin' && canDeleteRoles && (
                         <button
                           className="roles-card__action-btn roles-card__action-btn--danger"
-                          title="Delete Role"
+                          title={hasPermission('Roles & Permissions', 'canCreate') ? "Delete Role" : "Admin has not allowed this action. You do not have permission to delete roles."}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setSaveError(null);
-                            setDeleteTarget(role);
+                            if (hasPermission('Roles & Permissions', 'canCreate')) {
+                              setSaveError(null);
+                              setDeleteTarget(role);
+                            }
                           }}
+                          disabled={!hasPermission('Roles & Permissions', 'canCreate')}
+                          style={!hasPermission('Roles & Permissions', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                         >
                           <Trash2 size={15} />
                         </button>
@@ -668,7 +677,10 @@ export default function RolesPermissionsPage() {
                   <div className="roles-card__body-actions">
                     <button
                       className="roles-card__edit-btn"
-                      onClick={() => openEditModal(role)}
+                      onClick={() => hasPermission('Roles & Permissions', 'canCreate') && openEditModal(role)}
+                      disabled={!hasPermission('Roles & Permissions', 'canCreate')}
+                      title={!hasPermission('Roles & Permissions', 'canCreate') ? 'Admin has not allowed this action. You do not have permission to edit roles.' : undefined}
+                      style={!hasPermission('Roles & Permissions', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                     >
                       <Edit3 size={15} />
                       Edit Permissions

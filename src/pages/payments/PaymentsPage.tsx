@@ -3,15 +3,17 @@ import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { localDataService, type Payment as ServicePayment } from '../../services/localDataService';
+import BankPaymentVoucherModal, { type PaymentVoucherDocData } from '../../components/payments/BankPaymentVoucherModal';
 import {
   Search, Clock, CheckCircle2, XCircle,
   Banknote, RefreshCw, Eye, ThumbsUp,
-  Ban, RotateCcw, X, MessageSquare,
+  Ban, RotateCcw, X, MessageSquare, Printer, ShieldCheck
 } from 'lucide-react';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import '../../components/shared/ColumnCustomizer.css';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
+import { useAuth } from '../../context/AuthContext';
 import './PaymentsPage.css';
 
 // ─── Types ──────────────────────────────────────────────────
@@ -150,7 +152,10 @@ export default function PaymentsPage() {
   const [actionModal, setActionModal]     = useState<{ payment: Payment; action: 'confirm' | 'cancel' | 'retry' } | null>(null);
   const [actionComment, setActionComment] = useState('');
   const [detailPayment, setDetailPayment] = useState<Payment | null>(null);
-  useBodyScrollLock(!!(actionModal || detailPayment));
+  const [selectedPrintVoucher, setSelectedPrintVoucher] = useState<Payment | null>(null);
+  useBodyScrollLock(!!(actionModal || detailPayment || selectedPrintVoucher));
+  const { hasPermission } = useAuth();
+  const canApprovePayment = hasPermission('Payments', 'canApprove') || hasPermission('Payments', 'canCreate') || hasPermission('Accounts Payable', 'canApprove');
   const { formatAmount, companyDefaultCurrency } = useCurrency();
   const [displayCurrency, setDisplayCurrency] = useState(companyDefaultCurrency);
   useEffect(() => { setDisplayCurrency(companyDefaultCurrency); }, [companyDefaultCurrency]);
@@ -340,15 +345,36 @@ export default function PaymentsPage() {
                       <button className="approvals-table__action-btn" title="View Details" onClick={() => setDetailPayment(pay)}>
                         <Eye size={15} />
                       </button>
+                      <button className="approvals-table__action-btn" title="Print Official Bank Voucher" onClick={() => setSelectedPrintVoucher(pay)} style={{ color: '#10b981' }}>
+                        <Printer size={15} />
+                      </button>
                       {actionable && (
                         <>
-                          <button className="approvals-table__action-btn approvals-table__action-btn--approve" title="Confirm Payment" onClick={() => openAction(pay, 'confirm')}>
+                          <button
+                            className="approvals-table__action-btn approvals-table__action-btn--approve"
+                            title={!canApprovePayment ? "Admin has not allowed this action. You do not have permission to confirm payment transactions." : "Confirm Payment"}
+                            onClick={() => canApprovePayment && openAction(pay, 'confirm')}
+                            disabled={!canApprovePayment}
+                            style={!canApprovePayment ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                          >
                             <ThumbsUp size={15} />
                           </button>
-                          <button className="approvals-table__action-btn approvals-table__action-btn--reject" title="Cancel Payment" onClick={() => openAction(pay, 'cancel')}>
+                          <button
+                            className="approvals-table__action-btn approvals-table__action-btn--reject"
+                            title={!canApprovePayment ? "Admin has not allowed this action. You do not have permission to cancel payment transactions." : "Cancel Payment"}
+                            onClick={() => canApprovePayment && openAction(pay, 'cancel')}
+                            disabled={!canApprovePayment}
+                            style={!canApprovePayment ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                          >
                             <Ban size={15} />
                           </button>
-                          <button className="approvals-table__action-btn approvals-table__action-btn--return" title="Retry Payment" onClick={() => openAction(pay, 'retry')}>
+                          <button
+                            className="approvals-table__action-btn approvals-table__action-btn--return"
+                            title={!canApprovePayment ? "Admin has not allowed this action. You do not have permission to retry payment transactions." : "Retry Payment"}
+                            onClick={() => canApprovePayment && openAction(pay, 'retry')}
+                            disabled={!canApprovePayment}
+                            style={!canApprovePayment ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                          >
                             <RotateCcw size={15} />
                           </button>
                         </>
@@ -468,27 +494,68 @@ export default function PaymentsPage() {
               )}
             </div>
 
-            <div className="approvals-modal__footer">
-              <button className="approvals-modal__btn approvals-modal__btn--secondary" onClick={() => setDetailPayment(null)}>Close</button>
-              {ACTIONABLE.includes(detailPayment.status) && (
-                <>
-                  <button
-                    className="approvals-modal__btn approvals-modal__btn--approve"
-                    onClick={() => { setDetailPayment(null); openAction(detailPayment, 'confirm'); }}
-                  >
-                    <ThumbsUp size={16} /> Confirm
-                  </button>
-                  <button
-                    className="approvals-modal__btn approvals-modal__btn--reject"
-                    onClick={() => { setDetailPayment(null); openAction(detailPayment, 'cancel'); }}
-                  >
-                    <Ban size={16} /> Cancel
-                  </button>
-                </>
-              )}
+            <div className="approvals-modal__footer" style={{ justifyContent: 'space-between' }}>
+              <button
+                className="approvals-modal__btn"
+                style={{ background: '#10b981', color: '#fff', border: 'none' }}
+                onClick={() => {
+                  const target = detailPayment;
+                  setDetailPayment(null);
+                  setSelectedPrintVoucher(target);
+                }}
+              >
+                <Printer size={16} /> Print Bank Payment Voucher
+              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="approvals-modal__btn approvals-modal__btn--secondary" onClick={() => setDetailPayment(null)}>Close</button>
+                {ACTIONABLE.includes(detailPayment.status) && (
+                  <>
+                    <button
+                      className="approvals-modal__btn approvals-modal__btn--approve"
+                      onClick={() => { setDetailPayment(null); openAction(detailPayment, 'confirm'); }}
+                    >
+                      <ThumbsUp size={16} /> Confirm
+                    </button>
+                    <button
+                      className="approvals-modal__btn approvals-modal__btn--reject"
+                      onClick={() => { setDetailPayment(null); openAction(detailPayment, 'cancel'); }}
+                    >
+                      <Ban size={16} /> Cancel
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Official Printable Bank Payment Voucher Modal ── */}
+      {selectedPrintVoucher && (
+        <BankPaymentVoucherModal
+          data={{
+            voucherNumber: selectedPrintVoucher.paymentNumber,
+            voucherDate: selectedPrintVoucher.date,
+            paymentMethod: selectedPrintVoucher.method,
+            vendorName: selectedPrintVoucher.vendorName,
+            beneficiaryName: selectedPrintVoucher.vendorName,
+            bankName: 'HDFC Bank Ltd',
+            accountNumber: `9180${Math.floor(10000000 + Math.random() * 90000000)}`,
+            ifscCode: 'HDFC0000128',
+            invoiceRef: selectedPrintVoucher.invoiceRef,
+            grossAmount: selectedPrintVoucher.amount / 0.98,
+            tdsAmount: (selectedPrintVoucher.amount / 0.98) * 0.02,
+            netAmount: selectedPrintVoucher.amount,
+            matchStatus: selectedPrintVoucher.remarks.toLowerCase().includes('discrepancy') ? 'DISCREPANCY' : 'MATCHED',
+            discrepancyReason: selectedPrintVoucher.remarks,
+            approvers: [
+              { level: 'Initiator', name: 'Rahul Sharma', role: 'Procurement Officer', date: selectedPrintVoucher.date, status: 'APPROVED', comments: 'PO, GRN & Invoice 3-way verified' },
+              { level: 'Level 1 Review', name: 'Anand Verma', role: 'Purchase Manager', date: selectedPrintVoucher.date, status: 'APPROVED', comments: 'Rates & received quantities verified' },
+              { level: 'Level 2 Authorization', name: selectedPrintVoucher.approvedBy !== '—' ? selectedPrintVoucher.approvedBy : 'Priya Patel (Finance VP)', role: 'Treasury / Finance VP', date: selectedPrintVoucher.date, status: 'APPROVED', comments: 'Bank payment release authorized' },
+            ]
+          }}
+          onClose={() => setSelectedPrintVoucher(null)}
+        />
       )}
 
     </div>

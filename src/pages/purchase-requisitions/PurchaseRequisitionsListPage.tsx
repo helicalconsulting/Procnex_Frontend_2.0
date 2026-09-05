@@ -267,7 +267,7 @@ export default function PurchaseRequisitionsListPage() {
           className="pr-btn pr-btn--primary"
           onClick={hasPermission('PO Creation', 'canCreate') ? () => navigate('/procurement/create-purchase-order') : undefined}
           disabled={!hasPermission('PO Creation', 'canCreate')}
-          title={!hasPermission('PO Creation', 'canCreate') ? 'You do not have permission to create Purchase Orders' : 'Create new Purchase Order'}
+          title={!hasPermission('PO Creation', 'canCreate') ? 'Admin has not allowed this action. You do not have permission to create Purchase Orders.' : 'Create new Purchase Order'}
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -417,13 +417,20 @@ export default function PurchaseRequisitionsListPage() {
             </button>
             <button
               type="button"
+              disabled={!hasPermission('PO Creation', 'canCreate')}
               style={{
-                background: '#dc2626', color: '#ffffff', border: 'none',
+                background: hasPermission('PO Creation', 'canCreate') ? '#dc2626' : '#64748b',
+                color: '#ffffff', border: 'none',
                 padding: '7px 16px', fontSize: 13, fontWeight: 700,
-                borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+                borderRadius: 'var(--radius-sm)',
+                cursor: hasPermission('PO Creation', 'canCreate') ? 'pointer' : 'not-allowed',
+                opacity: hasPermission('PO Creation', 'canCreate') ? 1 : 0.5,
+                pointerEvents: 'auto',
                 display: 'inline-flex', alignItems: 'center', gap: 6
               }}
+              title={!hasPermission('PO Creation', 'canCreate') ? "Admin has not allowed this action. You do not have permission to delete Purchase Orders." : undefined}
               onClick={(e) => {
+                if (!hasPermission('PO Creation', 'canCreate')) return;
                 (e.currentTarget as HTMLElement).blur();
                 setShowBatchDeleteModal(true);
               }}
@@ -475,8 +482,10 @@ export default function PurchaseRequisitionsListPage() {
                   <input
                     type="checkbox"
                     checked={isAllSelected}
-                    onChange={handleToggleSelectAll}
-                    style={{ cursor: 'pointer', width: 16, height: 16 }}
+                    disabled={!hasPermission('PO Creation', 'canCreate')}
+                    onChange={hasPermission('PO Creation', 'canCreate') ? handleToggleSelectAll : undefined}
+                    style={{ cursor: hasPermission('PO Creation', 'canCreate') ? 'pointer' : 'not-allowed', width: 16, height: 16 }}
+                    title={!hasPermission('PO Creation', 'canCreate') ? "Admin has not allowed this action. You do not have permission to select Purchase Orders." : undefined}
                   />
                 </th>
                 {visibleColumns.map((col) => (
@@ -545,8 +554,10 @@ export default function PurchaseRequisitionsListPage() {
                       <input
                         type="checkbox"
                         checked={selectedPrIds.includes(String(pr.id || pr.rfqId))}
-                        onChange={() => handleToggleSelect(String(pr.id || pr.rfqId))}
-                        style={{ cursor: 'pointer', width: 16, height: 16 }}
+                        disabled={!hasPermission('PO Creation', 'canCreate')}
+                        onChange={() => hasPermission('PO Creation', 'canCreate') && handleToggleSelect(String(pr.id || pr.rfqId))}
+                        style={{ cursor: hasPermission('PO Creation', 'canCreate') ? 'pointer' : 'not-allowed', width: 16, height: 16 }}
+                        title={!hasPermission('PO Creation', 'canCreate') ? "Admin has not allowed this action. You do not have permission to select Purchase Orders." : undefined}
                       />
                     </td>
                     {visibleColumns.map((col) => {
@@ -592,18 +603,27 @@ export default function PurchaseRequisitionsListPage() {
                         </button>
                         <button
                           className="pr-list__view-btn"
+                          disabled={!hasPermission('PO Creation', 'canCreate')}
+                          style={!hasPermission('PO Creation', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                          title={hasPermission('PO Creation', 'canCreate') ? "Edit PO Document" : "Admin has not allowed this action. You do not have permission to edit Purchase Orders."}
                           onClick={(e) => {
                             e.stopPropagation();
+                            if (!hasPermission('PO Creation', 'canCreate')) return;
                             openPO('edit');
                           }}
-                          title="Edit PO Document"
                         >
                           <Pencil size={15} />
                         </button>
                         <button
                           className="pr-list__view-btn pr-list__delete-btn"
-                          onClick={(e) => { e.stopPropagation(); setDeleteTarget(pr); }}
-                          title="Delete PO document"
+                          disabled={!hasPermission('PO Creation', 'canCreate')}
+                          style={!hasPermission('PO Creation', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                          title={hasPermission('PO Creation', 'canCreate') ? "Delete PO document" : "Admin has not allowed this action. You do not have permission to delete Purchase Orders."}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!hasPermission('PO Creation', 'canCreate')) return;
+                            setDeleteTarget(pr);
+                          }}
                         >
                           <Trash2 size={15} />
                         </button>

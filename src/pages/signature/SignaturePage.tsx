@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
+import { useAuth } from '../../context/AuthContext';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import {
   PenLine,
@@ -49,6 +50,14 @@ const DOC_MODULES = [
 
 export default function SignaturePage() {
   const navigate = useNavigate();
+  const { hasPermission, roles, permissions } = useAuth();
+  const hasPermissionsMap = Boolean(permissions && Object.keys(permissions).length > 0);
+
+  const canCreateSignature = hasPermissionsMap
+    ? (hasPermission('Signature', 'canCreate') || hasPermission('Digital Signatures', 'canCreate') || hasPermission('Signatures', 'canCreate'))
+    : roles.some((r) =>
+        ['Super Admin', 'Administrator', 'admin', 'Procurement Manager', 'Purchase Manager', 'purchase_manager', 'procurement_manager', 'purchase_clerk', 'Purchase Clerk', 'Manager'].includes(r)
+      );
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [penColor, setPenColor] = useState('#1a1a2e');
@@ -312,13 +321,6 @@ export default function SignaturePage() {
           <h1>E-Signature</h1>
           <p>Draw, upload, and manage digital signatures for procurement documents</p>
         </div>
-        <button
-          className="sig-page__sign-doc-btn"
-          onClick={() => setShowSignPanel(v => !v)}
-          disabled={savedSignatures.length === 0}
-        >
-          <FileSignature size={18} /> Sign Document
-        </button>
       </div>
 
       <div className="sig-content">
@@ -351,14 +353,15 @@ export default function SignaturePage() {
             </div>
 
             {/* Pen Tools */}
-            <div className="sig-pen-tools">
+            <div className="sig-pen-tools" style={!canCreateSignature ? { opacity: 0.5, pointerEvents: 'none' } : undefined}>
               <div className="sig-pen-tools__colors">
                 {PEN_COLORS.map(c => (
                   <button
                     key={c.value}
+                    disabled={!canCreateSignature}
                     className={`sig-color-dot ${penColor === c.value ? 'sig-color-dot--active' : ''}`}
-                    style={{ '--dot-color': c.value } as React.CSSProperties}
-                    onClick={() => setPenColor(c.value)}
+                    style={{ '--dot-color': c.value, cursor: canCreateSignature ? 'pointer' : 'not-allowed' } as React.CSSProperties}
+                    onClick={() => canCreateSignature && setPenColor(c.value)}
                     title={c.name}
                   />
                 ))}
@@ -369,8 +372,10 @@ export default function SignaturePage() {
                   {PEN_SIZES.map(s => (
                     <button
                       key={s}
+                      disabled={!canCreateSignature}
                       className={`sig-size-btn ${penSize === s ? 'sig-size-btn--active' : ''}`}
-                      onClick={() => setPenSize(s)}
+                      style={{ cursor: canCreateSignature ? 'pointer' : 'not-allowed' }}
+                      onClick={() => canCreateSignature && setPenSize(s)}
                       title={`${s}px`}
                     >
                       <span className="sig-size-btn__dot" style={{ width: s + 4, height: s + 4 }} />
@@ -378,28 +383,39 @@ export default function SignaturePage() {
                   ))}
                 </div>
               </div>
-              <button className="sig-pen-tools__undo" onClick={handleUndo} disabled={history.length === 0} title="Undo">
+              <button
+                className="sig-pen-tools__undo"
+                onClick={canCreateSignature ? handleUndo : undefined}
+                disabled={history.length === 0 || !canCreateSignature}
+                style={{ cursor: canCreateSignature ? 'pointer' : 'not-allowed' }}
+                title="Undo"
+              >
                 <Undo2 size={15} />
               </button>
             </div>
 
             {/* Canvas */}
-            <div className="sig-canvas-wrap">
+            <div
+              className="sig-canvas-wrap"
+              style={!canCreateSignature ? { cursor: 'not-allowed', opacity: 0.7 } : undefined}
+              title={!canCreateSignature ? "Admin has not allowed this action. You do not have permission to capture signatures." : undefined}
+            >
               <canvas
                 ref={canvasRef}
                 className="sig-canvas"
-                onMouseDown={startDrawing}
-                onMouseMove={draw}
-                onMouseUp={stopDrawing}
-                onMouseLeave={stopDrawing}
-                onTouchStart={startDrawing}
-                onTouchMove={draw}
-                onTouchEnd={stopDrawing}
+                style={!canCreateSignature ? { cursor: 'not-allowed', pointerEvents: 'none' } : undefined}
+                onMouseDown={canCreateSignature ? startDrawing : undefined}
+                onMouseMove={canCreateSignature ? draw : undefined}
+                onMouseUp={canCreateSignature ? stopDrawing : undefined}
+                onMouseLeave={canCreateSignature ? stopDrawing : undefined}
+                onTouchStart={canCreateSignature ? startDrawing : undefined}
+                onTouchMove={canCreateSignature ? draw : undefined}
+                onTouchEnd={canCreateSignature ? stopDrawing : undefined}
               />
               {!hasDrawn && (
                 <div className="sig-canvas-placeholder">
                   <PenLine size={32} />
-                  <span>Draw your signature here</span>
+                  <span>{canCreateSignature ? 'Draw your signature here' : 'Signature drawing disabled (View Only)'}</span>
                 </div>
               )}
             </div>
@@ -410,9 +426,25 @@ export default function SignaturePage() {
                 <Upload size={14} />
                 <span>Alternative: Upload Image</span>
               </div>
-              <label className="sig-upload-area">
-                <input type="file" accept="image/*" onChange={handleUpload} className="sig-upload-area__input" />
-                <span className="sig-upload-area__btn">Browse...</span>
+              <label
+                className="sig-upload-area"
+                style={!canCreateSignature ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                title={!canCreateSignature ? "Admin has not allowed this action. You do not have permission to upload signatures." : undefined}
+                onClick={(e) => {
+                  if (!canCreateSignature) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }
+                }}
+              >
+                <input
+                  type="file"
+                  accept="image/*"
+                  disabled={!canCreateSignature}
+                  onChange={canCreateSignature ? handleUpload : undefined}
+                  className="sig-upload-area__input"
+                />
+                <span className="sig-upload-area__btn" style={!canCreateSignature ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}>Browse...</span>
                 <span className="sig-upload-area__text">
                   {uploadedImage ? 'Image loaded on canvas' : 'No file selected.'}
                 </span>
@@ -424,13 +456,25 @@ export default function SignaturePage() {
               <button className="sig-action-btn sig-action-btn--home" onClick={() => navigate('/dashboard')}>
                 <Home size={16} /> Home
               </button>
-              <button className="sig-action-btn sig-action-btn--clear" onClick={clearCanvas} disabled={!hasDrawn}>
+              <button
+                className="sig-action-btn sig-action-btn--clear"
+                onClick={canCreateSignature ? clearCanvas : undefined}
+                disabled={!hasDrawn || !canCreateSignature}
+                style={!canCreateSignature ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                title={!canCreateSignature ? "Admin has not allowed this action. You do not have permission to clear signature canvas." : undefined}
+              >
                 <Eraser size={16} /> Clear
               </button>
               <button className="sig-action-btn sig-action-btn--download" onClick={handleDownload} disabled={!hasDrawn}>
                 <Download size={16} /> Download
               </button>
-              <button className="sig-action-btn sig-action-btn--save" onClick={handleSave} disabled={!hasDrawn}>
+              <button
+                className="sig-action-btn sig-action-btn--save"
+                onClick={handleSave}
+                disabled={!hasDrawn || !canCreateSignature}
+                style={!canCreateSignature ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                title={!canCreateSignature ? "Admin has not allowed this action. You do not have permission to save digital signatures." : undefined}
+              >
                 <Save size={16} /> Save Signature
               </button>
             </div>
@@ -510,7 +554,9 @@ export default function SignaturePage() {
               <button
                 className="sig-sign-panel__submit"
                 onClick={handleSignDocument}
-                disabled={signing || !signSigId || !signRefId.trim()}
+                disabled={signing || !signSigId || !signRefId.trim() || !canCreateSignature}
+                style={!canCreateSignature ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                title={!canCreateSignature ? "Admin has not allowed this action. You do not have permission to apply digital signatures." : undefined}
               >
                 <FileSignature size={16} />
                 {signing ? 'Signing...' : 'Apply Signature'}
@@ -550,14 +596,26 @@ export default function SignaturePage() {
                   </div>
                   <div className="sig-saved-item__actions">
                     {!sig.isDefault && (
-                      <button className="sig-saved-item__action" title="Set as default" onClick={() => handleSetDefault(sig.id)}>
+                      <button
+                        className="sig-saved-item__action"
+                        disabled={!canCreateSignature}
+                        style={!canCreateSignature ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                        title={!canCreateSignature ? "Admin has not allowed this action. You do not have permission to set default signature." : "Set as default"}
+                        onClick={canCreateSignature ? () => handleSetDefault(sig.id) : undefined}
+                      >
                         <Star size={14} />
                       </button>
                     )}
                     <button className="sig-saved-item__action" title="Preview" onClick={() => setPreviewSig(sig)}>
                       <Eye size={14} />
                     </button>
-                    <button className="sig-saved-item__action sig-saved-item__action--danger" title="Delete" onClick={() => handleDeleteSaved(sig.id)}>
+                    <button
+                      className="sig-saved-item__action sig-saved-item__action--danger"
+                      disabled={!canCreateSignature}
+                      style={!canCreateSignature ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                      title={!canCreateSignature ? "Admin has not allowed this action. You do not have permission to delete signatures." : "Delete"}
+                      onClick={canCreateSignature ? () => handleDeleteSaved(sig.id) : undefined}
+                    >
                       <Trash2 size={14} />
                     </button>
                   </div>

@@ -23,6 +23,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import type { FormDefinition, FormField, FieldType } from '../../types/formBuilder';
+import { useAuth } from '../../context/AuthContext';
 import './FormBuilderCanvas.css';
 
 interface FormBuilderCanvasProps {
@@ -41,6 +42,7 @@ interface FormBuilderCanvasProps {
   canRedo: boolean;
   onUndo: () => void;
   onRedo: () => void;
+  canCreateForm?: boolean;
 }
 
 export default function FormBuilderCanvas({
@@ -59,13 +61,17 @@ export default function FormBuilderCanvas({
   canRedo,
   onUndo,
   onRedo,
+  canCreateForm: propCanCreateForm,
 }: FormBuilderCanvasProps) {
+  const { hasPermission } = useAuth();
+  const canCreateForm = propCanCreateForm ?? (hasPermission('Custom Form Builder', 'canCreate') || hasPermission('Form Builder', 'canCreate') || hasPermission('Forms', 'canCreate'));
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [gridCols, setGridCols] = useState<1 | 2>(2);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
   const handleDragOver = (e: React.DragEvent, index?: number) => {
+    if (!canCreateForm) return;
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = draggedIndex !== null ? 'move' : 'copy';
@@ -75,6 +81,7 @@ export default function FormBuilderCanvas({
   };
 
   const handleCanvasFieldDragStart = (e: React.DragEvent, index: number) => {
+    if (!canCreateForm) return;
     e.stopPropagation();
     setDraggedIndex(index);
     e.dataTransfer.setData('text/plain', String(index));
@@ -82,6 +89,7 @@ export default function FormBuilderCanvas({
   };
 
   const handleDrop = (e: React.DragEvent, targetIndex?: number) => {
+    if (!canCreateForm) return;
     e.preventDefault();
     e.stopPropagation();
     const targetIdx = targetIndex ?? form.fields.length;
@@ -162,18 +170,20 @@ export default function FormBuilderCanvas({
           <button
             type="button"
             className="fbc-icon-btn"
-            disabled={!canUndo}
+            disabled={!canUndo || !canCreateForm}
             onClick={onUndo}
-            title="Undo (Ctrl+Z)"
+            title={!canCreateForm ? "Admin has not allowed this action. You do not have permission to modify custom forms." : "Undo (Ctrl+Z)"}
+            style={!canCreateForm ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
           >
             <RotateCcw size={15} />
           </button>
           <button
             type="button"
             className="fbc-icon-btn"
-            disabled={!canRedo}
+            disabled={!canRedo || !canCreateForm}
             onClick={onRedo}
-            title="Redo (Ctrl+Y)"
+            title={!canCreateForm ? "Admin has not allowed this action. You do not have permission to modify custom forms." : "Redo (Ctrl+Y)"}
+            style={!canCreateForm ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
           >
             <RotateCw size={15} />
           </button>
@@ -184,12 +194,21 @@ export default function FormBuilderCanvas({
             type="button"
             className="fbc-clear-btn"
             onClick={onClearCanvas}
-            disabled={form.fields.length === 0}
+            disabled={form.fields.length === 0 || !canCreateForm}
+            style={!canCreateForm ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+            title={!canCreateForm ? "Admin has not allowed this action. You do not have permission to clear custom forms." : undefined}
           >
             <Trash2 size={14} /> Clear Canvas
           </button>
 
-          <button type="button" className="fbc-save-btn" onClick={onSaveForm}>
+          <button
+            type="button"
+            className="fbc-save-btn"
+            onClick={onSaveForm}
+            disabled={!canCreateForm}
+            style={!canCreateForm ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+            title={!canCreateForm ? "Admin has not allowed this action. You do not have permission to create or save custom forms." : undefined}
+          >
             <Save size={16} /> Save Form
           </button>
         </div>
@@ -214,6 +233,9 @@ export default function FormBuilderCanvas({
                   value={form.title}
                   onChange={(e) => onUpdateFormHeader(e.target.value, form.description)}
                   placeholder="Enter Form Title..."
+                  disabled={!canCreateForm}
+                  style={!canCreateForm ? { opacity: 0.7, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                  title={!canCreateForm ? "Admin has not allowed this action. You do not have permission to modify form title." : undefined}
                 />
                 <input
                   type="text"
@@ -221,6 +243,9 @@ export default function FormBuilderCanvas({
                   value={form.description}
                   onChange={(e) => onUpdateFormHeader(form.title, e.target.value)}
                   placeholder="Enter form description or instructions..."
+                  disabled={!canCreateForm}
+                  style={!canCreateForm ? { opacity: 0.7, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                  title={!canCreateForm ? "Admin has not allowed this action. You do not have permission to modify form description." : undefined}
                 />
               </>
             )}
@@ -255,7 +280,7 @@ export default function FormBuilderCanvas({
                   <div
                     key={field.id}
                     className={`fbc-field-wrapper ${isSectionType ? 'fbc-field-wrapper--section' : ''} ${isFullWidth ? 'fbc-field-wrapper--full' : 'fbc-field-wrapper--half'} ${isSelected ? 'fbc-field-wrapper--selected' : ''} ${draggedIndex === index ? 'fbc-field-wrapper--dragging' : ''} ${dragOverIndex === index ? 'fbc-field-wrapper--drag-over' : ''} ${isPreviewMode ? 'fbc-field-wrapper--preview' : ''}`}
-                    draggable={!isPreviewMode}
+                    draggable={!isPreviewMode && canCreateForm}
                     onDragStart={(e) => handleCanvasFieldDragStart(e, index)}
                     onClick={() => !isPreviewMode && onSelectField(field.id)}
                     onDragOver={(e) => handleDragOver(e, index)}
@@ -266,7 +291,7 @@ export default function FormBuilderCanvas({
                     {!isPreviewMode && (
                       <div className="fbc-field-toolbar">
                         <div className="fbc-field-toolbar-left">
-                          <span className="fbc-drag-handle" title="Drag field">
+                          <span className="fbc-drag-handle" title={canCreateForm ? "Drag field" : "Admin has not allowed this action. You do not have permission to reorder fields."} style={!canCreateForm ? { cursor: 'not-allowed' } : undefined}>
                             <GripVertical size={14} />
                           </span>
                           <span className="fbc-field-type-badge">{field.type.replace('_', ' ')}</span>
@@ -276,12 +301,13 @@ export default function FormBuilderCanvas({
                           <button
                             type="button"
                             className="fbc-action-btn"
-                            disabled={index === 0}
+                            disabled={index === 0 || !canCreateForm}
                             onClick={(e) => {
                               e.stopPropagation();
-                              onMoveField(index, 'up');
+                              if (canCreateForm) onMoveField(index, 'up');
                             }}
-                            title="Move Up"
+                            style={!canCreateForm ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                            title={!canCreateForm ? "Admin has not allowed this action. You do not have permission to move fields." : "Move Up"}
                           >
                             <ArrowUp size={13} />
                           </button>
@@ -289,12 +315,13 @@ export default function FormBuilderCanvas({
                           <button
                             type="button"
                             className="fbc-action-btn"
-                            disabled={index === form.fields.length - 1}
+                            disabled={index === form.fields.length - 1 || !canCreateForm}
                             onClick={(e) => {
                               e.stopPropagation();
-                              onMoveField(index, 'down');
+                              if (canCreateForm) onMoveField(index, 'down');
                             }}
-                            title="Move Down"
+                            style={!canCreateForm ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                            title={!canCreateForm ? "Admin has not allowed this action. You do not have permission to move fields." : "Move Down"}
                           >
                             <ArrowDown size={13} />
                           </button>
@@ -302,11 +329,13 @@ export default function FormBuilderCanvas({
                           <button
                             type="button"
                             className="fbc-action-btn"
+                            disabled={!canCreateForm}
                             onClick={(e) => {
                               e.stopPropagation();
-                              onDuplicateField(field.id);
+                              if (canCreateForm) onDuplicateField(field.id);
                             }}
-                            title="Duplicate Field"
+                            style={!canCreateForm ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                            title={!canCreateForm ? "Admin has not allowed this action. You do not have permission to duplicate fields." : "Duplicate Field"}
                           >
                             <Copy size={13} />
                           </button>
@@ -314,11 +343,13 @@ export default function FormBuilderCanvas({
                           <button
                             type="button"
                             className="fbc-action-btn fbc-action-btn--delete"
+                            disabled={!canCreateForm}
                             onClick={(e) => {
                               e.stopPropagation();
-                              onDeleteField(field.id);
+                              if (canCreateForm) onDeleteField(field.id);
                             }}
-                            title="Delete Field"
+                            style={!canCreateForm ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                            title={!canCreateForm ? "Admin has not allowed this action. You do not have permission to delete fields." : "Delete Field"}
                           >
                             <Trash2 size={13} />
                           </button>

@@ -28,7 +28,7 @@ export const ROUTE_PERMISSION_RULES: Array<{ prefix: string; rule: RoutePermissi
   { prefix: '/procurement/create-payment-voucher', rule: { module: 'Create Payment Voucher', action: 'canView' } },
   { prefix: '/sales-orders', rule: { module: 'Purchase Order Approval', action: 'canView' } },
   { prefix: '/vendors', rule: { module: 'Vendors', action: 'canView' } },
-  { prefix: '/onboarding/new', rule: { module: 'New Onboarding', action: 'canCreate' } },
+  { prefix: '/onboarding/new', rule: { module: 'New Onboarding', action: 'canView' } },
   { prefix: '/onboarding/queue', rule: { module: 'Onboarding Queue', action: 'canView' } },
   { prefix: '/signature', rule: { module: 'Signature', action: 'canView' } },
   { prefix: '/reports', rule: { module: 'Reports', action: 'canView' } },

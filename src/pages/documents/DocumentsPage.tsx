@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { localDataService, type DocumentItem as ServiceDocument } from '../../services/localDataService';
@@ -99,6 +100,8 @@ function mapDocument(d: ServiceDocument): MockDocument {
 // ─── Component ──────────────────────────────────────────────
 
 export default function DocumentsPage() {
+  const { hasPermission } = useAuth();
+  const canUpload = hasPermission('Company Settings', 'canCreate') || hasPermission('RFQ Management', 'canCreate');
   const { data: docs, loading, error } = useServiceData(
     () => localDataService.getDocuments().then((list) => list.map(mapDocument)),
     [] as MockDocument[]
@@ -173,7 +176,13 @@ export default function DocumentsPage() {
           <h1>Documents</h1>
           <p>Upload, manage, and access all procurement documents in one place</p>
         </div>
-        <button className="docs-page__upload-btn" onClick={openUpload}>
+        <button
+          className="docs-page__upload-btn"
+          onClick={canUpload ? openUpload : undefined}
+          disabled={!canUpload}
+          style={!canUpload ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+          title={!canUpload ? "Admin has not allowed this action. You do not have permission to upload documents." : undefined}
+        >
           <Upload size={18} /> Upload Document
         </button>
       </div>
@@ -268,7 +277,14 @@ export default function DocumentsPage() {
                         <div className="docs-table__actions">
                           <button className="docs-table__action-btn" title="View" onClick={() => setDetailDoc(doc)}><Eye size={15} /></button>
                           <button className="docs-table__action-btn" title="Download"><Download size={15} /></button>
-                          <button className="docs-table__action-btn docs-table__action-btn--danger" title="Delete"><Trash2 size={15} /></button>
+                          <button
+                            className="docs-table__action-btn docs-table__action-btn--danger"
+                            disabled={!canUpload}
+                            style={!canUpload ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                            title={!canUpload ? "Admin has not allowed this action. You do not have permission to delete documents." : "Delete"}
+                          >
+                            <Trash2 size={15} />
+                          </button>
                         </div>
                       </td>
                     </tr>

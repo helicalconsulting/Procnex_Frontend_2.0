@@ -15,6 +15,7 @@ import {
   Printer
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
+import { useAuth } from '../../context/AuthContext';
 import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyMaster';
 import { useBranding } from '../../context/BrandingContext';
 import defaultHeliflowLogo from '../../assets/heliflow.png';
@@ -33,6 +34,8 @@ interface LineItemState {
 
 export default function CreateGRNPage() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  const canCreateGRN = hasPermission('PO Creation', 'canCreate') || hasPermission('Goods Received Note', 'canCreate') || hasPermission('GRN', 'canCreate');
   const [searchParams] = useSearchParams();
   const poIdParam = searchParams.get('poId');
   const { companyDefaultCurrency, formatAmount } = useCurrency();
@@ -48,7 +51,7 @@ export default function CreateGRNPage() {
   const poList = poData.orders || [];
 
   // Form State
-  const [grnNumber] = useState<string>(() => `GRN-2026-${Math.floor(1000 + Math.random() * 9000)}`);
+  const [grnNumber] = useState<string>(() => `DN-2026-${Math.floor(1000 + Math.random() * 9000)}`);
   const [selectedPoId, setSelectedPoId] = useState<string>('');
   const [receivedDate, setReceivedDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState<string>('');
@@ -175,7 +178,7 @@ export default function CreateGRNPage() {
     );
   };
 
-  // Calculations: Total PO Value vs Total GRN Value
+  // Calculations: Total PO Value vs Total Dispatch Note Value
   const calculations = useMemo(() => {
     let totalPoValue = 0;
     let totalGrnValue = 0;
@@ -230,10 +233,10 @@ export default function CreateGRNPage() {
         items: payloadItems,
       });
 
-      setSuccessMsg(`Goods Received Note #${grnNumber} generated & sent successfully!`);
+      setSuccessMsg(`Dispatch Note #${grnNumber} generated & sent successfully!`);
       setTimeout(() => navigate('/procurement/grns'), 1500);
     } catch (err: any) {
-      setErrorMsg(err?.message || 'Failed to create Goods Received Note.');
+      setErrorMsg(err?.message || 'Failed to create Dispatch Note.');
     } finally {
       setSubmitting(false);
     }
@@ -260,8 +263,8 @@ export default function CreateGRNPage() {
             <ArrowLeft size={16} /> Back
           </button>
           <div className="cpo-header__title-wrap">
-            <h1>Create Goods Received Note (GRN)</h1>
-            <p>Record & dispatch received physical goods against an approved Purchase Order (Direct Send to Buyer)</p>
+            <h1>Create Dispatch Note</h1>
+            <p>Record & dispatch physical goods against an approved Purchase Order (Direct Send to Buyer)</p>
           </div>
         </div>
         <div className="cpo-header__actions">
@@ -275,16 +278,18 @@ export default function CreateGRNPage() {
           <button
             className="cpo-btn cpo-btn--primary"
             onClick={handleSubmit}
-            disabled={submitting || poLoading}
+            disabled={submitting || poLoading || !canCreateGRN}
+            style={!canCreateGRN ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+            title={!canCreateGRN ? "Admin has not allowed this action. You do not have permission to send dispatch notes." : undefined}
           >
-            <Send size={16} /> {submitting ? 'Sending GRN…' : 'Send Goods Received Note'}
+            <Send size={16} /> {submitting ? 'Sending Dispatch Note…' : 'Send Dispatch Note'}
           </button>
         </div>
       </div>
 
       {/* Form Content */}
       <div className="cpo-body">
-        {/* Section 01: Call PO & GRN Header */}
+        {/* Section 01: Call PO & Dispatch Note Header */}
         <div className="cpo-section">
           <div className="cpo-section__header">
             <span className="cpo-section__num">01</span>
@@ -311,9 +316,9 @@ export default function CreateGRNPage() {
             </div>
 
             <div className="cpo-field">
-              <label>GRN NUMBER (AUTO)</label>
+              <label>DISPATCH NOTE NUMBER (AUTO)</label>
               <input type="text" value={grnNumber} readOnly className="cpo-input--readonly" />
-              <span className="cpo-field__sub">Auto-generated GRN reference</span>
+              <span className="cpo-field__sub">Auto-generated Dispatch Note reference</span>
             </div>
 
             <div className="cpo-field">
@@ -364,7 +369,7 @@ export default function CreateGRNPage() {
                   <th style={{ width: '120px' }}>Ordered Qty</th>
                   <th style={{ width: '140px' }}>Delivered Qty *</th>
                   <th style={{ width: '130px' }}>Price ({currency})</th>
-                  <th style={{ width: '150px', textAlign: 'right' }}>GRN Value ({currency})</th>
+                  <th style={{ width: '150px', textAlign: 'right' }}>Dispatch Value ({currency})</th>
                   <th style={{ width: '180px' }}>Inspection Remarks</th>
                 </tr>
               </thead>
@@ -494,7 +499,7 @@ export default function CreateGRNPage() {
               </div>
 
               <div className="cpo-totals__row">
-                <span>Total GRN Value</span>
+                <span>Total Dispatch Note Value</span>
                 <span style={{ fontWeight: 700, color: 'var(--primary-500)' }}>{formatAmount(calculations.totalGrnValue, currency)}</span>
               </div>
             </div>
@@ -503,9 +508,11 @@ export default function CreateGRNPage() {
               <button
                 className="cpo-btn cpo-btn--primary cpo-btn--full"
                 onClick={handleSubmit}
-                disabled={submitting || poLoading}
+                disabled={submitting || poLoading || !canCreateGRN}
+                style={!canCreateGRN ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                title={!canCreateGRN ? "Admin has not allowed this action. You do not have permission to send dispatch notes." : undefined}
               >
-                <Send size={16} /> {submitting ? 'Sending GRN…' : 'Send Goods Received Note'}
+                <Send size={16} /> {submitting ? 'Sending Dispatch Note…' : 'Send Dispatch Note'}
               </button>
             </div>
           </div>
@@ -535,13 +542,13 @@ export default function CreateGRNPage() {
           </div>
           <div className="po-doc__header-right">
             <div className="po-doc__title-block">
-              <span className="po-doc__title-label" style={{ color: '#059669' }}>GOODS RECEIVED NOTE</span>
+              <span className="po-doc__title-label" style={{ color: '#059669' }}>DISPATCH NOTE</span>
               <span className="po-doc__title-po-num">{grnNumber}</span>
             </div>
             <table className="po-doc__meta-table">
               <tbody>
                 <tr>
-                  <td className="po-doc__meta-label">GRN Date</td>
+                  <td className="po-doc__meta-label">Dispatch Date</td>
                   <td className="po-doc__meta-value">{receivedDate}</td>
                 </tr>
                 <tr>

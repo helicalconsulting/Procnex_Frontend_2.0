@@ -5642,4 +5642,27 @@
   border-color: #38bdf8;
 }
 
+/* ═══════════════════════════════════════════════════════════
+   View-Only Mode (canView only, no canCreate)
+   ═══════════════════════════════════════════════════════════ */
+
+.company-settings-page.is-view-only input:not([type="search"]),
+.company-settings-page.is-view-only select,
+.company-settings-page.is-view-only textarea,
+.company-settings-page.is-view-only button:not(.cs-tab):not(.cs-sub-tab):not(.cs-dept__expand):not(.fbs-modal-close),
+.company-settings-page.is-view-only .cs-upload-btn,
+.company-settings-page.is-view-only .cs-dt-upload-strip__btn,
+.company-settings-page.is-view-only .cs-color-picker,
+.company-settings-page.is-view-only .cs-color-reset-btn {
+  opacity: 0.6 !important;
+  cursor: not-allowed !important;
+  pointer-events: auto !important;
+}
+
+.company-settings-page.is-view-only .cs-upload-btn input,
+.company-settings-page.is-view-only .cs-dt-upload-strip__btn input {
+  pointer-events: none !important;
+}
+
+
 

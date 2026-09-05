@@ -129,6 +129,8 @@ function mapLevel(l: ApprovalLevel): ApprovalLevelData {
 
 export default function ApprovalLevelsPage() {
   const { hasPermission } = useAuth();
+  const canCreateLevels = hasPermission('Approval Levels', 'canCreate');
+  const noPermissionTitle = "Admin has not allowed this action. You do not have permission to modify approval levels.";
   const { companyDefaultCurrency } = useCurrency();
   const { data: levels, loading, error, reload } = useServiceData(
     () => adminService.listApprovalLevels().then((list) => list.map(mapLevel)),
@@ -223,6 +225,7 @@ export default function ApprovalLevelsPage() {
 
   // Open add modal
   const openAddModal = useCallback((preselectedModule?: string) => {
+    if (!canCreateLevels) return;
     const mod = preselectedModule || '';
     setFormModule(mod);
     setFormRole('');
@@ -235,7 +238,7 @@ export default function ApprovalLevelsPage() {
     setEditingLevel(null);
     setFormError(null);
     setShowAddModal(true);
-  }, [companyDefaultCurrency, grouped]);
+  }, [companyDefaultCurrency, grouped, canCreateLevels]);
 
   const handleModuleSelect = (modKey: string) => {
     setFormModule(modKey);
@@ -247,6 +250,7 @@ export default function ApprovalLevelsPage() {
 
   // Open edit modal
   const openEditModal = useCallback((level: ApprovalLevelData) => {
+    if (!canCreateLevels) return;
     setEditingLevel(level);
     setFormModule(level.module);
     setFormRole(level.requiredRole);
@@ -256,9 +260,10 @@ export default function ApprovalLevelsPage() {
     setFormMaxValue(level.maxValue ?? '');
     setFormCurrency(level.currency || companyDefaultCurrency);
     setShowAddModal(true);
-  }, [companyDefaultCurrency]);
+  }, [companyDefaultCurrency, canCreateLevels]);
 
   const handleSave = useCallback(async () => {
+    if (!canCreateLevels) return;
     if (!formModule || !formRole) return;
     setSaveLoading(true);
     setFormError(null);
@@ -292,13 +297,15 @@ export default function ApprovalLevelsPage() {
     } finally {
       setSaveLoading(false);
     }
-  }, [formModule, formRole, formLevelNumber, formTimeLimit, formMinValue, formMaxValue, formCurrency, editingLevel, reload]);
+  }, [formModule, formRole, formLevelNumber, formTimeLimit, formMinValue, formMaxValue, formCurrency, editingLevel, reload, canCreateLevels]);
 
   const handleDelete = useCallback((levelId: number) => {
+    if (!canCreateLevels) return;
     setDeleteConfirmLevelId(levelId);
-  }, []);
+  }, [canCreateLevels]);
 
   const moveLevel = useCallback(async (levelId: number, direction: 'up' | 'down') => {
+    if (!canCreateLevels) return;
     setPageMsg(null);
     try {
       await adminService.reorderApprovalLevel(levelId, direction);
@@ -306,7 +313,7 @@ export default function ApprovalLevelsPage() {
     } catch (err) {
       setPageMsg(err instanceof Error ? err.message : 'Could not reorder level');
     }
-  }, [reload]);
+  }, [reload, canCreateLevels]);
 
   return (
     <div className="alvl-page">
@@ -331,7 +338,7 @@ export default function ApprovalLevelsPage() {
           className={`alvl-page__add-btn ${!hasPermission('Approval Levels', 'canCreate') ? 'alvl-page__add-btn--disabled' : ''}`}
           onClick={hasPermission('Approval Levels', 'canCreate') ? () => openAddModal() : undefined}
           disabled={!hasPermission('Approval Levels', 'canCreate')}
-          title={!hasPermission('Approval Levels', 'canCreate') ? 'You do not have permission to add approval levels' : 'Add new approval level'}
+          title={!hasPermission('Approval Levels', 'canCreate') ? 'Admin has not allowed this action. You do not have permission to add approval levels.' : 'Add new approval level'}
           style={!hasPermission('Approval Levels', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
         >
           <Plus size={18} />
@@ -432,7 +439,13 @@ export default function ApprovalLevelsPage() {
                     <span>{activeSystem === 'rfq' ? 'Procnex Only' : 'RFQ Only'}</span>
                   </div>
                 ) : (
-                  <button className="alvl-chain-card__add-btn" onClick={() => openAddModal(mod)}>
+                  <button
+                    className="alvl-chain-card__add-btn"
+                    onClick={canCreateLevels ? () => openAddModal(mod) : undefined}
+                    disabled={!canCreateLevels}
+                    style={!canCreateLevels ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                    title={!canCreateLevels ? noPermissionTitle : `Add level to ${moduleDef.label}`}
+                  >
                     <Plus size={14} />
                     Add
                   </button>
@@ -477,31 +490,37 @@ export default function ApprovalLevelsPage() {
                             <div className="alvl-pipeline__actions">
                               <button
                                 className="alvl-pipeline__action-btn"
-                                title="Move Up"
-                                disabled={idx === 0}
+                                title={!canCreateLevels ? noPermissionTitle : "Move Up"}
+                                disabled={idx === 0 || !canCreateLevels}
+                                style={!canCreateLevels ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                                 onClick={() => moveLevel(level.id, 'up')}
                               >
                                 <ArrowUp size={14} />
                               </button>
                               <button
                                 className="alvl-pipeline__action-btn"
-                                title="Move Down"
-                                disabled={idx === chain.length - 1}
+                                title={!canCreateLevels ? noPermissionTitle : "Move Down"}
+                                disabled={idx === chain.length - 1 || !canCreateLevels}
+                                style={!canCreateLevels ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                                 onClick={() => moveLevel(level.id, 'down')}
                               >
                                 <ArrowDown size={14} />
                               </button>
                               <button
                                 className="alvl-pipeline__action-btn"
-                                title="Edit"
-                                onClick={() => openEditModal(level)}
+                                title={!canCreateLevels ? noPermissionTitle : "Edit"}
+                                disabled={!canCreateLevels}
+                                style={!canCreateLevels ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                                onClick={canCreateLevels ? () => openEditModal(level) : undefined}
                               >
                                 <Edit3 size={14} />
                               </button>
                               <button
                                 className="alvl-pipeline__action-btn alvl-pipeline__action-btn--danger"
-                                title="Remove"
-                                onClick={() => handleDelete(level.id)}
+                                title={!canCreateLevels ? noPermissionTitle : "Remove"}
+                                disabled={!canCreateLevels}
+                                style={!canCreateLevels ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                                onClick={canCreateLevels ? () => handleDelete(level.id) : undefined}
                               >
                                 <Trash2 size={14} />
                               </button>
@@ -687,7 +706,9 @@ export default function ApprovalLevelsPage() {
               <button
                 type="button"
                 className="alvl-modal__btn alvl-modal__btn--primary"
-                disabled={!formModule || !formRole || saveLoading}
+                disabled={!formModule || !formRole || saveLoading || !canCreateLevels}
+                style={!canCreateLevels ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                title={!canCreateLevels ? noPermissionTitle : undefined}
                 onClick={handleSave}
               >
                 <Check size={16} />

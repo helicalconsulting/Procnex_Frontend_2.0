@@ -16,6 +16,7 @@ import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import '../../components/shared/ColumnCustomizer.css';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
+import { useAuth } from '../../context/AuthContext';
 import './PurchaseOrdersPage.css';
 
 // ─── Types ──────────────────────────────────────────────────
@@ -142,6 +143,8 @@ export default function PurchaseOrdersPage() {
   const [batchDeleting, setBatchDeleting] = useState(false);
   const [pageMsg, setPageMsg] = useState<string | null>(null);
   useBodyScrollLock(!!detailPO || !!deleteTarget || showBatchDeleteModal);
+  const { hasPermission } = useAuth();
+  const canCreatePO = hasPermission('PO Creation', 'canCreate') || hasPermission('Purchase Orders', 'canCreate') || hasPermission('PO', 'canCreate');
   const perPage = 8;
   const { formatAmount, companyDefaultCurrency } = useCurrency();
   const [displayCurrency, setDisplayCurrency] = useState(companyDefaultCurrency);
@@ -262,7 +265,13 @@ export default function PurchaseOrdersPage() {
           <h1>Purchase Orders</h1>
           <p>Track, manage, and monitor all purchase orders across departments</p>
         </div>
-        <button className="po-page__add-btn" onClick={() => navigate('/procurement/create-purchase-order')}>
+        <button
+          className="po-page__add-btn"
+          onClick={() => canCreatePO && navigate('/procurement/create-purchase-order')}
+          disabled={!canCreatePO}
+          style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+          title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to create purchase orders." : undefined}
+        >
           <Plus size={18} /> Create PO
         </button>
       </div>
@@ -345,13 +354,20 @@ export default function PurchaseOrdersPage() {
             </button>
             <button
               type="button"
+              disabled={!canCreatePO}
               style={{
-                background: '#dc2626', color: '#ffffff', border: 'none',
+                background: canCreatePO ? '#dc2626' : '#64748b',
+                color: '#ffffff', border: 'none',
                 padding: '7px 16px', fontSize: 13, fontWeight: 700,
-                borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+                borderRadius: 'var(--radius-sm)',
+                cursor: canCreatePO ? 'pointer' : 'not-allowed',
+                opacity: canCreatePO ? 1 : 0.5,
+                pointerEvents: 'auto',
                 display: 'inline-flex', alignItems: 'center', gap: 6
               }}
+              title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to delete purchase orders." : undefined}
               onClick={(e) => {
+                if (!canCreatePO) return;
                 (e.currentTarget as HTMLElement).blur();
                 setShowBatchDeleteModal(true);
               }}
@@ -379,8 +395,10 @@ export default function PurchaseOrdersPage() {
                       <input
                         type="checkbox"
                         checked={isAllSelected}
-                        onChange={handleToggleSelectAll}
-                        style={{ cursor: 'pointer', width: 16, height: 16 }}
+                        disabled={!canCreatePO}
+                        onChange={canCreatePO ? handleToggleSelectAll : undefined}
+                        style={{ cursor: canCreatePO ? 'pointer' : 'not-allowed', width: 16, height: 16 }}
+                        title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to select purchase orders." : undefined}
                       />
                     </th>
                     {visibleColumns.map((col) => (<th key={col.key}>{col.label}</th>))}
@@ -406,8 +424,10 @@ export default function PurchaseOrdersPage() {
                         <input
                           type="checkbox"
                           checked={selectedPOIds.includes(po.id)}
-                          onChange={() => handleToggleSelect(po.id)}
-                          style={{ cursor: 'pointer', width: 16, height: 16 }}
+                          disabled={!canCreatePO}
+                          onChange={() => canCreatePO && handleToggleSelect(po.id)}
+                          style={{ cursor: canCreatePO ? 'pointer' : 'not-allowed', width: 16, height: 16 }}
+                          title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to select purchase orders." : undefined}
                         />
                       </td>
                       {visibleColumns.map((col) => (<td key={col.key}>{col.render(po, formatDate, formatAmount, displayCurrency)}</td>))}
@@ -415,7 +435,13 @@ export default function PurchaseOrdersPage() {
                         <div className="po-table__actions">
                           <button className="po-table__action-btn" title="View Details" onClick={() => setDetailPO(po)}><Eye size={15} /></button>
                           <button className="po-table__action-btn" title="Download PDF" onClick={() => downloadPurchaseOrderAsPdf(po, formatAmount, displayCurrency)}><Download size={15} /></button>
-                          <button className="po-table__action-btn po-table__action-btn--danger" title="Delete PO" onClick={() => setDeleteTarget(po)}><Trash2 size={15} /></button>
+                          <button
+                            className="po-table__action-btn po-table__action-btn--danger"
+                            title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to delete purchase orders." : "Delete PO"}
+                            onClick={() => canCreatePO && setDeleteTarget(po)}
+                            disabled={!canCreatePO}
+                            style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                          ><Trash2 size={15} /></button>
                         </div>
                       </td>
                     </tr>

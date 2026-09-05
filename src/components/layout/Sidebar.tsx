@@ -205,7 +205,7 @@ export default function Sidebar({
         ...(isVendor(roles)
           ? [
               {
-                label: 'My Invoices & GRN',
+                label: 'My Invoices & Dispatches',
                 icon: <Truck size={19} />,
                 path: '/procurement/grns',
               },
@@ -239,6 +239,12 @@ export default function Sidebar({
         ...menuItems
           .filter((item) => item.id === 'onboarding-queue')
           .map((item) => ({ label: item.label, icon: ICON_MAP[item.label] || <UsersRound size={19} />, path: item.path })),
+        ...menuItems
+          .filter((item) => item.id === 'reports')
+          .map((item) => ({ label: item.label, icon: ICON_MAP[item.label] || <BarChart3 size={19} />, path: item.path })),
+        ...menuItems
+          .filter((item) => item.id === 'audit-trail')
+          .map((item) => ({ label: item.label, icon: ICON_MAP[item.label] || <History size={19} />, path: item.path })),
       ],
     },
     {

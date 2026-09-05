@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { downloadDocument as _downloadDocument } from '../../utils/download';
+import { useAuth } from '../../hooks/useAuth';
 import './OnboardingQueuePage.css';
 
 type QueueStatus = 'pending' | 'approved' | 'rejected';
@@ -144,6 +145,8 @@ function downloadSignedDocument(doc: VendorDocument): void {
 }
 
 export default function OnboardingQueuePage() {
+  const { hasPermission } = useAuth();
+  const canApproveOnboarding = hasPermission('Onboarding Queue', 'canApprove');
   const { data: requests, loading, error, reload } = useServiceData(
     () => procurementService.getOnboardingQueue().then((list) => list.map(mapOnboardingVendor)),
     [] as QueueRow[]
@@ -458,9 +461,11 @@ export default function OnboardingQueuePage() {
                               <button
                                 type="button"
                                 className="oq-btn oq-btn--reject"
-                                disabled={busyId === req.id || notSubmitted}
-                                title={notSubmittedTitle}
+                                disabled={busyId === req.id || notSubmitted || !canApproveOnboarding}
+                                title={!canApproveOnboarding ? 'Admin has not allowed this action. You do not have permission to reject onboarding requests.' : notSubmittedTitle}
+                                style={!canApproveOnboarding ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                                 onClick={() => {
+                                  if (!canApproveOnboarding) return;
                                   setActionError(null);
                                   setRejectTarget(req);
                                   setRejectReason('');
@@ -471,9 +476,13 @@ export default function OnboardingQueuePage() {
                               <button
                                 type="button"
                                 className="oq-btn oq-btn--approve"
-                                disabled={busyId === req.id || notSubmitted}
-                                title={notSubmittedTitle}
-                                onClick={() => openApproveModal(req)}
+                                disabled={busyId === req.id || notSubmitted || !canApproveOnboarding}
+                                title={!canApproveOnboarding ? 'Admin has not allowed this action. You do not have permission to approve onboarding requests.' : notSubmittedTitle}
+                                style={!canApproveOnboarding ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                                onClick={() => {
+                                  if (!canApproveOnboarding) return;
+                                  openApproveModal(req);
+                                }}
                               >
                                 <CheckCircle2 size={15} />
                                 {busyId === req.id ? 'Working…' : 'Approve'}
@@ -619,7 +628,9 @@ export default function OnboardingQueuePage() {
               <button
                 type="button"
                 className="oq-modal__btn oq-modal__btn--primary"
-                disabled={busyId === approveTarget.id}
+                disabled={busyId === approveTarget.id || !canApproveOnboarding}
+                title={!canApproveOnboarding ? 'Admin has not allowed this action. You do not have permission to approve onboarding requests.' : 'Approve & Send Email'}
+                style={!canApproveOnboarding ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                 onClick={handleApproveConfirm}
               >
                 {busyId === approveTarget.id ? 'Approving…' : 'Approve & Send Email'}
@@ -667,7 +678,9 @@ export default function OnboardingQueuePage() {
               <button
                 type="button"
                 className="oq-modal__btn oq-modal__btn--danger"
-                disabled={busyId === rejectTarget.id || rejectReason.trim().length < 5}
+                disabled={busyId === rejectTarget.id || rejectReason.trim().length < 5 || !canApproveOnboarding}
+                title={!canApproveOnboarding ? 'Admin has not allowed this action. You do not have permission to reject onboarding requests.' : 'Confirm rejection'}
+                style={!canApproveOnboarding ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                 onClick={handleRejectConfirm}
               >
                 {busyId === rejectTarget.id ? 'Rejecting…' : 'Confirm rejection'}

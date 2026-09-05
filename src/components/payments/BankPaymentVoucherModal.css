@@ -1,0 +1,450 @@
+/* ── Bank Payment Voucher Modal Styling ── */
+
+.bpv-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 30px 15px;
+  overflow-y: auto;
+}
+
+.bpv-modal {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 900px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  color: #f8fafc;
+}
+
+.bpv-modal__topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+}
+
+.bpv-modal__topbar-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.bpv-modal__icon {
+  color: #10b981;
+}
+
+.bpv-badge {
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.bpv-badge--matched {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.bpv-badge--discrepancy {
+  background: rgba(225, 29, 72, 0.15);
+  color: #f43f5e;
+  border: 1px solid rgba(225, 29, 72, 0.3);
+}
+
+.bpv-modal__topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bpv-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.bpv-btn--primary {
+  background: #10b981;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.bpv-btn--primary:hover {
+  background: #059669;
+}
+
+.bpv-btn--close {
+  background: #334155;
+  color: #94a3b8;
+  padding: 8px;
+}
+
+.bpv-btn--close:hover {
+  background: #475569;
+  color: #ffffff;
+}
+
+/* ── Printable Paper Sheet ── */
+.bpv-sheet {
+  background: #ffffff;
+  color: #0f172a;
+  padding: 40px 48px;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.05);
+}
+
+.bpv-sheet__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.bpv-sheet__company h2 {
+  margin: 0 0 4px 0;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.bpv-sheet__company p {
+  margin: 0;
+  font-size: 12.5px;
+  color: #475569;
+}
+
+.bpv-sheet__sub {
+  color: #64748b !important;
+  font-size: 11.5px !important;
+  margin-top: 2px !important;
+}
+
+.bpv-sheet__doc-type {
+  text-align: right;
+}
+
+.bpv-sheet__doc-type h3 {
+  margin: 0 0 6px 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #1e3a8a;
+  letter-spacing: 0.05em;
+}
+
+.bpv-sheet__voucher-no {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #0f172a;
+  font-family: monospace;
+  background: #f1f5f9;
+  padding: 4px 10px;
+  border-radius: 6px;
+  display: inline-block;
+}
+
+.bpv-sheet__doc-type p {
+  margin: 6px 0 0 0;
+  font-size: 12px;
+  color: #475569;
+}
+
+.bpv-divider {
+  height: 2px;
+  background: #e2e8f0;
+  margin: 24px 0;
+}
+
+/* ── Section Styling ── */
+.bpv-section {
+  margin-bottom: 24px;
+}
+
+.bpv-section__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e293b;
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #cbd5e1;
+  padding-bottom: 4px;
+}
+
+.bpv-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.bpv-grid--2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.bpv-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 14px 18px;
+}
+
+.bpv-box__title {
+  font-size: 11px;
+  font-weight: 800;
+  color: #475569;
+  letter-spacing: 0.05em;
+  margin-bottom: 10px;
+  border-bottom: 1px dashed #cbd5e1;
+  padding-bottom: 4px;
+}
+
+.bpv-box__row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12.5px;
+  margin-bottom: 6px;
+}
+
+.bpv-box__row span {
+  color: #64748b;
+}
+
+.bpv-box__row strong {
+  color: #0f172a;
+}
+
+.bpv-highlight {
+  color: #0284c7 !important;
+}
+
+/* ── Match Strip ── */
+.bpv-match-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 14px;
+  font-size: 12.5px;
+}
+
+.bpv-match-strip--success {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+
+.bpv-match-strip--warning {
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  color: #9f1239;
+}
+
+.bpv-match-strip p {
+  margin: 2px 0 0 0;
+  font-size: 11.5px;
+}
+
+/* ── Tables ── */
+.bpv-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 16px;
+  font-size: 12.5px;
+}
+
+.bpv-table th {
+  background: #f1f5f9;
+  color: #334155;
+  font-weight: 700;
+  text-align: left;
+  padding: 8px 12px;
+  border-top: 1px solid #cbd5e1;
+  border-bottom: 2px solid #cbd5e1;
+}
+
+.bpv-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  color: #1e293b;
+}
+
+.bpv-totals-box {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f8fafc;
+  border: 2px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 14px 20px;
+}
+
+.bpv-totals-box__words span {
+  display: block;
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.bpv-totals-box__words strong {
+  font-size: 13px;
+  color: #0f172a;
+  font-style: italic;
+}
+
+.bpv-totals-box__grand {
+  text-align: right;
+}
+
+.bpv-totals-box__grand span {
+  font-size: 11px;
+  font-weight: 800;
+  color: #475569;
+  letter-spacing: 0.05em;
+}
+
+.bpv-totals-box__grand h2 {
+  margin: 2px 0 0 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #059669;
+}
+
+/* ── Approval Stamps ("Kisne Kisne Approve Kiya") ── */
+.bpv-stamps-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.bpv-stamp-card {
+  background: #ffffff;
+  border: 2px dashed #94a3b8;
+  border-radius: 8px;
+  padding: 12px;
+  position: relative;
+  text-align: center;
+}
+
+.bpv-stamp-card__level {
+  font-size: 10px;
+  font-weight: 800;
+  color: #64748b;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 4px;
+  margin-bottom: 8px;
+}
+
+.bpv-stamp-card__name {
+  font-size: 13px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.bpv-stamp-card__role {
+  font-size: 11.5px;
+  color: #475569;
+}
+
+.bpv-stamp-card__date {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+.bpv-stamp-card__comment {
+  font-size: 10.5px;
+  font-style: italic;
+  color: #0284c7;
+  margin-top: 4px;
+}
+
+.bpv-stamp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+/* ── Footer ── */
+.bpv-sheet__footer {
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+  text-align: center;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.bpv-sheet__system-id {
+  font-family: monospace;
+  font-size: 10px !important;
+  color: #94a3b8 !important;
+  margin-top: 4px !important;
+}
+
+/* ── Media Print Overrides ── */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .bpv-modal-backdrop {
+    position: static;
+    background: transparent;
+    padding: 0;
+  }
+  .bpv-modal {
+    border: none;
+    box-shadow: none;
+    max-width: 100%;
+    width: 100%;
+  }
+  .bpv-sheet, .bpv-sheet * {
+    visibility: visible;
+  }
+  .bpv-sheet {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 20px;
+    box-shadow: none;
+  }
+}

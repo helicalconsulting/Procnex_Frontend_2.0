@@ -460,11 +460,39 @@
 /* ── Print Styles ────────────────────────────────────────── */
 
 @media print {
+  html,
+  body,
+  #root,
+  .app-layout,
+  .app-layout__main,
+  .app-layout__body,
+  .app-layout__content,
+  .main-content,
+  [data-theme="dark"],
+  [data-theme="dark"] body,
+  [data-theme="dark"] #root,
+  [data-theme="dark"] .app-layout,
+  [data-theme="dark"] .app-layout__main,
+  [data-theme="dark"] .app-layout__body,
+  [data-theme="dark"] .app-layout__content,
+  [data-theme="dark"] .main-content {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
   .po-document {
-    padding: 0;
-    max-width: 100%;
-    margin: 0;
+    padding: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
     font-size: 11px;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
   }
 
   .po-doc__header {
@@ -497,7 +525,11 @@
   .po-doc__items-table thead th {
     padding: 8px 14px;
     height: 40px;
-    font-size: 8px;
+    font-size: 8.5px;
+    background: #0a6ed1 !important;
+    color: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   .po-doc__items-table tbody td {
@@ -510,18 +542,29 @@
     width: 300px;
   }
 
+  .po-doc__total-row--grand {
+    background: #0a6ed1 !important;
+    color: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
   .po-doc__total-value--grand {
     font-size: 14px;
+    color: #ffffff !important;
   }
 
   .po-doc__party-box,
   .po-doc__info-grid,
   .po-doc__notes-col {
     break-inside: avoid;
+    background: #f8fafc !important;
+    border: 1px solid #cbd5e1 !important;
   }
 
   .po-doc__table-wrap {
     break-inside: auto;
+    border: 1px solid #cbd5e1 !important;
   }
 
   .po-doc__items-table thead {
@@ -538,6 +581,6 @@
 
   @page {
     size: A4 portrait;
-    margin: 15mm 20mm;
+    margin: 12mm 15mm;
   }
 }

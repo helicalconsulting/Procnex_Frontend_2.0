@@ -234,25 +234,21 @@ export default function App() {
                             path="/onboarding/new"
                             element={page(NewOnboardingPage)}
                           />
-                          <Route element={<ProtectedRoute allowedRoles={[...ADMIN_ACCESS_ROLES]} />}>
-                            <Route path="/onboarding/queue" element={page(OnboardingQueuePage)} />
-                          </Route>
+                          <Route path="/onboarding/queue" element={page(OnboardingQueuePage)} />
                           <Route path="/signature" element={page(SignaturePage)} />
                           <Route path="/reports" element={page(ReportsPage)} />
                           <Route
                             path="/admin/company-settings"
                             element={page(CompanySettingsPage)}
                           />
-                          <Route element={<ProtectedRoute allowedRoles={[...ADMIN_ACCESS_ROLES]} />}>
-                            <Route
-                              path="/admin/custom-form-builder"
-                              element={page(CustomFormBuilderPage)}
-                            />
-                            <Route
-                              path="/admin/form-responses"
-                              element={page(FormResponsesPage)}
-                            />
-                          </Route>
+                          <Route
+                            path="/admin/custom-form-builder"
+                            element={page(CustomFormBuilderPage)}
+                          />
+                          <Route
+                            path="/admin/form-responses"
+                            element={page(FormResponsesPage)}
+                          />
                           <Route path="/forms" element={page(FormsPage)} />
                           <Route path="/documents" element={page(DocumentsPage)} />
                           <Route
@@ -260,8 +256,9 @@ export default function App() {
                             element={page(NotificationsPage)}
                           />
                           <Route path="/contracts" element={page(ContractsPage)} />
-                          <Route path="/contracts/:id" element={page(ContractDetailPage)} />
                           <Route path="/contracts/new" element={page(CreateContractPage)} />
+                          <Route path="/contracts/create" element={page(CreateContractPage)} />
+                          <Route path="/contracts/:id" element={page(ContractDetailPage)} />
                           <Route path="/contracts/:id/edit" element={page(ContractDetailPage)} />
                           <Route path="/purchase-orders" element={page(PurchaseOrdersPage)} />
                           <Route path="/purchase-orders/new" element={page(CreatePurchaseOrderPage)} />

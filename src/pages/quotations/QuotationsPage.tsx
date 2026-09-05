@@ -2494,7 +2494,10 @@ export default function QuotationsPage() {
   const rfqFromUrl = searchParams.get('rfq');
   const { formatAmount, convert, companyDefaultCurrency } = useCurrency();
   const [displayCurrency, setDisplayCurrency] = useState<string>('');
-  const { user, roles } = useAuth();
+  const { user, roles, hasPermission } = useAuth();
+  const canApproveQuot = hasPermission('Quotation Evaluation', 'canApprove') || hasPermission('Quotation Evaluation', 'canCreate') || hasPermission('Quotations', 'canApprove') || hasPermission('RFQ Management', 'canApprove') || hasPermission('RFQ', 'canApprove');
+  const canCreatePO = hasPermission('PO Creation', 'canCreate') || hasPermission('Purchase Orders', 'canCreate') || hasPermission('PO', 'canCreate');
+  const canCreateContract = hasPermission('Contract Management', 'canCreate') || hasPermission('Contracts', 'canCreate');
   const [startLevelPromptState, setStartLevelPromptState] = useState<{
     id: number | string;
     apiStatus: string;
@@ -4382,22 +4385,28 @@ export default function QuotationsPage() {
                 <>
                   <button
                     className="quot-table__action-btn quot-table__action-btn--accept"
-                    title="Accept Quotation"
-                    onClick={() => openModal('accept', s)}
+                    title={!canApproveQuot ? "Admin has not allowed this action. You do not have permission to accept quotations." : "Accept Quotation"}
+                    onClick={() => canApproveQuot && openModal('accept', s)}
+                    disabled={!canApproveQuot}
+                    style={!canApproveQuot ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                   >
                     <ThumbsUp size={15} />
                   </button>
                   <button
                     className="quot-table__action-btn quot-table__action-btn--reject"
-                    title="Reject Quotation"
-                    onClick={() => openModal('reject', s)}
+                    title={!canApproveQuot ? "Admin has not allowed this action. You do not have permission to reject quotations." : "Reject Quotation"}
+                    onClick={() => canApproveQuot && openModal('reject', s)}
+                    disabled={!canApproveQuot}
+                    style={!canApproveQuot ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                   >
                     <ThumbsDown size={15} />
                   </button>
                   <button
                     className="quot-table__action-btn quot-table__action-btn--return"
-                    title="Return for Revision"
-                    onClick={() => openModal('return', s)}
+                    title={!canApproveQuot ? "Admin has not allowed this action. You do not have permission to return quotations." : "Return for Revision"}
+                    onClick={() => canApproveQuot && openModal('return', s)}
+                    disabled={!canApproveQuot}
+                    style={!canApproveQuot ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                   >
                     <RotateCcw size={15} />
                   </button>
@@ -4409,8 +4418,9 @@ export default function QuotationsPage() {
                     <button
                       type="button"
                       className="quot-sap-btn quot-sap-btn--po"
-                      title="Create Purchase Order for this accepted quotation"
+                      title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to create purchase orders." : "Create Purchase Order for this accepted quotation"}
                       onClick={() => {
+                        if (!canCreatePO) return;
                         const targetRfqId = s.rfqId;
                         const targetRfqNum = s.rfqNumber;
                         const updatePOGen = (q: MockQuotation): MockQuotation => {
@@ -4423,6 +4433,8 @@ export default function QuotationsPage() {
                         setAllQuotations(prev => prev.map(updatePOGen));
                         navigate(`/procurement/purchase-requisition/${s.rfqId}`);
                       }}
+                      disabled={!canCreatePO}
+                      style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                     >
                       <ShoppingCart size={13} />
                       <span>Create PO</span>
@@ -4432,11 +4444,14 @@ export default function QuotationsPage() {
                     <button
                       type="button"
                       className="quot-sap-btn quot-sap-btn--contract"
-                      title="Create Contract agreement for this accepted quotation"
+                      title={!canCreateContract ? "Admin has not allowed this action. You do not have permission to create contracts." : "Create Contract agreement for this accepted quotation"}
                       onClick={() => {
+                        if (!canCreateContract) return;
                         setPostAwardQuotation(s);
                         setShowTemplateSelect(true);
                       }}
+                      disabled={!canCreateContract}
+                      style={!canCreateContract ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                     >
                       <FileText size={13} />
                       <span>Create Contract</span>

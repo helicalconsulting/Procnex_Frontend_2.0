@@ -217,12 +217,12 @@ export default function VendorCreateInvoicePage() {
                 String(g.purchaseOrder?.id) === String(targetPoId) ||
                 String(g.purchaseOrder?.poNumber) === String(targetPoNum)
             );
-            setGrnOptions(matched.length > 0 ? matched : list);
-          });
+            setGrnOptions(matched);
+          }).catch(() => setGrnOptions([]));
         }
       })
       .catch(() => {
-        grnService.list({ limit: 100 }).then((res) => setGrnOptions(res.grns || [])).catch(() => setGrnOptions([]));
+        setGrnOptions([]);
       });
   }, [selectedPO, selectedPoId, poIdParam]);
 

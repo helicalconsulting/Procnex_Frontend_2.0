@@ -36,7 +36,9 @@ import './FormsPage.css';
 type ActiveTab = 'pending' | 'approval_pending' | 'submitted' | 'draft' | 'completed' | 'returned';
 
 export default function FormsPage() {
-  const { user, roles } = useAuth();
+  const { user, roles, hasPermission } = useAuth();
+  const canCreateFormResponse = hasPermission('Form Responses', 'canCreate') || hasPermission('Custom Form Builder', 'canCreate') || hasPermission('Form Builder', 'canCreate') || hasPermission('Forms', 'canCreate');
+  const canApproveFormResponse = hasPermission('Form Responses', 'canApprove') || hasPermission('Custom Form Builder', 'canApprove') || hasPermission('Form Builder', 'canApprove') || hasPermission('Forms', 'canApprove');
   const currentUserId = String(user?.id || (user as any)?._id || '1');
   const currentUserEmail = user?.email || '';
   const currentUserName = user?.fullName || 'Current Employee';
@@ -751,21 +753,39 @@ export default function FormsPage() {
                   <div className="fp-filler__footer-right">
                     {/* Return Form button only visible in approval workflow when workflow is attached */}
                     {selectedSubmission.workflowAttached && isApproverForSub && (
-                      <button className="fp-btn fp-btn--return" disabled={submitting} onClick={() => setShowReturnModal(true)}>
+                      <button
+                        className="fp-btn fp-btn--return"
+                        disabled={submitting || !canApproveFormResponse}
+                        style={!canApproveFormResponse ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                        title={!canApproveFormResponse ? "Admin has not allowed this action. You do not have permission to return form responses." : undefined}
+                        onClick={() => setShowReturnModal(true)}
+                      >
                         <RotateCcw size={15} /> Return Form
                       </button>
                     )}
 
                     {/* Save Draft if filling out */}
                     {(selectedSubmission.status === 'pending' || selectedSubmission.status === 'draft' || selectedSubmission.status === 'returned') && (
-                      <button className="fp-btn fp-btn--draft" disabled={submitting} onClick={handleSaveDraft}>
+                      <button
+                        className="fp-btn fp-btn--draft"
+                        disabled={submitting || !canCreateFormResponse}
+                        style={!canCreateFormResponse ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                        title={!canCreateFormResponse ? "Admin has not allowed this action. You do not have permission to save form responses." : undefined}
+                        onClick={handleSaveDraft}
+                      >
                         <Save size={15} /> Save Draft
                       </button>
                     )}
 
                     {/* Submit / Approve button */}
                     {isApproverForSub ? (
-                      <button className="fp-btn fp-btn--submit" disabled={submitting} onClick={handleApproveLevel}>
+                      <button
+                        className="fp-btn fp-btn--submit"
+                        disabled={submitting || !canApproveFormResponse}
+                        style={!canApproveFormResponse ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                        title={!canApproveFormResponse ? "Admin has not allowed this action. You do not have permission to approve form responses." : undefined}
+                        onClick={handleApproveLevel}
+                      >
                         <Check size={16} />
                         {submitting
                           ? 'Processing...'
@@ -774,7 +794,13 @@ export default function FormsPage() {
                           : `Submit & Approve Level ${selectedSubmission.currentLevelNumber || 1}`}
                       </button>
                     ) : (
-                      <button className="fp-btn fp-btn--submit" disabled={submitting} onClick={handleSubmitForm}>
+                      <button
+                        className="fp-btn fp-btn--submit"
+                        disabled={submitting || !canCreateFormResponse}
+                        style={!canCreateFormResponse ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                        title={!canCreateFormResponse ? "Admin has not allowed this action. You do not have permission to submit form responses." : undefined}
+                        onClick={handleSubmitForm}
+                      >
                         <Send size={16} />
                         {submitting ? 'Submitting...' : 'Submit Form'}
                       </button>

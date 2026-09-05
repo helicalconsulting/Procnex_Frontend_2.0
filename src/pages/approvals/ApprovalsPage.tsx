@@ -615,7 +615,7 @@ export default function ApprovalsPage() {
   }, []);
 
   const { user, roles: authRoles, hasPermission } = useAuth();
-  const canApprovePO = hasPermission('Purchase Order Approval', 'canApprove');
+  const canApprovePO = hasPermission('Purchase Order Approval', 'canApprove') || hasPermission('Approval Engine', 'canApprove') || hasPermission('Approvals', 'canApprove') || hasPermission('PO Creation', 'canApprove');
   const isAdmin = useMemo(() => {
     if (!authRoles || authRoles.length === 0) return false;
     return authRoles.some((r) =>
@@ -887,7 +887,7 @@ export default function ApprovalsPage() {
                           <>
                             <button
                               className={`approvals-table__action-btn approvals-table__action-btn--approve ${!canApprovePO ? 'approvals-table__action-btn--disabled' : ''}`}
-                              title={!canApprovePO ? 'You do not have permission to approve items' : 'Approve'}
+                              title={!canApprovePO ? 'Admin has not allowed this action. You do not have permission to approve items.' : 'Approve'}
                               onClick={canApprovePO ? () => openAction(req, 'approve') : undefined}
                               disabled={!canApprovePO}
                               style={!canApprovePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
@@ -896,7 +896,7 @@ export default function ApprovalsPage() {
                             </button>
                             <button
                               className={`approvals-table__action-btn approvals-table__action-btn--reject ${!canApprovePO ? 'approvals-table__action-btn--disabled' : ''}`}
-                              title={!canApprovePO ? 'You do not have permission to reject items' : 'Reject'}
+                              title={!canApprovePO ? 'Admin has not allowed this action. You do not have permission to reject items.' : 'Reject'}
                               onClick={canApprovePO ? () => openAction(req, 'reject') : undefined}
                               disabled={!canApprovePO}
                               style={!canApprovePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
@@ -905,7 +905,7 @@ export default function ApprovalsPage() {
                             </button>
                             <button
                               className={`approvals-table__action-btn approvals-table__action-btn--return ${!canApprovePO ? 'approvals-table__action-btn--disabled' : ''}`}
-                              title={!canApprovePO ? 'You do not have permission to return items' : 'Return'}
+                              title={!canApprovePO ? 'Admin has not allowed this action. You do not have permission to return items.' : 'Return'}
                               onClick={canApprovePO ? () => openAction(req, 'return') : undefined}
                               disabled={!canApprovePO}
                               style={!canApprovePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
@@ -1136,7 +1136,7 @@ export default function ApprovalsPage() {
                     className="approvals-modal__btn approvals-modal__btn--approve"
                     onClick={canApprovePO ? () => { setDetailRequest(null); openAction(detailRequest, 'approve'); } : undefined}
                     disabled={!canApprovePO}
-                    title={!canApprovePO ? 'You do not have permission to approve items' : 'Approve'}
+                    title={!canApprovePO ? 'Admin has not allowed this action. You do not have permission to approve items.' : 'Approve'}
                     style={!canApprovePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                   >
                     <ThumbsUp size={16} /> Approve
@@ -1145,7 +1145,7 @@ export default function ApprovalsPage() {
                     className="approvals-modal__btn approvals-modal__btn--reject"
                     onClick={canApprovePO ? () => { setDetailRequest(null); openAction(detailRequest, 'reject'); } : undefined}
                     disabled={!canApprovePO}
-                    title={!canApprovePO ? 'You do not have permission to reject items' : 'Reject'}
+                    title={!canApprovePO ? 'Admin has not allowed this action. You do not have permission to reject items.' : 'Reject'}
                     style={!canApprovePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                   >
                     <ThumbsDown size={16} /> Reject

@@ -396,7 +396,7 @@ export default function VendorOrdersPage() {
                         </button>
                         {order.status !== 'CANCELLED' && (
                           <Link to={`/procurement/create-grn?poId=${order.id}`} className="vendor-btn vendor-btn--primary" style={{ textDecoration: 'none', background: 'linear-gradient(135deg, #10b981, #059669)', borderColor: '#10b981' }}>
-                            <Truck size={15} /> Generate GRN / Dispatch Note
+                            <Truck size={15} /> Generate Dispatch Note
                           </Link>
                         )}
                         {order.status === 'DELIVERED' && (

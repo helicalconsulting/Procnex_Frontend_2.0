@@ -34,9 +34,13 @@ import {
   Upload,
   Image as ImageIcon,
 } from 'lucide-react';
+import { useAuth } from '../../hooks/useAuth';
 import './FormResponsesPage.css';
 
 export default function FormResponsesPage() {
+  const { hasPermission } = useAuth();
+  const canCreateCustomForm = hasPermission('Custom Form Builder', 'canCreate') || hasPermission('Form Responses', 'canCreate');
+  const canApproveFormResponse = hasPermission('Form Responses', 'canApprove') || hasPermission('Custom Form Builder', 'canApprove') || hasPermission('Form Builder', 'canApprove') || hasPermission('Forms', 'canApprove');
   const [submissions, setSubmissions] = useState<FormSubmissionInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -457,9 +461,21 @@ export default function FormResponsesPage() {
         </div>
 
         <div className="frp-header-actions">
-          <Link to="/admin/custom-form-builder" className="frp-btn frp-btn--primary">
-            <Plus size={16} /> Create Custom Form
-          </Link>
+          {canCreateCustomForm ? (
+            <Link to="/admin/custom-form-builder" className="frp-btn frp-btn--primary">
+              <Plus size={16} /> Create Custom Form
+            </Link>
+          ) : (
+            <button
+              type="button"
+              disabled
+              className="frp-btn frp-btn--primary"
+              title="Admin has not allowed this action. You do not have permission to create custom forms."
+              style={{ opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' }}
+            >
+              <Plus size={16} /> Create Custom Form
+            </button>
+          )}
         </div>
       </div>
 
@@ -562,7 +578,13 @@ export default function FormResponsesPage() {
             <button className="frp-btn frp-btn--secondary" onClick={() => setSelectedSubmissionIds([])}>
               Cancel
             </button>
-            <button className="frp-btn frp-btn--danger" onClick={handleBulkDelete}>
+            <button
+              className="frp-btn frp-btn--danger"
+              disabled={!canCreateCustomForm}
+              style={{ opacity: !canCreateCustomForm ? 0.5 : 1, cursor: !canCreateCustomForm ? 'not-allowed' : 'pointer', pointerEvents: 'auto' }}
+              title={!canCreateCustomForm ? "Admin has not allowed this action. You do not have permission to delete form responses." : undefined}
+              onClick={() => canCreateCustomForm && handleBulkDelete()}
+            >
               <Trash2 size={15} /> Delete Selected ({selectedSubmissionIds.length})
             </button>
           </div>
@@ -582,9 +604,21 @@ export default function FormResponsesPage() {
             <p>
               There are currently no form submissions matching your filters. Go to Custom Form Builder to create and publish a form.
             </p>
-            <Link to="/admin/custom-form-builder" className="frp-btn frp-btn--primary">
-              <Plus size={16} /> Create Custom Form
-            </Link>
+            {canCreateCustomForm ? (
+              <Link to="/admin/custom-form-builder" className="frp-btn frp-btn--primary">
+                <Plus size={16} /> Create Custom Form
+              </Link>
+            ) : (
+              <button
+                type="button"
+                disabled
+                className="frp-btn frp-btn--primary"
+                title="Admin has not allowed this action. You do not have permission to create custom forms."
+                style={{ opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' }}
+              >
+                <Plus size={16} /> Create Custom Form
+              </button>
+            )}
           </div>
         ) : (
           <table className="frp-table">
@@ -595,8 +629,10 @@ export default function FormResponsesPage() {
                     type="checkbox"
                     className="frp-checkbox"
                     checked={isAllSelected}
-                    onChange={handleToggleSelectAll}
-                    title="Select All Form Responses"
+                    disabled={!canCreateCustomForm}
+                    onChange={canCreateCustomForm ? handleToggleSelectAll : undefined}
+                    style={{ cursor: canCreateCustomForm ? 'pointer' : 'not-allowed' }}
+                    title={!canCreateCustomForm ? "Admin has not allowed this action. You do not have permission to select form responses." : "Select All Form Responses"}
                   />
                 </th>
                 <th>Form Name</th>
@@ -621,7 +657,10 @@ export default function FormResponsesPage() {
                         type="checkbox"
                         className="frp-checkbox"
                         checked={isSelected}
-                        onChange={() => handleToggleSelectRow(sub.id)}
+                        disabled={!canCreateCustomForm}
+                        onChange={() => canCreateCustomForm && handleToggleSelectRow(sub.id)}
+                        style={{ cursor: canCreateCustomForm ? 'pointer' : 'not-allowed' }}
+                        title={!canCreateCustomForm ? "Admin has not allowed this action. You do not have permission to select form responses." : undefined}
                       />
                     </td>
                     <td>
@@ -751,8 +790,11 @@ export default function FormResponsesPage() {
                 {selectedResponse.workflowAttached && selectedResponse.status !== 'completed' && (
                   <button
                     className="frp-btn frp-btn--primary"
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#0a6ed1', color: '#ffffff', padding: '8px 16px', borderRadius: '6px', border: 'none', fontWeight: 600, cursor: 'pointer' }}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#0a6ed1', color: '#ffffff', padding: '8px 16px', borderRadius: '6px', border: 'none', fontWeight: 600, cursor: !canApproveFormResponse ? 'not-allowed' : 'pointer', opacity: !canApproveFormResponse ? 0.5 : 1, pointerEvents: 'auto' }}
+                    disabled={!canApproveFormResponse}
+                    title={!canApproveFormResponse ? "Admin has not allowed this action. You do not have permission to approve form responses." : undefined}
                     onClick={async () => {
+                      if (!canApproveFormResponse) return;
                       try {
                         const res = await formWorkflowService.approveFormLevel(
                           selectedResponse.id,

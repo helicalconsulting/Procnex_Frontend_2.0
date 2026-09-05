@@ -274,7 +274,8 @@ export default function CreateRFQPage() {
     });
   }, [editId]);
 
-  const { roles } = useAuth();
+  const { roles, hasPermission } = useAuth();
+  const canCreateRFQ = hasPermission('RFQ Management', 'canCreate') || hasPermission('RFQ', 'canCreate');
   const [savingDraft, setSavingDraft] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -1945,11 +1946,23 @@ export default function CreateRFQPage() {
           </button>
         </div>
         <div className="create-rfq__footer-right">
-          <button className="create-rfq__btn create-rfq__btn--secondary" onClick={handleSaveDraft} disabled={savingDraft || sendingEmail || isEditLocked}>
+          <button
+            className="create-rfq__btn create-rfq__btn--secondary"
+            onClick={handleSaveDraft}
+            disabled={savingDraft || sendingEmail || isEditLocked || !canCreateRFQ}
+            style={!canCreateRFQ ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+            title={!canCreateRFQ ? "Admin has not allowed this action. You do not have permission to save draft RFQs." : undefined}
+          >
             <Save size={16} />
             {savingDraft ? 'Saving\u2026' : 'Save as Draft'}
           </button>
-          <button className="create-rfq__btn create-rfq__btn--primary" onClick={handleSubmit} disabled={savingDraft || sendingEmail || isEditLocked}>
+          <button
+            className="create-rfq__btn create-rfq__btn--primary"
+            onClick={handleSubmit}
+            disabled={savingDraft || sendingEmail || isEditLocked || !canCreateRFQ}
+            style={!canCreateRFQ ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+            title={!canCreateRFQ ? "Admin has not allowed this action. You do not have permission to submit RFQs." : undefined}
+          >
             <Send size={16} />
             {sendingEmail ? 'Sending\u2026' : 'Submit & Email Vendors'}
           </button>

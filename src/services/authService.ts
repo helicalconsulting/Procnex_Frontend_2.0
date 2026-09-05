@@ -11,38 +11,38 @@ const PERMISSIONS_KEY = 'heliflow_permissions';
 const VENDOR_TOKEN_KEY = 'heliflow_vendor_token';
 
 function mockPermissionsForRoles(roles: string[]): UserModulePermission[] {
-  if (roles.some((r) => r === 'Super Admin' || r === 'admin' || r === 'Administrator')) {
+  const isSuper = roles.some((r) => r === 'Super Admin' || r === 'admin' || r === 'Administrator');
+  const isManager = roles.some((r) =>
+    ['Procurement Manager', 'Purchase Manager', 'purchase_manager', 'procurement_manager', 'purchase_clerk', 'Purchase Clerk', 'Manager'].includes(r)
+  );
+  const isFinance = roles.some((r) =>
+    ['Finance Approver', 'finance_approver', 'Finance Manager', 'finance_manager'].includes(r)
+  );
+
+  if (isSuper || isManager) {
     return PERMISSION_MODULE_NAMES.map((module) => ({
       module,
       canView: true,
-      canCreate: module !== 'Dashboard' && module !== 'Notifications' && module !== 'Audit Trail',
-      canApprove:
-        module === 'RFQ' ||
-        module === 'Quotations' ||
-        module === 'Purchase Orders' ||
-        module === 'Approvals',
+      canCreate: module !== 'Dashboard' && module !== 'Notifications' && module !== 'Audit Trail' && module !== 'Form Responses',
+      canApprove: true,
     }));
   }
-  if (roles.includes('Procurement Manager') || roles.includes('purchase_clerk')) {
-    return [
-      { module: 'Dashboard', canView: true, canCreate: false, canApprove: false },
-      { module: 'RFQ', canView: true, canCreate: true, canApprove: true },
-      { module: 'Quotations', canView: true, canCreate: false, canApprove: false },
-      { module: 'Vendors', canView: true, canCreate: false, canApprove: false },
-      { module: 'Documents', canView: true, canCreate: true, canApprove: false },
-      { module: 'Notifications', canView: true, canCreate: false, canApprove: false },
-    ];
+
+  if (isFinance) {
+    return PERMISSION_MODULE_NAMES.map((module) => ({
+      module,
+      canView: true,
+      canCreate: module === 'Create Payment Voucher' || module === 'Create Purchase Invoice',
+      canApprove: true,
+    }));
   }
-  if (roles.includes('Finance Approver') || roles.includes('finance_approver')) {
-    return [
-      { module: 'Dashboard', canView: true, canCreate: false, canApprove: false },
-      { module: 'RFQ', canView: true, canCreate: false, canApprove: true },
-      { module: 'Quotations', canView: true, canCreate: false, canApprove: true },
-      { module: 'Purchase Orders', canView: true, canCreate: false, canApprove: true },
-      { module: 'Approvals', canView: true, canCreate: false, canApprove: true },
-    ];
-  }
-  return [{ module: 'Dashboard', canView: true, canCreate: false, canApprove: false }];
+
+  return PERMISSION_MODULE_NAMES.map((module) => ({
+    module,
+    canView: true,
+    canCreate: false,
+    canApprove: false,
+  }));
 }
 
 const MOCK_USERS = ALL_MOCK_USERS;

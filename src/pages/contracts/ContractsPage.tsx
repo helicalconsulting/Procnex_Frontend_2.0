@@ -83,6 +83,8 @@ interface ContractColumnDef {
 export default function ContractsPage() {
   const navigate = useNavigate();
   const { hasPermission } = useAuth();
+  const canCreatePO = hasPermission('PO Creation', 'canCreate') || hasPermission('Purchase Orders', 'canCreate') || hasPermission('PO', 'canCreate');
+  const canCreateContract = hasPermission('Contract Management', 'canCreate') || hasPermission('Contracts', 'canCreate');
   const { formatAmount, companyDefaultCurrency: displayCurrency } = useCurrency();
 
   // ─── Contract types from Company Settings ──
@@ -129,6 +131,14 @@ export default function ContractsPage() {
   const [operating, setOperating] = useState<string | null>(null); // id being acted upon
   const [pageMsg, setPageMsg] = useState<string | null>(null);
   useBodyScrollLock(!!deleteTarget || !!terminateTarget || showBatchDeleteModal);
+
+  useEffect(() => {
+    if (deleteTarget || terminateTarget || showBatchDeleteModal) {
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+    }
+  }, [deleteTarget, terminateTarget, showBatchDeleteModal]);
   const perPage = 10;
 
   // ── Recently signed contract banner state ──────────────────
@@ -552,7 +562,10 @@ export default function ContractsPage() {
                       </button>
                       <button
                         className="ctr-signed-banner__btn ctr-signed-banner__btn--secondary"
-                        onClick={() => handleNavigateToPO(event.contractId)}
+                        onClick={() => canCreatePO && handleNavigateToPO(event.contractId)}
+                        disabled={!canCreatePO}
+                        style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                        title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to create purchase orders." : undefined}
                       >
                         <ArrowRight size={14} />
                         <span>Create PO</span>
@@ -579,15 +592,6 @@ export default function ContractsPage() {
           <h1><FileText size={24} /> Contracts</h1>
           <p>Manage contracts, track signatures, and create purchase orders</p>
         </div>
-        <button
-          className="ctr-page__add-btn"
-          onClick={hasPermission('Contracts', 'canCreate') ? () => navigate('/contracts/create') : undefined}
-          disabled={!hasPermission('Contracts', 'canCreate')}
-          title={!hasPermission('Contracts', 'canCreate') ? 'You do not have permission to create contracts' : 'Create new contract'}
-          style={!hasPermission('Contracts', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-        >
-          <Plus size={18} /> Create Contract
-        </button>
       </div>
 
       {/* Summary */}
@@ -673,20 +677,32 @@ export default function ContractsPage() {
               type="button"
               className="ctr-modal__btn ctr-modal__btn--secondary"
               style={{ padding: '7px 16px', fontSize: 13, fontWeight: 600 }}
-              onClick={() => setSelectedContractIds([])}
+              onClick={(e) => {
+                (e.currentTarget as HTMLElement).blur();
+                (document.activeElement as HTMLElement)?.blur();
+                setSelectedContractIds([]);
+              }}
             >
               Cancel Selection
             </button>
             <button
               type="button"
+              disabled={!canCreateContract}
               style={{
-                background: '#dc2626', color: '#ffffff', border: 'none',
+                background: canCreateContract ? '#dc2626' : '#64748b',
+                color: '#ffffff', border: 'none',
                 padding: '7px 16px', fontSize: 13, fontWeight: 700,
-                borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+                borderRadius: 'var(--radius-sm)',
+                cursor: canCreateContract ? 'pointer' : 'not-allowed',
+                opacity: canCreateContract ? 1 : 0.5,
+                pointerEvents: 'auto',
                 display: 'inline-flex', alignItems: 'center', gap: 6
               }}
+              title={!canCreateContract ? "Admin has not allowed this action. You do not have permission to delete contracts." : undefined}
               onClick={(e) => {
+                if (!canCreateContract) return;
                 (e.currentTarget as HTMLElement).blur();
+                (document.activeElement as HTMLElement)?.blur();
                 setShowBatchDeleteModal(true);
               }}
             >
@@ -717,8 +733,10 @@ export default function ContractsPage() {
                       <input
                         type="checkbox"
                         checked={isAllSelected}
-                        onChange={handleToggleSelectAll}
-                        style={{ cursor: 'pointer', width: 16, height: 16 }}
+                        disabled={!canCreateContract}
+                        onChange={canCreateContract ? handleToggleSelectAll : undefined}
+                        style={{ cursor: canCreateContract ? 'pointer' : 'not-allowed', width: 16, height: 16 }}
+                        title={!canCreateContract ? "Admin has not allowed this action. You do not have permission to select contracts." : undefined}
                       />
                     </th>
                     {visibleColumns.map(col => <th key={col.key}>{col.label}</th>)}
@@ -760,8 +778,10 @@ export default function ContractsPage() {
                         <input
                           type="checkbox"
                           checked={selectedContractIds.includes(r.id)}
-                          onChange={() => handleToggleSelect(r.id)}
-                          style={{ cursor: 'pointer', width: 16, height: 16 }}
+                          disabled={!canCreateContract}
+                          onChange={() => canCreateContract && handleToggleSelect(r.id)}
+                          style={{ cursor: canCreateContract ? 'pointer' : 'not-allowed', width: 16, height: 16 }}
+                          title={!canCreateContract ? "Admin has not allowed this action. You do not have permission to select contracts." : undefined}
                         />
                       </td>
                       {visibleColumns.map(col => <td key={col.key}>{col.render(r, formatDate)}</td>)}
@@ -805,9 +825,10 @@ export default function ContractsPage() {
                           {['ACCEPTED', 'ACTIVE', 'VENDOR_SIGNED', 'EXPIRING_SOON'].includes(r.status) && (
                             <button
                               className="ctr-table__action-btn"
-                              title="Create Purchase Order"
-                              onClick={() => handleCreatePO(r.id)}
-                              disabled={operating === r.id}
+                              title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to create purchase orders." : "Create Purchase Order"}
+                              onClick={() => canCreatePO && handleCreatePO(r.id)}
+                              disabled={operating === r.id || !canCreatePO}
+                              style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                             ><Plus size={15} /></button>
                           )}
 
@@ -815,17 +836,20 @@ export default function ContractsPage() {
                           {['ACCEPTED', 'ACTIVE', 'EXPIRING_SOON'].includes(r.status) && (
                             <button
                               className="ctr-table__action-btn ctr-table__action-btn--danger"
-                              title="Terminate contract"
-                              onClick={() => setTerminateTarget(r)}
-                              disabled={operating === r.id}
+                              title={!canCreateContract ? "Admin has not allowed this action. You do not have permission to terminate contracts." : "Terminate contract"}
+                              onClick={() => canCreateContract && setTerminateTarget(r)}
+                              disabled={operating === r.id || !canCreateContract}
+                              style={!canCreateContract ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                             ><Ban size={15} /></button>
                           )}
 
                           {/* Delete */}
                           <button
                             className="ctr-table__action-btn ctr-table__action-btn--danger"
-                            title="Delete contract"
-                            onClick={() => setDeleteTarget(r)}
+                            title={!canCreateContract ? "Admin has not allowed this action. You do not have permission to delete contracts." : "Delete contract"}
+                            onClick={() => canCreateContract && setDeleteTarget(r)}
+                            disabled={!canCreateContract}
+                            style={!canCreateContract ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                           ><Trash2 size={15} /></button>
                         </div>
                       </td>

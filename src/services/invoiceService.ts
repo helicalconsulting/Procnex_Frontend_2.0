@@ -15,14 +15,20 @@ export interface APInvoice {
   paymentTerms?: string;
 }
 
-async function mockList(): Promise<APInvoice[]> {
+async function mockList(_params?: { poId?: string; vendorId?: string; search?: string }): Promise<APInvoice[]> {
   await new Promise((r) => setTimeout(r, 300));
   return [];
 }
 
-async function apiList(): Promise<APInvoice[]> {
+async function apiList(params?: { poId?: string; vendorId?: string; search?: string }): Promise<APInvoice[]> {
   try {
-    const data = await apiRequest<{ invoices: Record<string, unknown>[]; total?: number }>('/invoices');
+    const query = new URLSearchParams();
+    if (params?.poId) query.set('poId', params.poId);
+    if (params?.vendorId) query.set('vendorId', params.vendorId);
+    if (params?.search) query.set('search', params.search);
+
+    const url = query.toString() ? `/invoices?${query.toString()}` : '/invoices';
+    const data = await apiRequest<{ invoices: Record<string, unknown>[]; total?: number }>(url);
     if (!data.invoices || data.invoices.length === 0) {
       return [];
     }
@@ -31,6 +37,7 @@ async function apiList(): Promise<APInvoice[]> {
       invoiceNumber: String(inv.invoiceNumber),
       vendorName: (inv.vendor as { name?: string })?.name || String(inv.vendorName || '—'),
       poNumber: String(inv.poNumber || (inv.purchaseOrder as { poNumber?: string })?.poNumber || '—'),
+      poId: String(inv.poId || (inv.purchaseOrder as { id?: string })?.id || ''),
       amount: Number(inv.amount ?? inv.totalAmount ?? 0),
       status: String(inv.status),
       dueDate: String(inv.dueDate || '').slice(0, 10),

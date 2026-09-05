@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import DesktopWindow from '../../components/shared/DesktopWindow';
+import { useAuth } from '../../hooks/useAuth';
 import './NewOnboardingPage.css';
 
 // Heliflow — New Onboarding Page (Exact Phone Match)
@@ -108,6 +109,8 @@ function calculateFuzzyNameMatchScore(s1: string, s2: string): number {
 
 export default function NewOnboardingPage() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  const canCreateOnboarding = hasPermission('New Onboarding', 'canCreate');
   const { data: invitations, loading, error, reload } = useServiceData(
     () => procurementService.listInvitations(),
     [] as VendorInvitationRow[],
@@ -946,7 +949,10 @@ export default function NewOnboardingPage() {
               <button
                 type="button"
                 className="onb-invite-action onb-invite-action--resend"
-                onClick={(e) => { e.stopPropagation(); handleResend(inv.id); }}
+                onClick={(e) => { e.stopPropagation(); if (canCreateOnboarding) handleResend(inv.id); }}
+                disabled={!canCreateOnboarding}
+                title={!canCreateOnboarding ? 'Admin has not allowed this action. You do not have permission to resend invitations.' : 'Resend Email'}
+                style={!canCreateOnboarding ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
               >
                 <RefreshCw size={12} /> Resend Email
               </button>
@@ -955,8 +961,10 @@ export default function NewOnboardingPage() {
               <button
                 type="button"
                 className="onb-invite-action onb-invite-action--delete"
-                onClick={(e) => { e.stopPropagation(); handleDelete(inv.id); }}
-                title="Delete Invitation"
+                onClick={(e) => { e.stopPropagation(); if (canCreateOnboarding) handleDelete(inv.id); }}
+                disabled={!canCreateOnboarding}
+                title={!canCreateOnboarding ? 'Admin has not allowed this action. You do not have permission to delete invitations.' : 'Delete Invitation'}
+                style={!canCreateOnboarding ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
               >
                 <Trash2 size={12} />
               </button>
@@ -1662,7 +1670,13 @@ export default function NewOnboardingPage() {
                 </p>
               </div>
 
-              <button type="submit" disabled={sending} className="onb-form-submit">
+              <button
+                type="submit"
+                disabled={sending || !canCreateOnboarding}
+                title={!canCreateOnboarding ? 'Admin has not allowed this action. You do not have permission to send onboarding invitations.' : 'Send Invitation Email'}
+                style={!canCreateOnboarding ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                className={`onb-form-submit ${!canCreateOnboarding ? 'onb-form-submit--disabled' : ''}`}
+              >
                 {sending ? (
                   <span className="onb-form-submit__pulse">Sending...</span>
                 ) : (
@@ -3287,7 +3301,9 @@ export default function NewOnboardingPage() {
                 type="button"
                 className="onb-modal__btn onb-modal__btn--primary"
                 onClick={executeSendInvite}
-                disabled={sending || auditLoading}
+                disabled={sending || auditLoading || !canCreateOnboarding}
+                title={!canCreateOnboarding ? 'Admin has not allowed this action. You do not have permission to send onboarding invitations.' : 'Confirm & Send Invitation'}
+                style={!canCreateOnboarding ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
               >
                 {sending ? 'Sending...' : 'Confirm & Send Invitation'}
               </button>

@@ -13,7 +13,7 @@ export const MODULE_CAPABILITIES: ModuleCapability[] = [
   { module: 'Dashboard', hint: 'Read-only dashboard overview', supports: ['canView'] },
   { module: 'RFQ Management', hint: 'Create & send RFQs', supports: ['canView', 'canCreate', 'canApprove'] },
   { module: 'PO Creation', hint: 'Purchase Requisition & PO creation', supports: ['canView', 'canCreate'] },
-  { module: 'Contracts', hint: 'Contract lifecycle management', supports: ['canView', 'canCreate', 'canApprove'] },
+  { module: 'Contracts', hint: 'Contract lifecycle management', supports: ['canView', 'canCreate'] },
   { module: 'Create Purchase Invoice', hint: 'Create purchase invoices', supports: ['canView', 'canCreate'] },
   { module: 'Create Payment Voucher', hint: 'Create payment vouchers', supports: ['canView', 'canCreate'] },
   { module: 'Quotation Approval', hint: 'Review & approve vendor quotes', supports: ['canView', 'canApprove'] },

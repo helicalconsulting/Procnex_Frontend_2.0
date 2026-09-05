@@ -50,20 +50,7 @@ export interface DocumentItem {
   size: string;
 }
 
-const PAYMENTS_MOCK: Payment[] = [
-  { id: 1, paymentId: 'PAY-2024-001', vendor: 'TechSupply Co.', invoiceRef: 'INV-2024-0101', amount: 425000, method: 'NEFT', status: 'COMPLETED', paidAt: '2024-04-22', approvedBy: 'Anand Verma (Finance VP)', remarks: 'Q1 Hardware vendor batch payment' },
-  { id: 2, paymentId: 'PAY-2024-002', vendor: 'SafeGuard Corp.', invoiceRef: 'INV-2024-0102', amount: 185000, method: 'RTGS', status: 'SCHEDULED', paidAt: '2024-04-28', approvedBy: 'Priya Sharma (Finance Mgr)', remarks: 'Security system maintenance fee' },
-  { id: 3, paymentId: 'PAY-2024-003', vendor: 'Global Steel Works', invoiceRef: 'INV-2024-0105', amount: 1250000, method: 'RTGS', status: 'COMPLETED', paidAt: '2024-04-16', approvedBy: 'Anand Verma (Finance VP)', remarks: 'Raw material bulk shipment clearance' },
-  { id: 4, paymentId: 'PAY-2024-004', vendor: 'OmniNet Solutions', invoiceRef: 'INV-2024-0106', amount: 280000, method: 'NEFT', status: 'PROCESSING', paidAt: '2024-05-02', approvedBy: 'Suresh Mehta (Sr. Accountant)', remarks: 'Milestone 1 partial payment for cloud migration' },
-  { id: 5, paymentId: 'PAY-2024-005', vendor: 'GreenEnergy Systems', invoiceRef: 'INV-2024-0110', amount: 1480000, method: 'RTGS', status: 'APPROVED', paidAt: '2024-05-05', approvedBy: 'Anand Verma (Finance VP)', remarks: 'Solar panel grid installation balance' },
-  { id: 6, paymentId: 'PAY-2024-006', vendor: 'Precision Tools Corp', invoiceRef: 'INV-2024-0109', amount: 137500, method: 'IMPS', status: 'FAILED', paidAt: '2024-04-25', approvedBy: 'System (Auto)', remarks: 'Bank beneficiary IFSC mismatch error' },
-  { id: 7, paymentId: 'PAY-2024-007', vendor: 'Apex Logistics Ltd.', invoiceRef: 'INV-2024-0104', amount: 310000, method: 'NEFT', status: 'PENDING_APPROVAL', paidAt: '2024-05-10', approvedBy: 'Pending Approval', remarks: 'Freight forwarding charges for North region' },
-  { id: 8, paymentId: 'PAY-2024-008', vendor: 'ElectroPower India', invoiceRef: 'INV-2024-0103', amount: 720000, method: 'Cheque', status: 'PENDING', paidAt: '2024-05-12', approvedBy: 'Pending Approval', remarks: 'Transformer supply milestone 2' },
-  { id: 9, paymentId: 'PAY-2024-009', vendor: 'InfraBuild Projects', invoiceRef: 'INV-2024-0108', amount: 470000, method: 'NEFT', status: 'CANCELLED', paidAt: '2024-04-29', approvedBy: 'Priya Sharma (Finance Mgr)', remarks: 'Cancelled due to invoice rejection' },
-  { id: 10, paymentId: 'PAY-2024-010', vendor: 'Horizon Telecom Services', invoiceRef: 'INV-2024-0112', amount: 630000, method: 'UPI', status: 'COMPLETED', paidAt: '2024-05-01', approvedBy: 'Suresh Mehta (Sr. Accountant)', remarks: 'Quarterly bandwidth connectivity billing' },
-  { id: 11, paymentId: 'PAY-2024-011', vendor: 'Reliance Industrial', invoiceRef: 'INV-2024-0107', amount: 945000, method: 'RTGS', status: 'PROCESSING', paidAt: '2024-05-14', approvedBy: 'Anand Verma (Finance VP)', remarks: 'Advance material procurement clearance' },
-  { id: 12, paymentId: 'PAY-2024-012', vendor: 'Zenith Hardware Solutions', invoiceRef: 'INV-2024-0111', amount: 395000, method: 'NEFT', status: 'SCHEDULED', paidAt: '2024-05-18', approvedBy: 'Priya Sharma (Finance Mgr)', remarks: 'Server rack mounts & cabling supplies' },
-];
+const PAYMENTS_MOCK: Payment[] = [];
 
 const SALES_ORDERS_MOCK: SalesOrder[] = [
   { id: 1, soNumber: 'SO-2024-010', customer: 'ABC Industries', amount: 1250000, status: 'CONFIRMED', orderDate: '2024-04-20', itemCount: 12, region: 'North Region', salesRep: 'Vikram Malhotra' },
@@ -92,30 +79,78 @@ const DOCUMENTS_MOCK: DocumentItem[] = [
 
 export const localDataService = {
   getPayments: async () => {
+    let customPayments: Payment[] = [];
+    try {
+      const stored = localStorage.getItem('heliflow_custom_payments');
+      if (stored) {
+        customPayments = JSON.parse(stored);
+      }
+    } catch (_e) {
+      customPayments = [];
+    }
+
     if (!USE_MOCK) {
       try {
         const data = await apiRequest<{ payments: Array<Record<string, any>> }>('/payments');
-        if (!data.payments || data.payments.length === 0) {
-          return [];
+        if (data.payments && data.payments.length > 0) {
+          const apiPayments = data.payments.map((p, idx) => ({
+            id: typeof p.id === 'number' ? p.id : idx + 1000,
+            paymentId: p.paymentNumber || p.paymentId || `PAY-${p.id}`,
+            vendor: p.vendorName || p.vendor || '—',
+            invoiceRef: p.invoiceRef || '—',
+            amount: Number(p.amount || 0),
+            method: p.method || 'NEFT',
+            status: p.status || 'PENDING',
+            paidAt: String(p.paidAt || p.scheduledAt || p.createdAt || '').slice(0, 10),
+            approvedBy: p.approvedBy || 'Pending Approval (Payments Workflow)',
+            remarks: p.remarks || p.comments || '',
+          })) as Payment[];
+
+          // Combine without duplicates
+          const existingIds = new Set(customPayments.map(cp => cp.paymentId));
+          const filteredApi = apiPayments.filter(ap => !existingIds.has(ap.paymentId));
+          return [...customPayments, ...filteredApi];
         }
-        return data.payments.map((p, idx) => ({
-          id: typeof p.id === 'number' ? p.id : idx + 1,
-          paymentId: p.paymentNumber || p.paymentId || `PAY-${p.id}`,
-          vendor: p.vendorName || p.vendor || '—',
-          invoiceRef: p.invoiceRef || '—',
-          amount: Number(p.amount || 0),
-          method: p.method || 'NEFT',
-          status: p.status || 'PENDING',
-          paidAt: String(p.paidAt || p.scheduledAt || p.createdAt || '').slice(0, 10),
-          approvedBy: p.approvedBy || 'Finance Manager',
-          remarks: p.remarks || p.comments || '',
-        })) as Payment[];
       } catch (_err) {
-        return [];
+        // Fall back to custom payments if API call fails
       }
     }
     await delay();
-    return [];
+    return customPayments;
+  },
+  savePayment: (newPayment: Partial<Payment>): Payment => {
+    try {
+      const stored = localStorage.getItem('heliflow_custom_payments');
+      const list: Payment[] = stored ? JSON.parse(stored) : [];
+      const created: Payment = {
+        id: Date.now(),
+        paymentId: newPayment.paymentId || `VOU-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+        vendor: newPayment.vendor || 'Supplier',
+        invoiceRef: newPayment.invoiceRef || '—',
+        amount: newPayment.amount || 0,
+        method: newPayment.method || 'NEFT',
+        status: newPayment.status || 'PENDING',
+        paidAt: newPayment.paidAt || new Date().toISOString().slice(0, 10),
+        approvedBy: newPayment.approvedBy || 'Pending Approval (Payments Workflow)',
+        remarks: newPayment.remarks || 'Auto-generated from Approved Purchase Invoice',
+      };
+      list.unshift(created);
+      localStorage.setItem('heliflow_custom_payments', JSON.stringify(list));
+      return created;
+    } catch (e) {
+      console.error('Failed to save payment locally', e);
+      return {
+        id: Date.now(),
+        paymentId: `VOU-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+        vendor: newPayment.vendor || 'Supplier',
+        invoiceRef: newPayment.invoiceRef || '—',
+        amount: newPayment.amount || 0,
+        method: 'NEFT',
+        status: 'PENDING',
+        paidAt: new Date().toISOString().slice(0, 10),
+        approvedBy: 'Pending Approval (Payments Workflow)',
+      };
+    }
   },
   getSalesOrders: async () => {
     if (!USE_MOCK) {

@@ -13,6 +13,7 @@ import { downloadPurchaseOrderAsPdf } from '../../utils/pdfDownload';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
 import { useBranding } from '../../context/BrandingContext';
 import { MessageStrip } from '../../components/shared/MessageStrip';
+import { useAuth } from '../../context/AuthContext';
 import './CreatePurchaseOrderPage.css';
 
 interface VendorOption {
@@ -41,6 +42,8 @@ interface POItem {
 
 export default function CreatePurchaseOrderPage() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  const canCreatePO = hasPermission('PO Creation', 'canCreate') || hasPermission('Purchase Orders', 'canCreate') || hasPermission('PO', 'canCreate');
   const [searchParams] = useSearchParams();
   const editId = searchParams.get('id');
   const isReadOnly = searchParams.get('mode') === 'view';
@@ -614,14 +617,18 @@ export default function CreatePurchaseOrderPage() {
           <button
             className="cpo-btn cpo-btn--outline"
             onClick={() => handleSubmit('Draft')}
-            disabled={submittingAction !== null}
+            disabled={submittingAction !== null || !canCreatePO}
+            style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+            title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to save draft POs." : undefined}
           >
             <Save size={15} /> {submittingAction === 'draft' ? 'Saving Draft…' : 'Save Draft'}
           </button>
           <button
             className="cpo-btn cpo-btn--primary"
             onClick={() => handleSubmit('Pending Approval')}
-            disabled={submittingAction !== null}
+            disabled={submittingAction !== null || !canCreatePO}
+            style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+            title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to submit POs." : undefined}
           >
             <Send size={15} /> {submittingAction === 'submit' ? 'Submitting…' : 'Submit for Approval'}
           </button>
@@ -1154,14 +1161,18 @@ export default function CreatePurchaseOrderPage() {
               <button
                 className="cpo-btn cpo-btn--primary cpo-btn--full"
                 onClick={() => handleSubmit('Pending Approval')}
-                disabled={submittingAction !== null}
+                disabled={submittingAction !== null || !canCreatePO}
+                style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to submit POs." : undefined}
               >
                 <Send size={16} /> {submittingAction === 'submit' ? 'Submitting PO for Approval…' : 'Submit PO for Approval'}
               </button>
               <button
                 className="cpo-btn cpo-btn--outline cpo-btn--full"
                 onClick={() => handleSubmit('Draft')}
-                disabled={submittingAction !== null}
+                disabled={submittingAction !== null || !canCreatePO}
+                style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to save draft POs." : undefined}
               >
                 <Save size={16} /> {submittingAction === 'draft' ? 'Saving as Draft…' : 'Save as Draft'}
               </button>

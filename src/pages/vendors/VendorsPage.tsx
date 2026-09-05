@@ -223,7 +223,7 @@ const DEFAULT_VENDOR_DOCUMENTS: Record<string, VendorDocumentItem[]> = {
 
 interface VendorColumnDef {
   key: string; label: string; defaultVisible: boolean; required?: boolean;
-  width?: string; render: (v: VendorTableRow, fmtDate: (d: string) => string, toggle: (id: string) => void, toggleMobile?: (id: string) => void) => React.ReactNode;
+  width?: string; render: (v: VendorTableRow, fmtDate: (d: string) => string, toggle: (id: string) => void, toggleMobile?: (id: string) => void, canCreate?: boolean) => React.ReactNode;
 }
 
 const ALL_COLUMNS: VendorColumnDef[] = [
@@ -267,8 +267,13 @@ const ALL_COLUMNS: VendorColumnDef[] = [
   },
   {
     key: 'status', label: 'Status', defaultVisible: true, width: '110px',
-    render: (v, _fd, toggle) => (
-      <div className="vendors-status-toggle" onClick={(e) => { e.stopPropagation(); toggle(v.id); }}>
+    render: (v, _fd, toggle, _toggleMobile, canCreate = true) => (
+      <div
+        className={`vendors-status-toggle ${!canCreate ? 'vendors-status-toggle--disabled' : ''}`}
+        onClick={(e) => { e.stopPropagation(); if (canCreate) toggle(v.id); }}
+        title={!canCreate ? 'Admin has not allowed this action. You do not have permission to modify vendor status.' : ''}
+        style={!canCreate ? { opacity: 0.6, cursor: 'not-allowed', pointerEvents: 'auto' } : {}}
+      >
         <div className={`vendors-status-toggle__track ${v.isActive ? 'vendors-status-toggle__track--active' : ''}`}>
           <div className="vendors-status-toggle__knob" />
         </div>
@@ -280,12 +285,12 @@ const ALL_COLUMNS: VendorColumnDef[] = [
   },
   {
     key: 'mobileAccess', label: 'Mobile App Access', defaultVisible: true, width: '150px',
-    render: (v, _fd, _toggle, toggleMobile) => (
+    render: (v, _fd, _toggle, toggleMobile, canCreate = true) => (
       <div
-        className="vendors-status-toggle"
-        onClick={(e) => { e.stopPropagation(); toggleMobile && toggleMobile(v.id); }}
-        title="Toggle Mobile App Access"
-        style={{ cursor: 'pointer' }}
+        className={`vendors-status-toggle ${!canCreate ? 'vendors-status-toggle--disabled' : ''}`}
+        onClick={(e) => { e.stopPropagation(); if (canCreate && toggleMobile) toggleMobile(v.id); }}
+        title={!canCreate ? 'Admin has not allowed this action. You do not have permission to modify mobile access.' : 'Toggle Mobile App Access'}
+        style={{ cursor: canCreate ? 'pointer' : 'not-allowed', opacity: canCreate ? 1 : 0.6, pointerEvents: 'auto' }}
       >
         <div className={`vendors-status-toggle__track ${v.isMobileAccessEnabled ? 'vendors-status-toggle__track--active' : ''}`}>
           <div className="vendors-status-toggle__knob" />
@@ -797,7 +802,7 @@ export default function VendorsPage() {
         <button
           className={`vendors-page__add-btn ${!canCreateVendor ? 'vendors-page__add-btn--disabled' : ''}`}
           onClick={canCreateVendor ? openAddModal : undefined}
-          title={!canCreateVendor ? 'You do not have permission to create vendors' : 'Add a new vendor'}
+          title={!canCreateVendor ? 'Admin has not allowed this action. You do not have permission to create vendors.' : 'Add a new vendor'}
           disabled={!canCreateVendor}
         >
           {canCreateVendor ? <Plus size={18} /> : <ShieldOff size={18} />}
@@ -938,7 +943,7 @@ export default function VendorsPage() {
                 <tbody>
                   {paginated.map((v) => (
                     <tr key={v.id} className={`vendors-table__row vendors-table__row--${v.status ? v.status.toLowerCase() : (v.isActive ? 'active' : 'inactive')}`} onClick={() => setDetailVendor(v)}>
-                      {visibleColumns.map((col) => (<td key={col.key}>{col.render(v, formatDate, toggleActive, toggleMobileActive)}</td>))}
+                      {visibleColumns.map((col) => (<td key={col.key}>{col.render(v, formatDate, toggleActive, toggleMobileActive, canCreateVendor)}</td>))}
                       <td onClick={(e) => e.stopPropagation()}>
                         <div className="vendors-table__actions">
                           <button className="vendors-table__action-btn" title="View profile" onClick={() => setDetailVendor(v)}><Eye size={15} /></button>
@@ -962,8 +967,9 @@ export default function VendorsPage() {
                           ) : (
                             <button
                               className="vendors-table__action-btn vendors-table__action-btn--disabled"
-                              title="You do not have permission to edit vendors"
+                              title="Admin has not allowed this action. You do not have permission to edit vendors."
                               disabled
+                              style={{ opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' }}
                             >
                               <ShieldOff size={15} />
                             </button>
@@ -979,8 +985,9 @@ export default function VendorsPage() {
                           ) : (
                             <button
                               className="vendors-table__action-btn vendors-table__action-btn--disabled"
-                              title="You do not have permission to delete vendors"
+                              title="Admin has not allowed this action. You do not have permission to delete vendors."
                               disabled
+                              style={{ opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' }}
                             >
                               <ShieldOff size={15} />
                             </button>

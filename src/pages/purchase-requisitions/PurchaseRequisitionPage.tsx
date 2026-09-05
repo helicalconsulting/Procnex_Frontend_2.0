@@ -71,7 +71,9 @@ export default function PurchaseRequisitionPage() {
   const [searchParams] = useSearchParams();
   const contractId = searchParams.get('contractId');
   const isReadOnly = searchParams.get('mode') === 'view' || searchParams.get('readOnly') === 'true' || Boolean((location.state as any)?.readOnly);
-  const { roles } = useAuth();
+  const { roles, hasPermission } = useAuth();
+  const canCreatePO = hasPermission('PO Creation', 'canCreate') || hasPermission('Goods Received Note', 'canCreate') || hasPermission('GRN', 'canCreate');
+  const isFormDisabled = isReadOnly || !canCreatePO;
   const { formatAmount, companyDefaultCurrency } = useCurrency();
   const branding = useBranding();
 
@@ -807,7 +809,13 @@ export default function PurchaseRequisitionPage() {
         </div>
         <div className="pr-toolbar__actions">
           {!isReadOnly && (
-            <button className="pr-btn pr-btn--outline" onClick={handleSave} disabled={saving || (contractBalance ? pr.grandTotal > contractBalance.remainingValue : false)}>
+            <button
+              className="pr-btn pr-btn--outline"
+              onClick={canCreatePO ? handleSave : undefined}
+              disabled={saving || !canCreatePO || (contractBalance ? pr.grandTotal > contractBalance.remainingValue : false)}
+              style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+              title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to save draft POs." : undefined}
+            >
               {contractBalance && pr.grandTotal > contractBalance.remainingValue ? 'Amount Exceeds Limit' : <><Save size={16} /> {saving ? 'Saving…' : 'Save Draft'}</>}
             </button>
           )}
@@ -818,7 +826,13 @@ export default function PurchaseRequisitionPage() {
             <Download size={16} /> {downloadingPdf ? 'Downloading…' : 'Download PDF'}
           </button>
           {!isReadOnly && (
-            <button className="pr-btn pr-btn--primary" onClick={handleSubmitForApproval} disabled={saving || (contractBalance && pr.grandTotal > contractBalance.remainingValue)}>
+            <button
+              className="pr-btn pr-btn--primary"
+              onClick={canCreatePO ? handleSubmitForApproval : undefined}
+              disabled={saving || !canCreatePO || (contractBalance && pr.grandTotal > contractBalance.remainingValue)}
+              style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+              title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to submit POs." : undefined}
+            >
               {contractBalance && pr.grandTotal > contractBalance.remainingValue
                 ? 'PO Exceeds Contract Limit'
                 : <><Send size={16} /> {saving ? 'Submitting…' : 'Send for Approval'}</>}
@@ -827,7 +841,11 @@ export default function PurchaseRequisitionPage() {
           {poCreated && !isReadOnly && (
             <button
               className="pr-btn pr-btn--outline"
+              disabled={!canCreatePO}
+              style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+              title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to create POs." : undefined}
               onClick={() => {
+                if (!canCreatePO) return;
                 // Re-fetch balance and reset for another PO
                 setPoCreated(false);
                 if (contractId) {
@@ -1039,7 +1057,13 @@ export default function PurchaseRequisitionPage() {
           <div className="pr-section__header">
             <Hash size={16} /> Items
             {!isReadOnly && (
-              <button className="pr-btn pr-btn--sm pr-btn--ghost" onClick={addItem}>
+              <button
+                className="pr-btn pr-btn--sm pr-btn--ghost"
+                onClick={canCreatePO ? addItem : undefined}
+                disabled={!canCreatePO}
+                style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to add items." : undefined}
+              >
                 <Plus size={14} /> Add Item
               </button>
             )}
@@ -1074,30 +1098,36 @@ export default function PurchaseRequisitionPage() {
                 {pr.items.map((item, idx) => (
                   <tr key={idx} className={itemValidationErrors[idx] ? 'pr-item--error-row' : ''}>
                     <td className="pr-td--no">{item.itemNo}</td>
-                    <td className="pr-td--desc"><input value={item.description} disabled={isReadOnly} onChange={e => updateItem(idx, 'description', e.target.value)} placeholder="Item description" /></td>
+                    <td className="pr-td--desc"><input value={item.description} disabled={isFormDisabled} onChange={e => updateItem(idx, 'description', e.target.value)} placeholder="Item description" /></td>
                     <td className={`pr-td--num ${itemValidationErrors[idx]?.quantity ? 'pr-item__cell--error' : ''}`}>
-                      <input type="number" min="1" value={item.quantity === 0 ? '' : item.quantity} disabled={isReadOnly}
+                      <input type="number" min="1" value={item.quantity === 0 ? '' : item.quantity} disabled={isFormDisabled}
                         onChange={e => { updateItem(idx, 'quantity', e.target.value === '' ? 0 : Math.max(0, Number(e.target.value))); clearItemError(idx, 'quantity'); }}
                       />
                       {itemValidationErrors[idx]?.quantity && <span className="pr-field__error-msg">{itemValidationErrors[idx].quantity}</span>}
                     </td>
                     <td className="pr-td--unit">
-                      <select value={item.unit} disabled={isReadOnly} onChange={e => updateItem(idx, 'unit', e.target.value)}>
+                      <select value={item.unit} disabled={isFormDisabled} onChange={e => updateItem(idx, 'unit', e.target.value)}>
                         <option>Pcs</option><option>Kg</option><option>Ltr</option><option>Mtr</option><option>Box</option><option>Set</option>
                       </select>
                     </td>
                     <td className={`pr-td--num ${itemValidationErrors[idx]?.unitPrice ? 'pr-item__cell--error' : ''}`}>
-                      <input type="number" min="0" step="1" placeholder="0" value={item.unitPrice === 0 ? '' : item.unitPrice} disabled={isReadOnly}
+                      <input type="number" min="0" step="1" placeholder="0" value={item.unitPrice === 0 ? '' : item.unitPrice} disabled={isFormDisabled}
                         onChange={e => { updateItem(idx, 'unitPrice', e.target.value === '' ? 0 : Math.max(0, Number(e.target.value))); clearItemError(idx, 'unitPrice'); }}
                       />
                       {itemValidationErrors[idx]?.unitPrice && <span className="pr-field__error-msg">{itemValidationErrors[idx].unitPrice}</span>}
                     </td>
-                    <td className="pr-td--num"><input type="number" min="0" max="100" value={item.taxPercent} disabled={isReadOnly} onChange={e => updateItem(idx, 'taxPercent', Math.max(0, Math.min(100, Number(e.target.value))))} /></td>
-                    <td className="pr-td--num"><input type="number" min="0" max="100" value={item.discount} disabled={isReadOnly} onChange={e => updateItem(idx, 'discount', Math.max(0, Math.min(100, Number(e.target.value))))} /></td>
+                    <td className="pr-td--num"><input type="number" min="0" max="100" value={item.taxPercent} disabled={isFormDisabled} onChange={e => updateItem(idx, 'taxPercent', Math.max(0, Math.min(100, Number(e.target.value))))} /></td>
+                    <td className="pr-td--num"><input type="number" min="0" max="100" value={item.discount} disabled={isFormDisabled} onChange={e => updateItem(idx, 'discount', Math.max(0, Math.min(100, Number(e.target.value))))} /></td>
                     <td className="pr-td--total">{formatCurrency(item.total, pr.currency)}</td>
                     {!isReadOnly && (
                       <td className="pr-td--action">
-                        <button className="pr-item__delete" onClick={() => deleteItem(idx)} disabled={pr.items.length <= 1}>
+                        <button
+                          className="pr-item__delete"
+                          onClick={canCreatePO ? () => deleteItem(idx) : undefined}
+                          disabled={pr.items.length <= 1 || !canCreatePO}
+                          style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                          title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to delete items." : undefined}
+                        >
                           <Trash2 size={14} />
                         </button>
                       </td>

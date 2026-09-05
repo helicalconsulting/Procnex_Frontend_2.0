@@ -80,9 +80,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
     restoreSession();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+
+    const handleAuthChange = () => {
+      authService.getCurrentUser().then((session) => {
+        if (session && !cancelled) applySession(session);
+      }).catch(() => {});
+    };
+
+    window.addEventListener('heliflow_auth_change', handleAuthChange);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('heliflow_auth_change', handleAuthChange);
+    };
+  }, [applySession]);
 
   const login = useCallback(async (payload: LoginPayload) => {
     const data = await authService.login(payload);

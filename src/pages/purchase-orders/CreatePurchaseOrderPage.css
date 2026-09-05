@@ -471,17 +471,33 @@
   }
 
   /* Reset container wrappers for print */
+  html,
+  body,
   #root,
   .app-layout,
+  .app-layout__main,
+  .app-layout__body,
+  .app-layout__content,
   .main-content,
-  .cpo-page {
+  .cpo-page,
+  [data-theme="dark"],
+  [data-theme="dark"] body,
+  [data-theme="dark"] #root,
+  [data-theme="dark"] .app-layout,
+  [data-theme="dark"] .app-layout__main,
+  [data-theme="dark"] .app-layout__body,
+  [data-theme="dark"] .app-layout__content,
+  [data-theme="dark"] .main-content {
     display: block !important;
     background: #ffffff !important;
+    background-color: #ffffff !important;
     color: #0f172a !important;
     padding: 0 !important;
     margin: 0 !important;
     border: none !important;
     box-shadow: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
   }
 
   /* Hide ONLY Web Application UI Chrome */
@@ -504,9 +520,9 @@
   .grn-print-document {
     display: block !important;
     width: 100% !important;
-    max-width: 800px !important;
-    margin: 0 auto !important;
-    padding: 10px 0 !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
     background: #ffffff !important;
     color: #0f172a !important;
   }
@@ -634,14 +650,16 @@
   }
 
   .gpd-items-table th {
-    background: #0f172a !important;
+    background: #0a6ed1 !important;
     color: #ffffff !important;
     padding: 9px 10px;
     font-weight: 700;
     font-size: 9.5px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    border: 1px solid #0f172a;
+    border: 1px solid #0a6ed1;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   .gpd-items-table td {
@@ -699,10 +717,12 @@
   }
 
   .gpd-total-row--grand {
-    background: #0f172a !important;
+    background: #0a6ed1 !important;
     color: #ffffff !important;
     font-weight: 800;
     font-size: 12.5px;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   .gpd-signatures-grid {

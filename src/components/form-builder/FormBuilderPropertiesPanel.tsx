@@ -14,19 +14,25 @@ import {
   Text,
 } from 'lucide-react';
 import type { FormField } from '../../types/formBuilder';
+import { useAuth } from '../../context/AuthContext';
 import './FormBuilderPropertiesPanel.css';
 
 interface FormBuilderPropertiesPanelProps {
   selectedField: FormField | null;
   onUpdateField: (updatedField: FormField) => void;
   onClose: () => void;
+  canCreateForm?: boolean;
 }
 
 export default function FormBuilderPropertiesPanel({
   selectedField,
   onUpdateField,
   onClose,
+  canCreateForm: propCanCreateForm,
 }: FormBuilderPropertiesPanelProps) {
+  const { hasPermission } = useAuth();
+  const canCreateForm = propCanCreateForm ?? (hasPermission('Custom Form Builder', 'canCreate') || hasPermission('Form Builder', 'canCreate') || hasPermission('Forms', 'canCreate'));
+
   if (!selectedField) {
     return (
       <aside className="fbp-panel fbp-panel--empty">
@@ -43,7 +49,11 @@ export default function FormBuilderPropertiesPanel({
   const isContentField = ['heading', 'paragraph'].includes(selectedField.type);
   const isDivider = selectedField.type === 'divider';
 
+  const noPermissionTitle = "Admin has not allowed this action. You do not have permission to modify field properties.";
+  const disabledStyle = !canCreateForm ? { opacity: 0.6, cursor: 'not-allowed', pointerEvents: 'auto' as const } : undefined;
+
   const handleChange = (key: keyof FormField, value: any) => {
+    if (!canCreateForm) return;
     onUpdateField({
       ...selectedField,
       [key]: value,
@@ -51,6 +61,7 @@ export default function FormBuilderPropertiesPanel({
   };
 
   const handleValidationChange = (valKey: string, valValue: any) => {
+    if (!canCreateForm) return;
     onUpdateField({
       ...selectedField,
       validation: {
@@ -61,18 +72,21 @@ export default function FormBuilderPropertiesPanel({
   };
 
   const handleAddOption = () => {
+    if (!canCreateForm) return;
     const currentOptions = selectedField.options || [];
     const newOptionName = `Option ${currentOptions.length + 1}`;
     handleChange('options', [...currentOptions, newOptionName]);
   };
 
   const handleUpdateOption = (index: number, value: string) => {
+    if (!canCreateForm) return;
     const currentOptions = [...(selectedField.options || [])];
     currentOptions[index] = value;
     handleChange('options', currentOptions);
   };
 
   const handleRemoveOption = (index: number) => {
+    if (!canCreateForm) return;
     const currentOptions = [...(selectedField.options || [])];
     currentOptions.splice(index, 1);
     handleChange('options', currentOptions);
@@ -105,6 +119,9 @@ export default function FormBuilderPropertiesPanel({
             value={selectedField.label}
             onChange={(e) => handleChange('label', e.target.value)}
             placeholder="Field Label"
+            disabled={!canCreateForm}
+            style={disabledStyle}
+            title={!canCreateForm ? noPermissionTitle : undefined}
           />
         </div>
 
@@ -119,6 +136,9 @@ export default function FormBuilderPropertiesPanel({
                 value={selectedField.content || ''}
                 onChange={(e) => handleChange('content', e.target.value)}
                 placeholder="Heading text..."
+                disabled={!canCreateForm}
+                style={disabledStyle}
+                title={!canCreateForm ? noPermissionTitle : undefined}
               />
             ) : (
               <textarea
@@ -127,6 +147,9 @@ export default function FormBuilderPropertiesPanel({
                 value={selectedField.content || ''}
                 onChange={(e) => handleChange('content', e.target.value)}
                 placeholder="Paragraph description text..."
+                disabled={!canCreateForm}
+                style={disabledStyle}
+                title={!canCreateForm ? noPermissionTitle : undefined}
               />
             )}
           </div>
@@ -142,6 +165,9 @@ export default function FormBuilderPropertiesPanel({
               value={selectedField.placeholder || ''}
               onChange={(e) => handleChange('placeholder', e.target.value)}
               placeholder="e.g. Enter text here..."
+              disabled={!canCreateForm}
+              style={disabledStyle}
+              title={!canCreateForm ? noPermissionTitle : undefined}
             />
           </div>
         )}
@@ -156,6 +182,9 @@ export default function FormBuilderPropertiesPanel({
               value={selectedField.helpText || ''}
               onChange={(e) => handleChange('helpText', e.target.value)}
               placeholder="Subtext shown below the field..."
+              disabled={!canCreateForm}
+              style={disabledStyle}
+              title={!canCreateForm ? noPermissionTitle : undefined}
             />
           </div>
         )}
@@ -165,7 +194,14 @@ export default function FormBuilderPropertiesPanel({
           <div className="fbp-field-group">
             <div className="fbp-flex-between">
               <label className="fbp-label">Choice Options</label>
-              <button type="button" className="fbp-add-opt-btn" onClick={handleAddOption}>
+              <button
+                type="button"
+                className="fbp-add-opt-btn"
+                onClick={handleAddOption}
+                disabled={!canCreateForm}
+                style={disabledStyle}
+                title={!canCreateForm ? noPermissionTitle : undefined}
+              >
                 <Plus size={13} /> Add Option
               </button>
             </div>
@@ -177,12 +213,17 @@ export default function FormBuilderPropertiesPanel({
                     className="fbp-input fbp-input--opt"
                     value={opt}
                     onChange={(e) => handleUpdateOption(idx, e.target.value)}
+                    disabled={!canCreateForm}
+                    style={disabledStyle}
+                    title={!canCreateForm ? noPermissionTitle : undefined}
                   />
                   <button
                     type="button"
                     className="fbp-remove-opt-btn"
                     onClick={() => handleRemoveOption(idx)}
-                    title="Remove option"
+                    disabled={!canCreateForm}
+                    style={disabledStyle}
+                    title={!canCreateForm ? noPermissionTitle : "Remove option"}
                   >
                     <Trash2 size={13} />
                   </button>
@@ -202,6 +243,9 @@ export default function FormBuilderPropertiesPanel({
               value={selectedField.defaultValue || ''}
               onChange={(e) => handleChange('defaultValue', e.target.value)}
               placeholder="Optional prefilled value"
+              disabled={!canCreateForm}
+              style={disabledStyle}
+              title={!canCreateForm ? noPermissionTitle : undefined}
             />
           </div>
         )}
@@ -215,6 +259,9 @@ export default function FormBuilderPropertiesPanel({
                 type="button"
                 className={`fbp-toggle-btn ${selectedField.width === 'half' ? 'fbp-toggle-btn--active' : ''}`}
                 onClick={() => handleChange('width', 'half')}
+                disabled={!canCreateForm}
+                style={disabledStyle}
+                title={!canCreateForm ? noPermissionTitle : undefined}
               >
                 Half Width (1 Col)
               </button>
@@ -222,6 +269,9 @@ export default function FormBuilderPropertiesPanel({
                 type="button"
                 className={`fbp-toggle-btn ${selectedField.width === 'full' ? 'fbp-toggle-btn--active' : ''}`}
                 onClick={() => handleChange('width', 'full')}
+                disabled={!canCreateForm}
+                style={disabledStyle}
+                title={!canCreateForm ? noPermissionTitle : undefined}
               >
                 Full Width (2 Cols)
               </button>
@@ -234,11 +284,12 @@ export default function FormBuilderPropertiesPanel({
           <div className="fbp-section-box">
             <span className="fbp-section-title">Field Behavior & Rules</span>
 
-            <label className="fbp-checkbox-label">
+            <label className="fbp-checkbox-label" style={disabledStyle} title={!canCreateForm ? noPermissionTitle : undefined}>
               <input
                 type="checkbox"
                 checked={selectedField.required}
                 onChange={(e) => handleChange('required', e.target.checked)}
+                disabled={!canCreateForm}
               />
               <div className="fbp-chk-text">
                 <span>Required Field</span>
@@ -246,11 +297,12 @@ export default function FormBuilderPropertiesPanel({
               </div>
             </label>
 
-            <label className="fbp-checkbox-label">
+            <label className="fbp-checkbox-label" style={disabledStyle} title={!canCreateForm ? noPermissionTitle : undefined}>
               <input
                 type="checkbox"
                 checked={selectedField.readOnly}
                 onChange={(e) => handleChange('readOnly', e.target.checked)}
+                disabled={!canCreateForm}
               />
               <div className="fbp-chk-text">
                 <span>Read Only</span>
@@ -274,6 +326,9 @@ export default function FormBuilderPropertiesPanel({
                     className="fbp-input"
                     value={selectedField.validation?.min ?? ''}
                     onChange={(e) => handleValidationChange('min', e.target.value ? Number(e.target.value) : undefined)}
+                    disabled={!canCreateForm}
+                    style={disabledStyle}
+                    title={!canCreateForm ? noPermissionTitle : undefined}
                   />
                 </div>
                 <div>
@@ -283,6 +338,9 @@ export default function FormBuilderPropertiesPanel({
                     className="fbp-input"
                     value={selectedField.validation?.max ?? ''}
                     onChange={(e) => handleValidationChange('max', e.target.value ? Number(e.target.value) : undefined)}
+                    disabled={!canCreateForm}
+                    style={disabledStyle}
+                    title={!canCreateForm ? noPermissionTitle : undefined}
                   />
                 </div>
               </div>
@@ -295,6 +353,9 @@ export default function FormBuilderPropertiesPanel({
                     className="fbp-input"
                     value={selectedField.validation?.min ?? ''}
                     onChange={(e) => handleValidationChange('min', e.target.value ? Number(e.target.value) : undefined)}
+                    disabled={!canCreateForm}
+                    style={disabledStyle}
+                    title={!canCreateForm ? noPermissionTitle : undefined}
                   />
                 </div>
                 <div>
@@ -304,6 +365,9 @@ export default function FormBuilderPropertiesPanel({
                     className="fbp-input"
                     value={selectedField.validation?.max ?? ''}
                     onChange={(e) => handleValidationChange('max', e.target.value ? Number(e.target.value) : undefined)}
+                    disabled={!canCreateForm}
+                    style={disabledStyle}
+                    title={!canCreateForm ? noPermissionTitle : undefined}
                   />
                 </div>
               </div>
@@ -317,6 +381,9 @@ export default function FormBuilderPropertiesPanel({
                 placeholder="Custom validation alert message..."
                 value={selectedField.validation?.customError || ''}
                 onChange={(e) => handleValidationChange('customError', e.target.value)}
+                disabled={!canCreateForm}
+                style={disabledStyle}
+                title={!canCreateForm ? noPermissionTitle : undefined}
               />
             </div>
           </div>

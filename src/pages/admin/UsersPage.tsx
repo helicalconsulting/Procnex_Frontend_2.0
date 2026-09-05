@@ -118,7 +118,7 @@ const WIDGET_LIST = [
 
 interface UserColumnDef {
   key: string; label: string; defaultVisible: boolean; required?: boolean;
-  width?: string;  render: (u: MockUser, fmtDate: (d: string) => string, fmtDT: (d: string | null) => string, toggle: (id: string) => void, toggleMobile?: (id: string) => void) => React.ReactNode;
+  width?: string;  render: (u: MockUser, fmtDate: (d: string) => string, fmtDT: (d: string | null) => string, toggle: (id: string) => void, toggleMobile?: (id: string) => void, canCreate?: boolean) => React.ReactNode;
 }
 
 const ALL_COLUMNS: UserColumnDef[] = [
@@ -145,13 +145,15 @@ const ALL_COLUMNS: UserColumnDef[] = [
   { key: 'department', label: 'Department', defaultVisible: true, width: '110px', render: (u) => <span className="users-table__dept">{u.department}</span> },
   {
     key: 'status', label: 'Status', defaultVisible: true, width: '110px',
-    render: (u, _fd, _fdt, toggle) => {
+    render: (u, _fd, _fdt, toggle, _toggleMobile, canCreate = true) => {
       const isSuperAdmin = u.role === 'Super Admin' || u.apiRoleName === 'Super Admin';
+      const isDisabled = isSuperAdmin || !canCreate;
       return (
         <div
-          className={`users-status-toggle ${isSuperAdmin ? 'users-status-toggle--disabled' : ''}`}
-          onClick={() => !isSuperAdmin && toggle(u.id)}
-          title={isSuperAdmin ? 'Super Admin status cannot be changed' : ''}
+          className={`users-status-toggle ${isDisabled ? 'users-status-toggle--disabled' : ''}`}
+          onClick={() => !isDisabled && toggle(u.id)}
+          title={!canCreate ? 'Admin has not allowed this action. You do not have permission to modify user status.' : isSuperAdmin ? 'Super Admin status cannot be changed' : ''}
+          style={!canCreate ? { opacity: 0.6, cursor: 'not-allowed', pointerEvents: 'auto' } : {}}
         >
           <div className={`users-status-toggle__track ${u.isActive ? 'users-status-toggle__track--active' : ''}`}>
             <div className="users-status-toggle__knob" />
@@ -165,13 +167,13 @@ const ALL_COLUMNS: UserColumnDef[] = [
   },
   {
     key: 'mobileAccess', label: 'Mobile App Access', defaultVisible: true, width: '150px',
-    render: (u, _fd, _fdt, _toggle, toggleMobile) => {
+    render: (u, _fd, _fdt, _toggle, toggleMobile, canCreate = true) => {
       return (
         <div
-          className="users-status-toggle"
-          onClick={() => toggleMobile && toggleMobile(u.id)}
-          title="Toggle Mobile App Access"
-          style={{ cursor: 'pointer' }}
+          className={`users-status-toggle ${!canCreate ? 'users-status-toggle--disabled' : ''}`}
+          onClick={() => canCreate && toggleMobile && toggleMobile(u.id)}
+          title={!canCreate ? 'Admin has not allowed this action. You do not have permission to modify mobile access.' : 'Toggle Mobile App Access'}
+          style={{ cursor: canCreate ? 'pointer' : 'not-allowed', opacity: canCreate ? 1 : 0.6, pointerEvents: 'auto' }}
         >
           <div className={`users-status-toggle__track ${u.isMobileAccessEnabled ? 'users-status-toggle__track--active' : ''}`}>
             <div className="users-status-toggle__knob" />
@@ -194,31 +196,31 @@ const ALL_COLUMNS: UserColumnDef[] = [
 
 export default function UsersPage() {
   const { hasPermission, companyCode: userCompanyCode } = useAuth();
-  const { data: users, loading, error, reload } = useServiceData(
+  const { data: users, loading, error, reload, forceRefresh } = useServiceData(
     () => adminService.listUsers().then((list) => list.map(mapUser)),
     [] as MockUser[],
     [],
-    { cacheKey: 'users:list' }
+    { cacheKey: 'users:list', cacheTtlMs: 0 }
   );
   const { data: roleRecords } = useServiceData(
     () => adminService.listRoles(),
     [],
     [],
-    { cacheKey: 'users:roles' }
+    { cacheKey: 'users:roles', cacheTtlMs: 0 }
   );
 
   const { data: departments } = useServiceData(
     () => companySettingsService.listDepartments(),
     [],
     [],
-    { cacheKey: 'users:departments' }
+    { cacheKey: 'users:departments', cacheTtlMs: 0 }
   );
 
   const { data: positions } = useServiceData(
     () => companySettingsService.listPositions(),
     [],
     [],
-    { cacheKey: 'users:positions' }
+    { cacheKey: 'users:positions', cacheTtlMs: 0 }
   );
 
   // ── Company User Limit ──
@@ -240,34 +242,12 @@ export default function UsersPage() {
   const [pendingStatus, setPendingStatus] = useState<Map<string, boolean>>(new Map());
   const [pendingMobileStatus, setPendingMobileStatus] = useState<Map<string, boolean>>(new Map());
 
-  const assignableRoles = useMemo(
-    () => roleRecords.map((r) => r.roleName).sort(),
-    [roleRecords]
-  );
-
-  // Combine roles from Roles & Permissions with company positions
-  const positionRoleOptions = useMemo(() => {
-    const roleNames = roleRecords.map((r) => r.roleName);
-    const positionNames = positions
-      .filter((p) => p.isActive)
-      .map((p) => p.name);
-    const all = [...roleNames, ...positionNames];
-    return [...new Set(all.filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  }, [roleRecords, positions]);
-
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'admins'>('all');
   const [view, setView] = useState<'table' | 'card'>('table');
   const [currentPage, setCurrentPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
   const [pageMsg, setPageMsg] = useState<string | null>(null);
-
-  // ── Auto-clear pageMsg after 3 seconds ─────────────────────
-  useEffect(() => {
-    if (!pageMsg) return;
-    const timer = window.setTimeout(() => setPageMsg(null), 2000);
-    return () => window.clearTimeout(timer);
-  }, [pageMsg]);
 
   const [createModalError, setCreateModalError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
@@ -300,6 +280,22 @@ export default function UsersPage() {
     userName: string;
     isEnabled: boolean;
   } | null>(null);
+
+  const assignableRoles = useMemo(
+    () => roleRecords.map((r) => r.roleName).sort(),
+    [roleRecords]
+  );
+
+  // Combine roles from DB (Roles & Permissions) with active company positions from DB
+  const positionRoleOptions = useMemo(() => {
+    const roleNames = roleRecords.map((r) => r.roleName);
+    const positionNames = positions
+      .filter((p) => p.isActive)
+      .map((p) => p.name);
+    const currentEditRole = editingUser?.apiRoleName || editingUser?.role;
+    const all = [...roleNames, ...positionNames, currentEditRole].filter(Boolean) as string[];
+    return [...new Set(all)].sort((a, b) => a.localeCompare(b));
+  }, [roleRecords, positions, editingUser]);
 
   const perPage = 8;
 
@@ -607,7 +603,7 @@ export default function UsersPage() {
       setEditPhone(rawEditPhone);
     }
     setEditDepartment(user.department === '—' ? '' : user.department);
-    setEditRoleName(user.apiRoleName);
+    setEditRoleName(user.apiRoleName || user.role || '');
     setEditMobileAccess(user.isMobileAccessEnabled);
   }, []);
 
@@ -631,13 +627,13 @@ export default function UsersPage() {
       });
       setPageMsg(`User "${updated.fullName}" updated successfully.`);
       setEditingUser(null);
-      await reload();
+      await forceRefresh();
     } catch (err) {
       setPageMsg(err instanceof Error ? err.message : 'Failed to update user');
     } finally {
       setActionLoading(false);
     }
-  }, [editingUser, editFullName, editEmail, editPhone, editCountryCode, editDepartment, editRoleName, editMobileAccess, reload]);
+  }, [editingUser, editFullName, editEmail, editPhone, editCountryCode, editDepartment, editRoleName, editMobileAccess, forceRefresh]);
 
   const handleConfirmDelete = useCallback(async () => {
     if (!deleteTarget) return;
@@ -804,7 +800,7 @@ export default function UsersPage() {
             className="users-page__add-btn"
             onClick={(!isUserLimitReached && hasPermission('User Management', 'canCreate')) ? openAddModal : undefined}
             disabled={isUserLimitReached || !hasPermission('User Management', 'canCreate')}
-            title={!hasPermission('User Management', 'canCreate') ? 'You do not have permission to add users' : isUserLimitReached ? 'Company user limit reached. Please contact Procnex Support to upgrade.' : 'Add new staff user'}
+            title={!hasPermission('User Management', 'canCreate') ? 'Admin has not allowed this action. You do not have permission to add users.' : isUserLimitReached ? 'Company user limit reached. Please contact Procnex Support to upgrade.' : 'Add new staff user'}
             style={(isUserLimitReached || !hasPermission('User Management', 'canCreate')) ? { opacity: 0.6, cursor: 'not-allowed', pointerEvents: 'auto' } : {}}
           >
             <Plus size={18} />
@@ -905,13 +901,20 @@ export default function UsersPage() {
             </button>
             <button
               type="button"
+              disabled={!hasPermission('User Management', 'canCreate')}
               style={{
-                background: '#dc2626', color: '#ffffff', border: 'none',
+                background: hasPermission('User Management', 'canCreate') ? '#dc2626' : '#64748b',
+                color: '#ffffff', border: 'none',
                 padding: '7px 16px', fontSize: 13, fontWeight: 700,
-                borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+                borderRadius: 'var(--radius-sm)',
+                cursor: hasPermission('User Management', 'canCreate') ? 'pointer' : 'not-allowed',
+                opacity: hasPermission('User Management', 'canCreate') ? 1 : 0.5,
+                pointerEvents: 'auto',
                 display: 'inline-flex', alignItems: 'center', gap: 6
               }}
+              title={!hasPermission('User Management', 'canCreate') ? "Admin has not allowed this action. You do not have permission to delete users." : undefined}
               onClick={(e) => {
+                if (!hasPermission('User Management', 'canCreate')) return;
                 (e.currentTarget as HTMLElement).blur();
                 setShowBatchDeleteModal(true);
               }}
@@ -943,8 +946,10 @@ export default function UsersPage() {
                       <input
                         type="checkbox"
                         checked={isAllSelected}
-                        onChange={handleToggleSelectAll}
-                        style={{ cursor: 'pointer', width: 16, height: 16 }}
+                        disabled={!hasPermission('User Management', 'canCreate')}
+                        onChange={hasPermission('User Management', 'canCreate') ? handleToggleSelectAll : undefined}
+                        style={{ cursor: hasPermission('User Management', 'canCreate') ? 'pointer' : 'not-allowed', width: 16, height: 16 }}
+                        title={!hasPermission('User Management', 'canCreate') ? "Admin has not allowed this action. You do not have permission to select users." : undefined}
                       />
                     </th>
                     {visibleColumns.map((col) => (<th key={col.key}>{col.label}</th>))}
@@ -971,19 +976,48 @@ export default function UsersPage() {
                           <input
                             type="checkbox"
                             checked={selectedUserIds.includes(user.id)}
-                            onChange={() => handleToggleSelect(user.id)}
-                            style={{ cursor: 'pointer', width: 16, height: 16 }}
+                            disabled={!hasPermission('User Management', 'canCreate')}
+                            onChange={() => hasPermission('User Management', 'canCreate') && handleToggleSelect(user.id)}
+                            style={{ cursor: hasPermission('User Management', 'canCreate') ? 'pointer' : 'not-allowed', width: 16, height: 16 }}
+                            title={!hasPermission('User Management', 'canCreate') ? "Admin has not allowed this action. You do not have permission to select users." : undefined}
                           />
                         )}
                       </td>
-                      {visibleColumns.map((col) => (<td key={col.key}>{col.render(user, formatDate, formatDateTime, toggleActive, toggleMobileActive)}</td>))}
+                      {visibleColumns.map((col) => (<td key={col.key}>{col.render(user, formatDate, formatDateTime, toggleActive, toggleMobileActive, hasPermission('User Management', 'canCreate'))}</td>))}
                       <td>
                         <div className="users-table__actions">
                           <button type="button" className="users-table__action-btn" title="View" onClick={() => openViewUser(user)}><Eye size={15} /></button>
-                          <button type="button" className="users-table__action-btn" title="Edit" onClick={() => openEditUser(user)}><Edit3 size={15} /></button>
-                          <button type="button" className="users-table__action-btn" title="Widgets" onClick={() => openWidgetConfig(user)}><Zap size={15} /></button>
+                          <button
+                            type="button"
+                            className="users-table__action-btn"
+                            title={hasPermission('User Management', 'canCreate') ? "Edit" : "Admin has not allowed this action. You do not have permission to edit users."}
+                            onClick={() => hasPermission('User Management', 'canCreate') && openEditUser(user)}
+                            disabled={!hasPermission('User Management', 'canCreate')}
+                            style={!hasPermission('User Management', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : {}}
+                          >
+                            <Edit3 size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            className="users-table__action-btn"
+                            title={hasPermission('User Management', 'canCreate') ? "Widgets" : "Admin has not allowed this action. You do not have permission to configure widgets."}
+                            onClick={() => hasPermission('User Management', 'canCreate') && openWidgetConfig(user)}
+                            disabled={!hasPermission('User Management', 'canCreate')}
+                            style={!hasPermission('User Management', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : {}}
+                          >
+                            <Zap size={15} />
+                          </button>
                           {user.role !== 'Super Admin' && (
-                            <button type="button" className="users-table__action-btn users-table__action-btn--danger" title="Delete" onClick={() => setDeleteTarget(user)}><Trash2 size={15} /></button>
+                            <button
+                              type="button"
+                              className="users-table__action-btn users-table__action-btn--danger"
+                              title={hasPermission('User Management', 'canCreate') ? "Delete" : "Admin has not allowed this action. You do not have permission to delete users."}
+                              onClick={() => hasPermission('User Management', 'canCreate') && setDeleteTarget(user)}
+                              disabled={!hasPermission('User Management', 'canCreate')}
+                              style={!hasPermission('User Management', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : {}}
+                            >
+                              <Trash2 size={15} />
+                            </button>
                           )}
                         </div>
                       </td>
@@ -1034,10 +1068,37 @@ export default function UsersPage() {
                     </div>
                     <div className="users-card__actions" onClick={(e) => e.stopPropagation()}>
                       <button type="button" className="users-table__action-btn" title="View" onClick={() => openViewUser(user)}><Eye size={15} /></button>
-                      <button type="button" className="users-table__action-btn" title="Edit" onClick={() => openEditUser(user)}><Edit3 size={15} /></button>
-                      <button type="button" className="users-table__action-btn" title="Widgets" onClick={() => openWidgetConfig(user)}><Zap size={15} /></button>
+                      <button
+                        type="button"
+                        className="users-table__action-btn"
+                        title={hasPermission('User Management', 'canCreate') ? "Edit" : "Admin has not allowed this action. You do not have permission to edit users."}
+                        onClick={() => hasPermission('User Management', 'canCreate') && openEditUser(user)}
+                        disabled={!hasPermission('User Management', 'canCreate')}
+                        style={!hasPermission('User Management', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : {}}
+                      >
+                        <Edit3 size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        className="users-table__action-btn"
+                        title={hasPermission('User Management', 'canCreate') ? "Widgets" : "Admin has not allowed this action. You do not have permission to configure widgets."}
+                        onClick={() => hasPermission('User Management', 'canCreate') && openWidgetConfig(user)}
+                        disabled={!hasPermission('User Management', 'canCreate')}
+                        style={!hasPermission('User Management', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : {}}
+                      >
+                        <Zap size={15} />
+                      </button>
                       {user.role !== 'Super Admin' && (
-                        <button type="button" className="users-table__action-btn users-table__action-btn--danger" title="Delete" onClick={() => setDeleteTarget(user)}><Trash2 size={15} /></button>
+                        <button
+                          type="button"
+                          className="users-table__action-btn users-table__action-btn--danger"
+                          title={hasPermission('User Management', 'canCreate') ? "Delete" : "Admin has not allowed this action. You do not have permission to delete users."}
+                          onClick={() => hasPermission('User Management', 'canCreate') && setDeleteTarget(user)}
+                          disabled={!hasPermission('User Management', 'canCreate')}
+                          style={!hasPermission('User Management', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : {}}
+                        >
+                          <Trash2 size={15} />
+                        </button>
                       )}
                     </div>
                   </div>

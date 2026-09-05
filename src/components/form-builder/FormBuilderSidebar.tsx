@@ -63,6 +63,7 @@ interface FormBuilderSidebarProps {
   onAddField: (type: FieldType, defaultConfig: Partial<FormField>) => void;
   sidebarTab: 'palette' | 'forms';
   setSidebarTab: (tab: 'palette' | 'forms') => void;
+  canCreateForm?: boolean;
 }
 
 export default function FormBuilderSidebar({
@@ -74,6 +75,7 @@ export default function FormBuilderSidebar({
   onAddField,
   sidebarTab,
   setSidebarTab,
+  canCreateForm = true,
 }: FormBuilderSidebarProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [paletteSearch, setPaletteSearch] = useState('');
@@ -133,8 +135,10 @@ export default function FormBuilderSidebar({
         <button
           type="button"
           className="fbs-create-btn"
-          onClick={onCreateNewForm}
-          title="Create New Form"
+          onClick={canCreateForm ? onCreateNewForm : undefined}
+          disabled={!canCreateForm}
+          style={!canCreateForm ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+          title={!canCreateForm ? "Admin has not allowed this action. You do not have permission to create custom forms." : "Create New Form"}
         >
           <Plus size={16} />
           Create New Form
@@ -164,9 +168,11 @@ export default function FormBuilderSidebar({
                     <div
                       key={item.type}
                       className="fbs-palette-item"
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, item.type, item.defaultConfig)}
-                      onClick={() => onAddField(item.type, item.defaultConfig)}
+                      draggable={canCreateForm}
+                      onDragStart={canCreateForm ? (e) => handleDragStart(e, item.type, item.defaultConfig) : (e) => e.preventDefault()}
+                      onClick={() => canCreateForm && onAddField(item.type, item.defaultConfig)}
+                      style={!canCreateForm ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                      title={!canCreateForm ? "Admin has not allowed this action. You do not have permission to add fields." : "Drag onto canvas or click to add"}
                     >
                       <div className="fbs-item-icon">
                         {ICON_MAP[item.icon] || <Layers size={16} />}

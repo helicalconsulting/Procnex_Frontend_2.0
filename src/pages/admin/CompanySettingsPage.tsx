@@ -23,6 +23,7 @@ import OcrPreview from '../../components/shared/OcrPreview';
 import '../../components/shared/OcrPreview.css';
 import ErrorBoundary from '../../components/shared/ErrorBoundary';
 import { TableSkeleton, CardSkeleton, PageSkeleton, Skeleton } from '../../components/shared/Skeleton';
+import { useAuth } from '../../context/AuthContext';
 
 // ─── Predictive Match Analysis ──────────────────────────────
 interface PredictiveMatchResult {
@@ -261,6 +262,17 @@ function textToHtml(text: string): string {
     .join('\n');
 }
 
+// ─── Resolve dynamic placeholders ({YYYY} {YY} {MM} {DD}) ──────────────
+function resolvePlaceholders(template: string): string {
+  const now = new Date();
+  const yyyy = String(now.getFullYear());
+  return template
+    .replace(/\{YYYY\}/g, yyyy)
+    .replace(/\{YY\}/g, yyyy.slice(-2))
+    .replace(/\{MM\}/g, String(now.getMonth() + 1).padStart(2, '0'))
+    .replace(/\{DD\}/g, String(now.getDate()).padStart(2, '0'));
+}
+
 // ─── Tab Definitions ────────────────────────────────────────
 
 type TabKey = 'general' | 'branding' | 'departments' | 'positions' | 'forms' | 'form-documents' | 'email-templates' | 'documents-contracts' | 'doc-serialization';
@@ -383,6 +395,11 @@ const EMBEDDED_STANDARD_UNITS: EmbeddedUnit[] = [
 // ─── Component ──────────────────────────────────────────────
 
 export default function CompanySettingsPage() {
+  const { hasPermission } = useAuth();
+  const canCreateSettings = hasPermission('Company Settings', 'canCreate') || hasPermission('Settings', 'canCreate');
+  const noPermissionTitle = "Admin has not allowed this action. You do not have permission to modify company settings.";
+  const disabledActionStyle = !canCreateSettings ? { opacity: 0.6, cursor: 'not-allowed', pointerEvents: 'auto' as const } : undefined;
+
   // Data
   const { data: departments, loading, reload } = useServiceData(
     () => companySettingsService.listDepartments(),
@@ -459,13 +476,15 @@ export default function CompanySettingsPage() {
   }, [activeTab, fetchSequences]);
 
   const handleSeqFieldChange = useCallback((entityType: string, field: keyof SequenceSetting, value: string | number) => {
+    if (!canCreateSettings) return;
     setSeqEdits((prev) => ({
       ...prev,
       [entityType]: { ...prev[entityType], [field]: value },
     }));
-  }, []);
+  }, [canCreateSettings]);
 
   const handleSeqSave = useCallback(async (entityType: string) => {
+    if (!canCreateSettings) return;
     const edit = seqEdits[entityType];
     if (!edit) return;
     setSeqSaving(entityType);
@@ -496,13 +515,14 @@ export default function CompanySettingsPage() {
     } finally {
       setSeqSaving(null);
     }
-  }, [seqEdits]);
+  }, [seqEdits, canCreateSettings]);
 
   const [isBackfilling, setIsBackfilling] = useState(false);
   const [backfillResult, setBackfillResult] = useState<{ updated: number; nextCounter: number } | null>(null);
   const [showBackfillSuccess, setShowBackfillSuccess] = useState(false);
 
   const runBackfill = useCallback(async () => {
+    if (!canCreateSettings) return;
     setIsBackfilling(true);
     setBackfillResult(null);
     try {
@@ -529,9 +549,10 @@ export default function CompanySettingsPage() {
     } finally {
       setIsBackfilling(false);
     }
-  }, []);
+  }, [canCreateSettings]);
 
   const handleBackfillSuppliers = useCallback(() => {
+    if (!canCreateSettings) return;
     setConfirmModalConfig({
       isOpen: true,
       title: 'Assign Supplier Codes',
@@ -541,18 +562,9 @@ export default function CompanySettingsPage() {
       cancelText: 'Cancel',
       onConfirm: runBackfill,
     });
-  }, [runBackfill]);
+  }, [runBackfill, canCreateSettings]);
 
-  // ── Resolve dynamic placeholders ({YYYY} {YY} {MM} {DD}) ──────────────
-  const resolvePlaceholders = useCallback((template: string): string => {
-    const now = new Date();
-    const yyyy = String(now.getFullYear());
-    return template
-      .replace(/\{YYYY\}/g, yyyy)
-      .replace(/\{YY\}/g,   yyyy.slice(-2))
-      .replace(/\{MM\}/g,   String(now.getMonth() + 1).padStart(2, '0'))
-      .replace(/\{DD\}/g,   String(now.getDate()).padStart(2, '0'));
-  }, []);
+
 
   const getSeqPreview = useCallback((entityType: string): string => {
     const e = seqEdits[entityType];
@@ -677,6 +689,7 @@ export default function CompanySettingsPage() {
   }, [lockPasscode]);
 
   const handleSavePasscode = useCallback(async () => {
+    if (!canCreateSettings) return;
     if (passcodeModalMode === 'remove') {
       if (!passcodeCurrent.trim()) {
         setPasscodeError('Current passcode is required to disable protection');
@@ -730,7 +743,7 @@ export default function CompanySettingsPage() {
     } finally {
       setPasscodeSaving(false);
     }
-  }, [passcodeModalMode, passcodeCurrent, passcodeNew, passcodeConfirm, isPasscodeProtected]);
+  }, [passcodeModalMode, passcodeCurrent, passcodeNew, passcodeConfirm, isPasscodeProtected, canCreateSettings]);
 
   // The currently saved currency from the backend
   const savedCurrency = profile?.defaultCurrency || ctxDefaultCurrency;
@@ -739,9 +752,10 @@ export default function CompanySettingsPage() {
   const hasPendingChange = pendingCurrency !== null && pendingCurrency !== savedCurrency;
 
   const handleCurrencySelect = useCallback((code: string) => {
+    if (!canCreateSettings) return;
     // Just store the selection - don't save yet
     setPendingCurrency(code);
-  }, []);
+  }, [canCreateSettings]);
 
   const hasPortalNameChange = pendingPortalName !== null && pendingPortalName !== portalName;
   const hasMaxUsersChange = pendingMaxUsers !== null && pendingMaxUsers !== (profile?.maxUsers ?? 50);
@@ -750,6 +764,7 @@ export default function CompanySettingsPage() {
     (pendingResubmissionDeadline !== null && pendingResubmissionDeadline !== resubmissionDeadlineHours);
 
   const handleSaveGeneralSettings = useCallback(async () => {
+    if (!canCreateSettings) return;
     const currencyToSave = pendingCurrency || savedCurrency;
     const invExpiry = pendingInvitationExpiry !== null ? pendingInvitationExpiry : invitationExpiryHours;
     const resubDeadline = pendingResubmissionDeadline !== null ? pendingResubmissionDeadline : resubmissionDeadlineHours;
@@ -841,6 +856,7 @@ export default function CompanySettingsPage() {
   }, [profile]);
 
   const handleSaveBranding = useCallback(async () => {
+    if (!canCreateSettings) return;
     if (!brandingDirty) return;
     setSavingBranding(true);
     setPageMsg(null);
@@ -872,11 +888,12 @@ export default function CompanySettingsPage() {
     } finally {
       setSavingBranding(false);
     }
-  }, [brandingDirty, brandingName, brandingLogoUrl, brandingColor, brandingLoginText, brandingSupportEmail, brandingCompanyPhone, brandingCompanyEmail, profile, refreshBranding]);
+  }, [brandingDirty, brandingName, brandingLogoUrl, brandingColor, brandingLoginText, brandingSupportEmail, brandingCompanyPhone, brandingCompanyEmail, profile, refreshBranding, canCreateSettings]);
 
   const markBrandingDirty = useCallback(() => {
+    if (!canCreateSettings) return;
     if (!brandingDirty) setBrandingDirty(true);
-  }, [brandingDirty]);
+  }, [brandingDirty, canCreateSettings]);
 
   // ── Image Cropper (after branding so all variables are declared) ──
   const [cropFile, setCropFile] = useState<File | null>(null);
@@ -2022,6 +2039,7 @@ export default function CompanySettingsPage() {
   }, []);
 
   const handleSaveDocs = useCallback(async () => {
+    if (!canCreateSettings) return;
     setSavingDocs(true);
     setPageMsg(null);
     try {
@@ -2116,6 +2134,7 @@ export default function CompanySettingsPage() {
   }, []);
 
   const handleSaveDept = useCallback(async () => {
+    if (!canCreateSettings) return;
     const trimmed = deptName.trim();
     if (!trimmed) return;
     const exists = departments.some(
@@ -2151,7 +2170,7 @@ export default function CompanySettingsPage() {
     } finally {
       setActionLoading(false);
     }
-  }, [editingDept, deptName, deptDesc, departments, reload]);
+  }, [editingDept, deptName, deptDesc, departments, reload, canCreateSettings]);
 
   // ── Category CRUD ──
 
@@ -2174,6 +2193,7 @@ export default function CompanySettingsPage() {
   }, []);
 
   const handleSaveCat = useCallback(async () => {
+    if (!canCreateSettings) return;
     const trimmed = catName.trim();
     if (!trimmed || !catDeptId) return;
     const exists = categories.some(
@@ -2211,9 +2231,10 @@ export default function CompanySettingsPage() {
     } finally {
       setActionLoading(false);
     }
-  }, [editingCat, catDeptId, catName, catDesc, categories, reload, reloadCategories]);
+  }, [editingCat, catDeptId, catName, catDesc, categories, reload, reloadCategories, canCreateSettings]);
 
   const toggleDeptActive = useCallback(async (dept: Department) => {
+    if (!canCreateSettings) return;
     setPageMsg(null);
     try {
       await companySettingsService.updateDepartment(dept.id, { isActive: !dept.isActive });
@@ -2222,7 +2243,7 @@ export default function CompanySettingsPage() {
     } catch (err) {
       setPageMsg(err instanceof Error ? err.message : 'Failed to update department');
     }
-  }, [reload]);
+  }, [reload, canCreateSettings]);
 
   // ── Payment Term handlers ──
 
@@ -2387,7 +2408,7 @@ export default function CompanySettingsPage() {
   }, []);
 
   const confirmDelete = useCallback(async () => {
-    if (!deleteTarget) return;
+    if (!canCreateSettings || !deleteTarget) return;
     setDeleting(true);
     setPageMsg(null);
     try {
@@ -2422,7 +2443,7 @@ export default function CompanySettingsPage() {
     } finally {
       setDeleting(false);
     }
-  }, [deleteTarget, reload, reloadCategories, reloadUnits, reloadPaymentTerms, reloadPositions]);
+  }, [deleteTarget, reload, reloadCategories, reloadUnits, reloadPaymentTerms, reloadPositions, reloadRequiredDocuments, canCreateSettings]);
 
   const cancelDelete = useCallback(() => {
     setDeleteTarget(null);
@@ -2448,7 +2469,7 @@ export default function CompanySettingsPage() {
 
 
   return (
-    <div className="company-settings-page">
+    <div className={`company-settings-page ${!canCreateSettings ? 'is-view-only' : ''}`}>
       {pageMsg && (
         <MessageStrip
           type={inferMessageType(pageMsg)}
@@ -3030,17 +3051,29 @@ export default function CompanySettingsPage() {
                         <img src={brandingLogoUrl} alt="Logo" className="cs-logo-preview__img" />
                       </div>
                     )}
-                    <label className="cs-upload-btn">
+                    <label
+                      className="cs-upload-btn"
+                      style={!canCreateSettings ? { opacity: 0.6, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                      title={!canCreateSettings ? noPermissionTitle : undefined}
+                      onClick={(e) => {
+                        if (!canCreateSettings) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }
+                      }}
+                    >
                       <input
                         type="file"
                         accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
                         onChange={(e) => {
+                          if (!canCreateSettings) return;
                           const file = e.target.files?.[0];
                           if (!file) return;
                           setCropType('logo');
                           setCropFile(file);
                           e.target.value = '';
                         }}
+                        disabled={!canCreateSettings}
                         style={{ display: 'none' }}
                         id="logo-upload-input"
                       />
@@ -3052,7 +3085,10 @@ export default function CompanySettingsPage() {
                     {brandingLogoUrl && (
                       <button
                         className="company-settings__icon-btn company-settings__icon-btn--danger"
+                        disabled={!canCreateSettings}
+                        style={!canCreateSettings ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                         onClick={async () => {
+                          if (!canCreateSettings) return;
                           try {
                             setRemovingLogo(true);
                             const updated = await companySettingsService.updateCompanyProfile({ logoUrl: '', faviconUrl: '' });
@@ -3069,7 +3105,7 @@ export default function CompanySettingsPage() {
                             setRemovingLogo(false);
                           }
                         }}
-                        title="Remove logo"
+                        title={!canCreateSettings ? noPermissionTitle : "Remove logo"}
                       >
                         <Trash2 size={14} />
                       </button>
@@ -4460,7 +4496,7 @@ export default function CompanySettingsPage() {
 
                           <div className="cs-dt-upload-strip">
                             <div className="cs-dt-upload-strip__left">
-                              <FileText size={16} className="cs-dt-upload-strip__icon" />
+                                      <FileText size={16} className="cs-dt-upload-strip__icon" />
                               <div>
                                 <div className="cs-dt-upload-strip__label">Upload PDF/DOC (optional)</div>
                                 <div className="cs-dt-upload-strip__desc">Upload a document file or extract text into the rich editor below</div>
@@ -4472,7 +4508,7 @@ export default function CompanySettingsPage() {
                                   <FileText size={13} />
                                   <span>{selectedDocTemplate.fileName || 'Uploaded document'}</span>
                                   <a href={selectedDocTemplate.fileUrl} target="_blank" rel="noopener noreferrer" className="cs-dt-upload-strip__view">View</a>
-                                  <button type="button" className="cs-dt-upload-strip__remove" onClick={handleRemoveDocumentFile} disabled={docFileUploading} title="Remove">
+                                  <button type="button" className="cs-dt-upload-strip__remove" onClick={handleRemoveDocumentFile} disabled={docFileUploading || !canCreateSettings} title="Remove">
                                     <Trash2 size={12} />
                                   </button>
                                 </div>

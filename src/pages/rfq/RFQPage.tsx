@@ -239,6 +239,8 @@ const PRIORITY_CLASS: Record<string, string> = {
 export default function RFQPage() {
   const navigate = useNavigate();
   const { hasPermission } = useAuth();
+  const canCreateRFQ = hasPermission('RFQ Management', 'canCreate') || hasPermission('RFQ', 'canCreate');
+  const canApproveRFQ = hasPermission('RFQ Management', 'canApprove') || hasPermission('RFQ', 'canApprove') || canCreateRFQ;
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [currentPage, setCurrentPage] = useState(1);
@@ -667,7 +669,7 @@ export default function RFQPage() {
           className={`rfq-page__create-btn ${!hasPermission('RFQ', 'canCreate') ? 'rfq-page__create-btn--disabled' : ''}`}
           onClick={hasPermission('RFQ', 'canCreate') ? () => navigate('/rfq/create') : undefined}
           disabled={!hasPermission('RFQ', 'canCreate')}
-          title={!hasPermission('RFQ', 'canCreate') ? 'You do not have permission to create RFQs' : 'Create new RFQ'}
+          title={!hasPermission('RFQ', 'canCreate') ? 'Admin has not allowed this action. You do not have permission to create RFQs.' : 'Create new RFQ'}
           style={!hasPermission('RFQ', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
         >
           <Plus size={18} /> New RFQ
@@ -736,13 +738,20 @@ export default function RFQPage() {
             </button>
             <button
               type="button"
+              disabled={!canCreateRFQ}
               style={{
-                background: '#dc2626', color: '#ffffff', border: 'none',
+                background: canCreateRFQ ? '#dc2626' : '#64748b',
+                color: '#ffffff', border: 'none',
                 padding: '6px 14px', fontSize: 12, fontWeight: 600,
-                borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+                borderRadius: 'var(--radius-sm)',
+                cursor: canCreateRFQ ? 'pointer' : 'not-allowed',
+                opacity: canCreateRFQ ? 1 : 0.5,
+                pointerEvents: 'auto',
                 display: 'inline-flex', alignItems: 'center', gap: 6
               }}
+              title={!canCreateRFQ ? "Admin has not allowed this action. You do not have permission to delete RFQs." : undefined}
               onClick={(e) => {
+                if (!canCreateRFQ) return;
                 (e.currentTarget as HTMLElement).blur();
                 setShowBulkDeleteModal(true);
               }}
@@ -777,10 +786,11 @@ export default function RFQPage() {
                     <th style={{ width: '42px', textAlign: 'center' }}>
                       <input
                         type="checkbox"
-                        style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--primary-500)' }}
+                        disabled={!canCreateRFQ}
+                        style={{ width: 16, height: 16, cursor: canCreateRFQ ? 'pointer' : 'not-allowed', accentColor: 'var(--primary-500)' }}
                         checked={isAllSelected}
-                        onChange={handleToggleSelectAll}
-                        title="Select All RFQs"
+                        onChange={canCreateRFQ ? handleToggleSelectAll : undefined}
+                        title={!canCreateRFQ ? "Admin has not allowed this action. You do not have permission to select RFQs." : "Select All RFQs"}
                       />
                     </th>
                     {visibleColumns.map((col) => {
@@ -839,9 +849,11 @@ export default function RFQPage() {
                         <td style={{ textAlign: 'center', width: '42px' }} onClick={(e) => e.stopPropagation()}>
                           <input
                             type="checkbox"
-                            style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--primary-500)' }}
+                            disabled={!canCreateRFQ}
+                            style={{ width: 16, height: 16, cursor: canCreateRFQ ? 'pointer' : 'not-allowed', accentColor: 'var(--primary-500)' }}
                             checked={isSelected}
-                            onChange={() => handleToggleSelectRow(String(rfq.id))}
+                            onChange={() => canCreateRFQ && handleToggleSelectRow(String(rfq.id))}
+                            title={!canCreateRFQ ? "Admin has not allowed this action. You do not have permission to select RFQs." : undefined}
                           />
                         </td>
                         {visibleColumns.map((col) => {
@@ -864,22 +876,28 @@ export default function RFQPage() {
                               <>
                                 <button
                                   className="rfq-table__action-btn rfq-table__action-btn--approve"
-                                  title="Approve RFQ"
-                                  onClick={() => openApprovalAction(rfq, 'approve')}
+                                  title={!canApproveRFQ ? "Admin has not allowed this action. You do not have permission to approve RFQs." : "Approve RFQ"}
+                                  onClick={() => canApproveRFQ && openApprovalAction(rfq, 'approve')}
+                                  disabled={!canApproveRFQ}
+                                  style={!canApproveRFQ ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                                 >
                                   <ThumbsUp size={15} />
                                 </button>
                                 <button
                                   className="rfq-table__action-btn rfq-table__action-btn--reject"
-                                  title="Reject RFQ"
-                                  onClick={() => openApprovalAction(rfq, 'reject')}
+                                  title={!canApproveRFQ ? "Admin has not allowed this action. You do not have permission to reject RFQs." : "Reject RFQ"}
+                                  onClick={() => canApproveRFQ && openApprovalAction(rfq, 'reject')}
+                                  disabled={!canApproveRFQ}
+                                  style={!canApproveRFQ ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                                 >
                                   <ThumbsDown size={15} />
                                 </button>
                                 <button
                                   className="rfq-table__action-btn rfq-table__action-btn--return"
-                                  title="Return RFQ"
-                                  onClick={() => openApprovalAction(rfq, 'return')}
+                                  title={!canApproveRFQ ? "Admin has not allowed this action. You do not have permission to return RFQs." : "Return RFQ"}
+                                  onClick={() => canApproveRFQ && openApprovalAction(rfq, 'return')}
+                                  disabled={!canApproveRFQ}
+                                  style={!canApproveRFQ ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                                 >
                                   <RotateCcw size={15} />
                                 </button>
@@ -949,22 +967,28 @@ export default function RFQPage() {
                         <>
                           <button
                             className="rfq-table__action-btn rfq-table__action-btn--approve"
-                            title="Approve RFQ"
-                            onClick={() => openApprovalAction(rfq, 'approve')}
+                            title={!canApproveRFQ ? "Admin has not allowed this action. You do not have permission to approve RFQs." : "Approve RFQ"}
+                            onClick={() => canApproveRFQ && openApprovalAction(rfq, 'approve')}
+                            disabled={!canApproveRFQ}
+                            style={!canApproveRFQ ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                           >
                             <ThumbsUp size={14} />
                           </button>
                           <button
                             className="rfq-table__action-btn rfq-table__action-btn--reject"
-                            title="Reject RFQ"
-                            onClick={() => openApprovalAction(rfq, 'reject')}
+                            title={!canApproveRFQ ? "Admin has not allowed this action. You do not have permission to reject RFQs." : "Reject RFQ"}
+                            onClick={() => canApproveRFQ && openApprovalAction(rfq, 'reject')}
+                            disabled={!canApproveRFQ}
+                            style={!canApproveRFQ ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                           >
                             <ThumbsDown size={14} />
                           </button>
                           <button
                             className="rfq-table__action-btn rfq-table__action-btn--return"
-                            title="Return RFQ"
-                            onClick={() => openApprovalAction(rfq, 'return')}
+                            title={!canApproveRFQ ? "Admin has not allowed this action. You do not have permission to return RFQs." : "Return RFQ"}
+                            onClick={() => canApproveRFQ && openApprovalAction(rfq, 'return')}
+                            disabled={!canApproveRFQ}
+                            style={!canApproveRFQ ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                           >
                             <RotateCcw size={14} />
                           </button>

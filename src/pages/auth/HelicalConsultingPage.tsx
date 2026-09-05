@@ -61,6 +61,62 @@ export interface CompanyOverviewItem {
   } | null;
 }
 
+// ─── AI Predictive Similarity Matching Helpers ──────────────────────────────
+function levenshteinDistance(a: string, b: string): number {
+  const matrix: number[][] = [];
+  for (let i = 0; i <= a.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
+
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+  return matrix[a.length][b.length];
+}
+
+function calculateFuzzyNameMatchScore(s1: string, s2: string): number {
+  const norm = (str?: string) => (str || '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/\b(pvt|private|ltd|limited|llc|inc|co|corp|corporation|group|consulting|services)\b\.?/gi, '')
+    .trim();
+
+  const n1 = norm(s1);
+  const n2 = norm(s2);
+
+  if (!n1 || !n2) return 0;
+  if (n1 === n2) return 100;
+  if (n1.includes(n2) || n2.includes(n1)) return 85;
+
+  const maxLen = Math.max(n1.length, n2.length);
+  const dist = levenshteinDistance(n1, n2);
+  const charSim = Math.max(0, Math.round(((maxLen - dist) / maxLen) * 100));
+
+  const words1 = n1.split(' ').filter(Boolean);
+  const words2 = n2.split(' ').filter(Boolean);
+  let wordSimSum = 0;
+  words1.forEach((w1) => {
+    let maxW = 0;
+    words2.forEach((w2) => {
+      const wMax = Math.max(w1.length, w2.length);
+      const wDist = levenshteinDistance(w1, w2);
+      const wSim = Math.max(0, ((wMax - wDist) / wMax) * 100);
+      if (wSim > maxW) maxW = wSim;
+    });
+    wordSimSum += maxW;
+  });
+  const wordSim = Math.round(wordSimSum / Math.max(words1.length, words2.length));
+
+  return Math.max(charSim, wordSim);
+}
+
 export default function HelicalConsultingPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -179,6 +235,55 @@ export default function HelicalConsultingPage() {
     if (!phone.trim()) return null;
     return /^[0-9\s\-()]{6,20}$/.test(phone.trim());
   }, [phone]);
+
+  // Live Predictive Analysis for Company Code
+  const codeMatchAnalysis = useMemo(() => {
+    const inputCode = companyCode.trim().toUpperCase();
+    if (!inputCode || inputCode.length < 2) return null;
+
+    for (const c of companiesList) {
+      const existingCode = c.companyCode.toUpperCase();
+      if (inputCode === existingCode) {
+        return {
+          type: 'EXACT_CODE',
+          matchedCompany: c,
+          score: 100,
+          message: `Company Code '${inputCode}' is ALREADY REGISTERED for '${c.companyName}'.`,
+        };
+      }
+    }
+    return null;
+  }, [companyCode, companiesList]);
+
+  // Live Predictive Analysis for Company Name
+  const nameMatchAnalysis = useMemo(() => {
+    const inputName = companyName.trim();
+    if (!inputName || inputName.length < 2) return null;
+
+    let bestScore = 0;
+    let bestMatch: CompanyOverviewItem | null = null;
+
+    for (const c of companiesList) {
+      const score = calculateFuzzyNameMatchScore(inputName, c.companyName);
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = c;
+      }
+    }
+
+    if (bestMatch && bestScore >= 60) {
+      const isExact = bestScore >= 95 || inputName.toLowerCase().trim() === bestMatch.companyName.toLowerCase().trim();
+      return {
+        matchedCompany: bestMatch,
+        score: bestScore,
+        isExact,
+        message: isExact
+          ? `Organization '${bestMatch.companyName}' is ALREADY REGISTERED under Code '${bestMatch.companyCode}'.`
+          : `AI Predictive Similarity Alert: ${bestScore}% match with existing organization '${bestMatch.companyName}' (Code: ${bestMatch.companyCode}).`,
+      };
+    }
+    return null;
+  }, [companyName, companiesList]);
 
   // Fetch Companies Overview from Backend
   const fetchCompaniesOverview = async () => {
@@ -302,6 +407,22 @@ export default function HelicalConsultingPage() {
       setError('Company Code must be between 2 and 20 characters');
       return;
     }
+    if (codeMatchAnalysis?.type === 'EXACT_CODE') {
+      setError(`Cannot register company: Company Code '${cleanCode}' is already registered for organization '${codeMatchAnalysis.matchedCompany.companyName}'. Please use a unique Company Code.`);
+      return;
+    }
+    if (!companyName.trim()) {
+      setError('Company Name is required (e.g. Tata Steel Ltd)');
+      return;
+    }
+    if (nameMatchAnalysis?.isExact) {
+      setError(`Cannot register company: Company Name '${companyName.trim()}' is already registered under Company Code '${nameMatchAnalysis.matchedCompany.companyCode}'. Please use a unique Company Name.`);
+      return;
+    }
+    if (!maxUsers.trim() || parseInt(maxUsers, 10) < 1) {
+      setError('User Limit (Max Users) is required (e.g. 50)');
+      return;
+    }
     if (!fullName.trim()) {
       setError('Admin Full Name is required');
       return;
@@ -315,17 +436,33 @@ export default function HelicalConsultingPage() {
       setError('Please enter a valid email address (e.g. name@company.com)');
       return;
     }
-    const PHONE_REGEX = /^\+?[0-9\s\-()]{7,25}$/;
-    if (phone.trim() && !PHONE_REGEX.test(phone.trim())) {
-      setError('Please enter a valid phone number (e.g. +91 9876543210 or 0700000000)');
+    if (!password) {
+      setError('Password is required');
       return;
     }
     if (password.length < 6) {
       setError('Password must be at least 6 characters');
       return;
     }
+    if (!confirmPassword) {
+      setError('Confirm Password is required');
+      return;
+    }
     if (password !== confirmPassword) {
       setError('Passwords do not match');
+      return;
+    }
+    if (!department.trim()) {
+      setError('Department is required (e.g. Management)');
+      return;
+    }
+    if (!phone.trim()) {
+      setError('Phone Number is required');
+      return;
+    }
+    const PHONE_REGEX = /^\+?[0-9\s\-()]{7,25}$/;
+    if (!PHONE_REGEX.test(phone.trim())) {
+      setError('Please enter a valid phone number (e.g. 9876543210)');
       return;
     }
 
@@ -336,15 +473,15 @@ export default function HelicalConsultingPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           companyCode: cleanCode,
-          companyName: companyName.trim() || cleanCode,
+          companyName: companyName.trim(),
           maxUsers: parseInt(maxUsers, 10) || 50,
           fullName: fullName.trim(),
           username: username.trim(),
           email: email.trim().toLowerCase(),
           password,
           roleName: 'Super Admin',
-          department: department.trim() || 'Management',
-          phone: phone.trim() ? `${countryCode} ${phone.trim()}` : undefined,
+          department: department.trim(),
+          phone: `${countryCode} ${phone.trim()}`,
         }),
       });
 
@@ -646,6 +783,88 @@ export default function HelicalConsultingPage() {
 
           {/* SAP Fiori Styled Form */}
           <form className="sap-login__form" onSubmit={handleSubmit} style={{ gap: '20px' }}>
+            {/* AI Predictive Duplicate Analysis Warning Card */}
+            {(codeMatchAnalysis || nameMatchAnalysis) && (
+              <div style={{
+                background: (codeMatchAnalysis?.type === 'EXACT_CODE' || nameMatchAnalysis?.isExact)
+                  ? 'rgba(239, 68, 68, 0.08)'
+                  : 'rgba(245, 158, 11, 0.08)',
+                border: (codeMatchAnalysis?.type === 'EXACT_CODE' || nameMatchAnalysis?.isExact)
+                  ? '1.5px solid #ef4444'
+                  : '1.5px solid #f59e0b',
+                borderRadius: 'var(--radius-sm, 8px)',
+                padding: '14px 18px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '12px',
+                animation: 'sapSlideDown 0.2s ease-out'
+              }}>
+                <div style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  background: (codeMatchAnalysis?.type === 'EXACT_CODE' || nameMatchAnalysis?.isExact)
+                    ? 'rgba(239, 68, 68, 0.15)'
+                    : 'rgba(245, 158, 11, 0.15)',
+                  color: (codeMatchAnalysis?.type === 'EXACT_CODE' || nameMatchAnalysis?.isExact)
+                    ? '#ef4444'
+                    : '#f59e0b',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  {(codeMatchAnalysis?.type === 'EXACT_CODE' || nameMatchAnalysis?.isExact) ? <AlertTriangle size={20} /> : <Sparkles size={20} />}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{
+                    fontSize: '13px',
+                    fontWeight: '700',
+                    color: (codeMatchAnalysis?.type === 'EXACT_CODE' || nameMatchAnalysis?.isExact) ? '#ef4444' : '#f59e0b',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '8px',
+                    marginBottom: '4px'
+                  }}>
+                    <span>
+                      {(codeMatchAnalysis?.type === 'EXACT_CODE' || nameMatchAnalysis?.isExact)
+                        ? '🚫 Registration Blocked: Duplicate Organization Detected'
+                        : '⚡ AI Predictive Similarity Risk'}
+                    </span>
+                    {nameMatchAnalysis && (
+                      <span style={{
+                        fontSize: '11px',
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        background: nameMatchAnalysis.isExact ? 'rgba(239, 68, 68, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                        fontWeight: '800'
+                      }}>
+                        {nameMatchAnalysis.score}% Match Confidence
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-primary)', lineHeight: '1.4' }}>
+                    {codeMatchAnalysis && <div>• {codeMatchAnalysis.message}</div>}
+                    {nameMatchAnalysis && <div>• {nameMatchAnalysis.message}</div>}
+                  </div>
+                  {((codeMatchAnalysis?.matchedCompany) || (nameMatchAnalysis?.matchedCompany)) && (
+                    <div style={{
+                      marginTop: '8px',
+                      fontSize: '11px',
+                      color: 'var(--text-secondary)',
+                      background: 'var(--surface)',
+                      padding: '6px 10px',
+                      borderRadius: '4px',
+                      border: '1px solid var(--border)'
+                    }}>
+                      <strong>Registered Organization:</strong> {(codeMatchAnalysis?.matchedCompany || nameMatchAnalysis?.matchedCompany)?.companyName} | Code: <strong style={{ color: 'var(--primary-500)', fontFamily: 'var(--font-mono)' }}>{(codeMatchAnalysis?.matchedCompany || nameMatchAnalysis?.matchedCompany)?.companyCode}</strong> | Super Admin: {(codeMatchAnalysis?.matchedCompany || nameMatchAnalysis?.matchedCompany)?.superAdmin?.email || 'N/A'}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Card Section 1: Organization Info */}
             <div style={{
               background: 'var(--surface-card)',
@@ -677,7 +896,7 @@ export default function HelicalConsultingPage() {
                   <input
                     id="company-code"
                     type="text"
-                    className="sap-field__input"
+                    className={`sap-field__input ${codeMatchAnalysis?.type === 'EXACT_CODE' ? 'sap-field__input--error' : ''}`}
                     placeholder="e.g. TATA"
                     value={companyCode}
                     onChange={(e) => setCompanyCode(e.target.value.toUpperCase())}
@@ -686,22 +905,44 @@ export default function HelicalConsultingPage() {
                     required
                   />
                   <span style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '3px', display: 'block' }}>Unique ID (Auto uppercase)</span>
+                  {codeMatchAnalysis?.type === 'EXACT_CODE' && (
+                    <span style={{ fontSize: '11px', color: '#ef4444', marginTop: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                      <XCircle size={12} /> Code ALREADY REGISTERED for '{codeMatchAnalysis.matchedCompany.companyName}'
+                    </span>
+                  )}
                 </div>
 
                 <div className="sap-field">
                   <label className="sap-field__label" htmlFor="company-name">
-                    Company Name
+                    Company Name <span className="sap-field__required">*</span>
                   </label>
                   <input
                     id="company-name"
                     type="text"
-                    className="sap-field__input"
+                    className={`sap-field__input ${nameMatchAnalysis?.isExact ? 'sap-field__input--error' : ''}`}
                     placeholder="e.g. Tata Steel Ltd"
                     value={companyName}
                     onChange={(e) => setCompanyName(e.target.value)}
                     disabled={loading}
+                    required
                   />
                   <span style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '3px', display: 'block' }}>Display Brand Name</span>
+                  {nameMatchAnalysis && (
+                    <span style={{
+                      fontSize: '11px',
+                      color: nameMatchAnalysis.isExact ? '#ef4444' : '#f59e0b',
+                      marginTop: '4px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      fontWeight: '600'
+                    }}>
+                      {nameMatchAnalysis.isExact ? <XCircle size={12} /> : <Sparkles size={12} />}
+                      {nameMatchAnalysis.isExact
+                        ? `Organization ALREADY REGISTERED (Code: ${nameMatchAnalysis.matchedCompany.companyCode})`
+                        : `Predictive Match (${nameMatchAnalysis.score}%): '${nameMatchAnalysis.matchedCompany.companyName}'`}
+                    </span>
+                  )}
                 </div>
 
                 <div className="sap-field">
@@ -854,10 +1095,12 @@ export default function HelicalConsultingPage() {
               </div>
             </div>
 
-            {/* Optional Fields Row */}
+            {/* Mandatory Additional Fields Row */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
               <div className="sap-field">
-                <label className="sap-field__label" htmlFor="admin-dept">Department</label>
+                <label className="sap-field__label" htmlFor="admin-dept">
+                  Department <span className="sap-field__required">*</span>
+                </label>
                 <input
                   id="admin-dept"
                   type="text"
@@ -866,11 +1109,14 @@ export default function HelicalConsultingPage() {
                   value={department}
                   onChange={(e) => setDepartment(e.target.value)}
                   disabled={loading}
+                  required
                 />
               </div>
 
               <div className="sap-field">
-                <label className="sap-field__label" htmlFor="admin-phone">Phone Number</label>
+                <label className="sap-field__label" htmlFor="admin-phone">
+                  Phone Number <span className="sap-field__required">*</span>
+                </label>
                 <PhoneInput
                   countryCode={countryCode}
                   onCountryCodeChange={setCountryCode}
@@ -896,14 +1142,22 @@ export default function HelicalConsultingPage() {
             <button
               type="submit"
               className="sap-login__submit"
-              disabled={loading}
-              style={{ marginTop: '8px' }}
+              disabled={loading || codeMatchAnalysis?.type === 'EXACT_CODE' || nameMatchAnalysis?.isExact}
+              style={{
+                marginTop: '8px',
+                opacity: (codeMatchAnalysis?.type === 'EXACT_CODE' || nameMatchAnalysis?.isExact) ? 0.55 : 1,
+                cursor: (codeMatchAnalysis?.type === 'EXACT_CODE' || nameMatchAnalysis?.isExact) ? 'not-allowed' : 'pointer'
+              }}
             >
               {loading ? (
                 <span className="sap-login__spinner" />
               ) : (
                 <>
-                  <span>Create Company & Provision Admin</span>
+                  <span>
+                    {(codeMatchAnalysis?.type === 'EXACT_CODE' || nameMatchAnalysis?.isExact)
+                      ? 'Duplicate Company - Registration Blocked'
+                      : 'Create Company & Provision Admin'}
+                  </span>
                   <ArrowRight size={18} style={{ marginLeft: '8px' }} />
                 </>
               )}

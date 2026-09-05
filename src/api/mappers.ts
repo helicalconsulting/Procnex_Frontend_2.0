@@ -163,7 +163,7 @@ function safeString(val: unknown, fallback = '—'): string {
 
 export function mapVendorToTableRow(v: Vendor & Record<string, unknown>): VendorTableRow {
   const raw = v as Record<string, unknown>;
-  const name = safeString(raw.name, 'Vendor');
+  const name = safeString(raw.name || raw.companyName || raw.vendorName || raw.contactPerson, 'Vendor');
   const email = safeString(raw.email, '');
   const phone = safeString(raw.phone, '—');
   const contactPerson = safeString(raw.contactPerson, name);
