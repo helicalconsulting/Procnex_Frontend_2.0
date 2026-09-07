@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Plus, Trash2, Check, AlertTriangle, FileText } from 'lucide-react';
 import { vendorPortalService, type PaymentPlan } from '../../services/vendorPortalService';
 
@@ -130,10 +131,10 @@ export default function CustomPaymentPlanModal({ onClose, onSaved, editPlan }: C
     }
   }, [planName, milestones, validationErrors, onSaved, onClose, isEditing, editPlan]);
 
-  return (
-    <div className="vquot-modal-backdrop" onClick={onClose} style={{ zIndex: 10001 }}>
+  return createPortal(
+    <div className="vquot-modal-backdrop custom-plan-modal-backdrop" onClick={onClose} style={{ zIndex: 999998 }}>
       <div
-        className="vquot-modal vquot-modal--open"
+        className="vquot-modal vquot-modal--open custom-plan-modal"
         style={{
           position: 'fixed',
           top: '50%',
@@ -144,7 +145,7 @@ export default function CustomPaymentPlanModal({ onClose, onSaved, editPlan }: C
           maxHeight: 'calc(100vh - 80px)',
           display: 'flex',
           flexDirection: 'column',
-          zIndex: 10002,
+          zIndex: 999999,
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -312,6 +313,7 @@ export default function CustomPaymentPlanModal({ onClose, onSaved, editPlan }: C
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

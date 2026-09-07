@@ -26,7 +26,7 @@ const backdropStyle: React.CSSProperties = {
   inset: 0,
   background: 'rgba(0,0,0,0.55)',
   backdropFilter: 'blur(4px)',
-  zIndex: 99999,
+  zIndex: 999998,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -44,7 +44,7 @@ const dialogStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   overflow: 'hidden',
-  zIndex: 100000,
+  zIndex: 999999,
   animation: 'vppFadeIn 0.2s ease',
 };
 
@@ -177,9 +177,10 @@ function ViewPaymentPlanModalInner({ plan, onClose }: ViewPaymentPlanModalProps)
   const isTotalValid = Math.abs(totalAllocation - 100) < 0.01;
 
   return (
-    <div style={backdropStyle} onClick={onClose}>
+    <div className="vquot-modal-backdrop view-plan-modal-backdrop" style={backdropStyle} onClick={onClose}>
       {/* Dialog */}
       <div
+        className="vquot-modal view-plan-modal"
         style={dialogStyle}
         onClick={(e) => e.stopPropagation()}
         role="dialog"

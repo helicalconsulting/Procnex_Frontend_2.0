@@ -338,6 +338,7 @@ async function mockResubmitQuotation(rfqId: string, payload: SubmitQuotationPayl
       versionNumber: prevQuote.versionNumber || (prevHistory.length + 1),
       qNo: `Q${prevQuote.versionNumber || (prevHistory.length + 1)}`,
       totalPrice: prevQuote.totalPrice,
+      totalPriceNum: typeof prevQuote.totalPrice === 'number' ? prevQuote.totalPrice : ((prevQuote as any).totalPriceNum ?? (Number(prevQuote.totalPrice) || 0)),
       currency: prevQuote.currency,
       leadTimeDays: prevQuote.leadTimeDays,
       paymentTerms: prevQuote.paymentTerms,

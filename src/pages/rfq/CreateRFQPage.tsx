@@ -322,9 +322,11 @@ export default function CreateRFQPage() {
   const addCustomField = useCallback(() => {
     setCustomFields((prev) => [
       ...prev,
-      { id: `cf_${Date.now()}`, fieldName: '', fieldType: 'number', required: false, weightage: 0 },
+      { id: `cf_${Date.now()}`, fieldName: '', fieldType: 'text', required: false, weightage: 0 },
     ]);
   }, []);
+
+
 
   const removeCustomField = useCallback((id: string) => {
     setCustomFields((prev) => prev.filter((cf) => cf.id !== id));

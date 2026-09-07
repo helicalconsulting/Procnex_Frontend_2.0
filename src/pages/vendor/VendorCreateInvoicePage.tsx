@@ -66,9 +66,15 @@ export default function VendorCreateInvoicePage() {
   const [selectedGrnId, setSelectedGrnId] = useState<string>(() => grnIdParam || '');
   const [grnOptions, setGrnOptions] = useState<GoodsReceivedNote[]>([]);
 
-  const [invoiceNumber, setInvoiceNumber] = useState<string>(
-    () => `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`
-  );
+  const [invoiceNumber, setInvoiceNumber] = useState<string>('');
+
+  useEffect(() => {
+    if (!invoiceNumber) {
+      companySettingsService.generateNextSequence('INVOICE')
+        .then((res) => { if (res?.formattedCode) setInvoiceNumber(res.formattedCode); })
+        .catch(() => {});
+    }
+  }, []);
   const [invoiceDate, setInvoiceDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState<string>(() => {
     const d = new Date();

@@ -4,6 +4,7 @@ import { useServiceData } from '../../hooks/useServiceData';
 import { vendorService } from '../../services/vendorService';
 import { localDataService } from '../../services/localDataService';
 import { apiRequest } from '../../api/client';
+import { companySettingsService } from '../../services/companySettingsService';
 import {
   ArrowLeft,
   CreditCard,
@@ -60,7 +61,15 @@ export default function CreatePaymentVoucherPage() {
   );
 
   // Form State
-  const [voucherNumber] = useState<string>(() => `VOU-2026-${Math.floor(1000 + Math.random() * 9000)}`);
+  const [voucherNumber, setVoucherNumber] = useState<string>('');
+
+  useEffect(() => {
+    if (!voucherNumber) {
+      companySettingsService.generateNextSequence('PAYMENT_VOUCHER')
+        .then((res) => { if (res?.formattedCode) setVoucherNumber(res.formattedCode); })
+        .catch(() => {});
+    }
+  }, []);
   const [paymentMethod, setPaymentMethod] = useState<string>('NEFT');
   const [selectedVendorId, setSelectedVendorId] = useState<string>('');
   const [vendorName, setVendorName] = useState<string>('');

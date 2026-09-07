@@ -793,6 +793,21 @@ body.modal-open .app-layout__content {
   opacity: 1 !important;
 }
 
+/* ─── Stacked Sub-Modals & Custom Plan Dialogs (Always Above Parent Modals) ─── */
+.custom-plan-modal-backdrop,
+.view-plan-modal-backdrop,
+.vquot-modal-backdrop.custom-plan-modal-backdrop,
+.vquot-modal-backdrop.view-plan-modal-backdrop {
+  z-index: 999998 !important;
+}
+
+.custom-plan-modal,
+.view-plan-modal,
+.vquot-modal.custom-plan-modal,
+.vquot-modal.view-plan-modal {
+  z-index: 999999 !important;
+}
+
 /* ─── SAP Fiori Global Sharp Edges Enforcement (4px Radius Standard) ─── */
 [class*="-card"],
 [class*="__card"],

@@ -73,6 +73,7 @@ interface MockQuotation {
   vendorQuotationNumber?: string;
   parentQuotationId?: string;
   isLatestVersion?: boolean;
+  versionHistory?: any[];
 }
 
 interface QuotColDef {
@@ -306,6 +307,7 @@ function mapQuotationToRow(q: Quotation): MockQuotation {
     qNo: qNumber,
     versionNumber: vNum,
     vendorQuotationNumber: (q as any).vendorQuotationNumber || (q as any).quotationNumber || (q as any).vendorQuoteNumber,
+    versionHistory: (q as any).versionHistory || (q as any).version_history || [],
   };
 }
 
@@ -511,17 +513,22 @@ function ViewQuotationModal({
   // Fetch full quotation data including items and RFQ details
   useEffect(() => {
     const fetchData = async () => {
+      const qItems = (q as any).items || [];
+      if (Array.isArray(qItems) && qItems.length > 0) {
+        setSelectedItems(new Set(qItems.map((i: any) => i.id || i.rfqItemId || String(i.itemName))));
+      }
       try {
-        const data = await quotationService.getById(q.id);
-        if (data) {
-          setFullQuot(data);
-          // Pre-select items that were previously selected
-          const prevSelected: string[] = (data as any).selectedItemIds || [];
-          if (prevSelected.length > 0) {
-            setSelectedItems(new Set(prevSelected));
-          } else if (data.items && data.items.length > 0) {
-            // Default: all items selected
-            setSelectedItems(new Set(data.items.map((i: any) => i.id)));
+        const numId = typeof q.id === 'number' ? q.id : parseInt(String(q.id).replace(/\D/g, ''), 10);
+        if (!isNaN(numId) && numId > 0 && !String(q.id).includes('-v')) {
+          const data = await quotationService.getById(numId);
+          if (data) {
+            setFullQuot(data);
+            const prevSelected: string[] = (data as any).selectedItemIds || [];
+            if (prevSelected.length > 0) {
+              setSelectedItems(new Set(prevSelected));
+            } else if (data.items && data.items.length > 0) {
+              setSelectedItems(new Set(data.items.map((i: any) => i.id)));
+            }
           }
         }
       } catch (err) {
@@ -572,19 +579,23 @@ function ViewQuotationModal({
 
   const vendor = fullQuot?.vendor || { name: q.vendorName, email: q.vendorEmail };
   const rfq = fullQuot?.rfq || { rfqNumber: q.rfqNumber, title: '', description: '', priority: '', department: '' };
-  const items = fullQuot?.items || [];
+  const items = fullQuot?.items || (q as any).items || [];
   const attachments = fullQuot?.attachments || q.attachments || [];
   const defCur = q.currency || DEFAULT_CURRENCY;
   // Only convert when user explicitly selected a display currency (not when falling back to company default)
   const isConverting = viewDisplayCurrency !== '' && viewDisplayCurrency !== defCur;
   const displayCur = isConverting ? viewDisplayCurrency : defCur;
 
-  const selectedTotal = useMemo(
-    () => items
-      .filter((i: { id: string }) => selectedItems.has(i.id))
-      .reduce((sum: number, i: { totalPrice: number }) => sum + Number(i.totalPrice), 0),
-    [items, selectedItems],
-  );
+  const selectedTotal = useMemo(() => {
+    if (items.length > 0 && selectedItems.size > 0) {
+      const sum = items
+        .filter((i: { id: string }) => selectedItems.has(i.id))
+        .reduce((sum: number, i: { totalPrice: number }) => sum + Number(i.totalPrice || 0), 0);
+      if (sum > 0) return sum;
+    }
+    const rawPrice = q.totalPriceNum ?? q.totalPrice ?? 0;
+    return typeof rawPrice === 'number' ? rawPrice : (parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) || 0);
+  }, [items, selectedItems, q.totalPriceNum, q.totalPrice]);
   const formatDate = (d: string) =>
     new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -661,7 +672,7 @@ function ViewQuotationModal({
   useEffect(() => {
     if (activeTab !== 'evaluation' || evalTabState.data || evalTabState.loading) return;
     // Wait for fullQuot to load first so we can read the correct rfqType
-    if (!fullQuot) return;
+    if (!fullQuot && !q) return;
     const fetchEval = async () => {
       setEvalTabState(prev => ({ ...prev, loading: true, error: null }));
       try {
@@ -3453,32 +3464,45 @@ export default function QuotationsPage() {
       // 1. Collect all actual distinct quotation records from sorted array (Q3, Q2, Q1...)
       const history: MockQuotation[] = sorted.slice(1).map((h, idx) => {
         const vNum = h.versionNumber || (maxVersionNum - 1 - idx);
-        const priceVal = Number(h.totalPriceNum ?? h.totalPrice ?? 0);
+        const rawPrice = h.totalPriceNum ?? h.totalPrice ?? 0;
+        const priceVal = typeof rawPrice === 'number' ? rawPrice : (parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) || 0);
         return {
           ...h,
-          totalPrice: priceVal,
+          totalPrice: priceVal.toLocaleString('en-IN'),
           totalPriceNum: priceVal,
+          leadTimeDays: h.leadTimeDays ?? latestRaw.leadTimeDays,
+          paymentTerms: h.paymentTerms || latestRaw.paymentTerms,
           qNo: h.qNo || `Q${vNum}`,
           isLatestVersion: false,
         };
       });
 
-      // 2. Extract snapshots from versionHistory if present on latestRaw
-      const vHistory = Array.isArray((latestRaw as any).versionHistory) ? (latestRaw as any).versionHistory : [];
+      // 2. Extract snapshots from versionHistory if present on latestRaw (or any item in sorted)
+      const vHistory = Array.isArray((latestRaw as any).versionHistory)
+        ? (latestRaw as any).versionHistory
+        : (quots.find(q => Array.isArray((q as any).versionHistory) && (q as any).versionHistory.length > 0) as any)?.versionHistory || [];
+
       vHistory.forEach((vh: any) => {
         if (vh && (vh.versionNumber || vh.qNo)) {
           const vNum = vh.versionNumber || parseInt(String(vh.qNo).replace(/\D/g, ''), 10) || 1;
           if (!history.some(h => (h.versionNumber || 1) === vNum)) {
-            const priceVal = Number(vh.totalPriceNum ?? vh.totalPrice ?? 0);
+            const rawPrice = vh.totalPriceNum ?? vh.totalPrice ?? 0;
+            const priceVal = typeof rawPrice === 'number' ? rawPrice : (parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) || 0);
+            const leadVal = vh.leadTimeDays ?? latestRaw.leadTimeDays;
+            const payTermsVal = vh.paymentTerms ?? latestRaw.paymentTerms;
             history.push({
               ...latestRaw,
               ...vh,
-              totalPrice: priceVal,
+              totalPrice: priceVal.toLocaleString('en-IN'),
               totalPriceNum: priceVal,
+              leadTimeDays: leadVal,
+              paymentTerms: payTermsVal,
               id: vh.id || `${latestRaw.id}-v${vNum}`,
               versionNumber: vNum,
               qNo: `Q${vNum}`,
               status: vh.status || 'RETURNED',
+              submittedAt: vh.submittedAt || latestRaw.submittedAt,
+              returnReason: vh.returnReason || vh.returnComment || latestRaw.returnReason,
               isLatestVersion: false,
             });
           }
@@ -3491,15 +3515,23 @@ export default function QuotationsPage() {
 
       for (let v = maxVersionNum - 1; v >= 1; v--) {
         if (!existingVersionNums.has(v)) {
+          const snapshot = vHistory.find((item: any) => (item.versionNumber || parseInt(String(item.qNo || '').replace(/\D/g, ''), 10)) === v);
+          const rawPrice = snapshot ? (snapshot.totalPriceNum ?? snapshot.totalPrice ?? 0) : 0;
+          const priceVal = typeof rawPrice === 'number' ? rawPrice : (parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) || 0);
           const syntheticId = `${latestRaw.id}-v${v}-history`;
           history.push({
             ...latestRaw,
+            ...(snapshot || {}),
             id: syntheticId,
             versionNumber: v,
             qNo: `Q${v}`,
-            status: 'RETURNED',
-            returnReason: latestRaw.returnReason || 'Quotation returned for revision by procurement team.',
-            submittedAt: latestRaw.submittedAt,
+            totalPrice: (priceVal || latestRaw.totalPriceNum || 0).toLocaleString('en-IN'),
+            totalPriceNum: priceVal || latestRaw.totalPriceNum || 0,
+            leadTimeDays: snapshot?.leadTimeDays ?? latestRaw.leadTimeDays,
+            paymentTerms: snapshot?.paymentTerms ?? latestRaw.paymentTerms,
+            status: snapshot?.status || 'RETURNED',
+            returnReason: snapshot?.returnReason || snapshot?.returnComment || latestRaw.returnReason || 'Quotation returned for revision by procurement team.',
+            submittedAt: snapshot?.submittedAt || latestRaw.submittedAt,
             isLatestVersion: false,
           });
         }
@@ -3811,13 +3843,6 @@ export default function QuotationsPage() {
           };
           setQuotations(prev => prev.map(updateFinalAccepted));
           setAllQuotations(prev => prev.map(updateFinalAccepted));
-          setAcceptedModalData({ quotation: { ...modalQuotation, status: 'ACCEPTED', isChainComplete: true, isFinalApprover: true }, isNextLevel: false, message: response?.message });
-        } else if (response?.message) {
-          if (type === 'accept') {
-            setAcceptedModalData(prev => prev ? { ...prev, message: response.message } : null);
-          } else {
-            setActionSuccessModalData(prev => prev ? { ...prev, message: response.message } : null);
-          }
         }
         reload();
         reloadAllQuotations();

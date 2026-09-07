@@ -400,47 +400,56 @@ export default function CompanySettingsPage() {
   const noPermissionTitle = "Admin has not allowed this action. You do not have permission to modify company settings.";
   const disabledActionStyle = !canCreateSettings ? { opacity: 0.6, cursor: 'not-allowed', pointerEvents: 'auto' as const } : undefined;
 
+  // Passcode & Access control check
+  const [isPasscodeProtected, setIsPasscodeProtected] = useState<boolean>(false);
+  const [isUnlocked, setIsUnlocked] = useState<boolean>(() => {
+    return sessionStorage.getItem('heliflow_cs_unlocked') === 'true';
+  });
+  const [checkingPasscodeStatus, setCheckingPasscodeStatus] = useState<boolean>(true);
+
+  const isDataFetchEnabled = isUnlocked || (!checkingPasscodeStatus && !isPasscodeProtected);
+
   // Data
   const { data: departments, loading, reload } = useServiceData(
     () => companySettingsService.listDepartments(),
     [] as Department[],
     [],
-    { cacheTtlMs: 60000 }
+    { cacheTtlMs: 60000, enabled: isDataFetchEnabled }
   );
 
   const { data: categories, reload: reloadCategories } = useServiceData(
     () => companySettingsService.listCategories(),
     [] as Category[],
     [],
-    { cacheTtlMs: 60000 }
+    { cacheTtlMs: 60000, enabled: isDataFetchEnabled }
   );
 
   const { data: units, reload: reloadUnits } = useServiceData(
     () => companySettingsService.listUnits(),
     [] as Unit[],
     [],
-    { cacheTtlMs: 60000 }
+    { cacheTtlMs: 60000, enabled: isDataFetchEnabled }
   );
 
   const { data: positions, reload: reloadPositions } = useServiceData(
     () => companySettingsService.listPositions(),
     [] as Position[],
     [],
-    { cacheTtlMs: 60000 }
+    { cacheTtlMs: 60000, enabled: isDataFetchEnabled }
   );
 
   const { data: paymentTerms, reload: reloadPaymentTerms } = useServiceData(
     () => companySettingsService.listPaymentTerms(),
     [] as PaymentTerm[],
     [],
-    { cacheTtlMs: 60000 }
+    { cacheTtlMs: 60000, enabled: isDataFetchEnabled }
   );
 
   const { data: requiredDocuments, loading: requiredDocsLoading, reload: reloadRequiredDocuments } = useServiceData(
     () => companySettingsService.listRequiredDocuments(),
     [] as RequiredDocument[],
     [],
-    { cacheTtlMs: 30000 }
+    { cacheTtlMs: 30000, enabled: isDataFetchEnabled }
   );
 
   // UI state
@@ -502,7 +511,14 @@ export default function CompanySettingsPage() {
         periodEndDate: edit.periodEndDate ? String(edit.periodEndDate) : null,
       });
       setSequences((prev) => prev.map((s) => s.entityType === entityType ? { ...s, ...updated } : s));
-      const meta = { SUPPLIER_CODE: 'Supplier Code', PURCHASE_ORDER: 'Purchase Order No.', RFQ: 'RFQ Number' } as Record<string, string>;
+      const meta = {
+        SUPPLIER_CODE: 'Supplier Code',
+        PURCHASE_ORDER: 'Purchase Order No.',
+        RFQ: 'RFQ Number',
+        INVOICE: 'Invoice Number',
+        CONTRACT: 'Contract Number',
+        PAYMENT_VOUCHER: 'Payment Voucher No.',
+      } as Record<string, string>;
       const prefix = resolvePlaceholders(String(edit.prefix ?? ''));
       const suffix = resolvePlaceholders(String(edit.suffix ?? ''));
       const num = Number(edit.nextNumber ?? 1);
@@ -581,6 +597,9 @@ export default function CompanySettingsPage() {
     SUPPLIER_CODE: { label: 'Supplier Code', desc: 'Auto-generated code assigned when a new supplier is created.' },
     PURCHASE_ORDER: { label: 'Purchase Order No.', desc: 'Sequential number assigned to each new Purchase Order.' },
     RFQ: { label: 'RFQ Number', desc: 'Sequential number assigned to each new Request for Quotation.' },
+    INVOICE: { label: 'Invoice Number', desc: 'Sequential number assigned to each new Purchase Invoice.' },
+    CONTRACT: { label: 'Contract Number', desc: 'Sequential number assigned to each new Contract.' },
+    PAYMENT_VOUCHER: { label: 'Payment Voucher No.', desc: 'Sequential number assigned to each new Payment Voucher.' },
   };
   const [search, setSearch] = useState('');
   const [expandedDept, setExpandedDept] = useState<Set<number>>(new Set());
@@ -629,10 +648,7 @@ export default function CompanySettingsPage() {
     })();
   }, []);
 
-  // ── Passcode Protection State (Default to false until status is verified from backend) ──
-  const [isPasscodeProtected, setIsPasscodeProtected] = useState<boolean>(false);
-  const [isUnlocked, setIsUnlocked] = useState<boolean>(false);
-  const [checkingPasscodeStatus, setCheckingPasscodeStatus] = useState<boolean>(true);
+  // ── Passcode Protection State ──
   const [lockPasscode, setLockPasscode] = useState<string>('');
   const [lockError, setLockError] = useState<string | null>(null);
   const [verifyingLock, setVerifyingLock] = useState<boolean>(false);
@@ -655,7 +671,8 @@ export default function CompanySettingsPage() {
         const res = await companySettingsService.getSettingsPasswordStatus();
         setIsPasscodeProtected(res.isPasswordProtected);
         if (res.isPasswordProtected) {
-          setIsUnlocked(false);
+          const sessionUnlocked = sessionStorage.getItem('heliflow_cs_unlocked') === 'true';
+          setIsUnlocked(sessionUnlocked);
         } else {
           setIsUnlocked(true);
         }
@@ -676,6 +693,7 @@ export default function CompanySettingsPage() {
     try {
       const res = await companySettingsService.verifySettingsPassword(lockPasscode.trim());
       if (res.verified) {
+        sessionStorage.setItem('heliflow_cs_unlocked', 'true');
         setIsUnlocked(true);
         setLockPasscode('');
       } else {
@@ -699,6 +717,7 @@ export default function CompanySettingsPage() {
       setPasscodeError(null);
       try {
         await companySettingsService.removeSettingsPassword(passcodeCurrent.trim());
+        sessionStorage.removeItem('heliflow_cs_unlocked');
         setIsPasscodeProtected(false);
         setIsUnlocked(true);
         setShowPasscodeModal(false);
@@ -731,6 +750,7 @@ export default function CompanySettingsPage() {
     setPasscodeError(null);
     try {
       await companySettingsService.updateSettingsPassword(passcodeNew.trim(), isPasscodeProtected ? passcodeCurrent.trim() : undefined);
+      sessionStorage.setItem('heliflow_cs_unlocked', 'true');
       setIsPasscodeProtected(true);
       setIsUnlocked(true);
       setShowPasscodeModal(false);
@@ -2467,6 +2487,96 @@ export default function CompanySettingsPage() {
   // ── Render Documents Tab (extracted for Oxc compatibility) ──
   
 
+
+  // ── Early Return for Passcode Protection Gate ──
+  if (checkingPasscodeStatus && !isUnlocked) {
+    return (
+      <div className="cs-lock-overlay">
+        <div className="cs-lock-card">
+          <div className="cs-lock-badge">
+            <Lock size={34} />
+          </div>
+          <h2 className="cs-lock-title">Verifying Access...</h2>
+          <p className="cs-lock-subtitle">
+            Checking security settings for Company Settings...
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
+            <Loader2 size={24} style={{ animation: 'spin 1s linear infinite', color: 'var(--primary-400, #38bdf8)' }} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isPasscodeProtected && !isUnlocked) {
+    return (
+      <div className="cs-lock-overlay">
+        <div className="cs-lock-card">
+          <div className="cs-lock-badge">
+            <Lock size={34} />
+          </div>
+
+          <h2 className="cs-lock-title">
+            Company Settings Security Lock
+          </h2>
+          <p className="cs-lock-subtitle">
+            Access to Company Settings is passcode protected by Super Admin. Please enter your passcode to unlock.
+          </p>
+
+          {lockError && (
+            <div style={{ marginBottom: 18, textAlign: 'left' }}>
+              <MessageStrip type="error" compact>
+                {lockError}
+              </MessageStrip>
+            </div>
+          )}
+
+          <form onSubmit={handleUnlock} className="cs-lock-form">
+            <div className="cs-passcode-input-group">
+              <label className="cs-passcode-label" htmlFor="settings-lock-passcode">
+                Security Passcode <span className="cs-passcode-label__req">*</span>
+              </label>
+              <div className="cs-passcode-input-wrapper">
+                <input
+                  id="settings-lock-passcode"
+                  type={showPasscodeText ? 'text' : 'password'}
+                  className="cs-passcode-input"
+                  placeholder="Enter passcode"
+                  value={lockPasscode}
+                  onChange={(e) => setLockPasscode(e.target.value)}
+                  autoFocus
+                  required
+                />
+                <button
+                  type="button"
+                  className="cs-passcode-toggle-btn"
+                  onClick={() => setShowPasscodeText(!showPasscodeText)}
+                  tabIndex={-1}
+                >
+                  {showPasscodeText ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="cs-lock-submit-btn"
+              disabled={verifyingLock || !lockPasscode.trim()}
+            >
+              {verifyingLock ? (
+                <span>Verifying Passcode…</span>
+              ) : (
+                <>
+                  <Key size={18} />
+                  <span>Unlock Company Settings</span>
+                </>
+              )}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`company-settings-page ${!canCreateSettings ? 'is-view-only' : ''}`}>
@@ -5326,7 +5436,7 @@ export default function CompanySettingsPage() {
               <div className="cs-section-header__left">
                 <h2><Hash size={17} /> Document Serialization</h2>
                 <p>
-                  Configure auto-generated number formats for Supplier Codes, Purchase Orders, and RFQs.
+                  Configure auto-generated number formats for Supplier Codes, Purchase Orders, RFQs, Invoices, Contracts, and Payment Vouchers.
                   Changes apply to all newly created records — existing records are not affected.
                 </p>
               </div>
@@ -5346,7 +5456,7 @@ export default function CompanySettingsPage() {
                   )}
 
                   <div className="cs-seq-grid">
-                    {(['SUPPLIER_CODE', 'PURCHASE_ORDER', 'RFQ'] as const).map((entityType) => {
+                    {(['SUPPLIER_CODE', 'PURCHASE_ORDER', 'RFQ', 'INVOICE', 'CONTRACT', 'PAYMENT_VOUCHER'] as const).map((entityType) => {
                       const meta = ENTITY_LABELS[entityType] ?? { label: entityType, desc: '' };
                       const edit = seqEdits[entityType] ?? {};
                       const isSaving = seqSaving === entityType;
@@ -5610,74 +5720,7 @@ export default function CompanySettingsPage() {
         />
       )}
 
-      {/* ── Passcode Lock Screen Overlay (Only shown if passcode protection is enabled by admin and locked) ── */}
-      {!checkingPasscodeStatus && isPasscodeProtected && !isUnlocked && (
-        <div className="cs-lock-overlay">
-          <div className="cs-lock-card">
-            <div className="cs-lock-badge">
-              <Lock size={34} />
-            </div>
 
-            <h2 className="cs-lock-title">
-              Company Settings Security Lock
-            </h2>
-            <p className="cs-lock-subtitle">
-              Access to Company Settings is passcode protected by Super Admin. Please enter your passcode to unlock.
-            </p>
-
-            {lockError && (
-              <div style={{ marginBottom: 18, textAlign: 'left' }}>
-                <MessageStrip type="error" compact>
-                  {lockError}
-                </MessageStrip>
-              </div>
-            )}
-
-            <form onSubmit={handleUnlock} className="cs-lock-form">
-              <div className="cs-passcode-input-group">
-                <label className="cs-passcode-label" htmlFor="settings-lock-passcode">
-                  Security Passcode <span className="cs-passcode-label__req">*</span>
-                </label>
-                <div className="cs-passcode-input-wrapper">
-                  <input
-                    id="settings-lock-passcode"
-                    type={showPasscodeText ? 'text' : 'password'}
-                    className="cs-passcode-input"
-                    placeholder="Enter passcode"
-                    value={lockPasscode}
-                    onChange={(e) => setLockPasscode(e.target.value)}
-                    autoFocus
-                    required
-                  />
-                  <button
-                    type="button"
-                    className="cs-passcode-toggle-btn"
-                    onClick={() => setShowPasscodeText(!showPasscodeText)}
-                    tabIndex={-1}
-                  >
-                    {showPasscodeText ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="cs-lock-submit-btn"
-                disabled={verifyingLock || !lockPasscode.trim()}
-              >
-                {verifyingLock ? (
-                  <span>Verifying Passcode…</span>
-                ) : (
-                  <>
-                    <Key size={18} />
-                    <span>Unlock Company Settings</span>
-                  </>
-                )}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* ── Passcode Configuration Modal ── */}
       {/* ── Passcode Configuration Modal ── */}

@@ -1487,6 +1487,9 @@ async function apiListSequenceSettings(): Promise<SequenceSetting[]> {
       { entityType: 'SUPPLIER_CODE', prefix: 'SUP-', suffix: '', nextNumber: 1001, paddingLength: 4, resetFrequency: 'NEVER' },
       { entityType: 'PURCHASE_ORDER', prefix: 'PO-2026-', suffix: '', nextNumber: 770952, paddingLength: 6, resetFrequency: 'YEARLY' },
       { entityType: 'RFQ', prefix: 'RFQ-2026-', suffix: '', nextNumber: 101, paddingLength: 4, resetFrequency: 'YEARLY' },
+      { entityType: 'INVOICE', prefix: 'INV-{YYYY}-', suffix: '', nextNumber: 1, paddingLength: 4, resetFrequency: 'YEARLY' },
+      { entityType: 'CONTRACT', prefix: 'CON-{YYYY}-', suffix: '', nextNumber: 1, paddingLength: 4, resetFrequency: 'YEARLY' },
+      { entityType: 'PAYMENT_VOUCHER', prefix: 'PV-{YYYY}-', suffix: '', nextNumber: 1, paddingLength: 4, resetFrequency: 'YEARLY' },
     ];
   }
 }

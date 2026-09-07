@@ -549,7 +549,7 @@ export default function VendorRFQsPage() {
     // Initialize custom field values (fresh/clean)
     const initCustomValues: Record<string, string | number> = {};
     (currentRfq.customFields || []).forEach((cf) => {
-      initCustomValues[cf.id] = cf.fieldType === 'number' ? 0 : '';
+      initCustomValues[cf.id] = '';
     });
     setCustomFieldValues(initCustomValues);
 
@@ -567,8 +567,8 @@ export default function VendorRFQsPage() {
     setExpandedEvalCats(new Set());
 
     // Pre-fill bid security & bid bond format fields from previous quotation (if resubmitting) or RFQ default
-    const prevBNo = myQuot?.bidSecurityBondNumber || myQuot?.bidBondNumber || (myQuot?.id ? `BB-${String(myQuot.id).slice(-4).toUpperCase()}` : '');
-    const prevIssuer = myQuot?.bidSecurityIssuer || myQuot?.bidBondIssuer || 'Bank Guarantee / KCB';
+    const prevBNo = myQuot?.bidSecurityBondNumber || myQuot?.bidBondNumber || '';
+    const prevIssuer = myQuot?.bidSecurityIssuer || myQuot?.bidBondIssuer || '';
     const prevVal = myQuot?.bidSecurityValue ?? myQuot?.bidBondAmount ?? currentRfq.bidSecurityMinValue ?? '';
     const prevValDays = myQuot?.bidSecurityValidityValue ?? myQuot?.bidBondValidityValue ?? currentRfq.bidSecurityMinValidity ?? '';
 
@@ -663,7 +663,8 @@ export default function VendorRFQsPage() {
       for (const cf of quotModal.customFields) {
         if (!cf.required) continue;
         const val = customFieldValues[cf.id];
-        if (val === '' || val === undefined || val === null || (typeof val === 'number' && val === 0)) {
+        const strVal = val != null ? String(val).trim() : '';
+        if (!strVal) {
           missingRequired.push(cf.fieldName);
         }
       }
@@ -682,7 +683,7 @@ export default function VendorRFQsPage() {
       const hasCustomFields = quotModal.customFields && quotModal.customFields.length > 0;
       const cfPayload = hasCustomFields
         ? Object.fromEntries(
-            Object.entries(customFieldValues).filter(([, v]) => v !== '' && v !== 0)
+            Object.entries(customFieldValues).filter(([, v]) => v !== '' && v !== null && v !== undefined)
           )
         : undefined;
       // Include evaluation parameter values for Custom RFQ (vendor-filled info)
@@ -1068,9 +1069,10 @@ export default function VendorRFQsPage() {
         {deleteConfirmPlanId && (() => {
           const planToDelete = customPlans.find(p => p.id === deleteConfirmPlanId);
           if (!planToDelete) return null;
-          return (
-            <div className="vquot-modal-backdrop" onClick={() => !isDeleting && setDeleteConfirmPlanId(null)} style={{ zIndex: 10001 }}>
+          return createPortal(
+            <div className="vquot-modal-backdrop custom-plan-modal-backdrop" onClick={() => !isDeleting && setDeleteConfirmPlanId(null)} style={{ zIndex: 999998 }}>
               <div
+                className="custom-plan-modal"
                 style={{
                   position: 'fixed',
                   top: '50%',
@@ -1084,7 +1086,7 @@ export default function VendorRFQsPage() {
                   boxShadow: '0 24px 80px rgba(0,0,0,0.3)',
                   display: 'flex',
                   flexDirection: 'column',
-                  zIndex: 10002,
+                  zIndex: 999999,
                 }}
                 onClick={e => e.stopPropagation()}
               >
@@ -1150,7 +1152,8 @@ export default function VendorRFQsPage() {
                   </button>
                 </div>
               </div>
-            </div>
+            </div>,
+            document.body
           );
         })()}
 
@@ -1499,9 +1502,32 @@ export default function VendorRFQsPage() {
                                 );
                               })()}
 
-                              {/* 🛡️ Section 2: Bid Security & Bid Bond Details */}
+                              {/* 🛡️ Section 2: Bid Security & Bid Bond Details (Only rendered if required in RFQ or provided by vendor) */}
                               {(() => {
+                                const isBidSecurityRequired =
+                                  quotModal?.bidSecurityRequired === true ||
+                                  activePrevQuote?.bidSecurityRequired === true ||
+                                  (quotModal?.rfq && (quotModal.rfq as any)?.bidSecurityRequired === true);
+
+                                const hasBidSecurityValues = !!(
+                                  (activePrevQuote?.bidSecurityValue !== undefined && activePrevQuote?.bidSecurityValue !== null) ||
+                                  activePrevQuote?.bidSecurityBondNumber ||
+                                  activePrevQuote?.bidSecurityIssuer ||
+                                  activePrevQuote?.bidBondNumber ||
+                                  activePrevQuote?.bidBondIssuer ||
+                                  activePrevQuote?.bidSecurityValidityValue
+                                );
+
+                                if (!isBidSecurityRequired && !hasBidSecurityValues) return null;
+
                                 const isCollapsed = !!collapsedSnapshotSections['security'];
+                                const valType = activePrevQuote?.bidSecurityValueType || quotModal?.bidSecurityValueType || 'FIXED_AMOUNT';
+                                const val = activePrevQuote?.bidSecurityValue ?? quotModal?.bidSecurityValue ?? quotModal?.bidSecurityMinValue;
+                                const valCurr = activePrevQuote?.bidSecurityCurrency || activePrevQuote?.currency || quotModal?.bidSecurityCurrency || 'KES';
+                                const valDays = activePrevQuote?.bidSecurityValidityValue ?? quotModal?.bidSecurityValidityValue ?? quotModal?.bidSecurityMinValidity;
+                                const bondNo = activePrevQuote?.bidSecurityBondNumber || activePrevQuote?.bidBondNumber || '—';
+                                const issuer = activePrevQuote?.bidSecurityIssuer || activePrevQuote?.bidBondIssuer || '—';
+
                                 return (
                                   <div className="vquot-snapshot-section">
                                     <div 
@@ -1522,7 +1548,7 @@ export default function VendorRFQsPage() {
                                             Value Type
                                           </div>
                                           <div className="vquot-snapshot-kv-val">
-                                            {activePrevQuote?.bidSecurityValueType === 'PERCENTAGE' ? 'Percentage' : 'Fixed Amount'}
+                                            {valType === 'PERCENTAGE' ? 'Percentage' : 'Fixed Amount'}
                                           </div>
                                         </div>
                                         <div className="vquot-snapshot-kv-card">
@@ -1531,8 +1557,7 @@ export default function VendorRFQsPage() {
                                             Value / Amount
                                           </div>
                                           <div className="vquot-snapshot-kv-val" style={{ fontFamily: 'monospace', color: '#10b981' }}>
-                                            {activePrevQuote?.bidSecurityCurrency || activePrevQuote?.currency || 'KES'}{' '}
-                                            {Number(activePrevQuote?.bidSecurityValue ?? quotModal?.bidSecurityValue ?? quotModal?.bidSecurityMinValue ?? 100000).toLocaleString()}
+                                            {val !== undefined && val !== null ? `${valCurr} ${Number(val).toLocaleString()}` : '—'}
                                           </div>
                                         </div>
                                         <div className="vquot-snapshot-kv-card">
@@ -1541,7 +1566,7 @@ export default function VendorRFQsPage() {
                                             Validity Period
                                           </div>
                                           <div className="vquot-snapshot-kv-val">
-                                            {activePrevQuote?.bidSecurityValidityValue ?? quotModal?.bidSecurityValidityValue ?? quotModal?.bidSecurityMinValidity ?? 95} Days
+                                            {valDays !== undefined && valDays !== null ? `${valDays} Days` : '—'}
                                           </div>
                                         </div>
                                         <div className="vquot-snapshot-kv-card">
@@ -1550,7 +1575,7 @@ export default function VendorRFQsPage() {
                                             Bond # / Ref
                                           </div>
                                           <div className="vquot-snapshot-kv-val">
-                                            {activePrevQuote?.bidSecurityBondNumber || (activePrevQuote?.id ? `BB-2-V1` : 'BB-6CB9')}
+                                            {bondNo}
                                           </div>
                                         </div>
                                         <div className="vquot-snapshot-kv-card">
@@ -1559,7 +1584,7 @@ export default function VendorRFQsPage() {
                                             Issuer / Bank
                                           </div>
                                           <div className="vquot-snapshot-kv-val">
-                                            {activePrevQuote?.bidSecurityIssuer || 'KCB Bank'}
+                                            {issuer}
                                           </div>
                                         </div>
                                       </div>
@@ -1568,14 +1593,14 @@ export default function VendorRFQsPage() {
                                 );
                               })()}
 
-                              {/* 📋 Section 3: Custom Parameters Snapshot */}
+                              {/* 📋 Section 3: Additional Information / Custom Fields */}
                               {((quotModal.customFields && quotModal.customFields.length > 0) || (activePrevQuote.customFieldValues && Object.keys(activePrevQuote.customFieldValues).length > 0)) && (() => {
                                 const isCollapsed = !!collapsedSnapshotSections['custom'];
                                 const allCfMap = new Map<string, { label: string; value: any }>();
                                 (quotModal.customFields || []).forEach((cf: any) => {
-                                  const k = cf.id || cf.name;
-                                  const label = cf.name || cf.label || k;
-                                  const val = activePrevQuote.customFieldValues?.[cf.id] ?? activePrevQuote.customFieldValues?.[cf.name] ?? activePrevQuote[cf.id] ?? activePrevQuote[cf.name];
+                                  const k = cf.id || cf.fieldName || cf.name;
+                                  const label = cf.fieldName || cf.name || cf.label || k;
+                                  const val = activePrevQuote.customFieldValues?.[cf.id] ?? activePrevQuote.customFieldValues?.[cf.fieldName] ?? activePrevQuote.customFieldValues?.[cf.name] ?? activePrevQuote[cf.id] ?? activePrevQuote[cf.fieldName] ?? activePrevQuote[cf.name];
                                   if (val !== undefined && val !== null && val !== '') {
                                     allCfMap.set(k, { label, value: val });
                                   }
@@ -1583,8 +1608,8 @@ export default function VendorRFQsPage() {
                                 if (activePrevQuote.customFieldValues) {
                                   Object.entries(activePrevQuote.customFieldValues).forEach(([k, val]) => {
                                     if (!k.startsWith('eval_') && !allCfMap.has(k) && val !== undefined && val !== null && val !== '') {
-                                      const fieldObj = (quotModal.customFields || []).find((cf: any) => cf.id === k || cf.name === k);
-                                      const label = fieldObj?.name || (fieldObj as any)?.label || k;
+                                      const fieldObj = (quotModal.customFields || []).find((cf: any) => cf.id === k || cf.name === k || cf.fieldName === k);
+                                      const label = fieldObj?.fieldName || fieldObj?.name || (fieldObj as any)?.label || k;
                                       allCfMap.set(k, { label, value: val });
                                     }
                                   });
@@ -1628,49 +1653,26 @@ export default function VendorRFQsPage() {
                                 );
                               })()}
 
-                              {/* 📊 Section 4: Tender Evaluation Categories & Parameters (Distinct Section Cards) */}
+                              {/* 📊 Section 4: Tender Evaluation Categories & Parameters (Only rendered if defined on RFQ or submitted) */}
                               {(() => {
                                 const customEvalCats = quotModal.evaluationCategories || (quotModal.rfq as any)?.evaluationCategories || [];
-                                
-                                // Merge PREDEFINED_EVAL_CATEGORIES with customEvalCats so NO tender category is missing
-                                const evalCategoryMap = new Map<string, any>();
-                                PREDEFINED_EVAL_CATEGORIES.forEach((c) => {
-                                  evalCategoryMap.set(c.name.toLowerCase().trim(), {
-                                    id: c.id,
-                                    name: c.name,
-                                    weightage: c.weightage,
-                                    enabled: c.enabled,
-                                    subParameters: [...c.subParameters],
-                                  });
-                                });
+                                const evalVals = activePrevQuote.evalParamValues || activePrevQuote.customFieldValues || activePrevQuote.evaluationParamValues || activePrevQuote;
 
-                                if (Array.isArray(customEvalCats)) {
-                                  customEvalCats.forEach((c: any) => {
-                                    if (c && c.name) {
-                                      const k = c.name.toLowerCase().trim();
-                                      const existing = evalCategoryMap.get(k);
-                                      if (existing) {
-                                        const spMap = new Map<string, any>();
-                                        existing.subParameters.forEach((sp: any) => spMap.set((sp.name || sp.id).toLowerCase().trim(), sp));
-                                        (c.subParameters || []).forEach((sp: any) => {
-                                          if (sp && (sp.name || sp.id)) {
-                                            spMap.set((sp.name || sp.id).toLowerCase().trim(), sp);
-                                          }
-                                        });
-                                        evalCategoryMap.set(k, {
-                                          ...existing,
-                                          ...c,
-                                          subParameters: Array.from(spMap.values()),
-                                        });
-                                      } else {
-                                        evalCategoryMap.set(k, c);
-                                      }
-                                    }
-                                  });
+                                let evalCategoriesToRender: any[] = [];
+                                if (Array.isArray(customEvalCats) && customEvalCats.length > 0) {
+                                  evalCategoriesToRender = customEvalCats;
+                                } else if (evalVals && typeof evalVals === 'object') {
+                                  evalCategoriesToRender = PREDEFINED_EVAL_CATEGORIES.map((c) => {
+                                    const activeSubParams = c.subParameters.filter((sp: any) => {
+                                      const val = evalVals[sp.id] ?? evalVals[`eval_${sp.id}`] ?? evalVals[sp.name] ?? evalVals[`eval_${sp.name}`];
+                                      return val !== undefined && val !== null && val !== '' && val !== '—';
+                                    });
+                                    return { ...c, subParameters: activeSubParams };
+                                  }).filter((c) => c.subParameters.length > 0);
                                 }
 
-                                const evalCategories = Array.from(evalCategoryMap.values());
-                                const evalVals = activePrevQuote.evalParamValues || activePrevQuote.customFieldValues || activePrevQuote.evaluationParamValues || activePrevQuote;
+                                if (evalCategoriesToRender.length === 0) return null;
+
                                 const renderedSpIds = new Set<string>();
 
                                 const catIconMap: Record<string, string> = {
@@ -1687,11 +1689,10 @@ export default function VendorRFQsPage() {
 
                                 return (
                                   <>
-                                    {evalCategories.filter((cat: any) => cat.enabled !== false).map((cat: any, catIdx: number) => {
+                                    {evalCategoriesToRender.filter((cat: any) => cat.enabled !== false).map((cat: any, catIdx: number) => {
                                       const catKey = `eval_cat_${cat.id || catIdx}`;
-                                      // All categories are expanded by default; user can toggle individual or use Collapse All
                                       const isCatCollapsed = !!collapsedSnapshotSections[catKey];
-                                      const icon = catIconMap[cat.name.toLowerCase().trim()] || '📊';
+                                      const icon = catIconMap[cat.name?.toLowerCase?.()?.trim?.() || ''] || '📊';
                                       const subParams = (cat.subParameters || []).filter((sp: any) => sp.enabled !== false);
                                       if (subParams.length === 0) return null;
 
@@ -1975,36 +1976,25 @@ export default function VendorRFQsPage() {
                               {cf.fieldName}
                               {cf.required && <span style={{ color: 'var(--danger-500)', marginLeft: 2 }}>*</span>}
                             </label>
-                            {cf.fieldType === 'text' && (
-                              <input
-                                className="vquot-modal__input"
-                                type="text"
-                                placeholder={`Enter ${cf.fieldName.toLowerCase()}`}
-                                value={String(customFieldValues[cf.id] || '')}
-                                onChange={(e) => setCustomFieldValues(prev => ({ ...prev, [cf.id]: e.target.value }))}
-                              />
-                            )}
-                            {cf.fieldType === 'number' && (
-                              <input
-                                className="vquot-modal__input"
-                                type="number"
-                                placeholder={`Enter ${cf.fieldName.toLowerCase()}`}
-                                value={customFieldValues[cf.id] ?? ''}
-                                onChange={(e) => setCustomFieldValues(prev => ({ ...prev, [cf.id]: e.target.value === '' ? '' : Number(e.target.value) }))}
-                              />
-                            )}
-                            {cf.fieldType === 'date' && (
+                            {cf.fieldType === 'date' ? (
                               <input
                                 className="vquot-modal__input"
                                 type="date"
                                 value={String(customFieldValues[cf.id] || '')}
                                 onChange={(e) => setCustomFieldValues(prev => ({ ...prev, [cf.id]: e.target.value }))}
                               />
-                            )}
-                            {cf.fieldType === 'attachment' && (
+                            ) : cf.fieldType === 'attachment' ? (
                               <div style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '8px 0' }}>
                                 Please attach the required document using the attachments section below.
                               </div>
+                            ) : (
+                              <input
+                                className="vquot-modal__input"
+                                type="text"
+                                placeholder={`Enter ${cf.fieldName.toLowerCase()}`}
+                                value={customFieldValues[cf.id] != null ? String(customFieldValues[cf.id]) : ''}
+                                onChange={(e) => setCustomFieldValues(prev => ({ ...prev, [cf.id]: e.target.value }))}
+                              />
                             )}
                           </div>
                         ))}

@@ -17,6 +17,8 @@ interface UseServiceDataOptions {
   showInitialLoading?: boolean;
   /** Max number of automatic retries on TIMEOUT / NETWORK_ERROR (default 2) */
   maxRetries?: number;
+  /** Whether the query is enabled (default true) */
+  enabled?: boolean;
 }
 
 const DEFAULT_STALE_TIME_MS = 5 * 60 * 1000; // 5 min
@@ -80,6 +82,7 @@ export function useServiceData<T>(
     // always show fresh data when the user switches back to the browser tab.
     refetchOnWindowFocus: cacheDisabled ? true : false,
     refetchOnReconnect: !cacheDisabled,
+    enabled: options.enabled ?? true,
   });
 
   const data = queryData ?? initial;

@@ -37,6 +37,7 @@ import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyM
 import { useBranding } from '../../context/BrandingContext';
 import defaultHeliflowLogo from '../../assets/heliflow.png';
 import '../purchase-orders/CreatePurchaseOrderPage.css';
+import '../purchase-requisitions/PurchaseRequisitionPage.css';
 import '../../components/purchase-orders/PurchaseOrderDocument.css';
 import './CreatePurchaseInvoicePage.css';
 
@@ -140,7 +141,15 @@ export default function CreatePurchaseInvoicePage() {
   const [invoiceOptions, setInvoiceOptions] = useState<APInvoice[]>([]);
 
   // Form Details
-  const [invoiceNumber, setInvoiceNumber] = useState<string>(() => `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`);
+  const [invoiceNumber, setInvoiceNumber] = useState<string>('');
+
+  useEffect(() => {
+    if (isCreating && !invoiceNumber) {
+      companySettingsService.generateNextSequence('INVOICE')
+        .then((res) => { if (res?.formattedCode) setInvoiceNumber(res.formattedCode); })
+        .catch(() => {});
+    }
+  }, [isCreating]);
   const [vendorName, setVendorName] = useState<string>('');
   const [invoiceDate, setInvoiceDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState<string>(() => {
