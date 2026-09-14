@@ -240,6 +240,8 @@
   max-height: 280px;
   overflow-y: auto;
   padding: 6px;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .cur-selector__no-results {

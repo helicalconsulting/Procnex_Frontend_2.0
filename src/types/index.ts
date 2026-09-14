@@ -13,6 +13,9 @@ export interface User {
   companyCode: string;
   department?: string;
   phone?: string;
+  branchId?: string | null;
+  branchCode?: string | null;
+  branchName?: string | null;
   isActive: boolean;
   isMobileAccessEnabled?: boolean;
   lastLoginAt?: string;

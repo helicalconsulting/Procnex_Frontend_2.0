@@ -42,8 +42,12 @@ export default class ErrorBoundary extends React.Component<
       }
       let errText = 'An unexpected error occurred.';
       try {
-        if (this.state.error?.message) errText = String(this.state.error.message);
-        else if (this.state.error) errText = String(this.state.error);
+        const err = this.state.error as any;
+        if (err?.message) {
+          errText = typeof err.message === 'string' ? err.message : JSON.stringify(err.message);
+        } else if (err) {
+          errText = typeof err === 'string' ? err : typeof err === 'object' ? JSON.stringify(err) : String(err);
+        }
       } catch {
         errText = 'An unexpected error occurred.';
       }

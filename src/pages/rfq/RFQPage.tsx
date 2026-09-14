@@ -716,7 +716,7 @@ export default function RFQPage() {
       </div>
 
       {/* ── Floating Bulk Action Banner ── */}
-      {selectedRfqIds.length > 0 && (
+      {selectedRfqIds.length > 0 && !showBulkDeleteModal && (
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           background: 'var(--surface-card)', border: '1px solid var(--primary-500)',
@@ -750,9 +750,8 @@ export default function RFQPage() {
                 display: 'inline-flex', alignItems: 'center', gap: 6
               }}
               title={!canCreateRFQ ? "Admin has not allowed this action. You do not have permission to delete RFQs." : undefined}
-              onClick={(e) => {
+              onClick={() => {
                 if (!canCreateRFQ) return;
-                (e.currentTarget as HTMLElement).blur();
                 setShowBulkDeleteModal(true);
               }}
             >
@@ -1240,6 +1239,7 @@ export default function RFQPage() {
             <div className="rfq-confirm__actions">
               <button
                 type="button"
+                ref={(el) => el?.focus()}
                 className="rfq-confirm__btn rfq-confirm__btn--secondary"
                 onClick={() => setShowBulkDeleteModal(false)}
                 disabled={isBulkDeleting}

@@ -9,13 +9,14 @@ import { apiRequest } from '../../api/client';
 import {
   Wallet, Search, Clock, CheckCircle2, AlertTriangle,
   IndianRupee, Eye, ThumbsUp, ThumbsDown, RotateCcw,
-  X, MessageSquare, ArrowRight
+  X, MessageSquare, ArrowRight, XCircle, Minus, Printer
 } from 'lucide-react';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import '../../components/shared/ColumnCustomizer.css';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
 import { TableSkeleton } from '../../components/shared/Skeleton';
+import PrintPurchaseInvoiceModal from '../../components/invoices/PrintPurchaseInvoiceModal';
 import './AccountsPayablePage.css';
 
 // ─── Types ──────────────────────────────────────────────────
@@ -285,15 +286,26 @@ export default function AccountsPayablePage() {
         const initials = vName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() || 'VN';
 
         const statusMap: Record<string, APStatus> = {
+          PENDING_APPROVAL: 'PENDING',
           PENDING: 'PENDING',
           APPROVED: 'APPROVED',
+          PAID: 'PAID',
+          PARTIAL: 'PARTIAL',
+          OVERDUE: 'OVERDUE',
           REJECTED: 'REJECTED',
           RETURNED: 'RETURNED',
+          AUTO_FORWARDED: 'PENDING',
         };
-        const status = statusMap[app.status] || 'PENDING';
+
+        const rawDocStatus = matchingRaw?.status ? statusMap[matchingRaw.status] : undefined;
+        let status: APStatus = statusMap[app.status] || 'PENDING';
+        if (rawDocStatus && ['APPROVED', 'PAID', 'REJECTED', 'RETURNED'].includes(rawDocStatus)) {
+          status = rawDocStatus;
+        }
+
         const amt = typeof app.amount === 'number' ? app.amount : parseFloat(String(app.amount).replace(/[^0-9.]/g, '')) || matchingRaw?.amount || 0;
         const reqRole = app.requiredRole || 'Purchase Manager';
-        const effectiveCanAct = app.canAct || isRoleMatching(reqRole, authRoles);
+        const effectiveCanAct = app.status === 'PENDING' && status === 'PENDING' && (app.canAct || isRoleMatching(reqRole, authRoles));
 
         merged.push({
           id: matchingRaw?.id || app.referenceId || app.id,
@@ -337,7 +349,7 @@ export default function AccountsPayablePage() {
             DRAFT: 'PENDING',
           };
           const status = statusMap[inv.status] || 'PENDING';
-          const effectiveCanAct = isRoleMatching('Purchase Manager', authRoles);
+          const effectiveCanAct = status === 'PENDING' && isRoleMatching('Purchase Manager', authRoles);
 
           merged.push({
             id: inv.id,
@@ -387,10 +399,12 @@ export default function AccountsPayablePage() {
   const [search, setSearch]               = useState('');
   const [statusFilter, setStatusFilter]   = useState<string>('ALL');
   const [detailInvoice, setDetailInvoice] = useState<APInvoice | null>(null);
+  const [printInvoice, setPrintInvoice]   = useState<APInvoice | null>(null);
   const [actionModal, setActionModal]     = useState<{ invoice: APInvoice; action: 'approve' | 'reject' | 'return' } | null>(null);
   const [actionComment, setActionComment] = useState('');
   const [actionSaving, setActionSaving]   = useState(false);
-  useBodyScrollLock(!!(actionModal || detailInvoice));
+  const [chainModal, setChainModal]       = useState<{ module: string; referenceId: string } | null>(null);
+  useBodyScrollLock(!!(actionModal || detailInvoice || chainModal || printInvoice));
   const { formatAmount, companyDefaultCurrency } = useCurrency();
   const [displayCurrency, setDisplayCurrency] = useState(companyDefaultCurrency);
   useEffect(() => { setDisplayCurrency(companyDefaultCurrency); }, [companyDefaultCurrency]);
@@ -742,6 +756,14 @@ export default function AccountsPayablePage() {
                         >
                           <Eye size={15} />
                         </button>
+                        {/* Print Purchase Invoice */}
+                        <button
+                          className="approvals-table__action-btn"
+                          title="Print Purchase Invoice"
+                          onClick={() => setPrintInvoice(inv)}
+                        >
+                          <Printer size={15} />
+                        </button>
                         {/* Approve / Reject / Return — ONLY if status is PENDING AND canAct is true */}
                         {inv.status === 'PENDING' && inv.canAct ? (
                           <>
@@ -900,10 +922,24 @@ export default function AccountsPayablePage() {
                   <p className="approvals-detail-comments__text">{detailInvoice.comments}</p>
                 </div>
               )}
+              <button
+                className="approvals-modal__btn approvals-modal__btn--view-contract"
+                onClick={() => setChainModal({ module: 'AccountsPayable', referenceId: String(detailInvoice.id || detailInvoice.invoiceNumber) })}
+                style={{ width: '100%', justifyContent: 'center', marginTop: 14 }}
+              >
+                <Clock size={16} /> View Approval Chain
+              </button>
             </div>
 
             <div className="approvals-modal__footer">
               <button className="approvals-modal__btn approvals-modal__btn--secondary" onClick={() => setDetailInvoice(null)}>Close</button>
+              <button
+                className="approvals-modal__btn"
+                style={{ background: '#10b981', color: '#ffffff', border: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                onClick={() => setPrintInvoice(detailInvoice)}
+              >
+                <Printer size={16} /> Print Purchase Invoice
+              </button>
               {detailInvoice.status === 'PENDING' && detailInvoice.canAct && (
                 <>
                   <button
@@ -931,6 +967,208 @@ export default function AccountsPayablePage() {
         </div>
       )}
 
+      {/* Approval Chain Modal */}
+      {chainModal && (
+        <ApprovalChainView
+          module={chainModal.module}
+          referenceId={chainModal.referenceId}
+          onClose={() => setChainModal(null)}
+        />
+      )}
+
+      {/* Print Purchase Invoice Modal */}
+      {printInvoice && (
+        <PrintPurchaseInvoiceModal
+          data={printInvoice}
+          onClose={() => setPrintInvoice(null)}
+        />
+      )}
+
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Approval Chain View — Shows approval timeline for AccountsPayable
+// ═══════════════════════════════════════════════════════════════
+
+type ChainEntry = {
+  levelNumber: number;
+  requiredRole: string;
+  status: string;
+  approverName: string | null;
+  comments: string | null;
+  actionAt: string | null;
+  deadline: string | null;
+  createdAt: string;
+};
+
+function ApprovalChainView({ module, referenceId, onClose }: { module: string; referenceId: string; onClose: () => void }) {
+  const [chainData, setChainData] = useState<{
+    levels: ChainEntry[];
+    timeline: ChainEntry[];
+    history?: ChainEntry[];
+    currentLevel: number;
+    totalLevels: number;
+    isComplete: boolean;
+    isRejected: boolean;
+    isReturned?: boolean;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchChain = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await apiRequest<typeof chainData>(`/approvals/${module}/${referenceId}/chain`);
+        if (!cancelled) setChainData(data);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load approval chain');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetchChain();
+    return () => { cancelled = true; };
+  }, [module, referenceId]);
+
+  const formatDt = (d: string | null) => {
+    if (!d) return '—';
+    return new Date(d).toLocaleDateString('en-IN', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+  };
+
+  const statusColor = (status: string) => {
+    switch (status) {
+      case 'APPROVED': return '#107e3e';
+      case 'REJECTED': return '#bb0000';
+      case 'RETURNED': return '#e9730c';
+      case 'PENDING': return '#e9730c';
+      case 'AUTO_FORWARDED': return '#8b5cf6';
+      default: return 'var(--text-secondary)';
+    }
+  };
+
+  const itemsToDisplay = chainData?.history && chainData.history.length > 0
+    ? chainData.history
+    : (chainData?.timeline && chainData.timeline.length > 0 ? chainData.timeline : chainData?.levels || []);
+
+  return (
+    <div className="approvals-modal-backdrop" onClick={onClose}>
+      <div className="approvals-modal approvals-modal--detail" onClick={e => e.stopPropagation()}>
+        <div className="approvals-modal__header">
+          <div className="approvals-modal__title"><Clock size={20} /><span>Approval History & Timeline — Purchase Invoice</span></div>
+          <button className="approvals-modal__close" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="approvals-modal__body">
+          {loading && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-secondary)' }}>Loading approval chain…</div>}
+          {error && <div style={{ textAlign: 'center', padding: 32, color: '#bb0000' }}>{error}</div>}
+          {!loading && !error && (!chainData || itemsToDisplay.length === 0) && (
+            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-secondary)' }}>No approval chain data available.</div>
+          )}
+          {chainData && itemsToDisplay.length > 0 && (
+            <>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+                {chainData.isComplete && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px', borderRadius: 12, background: 'rgba(16,126,62,0.1)', color: '#107e3e', fontSize: 11, fontWeight: 700 }}>
+                    <CheckCircle2 size={12} /> Chain Complete
+                  </span>
+                )}
+                {chainData.isRejected && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px', borderRadius: 12, background: 'rgba(187,0,0,0.08)', color: '#bb0000', fontSize: 11, fontWeight: 700 }}>
+                    <XCircle size={12} /> Rejected
+                  </span>
+                )}
+                {chainData.isReturned && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px', borderRadius: 12, background: 'rgba(233,115,12,0.1)', color: '#e9730c', fontSize: 11, fontWeight: 700 }}>
+                    <RotateCcw size={12} /> Returned to Originator
+                  </span>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                {itemsToDisplay.map((level, idx) => {
+                  const isLast = idx === itemsToDisplay.length - 1;
+                  const isActive = level.status === 'PENDING';
+                  return (
+                    <div key={idx} style={{ position: 'relative', paddingLeft: 32, paddingBottom: isLast ? 0 : 24 }}>
+                      {!isLast && (
+                        <div style={{
+                          position: 'absolute', left: 11, top: 20, bottom: 0, width: 2,
+                          background: level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED'
+                            ? '#107e3e' : level.status === 'REJECTED' ? '#bb0000' : level.status === 'RETURNED' ? '#e9730c' : 'var(--border)',
+                        }} />
+                      )}
+                      <div style={{
+                        position: 'absolute', left: 4, top: 4, width: 16, height: 16,
+                        borderRadius: '50%',
+                        background: isActive ? '#e9730c' : level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED'
+                          ? '#107e3e' : level.status === 'REJECTED' ? '#bb0000' : level.status === 'RETURNED' ? '#e9730c' : 'var(--surface-card)',
+                        border: `2px solid ${
+                          isActive ? '#e9730c' : level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED'
+                            ? '#107e3e' : level.status === 'REJECTED' ? '#bb0000' : level.status === 'RETURNED' ? '#e9730c' : 'var(--border)'
+                        }`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        {level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED' ? (
+                          <CheckCircle2 size={10} style={{ color: '#fff' }} />
+                        ) : level.status === 'REJECTED' ? (
+                          <XCircle size={10} style={{ color: '#fff' }} />
+                        ) : level.status === 'RETURNED' ? (
+                          <RotateCcw size={10} style={{ color: '#fff' }} />
+                        ) : (
+                          <span style={{ fontSize: 9, fontWeight: 700, color: isActive ? '#fff' : 'var(--text-secondary)' }}>{level.levelNumber}</span>
+                        )}
+                      </div>
+                      <div style={{
+                        padding: '12px 14px',
+                        background: isActive ? 'rgba(233,115,12,0.06)' : level.status === 'RETURNED' ? 'rgba(233,115,12,0.04)' : 'var(--surface-elevated)',
+                        border: `1px solid ${
+                          isActive ? 'rgba(233,115,12,0.2)' : level.status === 'APPROVED' ? 'rgba(16,126,62,0.15)' : level.status === 'REJECTED' ? 'rgba(187,0,0,0.15)' : level.status === 'RETURNED' ? 'rgba(233,115,12,0.2)' : 'var(--border)'
+                        }`,
+                        borderRadius: 8,
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                            Level {level.levelNumber} — {level.requiredRole.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                          </span>
+                          <span style={{
+                            fontSize: 11, fontWeight: 600, color: statusColor(level.status),
+                            display: 'inline-flex', alignItems: 'center', gap: 3,
+                          }}>
+                            {level.status === 'APPROVED' ? 'Approved' : level.status === 'AUTO_FORWARDED' ? 'Auto-Forwarded' : level.status === 'REJECTED' ? 'Rejected' : level.status === 'RETURNED' ? 'Returned' : 'Pending'}
+                          </span>
+                        </div>
+                        {level.approverName && (
+                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                            By: <strong>{level.approverName}</strong>
+                          </div>
+                        )}
+                        {level.comments && (
+                          <div style={{ fontSize: 12, color: 'var(--text-primary)', padding: '6px 10px', marginTop: 4, background: 'var(--surface-card)', borderRadius: 4, border: '1px solid var(--border)' }}>
+                            "{level.comments}"
+                          </div>
+                        )}
+                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 6 }}>
+                          {level.actionAt ? `Acted: ${formatDt(level.actionAt)}` : level.createdAt ? `Date: ${formatDt(level.createdAt)}` : `Deadline: ${formatDt(level.deadline)}`}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+        <div className="approvals-modal__footer">
+          <button className="approvals-modal__btn approvals-modal__btn--secondary" onClick={onClose}>Close</button>
+        </div>
+      </div>
     </div>
   );
 }

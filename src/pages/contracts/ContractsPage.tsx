@@ -661,7 +661,7 @@ export default function ContractsPage() {
       </div>
 
       {/* ── Floating Bulk Action Banner ── */}
-      {selectedContractIds.length > 0 && (
+      {selectedContractIds.length > 0 && !showBatchDeleteModal && (
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           background: 'var(--surface-card)', border: '1px solid var(--primary-500)',
@@ -677,9 +677,7 @@ export default function ContractsPage() {
               type="button"
               className="ctr-modal__btn ctr-modal__btn--secondary"
               style={{ padding: '7px 16px', fontSize: 13, fontWeight: 600 }}
-              onClick={(e) => {
-                (e.currentTarget as HTMLElement).blur();
-                (document.activeElement as HTMLElement)?.blur();
+              onClick={() => {
                 setSelectedContractIds([]);
               }}
             >
@@ -699,10 +697,8 @@ export default function ContractsPage() {
                 display: 'inline-flex', alignItems: 'center', gap: 6
               }}
               title={!canCreateContract ? "Admin has not allowed this action. You do not have permission to delete contracts." : undefined}
-              onClick={(e) => {
+              onClick={() => {
                 if (!canCreateContract) return;
-                (e.currentTarget as HTMLElement).blur();
-                (document.activeElement as HTMLElement)?.blur();
                 setShowBatchDeleteModal(true);
               }}
             >
@@ -1016,7 +1012,7 @@ export default function ContractsPage() {
             </div>
             <div className="ctr-modal__footer">
               <button
-                autoFocus
+                ref={(el) => el?.focus()}
                 className="ctr-modal__btn ctr-modal__btn--secondary"
                 disabled={batchDeleting}
                 onClick={() => setShowBatchDeleteModal(false)}

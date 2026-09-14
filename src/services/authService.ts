@@ -113,12 +113,14 @@ async function apiLogin(payload: LoginPayload): Promise<AuthResponse> {
 }
 
 async function apiVendorLogin(payload: LoginPayload): Promise<AuthResponse> {
+  const companyCode = localStorage.getItem('vendor_company_code') || undefined;
   const res = await fetch(`${API_BASE}/vendors/auth/login`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({
       username: payload.username.trim(),
       password: payload.password,
+      companyCode,
     }),
   });
   const json = await res.json();
@@ -126,6 +128,9 @@ async function apiVendorLogin(payload: LoginPayload): Promise<AuthResponse> {
     throw new Error(json.error || json.message || 'Login failed');
   }
   const data = json.data ?? json;
+  if (data.vendor?.companyCode) {
+    localStorage.setItem('vendor_company_code', data.vendor.companyCode);
+  }
   return {
     token: data.token,
     user: {
@@ -133,7 +138,7 @@ async function apiVendorLogin(payload: LoginPayload): Promise<AuthResponse> {
       username: data.vendor.email,
       email: data.vendor.email,
       fullName: data.vendor.name,
-      companyCode: 'VENDOR',
+      companyCode: data.vendor?.companyCode || 'VENDOR',
       isActive: true,
       createdAt: new Date().toISOString(),
     },

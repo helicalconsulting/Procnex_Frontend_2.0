@@ -14,6 +14,7 @@ import { PermissionGate } from "./router/PermissionGate";
 const HelicalConsultingPage = lazy(() => import("./pages/auth/HelicalConsultingPage"));
 const LoginPage = lazy(() => import("./pages/auth/LoginPage"));
 const VendorLoginPage = lazy(() => import("./pages/auth/VendorLoginPage"));
+const BrandedVendorLoginPage = lazy(() => import("./pages/vendor/BrandedVendorLoginPage"));
 const SetPasswordPage = lazy(() => import("./pages/auth/SetPasswordPage"));
 const VendorMagicLinkPage = lazy(
   () => import("./pages/auth/VendorMagicLinkPage"),
@@ -136,6 +137,8 @@ export default function App() {
                     <Route path="/helicalconsulting" element={page(HelicalConsultingPage)} />
                     <Route path="/login" element={page(LoginPage)} />
                     <Route path="/vendor/login" element={page(VendorLoginPage)} />
+                    <Route path="/v/:companyCode/login" element={page(BrandedVendorLoginPage)} />
+                    <Route path="/v/:companyCode/dashboard" element={<Navigate to="/vendor/dashboard" replace />} />
                     <Route path="/set-password" element={page(SetPasswordPage)} />
                     <Route path="/auth/magic" element={page(VendorMagicLinkPage)} />
 

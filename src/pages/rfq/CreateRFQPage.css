@@ -6,7 +6,7 @@
   color: var(--text-primary);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
   width: 100%;
 }
 
@@ -15,12 +15,12 @@
 .create-rfq__header {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
 .create-rfq__back {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
   background: var(--surface-card);
@@ -40,13 +40,13 @@
 }
 
 .create-rfq__header-text h1 {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 700;
-  margin: 0 0 2px;
+  margin: 0 0 3px;
 }
 
 .create-rfq__header-text p {
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text-secondary);
   margin: 0;
 }
@@ -57,13 +57,13 @@
   display: flex;
   align-items: center;
   gap: 0;
-  padding: 4px 0;
+  padding: 6px 0;
 }
 
 .create-rfq__step {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   flex: 1;
   position: relative;
 }
@@ -73,7 +73,7 @@
   flex: 1;
   height: 2px;
   background: var(--border);
-  margin-left: 10px;
+  margin-left: 12px;
   transition: background 0.3s;
 }
 
@@ -87,13 +87,13 @@
 }
 
 .create-rfq__step-num {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   flex-shrink: 0;
   border: 2px solid var(--border);
@@ -115,7 +115,7 @@
 }
 
 .create-rfq__step-label {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-secondary);
   white-space: nowrap;
@@ -143,16 +143,16 @@
 .create-rfq__card-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 14px 16px;
+  gap: 12px;
+  padding: 16px 20px;
   border-bottom: 1px solid var(--border);
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .create-rfq__card-header svg {
-  opacity: 0.5;
+  opacity: 0.6;
 }
 
 /* ─── Mode Toggle Tabs (SAP Fiori Segmented Button) ─────── */
@@ -172,12 +172,12 @@
 .create-rfq__mode-btn {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 7px 16px;
+  gap: 8px;
+  padding: 8px 18px;
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
@@ -247,7 +247,7 @@
 }
 
 .create-rfq__card-body {
-  padding: 14px;
+  padding: 20px 24px;
 }
 
 /* ─── Form Fields ────────────────────────────────────────── */
@@ -255,7 +255,7 @@
 .create-rfq__form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: 18px;
 }
 
 .create-rfq__form-grid--full {
@@ -265,7 +265,7 @@
 .create-rfq__field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .create-rfq__field--full {
@@ -273,12 +273,12 @@
 }
 
 .create-rfq__label {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
 }
 
 .create-rfq__label-required {
@@ -289,12 +289,12 @@
 .create-rfq__select,
 .create-rfq__textarea {
   width: 100%;
-  padding: 10px 14px;
+  padding: 11px 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 15px;
   font-family: inherit;
   transition: border-color 0.2s, box-shadow 0.2s;
   outline: none;
@@ -314,20 +314,20 @@
 
 .create-rfq__textarea {
   resize: vertical;
-  min-height: 90px;
+  min-height: 100px;
 }
 
 .create-rfq__select {
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236a6d70' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236a6d70' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 12px center;
-  padding-right: 36px;
+  background-position: right 14px center;
+  padding-right: 40px;
   cursor: pointer;
 }
 
 .create-rfq__hint {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
 }
 
@@ -340,18 +340,18 @@
 
 .create-rfq__items-table th {
   text-align: left;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-secondary);
-  padding: 8px 8px;
+  padding: 10px 10px;
   border-bottom: 1px solid var(--border);
   background: var(--surface-elevated);
 }
 
 .create-rfq__items-table td {
-  padding: 8px 8px;
+  padding: 10px 8px;
   border-bottom: 1px solid var(--border);
   vertical-align: top;
 }
@@ -363,12 +363,12 @@
 .create-rfq__items-table input,
 .create-rfq__items-table select {
   width: 100%;
-  padding: 8px 10px;
+  padding: 9px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 14px;
   font-family: inherit;
   transition: border-color 0.2s;
   outline: none;
@@ -384,21 +384,21 @@
 }
 
 .create-rfq__row-num {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   background: var(--surface-elevated);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--text-secondary);
 }
 
 .create-rfq__remove-row {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: var(--radius-sm);
   border: none;
   background: transparent;
@@ -418,14 +418,14 @@
 .create-rfq__add-row {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  margin-top: 12px;
+  gap: 8px;
+  padding: 10px 18px;
+  margin-top: 14px;
   border: 1px dashed var(--border);
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--primary-500);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   font-family: inherit;
@@ -520,13 +520,13 @@
 }
 
 .create-rfq__vendor-name {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .create-rfq__vendor-email {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -535,7 +535,7 @@
 
 .create-rfq__vendor-category {
   margin-top: 2px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--primary-500);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -543,9 +543,9 @@
 }
 
 .create-rfq__vendor-score {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: 10px;
   white-space: nowrap;
 }
@@ -553,8 +553,41 @@
 .create-rfq__vendor-score--coming-soon {
   background: var(--surface-elevated);
   color: var(--text-placeholder);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
+}
+
+/* ─── Range Slider Track & Thumb Styling ─────────────────── */
+
+.create-rfq__range-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+}
+
+.create-rfq__range-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: currentColor;
+  cursor: pointer;
+  border: 2px solid var(--surface-card, #ffffff);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+.create-rfq__range-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: currentColor;
+  cursor: pointer;
+  border: 2px solid var(--surface-card, #ffffff);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
 
 /* ─── Weightages Action Bar (Save + Reset buttons) ──────── */
@@ -563,29 +596,29 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding-top: 8px;
+  gap: 14px;
+  padding-top: 12px;
   border-top: 1px solid var(--border);
 }
 
 .create-rfq__weightage-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .create-rfq__weightage-total {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
+  gap: 10px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-secondary);
 }
 
 .create-rfq__weightage-total-status {
-  font-size: 11px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .create-rfq__weightage-total-status--ok {
@@ -600,13 +633,13 @@
 .create-rfq__btn--weightage-reset {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
+  gap: 6px;
+  padding: 7px 14px;
   border: 1px dashed var(--border);
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-placeholder);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
@@ -637,13 +670,13 @@
 .create-rfq__btn--weightage-save {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 12px;
+  gap: 6px;
+  padding: 7px 16px;
   border: 1px solid var(--primary-500);
   border-radius: var(--radius-sm);
   background: linear-gradient(135deg, var(--primary-50) 0%, rgba(10, 110, 209, 0.06) 100%);
   color: var(--primary-500);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
@@ -704,27 +737,28 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 14px;
   flex-wrap: wrap;
+  padding-top: 8px;
 }
 
 .create-rfq__footer-left {
   display: flex;
-  gap: 10px;
+  gap: 12px;
 }
 
 .create-rfq__footer-right {
   display: flex;
-  gap: 10px;
+  gap: 12px;
 }
 
 .create-rfq__btn {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 22px;
+  padding: 12px 26px;
   border-radius: var(--radius-md);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   cursor: pointer;
   font-family: inherit;

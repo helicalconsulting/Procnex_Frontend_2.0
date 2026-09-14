@@ -22,9 +22,9 @@
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
-  min-width: 100px;
-  max-width: 170px;
-  padding: 10px 8px 10px 12px;
+  min-width: 80px;
+  max-width: 125px;
+  padding: 9px 8px 9px 10px;
   border: 1px solid var(--border);
   border-right: none;
   border-radius: var(--radius-md) 0 0 var(--radius-md);

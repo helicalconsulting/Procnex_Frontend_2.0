@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
-import { Printer, Download, X, CheckCircle2, ShieldCheck, Landmark, Building2, AlertCircle } from 'lucide-react';
+import { Printer, Download, X, CheckCircle2, ShieldCheck, Landmark, Building2, AlertCircle, Clock } from 'lucide-react';
 import { useCurrency } from '../shared/CurrencyMaster';
+import { useBranding } from '../../context/BrandingContext';
 import './BankPaymentVoucherModal.css';
 
 export interface PaymentVoucherDocData {
@@ -38,7 +39,13 @@ interface BankPaymentVoucherModalProps {
 
 export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVoucherModalProps) {
   const { formatAmount } = useCurrency();
+  const { companyName, logoUrl, profile } = useBranding();
   const printableRef = useRef<HTMLDivElement>(null);
+
+  const displayCompanyName = companyName && companyName !== 'Procnex' ? companyName : (profile?.companyName || 'Procnex');
+  const companyAddress = profile?.companyAddress
+    ? [profile.companyAddress, profile.companyCity, profile.companyCountry].filter(Boolean).join(', ')
+    : 'Corporate Finance & Treasury Division • Banking Operations';
 
   const currency = data.currency || 'INR';
   const isMatched = data.matchStatus !== 'DISCREPANCY';
@@ -48,9 +55,9 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
   };
 
   const defaultApprovers = data.approvers && data.approvers.length > 0 ? data.approvers : [
-    { level: 'Initiator', name: 'Rahul Sharma', role: 'Procurement Executive', date: data.voucherDate, status: 'APPROVED' as const, comments: 'Document 3-way matched and verified' },
-    { level: 'Level 1 Review', name: 'Anand Verma', role: 'Purchase Manager', date: data.voucherDate, status: 'APPROVED' as const, comments: 'Quantities and PO rates approved' },
-    { level: 'Level 2 Authorization', name: 'Priya Patel', role: 'Finance VP / Treasury Head', date: data.voucherDate, status: 'APPROVED' as const, comments: 'Bank payment release authorized' },
+    { level: 'Initiator / Verification', name: displayCompanyName ? `${displayCompanyName} Procurement` : 'Procurement Officer', role: 'Procurement Executive', date: data.voucherDate, status: 'APPROVED' as const, comments: 'Document 3-way matched & verified' },
+    { level: 'Level 1 Review', name: 'Purchase Manager', role: 'Purchase Manager', date: data.voucherDate, status: 'APPROVED' as const, comments: 'Quantities & PO rates approved' },
+    { level: 'Level 2 Authorization', name: 'Treasury / Finance VP', role: 'Treasury / Finance VP', date: data.voucherDate, status: 'APPROVED' as const, comments: 'Bank payment release authorized' },
   ];
 
   return (
@@ -80,9 +87,19 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
           {/* Header */}
           <div className="bpv-sheet__header">
             <div className="bpv-sheet__company">
-              <h2>HELICAL CONSULTING PRIVATE LIMITED</h2>
-              <p>Corporate Finance & Treasury Division • Banking Operations</p>
-              <p className="bpv-sheet__sub">Regd. Office: Plot 42, Technology Park, Sector 5, Gurugram, India</p>
+              {logoUrl && (
+                <img
+                  src={logoUrl}
+                  alt={displayCompanyName}
+                  className="bpv-sheet__company-logo"
+                  style={{ maxHeight: 50, maxWidth: 220, objectFit: 'contain', marginBottom: 10, display: 'block' }}
+                />
+              )}
+              <h2>{displayCompanyName}</h2>
+              <p>{companyAddress}</p>
+              {profile?.taxRegistrationNumber && (
+                <p className="bpv-sheet__sub">Tax Reg / GST: {profile.taxRegistrationNumber}</p>
+              )}
             </div>
             <div className="bpv-sheet__doc-type">
               <h3>BANK PAYMENT VOUCHER</h3>
@@ -101,7 +118,7 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
             <div className="bpv-grid bpv-grid--2">
               <div className="bpv-box">
                 <div className="bpv-box__title">REMITTER (PAYER) BANK ACCOUNT</div>
-                <div className="bpv-box__row"><span>Account Name:</span> <strong>Helical Consulting Pvt Ltd</strong></div>
+                <div className="bpv-box__row"><span>Account Name:</span> <strong>{displayCompanyName}</strong></div>
                 <div className="bpv-box__row"><span>Bank Name:</span> <strong>HDFC Bank Ltd</strong></div>
                 <div className="bpv-box__row"><span>Account Number:</span> <strong>50200084920192</strong></div>
                 <div className="bpv-box__row"><span>IFSC Code:</span> <strong>HDFC0000128</strong></div>
@@ -186,20 +203,23 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
             </div>
 
             <div className="bpv-stamps-grid">
-              {defaultApprovers.map((app, idx) => (
-                <div key={idx} className="bpv-stamp-card">
-                  <div className="bpv-stamp-card__level">LEVEL {idx + 1}: {app.level.toUpperCase()}</div>
-                  <div className="bpv-stamp-card__body">
-                    <div className="bpv-stamp-card__name">{app.name}</div>
-                    <div className="bpv-stamp-card__role">{app.role}</div>
-                    <div className="bpv-stamp-card__date">Date: {app.date}</div>
-                    {app.comments && <div className="bpv-stamp-card__comment">"{app.comments}"</div>}
+              {defaultApprovers.map((app, idx) => {
+                const isPending = app.status === 'PENDING';
+                return (
+                  <div key={idx} className="bpv-stamp-card">
+                    <div className="bpv-stamp-card__level">LEVEL {idx + 1}: {app.level.toUpperCase()}</div>
+                    <div className="bpv-stamp-card__body">
+                      <div className="bpv-stamp-card__name">{app.name}</div>
+                      <div className="bpv-stamp-card__role">{app.role}</div>
+                      <div className="bpv-stamp-card__date">Date: {app.date}</div>
+                      {app.comments && <div className="bpv-stamp-card__comment">"{app.comments}"</div>}
+                    </div>
+                    <div className={`bpv-stamp-badge ${isPending ? 'bpv-stamp-badge--pending' : ''}`}>
+                      {isPending ? <Clock size={14} /> : <CheckCircle2 size={14} />} {isPending ? 'PENDING APPROVAL' : 'APPROVED & SIGNED'}
+                    </div>
                   </div>
-                  <div className="bpv-stamp-badge">
-                    <CheckCircle2 size={14} /> APPROVED & SIGNED
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 

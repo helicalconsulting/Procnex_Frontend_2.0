@@ -27,12 +27,15 @@ import {
   ExternalLink,
   Minus,
   Wallet,
+  Printer,
 } from 'lucide-react';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import '../../components/shared/ColumnCustomizer.css';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TableSkeleton } from '../../components/shared/Skeleton';
 import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
+import PrintPurchaseOrderModal from '../../components/purchase-orders/PrintPurchaseOrderModal';
+import PrintPurchaseInvoiceModal from '../../components/invoices/PrintPurchaseInvoiceModal';
 import { apiRequest } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import './ApprovalsPage.css';
@@ -537,8 +540,9 @@ export default function ApprovalsPage() {
   const [actionComment, setActionComment] = useState('');
   const [actionReturnTarget, setActionReturnTarget] = useState<'ORIGINATOR' | 'LEVEL_1' | 'VENDOR'>('ORIGINATOR');
   const [detailRequest, setDetailRequest] = useState<ApprovalRequest | null>(null);
+  const [printRequest, setPrintRequest] = useState<ApprovalRequest | null>(null);
   const [chainModal, setChainModal] = useState<{ module: string; referenceId: string } | null>(null);
-  useBodyScrollLock(!!(actionModal || detailRequest || chainModal || actionSuccessData));
+  useBodyScrollLock(!!(actionModal || detailRequest || chainModal || actionSuccessData || printRequest));
   const perPage = 8;
 
   // ── Column state ──
@@ -883,6 +887,9 @@ export default function ApprovalsPage() {
                         <button className="approvals-table__action-btn" title="View Details" onClick={() => setDetailRequest(req)}>
                           <Eye size={15} />
                         </button>
+                        <button className="approvals-table__action-btn" title="Print Request / Document" onClick={() => setPrintRequest(req)}>
+                          <Printer size={15} />
+                        </button>
                         {req.status === 'PENDING' && req.canAct ? (
                           <>
                             <button
@@ -1130,6 +1137,13 @@ export default function ApprovalsPage() {
             </div>
             <div className="approvals-modal__footer">
               <button className="approvals-modal__btn approvals-modal__btn--secondary" onClick={() => setDetailRequest(null)}>Close</button>
+              <button
+                className="approvals-modal__btn"
+                style={{ background: '#10b981', color: '#ffffff', border: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                onClick={() => setPrintRequest(detailRequest)}
+              >
+                <Printer size={16} /> Print {detailRequest.module === 'Purchase Order' || detailRequest.module === 'PO' ? 'Purchase Order' : detailRequest.module === 'Purchase Invoice' || detailRequest.module === 'AccountsPayable' ? 'Purchase Invoice' : 'Document'}
+              </button>
               {detailRequest.status === 'PENDING' && detailRequest.canAct && (
                 <>
                   <button
@@ -1171,6 +1185,32 @@ export default function ApprovalsPage() {
         data={actionSuccessData}
         onClose={() => setActionSuccessData(null)}
       />
+
+      {/* Print Document Modal */}
+      {printRequest && (
+        printRequest.module === 'Purchase Invoice' || printRequest.module === 'AccountsPayable' ? (
+          <PrintPurchaseInvoiceModal
+            data={{
+              invoiceNumber: printRequest.referenceNumber,
+              poNumber: printRequest.title.includes('(PO: ') ? printRequest.title.split('(PO: ')[1]?.replace(')', '') : '—',
+              vendorName: printRequest.title.includes('for ') ? printRequest.title.split('for ')[1]?.split(' — ')[0] : 'Vendor',
+              amount: typeof printRequest.amount === 'number' ? printRequest.amount : parseFloat(String(printRequest.amount).replace(/[^0-9.]/g, '')) || 0,
+              dueDate: printRequest.submittedAt,
+              invoiceDate: printRequest.submittedAt,
+              status: printRequest.status,
+              paymentTerms: 'Net 30',
+              department: printRequest.department || 'Finance',
+              comments: printRequest.comments,
+            }}
+            onClose={() => setPrintRequest(null)}
+          />
+        ) : (
+          <PrintPurchaseOrderModal
+            data={printRequest}
+            onClose={() => setPrintRequest(null)}
+          />
+        )
+      )}
     </div>
   );
 }

@@ -36,6 +36,7 @@ import {
   LayoutGrid,
   CheckSquare,
   Smartphone,
+  MapPin,
 } from 'lucide-react';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
@@ -55,6 +56,9 @@ interface MockUser {
   phone: string;
   department: string;
   companyCode: string;
+  branchId?: string | null;
+  branchCode?: string | null;
+  branchName?: string | null;
   role: string;
   apiRoleName: string;
   isActive: boolean;
@@ -65,10 +69,22 @@ interface MockUser {
   initials: string;
 }
 
-function mapUser(u: User & { roles?: string[]; isMobileAccessEnabled?: boolean }): MockUser {
+function mapUser(
+  u: User & { roles?: string[]; isMobileAccessEnabled?: boolean; branchId?: string | null; branchCode?: string | null; branchName?: string | null },
+  branchList: Branch[] = []
+): MockUser {
   const rawRole = u.roles?.[0] || 'Staff';
   const role = rawRole;
   const initials = u.fullName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+  const matchedBranch = u.branchId ? branchList.find((b) => b.id === u.branchId || b.code === u.branchCode) : null;
+  const resolvedBranchName = u.branchName && u.branchName !== 'All Branches (HQ)'
+    ? u.branchName
+    : matchedBranch
+    ? matchedBranch.name
+    : u.branchCode
+    ? u.branchCode
+    : 'All Branches (HQ)';
+
   return {
     id: u.id,
     fullName: u.fullName,
@@ -77,6 +93,9 @@ function mapUser(u: User & { roles?: string[]; isMobileAccessEnabled?: boolean }
     phone: u.phone || '—',
     department: u.department || '—',
     companyCode: u.companyCode,
+    branchId: u.branchId || (matchedBranch ? matchedBranch.id : null),
+    branchCode: u.branchCode || (matchedBranch ? matchedBranch.code : null),
+    branchName: resolvedBranchName,
     role,
     apiRoleName: rawRole,
     isActive: u.isActive,
@@ -144,6 +163,15 @@ const ALL_COLUMNS: UserColumnDef[] = [
   },
   { key: 'department', label: 'Department', defaultVisible: true, width: '110px', render: (u) => <span className="users-table__dept">{u.department}</span> },
   {
+    key: 'branch', label: 'Branch', defaultVisible: true, width: '160px',
+    render: (u) => (
+      <span className="users-table__dept" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 6, background: 'var(--surface-hover)', fontWeight: 600, fontSize: 12 }}>
+        <MapPin size={12} style={{ color: 'var(--primary-500)' }} />
+        {u.branchName || 'All Branches (HQ)'}
+      </span>
+    ),
+  },
+  {
     key: 'status', label: 'Status', defaultVisible: true, width: '110px',
     render: (u, _fd, _fdt, toggle, _toggleMobile, canCreate = true) => {
       const isSuperAdmin = u.role === 'Super Admin' || u.apiRoleName === 'Super Admin';
@@ -196,10 +224,18 @@ const ALL_COLUMNS: UserColumnDef[] = [
 
 export default function UsersPage() {
   const { hasPermission, companyCode: userCompanyCode } = useAuth();
-  const { data: users, loading, error, reload, forceRefresh } = useServiceData(
-    () => adminService.listUsers().then((list) => list.map(mapUser)),
-    [] as MockUser[],
+
+  const { data: branches } = useServiceData(
+    () => companySettingsService.listBranches(),
     [],
+    [],
+    { cacheKey: 'users:branches', cacheTtlMs: 0 }
+  );
+
+  const { data: users, loading, error, reload, forceRefresh } = useServiceData(
+    () => adminService.listUsers().then((list) => list.map((u) => mapUser(u, branches))),
+    [] as MockUser[],
+    [branches],
     { cacheKey: 'users:list', cacheTtlMs: 0 }
   );
   const { data: roleRecords } = useServiceData(
@@ -260,6 +296,7 @@ export default function UsersPage() {
   const [editPhone, setEditPhone] = useState('');
   const [editDepartment, setEditDepartment] = useState('');
   const [editRoleName, setEditRoleName] = useState('');
+  const [editBranchId, setEditBranchId] = useState('HQ');
   const [editMobileAccess, setEditMobileAccess] = useState(false);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [showBatchDeleteModal, setShowBatchDeleteModal] = useState(false);
@@ -327,6 +364,7 @@ export default function UsersPage() {
   const [newRole, setNewRole] = useState<string>('');
   const [newDepartment, setNewDepartment] = useState('');
   const [newPosition, setNewPosition] = useState('');
+  const [newBranchId, setNewBranchId] = useState('HQ');
   const [newMobileAccess, setNewMobileAccess] = useState(false);
 
   // Document uploads
@@ -514,6 +552,7 @@ export default function UsersPage() {
     setNewRole('');
     setNewDepartment('');
     setNewPosition('');
+    setNewBranchId('HQ');
     setNewMobileAccess(false);
     setDocAadhaar(null);
     setDocPan(null);
@@ -521,6 +560,18 @@ export default function UsersPage() {
     setCreateModalError(null);
     setShowModal(true);
   }, []);
+
+  const isNewEmailInvalid = useMemo(() => {
+    if (!newEmail.trim()) return false;
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return !emailRegex.test(newEmail.trim());
+  }, [newEmail]);
+
+  const isEditEmailInvalid = useMemo(() => {
+    if (!editEmail.trim()) return false;
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return !emailRegex.test(editEmail.trim());
+  }, [editEmail]);
 
   // ── handleCreateUser — shows SAP toast after creation ───────
   const handleCreateUser = useCallback(async () => {
@@ -549,6 +600,7 @@ export default function UsersPage() {
         phone: newPhone.trim() ? `${newCountryCode}${newPhone.trim()}` : undefined,
         department: newDepartment || (selectedUserType === 'rfq' ? 'Procurement' : 'General'),
         position: selectedUserType === 'rfq' ? newPosition : undefined,
+        branchId: newBranchId || 'HQ',
         companyCode: userCompanyCode || undefined,
         roleName,
         userType: selectedUserType || undefined,
@@ -582,7 +634,8 @@ export default function UsersPage() {
     }
   }, [
     selectedUserType, newFullName, newUsername, newPassword, newEmail,
-    newPhone, newCountryCode, newRole, newDepartment, newPosition, docAadhaar, docPan, docOffer, reload,
+    newPhone, newCountryCode, newRole, newDepartment, newPosition, docAadhaar, docPan, docOffer,
+    newBranchId, newMobileAccess, userCompanyCode, reload,
   ]);
 
   const openViewUser = useCallback((user: MockUser) => { setViewUser(user); }, []);
@@ -604,6 +657,7 @@ export default function UsersPage() {
     }
     setEditDepartment(user.department === '—' ? '' : user.department);
     setEditRoleName(user.apiRoleName || user.role || '');
+    setEditBranchId(user.branchId || 'HQ');
     setEditMobileAccess(user.isMobileAccessEnabled);
   }, []);
 
@@ -623,6 +677,7 @@ export default function UsersPage() {
         phone: editPhone.trim() ? `${editCountryCode}${editPhone.trim()}` : undefined,
         department: editDepartment.trim() || undefined,
         roleName: editRoleName || undefined,
+        branchId: editBranchId || 'HQ',
         isMobileAccessEnabled: editMobileAccess,
       });
       setPageMsg(`User "${updated.fullName}" updated successfully.`);
@@ -633,7 +688,10 @@ export default function UsersPage() {
     } finally {
       setActionLoading(false);
     }
-  }, [editingUser, editFullName, editEmail, editPhone, editCountryCode, editDepartment, editRoleName, editMobileAccess, forceRefresh]);
+  }, [
+    editingUser, editFullName, editEmail, isEditEmailInvalid, editPhone, editCountryCode,
+    editDepartment, editRoleName, editBranchId, editMobileAccess, forceRefresh,
+  ]);
 
   const handleConfirmDelete = useCallback(async () => {
     if (!deleteTarget) return;
@@ -717,18 +775,6 @@ export default function UsersPage() {
     newPassword.trim().length >= 8 &&
     newEmail.trim() &&
     (selectedUserType === 'rfq' ? !!newPosition : !!newRole);
-
-  const isNewEmailInvalid = useMemo(() => {
-    if (!newEmail.trim()) return false;
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    return !emailRegex.test(newEmail.trim());
-  }, [newEmail]);
-
-  const isEditEmailInvalid = useMemo(() => {
-    if (!editEmail.trim()) return false;
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    return !emailRegex.test(editEmail.trim());
-  }, [editEmail]);
 
   const createUserMissingFields = useMemo(() => {
     const missing: string[] = [];
@@ -879,7 +925,7 @@ export default function UsersPage() {
       </div>
 
       {/* ── Floating Bulk Action Banner ── */}
-      {selectedUserIds.length > 0 && (
+      {selectedUserIds.length > 0 && !showBatchDeleteModal && (
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           background: 'var(--surface-card)', border: '1px solid var(--primary-500)',
@@ -913,9 +959,8 @@ export default function UsersPage() {
                 display: 'inline-flex', alignItems: 'center', gap: 6
               }}
               title={!hasPermission('User Management', 'canCreate') ? "Admin has not allowed this action. You do not have permission to delete users." : undefined}
-              onClick={(e) => {
+              onClick={() => {
                 if (!hasPermission('User Management', 'canCreate')) return;
-                (e.currentTarget as HTMLElement).blur();
                 setShowBatchDeleteModal(true);
               }}
             >
@@ -1290,6 +1335,19 @@ export default function UsersPage() {
                       </div>
                     </div>
                   )}
+                  <div className="users-modal__row" style={{ marginTop: 10 }}>
+                    <div className="users-modal__field">
+                      <label className="users-modal__label"><MapPin size={13} style={{ marginRight: 4 }} />Assigned Branch</label>
+                      <select className="users-modal__select" value={newBranchId} onChange={(e) => setNewBranchId(e.target.value)}>
+                        <option value="HQ">All Branches (HQ)</option>
+                        {branches.filter((b) => b.isActive).map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.code} - {b.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                   <div className="users-modal__field" style={{ marginTop: 12, padding: '10px 14px', background: 'var(--surface-elevated, #f8fafc)', borderRadius: 8, border: '1px solid var(--border, #e2e8f0)' }}>
                     <label className="users-modal__label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', margin: 0 }}>
                       <span style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 8 }}><Smartphone size={18} strokeWidth={2} style={{ color: 'var(--primary-500, #0a6ed1)' }} /> Allow Mobile App Access</span>
@@ -1440,6 +1498,17 @@ export default function UsersPage() {
                     {positionRoleOptions.map((r) => (<option key={r} value={r}>{r}</option>))}
                   </select>
                 </div>
+              </div>
+              <div className="users-modal__field" style={{ marginTop: 10 }}>
+                <label className="users-modal__label"><MapPin size={13} style={{ marginRight: 4 }} />Assigned Branch</label>
+                <select className="users-modal__select" value={editBranchId} onChange={(e) => setEditBranchId(e.target.value)}>
+                  <option value="HQ">All Branches (HQ)</option>
+                  {branches.filter((b) => b.isActive).map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.code} - {b.name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="users-modal__field" style={{ marginTop: 12, padding: '10px 14px', background: 'var(--surface-elevated, #f8fafc)', borderRadius: 8, border: '1px solid var(--border, #e2e8f0)' }}>
                 <label className="users-modal__label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', margin: 0 }}>
@@ -1618,7 +1687,7 @@ export default function UsersPage() {
               </p>
             </div>
             <div className="users-modal__footer">
-              <button autoFocus type="button" className="users-modal__btn users-modal__btn--secondary" onClick={() => setShowBatchDeleteModal(false)} disabled={batchDeleting}>Cancel</button>
+              <button ref={(el) => el?.focus()} type="button" className="users-modal__btn users-modal__btn--secondary" onClick={() => setShowBatchDeleteModal(false)} disabled={batchDeleting}>Cancel</button>
               <button type="button" className="users-modal__btn" style={{ background: '#dc2626', color: '#fff' }} onClick={handleBatchDeleteConfirm} disabled={batchDeleting}>
                 {batchDeleting ? 'Deleting…' : `Delete ${selectedUserIds.length} User(s)`}
               </button>

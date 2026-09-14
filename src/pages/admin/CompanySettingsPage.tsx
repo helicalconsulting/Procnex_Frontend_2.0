@@ -1,13 +1,14 @@
 import { useState, useCallback, useEffect, useRef, useMemo, createElement } from 'react';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
-import { companySettingsService, ALLOWED_CONTRACT_UPLOAD_EXTENSIONS, type Department, type Category, type Unit, type Position, type PaymentTerm, type CompanyProfile, type EmailTemplate, type RequiredDocument, type DocumentTemplate, type DocumentTemplateInput, type ContractTemplate, type ContractTemplateInput, type FormFieldConfig, type SequenceSetting } from '../../services/companySettingsService';
+import { companySettingsService, ALLOWED_CONTRACT_UPLOAD_EXTENSIONS, type Department, type Category, type Unit, type Position, type Warehouse, type Branch, type PaymentTerm, type CompanyProfile, type EmailTemplate, type RequiredDocument, type DocumentTemplate, type DocumentTemplateInput, type ContractTemplate, type ContractTemplateInput, type FormFieldConfig, type SequenceSetting } from '../../services/companySettingsService';
+import { adminService } from '../../services/adminService';
 import { invalidateApiCache } from '../../api/client';
 import {
   Plus, X, Edit3, Building2, Tag, ChevronDown, ChevronRight, ChevronUp, Search,
-  Save, Settings, DollarSign, Trash2, Ruler, Users, CreditCard, Mail, FileText, RotateCcw, Clock, Calendar,
+  Save, Settings, DollarSign, Trash2, Ruler, Users, CreditCard, Mail, Phone, FileText, RotateCcw, Clock, Calendar,
   Palette, Image, FileSignature, Eye, Upload, Loader2, ArrowRight, Sparkles, AlertTriangle, CheckCircle2, Info, FileCheck, Globe, Hash,
-  Lock, Unlock, ShieldCheck, Key, EyeOff, Check,
+  Lock, Unlock, ShieldCheck, Key, EyeOff, Check, MapPin, GitBranch,
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import ImageCropperModal from '../../components/shared/ImageCropperModal';
@@ -24,6 +25,8 @@ import '../../components/shared/OcrPreview.css';
 import ErrorBoundary from '../../components/shared/ErrorBoundary';
 import { TableSkeleton, CardSkeleton, PageSkeleton, Skeleton } from '../../components/shared/Skeleton';
 import { useAuth } from '../../context/AuthContext';
+import PhoneInput from '../../components/shared/PhoneInput';
+import { COUNTRY_CODES } from '../../config/countryCodes';
 
 // ─── Predictive Match Analysis ──────────────────────────────
 interface PredictiveMatchResult {
@@ -226,40 +229,166 @@ function PredictiveMatchCard({
 }
 
 // ─── Utility: Convert structured plain text to HTML ─────────
-// Converts plain text with layout (indentation, spacing, line breaks)
-// to HTML suitable for the RichTextEditor, preserving the original
-// document structure from OCR layout reconstruction.
+// Converts extracted OCR plain text into rich, beautifully formatted HTML
+// matching enterprise SRM software standards (headings, bold clause titles,
+// bulleted/numbered lists, key-value pairs, metadata headers, paragraph blocks).
 function textToHtml(text: string): string {
-  return text
-    .split('\n')
-    .map((line) => {
-      if (line.trim() === '') {
-        // Empty line → paragraph break
-        return '<p><br></p>';
+  if (!text || !text.trim()) return '';
+
+  const rawLines = text.split(/\r?\n/);
+  const htmlBlocks: string[] = [];
+  let currentListItems: string[] = [];
+  let listType: 'ul' | 'ol' | null = null;
+
+  const flushList = () => {
+    if (currentListItems.length > 0) {
+      const tag = listType === 'ol' ? 'ol' : 'ul';
+      const itemsHtml = currentListItems
+        .map((item) => `<li style="margin-bottom: 4px; line-height: 1.5;">${item}</li>`)
+        .join('');
+      htmlBlocks.push(`<${tag} style="margin-top: 4px; margin-bottom: 12px; padding-left: 24px;">${itemsHtml}</${tag}>`);
+      currentListItems = [];
+      listType = null;
+    }
+  };
+
+  let isFirstContentLine = true;
+  let isSecondContentLine = false;
+
+  for (let i = 0; i < rawLines.length; i++) {
+    const line = rawLines[i];
+    const trimmed = line.trim();
+
+    if (trimmed === '') {
+      flushList();
+      htmlBlocks.push('<p><br></p>');
+      continue;
+    }
+
+    // Split lines containing bullet symbols like • or ● embedded in sentence text
+    let subLines: string[] = [line];
+    if ((line.includes('•') || line.includes('●') || line.includes('▪')) && !/^[•●▪]/.test(trimmed)) {
+      const parts = line.split(/(?=[•●▪])/);
+      if (parts.length > 1) {
+        subLines = parts;
       }
-      // Escape HTML special characters first
-      let escaped = line
+    }
+
+    for (let j = 0; j < subLines.length; j++) {
+      const subLine = subLines[j];
+      const subTrimmed = subLine.trim();
+      if (!subTrimmed) continue;
+
+      // Escape HTML entities to prevent invalid injection while preserving placeholders like {{companyName}}
+      let escaped = subTrimmed
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
 
-      // Count leading spaces for indentation
-      const leadingMatch = escaped.match(/^ +/);
-      const leadingCount = leadingMatch ? leadingMatch[0].length : 0;
+      // Preserve indentation if present
+      const leadingSpaces = subLine.match(/^ +/);
+      const spaceCount = leadingSpaces ? leadingSpaces[0].length : 0;
+      const indentPrefix = spaceCount >= 4 ? '&nbsp;&nbsp;&nbsp;&nbsp;' : spaceCount >= 2 ? '&nbsp;&nbsp;' : '';
 
-      // Replace leading spaces with &nbsp; entities
-      if (leadingCount > 0) {
-        const indent = '&nbsp;'.repeat(leadingCount);
-        escaped = indent + escaped.slice(leadingCount);
+      // Rule 1: Horizontal Dividers / Separators (e.g. "---", "===", "___")
+      if (/^[-=_*]{3,}$/.test(subTrimmed)) {
+        flushList();
+        htmlBlocks.push('<hr style="border: none; border-top: 1px solid #cbd5e1; margin: 16px 0;" />');
+        continue;
       }
 
-      // Replace remaining runs of 2+ spaces with &nbsp; to preserve alignment
-      // Single spaces stay as-is (normal word separator)
-      escaped = escaped.replace(/  +/g, (match) => '&nbsp;'.repeat(match.length));
+      // Rule 2: Bullet points or Numbered lists
+      const bulletMatch = escaped.match(/^(?:[•●▪\-\*\+]\s*|\(?\d+[\.\)]\s+|\(?[a-zA-Z][\.\)]\s+)(.*)/);
+      const isHeaderClause = /^(?:SECTION|ARTICLE|CLAUSE|\d+[\.\)]\s+[A-Z0-9\s,&-]{4,})/i.test(subTrimmed);
 
-      return '<p>' + escaped + '</p>';
-    })
-    .join('\n');
+      if (bulletMatch && !isHeaderClause) {
+        const listContent = bulletMatch[1].trim();
+        const isNumeric = /^\(?\d+[\.\)]/.test(escaped);
+        const targetListType = isNumeric ? 'ol' : 'ul';
+
+        if (listType && listType !== targetListType) {
+          flushList();
+        }
+        listType = targetListType;
+        currentListItems.push(indentPrefix + listContent);
+        continue;
+      }
+
+      // Encountered non-list content → flush active list
+      flushList();
+
+      // Rule 3: Main Document Title (First non-empty line)
+      if (isFirstContentLine) {
+        isFirstContentLine = false;
+        isSecondContentLine = true;
+        if (subTrimmed.length <= 80 && !subTrimmed.endsWith('.')) {
+          htmlBlocks.push(
+            `<h2 style="margin-top: 4px; margin-bottom: 6px; font-size: 1.45em; font-weight: 700; color: #0f172a; line-height: 1.3;">${escaped}</h2>`
+          );
+          continue;
+        }
+      } else if (isSecondContentLine) {
+        isSecondContentLine = false;
+        if (subTrimmed.length <= 80 && !subTrimmed.endsWith('.') && !/^(SECTION|ARTICLE|DEFINITIONS|\d+[\.\)])/i.test(subTrimmed)) {
+          htmlBlocks.push(
+            `<p style="margin-top: 0; margin-bottom: 12px; font-size: 1.05em; font-weight: 600; color: #475569;">${escaped}</p>`
+          );
+          continue;
+        }
+      }
+
+      // Rule 4: Contact / Link / Metadata bar (e.g. "email@domain.com | +91-123456 | Linkedin")
+      if (subTrimmed.includes('|') && (subTrimmed.includes('@') || subTrimmed.includes('+') || /linkedin|github|leetcode|website|phone|email/i.test(subTrimmed))) {
+        const parts = escaped.split('|').map(p => p.trim());
+        const formattedPipe = parts.join(' &nbsp;<span style="color:#cbd5e1;">|</span>&nbsp; ');
+        htmlBlocks.push(
+          `<p style="margin-top: 2px; margin-bottom: 14px; color: #64748b; font-size: 0.9em; font-weight: 500;">${formattedPipe}</p>`
+        );
+        continue;
+      }
+
+      // Rule 5: Section Headings & Clause Titles
+      const isAllCapsHeading = /^[A-Z0-9\s,&/\\'\(\)-]{3,60}$/.test(subTrimmed) && !/[a-z]/.test(subTrimmed) && subTrimmed.length > 2;
+      const isNumberedClauseHeading = /^(?:\d+[\.\)]\s+|ARTICLE\s+[IVXLCDM\d]+|SECTION\s+\d+|CLAUSE\s+\d+)\s+[A-Z0-9\s,&/\\'-]+/i.test(subTrimmed) && subTrimmed.length <= 90;
+      const isColonTitle = subTrimmed.endsWith(':') && subTrimmed.length <= 60 && !subTrimmed.includes('http');
+
+      if (isAllCapsHeading || isNumberedClauseHeading || isColonTitle) {
+        htmlBlocks.push(
+          `<h3 style="margin-top: 18px; margin-bottom: 8px; font-size: 1.15em; font-weight: 700; color: #1e293b; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">${escaped}</h3>`
+        );
+        continue;
+      }
+
+      // Rule 6: Sub-clause numbering (e.g. "1.1 Confidential Information", "Section 2.3")
+      const subClauseMatch = escaped.match(/^(\d+\.\d+(?:\.\d+)?|\b[A-Z]\.\d+)\s+(.*)/);
+      if (subClauseMatch) {
+        const clauseNum = subClauseMatch[1];
+        const clauseRest = subClauseMatch[2];
+        htmlBlocks.push(
+          `<p style="margin-bottom: 8px; line-height: 1.55;"><strong>${clauseNum}</strong> ${clauseRest}</p>`
+        );
+        continue;
+      }
+
+      // Rule 7: Key-Value Pairs (e.g. "EFFECTIVE DATE: September 10, 2026", "Vendor Name: {{vendorName}}")
+      const keyValueMatch = escaped.match(/^([A-Za-z0-9_\s\{\}]+:)\s*(.*)/);
+      if (keyValueMatch && keyValueMatch[1].length <= 40 && !keyValueMatch[1].toLowerCase().startsWith('http')) {
+        const keyLabel = keyValueMatch[1];
+        const valueText = keyValueMatch[2];
+        htmlBlocks.push(
+          `<p style="margin-bottom: 6px; line-height: 1.5;"><strong style="color: #334155;">${keyLabel}</strong> ${valueText}</p>`
+        );
+        continue;
+      }
+
+      // Rule 8: Normal Paragraphs
+      htmlBlocks.push(`<p style="margin-bottom: 8px; line-height: 1.6; color: #1e293b;">${indentPrefix}${escaped}</p>`);
+    }
+  }
+
+  flushList();
+
+  return htmlBlocks.join('\n');
 }
 
 // ─── Resolve dynamic placeholders ({YYYY} {YY} {MM} {DD}) ──────────────
@@ -275,7 +404,7 @@ function resolvePlaceholders(template: string): string {
 
 // ─── Tab Definitions ────────────────────────────────────────
 
-type TabKey = 'general' | 'branding' | 'departments' | 'positions' | 'forms' | 'form-documents' | 'email-templates' | 'documents-contracts' | 'doc-serialization';
+type TabKey = 'general' | 'branding' | 'departments' | 'branches' | 'positions' | 'warehouses' | 'forms' | 'form-documents' | 'email-templates' | 'documents-contracts' | 'doc-serialization';
 
 interface TabDef {
   key: TabKey;
@@ -287,7 +416,9 @@ const TABS: TabDef[] = [
   { key: 'general',             label: 'General',                icon: <Settings size={15} /> },
   { key: 'branding',            label: 'Branding',               icon: <Palette size={15} /> },
   { key: 'departments',         label: 'Departments',            icon: <Building2 size={15} /> },
+  { key: 'branches',            label: 'Branches',               icon: <MapPin size={15} /> },
   { key: 'positions',           label: 'Positions',              icon: <Users size={15} /> },
+  { key: 'warehouses',          label: 'Warehouses',             icon: <Building2 size={15} /> },
   { key: 'forms',               label: 'Forms Settings',         icon: <FileText size={15} /> },
   { key: 'form-documents',      label: 'Required Documents',     icon: <FileCheck size={15} /> },
   { key: 'email-templates',     label: 'Email Templates',        icon: <Mail size={15} /> },
@@ -451,6 +582,266 @@ export default function CompanySettingsPage() {
     [],
     { cacheTtlMs: 30000, enabled: isDataFetchEnabled }
   );
+
+  // ── Warehouses State ──
+  const { data: warehouses, loading: warehousesLoading, reload: reloadWarehouses } = useServiceData(
+    () => companySettingsService.listWarehouses(true),
+    [] as Warehouse[],
+    [],
+    { cacheTtlMs: 30000, enabled: isDataFetchEnabled }
+  );
+
+  const [warehouseSearch, setWarehouseSearch] = useState('');
+  const [warehouseTypeFilter, setWarehouseTypeFilter] = useState('ALL');
+  const [showWarehouseModal, setShowWarehouseModal] = useState(false);
+  const [editingWarehouse, setEditingWarehouse] = useState<Warehouse | null>(null);
+
+  const [whCode, setWhCode] = useState('');
+  const [whName, setWhName] = useState('');
+  const [whType, setWhType] = useState('Central Warehouse');
+  const [whAddress, setWhAddress] = useState('');
+  const [whCity, setWhCity] = useState('');
+  const [whCountry, setWhCountry] = useState('');
+  const [whContactPerson, setWhContactPerson] = useState('');
+  const [whCountryCode, setWhCountryCode] = useState('+91');
+  const [whPhone, setWhPhone] = useState('');
+  const [whEmail, setWhEmail] = useState('');
+  const [whIsDefault, setWhIsDefault] = useState(false);
+  const [whIsActive, setWhIsActive] = useState(true);
+
+  const filteredWarehouses = useMemo(() => {
+    return warehouses.filter((wh) => {
+      const matchType = warehouseTypeFilter === 'ALL' || wh.type === warehouseTypeFilter;
+      if (!matchType) return false;
+
+      if (!warehouseSearch.trim()) return true;
+      const q = warehouseSearch.toLowerCase().trim();
+      return (
+        wh.code.toLowerCase().includes(q) ||
+        wh.name.toLowerCase().includes(q) ||
+        wh.type.toLowerCase().includes(q) ||
+        (wh.city && wh.city.toLowerCase().includes(q)) ||
+        (wh.address && wh.address.toLowerCase().includes(q)) ||
+        (wh.contactPerson && wh.contactPerson.toLowerCase().includes(q))
+      );
+    });
+  }, [warehouses, warehouseTypeFilter, warehouseSearch]);
+
+  const openWarehouseModal = useCallback((wh: Warehouse | null) => {
+    if (wh) {
+      setEditingWarehouse(wh);
+      setWhCode(wh.code);
+      setWhName(wh.name);
+      setWhType(wh.type || 'Central Warehouse');
+      setWhAddress(wh.address || '');
+      setWhCity(wh.city || '');
+      setWhCountry(wh.country || '');
+      setWhContactPerson(wh.contactPerson || '');
+
+      let dial = '+91';
+      let phoneDigits = wh.phone || '';
+      if (phoneDigits.startsWith('+')) {
+        const found = COUNTRY_CODES.find((c) => phoneDigits.startsWith(c.dial));
+        if (found) {
+          dial = found.dial;
+          phoneDigits = phoneDigits.slice(found.dial.length).trim();
+        }
+      }
+      setWhCountryCode(dial);
+      setWhPhone(phoneDigits);
+      setWhEmail(wh.email || '');
+      setWhIsDefault(wh.isDefault || false);
+      setWhIsActive(wh.isActive ?? true);
+    } else {
+      setEditingWarehouse(null);
+      setWhCode(`WH-00${warehouses.length + 1}`);
+      setWhName('');
+      setWhType('Central Warehouse');
+      setWhAddress('');
+      setWhCity('');
+      setWhCountry('');
+      setWhContactPerson('');
+      setWhCountryCode('+91');
+      setWhPhone('');
+      setWhEmail('');
+      setWhIsDefault(warehouses.length === 0);
+      setWhIsActive(true);
+    }
+    setShowWarehouseModal(true);
+  }, [warehouses.length]);
+
+  const handleSaveWarehouse = useCallback(async () => {
+    if (!canCreateSettings) return;
+    if (!whCode.trim() || !whName.trim()) {
+      setPageMsg('Warehouse Code and Name are required.');
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const formattedPhone = whPhone.trim() ? `${whCountryCode} ${whPhone.trim()}` : undefined;
+      const payload: Partial<Warehouse> = {
+        code: whCode.trim().toUpperCase(),
+        name: whName.trim(),
+        type: whType,
+        address: whAddress.trim() || undefined,
+        city: whCity.trim() || undefined,
+        country: whCountry.trim() || undefined,
+        contactPerson: whContactPerson.trim() || undefined,
+        phone: formattedPhone,
+        email: whEmail.trim() || undefined,
+        isDefault: whIsDefault,
+        isActive: whIsActive,
+      };
+
+      if (editingWarehouse) {
+        await companySettingsService.updateWarehouse(editingWarehouse.id, payload);
+        setPageMsg(`Warehouse ${payload.code} updated successfully.`);
+      } else {
+        await companySettingsService.createWarehouse(payload);
+        setPageMsg(`Warehouse ${payload.code} created successfully.`);
+      }
+      setShowWarehouseModal(false);
+      reloadWarehouses();
+    } catch (err) {
+      setPageMsg(err instanceof Error ? err.message : 'Failed to save warehouse');
+    } finally {
+      setActionLoading(false);
+    }
+  }, [canCreateSettings, whCode, whName, whType, whAddress, whCity, whCountry, whContactPerson, whPhone, whEmail, whIsDefault, whIsActive, editingWarehouse, reloadWarehouses]);
+
+  const handleSetDefaultWarehouse = useCallback(async (id: string) => {
+    if (!canCreateSettings) return;
+    try {
+      await companySettingsService.setDefaultWarehouse(id);
+      setPageMsg('Default Ship-To Warehouse updated.');
+      reloadWarehouses();
+    } catch (err) {
+      setPageMsg(err instanceof Error ? err.message : 'Failed to set default warehouse');
+    }
+  }, [canCreateSettings, reloadWarehouses]);
+
+  // ── Branches State ──
+  const { data: branches, loading: branchesLoading, reload: reloadBranches } = useServiceData(
+    () => companySettingsService.listBranches(true),
+    [] as Branch[],
+    [],
+    { cacheTtlMs: 30000, enabled: isDataFetchEnabled }
+  );
+
+  const { data: userList } = useServiceData(
+    () => adminService.listUsers(),
+    [],
+    [],
+    { cacheTtlMs: 60000, enabled: isDataFetchEnabled }
+  );
+
+  const [branchSearch, setBranchSearch] = useState('');
+  const [showBranchModal, setShowBranchModal] = useState(false);
+  const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
+
+  const [bCode, setBCode] = useState('');
+  const [bName, setBName] = useState('');
+  const [bCity, setBCity] = useState('');
+  const [bAddress, setBAddress] = useState('');
+  const [bManagerId, setBManagerId] = useState('');
+  const [bIsDefault, setBIsDefault] = useState(false);
+  const [bIsActive, setBIsActive] = useState(true);
+
+  const filteredBranches = useMemo(() => {
+    return branches.filter((br) => {
+      if (!branchSearch.trim()) return true;
+      const q = branchSearch.toLowerCase().trim();
+      return (
+        br.code.toLowerCase().includes(q) ||
+        br.name.toLowerCase().includes(q) ||
+        (br.city && br.city.toLowerCase().includes(q)) ||
+        (br.address && br.address.toLowerCase().includes(q)) ||
+        (br.managerName && br.managerName.toLowerCase().includes(q))
+      );
+    });
+  }, [branches, branchSearch]);
+
+  const openBranchModal = useCallback((br: Branch | null) => {
+    if (br) {
+      setEditingBranch(br);
+      setBCode(br.code);
+      setBName(br.name);
+      setBCity(br.city || '');
+      setBAddress(br.address || '');
+      setBManagerId(br.managerId || '');
+      setBIsDefault(br.isDefault || false);
+      setBIsActive(br.isActive ?? true);
+    } else {
+      setEditingBranch(null);
+      setBCode(`BR-00${branches.length + 1}`);
+      setBName('');
+      setBCity('');
+      setBAddress('');
+      setBManagerId('');
+      setBIsDefault(branches.length === 0);
+      setBIsActive(true);
+    }
+    setShowBranchModal(true);
+  }, [branches.length]);
+
+  const handleSaveBranch = useCallback(async () => {
+    if (!canCreateSettings) return;
+    if (!bCode.trim() || !bName.trim()) {
+      setPageMsg('Branch Code and Name are required.');
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const mgr = userList.find((u) => u.id === bManagerId);
+      const payload: Partial<Branch> = {
+        code: bCode.trim().toUpperCase(),
+        name: bName.trim(),
+        city: bCity.trim() || undefined,
+        address: bAddress.trim() || undefined,
+        managerId: bManagerId || undefined,
+        managerName: mgr ? mgr.fullName : undefined,
+        isDefault: bIsDefault,
+        isActive: bIsActive,
+      };
+
+      if (editingBranch) {
+        await companySettingsService.updateBranch(editingBranch.id, payload);
+        setPageMsg(`Branch ${payload.code} updated successfully.`);
+      } else {
+        await companySettingsService.createBranch(payload);
+        setPageMsg(`Branch ${payload.code} created successfully.`);
+      }
+      setShowBranchModal(false);
+      reloadBranches();
+    } catch (err) {
+      setPageMsg(err instanceof Error ? err.message : 'Failed to save branch');
+    } finally {
+      setActionLoading(false);
+    }
+  }, [canCreateSettings, bCode, bName, bCity, bAddress, bManagerId, bIsDefault, bIsActive, userList, editingBranch, reloadBranches]);
+
+  const handleSetDefaultBranch = useCallback(async (id: string) => {
+    if (!canCreateSettings) return;
+    try {
+      await companySettingsService.setDefaultBranch(id);
+      setPageMsg('Default Company Branch updated.');
+      reloadBranches();
+    } catch (err) {
+      setPageMsg(err instanceof Error ? err.message : 'Failed to set default branch');
+    }
+  }, [canCreateSettings, reloadBranches]);
+
+  const handleDeleteBranch = useCallback(async (id: string) => {
+    if (!canCreateSettings) return;
+    if (!window.confirm('Are you sure you want to delete this branch? Users assigned to this branch will be unlinked.')) return;
+    try {
+      await companySettingsService.deleteBranch(id);
+      setPageMsg('Branch deleted successfully.');
+      reloadBranches();
+    } catch (err) {
+      setPageMsg(err instanceof Error ? err.message : 'Failed to delete branch');
+    }
+  }, [canCreateSettings, reloadBranches]);
 
   // UI state
   const [activeTab, setActiveTab] = useState<TabKey>('general');
@@ -1453,24 +1844,23 @@ export default function CompanySettingsPage() {
     try {
       await companySettingsService.triggerContractOcr(selectedContractType);
 
-      // Poll for OCR status until COMPLETED, FAILED, or extended timeout (5 min for scanned PDFs)
       const typeAtTrigger = selectedContractType;
-      const MAX_POLL_MS = 300000; // 5 minutes for large scanned PDFs
-      const INTERVAL_MS = 3000;
-      const LONG_INTERVAL_MS = 10000; // Poll less frequently after the initial timeout window
+      const MAX_POLL_MS = 180000; // 3 minutes for large scanned documents
+      const INTERVAL_MS = 2000;
+      const LONG_INTERVAL_MS = 5000;
       const startTime = Date.now();
       ocrPollActiveRef.current = true;
 
       const poll = async () => {
-        // Stop polling if cancelled (new OCR trigger or component unmount)
         if (!ocrPollActiveRef.current) return;
 
         const elapsed = Date.now() - startTime;
         if (elapsed >= MAX_POLL_MS) {
           ocrPollActiveRef.current = false;
-          // Don't call fetchContractTemplates as it resets PROCESSING to null.
-          // Instead, update the message so user knows OCR is still running.
-          setPageMsg('OCR is still running on the server. Refresh the page later to check the result.');
+          setContractTemplates(prev => prev.map(t =>
+            t.type === typeAtTrigger ? { ...t, ocrStatus: t.ocrStatus === 'PROCESSING' ? (t.ocrText ? 'COMPLETED' : null) : t.ocrStatus } : t
+          ));
+          setPageMsg('OCR request timed out. Please check your document and try again.');
           return;
         }
         try {
@@ -1798,9 +2188,9 @@ export default function CompanySettingsPage() {
     try {
       await companySettingsService.triggerDocumentOcr(type);
       const idAtTrigger = selectedDocId;
-      const MAX_POLL_MS = 300000; // 5 minutes for large scanned PDFs
-      const INTERVAL_MS = 3000;
-      const LONG_INTERVAL_MS = 10000; // Poll less frequently after the initial timeout window
+      const MAX_POLL_MS = 180000; // 3 minutes for large scanned documents
+      const INTERVAL_MS = 2000;
+      const LONG_INTERVAL_MS = 5000;
       const startTime = Date.now();
       docOcrPollActiveRef.current = true;
 
@@ -1809,9 +2199,10 @@ export default function CompanySettingsPage() {
         const elapsed = Date.now() - startTime;
         if (elapsed >= MAX_POLL_MS) {
           docOcrPollActiveRef.current = false;
-          // Don't call fetchDocumentTemplates as it resets PROCESSING to null.
-          // Instead, update the message so user knows OCR is still running.
-          setPageMsg('OCR is still running on the server. Refresh the page later to check the result.');
+          setDocumentTemplates(prev => prev.map(t =>
+            t.id === idAtTrigger ? { ...t, ocrStatus: t.ocrStatus === 'PROCESSING' ? (t.ocrText ? 'COMPLETED' : null) : t.ocrStatus } : t
+          ));
+          setPageMsg('OCR request timed out. Please check your document and try again.');
           return;
         }
         try {
@@ -1875,13 +2266,30 @@ export default function CompanySettingsPage() {
     setPageMsg(null);
     try {
       const result = await companySettingsService.uploadDocumentTemplateFile(type, file);
-      // Update local state — reset OCR so user can re-run on the new file
+      const extractedText = (result as any).ocrText;
+      const ocrStatus = (result as any).ocrStatus || (extractedText ? 'COMPLETED' : null);
+
       setDocumentTemplates(prev => prev.map(t =>
         t.id === selectedDocId
-          ? { ...t, fileUrl: result.fileUrl, fileName: result.fileName, fileType: result.fileType, ocrStatus: null, ocrText: null, ocrProcessedAt: null }
+          ? {
+              ...t,
+              fileUrl: result.fileUrl,
+              fileName: result.fileName,
+              fileType: result.fileType,
+              ocrStatus: ocrStatus,
+              ocrText: extractedText || t.ocrText,
+              ocrProcessedAt: extractedText ? new Date().toISOString() : t.ocrProcessedAt,
+            }
           : t
       ));
-      setPageMsg('File uploaded successfully!');
+
+      if (extractedText) {
+        setEditedDocContent(textToHtml(extractedText));
+        setDocTemplateDirty(true);
+        setPageMsg(`Document "${file.name}" uploaded and text extracted via OCR successfully!`);
+      } else {
+        setPageMsg(`Document "${file.name}" uploaded successfully! Click "Run OCR" to extract text.`);
+      }
     } catch (err) {
       setPageMsg(err instanceof Error ? err.message : 'Upload failed');
     } finally {
@@ -2129,10 +2537,12 @@ export default function CompanySettingsPage() {
     'branding': undefined,
     'departments': undefined,
     'positions': positions.length,
+    'warehouses': warehouses.length,
     'forms': undefined,
     'form-documents': editableDocs.length,
     'email-templates': undefined,
     'documents-contracts': undefined,
+    'doc-serialization': undefined,
   };
 
   // ── Department CRUD ──
@@ -2347,8 +2757,50 @@ export default function CompanySettingsPage() {
   }, [positionName, positionDesc, positions, reloadPositions]);
 
   const requestDeletePosition = useCallback((position: Position) => {
-    setDeleteTarget({ type: 'position', id: position.id, name: position.name });
-  }, []);
+    if (!canCreateSettings) return;
+    setConfirmModalConfig({
+      isOpen: true,
+      title: 'Delete Position',
+      message: `Are you sure you want to delete position "${position.name}"? This action cannot be undone.`,
+      variant: 'danger',
+      confirmText: 'Delete Position',
+      cancelText: 'Cancel',
+      onConfirm: async () => {
+        try {
+          await companySettingsService.deletePosition(position.id);
+          setPageMsg(`Position "${position.name}" deleted.`);
+          reloadPositions();
+        } catch (err) {
+          setPageMsg(err instanceof Error ? err.message : 'Failed to delete position');
+        } finally {
+          setConfirmModalConfig(null);
+        }
+      },
+    });
+  }, [canCreateSettings, reloadPositions]);
+
+  const requestDeleteWarehouse = useCallback((wh: Warehouse) => {
+    if (!canCreateSettings) return;
+    setConfirmModalConfig({
+      isOpen: true,
+      title: 'Delete Warehouse',
+      message: `Are you sure you want to delete warehouse "${wh.code} - ${wh.name}"? This action cannot be undone.`,
+      variant: 'danger',
+      confirmText: 'Delete Warehouse',
+      cancelText: 'Cancel',
+      onConfirm: async () => {
+        try {
+          await companySettingsService.deleteWarehouse(wh.id);
+          setPageMsg(`Warehouse ${wh.code} deleted.`);
+          reloadWarehouses();
+        } catch (err) {
+          setPageMsg(err instanceof Error ? err.message : 'Failed to delete warehouse');
+        } finally {
+          setConfirmModalConfig(null);
+        }
+      },
+    });
+  }, [canCreateSettings, reloadWarehouses]);
 
   const openAddUnit = useCallback(() => {
     setUnitName('');
@@ -2587,7 +3039,7 @@ export default function CompanySettingsPage() {
           autoHideMs={5000}
           className="sap-message-strip--toast"
         >
-          {pageMsg}
+          {typeof pageMsg === 'string' ? pageMsg : (typeof pageMsg === 'object' && pageMsg !== null) ? JSON.stringify(pageMsg) : String(pageMsg)}
         </MessageStrip>
       )}
       {loading && <div className="company-settings-page__loading" />}
@@ -3477,6 +3929,306 @@ export default function CompanySettingsPage() {
 
                   )}
 
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* -------------------------------------------------------
+          TAB: Warehouses (SRM Logistics & Ship-To Locations)
+          ------------------------------------------------------- */}
+      {/* ── Branches Tab ── */}
+      {activeTab === 'branches' && (
+        <div className="cs-tab-panel" role="tabpanel">
+          <div className="cs-section-card">
+            <div className="cs-section-header">
+              <div className="cs-section-header__left">
+                <h2><MapPin size={17} /> Branch Master (Company Branches &amp; Offices)</h2>
+                <p>Manage office locations, regional branches, and assign Branch Managers for user tagging &amp; transaction tracking.</p>
+              </div>
+              <div className="cs-section-header__actions">
+                <button
+                  className="company-settings__btn company-settings__btn--primary"
+                  onClick={() => openBranchModal(null)}
+                  disabled={!canCreateSettings}
+                  style={disabledActionStyle}
+                  title={canCreateSettings ? undefined : noPermissionTitle}
+                >
+                  <Plus size={16} /> Add Branch
+                </button>
+              </div>
+            </div>
+            <div className="cs-section-body">
+              {/* Search Bar */}
+              <div className="cs-wh-toolbar">
+                <div className="cs-wh-search" style={{ flex: 1 }}>
+                  <Search size={15} />
+                  <input
+                    type="text"
+                    placeholder="Search by Code, Branch Name, City, Address or Manager..."
+                    value={branchSearch}
+                    onChange={(e) => setBranchSearch(e.target.value)}
+                  />
+                  {branchSearch && (
+                    <button className="cs-wh-clear" onClick={() => setBranchSearch('')}>
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {filteredBranches.length === 0 ? (
+                <div className="cs-empty">
+                  <div className="cs-empty__icon"><MapPin size={28} /></div>
+                  <p>{branches.length === 0 ? 'No company branches defined yet. Add your first branch location.' : 'No matching branches found.'}</p>
+                  {branches.length === 0 && (
+                    <button
+                      className="company-settings__btn company-settings__btn--primary"
+                      onClick={() => openBranchModal(null)}
+                      disabled={!canCreateSettings}
+                      style={disabledActionStyle}
+                      title={canCreateSettings ? undefined : noPermissionTitle}
+                    >
+                      <Plus size={16} /> Add Branch
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="cs-wh-table-wrap">
+                  <table className="cs-wh-table">
+                    <thead>
+                      <tr>
+                        <th>Branch Code</th>
+                        <th>Branch Name</th>
+                        <th>City / Address</th>
+                        <th>Branch Manager</th>
+                        <th>Status</th>
+                        <th style={{ textAlign: 'right' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredBranches.map((br) => (
+                        <tr key={br.id} className={!br.isActive ? 'cs-wh-tr--inactive' : ''}>
+                          <td>
+                            <span className="cs-wh-code-badge" style={{ background: 'var(--primary-100)', color: 'var(--primary-700)' }}>
+                              {br.code}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="cs-wh-name-cell">
+                              <span className="cs-wh-title" style={{ fontWeight: 600 }}>{br.name}</span>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="cs-wh-sub-text">
+                              {br.address ? `${br.address}${br.city ? `, ${br.city}` : ''}` : (br.city || '—')}
+                            </div>
+                          </td>
+                          <td>
+                            <div className="cs-wh-contact-cell">
+                              {br.manager ? (
+                                <span className="cs-wh-contact-name">{br.manager.fullName} ({br.manager.email})</span>
+                              ) : br.managerName ? (
+                                <span className="cs-wh-contact-name">{br.managerName}</span>
+                              ) : (
+                                <span style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>Unassigned</span>
+                              )}
+                            </div>
+                          </td>
+                          <td>
+                            <span className={`company-settings__badge company-settings__badge--sm ${br.isActive ? 'company-settings__badge--active' : 'company-settings__badge--inactive'}`}>
+                              {br.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="cs-wh-actions">
+                              <button
+                                className="company-settings__icon-btn"
+                                onClick={() => openBranchModal(br)}
+                                title="Edit Branch"
+                                disabled={!canCreateSettings}
+                              >
+                                <Edit3 size={15} />
+                              </button>
+                              <button
+                                className="company-settings__icon-btn company-settings__icon-btn--danger"
+                                onClick={() => handleDeleteBranch(br.id)}
+                                title="Delete Branch"
+                                disabled={!canCreateSettings}
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'warehouses' && (
+        <div className="cs-tab-panel" role="tabpanel">
+          <div className="cs-section-card">
+            <div className="cs-section-header">
+              <div className="cs-section-header__left">
+                <h2><Building2 size={17} /> Warehouse Master (Shipping &amp; Receiving Locations)</h2>
+                <p>Manage central warehouses, regional hubs, site stores, and ship-to locations for PRs, POs, and GRNs.</p>
+              </div>
+              <div className="cs-section-header__actions">
+                <button
+                  className="company-settings__btn company-settings__btn--primary"
+                  onClick={() => openWarehouseModal(null)}
+                  disabled={!canCreateSettings}
+                  style={disabledActionStyle}
+                  title={canCreateSettings ? undefined : noPermissionTitle}
+                >
+                  <Plus size={16} /> Add Warehouse
+                </button>
+              </div>
+            </div>
+            <div className="cs-section-body">
+              {/* Filter & Search Bar */}
+              <div className="cs-wh-toolbar">
+                <div className="cs-wh-search">
+                  <Search size={15} />
+                  <input
+                    type="text"
+                    placeholder="Search by Code, Name, Address, City or Manager..."
+                    value={warehouseSearch}
+                    onChange={(e) => setWarehouseSearch(e.target.value)}
+                  />
+                  {warehouseSearch && (
+                    <button className="cs-wh-clear" onClick={() => setWarehouseSearch('')}>
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+                <div className="cs-wh-filters">
+                  <select
+                    value={warehouseTypeFilter}
+                    onChange={(e) => setWarehouseTypeFilter(e.target.value)}
+                    className="cs-wh-select"
+                  >
+                    <option value="ALL">All Types</option>
+                    <option value="Central Warehouse">Central Warehouse</option>
+                    <option value="Regional Hub">Regional Hub</option>
+                    <option value="Site Store">Site Store</option>
+                    <option value="Transit Center">Transit Center</option>
+                  </select>
+                </div>
+              </div>
+
+              {filteredWarehouses.length === 0 ? (
+                <div className="cs-empty">
+                  <div className="cs-empty__icon"><Building2 size={28} /></div>
+                  <p>{warehouses.length === 0 ? 'No warehouses defined yet. Add your first warehouse location.' : 'No matching warehouses found.'}</p>
+                  {warehouses.length === 0 && (
+                    <button
+                      className="company-settings__btn company-settings__btn--primary"
+                      onClick={() => openWarehouseModal(null)}
+                      disabled={!canCreateSettings}
+                      style={disabledActionStyle}
+                      title={canCreateSettings ? undefined : noPermissionTitle}
+                    >
+                      <Plus size={16} /> Add Warehouse
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="cs-wh-table-wrap">
+                  <table className="cs-wh-table">
+                    <thead>
+                      <tr>
+                        <th>Code</th>
+                        <th>Name &amp; Type</th>
+                        <th>Address / City</th>
+                        <th>Manager / Contact</th>
+                        <th>Ship-To Default</th>
+                        <th>Status</th>
+                        <th style={{ textAlign: 'right' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredWarehouses.map((wh) => (
+                        <tr key={wh.id} className={!wh.isActive ? 'cs-wh-tr--inactive' : ''}>
+                          <td>
+                            <span className="cs-wh-code-badge">{wh.code}</span>
+                          </td>
+                          <td>
+                            <div className="cs-wh-name-cell">
+                              <span className="cs-wh-title">{wh.name}</span>
+                              <span className="cs-wh-type">{wh.type}</span>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="cs-wh-sub-text">
+                              {wh.address ? `${wh.address}${wh.city ? `, ${wh.city}` : ''}` : (wh.city || '—')}
+                              {wh.country && <span className="cs-wh-country"> ({wh.country})</span>}
+                            </div>
+                          </td>
+                          <td>
+                            <div className="cs-wh-contact-cell">
+                              {wh.contactPerson && <span className="cs-wh-contact-name">{wh.contactPerson}</span>}
+                              {wh.phone && <span className="cs-wh-contact-sub"><Phone size={12} /> {wh.phone}</span>}
+                              {wh.email && <span className="cs-wh-contact-sub"><Mail size={12} /> {wh.email}</span>}
+                              {!wh.contactPerson && !wh.phone && !wh.email && '—'}
+                            </div>
+                          </td>
+                          <td>
+                            {wh.isDefault ? (
+                              <span className="cs-wh-badge cs-wh-badge--default">
+                                <CheckCircle2 size={12} /> Default Ship-To
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                className="cs-wh-btn-text"
+                                onClick={() => handleSetDefaultWarehouse(wh.id)}
+                                disabled={!canCreateSettings}
+                                style={disabledActionStyle}
+                              >
+                                Set Default
+                              </button>
+                            )}
+                          </td>
+                          <td>
+                            <span className={`company-settings__badge company-settings__badge--sm ${wh.isActive ? 'company-settings__badge--active' : 'company-settings__badge--inactive'}`}>
+                              {wh.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="cs-wh-actions">
+                              <button
+                                className="company-settings__icon-btn"
+                                onClick={() => openWarehouseModal(wh)}
+                                title="Edit Warehouse"
+                                disabled={!canCreateSettings}
+                                style={disabledActionStyle}
+                              >
+                                <Edit3 size={14} />
+                              </button>
+                              <button
+                                className="company-settings__icon-btn company-settings__icon-btn--danger"
+                                onClick={() => requestDeleteWarehouse(wh)}
+                                title="Delete Warehouse"
+                                disabled={!canCreateSettings}
+                                style={disabledActionStyle}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -4415,9 +5167,12 @@ export default function CompanySettingsPage() {
                                       setContractFileUploading(true);
                                       try {
                                         const result = await companySettingsService.uploadContractTemplateFile(selectedContractType, file);
+                                        const extractedText = (result as any).ocrText;
+                                        const ocrStatus = (result as any).ocrStatus || (extractedText ? 'COMPLETED' : null);
+
                                         await companySettingsService.saveContractTemplate(selectedContractType, {
                                           name: editedContractName,
-                                          content: editedContractContent,
+                                          content: extractedText ? textToHtml(extractedText) : editedContractContent,
                                           description: editedContractDescription || null,
                                           isActive: editedContractIsActive,
                                           fileUrl: result.fileUrl,
@@ -4427,9 +5182,22 @@ export default function CompanySettingsPage() {
                                         setContractTemplateDirty(false);
                                         await fetchContractTemplates();
                                         setContractTemplates(prev => prev.map(t =>
-                                          t.type === selectedContractType ? { ...t, ocrStatus: null, ocrText: null, ocrProcessedAt: null } : t
+                                          t.type === selectedContractType ? {
+                                            ...t,
+                                            fileUrl: result.fileUrl,
+                                            fileName: result.fileName,
+                                            fileType: result.fileType,
+                                            ocrStatus: ocrStatus,
+                                            ocrText: extractedText || t.ocrText,
+                                            ocrProcessedAt: extractedText ? new Date().toISOString() : t.ocrProcessedAt,
+                                          } : t
                                         ));
-                                        setPageMsg(`Document "${file.name}" uploaded and attached to template.`);
+                                        if (extractedText) {
+                                          setEditedContractContent(textToHtml(extractedText));
+                                          setPageMsg(`Document "${file.name}" uploaded and text extracted via OCR!`);
+                                        } else {
+                                          setPageMsg(`Document "${file.name}" uploaded and attached to template.`);
+                                        }
                                       } catch (err) {
                                         setPageMsg(err instanceof Error ? err.message : 'Upload failed');
                                       } finally {
@@ -4450,9 +5218,11 @@ export default function CompanySettingsPage() {
                                     setPageMsg('Please upload a PDF/DOC file first before running OCR.');
                                     return;
                                   }
-                                  if (selectedContractTemplate?.ocrStatus === 'COMPLETED' && selectedContractTemplate?.ocrText) {
-                                    setEditedContractContent(textToHtml(selectedContractTemplate.ocrText));
+                                  const validOcrText = selectedContractTemplate?.ocrText;
+                                  if (validOcrText && validOcrText !== 'No readable text detected.' && !validOcrText.startsWith('OCR failed')) {
+                                    setEditedContractContent(textToHtml(validOcrText));
                                     setContractTemplateDirty(true);
+                                    setContractTemplates(prev => prev.map(t => t.type === selectedContractType ? { ...t, ocrStatus: 'COMPLETED' } : t));
                                     setPageMsg('Extracted OCR text applied to rich editor!');
                                   } else {
                                     handleTriggerContractOcr();
@@ -4637,9 +5407,11 @@ export default function CompanySettingsPage() {
                                     setPageMsg('Please upload a PDF/DOC file first before running OCR.');
                                     return;
                                   }
-                                  if (selectedDocTemplate?.ocrStatus === 'COMPLETED' && selectedDocTemplate?.ocrText) {
-                                    setEditedDocContent(textToHtml(selectedDocTemplate.ocrText));
+                                  const validDocOcrText = selectedDocTemplate?.ocrText;
+                                  if (validDocOcrText && validDocOcrText !== 'No readable text detected.' && !validDocOcrText.startsWith('OCR failed')) {
+                                    setEditedDocContent(textToHtml(validDocOcrText));
                                     setDocTemplateDirty(true);
+                                    setDocumentTemplates(prev => prev.map(t => t.id === selectedDocId ? { ...t, ocrStatus: 'COMPLETED' } : t));
                                     setPageMsg('Extracted OCR text applied to rich editor!');
                                   } else {
                                     handleTriggerDocumentOcr();
@@ -5101,7 +5873,7 @@ export default function CompanySettingsPage() {
             </div>
             <div className="company-settings__modal-body">
               <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
-                {confirmModalConfig.message}
+                {typeof confirmModalConfig.message === 'string' ? confirmModalConfig.message : (typeof confirmModalConfig.message === 'object' && confirmModalConfig.message !== null) ? JSON.stringify(confirmModalConfig.message) : String(confirmModalConfig.message)}
               </p>
             </div>
             <div className="company-settings__modal-footer">
@@ -5327,6 +6099,236 @@ export default function CompanySettingsPage() {
               <button className="company-settings__btn company-settings__btn--secondary" onClick={() => setShowPositionModal(false)}>Cancel</button>
               <button className="company-settings__btn company-settings__btn--primary" disabled={!positionName.trim() || actionLoading} onClick={handleSavePosition}>
                 <Save size={16} /> {actionLoading ? 'Saving…' : 'Create'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Branch Modal ── */}
+      {showBranchModal && (
+        <div className="company-settings__backdrop" onClick={() => !actionLoading && setShowBranchModal(false)}>
+          <div className="company-settings__modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 580, width: '100%', overflowX: 'hidden' }}>
+            <div className="company-settings__modal-header">
+              <span>{editingBranch ? `Edit Branch #${editingBranch.code}` : 'Add New Branch'}</span>
+              <button className="company-settings__icon-btn" onClick={() => setShowBranchModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="company-settings__modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
+                <div className="company-settings__field">
+                  <label>Branch Code <span>*</span></label>
+                  <input
+                    type="text"
+                    placeholder="e.g. DEL-01"
+                    value={bCode}
+                    onChange={(e) => setBCode(e.target.value.toUpperCase())}
+                  />
+                </div>
+                <div className="company-settings__field">
+                  <label>Branch Name <span>*</span></label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Delhi Regional Office"
+                    value={bName}
+                    onChange={(e) => setBName(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="company-settings__field">
+                  <label>City / Location</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Delhi"
+                    value={bCity}
+                    onChange={(e) => setBCity(e.target.value)}
+                  />
+                </div>
+                <div className="company-settings__field">
+                  <label>Branch Manager</label>
+                  <select
+                    value={bManagerId}
+                    onChange={(e) => setBManagerId(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface-card)', color: 'var(--text-primary)', outline: 'none' }}
+                  >
+                    <option value="">Select Branch Manager...</option>
+                    {userList.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.fullName} ({u.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="company-settings__field">
+                <label>Address Details</label>
+                <textarea
+                  placeholder="Street address, building name, suite number..."
+                  value={bAddress}
+                  onChange={(e) => setBAddress(e.target.value)}
+                  rows={2}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface-card)', color: 'var(--text-primary)', outline: 'none', resize: 'vertical' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4, padding: '12px 14px', background: 'var(--surface-ground)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                  <input
+                    type="checkbox"
+                    checked={bIsActive}
+                    onChange={(e) => setBIsActive(e.target.checked)}
+                    style={{ width: 16, height: 16, cursor: 'pointer' }}
+                  />
+                  <span>Active Status</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="company-settings__modal-footer">
+              <button className="company-settings__btn company-settings__btn--secondary" onClick={() => setShowBranchModal(false)}>Cancel</button>
+              <button
+                className="company-settings__btn company-settings__btn--primary"
+                disabled={!bCode.trim() || !bName.trim() || actionLoading}
+                onClick={handleSaveBranch}
+              >
+                <Save size={16} /> {actionLoading ? 'Saving…' : editingBranch ? 'Update Branch' : 'Create Branch'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Warehouse Modal ── */}
+      {showWarehouseModal && (
+        <div className="company-settings__backdrop" onClick={() => !actionLoading && setShowWarehouseModal(false)}>
+          <div className="company-settings__modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600, width: '100%', overflowX: 'hidden' }}>
+            <div className="company-settings__modal-header">
+              <span>{editingWarehouse ? `Edit Warehouse #${editingWarehouse.code}` : 'Add New Warehouse Location'}</span>
+              <button className="company-settings__icon-btn" onClick={() => setShowWarehouseModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="company-settings__modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
+                <div className="company-settings__field">
+                  <label>Warehouse Code <span>*</span></label>
+                  <input
+                    type="text"
+                    placeholder="e.g. WH-001"
+                    value={whCode}
+                    onChange={(e) => setWhCode(e.target.value.toUpperCase())}
+                  />
+                </div>
+                <div className="company-settings__field">
+                  <label>Warehouse Name <span>*</span></label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Central Depot & Logistics Hub"
+                    value={whName}
+                    onChange={(e) => setWhName(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="company-settings__field">
+                  <label>Warehouse Type</label>
+                  <select
+                    value={whType}
+                    onChange={(e) => setWhType(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface-card)', color: 'var(--text-primary)', outline: 'none' }}
+                  >
+                    <option value="Central Warehouse">Central Warehouse</option>
+                    <option value="Regional Hub">Regional Hub</option>
+                    <option value="Site Store">Site Store</option>
+                    <option value="Transit Center">Transit Center / Cross-Dock</option>
+                  </select>
+                </div>
+                <div className="company-settings__field">
+                  <label>City / Location</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Nairobi / Mumbai"
+                    value={whCity}
+                    onChange={(e) => setWhCity(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="company-settings__field">
+                <label>Full Shipping Address</label>
+                <textarea
+                  rows={2}
+                  placeholder="Plot No. 12, Industrial Area, Depot Road"
+                  value={whAddress}
+                  onChange={(e) => setWhAddress(e.target.value)}
+                />
+              </div>
+
+              <div className="company-settings__field">
+                <label>Contact Manager</label>
+                <input
+                  type="text"
+                  placeholder="Storekeeper Name"
+                  value={whContactPerson}
+                  onChange={(e) => setWhContactPerson(e.target.value)}
+                />
+              </div>
+
+              <div className="company-settings__field" style={{ maxWidth: 320, width: '100%' }}>
+                <label>Phone Number</label>
+                <PhoneInput
+                  countryCode={whCountryCode}
+                  onCountryCodeChange={setWhCountryCode}
+                  value={whPhone}
+                  onChange={setWhPhone}
+                  placeholder="8272811866"
+                />
+              </div>
+
+              <div className="company-settings__field">
+                <label>Manager Email</label>
+                <input
+                  type="email"
+                  placeholder="warehouse@company.com"
+                  value={whEmail}
+                  onChange={(e) => setWhEmail(e.target.value)}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: 24, marginTop: 4 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                  <input
+                    type="checkbox"
+                    checked={whIsDefault}
+                    onChange={(e) => setWhIsDefault(e.target.checked)}
+                  />
+                  Set as Default Ship-To Location
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                  <input
+                    type="checkbox"
+                    checked={whIsActive}
+                    onChange={(e) => setWhIsActive(e.target.checked)}
+                  />
+                  Active Status
+                </label>
+              </div>
+            </div>
+            <div className="company-settings__modal-footer">
+              <button className="company-settings__btn company-settings__btn--secondary" onClick={() => setShowWarehouseModal(false)}>
+                Cancel
+              </button>
+              <button
+                className="company-settings__btn company-settings__btn--primary"
+                onClick={handleSaveWarehouse}
+                disabled={actionLoading || !whCode.trim() || !whName.trim()}
+              >
+                <Save size={16} /> {actionLoading ? 'Saving...' : (editingWarehouse ? 'Update Warehouse' : 'Save Warehouse')}
               </button>
             </div>
           </div>

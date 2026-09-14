@@ -733,7 +733,20 @@ async function apiGetRfq(rfqId: string): Promise<{ rfq: any; myQuotation: any; i
   return vendorFetch<{ rfq: any; myQuotation: any; inviteStatus: string }>(`/rfqs/${rfqId}`, { cacheTtlMs: 0 });
 }
 
+export interface CompanyBranding {
+  companyCode: string;
+  companyName: string;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+  supportEmail?: string | null;
+}
+
+async function apiGetCompanyBranding(companyCode: string): Promise<CompanyBranding> {
+  return apiRequest<CompanyBranding>(`/vendors/branding/${companyCode}`, { cacheTtlMs: 300_000 });
+}
+
 export const vendorPortalService = {
+  getCompanyBranding: apiGetCompanyBranding,
   getRfq: apiGetRfq,
   listRfqs: USE_MOCK ? mockVendorRfqs : apiVendorRfqs,
   listQuotations: USE_MOCK ? mockVendorQuotations : apiVendorQuotations,

@@ -1245,12 +1245,16 @@ export default function CreateRFQPage() {
                 Scoring Weightages
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {Object.entries(simpleWeightages).map(([key, param]) => {
+                {Object.entries(simpleWeightages).map(([key, param], idx) => {
                   const isEditing = editingKey === key;
                   const accentColor =
-                    key === 'price' ? 'var(--primary-500)' :
-                    key === 'vendorRating' ? 'var(--success-500)' :
-                    key === 'delivery' ? '#d97706' : '#7c3aed';
+                    key === 'price' ? '#0a6ed1' :
+                    key === 'vendorRating' ? '#107e3e' :
+                    key === 'delivery' ? '#e9730c' :
+                    key === 'compliance' ? '#8b5cf6' :
+                    ['#0a6ed1', '#107e3e', '#e9730c', '#8b5cf6', '#0891b2', '#ec4899'][idx % 6];
+                  const fillPct = Math.min(100, Math.max(0, param.weightage));
+                  const trackBackground = `linear-gradient(to right, ${accentColor} 0%, ${accentColor} ${fillPct}%, var(--border-strong) ${fillPct}%, var(--border-strong) 100%)`;
                   return (
                     <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       {isEditing ? (
@@ -1312,6 +1316,7 @@ export default function CreateRFQPage() {
                       )}
                       <input
                         type="range"
+                        className="create-rfq__range-slider"
                         min="0"
                         max="100"
                         value={param.weightage}
@@ -1319,7 +1324,9 @@ export default function CreateRFQPage() {
                         style={{
                           flex: 1,
                           accentColor,
-                          height: 6,
+                          color: accentColor,
+                          background: trackBackground,
+                          height: 4,
                           cursor: 'pointer',
                         }}
                       />

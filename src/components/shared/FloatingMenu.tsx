@@ -1,4 +1,4 @@
-import { useRef, useState, useLayoutEffect, useEffect, type ReactNode, type RefObject } from 'react';
+import { useRef, useState, useLayoutEffect, useEffect, useCallback, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 
 type Placement = 'bottom-start' | 'bottom-end' | 'bottom' | 'top-start' | 'top-end' | 'top';
@@ -55,13 +55,9 @@ export default function FloatingMenu({
   const [pos, setPos] = useState<{ top: number; left: number; maxHeight?: number } | null>(null);
   const ready = pos !== null;
 
-  // ── SYNCHRONOUS positioning before browser paint ────────
-  useLayoutEffect(() => {
-    if (!open) {
-      setPos(null);
-      posKeyRef.current = '';
-      return;
-    }
+  // ── Positioning logic ──────────────────────────────────
+  const updatePosition = useCallback(() => {
+    if (!open) return;
 
     const anchor = anchorRef.current;
     const panel = panelRef.current;
@@ -114,25 +110,50 @@ export default function FloatingMenu({
       posKeyRef.current = key;
       setPos({ top, left, maxHeight: computedMaxHeight });
     }
-  }, [open, anchorRef, effectivePlacement, effectiveOffset, preventFlip, side, align, options?.viewportPadding]);
+  }, [open, anchorRef, effectiveOffset, preventFlip, side, align, options?.viewportPadding]);
+
+  // ── SYNCHRONOUS positioning before browser paint ────────
+  useLayoutEffect(() => {
+    if (!open) {
+      setPos(null);
+      posKeyRef.current = '';
+      return;
+    }
+    updatePosition();
+  }, [open, updatePosition]);
 
   // ── Recompute on scroll / resize ─────────────────────────
   useEffect(() => {
     if (!open) return;
     let raf: number;
-    const tick = () => {
-      setPos(null);
-      posKeyRef.current = '';
+
+    const onScroll = (e: Event) => {
+      // Ignore scroll events coming from inside the dropdown panel itself!
+      if (panelRef.current && panelRef.current.contains(e.target as Node)) {
+        return;
+      }
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        updatePosition();
+      });
     };
-    const onMove = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(tick); };
-    window.addEventListener('scroll', onMove, { capture: true, passive: true });
-    window.addEventListener('resize', onMove, { passive: true });
+
+    const onResize = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        updatePosition();
+      });
+    };
+
+    window.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    window.addEventListener('resize', onResize, { passive: true });
+
     return () => {
       cancelAnimationFrame(raf);
-      window.removeEventListener('scroll', onMove, { capture: true });
-      window.removeEventListener('resize', onMove);
+      window.removeEventListener('scroll', onScroll, { capture: true });
+      window.removeEventListener('resize', onResize);
     };
-  }, [open]);
+  }, [open, updatePosition]);
 
   // ── Close on outside click ───────────────────────────────
   useEffect(() => {

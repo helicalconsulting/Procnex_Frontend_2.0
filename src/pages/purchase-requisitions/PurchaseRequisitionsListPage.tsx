@@ -395,7 +395,7 @@ export default function PurchaseRequisitionsListPage() {
         </div>
       )}
 
-      {selectedPrIds.length > 0 && (
+      {selectedPrIds.length > 0 && !showBatchDeleteModal && (
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           background: 'var(--surface-card)', border: '1px solid var(--primary-500)',
@@ -429,9 +429,8 @@ export default function PurchaseRequisitionsListPage() {
                 display: 'inline-flex', alignItems: 'center', gap: 6
               }}
               title={!hasPermission('PO Creation', 'canCreate') ? "Admin has not allowed this action. You do not have permission to delete Purchase Orders." : undefined}
-              onClick={(e) => {
+              onClick={() => {
                 if (!hasPermission('PO Creation', 'canCreate')) return;
-                (e.currentTarget as HTMLElement).blur();
                 setShowBatchDeleteModal(true);
               }}
             >
@@ -710,7 +709,7 @@ export default function PurchaseRequisitionsListPage() {
             </div>
             <div className="pr-modal-footer">
               <button
-                autoFocus
+                ref={(el) => el?.focus()}
                 className="pr-btn pr-btn--outline"
                 onClick={() => setShowBatchDeleteModal(false)}
                 disabled={batchDeleting}

@@ -39,6 +39,8 @@ export interface AuditEntry {
   module: string;
   timestamp: string;
   details: string;
+  ipAddress?: string;
+  referenceId?: string;
 }
 
 export interface DocumentItem {
@@ -68,8 +70,156 @@ const SALES_ORDERS_MOCK: SalesOrder[] = [
 ];
 
 const AUDIT_MOCK: AuditEntry[] = [
-  { id: 1, user: 'admin', action: 'USER_LOGIN', module: 'AUTH', timestamp: '2024-04-26T10:00:00', details: 'Successful login' },
-  { id: 2, user: 'procurement', action: 'RFQ_CREATE', module: 'RFQ', timestamp: '2024-04-25T14:30:00', details: 'Created RFQ-2024-020' },
+  {
+    id: 1,
+    user: 'Vikram Malhotra',
+    action: 'PO_APPROVE',
+    module: 'PO',
+    timestamp: '2026-09-08T07:45:00',
+    details: 'Approved Purchase Order PO-20260824-3715 for ₹1,250,000 (Level 2 Finance Approval completed)',
+    referenceId: 'PO-20260824-3715',
+    ipAddress: '103.21.14.88',
+  },
+  {
+    id: 2,
+    user: 'System Administrator',
+    action: 'VENDOR_APPROVE',
+    module: 'VENDOR',
+    timestamp: '2026-09-08T07:12:00',
+    details: 'Approved vendor onboarding & verified GST/PAN compliance documents for Acme Industrial Suppliers',
+    referenceId: 'VND-9102',
+    ipAddress: '192.168.1.10',
+  },
+  {
+    id: 3,
+    user: 'Anjali Singh',
+    action: 'CONTRACT_SIGN',
+    module: 'CONTRACT',
+    timestamp: '2026-09-08T06:30:00',
+    details: 'Executed digital signature on Master Services Agreement (MSA) with Apex Logistics Pvt Ltd',
+    referenceId: 'CNT-2026-004',
+    ipAddress: '192.168.1.14',
+  },
+  {
+    id: 4,
+    user: 'Neha Gupta',
+    action: 'INVOICE_APPROVE',
+    module: 'AP',
+    timestamp: '2026-09-08T05:15:00',
+    details: 'Verified 3-Way Match (PO vs GRN vs Invoice) & approved Tax Invoice INV-2026-089 for ₹450,000',
+    referenceId: 'INV-2026-089',
+    ipAddress: '192.168.1.22',
+  },
+  {
+    id: 5,
+    user: 'Rahul Sharma',
+    action: 'RFQ_CREATE',
+    module: 'RFQ',
+    timestamp: '2026-09-07T16:20:00',
+    details: 'Published Request for Quotation RFQ-2026-104 (Steel Raw Materials) to 5 invited suppliers',
+    referenceId: 'RFQ-2026-104',
+    ipAddress: '192.168.1.45',
+  },
+  {
+    id: 6,
+    user: 'Finance Executive',
+    action: 'PAYMENT_EXPORT',
+    module: 'PAYMENTS',
+    timestamp: '2026-09-07T14:10:00',
+    details: 'Generated NEFT Payment Voucher VOU-2026-8819 for ₹890,000 and exported HDFC Bank Payment File',
+    referenceId: 'VOU-2026-8819',
+    ipAddress: '192.168.1.50',
+  },
+  {
+    id: 7,
+    user: 'Precision Tech Portal',
+    action: 'CREATE',
+    module: 'QUOTATION',
+    timestamp: '2026-09-07T11:45:00',
+    details: 'Supplier Precision Tech submitted sealed commercial quote QT-2026-042 for RFQ-2026-102',
+    referenceId: 'QT-2026-042',
+    ipAddress: '49.207.19.102',
+  },
+  {
+    id: 8,
+    user: 'System Administrator',
+    action: 'UPDATE',
+    module: 'USER',
+    timestamp: '2026-09-07T09:30:00',
+    details: 'Updated role permissions: Added PO Level 3 Approval threshold (₹5,000,000+) to Finance Director',
+    referenceId: 'ROLE-FIN-DIR',
+    ipAddress: '192.168.1.10',
+  },
+  {
+    id: 9,
+    user: 'Vikram Malhotra',
+    action: 'LOGIN',
+    module: 'AUTH',
+    timestamp: '2026-09-07T08:50:00',
+    details: 'User logged in successfully via Multi-Factor Authentication (MFA)',
+    referenceId: 'SESSION-90812',
+    ipAddress: '103.21.14.88',
+  },
+  {
+    id: 10,
+    user: 'Rohan Verma',
+    action: 'REJECT',
+    module: 'PO',
+    timestamp: '2026-09-06T17:05:00',
+    details: 'Rejected Purchase Requisition PR-2026-054 due to missing technical specifications attached',
+    referenceId: 'PR-2026-054',
+    ipAddress: '192.168.1.33',
+  },
+  {
+    id: 11,
+    user: 'Mahindra Infra',
+    action: 'UPDATE',
+    module: 'VENDOR',
+    timestamp: '2026-09-06T14:40:00',
+    details: 'Uploaded renewed GST Certificate & Bank Cancelled Cheque for compliance verification',
+    referenceId: 'DOC-GST-992',
+    ipAddress: '115.240.88.14',
+  },
+  {
+    id: 12,
+    user: 'System Administrator',
+    action: 'EXPORT',
+    module: 'AUTH',
+    timestamp: '2026-09-06T12:00:00',
+    details: 'Exported monthly system activity & compliance audit trail log report (CSV Format)',
+    referenceId: 'AUD-EXP-20260906',
+    ipAddress: '192.168.1.10',
+  },
+  {
+    id: 13,
+    user: 'Rahul Sharma',
+    action: 'CREATE',
+    module: 'PO',
+    timestamp: '2026-09-05T15:30:00',
+    details: 'Dispatched officially signed Purchase Order PO-20260824-3714 to Sterling Enterprises',
+    referenceId: 'PO-20260824-3714',
+    ipAddress: '192.168.1.45',
+  },
+  {
+    id: 14,
+    user: 'System Administrator',
+    action: 'UPDATE',
+    module: 'APPROVALS',
+    timestamp: '2026-09-05T11:15:00',
+    details: 'Updated Approval Level Workflow: Required 2 signatures for Purchase Orders > ₹1,000,000',
+    referenceId: 'WF-PO-APP',
+    ipAddress: '192.168.1.10',
+  },
+  {
+    id: 15,
+    user: 'Rohan Verma',
+    action: 'DELETE',
+    module: 'VENDOR',
+    timestamp: '2026-09-04T16:00:00',
+    details: 'Suspended vendor profile VND-4019 due to failed quality audit inspection report',
+    referenceId: 'VND-4019',
+    ipAddress: '192.168.1.33',
+  },
 ];
 
 const DOCUMENTS_MOCK: DocumentItem[] = [
@@ -178,12 +328,15 @@ export const localDataService = {
     return SALES_ORDERS_MOCK;
   },
   getAuditTrail: async () => {
-    if (!USE_MOCK) {
-      warnNoBackend('Audit Trail');
-      return [];
+    try {
+      const data = await apiRequest<{ auditTrail?: AuditEntry[] }>('/audit-trail?limit=2000');
+      if (data && Array.isArray(data.auditTrail)) {
+        return data.auditTrail;
+      }
+    } catch (_err) {
+      // Backend request error
     }
-    await delay();
-    return AUDIT_MOCK;
+    return [];
   },
   getDocuments: async () => {
     if (!USE_MOCK) {

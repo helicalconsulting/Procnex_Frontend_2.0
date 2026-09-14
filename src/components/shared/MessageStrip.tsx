@@ -11,8 +11,9 @@ const ICONS = {
   information: Info,
 } as const;
 
-export function inferMessageType(message: string): MessageStripType {
-  const lower = message.toLowerCase();
+export function inferMessageType(message: unknown): MessageStripType {
+  const str = typeof message === 'string' ? message : (message && typeof message === 'object') ? JSON.stringify(message) : String(message || '');
+  const lower = str.toLowerCase();
   if (/\b(fail|failed|failure|error|cannot|can't|could not|invalid|missing|unable|denied)\b/.test(lower)) {
     return 'error';
   }

@@ -178,12 +178,6 @@ export default function LoginPage() {
               {isSubmitting ? <span className="sap-login__spinner" /> : 'Log On'}
             </button>
           </form>
-
-          <p className="sap-login__form-footer">
-            <a href="/vendor/login" style={{ color: 'var(--primary-500)', fontSize: 16, fontWeight: 600, textDecoration: 'none' }}>
-              {PORTAL_NAMES.secondary}? Sign in here
-            </a>
-          </p>
         </div>
       </div>
     </div>

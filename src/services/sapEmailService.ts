@@ -251,7 +251,7 @@ export const sapEmailService = {
 
       newLogs.push({
         id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        recipientEmail: 'admin@heliflow.com',
+        recipientEmail: 'admin@procnex.com',
         recipientName: 'Administrator',
         subject: `[${cName} SAP] Direct Submission Received: ${sub.formTitle} (${sub.assignedUserName})`,
         bodyHtml: html,

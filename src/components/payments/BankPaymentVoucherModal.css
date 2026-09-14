@@ -400,6 +400,12 @@
   letter-spacing: 0.03em;
 }
 
+.bpv-stamp-badge--pending {
+  background: #fff7ed;
+  color: #ea580c;
+  border: 1px solid #ffedd5;
+}
+
 /* ── Footer ── */
 .bpv-sheet__footer {
   margin-top: 32px;

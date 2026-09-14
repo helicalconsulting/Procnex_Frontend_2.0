@@ -332,7 +332,7 @@ export default function PurchaseOrdersPage() {
       )}
 
       {/* ── Floating Bulk Action Banner ── */}
-      {selectedPOIds.length > 0 && (
+      {selectedPOIds.length > 0 && !showBatchDeleteModal && (
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           background: 'var(--surface-card)', border: '1px solid var(--primary-500)',
@@ -366,9 +366,8 @@ export default function PurchaseOrdersPage() {
                 display: 'inline-flex', alignItems: 'center', gap: 6
               }}
               title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to delete purchase orders." : undefined}
-              onClick={(e) => {
+              onClick={() => {
                 if (!canCreatePO) return;
-                (e.currentTarget as HTMLElement).blur();
                 setShowBatchDeleteModal(true);
               }}
             >
@@ -601,7 +600,7 @@ export default function PurchaseOrdersPage() {
               </p>
             </div>
             <div className="po-modal__footer">
-              <button autoFocus className="po-modal__btn po-modal__btn--secondary" onClick={() => setShowBatchDeleteModal(false)} disabled={batchDeleting}>Cancel</button>
+              <button ref={(el) => el?.focus()} className="po-modal__btn po-modal__btn--secondary" onClick={() => setShowBatchDeleteModal(false)} disabled={batchDeleting}>Cancel</button>
               <button className="po-modal__btn" style={{ background: '#dc2626', color: '#fff' }} onClick={handleBatchDeleteConfirm} disabled={batchDeleting}>
                 {batchDeleting ? 'Deleting…' : `Delete ${selectedPOIds.length} Order(s)`}
               </button>

@@ -498,6 +498,14 @@ body.modal-open .app-layout__content {
   overflow: hidden !important;
 }
 
+/* Ensure modal containers use flex layout so modal bodies scroll properly with touchpad / mouse wheel */
+[class*="-modal-backdrop"] > [class*="-modal"],
+[class*="__modal-backdrop"] > [class*="-modal"] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 /* Ensure modal bodies & scroll containers ALWAYS allow vertical scrolling */
 .quot-compare-modal__body,
 [class*="-modal__body"],
@@ -505,6 +513,8 @@ body.modal-open .app-layout__content {
 [class*="__modal-body"],
 [class*="-modal__content"],
 [class*="-modal-content"] {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto !important;
   touch-action: pan-y !important;
   overscroll-behavior: contain;

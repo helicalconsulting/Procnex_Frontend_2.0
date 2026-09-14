@@ -2355,7 +2355,7 @@ export default function NewOnboardingPage() {
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 10 }}>
                             <div>
                               <div style={{ fontSize: 9, color: '#047857', fontWeight: 700 }}>TRADE NAME</div>
-                              <div style={{ fontSize: 13, fontWeight: 800, color: '#064e3b' }}>HELIFLOW GLOBAL VENDORS LLC</div>
+                              <div style={{ fontSize: 13, fontWeight: 800, color: '#064e3b' }}>PROCNEX GLOBAL VENDORS LLC</div>
                             </div>
                             <div>
                               <div style={{ fontSize: 9, color: '#047857', fontWeight: 700 }}>LICENSE NUMBER</div>
@@ -2402,7 +2402,7 @@ export default function NewOnboardingPage() {
                           </div>
                           <div style={{ marginBottom: 10 }}>
                             <div style={{ fontSize: 9, color: '#c2410c', fontWeight: 700 }}>REGISTERED LEGAL ENTITY</div>
-                            <div style={{ fontSize: 13, fontWeight: 800, color: '#7c2d12' }}>HELIFLOW GLOBAL VENDOR ENTERPRISES</div>
+                            <div style={{ fontSize: 13, fontWeight: 800, color: '#7c2d12' }}>PROCNEX GLOBAL VENDOR ENTERPRISES</div>
                           </div>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, background: 'rgba(255,255,255,0.7)', padding: 10, borderRadius: 8, border: '1px solid #fed7aa' }}>
                             <div>

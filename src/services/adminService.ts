@@ -15,6 +15,7 @@ export interface CreateUserPayload {
   phone?: string;
   department?: string;
   position?: string;
+  branchId?: string;
   companyCode?: string;
   roleName: string;
   userType?: 'rfq' | 'heliflow';
@@ -30,6 +31,7 @@ export interface UpdateUserPayload {
   email?: string;
   phone?: string;
   department?: string;
+  branchId?: string;
   roleName?: string;
 }
 
@@ -125,6 +127,7 @@ async function apiCreateUser(payload: CreateUserPayload): Promise<UserWithRoles>
   if (payload.phone) formData.append('phone', payload.phone);
   if (payload.department) formData.append('department', payload.department);
   if (payload.position) formData.append('position', payload.position);
+  if (payload.branchId) formData.append('branchId', payload.branchId);
   if (payload.companyCode) formData.append('companyCode', payload.companyCode);
   if (payload.userType) formData.append('userType', payload.userType);
   if (payload.documents?.aadhaar) formData.append('aadhaar', payload.documents.aadhaar);
@@ -191,36 +194,14 @@ async function mockUpdateUser(id: string, payload: UpdateUserPayload): Promise<U
 }
 
 async function apiUpdateUser(id: string, payload: UpdateUserPayload): Promise<UserWithRoles> {
-  const updated = await apiRequest<{
-    id: string;
-    fullName: string;
-    username: string;
-    email: string;
-    role?: string;
-    roles?: string[];
-    phone?: string | null;
-    department?: string | null;
-    companyCode?: string;
-    isActive: boolean;
-    lastLoginAt?: string | null;
-    createdAt: string;
-  }>(`/admin/users/${id}`, {
+  const updated = await apiRequest<UserWithRoles & { role?: string }>(`/admin/users/${id}`, {
     method: 'PUT',
     body: JSON.stringify(payload),
   });
   invalidateApiCache('/admin/users');
   invalidateApiCache('/admin/roles');
   return {
-    id: updated.id,
-    fullName: updated.fullName,
-    username: updated.username,
-    email: updated.email,
-    phone: updated.phone ?? undefined,
-    department: updated.department ?? undefined,
-    companyCode: updated.companyCode || 'HFL',
-    isActive: updated.isActive,
-    lastLoginAt: updated.lastLoginAt ?? undefined,
-    createdAt: updated.createdAt,
+    ...updated,
     roles: updated.roles || (updated.role ? [updated.role] : []),
   };
 }

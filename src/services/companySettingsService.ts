@@ -36,6 +36,42 @@ export interface Unit {
   updatedAt: string;
 }
 
+export interface Warehouse {
+  id: string;
+  companyCode: string;
+  code: string;
+  name: string;
+  type: string;
+  address?: string | null;
+  city?: string | null;
+  country?: string | null;
+  contactPerson?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  isDefault: boolean;
+  isActive: boolean;
+  createdBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Branch {
+  id: string;
+  companyCode: string;
+  code: string;
+  name: string;
+  city?: string | null;
+  address?: string | null;
+  managerId?: string | null;
+  managerName?: string | null;
+  isDefault: boolean;
+  isActive: boolean;
+  createdBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  manager?: { id: string; fullName: string; username: string; email: string };
+}
+
 export interface Category {
   id: string;
   companyCode: string;
@@ -1463,6 +1499,18 @@ export const companySettingsService = {
   verifySettingsPassword: apiVerifySettingsPassword,
   updateSettingsPassword: apiUpdateSettingsPassword,
   removeSettingsPassword: apiRemoveSettingsPassword,
+  // Warehouses
+  listWarehouses: apiListWarehouses,
+  createWarehouse: apiCreateWarehouse,
+  updateWarehouse: apiUpdateWarehouse,
+  deleteWarehouse: apiDeleteWarehouse,
+  setDefaultWarehouse: apiSetDefaultWarehouse,
+  // Branches
+  listBranches: apiListBranches,
+  createBranch: apiCreateBranch,
+  updateBranch: apiUpdateBranch,
+  deleteBranch: apiDeleteBranch,
+  setDefaultBranch: apiSetDefaultBranch,
 };
 
 export interface SequenceSetting {
@@ -1542,3 +1590,68 @@ async function apiRemoveSettingsPassword(currentPassword: string): Promise<{ isP
     body: JSON.stringify({ currentPassword }),
   });
 }
+
+// ─── Warehouse API ─────────────────────────────────────────────────────────
+
+async function apiListWarehouses(includeInactive = false): Promise<Warehouse[]> {
+  const query = includeInactive ? '?includeInactive=true' : '';
+  const data = await apiRequest<{ warehouses: Warehouse[] }>(`/company-settings/warehouses${query}`, { cacheTtlMs: 30000 });
+  return data.warehouses || [];
+}
+
+async function apiCreateWarehouse(payload: Partial<Warehouse>): Promise<Warehouse> {
+  return apiRequest<Warehouse>('/company-settings/warehouses', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+async function apiUpdateWarehouse(id: string, payload: Partial<Warehouse>): Promise<Warehouse> {
+  return apiRequest<Warehouse>(`/company-settings/warehouses/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+async function apiDeleteWarehouse(id: string): Promise<void> {
+  await apiRequest(`/company-settings/warehouses/${id}`, { method: 'DELETE' });
+}
+
+async function apiSetDefaultWarehouse(id: string): Promise<Warehouse> {
+  return apiRequest<Warehouse>(`/company-settings/warehouses/${id}/set-default`, {
+    method: 'PATCH',
+  });
+}
+
+// ─── Branch API ───────────────────────────────────────────────────────────
+
+async function apiListBranches(includeInactive = false): Promise<Branch[]> {
+  const query = includeInactive ? '?includeInactive=true' : '';
+  const data = await apiRequest<{ branches: Branch[] }>(`/company-settings/branches${query}`, { cacheTtlMs: 30000 });
+  return data.branches || [];
+}
+
+async function apiCreateBranch(payload: Partial<Branch>): Promise<Branch> {
+  return apiRequest<Branch>('/company-settings/branches', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+async function apiUpdateBranch(id: string, payload: Partial<Branch>): Promise<Branch> {
+  return apiRequest<Branch>(`/company-settings/branches/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+async function apiDeleteBranch(id: string): Promise<void> {
+  await apiRequest(`/company-settings/branches/${id}`, { method: 'DELETE' });
+}
+
+async function apiSetDefaultBranch(id: string): Promise<Branch> {
+  return apiRequest<Branch>(`/company-settings/branches/${id}/set-default`, {
+    method: 'PATCH',
+  });
+}
+

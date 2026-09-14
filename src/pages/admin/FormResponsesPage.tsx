@@ -144,13 +144,13 @@ export default function FormResponsesPage() {
       ctx.fillStyle = '#94a3b8';
       ctx.font = '12px monospace';
       ctx.fillText(`File: ${fileName}  ·  Format: JPG/PNG Image`, 450, 465);
-      ctx.fillText('Heliflow Enterprise Security Engine', 450, 490);
+      ctx.fillText('Procnex Enterprise Security Engine', 450, 490);
 
       // Watermark
       ctx.fillStyle = '#64748b';
       ctx.font = '12px system-ui, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('Heliflow Secure Image Vault · Verified Record', 450, 615);
+      ctx.fillText('Procnex Secure Image Vault · Verified Record', 450, 615);
 
       return canvas.toDataURL('image/png');
     } catch {
@@ -1054,7 +1054,7 @@ export default function FormResponsesPage() {
               </div>
 
               <div className="frp-lightbox-footer">
-                <span style={{ fontSize: '12px', color: 'var(--text-secondary, #94a3b8)' }}>Heliflow Enterprise Document Viewer</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary, #94a3b8)' }}>Procnex Enterprise Document Viewer</span>
                 <div style={{ display: 'flex', gap: '10px' }}>
                   {viewingImage.src ? (
                     <a

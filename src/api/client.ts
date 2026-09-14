@@ -64,9 +64,11 @@ export function getClientInstanceId(): string {
 
 export function authHeaders(extra?: Record<string, string>): HeadersInit {
   const token = localStorage.getItem(TOKEN_KEY) || localStorage.getItem('heliflow_vendor_token');
+  const companyCode = localStorage.getItem('vendor_company_code');
   return {
     'Content-Type': 'application/json',
     'X-Client-Instance-Id': getClientInstanceId(),
+    ...(companyCode ? { 'X-Company-Code': companyCode } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...extra,
   };

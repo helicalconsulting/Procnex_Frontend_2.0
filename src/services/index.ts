@@ -15,3 +15,5 @@ export { localDataService } from './localDataService';
 export { reportsService } from './reportsService';
 export { contractService } from './contractService';
 export { companySettingsService } from './companySettingsService';
+export { repnexService } from './repnexService';
+

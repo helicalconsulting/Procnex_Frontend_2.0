@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
 import { purchaseRequisitionService } from '../../services/purchaseRequisitionService';
-import { companySettingsService } from '../../services/companySettingsService';
+import { companySettingsService, type Warehouse } from '../../services/companySettingsService';
 import { apiRequest } from '../../api/client';
 import { downloadPurchaseOrderAsPdf } from '../../utils/pdfDownload';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
@@ -49,6 +49,50 @@ export default function CreatePurchaseOrderPage() {
   const isReadOnly = searchParams.get('mode') === 'view';
   const { formatAmount, companyDefaultCurrency } = useCurrency();
   const { companyName: brandingCompanyName, companyPhone: brandingPhone, companyEmail: brandingEmail } = useBranding();
+
+  // ── Ship-To & Warehouse Master State ──
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [loadingWarehouses, setLoadingWarehouses] = useState(false);
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState('');
+  const [shipToCompany, setShipToCompany] = useState(brandingCompanyName || 'Procnex Warehouse');
+  const [shipToWarehouse, setShipToWarehouse] = useState('Central Warehouse');
+  const [shipToAddress, setShipToAddress] = useState('Central Depot');
+  const [shipToContact, setShipToContact] = useState('Warehouse Manager');
+  const [shipToPhone, setShipToPhone] = useState(brandingPhone || '+91 800-PROCNEX');
+
+  // ── Fetch Warehouses dynamically from Company Settings DB ──
+  useEffect(() => {
+    setLoadingWarehouses(true);
+    companySettingsService.listWarehouses()
+      .then((whs) => {
+        setWarehouses(whs);
+        if (whs.length > 0) {
+          const defWh = whs.find((w) => w.isDefault && w.isActive) || whs.find((w) => w.isActive) || whs[0];
+          if (defWh) {
+            setSelectedWarehouseId(defWh.id);
+            setShipToWarehouse(`${defWh.code} — ${defWh.name}`);
+            const fullAddress = [defWh.address, defWh.city, defWh.country].filter(Boolean).join(', ');
+            setShipToAddress(fullAddress || 'Central Depot');
+            if (defWh.contactPerson) setShipToContact(defWh.contactPerson);
+            if (defWh.phone) setShipToPhone(defWh.phone);
+          }
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingWarehouses(false));
+  }, []);
+
+  const handleWarehouseSelect = (whId: string) => {
+    setSelectedWarehouseId(whId);
+    const wh = warehouses.find((w) => w.id === whId);
+    if (wh) {
+      setShipToWarehouse(`${wh.code} — ${wh.name}`);
+      const fullAddress = [wh.address, wh.city, wh.country].filter(Boolean).join(', ');
+      setShipToAddress(fullAddress || '');
+      setShipToContact(wh.contactPerson || '');
+      setShipToPhone(wh.phone || '');
+    }
+  };
 
   // ── Form State ──
   const [poNumber, setPoNumber] = useState('');
@@ -448,7 +492,7 @@ export default function CreatePurchaseOrderPage() {
         poNumber: finalPoNumber,
         status: statusPayload,
         isStandalone: true,
-        companyName: brandingCompanyName || 'Heliflow Consulting',
+        companyName: brandingCompanyName || 'Procnex Consulting',
         companyAddress: supplierAddress || '',
         companyPhone: brandingPhone || '',
         companyEmail: brandingEmail || '',
@@ -463,11 +507,11 @@ export default function CreatePurchaseOrderPage() {
         vendorPhone: contactPhone,
         vendorEmail: contactEmail,
         vendorGstVat: supplierTaxId,
-        shipToCompany: brandingCompanyName || 'Heliflow Warehouse',
-        shipToWarehouse: 'Central Warehouse',
-        shipToAddress: supplierAddress || '',
-        shipToContact: contactPerson || '',
-        shipToPhone: contactPhone || '',
+        shipToCompany: shipToCompany || brandingCompanyName || 'Procnex Warehouse',
+        shipToWarehouse: shipToWarehouse || 'Central Warehouse',
+        shipToAddress: shipToAddress || '',
+        shipToContact: shipToContact || '',
+        shipToPhone: shipToPhone || '',
         poDate: poDate,
         currency: currency,
         requisitioner: 'Procurement Officer',
@@ -533,11 +577,11 @@ export default function CreatePurchaseOrderPage() {
       poNumber,
       revisionNo,
       orderDate: poDate,
-      companyName: brandingCompanyName || 'Heliflow Consulting',
+      companyName: brandingCompanyName || 'Procnex Consulting',
       companyAddress: 'Industrial Zone, Building 4',
-      companyPhone: brandingPhone || '+91 800-HELIFLOW',
-      companyEmail: brandingEmail || 'procurement@heliflow.com',
-      companyWebsite: 'www.heliflow.com',
+      companyPhone: brandingPhone || '+91 800-PROCNEX',
+      companyEmail: brandingEmail || 'procurement@procnex.com',
+      companyWebsite: 'www.procnex.com',
       vendorName: supplierName || 'Supplier',
       supplierCode: supplierCode || undefined,
       supplierType: supplierType || undefined,
@@ -546,11 +590,11 @@ export default function CreatePurchaseOrderPage() {
       vendorPhone: contactPhone || undefined,
       vendorEmail: contactEmail || undefined,
       vendorGstVat: supplierTaxId || undefined,
-      shipToCompany: brandingCompanyName || 'Heliflow Warehouse',
-      shipToWarehouse: 'Central Warehouse',
-      shipToAddress: supplierAddress || 'Central Depot',
-      shipToContact: contactPerson || 'Warehouse Manager',
-      shipToPhone: contactPhone || brandingPhone || '+91 800-HELIFLOW',
+      shipToCompany: shipToCompany || brandingCompanyName || 'Procnex Warehouse',
+      shipToWarehouse: shipToWarehouse || 'Central Warehouse',
+      shipToAddress: shipToAddress || 'Central Depot',
+      shipToContact: shipToContact || 'Warehouse Manager',
+      shipToPhone: shipToPhone || brandingPhone || '+91 800-PROCNEX',
       requisitioner: 'Procurement Officer',
       shipVia: 'Surface',
       fob: 'Destination',
@@ -949,6 +993,64 @@ export default function CreatePurchaseOrderPage() {
             <div className="cpo-field">
               <label>CONTACT PHONE</label>
               <input type="text" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="+1 000 000 0000" />
+            </div>
+          </div>
+        </div>
+
+        {/* ── Section 03B: Ship-To & Warehouse Location Master ── */}
+        <div className="cpo-section">
+          <div className="cpo-section__header">
+            <span className="cpo-section__num">03B</span>
+            <span className="cpo-section__title">Ship-To & Warehouse Location</span>
+            <span className="cpo-section__hint">Linked to Warehouse Master Database</span>
+          </div>
+
+          <div className="cpo-grid cpo-grid--3">
+            <div className="cpo-field">
+              <label>SHIP-TO WAREHOUSE MASTER *</label>
+              <select
+                value={selectedWarehouseId}
+                onChange={(e) => handleWarehouseSelect(e.target.value)}
+                style={{ fontWeight: 600 }}
+              >
+                <option value="">-- Select Dynamic Warehouse --</option>
+                {warehouses.map((wh) => (
+                  <option key={wh.id} value={wh.id}>
+                    {wh.code} — {wh.name} {wh.isDefault ? '(Default Master)' : ''}
+                  </option>
+                ))}
+              </select>
+              <span className="cpo-field__sub">Configured in Company Settings &gt; Warehouses</span>
+            </div>
+            <div className="cpo-field">
+              <label>RECEIVING CONTACT PERSON</label>
+              <input
+                type="text"
+                value={shipToContact}
+                onChange={(e) => setShipToContact(e.target.value)}
+                placeholder="Warehouse Manager / Store Incharge"
+              />
+            </div>
+            <div className="cpo-field">
+              <label>RECEIVING CONTACT PHONE</label>
+              <input
+                type="text"
+                value={shipToPhone}
+                onChange={(e) => setShipToPhone(e.target.value)}
+                placeholder="+91 800-PROCNEX"
+              />
+            </div>
+          </div>
+
+          <div className="cpo-grid cpo-grid--1" style={{ marginTop: 12 }}>
+            <div className="cpo-field">
+              <label>FULL SHIP-TO DELIVERY ADDRESS</label>
+              <input
+                type="text"
+                value={shipToAddress}
+                onChange={(e) => setShipToAddress(e.target.value)}
+                placeholder="Central Depot, Industrial Zone..."
+              />
             </div>
           </div>
         </div>

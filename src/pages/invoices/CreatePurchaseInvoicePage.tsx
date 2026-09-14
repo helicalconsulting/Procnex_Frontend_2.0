@@ -1703,7 +1703,7 @@ export default function CreatePurchaseInvoicePage() {
                 Phone: {companyPhone || selectedPO?.companyPhone || '+918272811866'} &nbsp;|&nbsp; Email: {companyEmail || selectedPO?.companyEmail || 'nischalagarwal674@gmail.com'}
               </p>
               <p className="po-doc__company-detail">
-                {selectedPO?.companyWebsite || 'www.heliflow.com'}
+                {selectedPO?.companyWebsite || 'www.procnex.com'}
               </p>
             </div>
           </div>

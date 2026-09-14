@@ -176,12 +176,12 @@ export async function downloadPurchaseOrderAsPdf(
 
   const val = (v: any, fallback = '—') => (v !== undefined && v !== null && v !== '' ? String(v) : fallback);
 
-  const companyName = order.companyName || order.buyerCompany || 'Heliflow Consulting';
+  const companyName = order.companyName || order.buyerCompany || 'Procnex Consulting';
   const companyLogoUrl = order.logoUrl || order.companyLogoUrl || defaultHeliflowLogo;
   const companyAddress = val(order.companyAddress, 'Industrial Zone, Building 4');
-  const companyPhone = val(order.companyPhone, '+91 800-HELIFLOW');
-  const companyEmail = val(order.companyEmail, 'procurement@heliflow.com');
-  const companyWebsite = val(order.companyWebsite, 'www.heliflow.com');
+  const companyPhone = val(order.companyPhone, '+91 800-PROCNEX');
+  const companyEmail = val(order.companyEmail, 'procurement@procnex.com');
+  const companyWebsite = val(order.companyWebsite, 'www.procnex.com');
 
   const vendorName = val(order.vendorName || order.buyerCompany, 'Supplier');
   const vendorContact = val(order.vendorContactPerson, '—');

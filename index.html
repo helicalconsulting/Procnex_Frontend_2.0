@@ -2,9 +2,41 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/jpeg" href="/Procnex-logo.jpeg" />
+    <script>
+      (function() {
+        try {
+          var path = window.location.pathname;
+          var match = path.match(/^\/v\/([a-zA-Z0-9_-]+)/);
+          var code = match && match[1] ? match[1].toUpperCase() : null;
+          if (!code) {
+            var params = new URLSearchParams(window.location.search);
+            code = (params.get('company') || params.get('companyCode') || '').toUpperCase() || null;
+          }
+          var link = document.createElement('link');
+          link.rel = 'icon';
+          if (code && code !== 'LOGIN' && code !== 'DASHBOARD') {
+            var raw = localStorage.getItem('branding_cache_' + code);
+            if (raw) {
+              var b = JSON.parse(raw);
+              if (b.companyName) document.title = b.companyName + ' — Vendor Portal';
+              if (b.logoUrl) {
+                link.href = b.logoUrl;
+              } else {
+                link.href = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏢</text></svg>';
+              }
+            } else {
+              document.title = code + ' — Vendor Portal';
+              link.href = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏢</text></svg>';
+            }
+          } else {
+            document.title = 'Procnex — Procurement Automation Software';
+            link.href = '/Procnex-logo.jpeg';
+          }
+          document.head.appendChild(link);
+        } catch (e) {}
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Procnex — Procurement Automation Software</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Poppins:wght@400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Roboto+Mono:ital,wght@0,100..700;1,100..700&display=swap" rel="stylesheet">

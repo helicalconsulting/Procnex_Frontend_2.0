@@ -744,6 +744,32 @@
   border-color: #8b5cf6 !important;
 }
 
+.approvals-modal__btn--view-contract {
+  background: var(--surface-card) !important;
+  color: var(--primary-500) !important;
+  border: 1px solid var(--border-strong, #cbd5e1) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+.approvals-modal__btn--view-contract:hover {
+  background: color-mix(in srgb, var(--primary-500) 8%, transparent) !important;
+  border-color: var(--primary-500) !important;
+  color: var(--primary-600) !important;
+  transform: translateY(-1px) !important;
+}
+
+[data-theme="dark"] .approvals-modal__btn--view-contract {
+  background: var(--surface-elevated) !important;
+  color: #60a5fa !important;
+  border-color: rgba(96, 165, 250, 0.3) !important;
+}
+
+[data-theme="dark"] .approvals-modal__btn--view-contract:hover {
+  background: rgba(96, 165, 250, 0.12) !important;
+  border-color: #60a5fa !important;
+  color: #93c5fd !important;
+}
+
 .approvals-detail-grid {
   display: grid !important;
   grid-template-columns: 1fr 1fr !important;

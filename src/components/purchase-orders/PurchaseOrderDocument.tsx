@@ -39,7 +39,7 @@ function ensurePONumber(poNumber: string | null | undefined): string {
 export default function PurchaseOrderDocument({ pr }: Props) {
   const { companyName: brandingCompanyName, companyPhone: brandingPhone, companyEmail: brandingEmail, logoUrl } = useBranding();
 
-  const finalCompanyName = pr.companyName || brandingCompanyName || 'Heliflow Consulting';
+  const finalCompanyName = pr.companyName || brandingCompanyName || 'Procnex Consulting';
 
   const finalLogoUrl = logoUrl || (pr as any).companyLogoUrl || defaultHeliflowLogo;
 
@@ -53,9 +53,9 @@ export default function PurchaseOrderDocument({ pr }: Props) {
             <h1 className="po-doc__company-name">{val(finalCompanyName)}</h1>
             <p className="po-doc__company-detail">{val(pr.companyAddress, 'Industrial Zone, Building 4')}</p>
             <p className="po-doc__company-detail">
-              Phone: {val(brandingPhone || pr.companyPhone, '+91 800-HELIFLOW')} &nbsp;|&nbsp; Email: {val(brandingEmail || pr.companyEmail, 'procurement@heliflow.com')}
+              Phone: {val(brandingPhone || pr.companyPhone, '+91 800-PROCNEX')} &nbsp;|&nbsp; Email: {val(brandingEmail || pr.companyEmail, 'procurement@procnex.com')}
             </p>
-            <p className="po-doc__company-detail">{val(pr.companyWebsite, 'www.heliflow.com')}</p>
+            <p className="po-doc__company-detail">{val(pr.companyWebsite, 'www.procnex.com')}</p>
           </div>
         </div>
         <div className="po-doc__header-right">

@@ -354,6 +354,8 @@ export default function VendorRFQsPage() {
     return target;
   }, [selectedPrevVersionId, previousQuotationsList, previousQuotation]);
 
+  const isQuotReadOnly = quotModal?.status === 'SUBMITTED' && !quotModal?.needsResubmit;
+
   // ── Bid Security — per-RFQ state to support multiple RFQ cards ──
   const [bidSecurityUploadingRfqId, setBidSecurityUploadingRfqId] = useState<number | null>(null);
   const [bidSecurityDocs, setBidSecurityDocs] = useState<Record<number, QuotationBidSecurity>>({});
@@ -530,30 +532,34 @@ export default function VendorRFQsPage() {
       setSelectedPrevVersionId(null);
     }
 
+    const matchingQuot = myQuot || (allMyQuotes.length > 0 ? allMyQuotes[0] : null);
+    const prevCustomValues = matchingQuot?.customFieldValues || {};
+
     const prices: Record<number, number> = {};
     const initCurrencies: Record<number, string> = {};
     currentRfq.items.forEach((item, idx) => {
-      prices[idx] = 0;
-      initCurrencies[idx] = companyDefaultCurrency;
+      const qItem = matchingQuot?.items?.find((qi: any) => qi.rfqItemId === item.id || qi.id === item.id) || matchingQuot?.items?.[idx] || matchingQuot?.lineItems?.[idx];
+      prices[idx] = qItem?.unitPrice ?? 0;
+      initCurrencies[idx] = matchingQuot?.currency || companyDefaultCurrency;
     });
     setQuotPrices(prices);
     setItemCurrencies(initCurrencies);
-    setQuotLeadTime('');
-    setQuotPayTerms(defaultPayTerm);
-    setVendorQuotationNumber(`QTN-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
-    setSelectedPaymentPlanId(null);
-    setQuotNotes('');
-    setCurrency(companyDefaultCurrency);
+    setQuotLeadTime(matchingQuot?.leadTimeDays ? String(matchingQuot.leadTimeDays) : (matchingQuot?.leadTime ? String(matchingQuot.leadTime) : ''));
+    setQuotPayTerms(matchingQuot?.paymentTerms || defaultPayTerm);
+    setVendorQuotationNumber(matchingQuot?.vendorQuotationNumber || `QTN-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
+    setSelectedPaymentPlanId(matchingQuot?.paymentPlanId || null);
+    setQuotNotes(matchingQuot?.notes || matchingQuot?.vendorNotes || '');
+    if (matchingQuot?.currency) setCurrency(matchingQuot.currency);
     setAttachments([]);
 
-    // Initialize custom field values (fresh/clean)
+    // Initialize custom field values
     const initCustomValues: Record<string, string | number> = {};
     (currentRfq.customFields || []).forEach((cf) => {
-      initCustomValues[cf.id] = '';
+      initCustomValues[cf.id] = prevCustomValues[cf.id] ?? prevCustomValues[cf.fieldName] ?? '';
     });
     setCustomFieldValues(initCustomValues);
 
-    // Initialize evaluation parameter values (pre-fill from previous submission if available)
+    // Initialize evaluation parameter values
     const initEvalValues: Record<string, string> = {};
     (currentRfq.evaluationCategories || []).forEach((cat) => {
       (cat.subParameters || []).filter(p => p.enabled !== false).forEach((sp) => {
@@ -566,7 +572,7 @@ export default function VendorRFQsPage() {
     // All categories collapsed by default — vendor clicks to expand
     setExpandedEvalCats(new Set());
 
-    // Pre-fill bid security & bid bond format fields from previous quotation (if resubmitting) or RFQ default
+    // Pre-fill bid security & bid bond format fields from previous quotation (if available) or RFQ default
     const prevBNo = myQuot?.bidSecurityBondNumber || myQuot?.bidBondNumber || '';
     const prevIssuer = myQuot?.bidSecurityIssuer || myQuot?.bidBondIssuer || '';
     const prevVal = myQuot?.bidSecurityValue ?? myQuot?.bidBondAmount ?? currentRfq.bidSecurityMinValue ?? '';
@@ -595,7 +601,14 @@ export default function VendorRFQsPage() {
     // Also reset card-body bid security upload state to prevent stale loading indicator
     setBidSecurityUploadingRfqId(prev => prev === currentRfq.id ? null : prev);
     setBidSecurityErrors(prev => { const n = { ...prev }; delete n[currentRfq.id]; return n; });
-    setQuotModalTitle(currentRfq.needsResubmit ? 'Resubmit Quotation' : 'Submit Quotation');
+    if (currentRfq.status === 'SUBMITTED' && !currentRfq.needsResubmit) {
+      setQuotModalTitle('View Quotation');
+    } else if (currentRfq.needsResubmit) {
+      setQuotModalTitle('Resubmit Quotation');
+    } else {
+      setQuotModalTitle('Submit Quotation');
+    }
+    setVquotModalState('open');
     setVquotModalState('open');
   }, [companyDefaultCurrency, defaultPayTerm]);
 
@@ -887,7 +900,7 @@ export default function VendorRFQsPage() {
                           style={{ padding: '6px 12px', fontSize: 12 }}
                           onClick={() => openQuotModal(rfq)}
                         >
-                          <Eye size={13} /> View / Edit Quote
+                          <Eye size={13} /> View Quote
                         </button>
                       )}
                       {rfq.status === 'RETURNED' && (
@@ -1007,7 +1020,7 @@ export default function VendorRFQsPage() {
                               className="vendor-btn vendor-btn--outline"
                               onClick={() => openQuotModal(rfq)}
                             >
-                              <Eye size={15} /> View / Edit Quotation
+                              <Eye size={15} /> View Quote
                             </button>
                           </div>
                         )}
@@ -1242,8 +1255,35 @@ export default function VendorRFQsPage() {
                     {quotModal.title}
                   </div>
 
+                  {/* ── Submitted Quotation Read-Only Banner ── */}
+                  {isQuotReadOnly && (
+                    <div className="vquot-modal__previous-banner" style={{ borderLeftColor: '#107e3e', background: 'rgba(16,126,62,0.06)' }}>
+                      <div className="vquot-modal__previous-banner-header" style={{ alignItems: 'center' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div className="vquot-modal__previous-banner-title" style={{ color: '#107e3e' }}>
+                            <CheckCircle2 size={16} />
+                            <span>Quotation Submitted (Ref #{vendorQuotationNumber || 'SUBMITTED'})</span>
+                          </div>
+                          <div className="vquot-modal__previous-banner-hint" style={{ color: 'var(--text-secondary)' }}>
+                            This quotation has been submitted to the buyer and is read-only.
+                          </div>
+                        </div>
+                        {activePrevQuote && (
+                          <button
+                            type="button"
+                            className="vquot-modal__previous-toggle-btn"
+                            onClick={() => setShowPreviousQuoteDetails(true)}
+                          >
+                            <Eye size={13} />
+                            View Snapshot
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* ── SAP Fiori Style Revision Request & Previous Submission Snapshot ── */}
-                  {activePrevQuote && (
+                  {activePrevQuote && quotModal.needsResubmit && (
                     <div className="vquot-modal__previous-banner">
                       <div className="vquot-modal__previous-banner-header" style={{ alignItems: 'flex-start' }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -1779,6 +1819,7 @@ export default function VendorRFQsPage() {
                           onCurrencyChange={(code) => setItemCurrencies(prev => ({ ...prev, [idx]: code }))}
                           placeholder="Unit price"
                           min={0}
+                          disabled={isQuotReadOnly}
                         />
                       </div>
                     ))}
@@ -1787,7 +1828,7 @@ export default function VendorRFQsPage() {
                   <div className="vquot-modal__total">
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       <span className="vquot-modal__total-label">Total Quotation Value</span>
-                      <CurrencySelector value={currency} onChange={setCurrency} size="sm" />
+                      <CurrencySelector value={currency} onChange={setCurrency} size="sm" disabled={isQuotReadOnly} />
                     </div>
                     <span className="vquot-modal__total-value">{formatAmount(quotTotal, currency)}</span>
                   </div>
@@ -1795,32 +1836,35 @@ export default function VendorRFQsPage() {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
                     <div className="vquot-modal__field">
                       <label className="vquot-modal__label">Vendor Quote Ref No</label>
-                      <input className="vquot-modal__input" type="text" placeholder="e.g. QTN-2026-001" value={vendorQuotationNumber} onChange={e => setVendorQuotationNumber(e.target.value)} />
+                      <input className="vquot-modal__input" type="text" placeholder="e.g. QTN-2026-001" value={vendorQuotationNumber} onChange={e => setVendorQuotationNumber(e.target.value)} disabled={isQuotReadOnly} />
                     </div>
                     <div className="vquot-modal__field">
                       <label className="vquot-modal__label">Lead Time (days) *</label>
-                      <input className="vquot-modal__input" type="number" placeholder="e.g. 14" value={quotLeadTime} onChange={e => setQuotLeadTime(e.target.value)} />
+                      <input className="vquot-modal__input" type="number" placeholder="e.g. 14" value={quotLeadTime} onChange={e => setQuotLeadTime(e.target.value)} disabled={isQuotReadOnly} />
                     </div>
                     <div className="vquot-modal__field">
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                         <label className="vquot-modal__label" style={{ marginBottom: 0 }}>Payment Terms</label>
-                        <button
-                          type="button"
-                          onClick={() => setShowCustomPlanModal(true)}
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 4,
-                            background: 'none', border: 'none',
-                            color: 'var(--vendor-primary, #0a6ed1)', fontSize: 12, fontWeight: 600,
-                            cursor: 'pointer', padding: '2px 6px', borderRadius: 4,
-                          }}
-                        >
-                          <Plus size={12} /> Custom Payment Plan
-                        </button>
+                        {!isQuotReadOnly && (
+                          <button
+                            type="button"
+                            onClick={() => setShowCustomPlanModal(true)}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                              background: 'none', border: 'none',
+                              color: 'var(--vendor-primary, #0a6ed1)', fontSize: 12, fontWeight: 600,
+                              cursor: 'pointer', padding: '2px 6px', borderRadius: 4,
+                            }}
+                          >
+                            <Plus size={12} /> Custom Payment Plan
+                          </button>
+                        )}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
                         <select
                           className="vquot-modal__input"
                           value={selectedPaymentPlanId ? `custom_${selectedPaymentPlanId}` : quotPayTerms}
+                          disabled={isQuotReadOnly}
                           onChange={e => {
                             const val = e.target.value;
                             if (val.startsWith('custom_')) {
@@ -1982,6 +2026,7 @@ export default function VendorRFQsPage() {
                                 type="date"
                                 value={String(customFieldValues[cf.id] || '')}
                                 onChange={(e) => setCustomFieldValues(prev => ({ ...prev, [cf.id]: e.target.value }))}
+                                disabled={isQuotReadOnly}
                               />
                             ) : cf.fieldType === 'attachment' ? (
                               <div style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '8px 0' }}>
@@ -1994,6 +2039,7 @@ export default function VendorRFQsPage() {
                                 placeholder={`Enter ${cf.fieldName.toLowerCase()}`}
                                 value={customFieldValues[cf.id] != null ? String(customFieldValues[cf.id]) : ''}
                                 onChange={(e) => setCustomFieldValues(prev => ({ ...prev, [cf.id]: e.target.value }))}
+                                disabled={isQuotReadOnly}
                               />
                             )}
                           </div>
@@ -2067,6 +2113,7 @@ export default function VendorRFQsPage() {
                                       placeholder={sp.description || `Provide ${sp.name.toLowerCase()} details`}
                                       value={evalParamValues[sp.id] ?? ''}
                                       onChange={(e) => setEvalParamValues(prev => ({ ...prev, [sp.id]: e.target.value }))}
+                                      disabled={isQuotReadOnly}
                                     />
                                   </div>
                                 ))}
@@ -2080,7 +2127,7 @@ export default function VendorRFQsPage() {
 
                   <div className="vquot-modal__field">
                     <label className="vquot-modal__label">Notes / Remarks</label>
-                    <textarea className="vquot-modal__textarea" placeholder="Any additional notes, conditions, or remarks..." value={quotNotes} onChange={e => setQuotNotes(e.target.value)} />
+                    <textarea className="vquot-modal__textarea" placeholder="Any additional notes, conditions, or remarks..." value={quotNotes} onChange={e => setQuotNotes(e.target.value)} disabled={isQuotReadOnly} />
                   </div>
 
                   {/* ── Bid Security Section (Vendor Inputs) ── */}
@@ -2123,6 +2170,7 @@ export default function VendorRFQsPage() {
                             className="vquot-modal__input"
                             value={bidSecValueType}
                             onChange={(e) => setBidSecValueType(e.target.value as 'FIXED_AMOUNT' | 'PERCENTAGE')}
+                            disabled={isQuotReadOnly}
                           >
                             <option value="FIXED_AMOUNT">Fixed Amount</option>
                             <option value="PERCENTAGE">Percentage</option>
@@ -2140,12 +2188,14 @@ export default function VendorRFQsPage() {
                                 placeholder="e.g. 100000"
                                 value={bidSecValue}
                                 onChange={(e) => setBidSecValue(e.target.value)}
+                                disabled={isQuotReadOnly}
                                 style={{ flex: 1 }}
                               />
                               <CurrencySelector
                                 value={bidSecCurrency}
                                 onChange={setBidSecCurrency}
                                 size="sm"
+                                disabled={isQuotReadOnly}
                                 style={{ minWidth: 150 }}
                               />
                             </div>
@@ -2160,6 +2210,7 @@ export default function VendorRFQsPage() {
                                 placeholder="e.g. 2"
                                 value={bidSecValue}
                                 onChange={(e) => setBidSecValue(e.target.value)}
+                                disabled={isQuotReadOnly}
                                 style={{ flex: 1 }}
                               />
                               <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', flexShrink: 0 }}>%</span>
@@ -2183,12 +2234,14 @@ export default function VendorRFQsPage() {
                               placeholder="e.g. 90"
                               value={bidSecValidityValue}
                               onChange={(e) => setBidSecValidityValue(e.target.value)}
+                              disabled={isQuotReadOnly}
                               style={{ flex: 1 }}
                             />
                             <select
                               className="vquot-modal__input"
                               value={bidSecValidityUnit}
                               onChange={(e) => setBidSecValidityUnit(e.target.value as 'DAYS')}
+                              disabled={isQuotReadOnly}
                               style={{ width: 100, flexShrink: 0 }}
                             >
                               <option value="DAYS">Days</option>
@@ -2214,6 +2267,7 @@ export default function VendorRFQsPage() {
                                 placeholder="BB-001"
                                 value={bidSecBondNumber}
                                 onChange={(e) => setBidSecBondNumber(e.target.value)}
+                                disabled={isQuotReadOnly}
                               />
                             </div>
                             <div className="vquot-modal__field">
@@ -2224,6 +2278,7 @@ export default function VendorRFQsPage() {
                                 placeholder="KCB"
                                 value={bidSecIssuer}
                                 onChange={(e) => setBidSecIssuer(e.target.value)}
+                                disabled={isQuotReadOnly}
                               />
                             </div>
                           </div>
@@ -2242,37 +2297,41 @@ export default function VendorRFQsPage() {
                                     ? (bidSecFile.size / (1024 * 1024)).toFixed(1) + ' MB'
                                     : (bidSecFile.size / 1024).toFixed(0) + ' KB'}
                                 </span>
-                                <button
-                                  className="vquot-file-upload__remove-btn"
-                                  onClick={() => setBidSecFile(null)}
-                                  title="Remove file"
-                                >
-                                  ✕
-                                </button>
+                                {!isQuotReadOnly && (
+                                  <button
+                                    className="vquot-file-upload__remove-btn"
+                                    onClick={() => setBidSecFile(null)}
+                                    title="Remove file"
+                                  >
+                                    ✕
+                                  </button>
+                                )}
                               </div>
                             ) : null}
-                            <label
-                              className={`vquot-file-btn${bidSecFile ? ' vquot-file-btn--active' : ''}`}
-                            >
-                              <input
-                                type="file"
-                                accept=".pdf,.jpg,.jpeg,.png"
-                                style={{ display: 'none' }}
-                                onChange={e => {
-                                  const file = e.target.files?.[0];
-                                  if (file) {
-                                    if (file.size > 10 * 1024 * 1024) {
-                                      setBidBondUploadError('File size must be less than 10 MB');
-                                      return;
+                            {!isQuotReadOnly && (
+                              <label
+                                className={`vquot-file-btn${bidSecFile ? ' vquot-file-btn--active' : ''}`}
+                              >
+                                <input
+                                  type="file"
+                                  accept=".pdf,.jpg,.jpeg,.png"
+                                  style={{ display: 'none' }}
+                                  onChange={e => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      if (file.size > 10 * 1024 * 1024) {
+                                        setBidBondUploadError('File size must be less than 10 MB');
+                                        return;
+                                      }
+                                      setBidSecFile(file);
                                     }
-                                    setBidSecFile(file);
-                                  }
-                                  e.target.value = '';
-                                }}
-                              />
-                              <Upload size={14} className="vquot-file-btn__icon" />
-                              {bidSecFile ? 'Change File' : 'Choose File'}
-                            </label>
+                                    e.target.value = '';
+                                  }}
+                                />
+                                <Upload size={14} className="vquot-file-btn__icon" />
+                                {bidSecFile ? 'Change File' : 'Choose File'}
+                              </label>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -2322,6 +2381,7 @@ export default function VendorRFQsPage() {
                               placeholder="e.g. BB-001"
                               value={bidBondNumber}
                               onChange={(e) => setBidBondNumber(e.target.value)}
+                              disabled={isQuotReadOnly}
                             />
                           </div>
                           <div className="vquot-modal__field">
@@ -2332,6 +2392,7 @@ export default function VendorRFQsPage() {
                               placeholder="e.g. KCB"
                               value={bidBondIssuer}
                               onChange={(e) => setBidBondIssuer(e.target.value)}
+                              disabled={isQuotReadOnly}
                             />
                           </div>
                           <div className="vquot-modal__field">
@@ -2344,11 +2405,13 @@ export default function VendorRFQsPage() {
                                 placeholder="500000"
                                 value={bidBondAmount}
                                 onChange={(e) => setBidBondAmount(e.target.value)}
+                                disabled={isQuotReadOnly}
                               />
                               <CurrencySelector
                                 value={bidBondCurrency}
                                 onChange={setBidBondCurrency}
                                 size="xs"
+                                disabled={isQuotReadOnly}
                               />
                             </div>
                             {/* ⚠ Warning: Bid Bond amount below minimum */}
@@ -2365,6 +2428,7 @@ export default function VendorRFQsPage() {
                               type="date"
                               value={bidBondIssueDate}
                               onChange={(e) => setBidBondIssueDate(e.target.value)}
+                              disabled={isQuotReadOnly}
                             />
                           </div>
                           <div className="vquot-modal__field">
@@ -2374,6 +2438,7 @@ export default function VendorRFQsPage() {
                               type="date"
                               value={bidBondExpiryDate}
                               onChange={(e) => setBidBondExpiryDate(e.target.value)}
+                              disabled={isQuotReadOnly}
                             />
                           </div>
                           <div className="vquot-modal__field">
@@ -2386,11 +2451,13 @@ export default function VendorRFQsPage() {
                                 placeholder="90"
                                 value={bidBondValidityValue}
                                 onChange={(e) => setBidBondValidityValue(e.target.value)}
+                                disabled={isQuotReadOnly}
                               />
                               <select
                                 className="vquot-modal__input"
                                 value={bidBondValidityUnit}
                                 onChange={(e) => setBidBondValidityUnit(e.target.value as 'DAYS')}
+                                disabled={isQuotReadOnly}
                               >
                                 <option value="DAYS">Days</option>
                               </select>
@@ -2428,38 +2495,42 @@ export default function VendorRFQsPage() {
                                     ? (bidBondFile.size / (1024 * 1024)).toFixed(1) + ' MB'
                                     : (bidBondFile.size / 1024).toFixed(0) + ' KB'}
                                 </span>
-                                <button
-                                  className="vquot-file-upload__remove-btn"
-                                  onClick={() => { setBidBondFile(null); setBidBondUploadError(null); }}
-                                  title="Remove file"
-                                >
-                                  ✕
-                                </button>
+                                {!isQuotReadOnly && (
+                                  <button
+                                    className="vquot-file-upload__remove-btn"
+                                    onClick={() => { setBidBondFile(null); setBidBondUploadError(null); }}
+                                    title="Remove file"
+                                  >
+                                    ✕
+                                  </button>
+                                )}
                               </div>
                             ) : null}
-                            <label
-                              className={`vquot-file-btn${bidBondFile ? ' vquot-file-btn--active' : ''}`}
-                            >
-                              <input
-                                type="file"
-                                accept=".pdf,.jpg,.jpeg,.png"
-                                style={{ display: 'none' }}
-                                onChange={e => {
-                                  const file = e.target.files?.[0];
-                                  if (file) {
-                                    if (file.size > 10 * 1024 * 1024) {
-                                      setBidBondUploadError('File size must be less than 10 MB');
-                                      return;
+                            {!isQuotReadOnly && (
+                              <label
+                                className={`vquot-file-btn${bidBondFile ? ' vquot-file-btn--active' : ''}`}
+                              >
+                                <input
+                                  type="file"
+                                  accept=".pdf,.jpg,.jpeg,.png"
+                                  style={{ display: 'none' }}
+                                  onChange={e => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      if (file.size > 10 * 1024 * 1024) {
+                                        setBidBondUploadError('File size must be less than 10 MB');
+                                        return;
+                                      }
+                                      setBidBondFile(file);
+                                      setBidBondUploadError(null);
                                     }
-                                    setBidBondFile(file);
-                                    setBidBondUploadError(null);
-                                  }
-                                  e.target.value = '';
-                                }}
-                              />
-                              <Upload size={14} className="vquot-file-btn__icon" />
-                              {bidBondFile ? 'Change File' : 'Choose File'}
-                            </label>
+                                    e.target.value = '';
+                                  }}
+                                />
+                                <Upload size={14} className="vquot-file-btn__icon" />
+                                {bidBondFile ? 'Change File' : 'Choose File'}
+                              </label>
+                            )}
                             {bidBondUploadError && (
                               <div className="vquot-file-upload__error">
                                 {bidBondUploadError}
@@ -2497,26 +2568,28 @@ export default function VendorRFQsPage() {
                           ))}
                         </div>
                       )}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                        <label className="vquot-file-upload__trigger">
-                          <input
-                            type="file"
-                            multiple
-                            accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx,.xls,.csv,.txt"
-                            style={{ display: 'none' }}
-                            onChange={e => {
-                              const files = Array.from(e.target.files || []);
-                              setAttachments(prev => [...prev, ...files]);
-                              e.target.value = '';
-                            }}
-                          />
-                          <Upload size={14} className="vquot-file-upload__icon" />
-                          Choose Files
-                        </label>
-                        <span className="vquot-file-upload__hint">
-                          PDF, JPG, PNG, DOCX, XLSX (max 5 files)
-                        </span>
-                      </div>
+                      {!isQuotReadOnly && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                          <label className="vquot-file-upload__trigger">
+                            <input
+                              type="file"
+                              multiple
+                              accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx,.xls,.csv,.txt"
+                              style={{ display: 'none' }}
+                              onChange={e => {
+                                const files = Array.from(e.target.files || []);
+                                setAttachments(prev => [...prev, ...files]);
+                                e.target.value = '';
+                              }}
+                            />
+                            <Upload size={14} className="vquot-file-upload__icon" />
+                            Choose Files
+                          </label>
+                          <span className="vquot-file-upload__hint">
+                            PDF, JPG, PNG, DOCX, XLSX (max 5 files)
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2529,14 +2602,20 @@ export default function VendorRFQsPage() {
               )}
               {!isVquotMinimized && (
                 <div className="vquot-modal__footer">
-                  <button className="vendor-btn vendor-btn--secondary" onClick={() => setQuotModal(null)}>Cancel</button>
-                  <button
-                    className="vendor-btn vendor-btn--primary"
-                    disabled={submitting || quotTotal <= 0 || !quotLeadTime}
-                    onClick={handleSubmitQuot}
-                  >
-                    <Send size={15} /> {submitting ? 'Submitting…' : 'Submit Quotation'}
-                  </button>
+                  {isQuotReadOnly ? (
+                    <button className="vendor-btn vendor-btn--secondary" onClick={() => setQuotModal(null)}>Close</button>
+                  ) : (
+                    <>
+                      <button className="vendor-btn vendor-btn--secondary" onClick={() => setQuotModal(null)}>Cancel</button>
+                      <button
+                        className="vendor-btn vendor-btn--primary"
+                        disabled={submitting || quotTotal <= 0 || !quotLeadTime}
+                        onClick={handleSubmitQuot}
+                      >
+                        <Send size={15} /> {submitting ? 'Submitting…' : (quotModal.needsResubmit ? 'Resubmit Quotation' : 'Submit Quotation')}
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>
