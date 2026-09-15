@@ -30,7 +30,10 @@ import { useAuth } from '../../context/AuthContext';
 import type { User } from '../../types';
 import type { AudienceType } from '../../services/formWorkflowService';
 import { MessageStrip } from '../shared/MessageStrip';
-import './FormSaveWorkflowModal.css';
+
+const workflowInputClass = 'min-h-11 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15';
+const workflowSecondaryButton = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-semibold text-foreground transition hover:bg-muted';
+const workflowPrimaryButton = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50';
 
 interface FormSaveWorkflowModalProps {
   isOpen: boolean;
@@ -335,116 +338,114 @@ export default function FormSaveWorkflowModal({
 
   return createPortal(
     <>
-      <div className="fwm-backdrop" style={{ zIndex: 99999 }} onClick={onClose}>
-        <div className="fwm-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/55 p-3 backdrop-blur-sm sm:p-6" onClick={onClose}>
+        <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-card shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="workflow-modal-title" onClick={(e) => e.stopPropagation()}>
           {/* Top Header */}
-          <div className="fwm-modal__header">
-            <div className="fwm-modal__header-left">
-              <div className="fwm-icon-badge">
+          <div className="flex items-center justify-between gap-4 border-b border-border/70 px-5 py-4 sm:px-6">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                 <GitMerge size={22} />
               </div>
               <div>
-                <h2 className="fwm-modal__title">Form Distribution & Workflow</h2>
-                <p className="fwm-modal__subtitle">
+                <h2 id="workflow-modal-title" className="text-base font-semibold text-foreground">Form Distribution & Workflow</h2>
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">
                   Form: <strong>{formTitle || 'Untitled Custom Form'}</strong>
                 </p>
               </div>
             </div>
-            <button className="fwm-close-btn" onClick={onClose} aria-label="Close modal">
+            <button type="button" className="flex size-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground" onClick={onClose} aria-label="Close modal">
               <X size={18} />
             </button>
           </div>
 
           {/* Wizard Steps Indicator */}
-          <div className="fwm-steps-bar">
-            <div className={`fwm-step-pill ${step === 1 ? 'fwm-step-pill--active' : 'fwm-step-pill--completed'}`}>
-              <span className="fwm-step-num">1</span>
-              <span className="fwm-step-label">Select Form Audience</span>
+          <div className="flex items-center border-b border-border/70 px-5 py-3 sm:px-6">
+            <div className="flex items-center gap-2 text-xs font-semibold text-primary">
+              <span className="flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground">1</span>
+              <span className="hidden sm:inline">Select Form Audience</span>
             </div>
-            <div className="fwm-step-divider" />
-            <div className={`fwm-step-pill ${step === 2 ? 'fwm-step-pill--active' : ''}`}>
-              <span className="fwm-step-num">2</span>
-              <span className="fwm-step-label">Attach Workflow & Distribute</span>
+            <div className="mx-3 h-px flex-1 bg-border" />
+            <div className={`flex items-center gap-2 text-xs font-semibold ${step === 2 ? 'text-primary' : 'text-muted-foreground'}`}>
+              <span className={`flex size-7 items-center justify-center rounded-full border ${step === 2 ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-muted'}`}>2</span>
+              <span className="hidden sm:inline">Attach Workflow & Distribute</span>
             </div>
           </div>
 
           {modalError && (
-            <MessageStrip type="error" compact onClose={() => setModalError(null)} style={{ margin: '12px 24px 0' }}>
+            <MessageStrip type="error" compact onClose={() => setModalError(null)} className="mx-5 mt-3 sm:mx-6">
               {modalError}
             </MessageStrip>
           )}
 
           {/* Body Content */}
-          <div className="fwm-body">
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
             {step === 1 ? (
               /* ── STEP 1: AUDIENCE SELECTION ── */
-              <div className="fwm-step-content">
-                <div className="fwm-section-title">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                   <Users size={16} />
                   <span>Who should receive this form?</span>
                 </div>
 
                 {/* Audience Type Radio Cards */}
-                <div className="fwm-audience-grid">
-                  <div
-                    className={`fwm-audience-card ${audienceType === 'specific_users' ? 'fwm-audience-card--selected' : ''}`}
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <button type="button"
+                    className={`relative flex min-h-32 items-start gap-3 rounded-2xl border p-4 text-left transition ${audienceType === 'specific_users' ? 'border-primary bg-primary/[0.06] ring-2 ring-primary/10' : 'border-border bg-background hover:border-primary/30'}`}
                     onClick={() => setAudienceType('specific_users')}
+                    aria-pressed={audienceType === 'specific_users'}
                   >
-                    <div className="fwm-audience-card__icon">
+                    <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                       <UserCheck size={22} />
                     </div>
-                    <div className="fwm-audience-card__info">
-                      <h4>Specific User(s)</h4>
-                      <p>Assign to one or multiple specific employees or managers.</p>
+                    <div>
+                      <h4 className="text-sm font-semibold text-foreground">Specific User(s)</h4>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">Assign to one or multiple specific employees or managers.</p>
                     </div>
-                    <div className="fwm-audience-card__radio">
-                      <div className="fwm-radio-dot" />
-                    </div>
-                  </div>
+                    <span className={`absolute right-3 top-3 size-4 rounded-full border-4 ${audienceType === 'specific_users' ? 'border-primary bg-card' : 'border-border bg-card'}`} />
+                  </button>
 
-                  <div
-                    className={`fwm-audience-card ${audienceType === 'whole_org' ? 'fwm-audience-card--selected' : ''}`}
+                  <button type="button"
+                    className={`relative flex min-h-32 items-start gap-3 rounded-2xl border p-4 text-left transition ${audienceType === 'whole_org' ? 'border-primary bg-primary/[0.06] ring-2 ring-primary/10' : 'border-border bg-background hover:border-primary/30'}`}
                     onClick={() => setAudienceType('whole_org')}
+                    aria-pressed={audienceType === 'whole_org'}
                   >
-                    <div className="fwm-audience-card__icon fwm-audience-card__icon--org">
+                    <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-violet-500/10 text-violet-600">
                       <Building size={22} />
                     </div>
-                    <div className="fwm-audience-card__info">
-                      <h4>Whole Organization</h4>
-                      <p>Publish to every active employee across the organization ({eligibleUsers.length} users).</p>
+                    <div>
+                      <h4 className="text-sm font-semibold text-foreground">Whole Organization</h4>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">Publish to every active employee across the organization ({eligibleUsers.length} users).</p>
                     </div>
-                    <div className="fwm-audience-card__radio">
-                      <div className="fwm-radio-dot" />
-                    </div>
-                  </div>
+                    <span className={`absolute right-3 top-3 size-4 rounded-full border-4 ${audienceType === 'whole_org' ? 'border-primary bg-card' : 'border-border bg-card'}`} />
+                  </button>
                 </div>
 
                 {/* User Selection Box (If Specific Users Selected) */}
                 {audienceType === 'specific_users' && (
-                  <div className="fwm-user-picker-container">
-                    <div className="fwm-user-picker__header">
-                      <div className="fwm-user-search-wrap">
-                        <Search size={15} className="fwm-search-icon" />
+                  <div className="mt-4 overflow-hidden rounded-2xl border border-border bg-background">
+                    <div className="flex flex-col gap-3 border-b border-border/70 p-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="relative min-w-0 flex-1">
+                        <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                         <input
                           type="text"
-                          className="fwm-user-search-input"
+                          className="min-h-10 w-full rounded-xl border border-input bg-background pl-9 pr-3 text-sm outline-none placeholder:text-muted-foreground focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
                           placeholder="Search employee by name, email, department..."
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
                         />
                       </div>
-                      <div className="fwm-user-picker__actions">
-                        <button type="button" className="fwm-link-btn" onClick={handleSelectAllFiltered}>
+                      <div className="flex items-center gap-1">
+                        <button type="button" className="min-h-10 rounded-lg px-3 text-xs font-semibold text-primary transition hover:bg-primary/10" onClick={handleSelectAllFiltered}>
                           Select All
                         </button>
-                        <button type="button" className="fwm-link-btn fwm-link-btn--muted" onClick={handleClearSelection}>
+                        <button type="button" className="min-h-10 rounded-lg px-3 text-xs font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground" onClick={handleClearSelection}>
                           Clear ({selectedUserIds.length})
                         </button>
                       </div>
                     </div>
 
                     {/* Selected count badge */}
-                    <div className="fwm-selected-count-strip">
+                    <div className="flex items-center gap-2 border-b border-border/70 bg-emerald-500/[0.06] px-4 py-2.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
                       <Check size={14} />
                       <span>
                         {selectedUserIds.length} user{selectedUserIds.length !== 1 ? 's' : ''} selected for assignment
@@ -452,26 +453,27 @@ export default function FormSaveWorkflowModal({
                     </div>
 
                     {/* Users list grid */}
-                    <div className="fwm-user-list">
+                    <div className="grid max-h-64 gap-2 overflow-y-auto p-3 sm:grid-cols-2">
                       {filteredUsers.map((u) => {
                         const isSelected = selectedUserIds.includes(String(u.id));
                         return (
-                          <div
+                          <button type="button"
                             key={u.id}
-                            className={`fwm-user-item ${isSelected ? 'fwm-user-item--selected' : ''}`}
+                            className={`flex min-h-14 items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition ${isSelected ? 'border-primary bg-primary/[0.06]' : 'border-border hover:border-primary/30 hover:bg-muted/30'}`}
                             onClick={() => toggleUserSelection(String(u.id))}
+                            aria-pressed={isSelected}
                           >
-                            <div className="fwm-user-item__avatar">
+                            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-xs font-bold text-primary">
                               {u.fullName.split(' ').map((n) => n[0]).join('').substring(0, 2)}
                             </div>
-                            <div className="fwm-user-item__info">
-                              <span className="fwm-user-item__name">{u.fullName}</span>
-                              <span className="fwm-user-item__email">{u.email}</span>
+                            <div className="flex min-w-0 flex-1 flex-col">
+                              <span className="truncate text-xs font-semibold text-foreground">{u.fullName}</span>
+                              <span className="truncate text-[11px] text-muted-foreground">{u.email}</span>
                             </div>
-                            <div className={`fwm-checkbox ${isSelected ? 'fwm-checkbox--checked' : ''}`}>
+                            <div className={`flex size-5 shrink-0 items-center justify-center rounded-md border ${isSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card'}`}>
                               {isSelected && <Check size={12} />}
                             </div>
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
@@ -479,11 +481,11 @@ export default function FormSaveWorkflowModal({
                 )}
 
                 {audienceType === 'whole_org' && (
-                  <div className="fwm-org-notice">
+                  <div className="mt-4 flex items-start gap-3 rounded-2xl border border-violet-500/20 bg-violet-500/[0.06] p-4 text-violet-700 dark:text-violet-300">
                     <Sparkles size={18} />
-                    <div>
-                      <strong>Organization-Wide Distribution Mode</strong>
-                      <p>
+                    <div className="text-xs leading-5">
+                      <strong className="text-sm">Organization-Wide Distribution Mode</strong>
+                      <p className="mt-1 text-muted-foreground">
                         Upon publishing, an independent submission & workflow instance will be created for each employee.
                         Employees submit individually and progress through their approval pipeline.
                       </p>
@@ -493,55 +495,56 @@ export default function FormSaveWorkflowModal({
               </div>
             ) : (
               /* ── STEP 2: WORKFLOW ATTACHMENT & PUBLISH ── */
-              <div className="fwm-step-content">
-                <div className="fwm-section-title">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                   <GitMerge size={16} />
                   <span>Workflow & Distribution Settings</span>
                 </div>
 
                 {/* Attach Workflow Toggle Box */}
-                <div className="fwm-workflow-toggle-box">
-                  <div className="fwm-wf-toggle-left">
-                    <div className="fwm-wf-toggle-icon">
+                <div className="mt-4 flex flex-col gap-4 rounded-2xl border border-border bg-background p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                       <GitMerge size={20} />
                     </div>
                     <div>
-                      <h4>Attach Approval Workflow</h4>
-                      <p>
+                      <h4 className="text-sm font-semibold text-foreground">Attach Approval Workflow</h4>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
                         Connect Approval Levels matrix (Level 1 → Level 2 → Level 3) so form submissions progress sequentially through each level before final completion.
                       </p>
                     </div>
                   </div>
-                  <label className="fwm-switch">
+                  <label className="relative inline-flex min-h-11 cursor-pointer items-center">
                     <input
                       type="checkbox"
+                      className="sr-only"
                       checked={attachWorkflow}
                       onChange={(e) => setAttachWorkflow(e.target.checked)}
                     />
-                    <span className="fwm-slider" />
+                    <span className={`relative h-7 w-12 rounded-full transition-colors after:absolute after:left-1 after:top-1 after:size-5 after:rounded-full after:bg-white after:shadow-sm after:transition-transform ${attachWorkflow ? 'bg-primary after:translate-x-5' : 'bg-slate-300 dark:bg-slate-600'}`} />
                   </label>
                 </div>
 
                 {/* Options Breakdown */}
-                <div className="fwm-meta-grid">
-                  <div className="fwm-meta-field">
-                    <label>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
                       <Calendar size={14} /> Due Date
                     </label>
                     <input
                       type="date"
-                      className="fwm-meta-input"
+                      className={workflowInputClass}
                       value={dueDate}
                       onChange={(e) => setDueDate(e.target.value)}
                     />
                   </div>
 
-                  <div className="fwm-meta-field">
-                    <label>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
                       <Clock size={14} /> Priority Level
                     </label>
                     <select
-                      className="fwm-meta-select"
+                      className={workflowInputClass}
                       value={priority}
                       onChange={(e) => setPriority(e.target.value as any)}
                     >
@@ -552,7 +555,7 @@ export default function FormSaveWorkflowModal({
                   </div>
                 </div>
 
-                <div className="fwm-summary-strip">
+                <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-amber-500/20 bg-amber-500/[0.07] p-3 text-xs leading-5 text-amber-800 dark:text-amber-200">
                   <AlertCircle size={16} />
                   <span>
                     Ready to publish to{' '}
@@ -571,18 +574,18 @@ export default function FormSaveWorkflowModal({
           </div>
 
           {/* Modal Footer */}
-          <div className="fwm-footer">
+          <div className="flex flex-col gap-2 border-t border-border/70 bg-muted/20 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             {step === 1 ? (
               <>
-                <button type="button" className="fwm-btn fwm-btn--secondary" onClick={onClose}>
+                <button type="button" className={workflowSecondaryButton} onClick={onClose}>
                   Cancel
                 </button>
-                <div className="fwm-footer-right">
-                  <button type="button" className="fwm-btn fwm-btn--draft" onClick={onSaveAsDraft}>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <button type="button" className={workflowSecondaryButton} onClick={onSaveAsDraft}>
                     <FileText size={15} />
                     Save as Draft
                   </button>
-                  <button type="button" className="fwm-btn fwm-btn--primary" onClick={handleNextStep}>
+                  <button type="button" className={workflowPrimaryButton} onClick={handleNextStep}>
                     Next: Workflow Options
                     <ChevronRight size={16} />
                   </button>
@@ -590,20 +593,20 @@ export default function FormSaveWorkflowModal({
               </>
             ) : (
               <>
-                <button type="button" className="fwm-btn fwm-btn--secondary" onClick={() => setStep(1)}>
+                <button type="button" className={workflowSecondaryButton} onClick={() => setStep(1)}>
                   <ChevronLeft size={16} />
                   Back
                 </button>
-                <div className="fwm-footer-right">
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <button
                     type="button"
-                    className="fwm-btn fwm-btn--configure-wf"
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 text-sm font-semibold text-violet-700 transition hover:bg-violet-500/15 dark:text-violet-300"
                     onClick={() => setShowMatrixEditor(true)}
                   >
                     <GitMerge size={15} />
                     Configure Approval Matrix {matrixLevels.length > 0 ? `(${matrixLevels.length} Levels)` : ''}
                   </button>
-                  <button type="button" className="fwm-btn fwm-btn--publish" onClick={handlePublish}>
+                  <button type="button" className={workflowPrimaryButton} onClick={handlePublish}>
                     <Send size={15} />
                     Publish & Distribute
                   </button>
@@ -616,41 +619,41 @@ export default function FormSaveWorkflowModal({
 
       {/* ── Approval Matrix Configurator Modal Overlay (Portaled ON TOP of main modal) ── */}
       {showMatrixEditor && createPortal(
-        <div className="fwm-backdrop fwm-backdrop--matrix" style={{ zIndex: 100010 }} onClick={() => setShowMatrixEditor(false)}>
-          <div className="fwm-modal fwm-modal--matrix" style={{ zIndex: 100011, position: 'relative' }} onClick={(e) => e.stopPropagation()}>
-            <div className="fwm-modal__header">
-              <div className="fwm-modal__header-left">
-                <div className="fwm-icon-badge" style={{ background: '#8b5cf6' }}>
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/65 p-3 backdrop-blur-sm sm:p-6" onClick={() => setShowMatrixEditor(false)}>
+          <div className="relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-card shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="matrix-modal-title" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between gap-4 border-b border-border/70 px-5 py-4 sm:px-6">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-violet-500/10 text-violet-600">
                   <Layers size={22} />
                 </div>
                 <div>
-                  <h3 className="fwm-modal__title">Configure Approval Matrix</h3>
-                  <p className="fwm-modal__subtitle">
+                  <h3 id="matrix-modal-title" className="text-base font-semibold text-foreground">Configure Approval Matrix</h3>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
                     Set up sign-off levels and time limits for form "{formTitle}"
                   </p>
                 </div>
               </div>
-              <button className="fwm-close-btn" onClick={() => setShowMatrixEditor(false)}>
+              <button type="button" className="flex size-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground" aria-label="Close approval matrix" onClick={() => setShowMatrixEditor(false)}>
                 <X size={18} />
               </button>
             </div>
 
-            <div className="fwm-body">
-              <div className="fwm-matrix-level-list">
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+              <div className="flex flex-col gap-3">
                 {matrixLevels.length === 0 ? (
-                  <div className="fwm-matrix-empty">
+                  <div className="flex flex-col items-center rounded-2xl border border-dashed border-border px-6 py-10 text-center text-muted-foreground">
                     <AlertCircle size={24} />
-                    <p>No approval levels configured. Add a level below to create your approval chain.</p>
+                    <p className="mt-2 max-w-md text-sm leading-6">No approval levels configured. Add a level below to create your approval chain.</p>
                   </div>
                 ) : (
                   matrixLevels.map((lvl, index) => (
-                    <div key={lvl.id} className="fwm-matrix-level-card">
-                      <div className="fwm-matrix-level-num">Level {lvl.levelNumber}</div>
-                      <div className="fwm-matrix-level-details">
-                        <div className="fwm-matrix-role-row">
-                          <Shield size={14} className="fwm-matrix-icon" />
+                    <div key={lvl.id} className="flex flex-col gap-3 rounded-2xl border border-border bg-background p-4 sm:flex-row sm:items-center">
+                      <div className="shrink-0 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary">Level {lvl.levelNumber}</div>
+                      <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
+                        <div className="flex items-center gap-2">
+                          <Shield size={14} className="shrink-0 text-muted-foreground" />
                           <select
-                            className="fwm-meta-select"
+                            className={workflowInputClass}
                             value={lvl.requiredRole}
                             onChange={(e) => {
                               const val = e.target.value;
@@ -669,12 +672,11 @@ export default function FormSaveWorkflowModal({
                           </select>
                         </div>
 
-                        <div className="fwm-matrix-time-row">
-                          <Clock size={14} className="fwm-matrix-icon" />
-                          <label style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Time Limit:</label>
+                        <div className="flex items-center gap-2">
+                          <Clock size={14} className="shrink-0 text-muted-foreground" />
+                          <label className="sr-only">Time Limit</label>
                           <select
-                            className="fwm-meta-select"
-                            style={{ width: '130px' }}
+                            className={workflowInputClass}
                             value={lvl.timeLimitHours}
                             onChange={(e) => {
                               const val = Number(e.target.value);
@@ -693,10 +695,10 @@ export default function FormSaveWorkflowModal({
                         </div>
                       </div>
 
-                      <div className="fwm-matrix-level-actions">
+                      <div className="flex shrink-0 items-center justify-end gap-1">
                         <button
                           type="button"
-                          className="fwm-matrix-btn"
+                          className="flex size-10 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-30"
                           disabled={index === 0}
                           title="Move Level Up"
                           onClick={() => handleMoveLevel(index, 'up')}
@@ -705,7 +707,7 @@ export default function FormSaveWorkflowModal({
                         </button>
                         <button
                           type="button"
-                          className="fwm-matrix-btn"
+                          className="flex size-10 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-30"
                           disabled={index === matrixLevels.length - 1}
                           title="Move Level Down"
                           onClick={() => handleMoveLevel(index, 'down')}
@@ -714,7 +716,7 @@ export default function FormSaveWorkflowModal({
                         </button>
                         <button
                           type="button"
-                          className="fwm-matrix-btn fwm-matrix-btn--danger"
+                          className="flex size-10 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
                           title="Delete Level"
                           onClick={() => handleDeleteLevel(index)}
                         >
@@ -727,13 +729,13 @@ export default function FormSaveWorkflowModal({
               </div>
 
               {/* Add New Approval Level Control */}
-              <div className="fwm-matrix-add-box">
-                <h4>+ Add Approval Level</h4>
-                <div className="fwm-matrix-add-row">
-                  <div className="fwm-matrix-field-wrap">
-                    <label>Required Role:</label>
+              <div className="mt-5 rounded-2xl border border-dashed border-primary/30 bg-primary/[0.035] p-4">
+                <h4 className="text-sm font-semibold text-foreground">Add Approval Level</h4>
+                <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-foreground">Required Role</label>
                     <select
-                      className="fwm-meta-select"
+                      className={workflowInputClass}
                       value={addRole}
                       onChange={(e) => setAddRole(e.target.value)}
                     >
@@ -745,10 +747,10 @@ export default function FormSaveWorkflowModal({
                     </select>
                   </div>
 
-                  <div className="fwm-matrix-field-wrap">
-                    <label>SLA Limit:</label>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-foreground">SLA Limit</label>
                     <select
-                      className="fwm-meta-select"
+                      className={workflowInputClass}
                       value={addTimeLimit}
                       onChange={(e) => setAddTimeLimit(Number(e.target.value))}
                     >
@@ -759,20 +761,20 @@ export default function FormSaveWorkflowModal({
                     </select>
                   </div>
 
-                  <button type="button" className="fwm-btn fwm-btn--primary" onClick={handleAddLevel}>
+                  <button type="button" className={workflowPrimaryButton} onClick={handleAddLevel}>
                     <Plus size={15} /> Add
                   </button>
                 </div>
               </div>
             </div>
 
-            <div className="fwm-footer">
-              <button type="button" className="fwm-btn fwm-btn--secondary" onClick={() => setShowMatrixEditor(false)}>
+            <div className="flex flex-col-reverse gap-2 border-t border-border/70 bg-muted/20 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
+              <button type="button" className={workflowSecondaryButton} onClick={() => setShowMatrixEditor(false)}>
                 Cancel
               </button>
               <button
                 type="button"
-                className="fwm-btn fwm-btn--primary"
+                className={workflowPrimaryButton}
                 disabled={savingMatrix}
                 onClick={handleSaveMatrix}
               >

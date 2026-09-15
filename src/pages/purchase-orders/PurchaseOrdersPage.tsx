@@ -1,27 +1,55 @@
-import React from 'react';
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback, type KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useServiceData } from '../../hooks/useServiceData';
-import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
+import {
+  AlertTriangle,
+  Calendar,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Download,
+  Eye,
+  FileText,
+  Package,
+  Plus,
+  Search,
+  ShoppingCart,
+  Truck,
+  XCircle,
+  X,
+  Trash2,
+  CheckSquare,
+  SlidersHorizontal,
+  LayoutList,
+  LayoutGrid,
+} from 'lucide-react';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
 import { downloadPurchaseOrderAsPdf } from '../../utils/pdfDownload';
 import { toNumber } from '../../api/normalize';
 import type { PurchaseOrder } from '../../types';
-import {
-  ShoppingCart, Search, Plus, Eye, Filter, Clock, CheckCircle2, XCircle,
-  Truck, Package, FileText, X, ChevronLeft, ChevronRight, Download,
-  LayoutList, LayoutGrid, Calendar, IndianRupee, AlertTriangle, Trash2, CheckSquare,
-} from 'lucide-react';
-import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
-import '../../components/shared/ColumnCustomizer.css';
-import { MessageStrip } from '../../components/shared/MessageStrip';
+import { useServiceData } from '../../hooks/useServiceData';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
 import { useAuth } from '../../context/AuthContext';
-import './PurchaseOrdersPage.css';
-
-// ─── Types ──────────────────────────────────────────────────
+import { MessageStrip } from '../../components/shared/MessageStrip';
+import ColumnCustomizer, { type ColumnDef } from '../../components/shared/ColumnCustomizer';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Card } from '../../components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/ui/dialog';
+import { Input } from '../../components/ui/input';
+import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
+import { cn } from '../../lib/utils';
+import '../../components/shared/ColumnCustomizer.css';
 
 type POStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'DISPATCHED' | 'DELIVERED' | 'CANCELLED';
+type Tone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
 
 interface MockPO {
   id: number;
@@ -40,6 +68,17 @@ interface MockPO {
   department: string;
   createdBy: string;
 }
+
+const STATUS_CONFIG: Record<POStatus, { label: string; tone: Tone; icon: typeof FileText }> = {
+  DRAFT: { label: 'Draft', tone: 'neutral', icon: FileText },
+  PENDING_APPROVAL: { label: 'Pending Approval', tone: 'warning', icon: Clock },
+  APPROVED: { label: 'Approved', tone: 'success', icon: CheckCircle2 },
+  DISPATCHED: { label: 'Dispatched', tone: 'info', icon: Truck },
+  DELIVERED: { label: 'Delivered', tone: 'success', icon: Package },
+  CANCELLED: { label: 'Cancelled', tone: 'danger', icon: XCircle },
+};
+
+const PROGRESS_STEPS: POStatus[] = ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'DISPATCHED', 'DELIVERED'];
 
 function mapPO(po: PurchaseOrder): MockPO {
   const vendor = po.vendor;
@@ -66,74 +105,44 @@ function mapPO(po: PurchaseOrder): MockPO {
   };
 }
 
-const STATUS_LABELS: Record<POStatus, string> = {
-  DRAFT: 'Draft', PENDING_APPROVAL: 'Pending Approval', APPROVED: 'Completed',
-  DISPATCHED: 'Dispatched', DELIVERED: 'Delivered', CANCELLED: 'Cancelled',
-};
-
-const STATUS_ICONS: Record<POStatus, React.ReactNode> = {
-  DRAFT: <FileText size={12} />, PENDING_APPROVAL: <Clock size={12} />, APPROVED: <CheckCircle2 size={12} />,
-  DISPATCHED: <Truck size={12} />, DELIVERED: <Package size={12} />, CANCELLED: <XCircle size={12} />,
-};
-
-// ─── Column Definitions ─────────────────────────────────────
-interface POColumnDef {
-  key: string; label: string; defaultVisible: boolean; required?: boolean;
-  width?: string; render: (po: MockPO, fmtDate: (d: string) => string, fmtAmt?: (amt: number, c?: string) => string, curr?: string) => React.ReactNode;
+function StatusBadge({ status }: { status: POStatus }) {
+  const config = STATUS_CONFIG[status] || STATUS_CONFIG.DRAFT;
+  const Icon = config.icon;
+  return (
+    <Badge tone={config.tone}>
+      <Icon className="size-3" />
+      {config.label}
+    </Badge>
+  );
 }
 
-const ALL_COLUMNS: POColumnDef[] = [
-  {
-    key: 'po', label: 'Purchase Order', defaultVisible: true, required: true, width: '200px',
-    render: (po) => (
-      <div className="po-table__po-info">
-        <span className="po-table__po-number">{po.poNumber}</span>
-        <span className="po-table__rfq-link">{po.rfqNumber}</span>
-        <span className="po-table__meta">by {po.createdBy} · {po.department}</span>
-      </div>
-    ),
-  },
-  {
-    key: 'vendor', label: 'Vendor', defaultVisible: true, width: '180px',
-    render: (po) => (
-      <div className="po-table__vendor">
-        <div className={`po-table__avatar po-table__avatar--${po.avatarMod}`}>{po.vendorInitials}</div>
-        <span className="po-table__vendor-name">{po.vendorName}</span>
-      </div>
-    ),
-  },
-  { key: 'amount', label: 'Amount', defaultVisible: true, width: '120px', render: (po, _fmtDate, fmtAmt, curr) => <span className="po-table__amount">{fmtAmt ? fmtAmt(po.totalAmountNum, curr) : po.totalAmount}</span> },
-  { key: 'items', label: 'Items', defaultVisible: true, width: '70px', render: (po) => <span className="po-table__items">{po.itemCount}</span> },
-  {
-    key: 'priority', label: 'Priority', defaultVisible: true, width: '100px',
-    render: (po) => <span className={`po-priority po-priority--${po.priority.toLowerCase()}`}>{po.priority === 'HIGH' && <AlertTriangle size={11} />}{po.priority}</span>,
-  },
-  {
-    key: 'status', label: 'Status', defaultVisible: true, width: '140px',
-    render: (po) => <span className={`po-badge po-badge--${po.status}`}>{STATUS_ICONS[po.status]} {STATUS_LABELS[po.status]}</span>,
-  },
-  {
-    key: 'delivery', label: 'Expected Delivery', defaultVisible: true, width: '140px',
-    render: (po, fmtDate) => <span className="po-table__date"><Calendar size={12} /> {fmtDate(po.expectedDelivery)}</span>,
-  },
-  // Extra
-  { key: 'department', label: 'Department', defaultVisible: false, width: '120px', render: (po) => <span className="po-table__date">{po.department}</span> },
-  { key: 'createdBy', label: 'Created By', defaultVisible: false, width: '120px', render: (po) => <span className="po-table__date">{po.createdBy}</span> },
-  { key: 'createdAt', label: 'Created', defaultVisible: false, width: '110px', render: (po, fmtDate) => <span className="po-table__date">{fmtDate(po.createdAt)}</span> },
+const ALL_COLUMNS: ColumnDef[] = [
+  { key: 'poNumber', label: 'Purchase Order', defaultVisible: true, required: true },
+  { key: 'vendorName', label: 'Vendor', defaultVisible: true },
+  { key: 'totalAmount', label: 'Amount', defaultVisible: true },
+  { key: 'itemCount', label: 'Items', defaultVisible: true },
+  { key: 'priority', label: 'Priority', defaultVisible: true },
+  { key: 'status', label: 'Status', defaultVisible: true },
+  { key: 'expectedDelivery', label: 'Expected Delivery', defaultVisible: true },
 ];
-
-// ─── Component ──────────────────────────────────────────────
 
 export default function PurchaseOrdersPage() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  const canCreatePO =
+    hasPermission('PO Creation', 'canCreate') ||
+    hasPermission('Purchase Orders', 'canCreate') ||
+    hasPermission('PO', 'canCreate');
+
   const { data: poResult, loading, error } = useServiceData(
     () => purchaseOrderService.list().then((r) => r.orders.map(mapPO)),
     [] as MockPO[]
   );
-  const orders = poResult;
 
+  const { formatAmount, companyDefaultCurrency } = useCurrency();
   const [search, setSearch] = useState('');
   const [view, setView] = useState<'table' | 'card'>('table');
+  const [statusFilter, setStatusFilter] = useState<POStatus | 'ALL'>('ALL');
   const [currentPage, setCurrentPage] = useState(1);
   const [detailPO, setDetailPO] = useState<MockPO | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<MockPO | null>(null);
@@ -141,84 +150,73 @@ export default function PurchaseOrdersPage() {
   const [selectedPOIds, setSelectedPOIds] = useState<number[]>([]);
   const [showBatchDeleteModal, setShowBatchDeleteModal] = useState(false);
   const [batchDeleting, setBatchDeleting] = useState(false);
-  const [pageMsg, setPageMsg] = useState<string | null>(null);
-  useBodyScrollLock(!!detailPO || !!deleteTarget || showBatchDeleteModal);
-  const { hasPermission } = useAuth();
-  const canCreatePO = hasPermission('PO Creation', 'canCreate') || hasPermission('Purchase Orders', 'canCreate') || hasPermission('PO', 'canCreate');
-  const perPage = 8;
-  const { formatAmount, companyDefaultCurrency } = useCurrency();
-  const [displayCurrency, setDisplayCurrency] = useState(companyDefaultCurrency);
-  useEffect(() => { setDisplayCurrency(companyDefaultCurrency); }, [companyDefaultCurrency]);
+  const [pageMsg, setPageMsg] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  // ── Column state ──
-  const defaultOrder = ALL_COLUMNS.map((c) => c.key);
-  const defaultVisible = new Set(ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key));
+  const perPage = 8;
+
+  // Column Customizer State
+  const defaultOrder = useMemo(() => ALL_COLUMNS.map((c) => c.key), []);
+  const defaultVisible = useMemo(() => new Set(ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key)), []);
   const [columnOrder, setColumnOrder] = useState<string[]>(defaultOrder);
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(defaultVisible);
   const [showColPanel, setShowColPanel] = useState(false);
   const colBtnRef = useRef<HTMLButtonElement>(null);
-  const visibleColumns = useMemo(() => columnOrder.map((k) => ALL_COLUMNS.find((c) => c.key === k)!).filter((c) => c && visibleKeys.has(c.key)), [columnOrder, visibleKeys]);
-  const handleToggleColumn = (key: string) => { setVisibleKeys((prev) => { const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next; }); };
-  const handleResetColumns = () => { setColumnOrder(defaultOrder); setVisibleKeys(new Set(defaultVisible)); };
 
-  // ── Status filter for summary cards ──
-  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const visibleColumns = useMemo(
+    () => columnOrder.map((k) => ALL_COLUMNS.find((c) => c.key === k)!).filter((c) => c && visibleKeys.has(c.key)),
+    [columnOrder, visibleKeys]
+  );
 
-
-  const summary = useMemo(() => ({
-    total: orders.length,
-    pending: orders.filter(p => p.status === 'PENDING_APPROVAL' || p.status === 'DRAFT').length,
-    active: orders.filter(p => p.status === 'APPROVED' || p.status === 'DISPATCHED').length,
-    totalValue: formatAmount(orders.reduce((s, p) => s + p.totalAmountNum, 0), displayCurrency),
-  }), [orders, displayCurrency, formatAmount]);
+  const summary = useMemo(
+    () => ({
+      total: poResult.length,
+      pending: poResult.filter((p) => ['PENDING_APPROVAL', 'DRAFT'].includes(p.status)).length,
+      active: poResult.filter((p) => ['APPROVED', 'DISPATCHED'].includes(p.status)).length,
+      totalValue: poResult.reduce((sum, p) => sum + p.totalAmountNum, 0),
+    }),
+    [poResult]
+  );
 
   const filtered = useMemo(() => {
-    let list: MockPO[] = orders;
-    // Apply status card filter
-    if (statusFilter && statusFilter !== 'ALL') {
-      if (statusFilter === 'PENDING_APPROVAL') {
-        list = list.filter(p => p.status === 'PENDING_APPROVAL' || p.status === 'DRAFT');
-      } else {
-        list = list.filter(p => p.status === statusFilter);
+    const query = search.trim().toLowerCase();
+    return poResult.filter((p) => {
+      if (statusFilter !== 'ALL') {
+        if (statusFilter === 'PENDING_APPROVAL' && !['PENDING_APPROVAL', 'DRAFT'].includes(p.status)) return false;
+        if (statusFilter === 'APPROVED' && !['APPROVED', 'DISPATCHED'].includes(p.status)) return false;
+        if (statusFilter !== 'PENDING_APPROVAL' && statusFilter !== 'APPROVED' && p.status !== statusFilter) return false;
       }
-    }
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(p =>
-        p.poNumber.toLowerCase().includes(q) || p.vendorName.toLowerCase().includes(q) ||
-        p.rfqNumber.toLowerCase().includes(q) || p.createdBy.toLowerCase().includes(q) ||
-        p.department.toLowerCase().includes(q)
+      if (!query) return true;
+      return [p.poNumber, p.vendorName, p.rfqNumber, p.createdBy, p.department].some((field) =>
+        (field || '').toLowerCase().includes(query)
       );
-    }
-    return list;
-  }, [orders, search, statusFilter]);
+    });
+  }, [poResult, search, statusFilter]);
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginated = filtered.slice((safePage - 1) * perPage, safePage * perPage);
 
-  const totalPages = Math.ceil(filtered.length / perPage);
-  const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
+  const formatDate = (date?: string) =>
+    date ? new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
-  const formatDate = (d: string) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-
-  // ── Batch selection ──
+  // Batch Selection
   const isAllSelected = useMemo(() => {
     if (paginated.length === 0) return false;
-    return paginated.every(p => selectedPOIds.includes(p.id));
+    return paginated.every((p) => selectedPOIds.includes(p.id));
   }, [paginated, selectedPOIds]);
 
   const handleToggleSelectAll = useCallback(() => {
     if (isAllSelected) {
-      const paginatedIds = new Set(paginated.map(p => p.id));
-      setSelectedPOIds(prev => prev.filter(id => !paginatedIds.has(id)));
+      const paginatedIds = new Set(paginated.map((p) => p.id));
+      setSelectedPOIds((prev) => prev.filter((id) => !paginatedIds.has(id)));
     } else {
-      const newIds = paginated.map(p => p.id);
-      setSelectedPOIds(prev => Array.from(new Set([...prev, ...newIds])));
+      const newIds = paginated.map((p) => p.id);
+      setSelectedPOIds((prev) => Array.from(new Set([...prev, ...newIds])));
     }
   }, [isAllSelected, paginated]);
 
   const handleToggleSelect = useCallback((id: number) => {
-    setSelectedPOIds(prev =>
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
+    setSelectedPOIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
   }, []);
 
   const handleDeleteConfirm = useCallback(async () => {
@@ -226,11 +224,12 @@ export default function PurchaseOrdersPage() {
     setDeleting(true);
     try {
       await purchaseOrderService.delete(deleteTarget.id);
-      setPageMsg(`PO ${deleteTarget.poNumber} deleted successfully.`);
+      setPageMsg({ message: `Purchase Order ${deleteTarget.poNumber} deleted successfully.`, type: 'success' });
       setDeleteTarget(null);
-      poResult.splice(poResult.findIndex(p => p.id === deleteTarget.id), 1);
-    } catch (err) {
-      setPageMsg(err instanceof Error ? err.message : 'Failed to delete PO');
+      const idx = poResult.findIndex((p) => p.id === deleteTarget.id);
+      if (idx !== -1) poResult.splice(idx, 1);
+    } catch (err: any) {
+      setPageMsg({ message: err?.message || 'Failed to delete PO', type: 'error' });
     } finally {
       setDeleting(false);
     }
@@ -242,372 +241,583 @@ export default function PurchaseOrdersPage() {
     try {
       for (const id of selectedPOIds) {
         await purchaseOrderService.delete(id).catch(() => {});
-        const idx = poResult.findIndex(p => p.id === id);
+        const idx = poResult.findIndex((p) => p.id === id);
         if (idx !== -1) poResult.splice(idx, 1);
       }
-      setPageMsg(`Successfully deleted ${selectedPOIds.length} purchase order(s).`);
+      setPageMsg({ message: `Successfully deleted ${selectedPOIds.length} purchase order(s).`, type: 'success' });
       setSelectedPOIds([]);
       setShowBatchDeleteModal(false);
-    } catch (err) {
-      setPageMsg(err instanceof Error ? err.message : 'Failed to delete selected purchase orders');
+    } catch (err: any) {
+      setPageMsg({ message: err?.message || 'Failed to delete selected purchase orders', type: 'error' });
     } finally {
       setBatchDeleting(false);
     }
   }, [selectedPOIds, poResult]);
 
+  const cardProps = (filter: POStatus | 'ALL') => ({
+    role: 'button',
+    tabIndex: 0,
+    'aria-pressed': statusFilter === filter,
+    onClick: () => {
+      setStatusFilter((current) => (current === filter && filter !== 'ALL' ? 'ALL' : filter));
+      setCurrentPage(1);
+    },
+    onKeyDown: (event: KeyboardEvent) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        setStatusFilter(filter);
+        setCurrentPage(1);
+      }
+    },
+    className: cn(
+      'cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+      statusFilter === filter && 'border-primary/40 ring-2 ring-primary/10'
+    ),
+  });
+
   return (
-    <div className="po-page">
-      {error && <MessageStrip type="error">{error}</MessageStrip>}
-      {loading && <div className="po-page__loading">Loading purchase orders…</div>}
-      {/* Header */}
-      <div className="po-page__header">
-        <div className="po-page__header-left">
-          <h1>Purchase Orders</h1>
-          <p>Track, manage, and monitor all purchase orders across departments</p>
-        </div>
-        <button
-          className="po-page__add-btn"
-          onClick={() => canCreatePO && navigate('/procurement/create-purchase-order')}
-          disabled={!canCreatePO}
-          style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-          title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to create purchase orders." : undefined}
-        >
-          <Plus size={18} /> Create PO
-        </button>
-      </div>
+    <PageFrame>
+      <PageLead
+        title="Purchase orders"
+        description="Track purchasing commitments from approval through delivery."
+        actions={
+          <Button
+            onClick={canCreatePO ? () => navigate('/procurement/create-purchase-order') : undefined}
+            disabled={!canCreatePO}
+            title={!canCreatePO ? 'You do not have permission to create purchase orders.' : undefined}
+          >
+            <Plus /> Create PO
+          </Button>
+        }
+      />
 
-      {/* Summary */}
-      <div className="po-summary">
-        {[
-          { icon: <ShoppingCart size={22} />, val: summary.total, label: 'Total Orders', cls: 'total', filterKey: 'ALL', isFilter: true },
-          { icon: <Clock size={22} />, val: summary.pending, label: 'Pending', cls: 'pending', filterKey: 'PENDING_APPROVAL', isFilter: true },
-          { icon: <Truck size={22} />, val: summary.active, label: 'Active', cls: 'released', filterKey: 'APPROVED', isFilter: true },
-          { icon: <IndianRupee size={22} />, val: summary.totalValue, label: 'Total Value', cls: 'value', isFilter: false },
-        ].map(c => {
-          const isActive = c.isFilter && statusFilter === c.filterKey;
-          return (
-            <div
-              key={c.label}
-              className={`po-summary-card ${isActive ? 'po-summary-card--active' : ''}`}
-              onClick={() => {
-                if (c.isFilter && c.filterKey) {
-                  setStatusFilter(prev => (prev === c.filterKey ? 'ALL' : c.filterKey));
-                  setCurrentPage(1);
-                }
-              }}
-              style={{ cursor: c.isFilter ? 'pointer' : 'default' }}
-            >
-              <div className={`po-summary-card__icon po-summary-card__icon--${c.cls}`}>{c.icon}</div>
-              <div className="po-summary-card__info">
-                <span className="po-summary-card__value">{c.val}</span>
-                <span className="po-summary-card__label">{c.label}</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Toolbar */}
-      <div className="po-toolbar">
-        <div className="po-toolbar__search">
-          <Search size={16} className="po-toolbar__search-icon" />
-          <input type="text" placeholder="Search by PO number, vendor, RFQ, department..."
-            value={search} onChange={e => { setSearch(e.target.value); setCurrentPage(1); }} />
+      {error && (
+        <div className="mb-4">
+          <MessageStrip type="error">{error}</MessageStrip>
         </div>
-        <div className="po-toolbar__right">
-          <button className="po-toolbar__filter"><Filter size={14} /> Priority</button>
-          <div className="po-toolbar__view-toggle">
-            <button className={`po-toolbar__view-btn ${view === 'table' ? 'po-toolbar__view-btn--active' : ''}`}
-              onClick={() => setView('table')}><LayoutList size={16} /></button>
-            <button className={`po-toolbar__view-btn ${view === 'card' ? 'po-toolbar__view-btn--active' : ''}`}
-              onClick={() => setView('card')}><LayoutGrid size={16} /></button>
-          </div>
-        </div>
-      </div>
+      )}
 
       {pageMsg && (
-        <MessageStrip type={pageMsg.includes('failed') || pageMsg.includes('Failed') ? 'error' : 'success'} onClose={() => setPageMsg(null)} autoHideMs={5000}>
-          {pageMsg}
-        </MessageStrip>
+        <div className="mb-4">
+          <MessageStrip type={pageMsg.type} onClose={() => setPageMsg(null)} autoHideMs={5000}>
+            {pageMsg.message}
+          </MessageStrip>
+        </div>
       )}
 
-      {/* ── Floating Bulk Action Banner ── */}
-      {selectedPOIds.length > 0 && !showBatchDeleteModal && (
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          background: 'var(--surface-card)', border: '1px solid var(--primary-500)',
-          padding: '12px 18px', borderRadius: 'var(--radius-md)', marginBottom: '16px',
-          boxShadow: '0 4px 14px rgba(0,0,0,0.12)', transition: 'all 0.2s ease'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-            <CheckSquare size={18} style={{ color: 'var(--primary-500)' }} />
-            <span><strong>{selectedPOIds.length}</strong> Order(s) selected</span>
+      <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <MetricCard {...cardProps('ALL')} label="Total orders" value={summary.total} detail="All purchase orders" icon={ShoppingCart} />
+        <MetricCard {...cardProps('PENDING_APPROVAL')} label="Pending" value={summary.pending} detail="Draft or in approval" icon={Clock} tone="warning" />
+        <MetricCard {...cardProps('APPROVED')} label="Active" value={summary.active} detail="Approved or dispatched" icon={Truck} tone="success" />
+        <MetricCard label="Total value" value={formatAmount(summary.totalValue, companyDefaultCurrency)} detail="Across all orders" icon={ShoppingCart} tone="violet" />
+      </div>
+
+      {selectedPOIds.length > 0 && (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-primary/30 bg-primary/[0.04] p-3.5 shadow-sm">
+          <div className="flex items-center gap-2.5 text-sm font-semibold text-foreground">
+            <CheckSquare className="size-4 text-primary" />
+            <span><strong>{selectedPOIds.length}</strong> order(s) selected</span>
           </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button
-              type="button"
-              className="po-modal__btn po-modal__btn--secondary"
-              style={{ padding: '7px 16px', fontSize: 13, fontWeight: 600 }}
-              onClick={() => setSelectedPOIds([])}
-            >
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setSelectedPOIds([])}>
               Cancel Selection
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
               disabled={!canCreatePO}
-              style={{
-                background: canCreatePO ? '#dc2626' : '#64748b',
-                color: '#ffffff', border: 'none',
-                padding: '7px 16px', fontSize: 13, fontWeight: 700,
-                borderRadius: 'var(--radius-sm)',
-                cursor: canCreatePO ? 'pointer' : 'not-allowed',
-                opacity: canCreatePO ? 1 : 0.5,
-                pointerEvents: 'auto',
-                display: 'inline-flex', alignItems: 'center', gap: 6
-              }}
-              title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to delete purchase orders." : undefined}
-              onClick={() => {
-                if (!canCreatePO) return;
-                setShowBatchDeleteModal(true);
-              }}
+              onClick={() => canCreatePO && setShowBatchDeleteModal(true)}
             >
-              <Trash2 size={14} /> Delete Selected ({selectedPOIds.length})
-            </button>
+              <Trash2 className="size-4" /> Delete Selected ({selectedPOIds.length})
+            </Button>
           </div>
         </div>
       )}
 
-      {/* Content */}
-      {paginated.length > 0 ? (
-        view === 'table' ? (
-          <div className="po-table-card">
-            <div className="po-table-wrap">
-              <table className="po-table" style={{ tableLayout: 'fixed', minWidth: '800px' }}>
-                <colgroup>
-                  <col style={{ width: '44px' }} />
-                  {visibleColumns.map((col) => (<col key={col.key} style={{ width: col.width || 'auto' }} />))}
-                  <col style={{ width: '110px' }} />
-                </colgroup>
-                <thead>
+      <Card className="mb-4 p-3 sm:p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full max-w-xl">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="h-10 pl-10 pr-10"
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setCurrentPage(1);
+              }}
+              placeholder="Search PO, vendor, RFQ, or department"
+              aria-label="Search purchase orders"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-1.5 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-lg text-muted-foreground hover:bg-accent"
+              >
+                <X className="size-4" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between gap-2.5 sm:justify-end">
+            <div className="relative">
+              <Button
+                ref={colBtnRef}
+                variant="outline"
+                size="sm"
+                onClick={() => setShowColPanel((v) => !v)}
+                title="Customize columns"
+              >
+                <SlidersHorizontal className="size-3.5" /> Columns
+              </Button>
+              {showColPanel && (
+                <ColumnCustomizer
+                  columnOrder={columnOrder}
+                  visibleKeys={visibleKeys}
+                  allColumns={ALL_COLUMNS}
+                  onToggle={(key) => {
+                    setVisibleKeys((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(key)) next.delete(key);
+                      else next.add(key);
+                      return next;
+                    });
+                  }}
+                  onReorder={setColumnOrder}
+                  onReset={() => {
+                    setColumnOrder(defaultOrder);
+                    setVisibleKeys(new Set(defaultVisible));
+                  }}
+                  onClose={() => setShowColPanel(false)}
+                  anchorRef={colBtnRef}
+                />
+              )}
+            </div>
+
+            <div className="flex items-center rounded-lg border border-border/70 p-0.5 bg-muted/40">
+              <Button
+                variant={view === 'table' ? 'secondary' : 'ghost'}
+                size="icon-sm"
+                onClick={() => setView('table')}
+                title="Table view"
+              >
+                <LayoutList className="size-4" />
+              </Button>
+              <Button
+                variant={view === 'card' ? 'secondary' : 'ghost'}
+                size="icon-sm"
+                onClick={() => setView('card')}
+                title="Card view"
+              >
+                <LayoutGrid className="size-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {loading ? (
+        <Card className="flex min-h-[360px] items-center justify-center p-8">
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <div className="size-5 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
+            Loading purchase orders…
+          </div>
+        </Card>
+      ) : paginated.length === 0 ? (
+        <EmptyState
+          icon={ShoppingCart}
+          title="No purchase orders found"
+          description={
+            search || statusFilter !== 'ALL'
+              ? 'Try clearing the search or status filter.'
+              : 'Create your first purchase order to get started.'
+          }
+          action={
+            search || statusFilter !== 'ALL' ? (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setSearch('');
+                  setStatusFilter('ALL');
+                }}
+              >
+                Clear filters
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : view === 'table' ? (
+        <>
+          <Card className="hidden overflow-hidden lg:block">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[880px] text-left text-sm">
+                <thead className="border-b border-border/70 bg-secondary/55 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                   <tr>
-                    <th style={{ width: '44px', textAlign: 'center' }}>
+                    <th className="w-11 px-4 py-3 text-center">
                       <input
                         type="checkbox"
                         checked={isAllSelected}
                         disabled={!canCreatePO}
                         onChange={canCreatePO ? handleToggleSelectAll : undefined}
-                        style={{ cursor: canCreatePO ? 'pointer' : 'not-allowed', width: 16, height: 16 }}
-                        title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to select purchase orders." : undefined}
+                        className="size-4 rounded border-border text-primary focus:ring-primary/40"
                       />
                     </th>
-                    {visibleColumns.map((col) => (<th key={col.key}>{col.label}</th>))}
-                    <th>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                        <span>Actions</span>
-                        <div className="col-btn-wrap">
-                          <button ref={colBtnRef} className={`col-btn ${showColPanel ? 'col-btn--active' : ''}`} onClick={() => setShowColPanel((v) => !v)} title="Customize columns" aria-label="Customize columns" aria-expanded={showColPanel}>
-                            <span /><span /><span />
-                          </button>
-                          {showColPanel && (
-                            <ColumnCustomizer columnOrder={columnOrder} visibleKeys={visibleKeys} allColumns={ALL_COLUMNS} onToggle={handleToggleColumn} onReorder={setColumnOrder} onReset={handleResetColumns} onClose={() => setShowColPanel(false)} anchorRef={colBtnRef} />
-                          )}
-                        </div>
-                      </div>
-                    </th>
+                    {visibleColumns.map((col) => (
+                      <th
+                        key={col.key}
+                        className={cn('px-4 py-3', ['totalAmount', 'itemCount'].includes(col.key) && 'text-right')}
+                      >
+                        {col.label}
+                      </th>
+                    ))}
+                    <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {paginated.map(po => (
-                    <tr key={po.id} className={`po-table__row po-table__row--${(po.status || '').toLowerCase()}`}>
-                      <td onClick={e => e.stopPropagation()} style={{ textAlign: 'center' }}>
-                        <input
-                          type="checkbox"
-                          checked={selectedPOIds.includes(po.id)}
-                          disabled={!canCreatePO}
-                          onChange={() => canCreatePO && handleToggleSelect(po.id)}
-                          style={{ cursor: canCreatePO ? 'pointer' : 'not-allowed', width: 16, height: 16 }}
-                          title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to select purchase orders." : undefined}
-                        />
-                      </td>
-                      {visibleColumns.map((col) => (<td key={col.key}>{col.render(po, formatDate, formatAmount, displayCurrency)}</td>))}
-                      <td>
-                        <div className="po-table__actions">
-                          <button className="po-table__action-btn" title="View Details" onClick={() => setDetailPO(po)}><Eye size={15} /></button>
-                          <button className="po-table__action-btn" title="Download PDF" onClick={() => downloadPurchaseOrderAsPdf(po, formatAmount, displayCurrency)}><Download size={15} /></button>
-                          <button
-                            className="po-table__action-btn po-table__action-btn--danger"
-                            title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to delete purchase orders." : "Delete PO"}
-                            onClick={() => canCreatePO && setDeleteTarget(po)}
+                <tbody className="divide-y divide-border/60">
+                  {paginated.map((order) => {
+                    const isSelected = selectedPOIds.includes(order.id);
+                    return (
+                      <tr
+                        key={order.id}
+                        className={cn(
+                          'transition-colors hover:bg-accent/35 cursor-pointer',
+                          isSelected && 'bg-primary/[0.035]'
+                        )}
+                        onClick={() => setDetailPO(order)}
+                      >
+                        <td className="px-4 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
                             disabled={!canCreatePO}
-                            style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                          ><Trash2 size={15} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                            onChange={() => canCreatePO && handleToggleSelect(order.id)}
+                            className="size-4 rounded border-border text-primary focus:ring-primary/40"
+                          />
+                        </td>
+                        {visibleColumns.map((col) => {
+                          if (col.key === 'poNumber') {
+                            return (
+                              <td key="poNumber" className="px-4 py-3.5">
+                                <div className="font-semibold text-primary">{order.poNumber}</div>
+                                <div className="mt-0.5 text-[11px] text-muted-foreground">{order.rfqNumber}</div>
+                              </td>
+                            );
+                          }
+                          if (col.key === 'vendorName') {
+                            return (
+                              <td key="vendorName" className="px-4 py-3.5">
+                                <div className="flex items-center gap-2.5">
+                                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-[11px] font-semibold text-primary">
+                                    {order.vendorInitials}
+                                  </span>
+                                  <span className="font-medium">{order.vendorName}</span>
+                                </div>
+                              </td>
+                            );
+                          }
+                          if (col.key === 'totalAmount') {
+                            return (
+                              <td key="totalAmount" className="px-4 py-3.5 text-right font-semibold tabular-nums">
+                                {formatAmount(order.totalAmountNum, companyDefaultCurrency)}
+                              </td>
+                            );
+                          }
+                          if (col.key === 'itemCount') {
+                            return <td key="itemCount" className="px-4 py-3.5 text-right tabular-nums">{order.itemCount}</td>;
+                          }
+                          if (col.key === 'priority') {
+                            return (
+                              <td key="priority" className="px-4 py-3.5">
+                                <Badge tone={order.priority === 'HIGH' ? 'danger' : order.priority === 'MEDIUM' ? 'warning' : 'neutral'}>
+                                  {order.priority === 'HIGH' && <AlertTriangle className="size-3" />}
+                                  {order.priority}
+                                </Badge>
+                              </td>
+                            );
+                          }
+                          if (col.key === 'status') {
+                            return <td key="status" className="px-4 py-3.5"><StatusBadge status={order.status} /></td>;
+                          }
+                          if (col.key === 'expectedDelivery') {
+                            return (
+                              <td key="expectedDelivery" className="px-4 py-3.5 text-xs text-muted-foreground">
+                                <span className="flex items-center gap-1">
+                                  <Calendar className="size-3" />
+                                  {formatDate(order.expectedDelivery)}
+                                </span>
+                              </td>
+                            );
+                          }
+                          return <td key={col.key} className="px-4 py-3.5">-</td>;
+                        })}
+                        <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => setDetailPO(order)}
+                              title={`View ${order.poNumber}`}
+                            >
+                              <Eye className="size-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => downloadPurchaseOrderAsPdf(order, formatAmount, companyDefaultCurrency)}
+                              title={`Download ${order.poNumber}`}
+                            >
+                              <Download className="size-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              disabled={!canCreatePO}
+                              className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                              onClick={() => canCreatePO && setDeleteTarget(order)}
+                              title={canCreatePO ? `Delete ${order.poNumber}` : 'Permission denied'}
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
-            {filtered.length > perPage && (
-              <div className="po-pagination">
-                <span className="po-pagination__info">Showing {(currentPage - 1) * perPage + 1}–{Math.min(currentPage * perPage, filtered.length)} of {filtered.length}</span>
-                <div className="po-pagination__btns">
-                  <button className="po-pagination__btn" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}><ChevronLeft size={14} /></button>
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                    <button key={p} className={`po-pagination__btn ${currentPage === p ? 'po-pagination__btn--active' : ''}`} onClick={() => setCurrentPage(p)}>{p}</button>
-                  ))}
-                  <button className="po-pagination__btn" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}><ChevronRight size={14} /></button>
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="po-cards">
-            {paginated.map(po => (
-              <div key={po.id} className="po-card" onClick={() => setDetailPO(po)}>
-                <div className="po-card__top">
-                  <div className="po-card__header-left">
-                    <span className="po-card__po-number">{po.poNumber}</span>
-                    <span className="po-card__rfq">{po.rfqNumber}</span>
+          </Card>
+
+          <div className="grid gap-3 lg:hidden">
+            {paginated.map((order) => (
+              <Card key={order.id} className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-primary">{order.poNumber}</div>
+                    <div className="mt-1 truncate text-sm font-medium">{order.vendorName}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">{order.rfqNumber}</div>
                   </div>
-                  <span className={`po-badge po-badge--${po.status}`}>{STATUS_ICONS[po.status]} {STATUS_LABELS[po.status]}</span>
+                  <StatusBadge status={order.status} />
                 </div>
-                <div className="po-card__vendor-row">
-                  <div className={`po-card__avatar po-table__avatar--${po.avatarMod}`}>{po.vendorInitials}</div>
-                  <div><div className="po-card__vendor-name">{po.vendorName}</div>
-                    <div className="po-card__vendor-meta">{po.department} · {po.createdBy}</div></div>
+                <dl className="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-secondary/45 p-3 text-xs">
+                  <div>
+                    <dt className="text-muted-foreground">Amount</dt>
+                    <dd className="mt-1 font-semibold">{formatAmount(order.totalAmountNum, companyDefaultCurrency)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Items</dt>
+                    <dd className="mt-1 font-medium">{order.itemCount}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Delivery</dt>
+                    <dd className="mt-1 font-medium">{formatDate(order.expectedDelivery)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Priority</dt>
+                    <dd className="mt-1 font-medium">{order.priority}</dd>
+                  </div>
+                </dl>
+                <div className="mt-3 flex items-center justify-between border-t border-border/60 pt-3">
+                  <div className="flex gap-1.5">
+                    <Button variant="ghost" size="sm" onClick={() => setDetailPO(order)}>
+                      <Eye /> Details
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => downloadPurchaseOrderAsPdf(order, formatAmount, companyDefaultCurrency)}>
+                      <Download /> PDF
+                    </Button>
+                  </div>
+                  {canCreatePO && (
+                    <Button variant="ghost" size="icon-sm" className="text-destructive" onClick={() => setDeleteTarget(order)}>
+                      <Trash2 className="size-4" />
+                    </Button>
+                  )}
                 </div>
-                <div className="po-card__details">
-                  <div className="po-card__detail"><span className="po-card__detail-label">Amount</span><span className="po-card__detail-value">{formatAmount(po.totalAmountNum, displayCurrency)}</span></div>
-                  <div className="po-card__detail"><span className="po-card__detail-label">Items</span><span className="po-card__detail-value">{po.itemCount}</span></div>
-                  <div className="po-card__detail"><span className="po-card__detail-label">Delivery</span><span className="po-card__detail-value">{formatDate(po.expectedDelivery)}</span></div>
-                </div>
-                <div className="po-card__footer">
-                  <span className={`po-priority po-priority--${po.priority.toLowerCase()}`}>{po.priority === 'HIGH' && <AlertTriangle size={11} />} {po.priority}</span>
-                  <span className="po-card__created">{formatDate(po.createdAt)}</span>
-                </div>
-              </div>
+              </Card>
             ))}
           </div>
-        )
+        </>
       ) : (
-        <div className="po-table-card"><div className="po-empty">
-          <div className="po-empty__icon"><ShoppingCart size={48} /></div>
-          <div className="po-empty__title">No purchase orders found</div>
-          <div className="po-empty__desc">{search ? 'Try adjusting your search.' : 'Create your first purchase order to get started.'}</div>
-        </div></div>
-      )}
-
-      {/* Detail Modal */}
-      {detailPO && (
-        <div className="po-modal-backdrop" onClick={() => setDetailPO(null)}>
-          <div className="po-modal" onClick={e => e.stopPropagation()}>
-            <div className="po-modal__header">
-              <div className="po-modal__title"><Eye size={20} /><span>Order Details — {detailPO.poNumber}</span></div>
-              <button className="po-modal__close" onClick={() => setDetailPO(null)}><X size={18} /></button>
-            </div>
-            <div className="po-modal__body">
-              <div className="po-modal__status-bar">
-                <span className={`po-badge po-badge--${detailPO.status}`}>{STATUS_ICONS[detailPO.status]} {STATUS_LABELS[detailPO.status]}</span>
-                <span className={`po-priority po-priority--${detailPO.priority.toLowerCase()}`}>{detailPO.priority} Priority</span>
-              </div>
-              <div className="po-modal__grid">
-                {[
-                  { l: 'PO Number', v: detailPO.poNumber }, { l: 'RFQ Reference', v: detailPO.rfqNumber },
-                  { l: 'Vendor', v: detailPO.vendorName },                  { l: 'Total Amount', v: formatAmount(detailPO.totalAmountNum, displayCurrency) },
-                  { l: 'Items', v: String(detailPO.itemCount) }, { l: 'Department', v: detailPO.department },
-                  { l: 'Created By', v: detailPO.createdBy }, { l: 'Created', v: formatDate(detailPO.createdAt) },
-                  { l: 'Expected Delivery', v: formatDate(detailPO.expectedDelivery) },
-                ].map(i => (
-                  <div key={i.l} className="po-modal__grid-item">
-                    <span className="po-modal__grid-label">{i.l}</span>
-                    <span className="po-modal__grid-value">{i.v}</span>
-                  </div>
-                ))}
-              </div>
-              {/* Timeline */}
-              <div className="po-modal__timeline">
-                <span className="po-modal__timeline-title">Order Timeline</span>
-                <div className="po-modal__timeline-steps">
-                  {(['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'DISPATCHED', 'DELIVERED'] as POStatus[]).map((step, idx) => {
-                    const statusOrder = ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'DISPATCHED', 'DELIVERED'];
-                    const currentIdx = detailPO.status === 'CANCELLED' ? -1 : statusOrder.indexOf(detailPO.status);
-                    const stepIdx = statusOrder.indexOf(step);
-                    const isDone = stepIdx <= currentIdx;
-                    const isCurrent = stepIdx === currentIdx;
-                    return (
-                      <div key={step} className="po-modal__timeline-step">
-                        <div className={`po-modal__timeline-dot ${isDone ? 'po-modal__timeline-dot--done' : ''} ${isCurrent ? 'po-modal__timeline-dot--current' : ''}`}>
-                          {isDone ? <CheckCircle2 size={14} /> : <span>{idx + 1}</span>}
-                        </div>
-                        {idx < 4 && <div className={`po-modal__timeline-line ${isDone && !isCurrent ? 'po-modal__timeline-line--done' : ''}`} />}
-                        <span className={`po-modal__timeline-label ${isDone ? 'po-modal__timeline-label--done' : ''}`}>{STATUS_LABELS[step]}</span>
-                      </div>
-                    );
-                  })}
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {paginated.map((order) => (
+            <Card
+              key={order.id}
+              className="group cursor-pointer p-4 transition-all hover:border-primary/30 hover:shadow-md"
+              onClick={() => setDetailPO(order)}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-semibold text-primary">{order.poNumber}</div>
+                  <div className="mt-1 truncate text-sm font-medium">{order.vendorName}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">{order.rfqNumber}</div>
                 </div>
-                {detailPO.status === 'CANCELLED' && (
-                  <div className="po-modal__cancelled-notice"><XCircle size={14} /> This order has been cancelled.</div>
-                )}
+                <StatusBadge status={order.status} />
               </div>
-            </div>
-            <div className="po-modal__footer">
-              <button className="po-modal__btn po-modal__btn--primary" onClick={() => downloadPurchaseOrderAsPdf(detailPO, formatAmount, displayCurrency)}>
-                <Download size={14} style={{ marginRight: 6 }} /> Download PDF
-              </button>
-              <button className="po-modal__btn po-modal__btn--secondary" onClick={() => setDetailPO(null)}>Close</button>
-            </div>
+              <dl className="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-secondary/45 p-3 text-xs">
+                <div>
+                  <dt className="text-muted-foreground">Amount</dt>
+                  <dd className="mt-1 font-semibold">{formatAmount(order.totalAmountNum, companyDefaultCurrency)}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Items</dt>
+                  <dd className="mt-1 font-medium">{order.itemCount}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Delivery</dt>
+                  <dd className="mt-1 font-medium">{formatDate(order.expectedDelivery)}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Priority</dt>
+                  <dd className="mt-1 font-medium">{order.priority}</dd>
+                </div>
+              </dl>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {filtered.length > perPage && (
+        <div className="mt-4 flex flex-col gap-3 rounded-xl border border-border/65 bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <span className="text-xs text-muted-foreground">
+            {(safePage - 1) * perPage + 1}–{Math.min(safePage * perPage, filtered.length)} of {filtered.length}
+          </span>
+          <div className="flex flex-wrap gap-1">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              disabled={safePage === 1}
+              onClick={() => setCurrentPage((page) => page - 1)}
+              aria-label="Previous page"
+            >
+              <ChevronLeft />
+            </Button>
+            {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
+              <Button
+                key={page}
+                variant={safePage === page ? 'default' : 'ghost'}
+                size="icon-sm"
+                onClick={() => setCurrentPage(page)}
+                aria-label={`Page ${page}`}
+              >
+                {page}
+              </Button>
+            ))}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              disabled={safePage === totalPages}
+              onClick={() => setCurrentPage((page) => page + 1)}
+              aria-label="Next page"
+            >
+              <ChevronRight />
+            </Button>
           </div>
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
-      {deleteTarget && (
-        <div className="po-modal-backdrop" onClick={() => !deleting && setDeleteTarget(null)}>
-          <div className="po-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
-            <div className="po-modal__header">
-              <div className="po-modal__title"><Trash2 size={20} /><span>Delete Purchase Order?</span></div>
-              <button className="po-modal__close" onClick={() => setDeleteTarget(null)} disabled={deleting}><X size={18} /></button>
-            </div>
-            <div className="po-modal__body">
-              <p style={{ margin: 0, fontSize: 14 }}>
-                Are you sure you want to delete <strong>{deleteTarget.poNumber}</strong>?
-                This action cannot be undone and will permanently remove this purchase order.
-              </p>
-            </div>
-            <div className="po-modal__footer">
-              <button className="po-modal__btn po-modal__btn--secondary" onClick={() => setDeleteTarget(null)} disabled={deleting}>Cancel</button>
-              <button className="po-modal__btn" style={{ background: '#dc2626', color: '#fff' }} onClick={handleDeleteConfirm} disabled={deleting}>
-                {deleting ? 'Deleting…' : 'Delete PO'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Detail Dialog */}
+      <Dialog open={!!detailPO} onOpenChange={(open) => { if (!open) setDetailPO(null); }}>
+        {detailPO && (
+          <DialogContent className="max-w-2xl">
+            <DialogHeader className="pr-10">
+              <div className="flex flex-wrap items-center gap-2">
+                <DialogTitle>{detailPO.poNumber}</DialogTitle>
+                <StatusBadge status={detailPO.status} />
+                <Badge>{detailPO.priority} priority</Badge>
+              </div>
+              <DialogDescription>
+                {detailPO.vendorName} · {formatAmount(detailPO.totalAmountNum, companyDefaultCurrency)}
+              </DialogDescription>
+            </DialogHeader>
+            <dl className="grid gap-2 sm:grid-cols-2">
+              {[
+                ['RFQ reference', detailPO.rfqNumber],
+                ['Vendor', detailPO.vendorName],
+                ['Total amount', formatAmount(detailPO.totalAmountNum, companyDefaultCurrency)],
+                ['Items', String(detailPO.itemCount)],
+                ['Department', detailPO.department],
+                ['Created by', detailPO.createdBy],
+                ['Created', formatDate(detailPO.createdAt)],
+                ['Expected delivery', formatDate(detailPO.expectedDelivery)],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-xl border border-border/65 bg-secondary/40 p-3">
+                  <dt className="text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{label}</dt>
+                  <dd className="mt-1 text-sm font-medium">{value}</dd>
+                </div>
+              ))}
+            </dl>
+            {detailPO.status === 'CANCELLED' ? (
+              <div className="flex items-center gap-2 rounded-xl border border-destructive/20 bg-destructive/8 p-3 text-sm text-destructive">
+                <XCircle className="size-4" /> This order has been cancelled.
+              </div>
+            ) : (
+              <ol className="grid grid-cols-5 gap-1" aria-label="Order progress">
+                {PROGRESS_STEPS.map((step, index) => {
+                  const done = index <= PROGRESS_STEPS.indexOf(detailPO.status);
+                  return (
+                    <li
+                      key={step}
+                      className="relative flex min-w-0 flex-col items-center text-center before:absolute before:left-[calc(50%+12px)] before:right-[calc(-50%+12px)] before:top-3 before:h-px before:bg-border last:before:hidden"
+                    >
+                      <span
+                        className={cn(
+                          'relative z-10 grid size-6 place-items-center rounded-full border bg-card text-[10px]',
+                          done ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground'
+                        )}
+                      >
+                        {done ? <CheckCircle2 className="size-3.5" /> : index + 1}
+                      </span>
+                      <span className="mt-2 hidden text-[9px] text-muted-foreground sm:block">{STATUS_CONFIG[step].label}</span>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+            <DialogFooter>
+              <Button variant="secondary" onClick={() => setDetailPO(null)}>Close</Button>
+              <Button onClick={() => downloadPurchaseOrderAsPdf(detailPO, formatAmount, companyDefaultCurrency)}>
+                <Download /> Download PDF
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        )}
+      </Dialog>
 
-      {/* Batch Delete Confirmation Modal */}
-      {showBatchDeleteModal && (
-        <div className="po-modal-backdrop" onClick={() => !batchDeleting && setShowBatchDeleteModal(false)}>
-          <div className="po-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
-            <div className="po-modal__header">
-              <div className="po-modal__title"><Trash2 size={20} /><span>Delete {selectedPOIds.length} Selected Order(s)?</span></div>
-              <button className="po-modal__close" onClick={() => setShowBatchDeleteModal(false)} disabled={batchDeleting}><X size={18} /></button>
+      {/* Delete Single Modal */}
+      <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open && !deleting) setDeleteTarget(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <div className="mb-2 grid size-11 place-items-center rounded-xl bg-destructive/10 text-destructive">
+              <Trash2 className="size-5" />
             </div>
-            <div className="po-modal__body">
-              <p style={{ margin: 0, fontSize: 14 }}>
-                Are you sure you want to delete the <strong>{selectedPOIds.length} selected purchase order(s)</strong>?
-                This action cannot be undone.
-              </p>
+            <DialogTitle>Delete purchase order?</DialogTitle>
+            <DialogDescription>
+              {deleteTarget?.poNumber || 'This order'} will be permanently removed. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>Cancel</Button>
+            <Button variant="destructive" loading={deleting} onClick={handleDeleteConfirm}>Delete order</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Batch Delete Modal */}
+      <Dialog open={showBatchDeleteModal} onOpenChange={(open) => { if (!open && !batchDeleting) setShowBatchDeleteModal(false); }}>
+        <DialogContent>
+          <DialogHeader>
+            <div className="mb-2 grid size-11 place-items-center rounded-xl bg-destructive/10 text-destructive">
+              <Trash2 className="size-5" />
             </div>
-            <div className="po-modal__footer">
-              <button ref={(el) => el?.focus()} className="po-modal__btn po-modal__btn--secondary" onClick={() => setShowBatchDeleteModal(false)} disabled={batchDeleting}>Cancel</button>
-              <button className="po-modal__btn" style={{ background: '#dc2626', color: '#fff' }} onClick={handleBatchDeleteConfirm} disabled={batchDeleting}>
-                {batchDeleting ? 'Deleting…' : `Delete ${selectedPOIds.length} Order(s)`}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+            <DialogTitle>Delete {selectedPOIds.length} selected order(s)?</DialogTitle>
+            <DialogDescription>
+              The selected {selectedPOIds.length} purchase order(s) will be permanently deleted from the database.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBatchDeleteModal(false)} disabled={batchDeleting}>Cancel</Button>
+            <Button variant="destructive" loading={batchDeleting} onClick={handleBatchDeleteConfirm}>Delete {selectedPOIds.length} order(s)</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </PageFrame>
   );
 }

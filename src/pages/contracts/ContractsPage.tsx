@@ -10,7 +10,7 @@ import {
   FileText, Search, Plus, Eye, Edit3, X, ChevronLeft, ChevronRight,
   LayoutList, LayoutGrid, Calendar, DollarSign, AlertTriangle,
   Clock, CheckCircle2, XCircle, FileSignature, Trash2, Download,
-  Ban, Printer, Bell, ArrowRight, CheckSquare,
+  Ban, Bell, ArrowRight, CheckSquare,
 } from 'lucide-react';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import '../../components/shared/ColumnCustomizer.css';
@@ -18,7 +18,20 @@ import { MessageStrip, inferMessageType } from '../../components/shared/MessageS
 import { useCurrency } from '../../components/shared/CurrencyMaster';
 import { TableSkeleton } from '../../components/shared/Skeleton';
 import { downloadContractAsPdf } from '../../utils/pdfDownload';
-import './ContractsPage.css';
+import { PageFrame, PageLead, MetricCard, EmptyState } from '../../components/ui/product';
+import { Card } from '../../components/ui/card';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/ui/dialog';
+import { cn } from '../../lib/utils';
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -55,22 +68,28 @@ const STATUS_LABELS: Record<string, string> = {
   TERMINATED: 'Terminated',
 };
 
-function getStatusIcon(status: string) {
-  switch (status) {
-    case 'DRAFT': return <FileText size={12} />;
-    case 'PENDING_VENDOR_SIGNATURE':
-    case 'AWAITING_CUSTOMER_SIGNATURE':
-    case 'AWAITING_VENDOR_SIGNATURE': return <Clock size={12} />;
-    case 'VENDOR_SIGNED':
-    case 'ACCEPTED':
-    case 'COMPLETED':
-    case 'ACTIVE': return <CheckCircle2 size={12} />;
-    case 'EXPIRING_SOON': return <AlertTriangle size={12} />;
-    case 'EXPIRED':
-    case 'CANCELLED':
-    case 'TERMINATED': return <XCircle size={12} />;
-    default: return null;
-  }
+const STATUS_TONES: Record<string, string> = {
+  DRAFT: 'bg-muted/50 text-muted-foreground border-border/60',
+  PENDING_VENDOR_SIGNATURE: 'bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-300',
+  AWAITING_CUSTOMER_SIGNATURE: 'bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-300',
+  AWAITING_VENDOR_SIGNATURE: 'bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-300',
+  VENDOR_SIGNED: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-300',
+  ACCEPTED: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-300',
+  COMPLETED: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-300',
+  ACTIVE: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-300',
+  EXPIRING_SOON: 'bg-orange-500/10 text-orange-600 border-orange-500/20 dark:text-orange-300',
+  EXPIRED: 'bg-rose-500/10 text-rose-600 border-rose-500/20 dark:text-rose-300',
+  CANCELLED: 'bg-rose-500/10 text-rose-600 border-rose-500/20 dark:text-rose-300',
+  TERMINATED: 'bg-rose-500/10 text-rose-600 border-rose-500/20 dark:text-rose-300',
+};
+
+function getTimeAgo(dateStr: string) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
 }
 
 interface ContractColumnDef {
@@ -87,7 +106,6 @@ export default function ContractsPage() {
   const canCreateContract = hasPermission('Contract Management', 'canCreate') || hasPermission('Contracts', 'canCreate');
   const { formatAmount, companyDefaultCurrency: displayCurrency } = useCurrency();
 
-  // ─── Contract types from Company Settings ──
   const [contractTypeLabels, setContractTypeLabels] = useState<Record<string, string>>({});
 
   const { data: rawResult, loading, error, reload } = useServiceData(
@@ -128,20 +146,10 @@ export default function ContractsPage() {
   const [selectedContractIds, setSelectedContractIds] = useState<string[]>([]);
   const [showBatchDeleteModal, setShowBatchDeleteModal] = useState(false);
   const [batchDeleting, setBatchDeleting] = useState(false);
-  const [operating, setOperating] = useState<string | null>(null); // id being acted upon
   const [pageMsg, setPageMsg] = useState<string | null>(null);
   useBodyScrollLock(!!deleteTarget || !!terminateTarget || showBatchDeleteModal);
-
-  useEffect(() => {
-    if (deleteTarget || terminateTarget || showBatchDeleteModal) {
-      if (document.activeElement instanceof HTMLElement) {
-        document.activeElement.blur();
-      }
-    }
-  }, [deleteTarget, terminateTarget, showBatchDeleteModal]);
   const perPage = 10;
 
-  // ── Recently signed contract banner state ──────────────────
   const [recentlySigned, setRecentlySigned] = useState<Array<{
     contractId: string;
     contractNumber: string;
@@ -154,7 +162,6 @@ export default function ContractsPage() {
     rfqTitle: string | null;
   }>>([]);
 
-  // Subscribe to SSE for real-time contract signing alerts
   useEffect(() => {
     const unsub = sseClient.on('contract_signed', (data: unknown) => {
       const event = data as {
@@ -170,27 +177,21 @@ export default function ContractsPage() {
       };
 
       setRecentlySigned(prev => {
-        // Avoid duplicates if multiple SSE events arrive
         if (prev.some(s => s.contractId === event.contractId)) return prev;
-        // Keep last 5
         return [event, ...prev].slice(0, 5);
       });
 
-      // Auto-refresh the contract list to reflect new status
       reload();
 
-      // Auto-dismiss after 60 seconds
       setTimeout(() => {
         setRecentlySigned(prev => prev.filter(s => s.contractId !== event.contractId));
       }, 60_000);
     });
 
-    // Subscribe to PO creation events — refresh list so balance/status updates show
     const unsubPO = sseClient.on('po_created', () => {
       reload();
     });
 
-    // Connect SSE client if not already connected
     sseClient.connect();
 
     return () => {
@@ -199,7 +200,6 @@ export default function ContractsPage() {
     };
   }, [reload]);
 
-  // Dismiss all banners
   const dismissAllSigned = useCallback(() => {
     setRecentlySigned([]);
   }, []);
@@ -212,61 +212,55 @@ export default function ContractsPage() {
           const labels = Object.fromEntries(templates.map(t => [t.type, t.name]));
           setContractTypeLabels(labels);
         }
-      } catch { /* no company settings configured */ }
+      } catch { /* no settings */ }
     })();
   }, []);
-
-
-
-  // ─── Column definitions (memoized with formatAmount) ────────
 
   const allColumns = useMemo((): ContractColumnDef[] => [
     {
       key: 'contract', label: 'Contract', defaultVisible: true, required: true, width: '220px',
       render: (r) => (
-        <div className="ctr-table__contract-info">
-          <span className="ctr-table__contract-number">{r.contractNumber}</span>
-          <span className="ctr-table__contract-title">{r.title}</span>
+        <div>
+          <div className="font-semibold text-foreground font-mono text-xs">{r.contractNumber}</div>
+          <div className="text-[11px] text-muted-foreground truncate max-w-[200px]">{r.title}</div>
         </div>
       ),
     },
     {
       key: 'vendor', label: 'Supplier', defaultVisible: true, width: '160px',
-      render: (r) => <span className="ctr-table__vendor-name">{r.vendorName}</span>,
+      render: (r) => <span className="font-medium text-foreground">{r.vendorName}</span>,
     },
     {
       key: 'value', label: 'Contract Value', defaultVisible: true, width: '130px',
-      render: (r) => <span className="ctr-table__amount">{formatAmount(r.contractValue, r.currency)}</span>,
+      render: (r) => <span className="font-semibold text-foreground font-mono">{formatAmount(r.contractValue, r.currency)}</span>,
     },
     {
       key: 'status', label: 'Status', defaultVisible: true, width: '160px',
       render: (r) => (
-        <span className={`ctr-badge ctr-badge--${r.status}`}>
-          {getStatusIcon(r.status)} {STATUS_LABELS[r.status]}
-        </span>
+        <Badge variant="outline" className={cn('gap-1 text-[10px] font-semibold', STATUS_TONES[r.status])}>
+          {STATUS_LABELS[r.status]}
+        </Badge>
       ),
     },
     {
       key: 'startDate', label: 'Start Date', defaultVisible: true, width: '120px',
       render: (r, fmtDate) => (
-        <span className="ctr-table__date"><Calendar size={12} /> {fmtDate(r.startDate)}</span>
+        <span className="text-muted-foreground whitespace-nowrap">{fmtDate(r.startDate)}</span>
       ),
     },
     {
       key: 'endDate', label: 'End Date', defaultVisible: true, width: '120px',
       render: (r, fmtDate) => (
-        <span className="ctr-table__date">
-          {r.endDate ? <><Calendar size={12} /> {fmtDate(r.endDate)}</> : '—'}
+        <span className="text-muted-foreground whitespace-nowrap">
+          {r.endDate ? fmtDate(r.endDate) : '—'}
         </span>
       ),
     },
     {
       key: 'contractOwner', label: 'Owner', defaultVisible: true, width: '140px',
-      render: (r) => <span className="ctr-table__owner">{r.contractOwner}</span>,
+      render: (r) => <span className="text-muted-foreground">{r.contractOwner}</span>,
     },
   ], [formatAmount]);
-
-  // ─── Column state ──────────────────────────────────────────
 
   const defaultOrder = useMemo(() => allColumns.map((c) => c.key), [allColumns]);
   const defaultVisible = useMemo(
@@ -297,8 +291,6 @@ export default function ContractsPage() {
     setColumnOrder(defaultOrder);
     setVisibleKeys(new Set(defaultVisible));
   };
-
-  // ─── Filters ────────────────────────────────────────────────
 
   const filtered = useMemo(() => {
     let list = contracts;
@@ -338,7 +330,6 @@ export default function ContractsPage() {
     new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
   []);
 
-  // ─── Batch selection ────────────────────────────────────────
   const isAllSelected = useMemo(() => {
     if (paginated.length === 0) return false;
     return paginated.every(r => selectedContractIds.includes(r.id));
@@ -378,27 +369,21 @@ export default function ContractsPage() {
     }
   }, [selectedContractIds, reload]);
 
-  // Navigate to RFQ's purchase-requisition page with contractId pre-fill
   const handleNavigateToPO = useCallback((contractId: string) => {
     const contract = contracts.find(c => c.id === contractId);
     if (contract?.sourceRfq) {
-      // Find the actual contract to get the rfqId
       const fullContract = rawResult.rawContracts.find(c => c.id === contractId);
       if (fullContract?.rfqId) {
         navigate(`/procurement/purchase-requisition/${fullContract.rfqId}?contractId=${contractId}`);
         return;
       }
     }
-    // Fallback: just go to contract detail
     navigate(`/contracts/${contractId}`);
   }, [navigate, contracts, rawResult.rawContracts]);
 
-  // Dismiss a single banner
   const dismissSignedBanner = useCallback((contractId: string) => {
     setRecentlySigned(prev => prev.filter(s => s.contractId !== contractId));
   }, []);
-
-  // ─── Action Handlers ────────────────────────────────────────
 
   const handleView = useCallback((id: string) => {
     navigate(`/contracts/${id}`);
@@ -425,9 +410,7 @@ export default function ContractsPage() {
         if (res?.contract?.contentSnapshot) {
           contentHtml = res.contract.contentSnapshot;
         }
-      } catch {
-        /* fallback to formatted row HTML */
-      }
+      } catch { /* fallback */ }
 
       if (!contentHtml) {
         contentHtml = `
@@ -488,365 +471,212 @@ export default function ContractsPage() {
     }
   }, [deleteTarget, reload]);
 
-  const contractTypes = Object.keys(contractTypeLabels);
-
-  // ─── Render ──────────────────────────────────────────────────
-
   return (
-    <div className="ctr-page">
+    <PageFrame>
       {pageMsg && (
-        <MessageStrip type={inferMessageType(pageMsg)} onClose={() => setPageMsg(null)} autoHideMs={5000}>
+        <MessageStrip type={inferMessageType(pageMsg)} onClose={() => setPageMsg(null)} autoHideMs={5000} className="mb-4">
           {pageMsg}
         </MessageStrip>
       )}
-      {error && <MessageStrip type="error">{error}</MessageStrip>}
+      {error && <MessageStrip type="error" className="mb-4">{error}</MessageStrip>}
 
-      {/* ── Recently Signed Contracts Banner ── */}
+      {/* Recently Signed Banner */}
       {recentlySigned.length > 0 && (
-        <div className="ctr-signed-banner-wrap">
-          <div className="ctr-signed-banner-header">
-            <div className="ctr-signed-banner-header__left">
-              <Bell size={16} className="ctr-signed-banner-header__icon" />
-              <span>Recently Signed Contracts</span>
+        <Card className="mb-6 border-emerald-500/30 bg-emerald-500/5 p-4">
+          <div className="flex items-center justify-between border-b border-emerald-500/20 pb-2 mb-3">
+            <div className="flex items-center gap-2 text-sm font-bold text-emerald-600 dark:text-emerald-400">
+              <Bell className="size-4 animate-bounce" /> Recently Signed Contracts
             </div>
-            <button
-              className="ctr-signed-banner-header__dismiss-all"
-              onClick={dismissAllSigned}
-            >
+            <button className="text-xs font-semibold text-emerald-600 hover:underline dark:text-emerald-400" onClick={dismissAllSigned}>
               Dismiss all
             </button>
           </div>
-          <div className="ctr-signed-banner-list">
-            {recentlySigned.map(event => {
-              const timeAgo = getTimeAgo(event.signedAt);
-              return (
-                <div key={event.contractId} className="ctr-signed-banner">
-                  <div className="ctr-signed-banner__ribbon">
-                    <span>JUST SIGNED</span>
-                  </div>
-                  <div className="ctr-signed-banner__content">
-                    <div className="ctr-signed-banner__info">
-                      <div className="ctr-signed-banner__vendor">
-                        <CheckCircle2 size={18} />
-                        <span>{event.vendorName}</span>
-                      </div>
-                      <div className="ctr-signed-banner__meta">
-                        <span className="ctr-signed-banner__contract">
-                          {event.contractNumber}
-                        </span>
-                        <span className="ctr-signed-banner__sep">·</span>
-                        <span className="ctr-signed-banner__value">
-                          {formatCurrency(event.contractValue, event.currency)}
-                        </span>
-                        {event.rfqNumber && (
-                          <>
-                            <span className="ctr-signed-banner__sep">·</span>
-                            <span className="ctr-signed-banner__rfq">{event.rfqNumber}</span>
-                          </>
-                        )}
-                      </div>
-                      <div className="ctr-signed-banner__time">
-                        <Clock size={12} />
-                        <span>{timeAgo}</span>
-                        <span className="ctr-signed-banner__sep">·</span>
-                        <span>Signed by {event.signedBy}</span>
-                      </div>
-                    </div>
-                    <div className="ctr-signed-banner__actions">
-                      <button
-                        className="ctr-signed-banner__btn ctr-signed-banner__btn--primary"
-                        onClick={() => handleView(event.contractId)}
-                      >
-                        <Eye size={14} />
-                        <span>View</span>
-                      </button>
-                      <button
-                        className="ctr-signed-banner__btn ctr-signed-banner__btn--secondary"
-                        onClick={() => canCreatePO && handleNavigateToPO(event.contractId)}
-                        disabled={!canCreatePO}
-                        style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                        title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to create purchase orders." : undefined}
-                      >
-                        <ArrowRight size={14} />
-                        <span>Create PO</span>
-                      </button>
-                      <button
-                        className="ctr-signed-banner__dismiss"
-                        onClick={() => dismissSignedBanner(event.contractId)}
-                        title="Dismiss"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
+          <div className="space-y-2">
+            {recentlySigned.map(event => (
+              <div key={event.contractId} className="flex flex-col gap-2 rounded-lg border border-emerald-500/20 bg-background/80 p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2.5">
+                  <CheckCircle2 className="size-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <div>
+                    <div className="text-xs font-bold text-foreground">{event.vendorName} · <span className="font-mono">{event.contractNumber}</span></div>
+                    <div className="text-[11px] text-muted-foreground">Signed by {event.signedBy} · {getTimeAgo(event.signedAt)}</div>
                   </div>
                 </div>
-              );
-            })}
+                <div className="flex items-center gap-2">
+                  <Button size="sm" onClick={() => handleView(event.contractId)} className="h-8 text-xs">
+                    <Eye className="mr-1.5 size-3.5" /> View
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => canCreatePO && handleNavigateToPO(event.contractId)} disabled={!canCreatePO} className="h-8 text-xs">
+                    <ArrowRight className="mr-1.5 size-3.5" /> Create PO
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => dismissSignedBanner(event.contractId)} className="h-8 w-8 p-0">
+                    <X className="size-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Header */}
-      <div className="ctr-page__header">
-        <div className="ctr-page__header-left">
-          <h1><FileText size={24} /> Contracts</h1>
-          <p>Manage contracts, track signatures, and create purchase orders</p>
-        </div>
-      </div>
+      <PageLead
+        title="Contracts"
+        description="Manage contracts, track signatures, and create purchase orders"
+      />
 
-      {/* Summary */}
-      <div className="ctr-summary">
-        {[
-          { icon: <FileText size={22} />, val: summary.total, label: 'Total Contracts', cls: 'total', filterKey: 'ALL', isFilter: true },
-          { icon: <CheckCircle2 size={22} />, val: summary.vendorSigned, label: 'Vendor Signed', cls: 'signed', filterKey: 'VENDOR_SIGNED_GROUP', isFilter: true },
-          { icon: <Clock size={22} />, val: summary.pendingSignature, label: 'Pending Signature', cls: 'pending', filterKey: 'PENDING_SIGNATURE_GROUP', isFilter: true },
-          { icon: <DollarSign size={22} />, val: formatCurrency(summary.totalValue, displayCurrency), label: 'Total Value', cls: 'value', isFilter: false },
-        ].map(c => {
-          const isActive = c.isFilter && statusFilter === c.filterKey;
-          return (
-            <div
-              key={c.label}
-              className={`ctr-summary-card ${isActive ? 'ctr-summary-card--active' : ''}`}
-              onClick={() => {
-                if (c.isFilter && c.filterKey) {
-                  setStatusFilter(prev => (prev === c.filterKey ? 'ALL' : c.filterKey));
-                  setCurrentPage(1);
-                }
-              }}
-              style={{ cursor: c.isFilter ? 'pointer' : 'default' }}
-              role={c.isFilter ? 'button' : undefined}
-              tabIndex={c.isFilter ? 0 : undefined}
-              onKeyDown={(e) => {
-                if (c.isFilter && c.filterKey && (e.key === 'Enter' || e.key === ' ')) {
-                  setStatusFilter(prev => (prev === c.filterKey ? 'ALL' : c.filterKey));
-                  setCurrentPage(1);
-                }
-              }}
-            >
-              <div className={`ctr-summary-card__icon ctr-summary-card__icon--${c.cls}`}>{c.icon}</div>
-              <div className="ctr-summary-card__info">
-                <span className="ctr-summary-card__value">
-                  {typeof c.val === 'number' ? c.val.toLocaleString('en-IN') : c.val}
-                </span>
-                <span className="ctr-summary-card__label">{c.label}</span>
-              </div>
-            </div>
-          );
-        })}
+      {/* Metric Cards */}
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard
+          icon={FileText}
+          label="Total Contracts"
+          value={summary.total}
+          tone="primary"
+          className="cursor-pointer"
+          onClick={() => { setStatusFilter('ALL'); setCurrentPage(1); }}
+        />
+        <MetricCard
+          icon={CheckCircle2}
+          label="Vendor Signed"
+          value={summary.vendorSigned}
+          tone="success"
+          className="cursor-pointer"
+          onClick={() => { setStatusFilter('VENDOR_SIGNED_GROUP'); setCurrentPage(1); }}
+        />
+        <MetricCard
+          icon={Clock}
+          label="Pending Signature"
+          value={summary.pendingSignature}
+          tone="warning"
+          className="cursor-pointer"
+          onClick={() => { setStatusFilter('PENDING_SIGNATURE_GROUP'); setCurrentPage(1); }}
+        />
+        <MetricCard
+          icon={DollarSign}
+          label="Total Value"
+          value={formatAmount(summary.totalValue, displayCurrency)}
+          tone="violet"
+        />
       </div>
 
       {/* Toolbar */}
-      <div className="ctr-toolbar">
-        <div className="ctr-toolbar__search">
-          <Search size={16} className="ctr-toolbar__search-icon" />
-          <input
-            type="text"
-            placeholder="Search by contract number, title, supplier, RFQ..."
-            value={search}
-            onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
-          />
-        </div>
-        <div className="ctr-toolbar__right">
-          <div className="ctr-toolbar__view-toggle">
-            <button
-              className={`ctr-toolbar__view-btn ${view === 'table' ? 'ctr-toolbar__view-btn--active' : ''}`}
+      <Card className="mb-6 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative min-w-0 flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search by contract number, title, supplier, RFQ..."
+              value={search}
+              onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
+              className="pl-9"
+            />
+          </div>
+          <div className="flex items-center gap-1.5 justify-end">
+            <Button
+              variant={view === 'table' ? 'secondary' : 'ghost'}
+              size="sm"
               onClick={() => setView('table')}
-            ><LayoutList size={16} /></button>
-            <button
-              className={`ctr-toolbar__view-btn ${view === 'card' ? 'ctr-toolbar__view-btn--active' : ''}`}
+              className="h-9 w-9 p-0"
+              title="Table View"
+            >
+              <LayoutList className="size-4" />
+            </Button>
+            <Button
+              variant={view === 'card' ? 'secondary' : 'ghost'}
+              size="sm"
               onClick={() => setView('card')}
-            ><LayoutGrid size={16} /></button>
+              className="h-9 w-9 p-0"
+              title="Card View"
+            >
+              <LayoutGrid className="size-4" />
+            </Button>
           </div>
         </div>
-      </div>
+      </Card>
 
-      {/* ── Floating Bulk Action Banner ── */}
+      {/* Floating Bulk Action */}
       {selectedContractIds.length > 0 && !showBatchDeleteModal && (
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          background: 'var(--surface-card)', border: '1px solid var(--primary-500)',
-          padding: '12px 18px', borderRadius: 'var(--radius-md)', marginBottom: '16px',
-          boxShadow: '0 4px 14px rgba(0,0,0,0.12)', transition: 'all 0.2s ease'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-            <CheckSquare size={18} style={{ color: 'var(--primary-500)' }} />
+        <Card className="mb-6 flex items-center justify-between border-primary p-4 bg-primary/5">
+          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <CheckSquare className="size-5 text-primary" />
             <span><strong>{selectedContractIds.length}</strong> Contract(s) selected</span>
           </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button
-              type="button"
-              className="ctr-modal__btn ctr-modal__btn--secondary"
-              style={{ padding: '7px 16px', fontSize: 13, fontWeight: 600 }}
-              onClick={() => {
-                setSelectedContractIds([]);
-              }}
-            >
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setSelectedContractIds([])}>
               Cancel Selection
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
               disabled={!canCreateContract}
-              style={{
-                background: canCreateContract ? '#dc2626' : '#64748b',
-                color: '#ffffff', border: 'none',
-                padding: '7px 16px', fontSize: 13, fontWeight: 700,
-                borderRadius: 'var(--radius-sm)',
-                cursor: canCreateContract ? 'pointer' : 'not-allowed',
-                opacity: canCreateContract ? 1 : 0.5,
-                pointerEvents: 'auto',
-                display: 'inline-flex', alignItems: 'center', gap: 6
-              }}
-              title={!canCreateContract ? "Admin has not allowed this action. You do not have permission to delete contracts." : undefined}
-              onClick={() => {
-                if (!canCreateContract) return;
-                setShowBatchDeleteModal(true);
-              }}
+              onClick={() => canCreateContract && setShowBatchDeleteModal(true)}
             >
-              <Trash2 size={14} /> Delete Selected ({selectedContractIds.length})
-            </button>
+              <Trash2 className="mr-1.5 size-4" /> Delete Selected ({selectedContractIds.length})
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Content */}
       {loading ? (
-        <div className="ctr-table-card">
+        <Card className="p-6">
           <TableSkeleton rows={4} columns={6} />
-        </div>
+        </Card>
       ) : paginated.length > 0 ? (
         view === 'table' ? (
-          <div className="ctr-table-card">
-            <div className="ctr-table-wrap">
-              <table className="ctr-table" style={{ tableLayout: 'fixed', minWidth: '850px' }}>
-                <colgroup>
-                  <col style={{ width: '44px' }} />
-                  {visibleColumns.map(col => <col key={col.key} style={{ width: col.width || 'auto' }} />)}
-                  <col style={{ width: '200px' }} />
-                </colgroup>
+          <Card className="overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
                 <thead>
-                  <tr>
-                    <th style={{ width: '44px', textAlign: 'center' }}>
+                  <tr className="border-b border-border/70 bg-muted/40 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <th className="px-4 py-3.5 w-10 text-center">
                       <input
                         type="checkbox"
                         checked={isAllSelected}
                         disabled={!canCreateContract}
                         onChange={canCreateContract ? handleToggleSelectAll : undefined}
-                        style={{ cursor: canCreateContract ? 'pointer' : 'not-allowed', width: 16, height: 16 }}
-                        title={!canCreateContract ? "Admin has not allowed this action. You do not have permission to select contracts." : undefined}
+                        className="rounded border-input text-primary shadow-xs focus:ring-primary"
                       />
                     </th>
-                    {visibleColumns.map(col => <th key={col.key}>{col.label}</th>)}
-                    <th>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                        <span>Actions</span>
-                        <div className="col-btn-wrap">
-                          <button
-                            ref={colBtnRef}
-                            className={`col-btn ${showColPanel ? 'col-btn--active' : ''}`}
-                            onClick={() => setShowColPanel(v => !v)}
-                            title="Customize columns"
-                            aria-label="Customize columns"
-                            aria-expanded={showColPanel}
-                          >
-                            <span /><span /><span />
-                          </button>
-                          {showColPanel && (
-                            <ColumnCustomizer
-                              columnOrder={columnOrder}
-                              visibleKeys={visibleKeys}
-                              allColumns={allColumns}
-                              onToggle={handleToggleColumn}
-                              onReorder={setColumnOrder}
-                              onReset={handleResetColumns}
-                              onClose={() => setShowColPanel(false)}
-                              anchorRef={colBtnRef}
-                            />
-                          )}
-                        </div>
-                      </div>
-                    </th>
+                    {visibleColumns.map(col => <th key={col.key} className="px-5 py-3.5">{col.label}</th>)}
+                    <th className="px-5 py-3.5 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-border/50">
                   {paginated.map(r => (
-                    <tr key={r.id} className={`ctr-table__row ctr-table__row--${(r.status || '').toLowerCase()}`} onClick={() => handleView(r.id)}>
-                      <td onClick={e => e.stopPropagation()} style={{ textAlign: 'center' }}>
+                    <tr key={r.id} className="transition-colors hover:bg-muted/30 cursor-pointer" onClick={() => handleView(r.id)}>
+                      <td className="px-4 py-3.5 text-center" onClick={e => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={selectedContractIds.includes(r.id)}
                           disabled={!canCreateContract}
                           onChange={() => canCreateContract && handleToggleSelect(r.id)}
-                          style={{ cursor: canCreateContract ? 'pointer' : 'not-allowed', width: 16, height: 16 }}
-                          title={!canCreateContract ? "Admin has not allowed this action. You do not have permission to select contracts." : undefined}
+                          className="rounded border-input text-primary shadow-xs focus:ring-primary"
                         />
                       </td>
-                      {visibleColumns.map(col => <td key={col.key}>{col.render(r, formatDate)}</td>)}
-                      <td onClick={e => e.stopPropagation()}>
-                        <div className="ctr-table__actions">
-                          {/* View — always available */}
-                          <button
-                            className="ctr-table__action-btn"
-                            title="View contract"
-                            onClick={() => handleView(r.id)}
-                          ><Eye size={15} /></button>
-
-                          {/* Edit — Draft only */}
+                      {visibleColumns.map(col => <td key={col.key} className="px-5 py-3.5">{col.render(r, formatDate)}</td>)}
+                      <td className="px-5 py-3.5 text-right" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="View" onClick={() => handleView(r.id)}>
+                            <Eye className="size-4" />
+                          </Button>
                           {r.status === 'DRAFT' && (
-                            <button
-                              className="ctr-table__action-btn"
-                              title="Edit contract"
-                              onClick={() => handleEdit(r.id)}
-                            ><Edit3 size={15} /></button>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Edit" onClick={() => handleEdit(r.id)}>
+                              <Edit3 className="size-4" />
+                            </Button>
                           )}
-
-                          {/* Sign — DRAFT or awaiting customer signature */}
-                          {(r.status === 'DRAFT' || r.status === 'AWAITING_CUSTOMER_SIGNATURE') && (
-                            <button
-                              className="ctr-table__action-btn"
-                              title="Sign contract"
-                              onClick={() => handleSign(r.id)}
-                            ><FileSignature size={15} /></button>
+                          {(r.status === 'PENDING_VENDOR_SIGNATURE' || r.status === 'AWAITING_CUSTOMER_SIGNATURE') && (
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-emerald-600" title="Sign Contract" onClick={() => handleSign(r.id)}>
+                              <FileSignature className="size-4" />
+                            </Button>
                           )}
-
-                          {/* Download — available for any non-draft status */}
-                          {(r.status !== 'DRAFT') && (
-                            <button
-                              className="ctr-table__action-btn"
-                              title="Download contract"
-                              onClick={() => handleDownload(r)}
-                            ><Download size={15} /></button>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Download PDF" onClick={() => handleDownload(r)}>
+                            <Download className="size-4" />
+                          </Button>
+                          {r.status === 'DRAFT' && (
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive" title="Delete" onClick={() => setDeleteTarget(r)}>
+                              <Trash2 className="size-4" />
+                            </Button>
                           )}
-
-                          {/* Create PO — Accepted, Active, Vendor Signed, or Expiring Soon */}
-                          {['ACCEPTED', 'ACTIVE', 'VENDOR_SIGNED', 'EXPIRING_SOON'].includes(r.status) && (
-                            <button
-                              className="ctr-table__action-btn"
-                              title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to create purchase orders." : "Create Purchase Order"}
-                              onClick={() => canCreatePO && handleCreatePO(r.id)}
-                              disabled={operating === r.id || !canCreatePO}
-                              style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                            ><Plus size={15} /></button>
-                          )}
-
-                          {/* Terminate — Accepted, Active, or Expiring Soon */}
-                          {['ACCEPTED', 'ACTIVE', 'EXPIRING_SOON'].includes(r.status) && (
-                            <button
-                              className="ctr-table__action-btn ctr-table__action-btn--danger"
-                              title={!canCreateContract ? "Admin has not allowed this action. You do not have permission to terminate contracts." : "Terminate contract"}
-                              onClick={() => canCreateContract && setTerminateTarget(r)}
-                              disabled={operating === r.id || !canCreateContract}
-                              style={!canCreateContract ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                            ><Ban size={15} /></button>
-                          )}
-
-                          {/* Delete */}
-                          <button
-                            className="ctr-table__action-btn ctr-table__action-btn--danger"
-                            title={!canCreateContract ? "Admin has not allowed this action. You do not have permission to delete contracts." : "Delete contract"}
-                            onClick={() => canCreateContract && setDeleteTarget(r)}
-                            disabled={!canCreateContract}
-                            style={!canCreateContract ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                          ><Trash2 size={15} /></button>
                         </div>
                       </td>
                     </tr>
@@ -854,197 +684,86 @@ export default function ContractsPage() {
                 </tbody>
               </table>
             </div>
+
             {filtered.length > perPage && (
-              <div className="ctr-pagination">
-                <span className="ctr-pagination__info">
-                  Showing {(currentPage - 1) * perPage + 1}–{Math.min(currentPage * perPage, filtered.length)} of {filtered.length}
-                </span>
-                <div className="ctr-pagination__btns">
-                  <button
-                    className="ctr-pagination__btn"
-                    disabled={currentPage === 1}
-                    onClick={() => setCurrentPage(p => p - 1)}
-                  ><ChevronLeft size={14} /></button>
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                    <button
+              <div className="flex items-center justify-between border-t border-border/60 px-5 py-3 text-xs text-muted-foreground">
+                <span>Showing {(currentPage-1)*perPage+1}–{Math.min(currentPage*perPage, filtered.length)} of {filtered.length}</span>
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="sm" disabled={currentPage===1} onClick={() => setCurrentPage(p=>p-1)} className="h-8 w-8 p-0">
+                    <ChevronLeft className="size-4" />
+                  </Button>
+                  {Array.from({length:totalPages},(_,i)=>i+1).map(p=>(
+                    <Button
                       key={p}
-                      className={`ctr-pagination__btn ${currentPage === p ? 'ctr-pagination__btn--active' : ''}`}
-                      onClick={() => setCurrentPage(p)}
-                    >{p}</button>
+                      variant={currentPage===p?'default':'outline'}
+                      size="sm"
+                      onClick={()=>setCurrentPage(p)}
+                      className="h-8 w-8 p-0"
+                    >
+                      {p}
+                    </Button>
                   ))}
-                  <button
-                    className="ctr-pagination__btn"
-                    disabled={currentPage === totalPages}
-                    onClick={() => setCurrentPage(p => p + 1)}
-                  ><ChevronRight size={14} /></button>
+                  <Button variant="outline" size="sm" disabled={currentPage===totalPages} onClick={()=>setCurrentPage(p=>p+1)} className="h-8 w-8 p-0">
+                    <ChevronRight className="size-4" />
+                  </Button>
                 </div>
               </div>
             )}
-          </div>
+          </Card>
         ) : (
-          /* ── Card View ── */
-          <div className="ctr-cards">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {paginated.map(r => (
-              <div key={r.id} className="ctr-card" onClick={() => handleView(r.id)}>
-                <div className="ctr-card__top">
-                  <span className="ctr-card__number">{r.contractNumber}</span>
-                  <span className={`ctr-badge ctr-badge--${r.status}`}>
-                    {getStatusIcon(r.status)} {STATUS_LABELS[r.status]}
-                  </span>
+              <Card
+                key={r.id}
+                className="group cursor-pointer p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
+                onClick={() => handleView(r.id)}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <Badge variant="outline" className={cn('text-[10px]', STATUS_TONES[r.status])}>
+                    {STATUS_LABELS[r.status]}
+                  </Badge>
+                  <span className="font-mono text-xs text-muted-foreground">{r.contractNumber}</span>
                 </div>
-                <div className="ctr-card__title">{r.title}</div>
-                <div className="ctr-card__vendor">{r.vendorName}</div>
-                <div className="ctr-card__details">
-                  <div className="ctr-card__detail">
-                    <span className="ctr-card__detail-label">Value</span>
-                    <span className="ctr-card__detail-value">{formatAmount(r.contractValue, r.currency)}</span>
-                  </div>
-                  <div className="ctr-card__detail">
-                    <span className="ctr-card__detail-label">Type</span>
-                    <span className="ctr-card__detail-value">{r.contractType}</span>
-                  </div>
-                  <div className="ctr-card__detail">
-                    <span className="ctr-card__detail-label">Start</span>
-                    <span className="ctr-card__detail-value">{formatDate(r.startDate)}</span>
-                  </div>
+                <h3 className="mt-3 text-sm font-semibold text-foreground group-hover:text-primary truncate">{r.title}</h3>
+                <div className="mt-1 text-xs text-muted-foreground">{r.vendorName}</div>
+                <div className="mt-4 flex items-center justify-between border-t border-border/50 pt-3 text-xs">
+                  <span className="font-semibold text-foreground font-mono">{formatAmount(r.contractValue, r.currency)}</span>
+                  <span className="text-muted-foreground">{formatDate(r.startDate)}</span>
                 </div>
-                <div className="ctr-card__footer">
-                  <span>{r.sourceRfq}</span>
-                  <span>{r.contractOwner}</span>
-                </div>
-              </div>
+              </Card>
             ))}
           </div>
         )
       ) : (
-        <div className="ctr-table-card">
-          <div className="ctr-empty">
-            <div className="ctr-empty__icon"><FileText size={48} /></div>
-            <div className="ctr-empty__title">No contracts found</div>
-            <div className="ctr-empty__desc">
-              {search
-                ? 'Try adjusting your search or filters.'
-                : 'No contracts have been created yet. Contracts are generated after RFQ finalization.'}
-            </div>
-          </div>
-        </div>
+        <EmptyState
+          icon={FileText}
+          title="No contracts found"
+          description={search ? 'Try adjusting your search criteria.' : 'Create your first contract to get started.'}
+        />
       )}
 
-      {/* Delete Confirmation Modal */}
-      {deleteTarget && (
-        <div className="ctr-modal-backdrop" onClick={() => !deleting && setDeleteTarget(null)}>
-          <div className="ctr-modal" onClick={e => e.stopPropagation()}>
-            <div className="ctr-modal__header">
-              <span className="ctr-modal__title"><Trash2 size={20} /> Delete Contract?</span>
-              <button className="ctr-modal__close" onClick={() => setDeleteTarget(null)}><X size={18} /></button>
-            </div>
-            <div className="ctr-modal__body">
-              <p style={{ margin: 0 }}>
-                Delete <strong>{deleteTarget.contractNumber}</strong> — {deleteTarget.title}?
-                This action cannot be undone.
-              </p>
-            </div>
-            <div className="ctr-modal__footer">
-              <button
-                className="ctr-modal__btn ctr-modal__btn--secondary"
-                disabled={deleting}
-                onClick={() => setDeleteTarget(null)}
-              >Cancel</button>
-              <button
-                className="ctr-modal__btn ctr-modal__btn--primary"
-                style={{ background: '#dc2626' }}
-                disabled={deleting}
-                onClick={handleDeleteConfirm}
-              >
-                {deleting ? 'Deleting…' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Delete Modal */}
+      <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
+        {deleteTarget && (
+          <DialogContent className="sm:max-w-[440px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-destructive">
+                <Trash2 className="size-5" /> Delete Contract
+              </DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete contract <strong>{deleteTarget.contractNumber}</strong>? This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
 
-      {/* Terminate Confirmation Modal */}
-      {terminateTarget && (
-        <div className="ctr-modal-backdrop" onClick={() => !terminating && setTerminateTarget(null)}>
-          <div className="ctr-modal" onClick={e => e.stopPropagation()}>
-            <div className="ctr-modal__header">
-              <span className="ctr-modal__title"><Ban size={20} /> Terminate Contract?</span>
-              <button className="ctr-modal__close" onClick={() => setTerminateTarget(null)}><X size={18} /></button>
-            </div>
-            <div className="ctr-modal__body">
-              <p style={{ margin: 0 }}>
-                Terminate <strong>{terminateTarget.contractNumber}</strong> — {terminateTarget.title}?
-                This will change the contract status to Terminated and can affect linked purchase orders.
-              </p>
-            </div>
-            <div className="ctr-modal__footer">
-              <button
-                className="ctr-modal__btn ctr-modal__btn--secondary"
-                disabled={terminating}
-                onClick={() => setTerminateTarget(null)}
-              >Cancel</button>
-              <button
-                className="ctr-modal__btn"
-                style={{ background: '#dc2626', color: '#fff' }}
-                disabled={terminating}
-                onClick={handleTerminateConfirm}
-              >
-                {terminating ? 'Terminating…' : 'Terminate'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Batch Delete Confirmation Modal */}
-      {showBatchDeleteModal && (
-        <div className="ctr-modal-backdrop" onClick={() => !batchDeleting && setShowBatchDeleteModal(false)}>
-          <div className="ctr-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
-            <div className="ctr-modal__header">
-              <span className="ctr-modal__title"><Trash2 size={20} /> Delete {selectedContractIds.length} Selected Contract(s)?</span>
-              <button className="ctr-modal__close" onClick={() => setShowBatchDeleteModal(false)} disabled={batchDeleting}><X size={18} /></button>
-            </div>
-            <div className="ctr-modal__body">
-              <p style={{ margin: 0, fontSize: 14 }}>
-                Are you sure you want to delete the <strong>{selectedContractIds.length} selected contract(s)</strong>?
-                This action cannot be undone and will permanently remove these contract records.
-              </p>
-            </div>
-            <div className="ctr-modal__footer">
-              <button
-                ref={(el) => el?.focus()}
-                className="ctr-modal__btn ctr-modal__btn--secondary"
-                disabled={batchDeleting}
-                onClick={() => setShowBatchDeleteModal(false)}
-              >Cancel</button>
-              <button
-                className="ctr-modal__btn ctr-modal__btn--primary"
-                style={{ background: '#dc2626' }}
-                disabled={batchDeleting}
-                onClick={handleBatchDeleteConfirm}
-              >
-                {batchDeleting ? 'Deleting…' : `Delete ${selectedContractIds.length} Contract(s)`}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+              <Button variant="destructive" disabled={deleting} onClick={handleDeleteConfirm}>
+                {deleting ? 'Deleting…' : 'Delete Contract'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        )}
+      </Dialog>
+    </PageFrame>
   );
-}
-
-function formatCurrency(value: number, currency: string): string {
-  return new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value);
-}
-
-function getTimeAgo(dateStr: string): string {
-  const now = Date.now();
-  const date = new Date(dateStr).getTime();
-  const diffSec = Math.floor((now - date) / 1000);
-  if (diffSec < 60) return 'Just now';
-  const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  return `${Math.floor(diffHr / 24)}d ago`;
 }

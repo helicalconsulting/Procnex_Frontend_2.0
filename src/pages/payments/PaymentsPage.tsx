@@ -1,26 +1,50 @@
-import React from 'react';
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { useCallback, useMemo, useState, useEffect, useRef, type KeyboardEvent } from 'react';
+import {
+  Ban,
+  Banknote,
+  CheckCircle2,
+  Clock,
+  Eye,
+  MessageSquare,
+  Printer,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  SlidersHorizontal,
+  ThumbsUp,
+  X,
+  XCircle,
+} from 'lucide-react';
+import { useCurrency } from '../../components/shared/CurrencyMaster';
+import { MessageStrip } from '../../components/shared/MessageStrip';
+import { TableSkeleton } from '../../components/shared/Skeleton';
+import ColumnCustomizer, { type ColumnDef } from '../../components/shared/ColumnCustomizer';
+import BankPaymentVoucherModal from '../../components/payments/BankPaymentVoucherModal';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Card } from '../../components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/ui/dialog';
+import { Input } from '../../components/ui/input';
+import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
+import { cn } from '../../lib/utils';
 import { localDataService, type Payment as ServicePayment } from '../../services/localDataService';
-import BankPaymentVoucherModal, { type PaymentVoucherDocData } from '../../components/payments/BankPaymentVoucherModal';
-import {
-  Search, Clock, CheckCircle2, XCircle,
-  Banknote, RefreshCw, Eye, ThumbsUp,
-  Ban, RotateCcw, X, MessageSquare, Printer, ShieldCheck
-} from 'lucide-react';
-import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
-import '../../components/shared/ColumnCustomizer.css';
-import { MessageStrip } from '../../components/shared/MessageStrip';
-import { useCurrency } from '../../components/shared/CurrencyMaster';
-import { useAuth } from '../../context/AuthContext';
 import { approvalService } from '../../services/approvalService';
-import './PaymentsPage.css';
-
-// ─── Types ──────────────────────────────────────────────────
+import { useAuth } from '../../context/AuthContext';
+import '../../components/shared/ColumnCustomizer.css';
 
 type PaymentStatus = 'COMPLETED' | 'PENDING' | 'PROCESSING' | 'FAILED' | 'CONFIRMED' | 'CANCELLED' | 'RETRIED';
 type PaymentMethod = 'NEFT' | 'RTGS' | 'IMPS' | 'Cheque' | 'UPI';
+type ActionType = 'confirm' | 'cancel' | 'retry';
+type Tone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
 
 interface Payment {
   id: number;
@@ -28,7 +52,6 @@ interface Payment {
   invoiceRef: string;
   vendorName: string;
   vendorInitials: string;
-  avatarMod: string;
   amount: number;
   method: PaymentMethod;
   date: string;
@@ -38,8 +61,19 @@ interface Payment {
   comments?: string;
 }
 
-function mapPayment(p: ServicePayment): Payment {
-  const initials = p.vendor.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+const STATUS_CONFIG: Record<PaymentStatus, { label: string; tone: Tone; icon: typeof Clock }> = {
+  COMPLETED: { label: 'Completed', tone: 'success', icon: CheckCircle2 },
+  PENDING: { label: 'Pending', tone: 'warning', icon: Clock },
+  PROCESSING: { label: 'Processing', tone: 'info', icon: RefreshCw },
+  FAILED: { label: 'Failed', tone: 'danger', icon: XCircle },
+  CONFIRMED: { label: 'Confirmed', tone: 'success', icon: CheckCircle2 },
+  CANCELLED: { label: 'Cancelled', tone: 'danger', icon: X },
+  RETRIED: { label: 'Retried', tone: 'neutral', icon: RotateCcw },
+};
+
+const ACTIONABLE: PaymentStatus[] = ['PENDING', 'PROCESSING'];
+
+function mapPayment(payment: ServicePayment): Payment {
   const statusMap: Record<string, PaymentStatus> = {
     COMPLETED: 'COMPLETED',
     SCHEDULED: 'PENDING',
@@ -51,107 +85,66 @@ function mapPayment(p: ServicePayment): Payment {
     CANCELLED: 'CANCELLED',
   };
   return {
-    id: p.id,
-    paymentNumber: p.paymentId,
-    invoiceRef: p.invoiceRef,
-    vendorName: p.vendor,
-    vendorInitials: initials,
-    avatarMod: String((p.id % 6) + 1),
-    amount: p.amount,
-    method: (p.method as PaymentMethod) || 'NEFT',
-    date: p.paidAt,
-    status: statusMap[p.status] || 'PENDING',
-    approvedBy: p.approvedBy || '—',
-    remarks: p.remarks || '',
+    id: payment.id,
+    paymentNumber: payment.paymentId,
+    invoiceRef: payment.invoiceRef,
+    vendorName: payment.vendor,
+    vendorInitials: payment.vendor.split(' ').map((word) => word[0]).join('').slice(0, 2).toUpperCase(),
+    amount: payment.amount,
+    method: (payment.method as PaymentMethod) || 'NEFT',
+    date: payment.paidAt,
+    status: statusMap[payment.status] || 'PENDING',
+    approvedBy: payment.approvedBy || '—',
+    remarks: payment.remarks || '',
   };
 }
 
-const STATUS_MAP: Record<PaymentStatus, { label: string; cls: string; icon: React.ReactNode }> = {
-  COMPLETED:  { label: 'Completed',  cls: 'paid',     icon: <CheckCircle2 size={13} /> },
-  PENDING:    { label: 'Pending',    cls: 'pending',  icon: <Clock size={13} /> },
-  PROCESSING: { label: 'Processing', cls: 'partial',  icon: <RefreshCw size={13} /> },
-  FAILED:     { label: 'Failed',     cls: 'overdue',  icon: <XCircle size={13} /> },
-  CONFIRMED:  { label: 'Confirmed',  cls: 'approved', icon: <CheckCircle2 size={13} /> },
-  CANCELLED:  { label: 'Cancelled',  cls: 'rejected', icon: <X size={13} /> },
-  RETRIED:    { label: 'Retried',    cls: 'returned', icon: <RotateCcw size={13} /> },
-};
-
-const ACTIONABLE: PaymentStatus[] = ['PENDING', 'PROCESSING'];
-
-// ─── Column Definitions ─────────────────────────────────────
-
-interface PayColumnDef {
-  key: string;
-  label: string;
-  defaultVisible: boolean;
-  required?: boolean;
-  width?: string;
-  align?: 'left' | 'center' | 'right';
-  render: (pay: Payment, fmt: (n: number) => string, fmtDate: (d: string) => string) => React.ReactNode;
+function StatusBadge({ status }: { status: PaymentStatus }) {
+  const config = STATUS_CONFIG[status] || STATUS_CONFIG.PENDING;
+  const Icon = config.icon;
+  return (
+    <Badge tone={config.tone}>
+      <Icon className={cn('size-3', status === 'PROCESSING' && 'animate-spin')} />
+      {config.label}
+    </Badge>
+  );
 }
 
-const ALL_COLUMNS: PayColumnDef[] = [
-  {
-    key: 'paymentNumber', label: 'Payment #', defaultVisible: true, required: true, width: '140px',
-    render: (pay) => <span className="fin-table__ref">{pay.paymentNumber}</span>,
-  },
-  {
-    key: 'vendor', label: 'Vendor', defaultVisible: true, required: true, width: '190px',
-    render: (pay) => (
-      <div className="fin-table__vendor">
-        <div className={`fin-table__avatar fin-table__avatar--${pay.avatarMod}`}>{pay.vendorInitials}</div>
-        <span className="fin-table__vendor-name">{pay.vendorName}</span>
-      </div>
-    ),
-  },
-  {
-    key: 'invoiceRef', label: 'Invoice Ref', defaultVisible: true, width: '130px',
-    render: (pay) => <span className="fin-table__secondary">{pay.invoiceRef}</span>,
-  },
-  {
-    key: 'amount', label: 'Amount', defaultVisible: true, width: '120px', align: 'right',
-    render: (pay, fmt) => <span className="fin-table__amount fin-table__amount--bold">{fmt(pay.amount)}</span>,
-  },
-  {
-    key: 'method', label: 'Method', defaultVisible: true, width: '90px',
-    render: (pay) => <span className="fin-method-badge">{pay.method}</span>,
-  },
-  {
-    key: 'date', label: 'Date', defaultVisible: true, width: '110px',
-    render: (pay, _fmt, fmtDate) => <span className="fin-table__date">{fmtDate(pay.date)}</span>,
-  },
-  {
-    key: 'status', label: 'Status', defaultVisible: true, width: '110px',
-    render: (pay) => { const cfg = STATUS_MAP[pay.status]; return <span className={`fin-badge fin-badge--${cfg.cls}`}>{cfg.icon}{cfg.label}</span>; },
-  },
-  // ── Extra columns (hidden by default) ──
-  {
-    key: 'remarks', label: 'Remarks', defaultVisible: false, width: '180px',
-    render: (pay) => <span className="fin-table__secondary" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block', maxWidth: 160 }}>{pay.remarks}</span>,
-  },
+const ALL_COLUMNS: ColumnDef[] = [
+  { key: 'paymentNumber', label: 'Payment #', defaultVisible: true, required: true },
+  { key: 'vendorName', label: 'Vendor', defaultVisible: true, required: true },
+  { key: 'invoiceRef', label: 'Invoice Ref', defaultVisible: true },
+  { key: 'amount', label: 'Amount', defaultVisible: true },
+  { key: 'method', label: 'Method', defaultVisible: true },
+  { key: 'date', label: 'Date', defaultVisible: true },
+  { key: 'status', label: 'Status', defaultVisible: true },
 ];
 
-// ─── Component ──────────────────────────────────────────────
-
 export default function PaymentsPage() {
+  const { hasPermission } = useAuth();
+  const canApprovePayment =
+    hasPermission('Payments', 'canApprove') ||
+    hasPermission('Payments', 'canCreate') ||
+    hasPermission('Accounts Payable', 'canApprove');
+
   const { data: serverPayments, loading, error } = useServiceData(
     () => localDataService.getPayments().then((list) => list.map(mapPayment)),
     [] as Payment[]
   );
-  // Optimistic overlay for local actions (no API persistence)
+
   const [pendingActions, setPendingActions] = useState<Record<number, Payment>>({});
-  const payments = useMemo(() => {
-    if (Object.keys(pendingActions).length === 0) return serverPayments;
-    return serverPayments.map(p => pendingActions[p.id] ?? p);
-  }, [serverPayments, pendingActions]);
-  const [search, setSearch]               = useState('');
-  const [statusFilter, setStatusFilter]   = useState<string>('ALL');
-  const [actionModal, setActionModal]     = useState<{ payment: Payment; action: 'confirm' | 'cancel' | 'retry' } | null>(null);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<PaymentStatus | 'ALL'>('ALL');
+  const [actionModal, setActionModal] = useState<{ payment: Payment; action: ActionType } | null>(null);
   const [actionComment, setActionComment] = useState('');
   const [detailPayment, setDetailPayment] = useState<Payment | null>(null);
   const [selectedPrintVoucher, setSelectedPrintVoucher] = useState<Payment | null>(null);
   const [voucherApprovers, setVoucherApprovers] = useState<any[] | null>(null);
   const [chainModal, setChainModal] = useState<{ module: string; referenceId: string } | null>(null);
+
+  const { formatAmount, companyDefaultCurrency } = useCurrency();
+
+  useBodyScrollLock(!!(actionModal || detailPayment || selectedPrintVoucher || chainModal));
 
   useEffect(() => {
     if (!selectedPrintVoucher) {
@@ -165,21 +158,37 @@ export default function PaymentsPage() {
         const res = await approvalService.getChain('AccountsPayable', targetRef);
         if (!isMounted) return;
 
-        const chainItems = (res?.history && res.history.length > 0) ? res.history : (res?.levels || []);
+        const chainItems = res?.history && res.history.length > 0 ? res.history : res?.levels || [];
         if (chainItems && chainItems.length > 0) {
           const mapped = chainItems.map((item: any, idx: number) => {
             const roleName = item.requiredRole
               ? item.requiredRole.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
               : `Level ${item.levelNumber || idx + 1} Approver`;
-            const name = item.approverName || (item.status === 'AUTO_FORWARDED' ? 'Auto-Approved (System)' : item.status === 'APPROVED' ? (selectedPrintVoucher.approvedBy !== '—' ? selectedPrintVoucher.approvedBy : 'Authorized Approver') : 'Pending Approval');
-            const comments = item.comments || (item.status === 'APPROVED' ? 'Approved & Signed' : item.status === 'AUTO_FORWARDED' ? 'Auto-approved by system deadline' : 'Awaiting action');
+            const name =
+              item.approverName ||
+              (item.status === 'AUTO_FORWARDED'
+                ? 'Auto-Approved (System)'
+                : item.status === 'APPROVED'
+                ? selectedPrintVoucher.approvedBy !== '—'
+                  ? selectedPrintVoucher.approvedBy
+                  : 'Authorized Approver'
+                : 'Pending Approval');
+            const comments =
+              item.comments ||
+              (item.status === 'APPROVED'
+                ? 'Approved & Signed'
+                : item.status === 'AUTO_FORWARDED'
+                ? 'Auto-approved by system deadline'
+                : 'Awaiting action');
             const date = item.actionAt ? new Date(item.actionAt).toISOString().slice(0, 10) : selectedPrintVoucher.date;
             return {
               level: `Level ${item.levelNumber || idx + 1}`,
               name,
               role: roleName,
               date,
-              status: (item.status === 'APPROVED' || item.status === 'AUTO_FORWARDED') ? 'APPROVED' as const : 'PENDING' as const,
+              status: (item.status === 'APPROVED' || item.status === 'AUTO_FORWARDED' ? 'APPROVED' : 'PENDING') as
+                | 'APPROVED'
+                | 'PENDING',
               comments,
             };
           });
@@ -187,25 +196,20 @@ export default function PaymentsPage() {
         } else {
           setVoucherApprovers(null);
         }
-      } catch (err) {
+      } catch (_err) {
         if (isMounted) setVoucherApprovers(null);
       }
     };
 
     fetchApprovalChain();
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+    };
   }, [selectedPrintVoucher]);
 
-  useBodyScrollLock(!!(actionModal || detailPayment || selectedPrintVoucher || chainModal));
-  const { hasPermission } = useAuth();
-  const canApprovePayment = hasPermission('Payments', 'canApprove') || hasPermission('Payments', 'canCreate') || hasPermission('Accounts Payable', 'canApprove');
-  const { formatAmount, companyDefaultCurrency } = useCurrency();
-  const [displayCurrency, setDisplayCurrency] = useState(companyDefaultCurrency);
-  useEffect(() => { setDisplayCurrency(companyDefaultCurrency); }, [companyDefaultCurrency]);
-
-  // ── Column state ──
-  const defaultOrder = ALL_COLUMNS.map((c) => c.key);
-  const defaultVisible = new Set(ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key));
+  // Column Customizer State
+  const defaultOrder = useMemo(() => ALL_COLUMNS.map((c) => c.key), []);
+  const defaultVisible = useMemo(() => new Set(ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key)), []);
   const [columnOrder, setColumnOrder] = useState<string[]>(defaultOrder);
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(defaultVisible);
   const [showColPanel, setShowColPanel] = useState(false);
@@ -213,358 +217,483 @@ export default function PaymentsPage() {
 
   const visibleColumns = useMemo(
     () => columnOrder.map((k) => ALL_COLUMNS.find((c) => c.key === k)!).filter((c) => c && visibleKeys.has(c.key)),
-    [columnOrder, visibleKeys],
+    [columnOrder, visibleKeys]
   );
-  const handleToggleColumn = (key: string) => {
-    setVisibleKeys((prev) => { const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next; });
-  };
-  const handleResetColumns = () => { setColumnOrder(defaultOrder); setVisibleKeys(new Set(defaultVisible)); };
 
-  // ── KPIs (reactive) ──
-  const summary = useMemo(() => ({
-    totalPaid:  payments.filter(p => p.status === 'COMPLETED' || p.status === 'CONFIRMED').reduce((s, p) => s + p.amount, 0),
-    pending:    payments.filter(p => p.status === 'PENDING').length,
-    completed:  payments.filter(p => p.status === 'COMPLETED' || p.status === 'CONFIRMED').length,
-    failed:     payments.filter(p => p.status === 'FAILED' || p.status === 'CANCELLED').length,
-  }), [payments]);
+  const payments = useMemo(
+    () => serverPayments.map((payment) => pendingActions[payment.id] ?? payment),
+    [serverPayments, pendingActions]
+  );
 
-  // ── Filtered list ──
+  const summary = useMemo(
+    () => ({
+      totalPaid: payments
+        .filter((payment) => ['COMPLETED', 'CONFIRMED'].includes(payment.status))
+        .reduce((sum, payment) => sum + payment.amount, 0),
+      pending: payments.filter((payment) => payment.status === 'PENDING').length,
+      completed: payments.filter((payment) => ['COMPLETED', 'CONFIRMED'].includes(payment.status)).length,
+      failed: payments.filter((payment) => ['FAILED', 'CANCELLED'].includes(payment.status)).length,
+    }),
+    [payments]
+  );
+
   const filtered = useMemo(() => {
-    let list = payments;
-    if (statusFilter !== 'ALL') {
-      list = list.filter(p => p.status === statusFilter);
-    }
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(p =>
-        p.paymentNumber.toLowerCase().includes(q) ||
-        p.vendorName.toLowerCase().includes(q) ||
-        p.invoiceRef.toLowerCase().includes(q)
-      );
-    }
-    return list;
+    const query = search.trim().toLowerCase();
+    return payments.filter(
+      (payment) =>
+        (statusFilter === 'ALL' || payment.status === statusFilter) &&
+        (!query || [payment.paymentNumber, payment.vendorName, payment.invoiceRef].some((field) => (field || '').toLowerCase().includes(query)))
+    );
   }, [payments, search, statusFilter]);
 
-  // ── Action handler ──
+  const amount = (value: number) => formatAmount(value, companyDefaultCurrency);
+  const formatDate = (date: string) =>
+    date ? new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+
+  const openAction = useCallback((payment: Payment, action: ActionType) => {
+    setActionModal({ payment, action });
+    setActionComment('');
+  }, []);
+
   const handleAction = useCallback(() => {
     if (!actionModal) return;
-    const newStatus: PaymentStatus =
-      actionModal.action === 'confirm' ? 'CONFIRMED' :
-      actionModal.action === 'cancel'  ? 'CANCELLED' : 'RETRIED';
-    setPendingActions(prev => ({
-      ...prev,
+    const status: PaymentStatus =
+      actionModal.action === 'confirm' ? 'CONFIRMED' : actionModal.action === 'cancel' ? 'CANCELLED' : 'RETRIED';
+    setPendingActions((current) => ({
+      ...current,
       [actionModal.payment.id]: {
         ...actionModal.payment,
-        status: newStatus,
+        status,
         comments: actionComment.trim() || undefined,
       },
     }));
     setActionModal(null);
     setActionComment('');
-  }, [actionModal, actionComment]);
+  }, [actionComment, actionModal]);
 
-  const openAction = useCallback((payment: Payment, action: 'confirm' | 'cancel' | 'retry') => {
-    setActionModal({ payment, action });
-    setActionComment('');
-  }, []);
+  const cardProps = (filter: PaymentStatus | 'ALL') => ({
+    role: 'button',
+    tabIndex: 0,
+    'aria-pressed': statusFilter === filter,
+    onClick: () => setStatusFilter((current) => (current === filter && filter !== 'ALL' ? 'ALL' : filter)),
+    onKeyDown: (event: KeyboardEvent) => {
+      if (event.key === 'Enter' || event.key === ' ') setStatusFilter(filter);
+    },
+    className: cn(
+      'cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+      statusFilter === filter && 'border-primary/40 ring-2 ring-primary/10'
+    ),
+  });
 
-  const fmt     = (n: number) => formatAmount(n, displayCurrency);
-  const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-
-  const actionColor = actionModal?.action === 'confirm' ? 'approve' : actionModal?.action === 'cancel' ? 'reject' : 'return';
-  const actionTitle = actionModal?.action === 'confirm' ? 'Confirm Payment' : actionModal?.action === 'cancel' ? 'Cancel Payment' : 'Retry Payment';
+  const actionTitle =
+    actionModal?.action === 'confirm'
+      ? 'Confirm payment'
+      : actionModal?.action === 'cancel'
+      ? 'Cancel payment'
+      : 'Retry payment';
+  const destructive = actionModal?.action !== 'confirm';
 
   return (
-    <div className="fin-page">
+    <PageFrame>
+      <PageLead title="Payment approvals" description="Review payment vouchers and track vendor disbursements." />
       {error && <MessageStrip type="error">{error}</MessageStrip>}
-      {loading && <div className="fin-page__loading">Loading payments…</div>}
 
-      {/* ── Header ── */}
-      <div className="fin-page__header">
-        <div>
-          <h1>Payment Voucher Approval</h1>
-          <p>Track payment transactions and disbursements to vendors</p>
-        </div>
+      <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <MetricCard {...cardProps('ALL')} label="Total paid" value={amount(summary.totalPaid)} detail="Completed payments" icon={Banknote} tone="success" />
+        <MetricCard {...cardProps('PENDING')} label="Pending" value={summary.pending} detail="Awaiting confirmation" icon={Clock} tone="warning" />
+        <MetricCard {...cardProps('COMPLETED')} label="Completed" value={summary.completed} detail="Confirmed transactions" icon={CheckCircle2} />
+        <MetricCard {...cardProps('FAILED')} label="Failed / cancelled" value={summary.failed} detail="Needs attention" icon={XCircle} tone="danger" />
       </div>
 
-      {/* ── KPIs ── */}
-      <div className="fin-kpis">
-        <div
-          className={`fin-kpi${statusFilter === 'ALL' ? ' fin-kpi--active' : ''}`}
-          onClick={() => setStatusFilter('ALL')}
-        >
-          <div className="fin-kpi__icon fin-kpi__icon--success"><Banknote size={20} /></div>
-          <div><span className="fin-kpi__value">{fmt(summary.totalPaid)}</span><span className="fin-kpi__label">Total Paid</span></div>
-        </div>
-        <div
-          className={`fin-kpi${statusFilter === 'PENDING' ? ' fin-kpi--active' : ''}`}
-          onClick={() => setStatusFilter(prev => prev === 'PENDING' ? 'ALL' : 'PENDING')}
-        >
-          <div className="fin-kpi__icon fin-kpi__icon--warning"><Clock size={20} /></div>
-          <div><span className="fin-kpi__value">{summary.pending}</span><span className="fin-kpi__label">Pending</span></div>
-        </div>
-        <div
-          className={`fin-kpi${statusFilter === 'COMPLETED' ? ' fin-kpi--active' : ''}`}
-          onClick={() => setStatusFilter(prev => prev === 'COMPLETED' ? 'ALL' : 'COMPLETED')}
-        >
-          <div className="fin-kpi__icon fin-kpi__icon--primary"><CheckCircle2 size={20} /></div>
-          <div><span className="fin-kpi__value">{summary.completed}</span><span className="fin-kpi__label">Completed</span></div>
-        </div>
-        <div
-          className={`fin-kpi${statusFilter === 'FAILED' ? ' fin-kpi--active' : ''}`}
-          onClick={() => setStatusFilter(prev => prev === 'FAILED' ? 'ALL' : 'FAILED')}
-        >
-          <div className="fin-kpi__icon fin-kpi__icon--danger"><XCircle size={20} /></div>
-          <div><span className="fin-kpi__value">{summary.failed}</span><span className="fin-kpi__label">Failed / Cancelled</span></div>
-        </div>
-      </div>
-
-      {/* ── Toolbar ── */}
-      <div className="fin-toolbar">
-        <div className="fin-toolbar__search">
-          <Search size={16} className="fin-toolbar__search-icon" />
-          <input placeholder="Search payments..." value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-      </div>
-
-      {/* ── Table ── */}
-      <div className="fin-table-card">
-        <div style={{ overflowX: 'auto' }}>
-        <table className="fin-table" style={{ tableLayout: 'fixed', minWidth: '700px' }}>
-          <colgroup>
-            {visibleColumns.map((col) => (
-              <col key={col.key} style={{ width: col.width || 'auto' }} />
-            ))}
-            <col style={{ width: '160px' }} />
-          </colgroup>
-          <thead>
-            <tr>
-              {visibleColumns.map((col) => (
-                <th key={col.key} style={{ textAlign: col.align || 'left' }}>{col.label}</th>
-              ))}
-              <th>
-                <div className="fin-table__actions-header">
-                  <span>Actions</span>
-                  <div className="col-btn-wrap">
-                    <button
-                      ref={colBtnRef}
-                      className={`col-btn ${showColPanel ? 'col-btn--active' : ''}`}
-                      onClick={() => setShowColPanel((v) => !v)}
-                      title="Customize columns"
-                      aria-label="Customize columns"
-                      aria-expanded={showColPanel}
-                    >
-                      <span /><span /><span />
-                    </button>
-                    {showColPanel && (
-                      <ColumnCustomizer
-                        columnOrder={columnOrder}
-                        visibleKeys={visibleKeys}
-                        allColumns={ALL_COLUMNS}
-                        onToggle={handleToggleColumn}
-                        onReorder={setColumnOrder}
-                        onReset={handleResetColumns}
-                        onClose={() => setShowColPanel(false)}
-                        anchorRef={colBtnRef}
-                      />
-                    )}
-                  </div>
-                </div>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(pay => {
-              const actionable = ACTIONABLE.includes(pay.status);
-              return (
-                <tr key={pay.id} className={`fin-table__row fin-table__row--${pay.status.toLowerCase()}`}>
-                  {visibleColumns.map((col) => (
-                    <td key={col.key} style={{ textAlign: col.align || 'left' }}>
-                      {col.render(pay, fmt, fmtDate)}
-                    </td>
-                  ))}
-                  <td>
-                    <div className="approvals-table__actions">
-                      <button className="approvals-table__action-btn" title="View Details" onClick={() => setDetailPayment(pay)}>
-                        <Eye size={15} />
-                      </button>
-                      <button className="approvals-table__action-btn" title="Print Official Bank Voucher" onClick={() => setSelectedPrintVoucher(pay)} style={{ color: '#10b981' }}>
-                        <Printer size={15} />
-                      </button>
-                      {actionable && (
-                        <>
-                          <button
-                            className="approvals-table__action-btn approvals-table__action-btn--approve"
-                            title={!canApprovePayment ? "Admin has not allowed this action. You do not have permission to confirm payment transactions." : "Confirm Payment"}
-                            onClick={() => canApprovePayment && openAction(pay, 'confirm')}
-                            disabled={!canApprovePayment}
-                            style={!canApprovePayment ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                          >
-                            <ThumbsUp size={15} />
-                          </button>
-                          <button
-                            className="approvals-table__action-btn approvals-table__action-btn--reject"
-                            title={!canApprovePayment ? "Admin has not allowed this action. You do not have permission to cancel payment transactions." : "Cancel Payment"}
-                            onClick={() => canApprovePayment && openAction(pay, 'cancel')}
-                            disabled={!canApprovePayment}
-                            style={!canApprovePayment ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                          >
-                            <Ban size={15} />
-                          </button>
-                          <button
-                            className="approvals-table__action-btn approvals-table__action-btn--return"
-                            title={!canApprovePayment ? "Admin has not allowed this action. You do not have permission to retry payment transactions." : "Retry Payment"}
-                            onClick={() => canApprovePayment && openAction(pay, 'retry')}
-                            disabled={!canApprovePayment}
-                            style={!canApprovePayment ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                          >
-                            <RotateCcw size={15} />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        </div>
-        {filtered.length === 0 && (
-          <div className="fin-empty"><span>💳</span><p>No payments found</p></div>
-        )}
-      </div>
-
-      {/* ── Action Modal (Confirm / Cancel / Retry) ── */}
-      {actionModal && (
-        <div className="approvals-modal-backdrop" onClick={() => setActionModal(null)}>
-          <div className="approvals-modal" onClick={e => e.stopPropagation()}>
-            <div className={`approvals-modal__header approvals-modal__header--${actionColor}`}>
-              <div className="approvals-modal__title">
-                {actionModal.action === 'confirm' ? <ThumbsUp size={20} /> : actionModal.action === 'cancel' ? <Ban size={20} /> : <RotateCcw size={20} />}
-                <span>{actionTitle}</span>
-              </div>
-              <button className="approvals-modal__close" onClick={() => setActionModal(null)}><X size={18} /></button>
-            </div>
-
-            <div className="approvals-modal__body">
-              <div className="approvals-modal__request-summary">
-                <div className="approvals-modal__summary-row">
-                  <span className="approvals-modal__summary-label">Payment #</span>
-                  <span className="approvals-modal__summary-value">{actionModal.payment.paymentNumber}</span>
-                </div>
-                <div className="approvals-modal__summary-row">
-                  <span className="approvals-modal__summary-label">Vendor</span>
-                  <span className="approvals-modal__summary-value">{actionModal.payment.vendorName}</span>
-                </div>
-                <div className="approvals-modal__summary-row">
-                  <span className="approvals-modal__summary-label">Amount</span>
-                  <span className="approvals-modal__summary-value approvals-modal__summary-value--amount">{fmt(actionModal.payment.amount)}</span>
-                </div>
-                <div className="approvals-modal__summary-row">
-                  <span className="approvals-modal__summary-label">Method</span>
-                  <span className="approvals-modal__summary-value">{actionModal.payment.method}</span>
-                </div>
-                <div className="approvals-modal__summary-row">
-                  <span className="approvals-modal__summary-label">Invoice ref</span>
-                  <span className="approvals-modal__summary-value">{actionModal.payment.invoiceRef}</span>
-                </div>
-              </div>
-
-              <div className="approvals-modal__field">
-                <label className="approvals-modal__label">
-                  <MessageSquare size={13} style={{ marginRight: 4 }} />
-                  Comments {actionModal.action !== 'confirm' && <span>*</span>}
-                </label>
-                <textarea
-                  className="approvals-modal__textarea"
-                  rows={4}
-                  placeholder={actionModal.action === 'confirm' ? 'Optional comments...' : 'Provide a reason...'}
-                  value={actionComment}
-                  onChange={e => setActionComment(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="approvals-modal__footer">
-              <button className="approvals-modal__btn approvals-modal__btn--secondary" onClick={() => setActionModal(null)}>Cancel</button>
+      <Card className="mb-4 p-3 sm:p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full max-w-xl">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="h-10 pl-10 pr-10"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search payment, vendor, or invoice"
+              aria-label="Search payments"
+            />
+            {search && (
               <button
-                className={`approvals-modal__btn approvals-modal__btn--${actionColor}`}
-                disabled={actionModal.action !== 'confirm' && !actionComment.trim()}
-                onClick={handleAction}
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-1.5 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-lg text-muted-foreground hover:bg-accent"
               >
-                {actionModal.action === 'confirm' ? <ThumbsUp size={16} /> : actionModal.action === 'cancel' ? <Ban size={16} /> : <RotateCcw size={16} />}
-                {actionModal.action === 'confirm' ? 'Confirm' : actionModal.action === 'cancel' ? 'Cancel Payment' : 'Retry'}
+                <X className="size-4" />
               </button>
-            </div>
+            )}
+          </div>
+
+          <div className="relative">
+            <Button
+              ref={colBtnRef}
+              variant="outline"
+              size="sm"
+              onClick={() => setShowColPanel((v) => !v)}
+              title="Customize columns"
+            >
+              <SlidersHorizontal className="size-3.5" /> Columns
+            </Button>
+            {showColPanel && (
+              <ColumnCustomizer
+                columnOrder={columnOrder}
+                visibleKeys={visibleKeys}
+                allColumns={ALL_COLUMNS}
+                onToggle={(key) => {
+                  setVisibleKeys((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(key)) next.delete(key);
+                    else next.add(key);
+                    return next;
+                  });
+                }}
+                onReorder={setColumnOrder}
+                onReset={() => {
+                  setColumnOrder(defaultOrder);
+                  setVisibleKeys(new Set(defaultVisible));
+                }}
+                onClose={() => setShowColPanel(false)}
+                anchorRef={colBtnRef}
+              />
+            )}
           </div>
         </div>
-      )}
+      </Card>
 
-      {/* ── Detail Modal ── */}
-      {detailPayment && (
-        <div className="approvals-modal-backdrop" onClick={() => setDetailPayment(null)}>
-          <div className="approvals-modal approvals-modal--detail" onClick={e => e.stopPropagation()}>
-            <div className="approvals-modal__header">
-              <div className="approvals-modal__title"><Eye size={20} /><span>Payment Details</span></div>
-              <button className="approvals-modal__close" onClick={() => setDetailPayment(null)}><X size={18} /></button>
-            </div>
-
-            <div className="approvals-modal__body">
-              <div className="approvals-detail-grid">
-                {[
-                  { label: 'Payment #',   value: detailPayment.paymentNumber },
-                  { label: 'Invoice ref', value: detailPayment.invoiceRef },
-                  { label: 'Vendor',      value: detailPayment.vendorName },
-                  { label: 'Amount',      value: fmt(detailPayment.amount) },
-                  { label: 'Method',      value: detailPayment.method },
-                  { label: 'Date',        value: fmtDate(detailPayment.date) },
-                  { label: 'Approved by', value: detailPayment.approvedBy },
-                  { label: 'Status',      value: STATUS_MAP[detailPayment.status].label },
-                  { label: 'Remarks',     value: detailPayment.remarks },
-                ].map(item => (
-                  <div key={item.label} className="approvals-detail-grid__item">
-                    <span className="approvals-detail-grid__label">{item.label}</span>
-                    <span className="approvals-detail-grid__value">{item.value}</span>
-                  </div>
-                ))}
-              </div>
-              {detailPayment.comments && (
-                <div className="approvals-detail-comments">
-                  <span className="approvals-detail-comments__label"><MessageSquare size={13} /> Comments</span>
-                  <p className="approvals-detail-comments__text">{detailPayment.comments}</p>
-                </div>
-              )}
-              <button
-                className="approvals-modal__btn approvals-modal__btn--view-contract"
-                onClick={() => setChainModal({ module: 'Payments', referenceId: detailPayment.paymentNumber || detailPayment.invoiceRef })}
-                style={{ width: '100%', justifyContent: 'center', marginTop: 14 }}
-              >
-                <Clock size={16} /> View Approval Chain
-              </button>
-            </div>
-
-            <div className="approvals-modal__footer" style={{ justifyContent: 'space-between' }}>
-              <button
-                className="approvals-modal__btn"
-                style={{ background: '#10b981', color: '#fff', border: 'none' }}
+      {loading ? (
+        <Card className="p-4">
+          <TableSkeleton rows={5} columns={7} />
+        </Card>
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          icon={Banknote}
+          title="No payments found"
+          description={
+            search || statusFilter !== 'ALL'
+              ? 'Try clearing the search or status filter.'
+              : 'Payment vouchers will appear here when created.'
+          }
+          action={
+            search || statusFilter !== 'ALL' ? (
+              <Button
+                variant="secondary"
                 onClick={() => {
-                  const target = detailPayment;
-                  setDetailPayment(null);
-                  setSelectedPrintVoucher(target);
+                  setSearch('');
+                  setStatusFilter('ALL');
                 }}
               >
-                <Printer size={16} /> Print Bank Payment Voucher
-              </button>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="approvals-modal__btn approvals-modal__btn--secondary" onClick={() => setDetailPayment(null)}>Close</button>
-              </div>
+                Clear filters
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : (
+        <>
+          <Card className="hidden overflow-hidden lg:block">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[960px] text-left text-sm">
+                <thead className="border-b border-border/70 bg-secondary/55 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  <tr>
+                    {visibleColumns.map((col) => (
+                      <th
+                        key={col.key}
+                        className={cn('px-4 py-3', col.key === 'amount' && 'text-right')}
+                      >
+                        {col.label}
+                      </th>
+                    ))}
+                    <th className="px-4 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {filtered.map((payment) => (
+                    <tr
+                      key={payment.id}
+                      className="transition-colors hover:bg-accent/35 cursor-pointer"
+                      onClick={() => setDetailPayment(payment)}
+                    >
+                      {visibleColumns.map((col) => {
+                        if (col.key === 'paymentNumber') {
+                          return (
+                            <td key="paymentNumber" className="px-4 py-3.5 font-semibold text-primary">
+                              {payment.paymentNumber}
+                            </td>
+                          );
+                        }
+                        if (col.key === 'vendorName') {
+                          return (
+                            <td key="vendorName" className="px-4 py-3.5">
+                              <div className="flex items-center gap-2.5">
+                                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-[11px] font-semibold text-primary">
+                                  {payment.vendorInitials}
+                                </span>
+                                <span className="font-medium">{payment.vendorName}</span>
+                              </div>
+                            </td>
+                          );
+                        }
+                        if (col.key === 'invoiceRef') {
+                          return <td key="invoiceRef" className="px-4 py-3.5 text-xs text-muted-foreground">{payment.invoiceRef}</td>;
+                        }
+                        if (col.key === 'amount') {
+                          return (
+                            <td key="amount" className="px-4 py-3.5 text-right font-semibold tabular-nums">
+                              {amount(payment.amount)}
+                            </td>
+                          );
+                        }
+                        if (col.key === 'method') {
+                          return <td key="method" className="px-4 py-3.5"><Badge>{payment.method}</Badge></td>;
+                        }
+                        if (col.key === 'date') {
+                          return <td key="date" className="px-4 py-3.5 text-xs text-muted-foreground">{formatDate(payment.date)}</td>;
+                        }
+                        if (col.key === 'status') {
+                          return <td key="status" className="px-4 py-3.5"><StatusBadge status={payment.status} /></td>;
+                        }
+                        return <td key={col.key} className="px-4 py-3.5">-</td>;
+                      })}
+                      <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => setDetailPayment(payment)}
+                            aria-label={`View ${payment.paymentNumber}`}
+                            title="View Details"
+                          >
+                            <Eye className="size-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => setSelectedPrintVoucher(payment)}
+                            aria-label={`Print ${payment.paymentNumber}`}
+                            title="Print Bank Voucher"
+                          >
+                            <Printer className="size-4" />
+                          </Button>
+                          {ACTIONABLE.includes(payment.status) && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                className="text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-700"
+                                disabled={!canApprovePayment}
+                                onClick={() => canApprovePayment && openAction(payment, 'confirm')}
+                                aria-label={`Confirm ${payment.paymentNumber}`}
+                                title={canApprovePayment ? 'Confirm payment' : 'Permission denied'}
+                              >
+                                <ThumbsUp className="size-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                disabled={!canApprovePayment}
+                                onClick={() => canApprovePayment && openAction(payment, 'cancel')}
+                                aria-label={`Cancel ${payment.paymentNumber}`}
+                                title={canApprovePayment ? 'Cancel payment' : 'Permission denied'}
+                              >
+                                <Ban className="size-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                disabled={!canApprovePayment}
+                                onClick={() => canApprovePayment && openAction(payment, 'retry')}
+                                aria-label={`Retry ${payment.paymentNumber}`}
+                                title={canApprovePayment ? 'Retry payment' : 'Permission denied'}
+                              >
+                                <RotateCcw className="size-4" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
+          </Card>
+
+          <div className="grid gap-3 lg:hidden">
+            {filtered.map((payment) => (
+              <Card key={payment.id} className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-primary">{payment.paymentNumber}</div>
+                    <div className="mt-1 truncate text-sm font-medium">{payment.vendorName}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">{payment.invoiceRef}</div>
+                  </div>
+                  <StatusBadge status={payment.status} />
+                </div>
+                <dl className="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-secondary/45 p-3 text-xs">
+                  <div>
+                    <dt className="text-muted-foreground">Amount</dt>
+                    <dd className="mt-1 font-semibold">{amount(payment.amount)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Method</dt>
+                    <dd className="mt-1 font-medium">{payment.method}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Date</dt>
+                    <dd className="mt-1 font-medium">{formatDate(payment.date)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Approved by</dt>
+                    <dd className="mt-1 font-medium">{payment.approvedBy}</dd>
+                  </div>
+                </dl>
+                <div className="mt-3 flex flex-wrap gap-1.5 border-t border-border/60 pt-3">
+                  <Button variant="ghost" size="sm" onClick={() => setDetailPayment(payment)}>
+                    <Eye /> Details
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setSelectedPrintVoucher(payment)}>
+                    <Printer /> Print
+                  </Button>
+                  {ACTIONABLE.includes(payment.status) && canApprovePayment && (
+                    <>
+                      <Button size="sm" onClick={() => openAction(payment, 'confirm')}>
+                        <ThumbsUp /> Confirm
+                      </Button>
+                      <Button variant="ghost" size="sm" className="text-destructive" onClick={() => openAction(payment, 'cancel')}>
+                        <Ban /> Cancel
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => openAction(payment, 'retry')}>
+                        <RotateCcw /> Retry
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </Card>
+            ))}
           </div>
-        </div>
+        </>
       )}
 
-      {/* ── Official Printable Bank Payment Voucher Modal ── */}
+      {/* Action Dialog */}
+      <Dialog open={!!actionModal} onOpenChange={(open) => { if (!open) setActionModal(null); }}>
+        {actionModal && (
+          <DialogContent>
+            <DialogHeader className="pr-10">
+              <div
+                className={cn(
+                  'mb-1 grid size-11 place-items-center rounded-xl',
+                  destructive ? 'bg-destructive/10 text-destructive' : 'bg-emerald-500/10 text-emerald-600'
+                )}
+              >
+                {actionModal.action === 'confirm' ? (
+                  <ThumbsUp className="size-5" />
+                ) : actionModal.action === 'cancel' ? (
+                  <Ban className="size-5" />
+                ) : (
+                  <RotateCcw className="size-5" />
+                )}
+              </div>
+              <DialogTitle>{actionTitle}</DialogTitle>
+              <DialogDescription>Review the payment before applying this decision.</DialogDescription>
+            </DialogHeader>
+            <dl className="grid gap-2 rounded-xl border border-border/65 bg-secondary/40 p-4 sm:grid-cols-2">
+              {[
+                ['Payment', actionModal.payment.paymentNumber],
+                ['Vendor', actionModal.payment.vendorName],
+                ['Amount', amount(actionModal.payment.amount)],
+                ['Method', actionModal.payment.method],
+                ['Invoice', actionModal.payment.invoiceRef],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <dt className="text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{label}</dt>
+                  <dd className="mt-1 text-sm font-medium">{value}</dd>
+                </div>
+              ))}
+            </dl>
+            <label className="grid gap-2 text-sm font-semibold">
+              <span className="flex items-center gap-1.5">
+                <MessageSquare className="size-3.5" /> Comments {destructive && <span className="text-destructive">*</span>}
+              </span>
+              <textarea
+                className="min-h-28 resize-y rounded-xl border border-input bg-background px-3.5 py-3 text-sm font-normal outline-none focus:border-primary/50 focus:ring-2 focus:ring-ring/30"
+                value={actionComment}
+                onChange={(event) => setActionComment(event.target.value)}
+                placeholder={destructive ? 'Provide a reason…' : 'Optional comments…'}
+              />
+            </label>
+            <DialogFooter>
+              <Button variant="secondary" onClick={() => setActionModal(null)}>Cancel</Button>
+              <Button variant={destructive ? 'destructive' : 'default'} disabled={destructive && !actionComment.trim()} onClick={handleAction}>
+                {actionTitle}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        )}
+      </Dialog>
+
+      {/* Detail Dialog */}
+      <Dialog open={!!detailPayment} onOpenChange={(open) => { if (!open) setDetailPayment(null); }}>
+        {detailPayment && (
+          <DialogContent className="max-w-2xl">
+            <DialogHeader className="pr-10">
+              <div className="flex items-center gap-2">
+                <DialogTitle>{detailPayment.paymentNumber}</DialogTitle>
+                <StatusBadge status={detailPayment.status} />
+              </div>
+              <DialogDescription>
+                {detailPayment.vendorName} · {amount(detailPayment.amount)}
+              </DialogDescription>
+            </DialogHeader>
+            <dl className="grid gap-2 sm:grid-cols-2">
+              {[
+                ['Invoice reference', detailPayment.invoiceRef],
+                ['Amount', amount(detailPayment.amount)],
+                ['Method', detailPayment.method],
+                ['Date', formatDate(detailPayment.date)],
+                ['Approved by', detailPayment.approvedBy],
+                ['Remarks', detailPayment.remarks || '—'],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-xl border border-border/65 bg-secondary/40 p-3">
+                  <dt className="text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{label}</dt>
+                  <dd className="mt-1 text-sm font-medium">{value}</dd>
+                </div>
+              ))}
+            </dl>
+            {detailPayment.comments && (
+              <div className="rounded-xl border border-border/65 p-4">
+                <div className="text-xs font-semibold text-muted-foreground">Comments</div>
+                <p className="mt-2 text-sm">{detailPayment.comments}</p>
+              </div>
+            )}
+            <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
+              <Button
+                variant="outline"
+                onClick={() => setChainModal({ module: 'Payments', referenceId: detailPayment.paymentNumber || detailPayment.invoiceRef })}
+              >
+                <Clock className="size-4" /> View Approval Chain
+              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    const target = detailPayment;
+                    setDetailPayment(null);
+                    setSelectedPrintVoucher(target);
+                  }}
+                >
+                  <Printer className="size-4" /> Print Voucher
+                </Button>
+                <Button variant="secondary" onClick={() => setDetailPayment(null)}>Close</Button>
+              </div>
+            </DialogFooter>
+          </DialogContent>
+        )}
+      </Dialog>
+
+      {/* Official Printable Bank Payment Voucher Modal */}
       {selectedPrintVoucher && (
         <BankPaymentVoucherModal
           data={{
@@ -582,7 +711,7 @@ export default function PaymentsPage() {
             netAmount: selectedPrintVoucher.amount,
             matchStatus: selectedPrintVoucher.remarks.toLowerCase().includes('discrepancy') ? 'DISCREPANCY' : 'MATCHED',
             discrepancyReason: selectedPrintVoucher.remarks,
-            approvers: voucherApprovers || undefined
+            approvers: voucherApprovers || undefined,
           }}
           onClose={() => setSelectedPrintVoucher(null)}
         />
@@ -596,37 +725,12 @@ export default function PaymentsPage() {
           onClose={() => setChainModal(null)}
         />
       )}
-
-    </div>
+    </PageFrame>
   );
 }
 
-// ═══════════════════════════════════════════════════════════════
-// Approval Chain View — Shows approval timeline for Payments / Invoices
-// ═══════════════════════════════════════════════════════════════
-
-type ChainEntry = {
-  levelNumber: number;
-  requiredRole: string;
-  status: string;
-  approverName: string | null;
-  comments: string | null;
-  actionAt: string | null;
-  deadline: string | null;
-  createdAt: string;
-};
-
 function ApprovalChainView({ module, referenceId, onClose }: { module: string; referenceId: string; onClose: () => void }) {
-  const [chainData, setChainData] = useState<{
-    levels: ChainEntry[];
-    timeline: ChainEntry[];
-    history?: ChainEntry[];
-    currentLevel: number;
-    totalLevels: number;
-    isComplete: boolean;
-    isRejected: boolean;
-    isReturned?: boolean;
-  } | null>(null);
+  const [chainData, setChainData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -645,143 +749,59 @@ function ApprovalChainView({ module, referenceId, onClose }: { module: string; r
       }
     };
     fetchChain();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [module, referenceId]);
-
-  const formatDt = (d: string | null) => {
-    if (!d) return '—';
-    return new Date(d).toLocaleDateString('en-IN', {
-      day: '2-digit', month: 'short', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
-    });
-  };
-
-  const statusColor = (status: string) => {
-    switch (status) {
-      case 'APPROVED': return '#107e3e';
-      case 'REJECTED': return '#bb0000';
-      case 'RETURNED': return '#e9730c';
-      case 'PENDING': return '#e9730c';
-      case 'AUTO_FORWARDED': return '#8b5cf6';
-      default: return 'var(--text-secondary)';
-    }
-  };
 
   const itemsToDisplay = chainData?.history && chainData.history.length > 0
     ? chainData.history
-    : (chainData?.timeline && chainData.timeline.length > 0 ? chainData.timeline : chainData?.levels || []);
+    : chainData?.timeline && chainData.timeline.length > 0
+    ? chainData.timeline
+    : chainData?.levels || [];
 
   return (
-    <div className="approvals-modal-backdrop" onClick={onClose}>
-      <div className="approvals-modal approvals-modal--detail" onClick={e => e.stopPropagation()}>
-        <div className="approvals-modal__header">
-          <div className="approvals-modal__title"><Clock size={20} /><span>Approval History & Timeline</span></div>
-          <button className="approvals-modal__close" onClick={onClose}><X size={18} /></button>
-        </div>
-        <div className="approvals-modal__body">
-          {loading && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-secondary)' }}>Loading approval chain…</div>}
-          {error && <div style={{ textAlign: 'center', padding: 32, color: '#bb0000' }}>{error}</div>}
-          {!loading && !error && (!chainData || itemsToDisplay.length === 0) && (
-            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-secondary)' }}>No approval chain data available.</div>
-          )}
-          {chainData && itemsToDisplay.length > 0 && (
-            <>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-                {chainData.isComplete && (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px', borderRadius: 12, background: 'rgba(16,126,62,0.1)', color: '#107e3e', fontSize: 11, fontWeight: 700 }}>
-                    <CheckCircle2 size={12} /> Chain Complete
-                  </span>
-                )}
-                {chainData.isRejected && (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px', borderRadius: 12, background: 'rgba(187,0,0,0.08)', color: '#bb0000', fontSize: 11, fontWeight: 700 }}>
-                    <XCircle size={12} /> Rejected
-                  </span>
-                )}
-                {chainData.isReturned && (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px', borderRadius: 12, background: 'rgba(233,115,12,0.1)', color: '#e9730c', fontSize: 11, fontWeight: 700 }}>
-                    <RotateCcw size={12} /> Returned to Originator
-                  </span>
-                )}
-              </div>
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Approval history & timeline</DialogTitle>
+          <DialogDescription>{module} · {referenceId}</DialogDescription>
+        </DialogHeader>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                {itemsToDisplay.map((level, idx) => {
-                  const isLast = idx === itemsToDisplay.length - 1;
-                  const isActive = level.status === 'PENDING';
-                  return (
-                    <div key={idx} style={{ position: 'relative', paddingLeft: 32, paddingBottom: isLast ? 0 : 24 }}>
-                      {!isLast && (
-                        <div style={{
-                          position: 'absolute', left: 11, top: 20, bottom: 0, width: 2,
-                          background: level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED'
-                            ? '#107e3e' : level.status === 'REJECTED' ? '#bb0000' : level.status === 'RETURNED' ? '#e9730c' : 'var(--border)',
-                        }} />
-                      )}
-                      <div style={{
-                        position: 'absolute', left: 4, top: 4, width: 16, height: 16,
-                        borderRadius: '50%',
-                        background: isActive ? '#e9730c' : level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED'
-                          ? '#107e3e' : level.status === 'REJECTED' ? '#bb0000' : level.status === 'RETURNED' ? '#e9730c' : 'var(--surface-card)',
-                        border: `2px solid ${
-                          isActive ? '#e9730c' : level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED'
-                            ? '#107e3e' : level.status === 'REJECTED' ? '#bb0000' : level.status === 'RETURNED' ? '#e9730c' : 'var(--border)'
-                        }`,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}>
-                        {level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED' ? (
-                          <CheckCircle2 size={10} style={{ color: '#fff' }} />
-                        ) : level.status === 'REJECTED' ? (
-                          <XCircle size={10} style={{ color: '#fff' }} />
-                        ) : level.status === 'RETURNED' ? (
-                          <RotateCcw size={10} style={{ color: '#fff' }} />
-                        ) : (
-                          <span style={{ fontSize: 9, fontWeight: 700, color: isActive ? '#fff' : 'var(--text-secondary)' }}>{level.levelNumber}</span>
-                        )}
-                      </div>
-                      <div style={{
-                        padding: '12px 14px',
-                        background: isActive ? 'rgba(233,115,12,0.06)' : level.status === 'RETURNED' ? 'rgba(233,115,12,0.04)' : 'var(--surface-elevated)',
-                        border: `1px solid ${
-                          isActive ? 'rgba(233,115,12,0.2)' : level.status === 'APPROVED' ? 'rgba(16,126,62,0.15)' : level.status === 'REJECTED' ? 'rgba(187,0,0,0.15)' : level.status === 'RETURNED' ? 'rgba(233,115,12,0.2)' : 'var(--border)'
-                        }`,
-                        borderRadius: 8,
-                      }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
-                            Level {level.levelNumber} — {level.requiredRole.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                          </span>
-                          <span style={{
-                            fontSize: 11, fontWeight: 600, color: statusColor(level.status),
-                            display: 'inline-flex', alignItems: 'center', gap: 3,
-                          }}>
-                            {level.status === 'APPROVED' ? 'Approved' : level.status === 'AUTO_FORWARDED' ? 'Auto-Forwarded' : level.status === 'REJECTED' ? 'Rejected' : level.status === 'RETURNED' ? 'Returned' : 'Pending'}
-                          </span>
-                        </div>
-                        {level.approverName && (
-                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
-                            By: <strong>{level.approverName}</strong>
-                          </div>
-                        )}
-                        {level.comments && (
-                          <div style={{ fontSize: 12, color: 'var(--text-primary)', padding: '6px 10px', marginTop: 4, background: 'var(--surface-card)', borderRadius: 4, border: '1px solid var(--border)' }}>
-                            "{level.comments}"
-                          </div>
-                        )}
-                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 6 }}>
-                          {level.actionAt ? `Acted: ${formatDt(level.actionAt)}` : level.createdAt ? `Date: ${formatDt(level.createdAt)}` : `Deadline: ${formatDt(level.deadline)}`}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+        {loading ? (
+          <div className="py-8 text-center text-sm text-muted-foreground">Loading approval chain…</div>
+        ) : error ? (
+          <div className="py-8 text-center text-sm text-destructive">{error}</div>
+        ) : itemsToDisplay.length === 0 ? (
+          <div className="py-8 text-center text-sm text-muted-foreground">No approval history available.</div>
+        ) : (
+          <div className="space-y-4 py-2">
+            {itemsToDisplay.map((item: any, idx: number) => (
+              <div key={idx} className="flex gap-3 rounded-xl border border-border/70 bg-secondary/40 p-3.5 text-sm">
+                <div className="grid size-7 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                  {item.levelNumber || idx + 1}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold">
+                      {item.requiredRole ? item.requiredRole.replace(/_/g, ' ') : `Level ${idx + 1}`}
+                    </span>
+                    <Badge tone={item.status === 'APPROVED' ? 'success' : item.status === 'REJECTED' ? 'danger' : 'warning'}>
+                      {item.status}
+                    </Badge>
+                  </div>
+                  {item.approverName && <p className="mt-1 text-xs text-muted-foreground">By: {item.approverName}</p>}
+                  {item.comments && <p className="mt-1 rounded-lg bg-background p-2 text-xs italic">{item.comments}</p>}
+                </div>
               </div>
-            </>
-          )}
-        </div>
-        <div className="approvals-modal__footer">
-          <button className="approvals-modal__btn approvals-modal__btn--secondary" onClick={onClose}>Close</button>
-        </div>
-      </div>
-    </div>
+            ))}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="secondary" onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

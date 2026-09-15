@@ -24,21 +24,31 @@ import {
   ChevronRight,
   AlertTriangle,
   FileSignature,
-  ExternalLink,
   Minus,
   Wallet,
-  Printer,
 } from 'lucide-react';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import '../../components/shared/ColumnCustomizer.css';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TableSkeleton } from '../../components/shared/Skeleton';
 import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
-import PrintPurchaseOrderModal from '../../components/purchase-orders/PrintPurchaseOrderModal';
-import PrintPurchaseInvoiceModal from '../../components/invoices/PrintPurchaseInvoiceModal';
 import { apiRequest } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
-import './ApprovalsPage.css';
+import { PageFrame, PageLead, MetricCard, EmptyState } from '../../components/ui/product';
+import { Card } from '../../components/ui/card';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/ui/dialog';
+import { cn } from '../../lib/utils';
+import { useSearchParams } from 'react-router-dom';
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -57,6 +67,15 @@ const STATUS_LABELS: Record<string, string> = {
   AUTO_FORWARDED: 'Auto Forwarded',
 };
 
+const STATUS_TONES: Record<string, string> = {
+  PENDING: 'bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-300',
+  APPROVED: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-300',
+  APPROVED_L1: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-300',
+  REJECTED: 'bg-rose-500/10 text-rose-600 border-rose-500/20 dark:text-rose-300',
+  RETURNED: 'bg-orange-500/10 text-orange-600 border-orange-500/20 dark:text-orange-300',
+  AUTO_FORWARDED: 'bg-violet-500/10 text-violet-600 border-violet-500/20 dark:text-violet-300',
+};
+
 const MODULE_ICONS: Record<ModuleType, React.ReactNode> = {
   RFQ: <FileText size={15} />,
   'Purchase Order': <ShoppingCart size={15} />,
@@ -64,10 +83,6 @@ const MODULE_ICONS: Record<ModuleType, React.ReactNode> = {
   Quotation: <ClipboardList size={15} />,
   Contract: <FileSignature size={15} />,
 };
-
-const PRIORITY_CLASS: Record<PriorityType, string> = { HIGH: 'high', MEDIUM: 'medium', LOW: 'low' };
-
-// ─── Column Definitions ─────────────────────────────────────
 
 interface ApprovalColumnDef {
   key: string;
@@ -83,12 +98,14 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
   {
     key: 'request', label: 'Request', defaultVisible: true, required: true, width: '260px',
     render: (req) => (
-      <div className="approvals-table__request">
-        <div className={`approvals-table__avatar approvals-table__avatar--${req.avatarMod}`}>{req.requestedByInitials}</div>
-        <div className="approvals-table__request-info">
-          <span className="approvals-table__ref">{req.referenceNumber}</span>
-          <span className="approvals-table__title">{req.title}</span>
-          <span className="approvals-table__requester">by {req.requestedBy} · {req.department}</span>
+      <div className="flex items-center gap-3">
+        <div className="grid size-8 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+          {req.requestedByInitials}
+        </div>
+        <div className="min-w-0">
+          <div className="font-semibold text-foreground font-mono text-xs">{req.referenceNumber}</div>
+          <div className="text-[11px] font-medium text-foreground truncate max-w-[200px]">{req.title}</div>
+          <div className="text-[10px] text-muted-foreground">by {req.requestedBy} · {req.department}</div>
         </div>
       </div>
     ),
@@ -96,21 +113,29 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
   {
     key: 'module', label: 'Module', defaultVisible: true, width: '140px',
     render: (req) => (
-      <span className={`approvals-module-badge approvals-module-badge--${req.module.toLowerCase().replace(' ', '-')}`}>
+      <Badge variant="outline" className="gap-1 text-[10px] font-semibold">
         {MODULE_ICONS[req.module]}{req.module}
-      </span>
+      </Badge>
     ),
   },
   {
     key: 'amount', label: 'Amount', defaultVisible: true, width: '120px', align: 'right',
-    render: (req) => <span className="approvals-table__amount">{req.amount}</span>,
+    render: (req) => <span className="font-mono font-semibold text-foreground">{req.amount}</span>,
   },
   {
     key: 'priority', label: 'Priority', defaultVisible: true, width: '100px',
     render: (req) => (
-      <span className={`approvals-priority approvals-priority--${PRIORITY_CLASS[req.priority]}`}>
+      <Badge
+        variant="outline"
+        className={cn(
+          'text-[10px] font-semibold uppercase',
+          req.priority === 'HIGH' && 'bg-rose-500/10 text-rose-600 border-rose-500/20',
+          req.priority === 'MEDIUM' && 'bg-amber-500/10 text-amber-600 border-amber-500/20',
+          req.priority === 'LOW' && 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+        )}
+      >
         {req.priority}
-      </span>
+      </Badge>
     ),
   },
   {
@@ -118,38 +143,12 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
     render: (req) => {
       const total = req.totalLevels || 1;
       const isApproved = req.status === 'APPROVED';
-      const isRejected = req.status === 'REJECTED';
       const current = isApproved ? total + 1 : (req.currentLevel || 1);
-
       return (
-        <div className="approvals-level" title={`Approval Level ${Math.min(current, total)} of ${total}`}>
-          <div className="approvals-level__steps">
-            {Array.from({ length: total }, (_, i) => {
-              const stepNum = i + 1;
-              const isDone    = isApproved || stepNum < current;
-              const isCurrent = !isApproved && stepNum === current;
-              return (
-                <div key={i} className="approvals-level__step">
-                  <div
-                    className={[
-                      'approvals-level__step-circle',
-                      isDone                   ? 'approvals-level__step-circle--done'     : '',
-                      isCurrent && !isRejected ? 'approvals-level__step-circle--current'  : '',
-                      isCurrent && isRejected  ? 'approvals-level__step-circle--rejected' : '',
-                    ].filter(Boolean).join(' ')}
-                  >
-                    {isDone ? '✓' : stepNum}
-                  </div>
-                  {i < total - 1 && (
-                    <div className={`approvals-level__step-connector ${isDone ? 'approvals-level__step-connector--done' : ''}`} />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <span className="approvals-level__text">
+        <div className="flex items-center gap-1.5 text-xs font-mono">
+          <Badge variant="secondary" className="text-[10px]">
             L{isApproved ? total : Math.min(current, total)}/{total}
-          </span>
+          </Badge>
         </div>
       );
     },
@@ -157,9 +156,6 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
   {
     key: 'status', label: 'Status', defaultVisible: true, width: '170px', align: 'left',
     render: (req) => {
-      // Role-aware status determination:
-      // If user can act on the pending level (e.g. Level 2 approver), status is PENDING for them.
-      // If level 1 is done and user cannot act (e.g. Level 1 approver), status is APPROVED for them.
       let effectiveStatus = req.status;
       if (req.status === 'PENDING') {
         if (req.canAct) {
@@ -169,250 +165,18 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
         }
       }
       return (
-        <span className={`approvals-badge approvals-badge--${effectiveStatus}`}>
+        <Badge variant="outline" className={cn('text-[10px] font-semibold', STATUS_TONES[effectiveStatus] || 'bg-muted/50 text-muted-foreground')}>
           {STATUS_LABELS[effectiveStatus] || effectiveStatus.replace(/_/g, ' ')}
-        </span>
+        </Badge>
       );
     },
   },
   {
     key: 'submitted', label: 'Submitted', defaultVisible: true, width: '130px',
-    render: (req, formatDateTime) => <span className="approvals-table__date">{formatDateTime(req.submittedAt)}</span>,
-  },
-  // ── Extra columns (hidden by default) ──
-  {
-    key: 'department', label: 'Department', defaultVisible: false, width: '120px',
-    render: (req) => <span className="approvals-table__date">{req.department}</span>,
-  },
-  {
-    key: 'requiredRole', label: 'Required Role', defaultVisible: false, width: '140px',
-    render: (req) => <span className="approvals-table__date">{req.requiredRole}</span>,
-  },
-  {
-    key: 'requestedBy', label: 'Requested By', defaultVisible: false, width: '130px',
-    render: (req) => <span className="approvals-table__date">{req.requestedBy}</span>,
+    render: (req, formatDateTime) => <span className="text-muted-foreground whitespace-nowrap">{formatDateTime(req.submittedAt)}</span>,
   },
 ];
 
-// ═══════════════════════════════════════════════════════════════
-// Approval Chain View — Shows approval timeline for any module
-// ═══════════════════════════════════════════════════════════════
-
-type ChainEntry = {
-  levelNumber: number;
-  requiredRole: string;
-  status: string;
-  approverName: string | null;
-  comments: string | null;
-  actionAt: string | null;
-  deadline: string | null;
-  createdAt: string;
-};
-
-function ApprovalChainView({ module, referenceId, onClose }: { module: string; referenceId: string; onClose: () => void }) {
-  const [chainData, setChainData] = useState<{
-    levels: ChainEntry[];
-    timeline: ChainEntry[];
-    history?: ChainEntry[];
-    currentLevel: number;
-    totalLevels: number;
-    isComplete: boolean;
-    isRejected: boolean;
-    isReturned?: boolean;
-  } | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    const fetchChain = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const data = await apiRequest<typeof chainData>(`/approvals/${module}/${referenceId}/chain`);
-        if (!cancelled) setChainData(data);
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load approval chain');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    fetchChain();
-    return () => { cancelled = true; };
-  }, [module, referenceId]);
-
-  const formatDt = (d: string | null) => {
-    if (!d) return '—';
-    return new Date(d).toLocaleDateString('en-IN', {
-      day: '2-digit', month: 'short', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
-    });
-  };
-
-  const statusIcon = (status: string) => {
-    switch (status) {
-      case 'APPROVED': return <CheckCircle2 size={14} style={{ color: '#107e3e' }} />;
-      case 'REJECTED': return <XCircle size={14} style={{ color: '#bb0000' }} />;
-      case 'RETURNED': return <RotateCcw size={14} style={{ color: '#e9730c' }} />;
-      case 'PENDING': return <Clock size={14} style={{ color: '#e9730c' }} />;
-      case 'AUTO_FORWARDED': return <AlertTriangle size={14} style={{ color: '#8b5cf6' }} />;
-      default: return <Minus size={14} style={{ color: 'var(--text-secondary)' }} />;
-    }
-  };
-
-  const statusLabel = (status: string) => {
-    switch (status) {
-      case 'APPROVED': return 'Approved';
-      case 'REJECTED': return 'Rejected';
-      case 'RETURNED': return 'Returned for Revision';
-      case 'PENDING': return 'Pending';
-      case 'AUTO_FORWARDED': return 'Auto-Forwarded';
-      default: return status;
-    }
-  };
-
-  const statusColor = (status: string) => {
-    switch (status) {
-      case 'APPROVED': return '#107e3e';
-      case 'REJECTED': return '#bb0000';
-      case 'RETURNED': return '#e9730c';
-      case 'PENDING': return '#e9730c';
-      case 'AUTO_FORWARDED': return '#8b5cf6';
-      default: return 'var(--text-secondary)';
-    }
-  };
-
-  const itemsToDisplay = chainData?.history && chainData.history.length > 0
-    ? chainData.history
-    : (chainData?.timeline && chainData.timeline.length > 0 ? chainData.timeline : chainData?.levels || []);
-
-  return (
-    <div className="approvals-modal-backdrop" onClick={onClose}>
-      <div className="approvals-modal approvals-modal--detail" onClick={e => e.stopPropagation()}>
-        <div className="approvals-modal__header">
-          <div className="approvals-modal__title"><Clock size={20} /><span>Approval History & Timeline — {module}</span></div>
-          <button className="approvals-modal__close" onClick={onClose}><X size={18} /></button>
-        </div>
-        <div className="approvals-modal__body">
-          {loading && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-secondary)' }}>Loading approval chain…</div>}
-          {error && <div style={{ textAlign: 'center', padding: 32, color: '#bb0000' }}>{error}</div>}
-          {!loading && !error && (!chainData || itemsToDisplay.length === 0) && (
-            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-secondary)' }}>No approval chain data available.</div>
-          )}
-          {chainData && itemsToDisplay.length > 0 && (
-            <>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-                {chainData.isComplete && (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px', borderRadius: 12, background: 'rgba(16,126,62,0.1)', color: '#107e3e', fontSize: 11, fontWeight: 700 }}>
-                    <CheckCircle2 size={12} /> Chain Complete
-                  </span>
-                )}
-                {chainData.isRejected && (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px', borderRadius: 12, background: 'rgba(187,0,0,0.08)', color: '#bb0000', fontSize: 11, fontWeight: 700 }}>
-                    <XCircle size={12} /> Rejected
-                  </span>
-                )}
-                {chainData.isReturned && (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px', borderRadius: 12, background: 'rgba(233,115,12,0.1)', color: '#e9730c', fontSize: 11, fontWeight: 700 }}>
-                    <RotateCcw size={12} /> Returned to Originator
-                  </span>
-                )}
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                {itemsToDisplay.map((level, idx) => {
-                  const isLast = idx === itemsToDisplay.length - 1;
-                  const isActive = level.status === 'PENDING';
-                  return (
-                    <div key={idx} style={{ position: 'relative', paddingLeft: 32, paddingBottom: isLast ? 0 : 24 }}>
-                      {/* Timeline line */}
-                      {!isLast && (
-                        <div style={{
-                          position: 'absolute', left: 11, top: 20, bottom: 0, width: 2,
-                          background: level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED'
-                            ? '#107e3e' : level.status === 'REJECTED' ? '#bb0000' : level.status === 'RETURNED' ? '#e9730c' : 'var(--border)',
-                        }} />
-                      )}
-                      {/* Timeline dot */}
-                      <div style={{
-                        position: 'absolute', left: 4, top: 4, width: 16, height: 16,
-                        borderRadius: '50%',
-                        background: isActive ? '#e9730c' : level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED'
-                          ? '#107e3e' : level.status === 'REJECTED' ? '#bb0000' : level.status === 'RETURNED' ? '#e9730c' : 'var(--surface-card)',
-                        border: `2px solid ${
-                          isActive ? '#e9730c' : level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED'
-                            ? '#107e3e' : level.status === 'REJECTED' ? '#bb0000' : level.status === 'RETURNED' ? '#e9730c' : 'var(--border)'
-                        }`,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}>
-                        {level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED' ? (
-                          <CheckCircle2 size={10} style={{ color: '#fff' }} />
-                        ) : level.status === 'REJECTED' ? (
-                          <XCircle size={10} style={{ color: '#fff' }} />
-                        ) : level.status === 'RETURNED' ? (
-                          <RotateCcw size={10} style={{ color: '#fff' }} />
-                        ) : (
-                          <span style={{ fontSize: 9, fontWeight: 700, color: isActive ? '#fff' : 'var(--text-secondary)' }}>{level.levelNumber}</span>
-                        )}
-                      </div>
-                      {/* Content card */}
-                      <div style={{
-                        padding: '12px 14px',
-                        background: isActive ? 'rgba(233,115,12,0.06)' : level.status === 'RETURNED' ? 'rgba(233,115,12,0.04)' : 'var(--surface-elevated)',
-                        border: `1px solid ${
-                          isActive ? 'rgba(233,115,12,0.2)' : level.status === 'APPROVED' ? 'rgba(16,126,62,0.15)' : level.status === 'REJECTED' ? 'rgba(187,0,0,0.15)' : level.status === 'RETURNED' ? 'rgba(233,115,12,0.2)' : 'var(--border)'
-                        }`,
-                        borderRadius: 8,
-                      }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
-                            Level {level.levelNumber} — {level.requiredRole.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                          </span>
-                          <span style={{
-                            fontSize: 11, fontWeight: 600, color: statusColor(level.status),
-                            display: 'inline-flex', alignItems: 'center', gap: 3,
-                          }}>
-                            {statusIcon(level.status)}
-                            {statusLabel(level.status)}
-                          </span>
-                        </div>
-                        {level.approverName && (
-                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
-                            By: <strong>{level.approverName}</strong>
-                          </div>
-                        )}
-                        {level.comments && (
-                          <div style={{
-                            fontSize: 12, color: 'var(--text-primary)',
-                            padding: '6px 10px', marginTop: 4,
-                            background: 'var(--surface-card)', borderRadius: 4,
-                            border: '1px solid var(--border)',
-                          }}>
-                            "{level.comments}"
-                          </div>
-                        )}
-                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 6 }}>
-                          {level.actionAt ? `Acted: ${formatDt(level.actionAt)}` : level.createdAt ? `Date: ${formatDt(level.createdAt)}` : `Deadline: ${formatDt(level.deadline)}`}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </div>
-        <div className="approvals-modal__footer">
-          <button className="approvals-modal__btn approvals-modal__btn--secondary" onClick={onClose}>Close</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Canonical module name mapping for chain API endpoint ────
-// ApprovalTableRow uses display names (e.g. 'Purchase Order', 'Quotation')
-// but the backend expects canonical names (e.g. 'PurchaseOrders', 'Quotations')
 const CANONICAL_MODULE: Record<string, string> = {
   'Purchase Order': 'PurchaseOrders',
   'Purchase Invoice': 'AccountsPayable',
@@ -421,12 +185,8 @@ const CANONICAL_MODULE: Record<string, string> = {
   'RFQ': 'RFQ',
 };
 
-// ─── Component ──────────────────────────────────────────────
-
-import { useSearchParams } from 'react-router-dom';
-
 export default function ApprovalsPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const initialModule = searchParams.get('module');
   const initialStatus = searchParams.get('status');
 
@@ -448,18 +208,15 @@ export default function ApprovalsPage() {
   const { data: approvals, loading, error, reload, forceRefresh } = useServiceData(
     () => approvalService.listTable({
       module: moduleFilter !== 'ALL' ? (CANONICAL_MODULE[moduleFilter] || moduleFilter) : undefined,
-      // Do NOT filter status at API level so KPI summary cards stay rock-solid and stable when switching filter cards
     }),
     [] as ApprovalTableRow[],
     [moduleFilter],
     { cacheTtlMs: 0 }
   );
 
-  // Real-time sync & auto-refresh (SSE + BroadcastChannel + Window Events + 5s Polling Fallback + Tab Focus)
   useEffect(() => {
     const refreshAll = () => forceRefresh();
 
-    // 1. SSE Events
     const unsubLevel = sseClient.on('approval_level_complete', refreshAll);
     const unsubChain = sseClient.on('approval_chain_complete', refreshAll);
     const unsubForwarded = sseClient.on('approval_auto_forwarded', refreshAll);
@@ -479,7 +236,6 @@ export default function ApprovalsPage() {
       refreshAll();
     });
 
-    // 2. Custom Window Events (Instant same-window sync)
     const handlePoDeleted = (e: Event) => {
       const { poId, poNumber } = (e as CustomEvent).detail || {};
       if (poId || poNumber) {
@@ -499,29 +255,16 @@ export default function ApprovalsPage() {
     window.addEventListener('heliflow:po-updated', refreshAll);
     window.addEventListener('focus', refreshAll);
 
-    // 3. BroadcastChannel (Instant multi-tab sync across browser)
     let bc: BroadcastChannel | null = null;
     try {
       bc = new BroadcastChannel('heliflow_sync');
-      bc.onmessage = () => {
-        refreshAll();
-      };
+      bc.onmessage = () => { refreshAll(); };
     } catch {}
 
-    // 4. Background Fast Polling (Every 5 seconds fallback so approver NEVER has to reload F5!)
-    const pollInterval = setInterval(() => {
-      refreshAll();
-    }, 5000);
+    const pollInterval = setInterval(() => { refreshAll(); }, 5000);
 
     return () => {
-      unsubLevel();
-      unsubChain();
-      unsubForwarded();
-      unsubPoStatus();
-      unsubReq();
-      unsubNotif();
-      unsubPoCreated();
-      unsubApprovalInit();
+      unsubLevel(); unsubChain(); unsubForwarded(); unsubPoStatus(); unsubReq(); unsubNotif(); unsubPoCreated(); unsubApprovalInit();
       window.removeEventListener('heliflow:po-deleted', handlePoDeleted);
       window.removeEventListener('heliflow:po-created', refreshAll);
       window.removeEventListener('heliflow:approval-updated', refreshAll);
@@ -540,31 +283,21 @@ export default function ApprovalsPage() {
   const [actionComment, setActionComment] = useState('');
   const [actionReturnTarget, setActionReturnTarget] = useState<'ORIGINATOR' | 'LEVEL_1' | 'VENDOR'>('ORIGINATOR');
   const [detailRequest, setDetailRequest] = useState<ApprovalRequest | null>(null);
-  const [printRequest, setPrintRequest] = useState<ApprovalRequest | null>(null);
-  const [chainModal, setChainModal] = useState<{ module: string; referenceId: string } | null>(null);
-  useBodyScrollLock(!!(actionModal || detailRequest || chainModal || actionSuccessData || printRequest));
+  useBodyScrollLock(!!(actionModal || detailRequest || actionSuccessData));
   const perPage = 8;
 
-  // ── Column state ──
   const defaultOrder = ALL_COLUMNS.map((c) => c.key);
   const defaultVisible = new Set(ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key));
   const [columnOrder, setColumnOrder] = useState<string[]>(defaultOrder);
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(defaultVisible);
-  const [showColPanel, setShowColPanel] = useState(false);
-  const colBtnRef = useRef<HTMLButtonElement>(null);
 
   const visibleColumns = useMemo(
     () => columnOrder.map((k) => ALL_COLUMNS.find((c) => c.key === k)!).filter((c) => c && visibleKeys.has(c.key)),
     [columnOrder, visibleKeys],
   );
-  const handleToggleColumn = (key: string) => {
-    setVisibleKeys((prev) => { const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next; });
-  };
-  const handleResetColumns = () => { setColumnOrder(defaultOrder); setVisibleKeys(new Set(defaultVisible)); };
 
   const [optimisticMap, setOptimisticMap] = useState<Record<string, { status: ApprovalStatusType; currentLevel?: number }>>({});
 
-  // Module & Search filtered list (used for summary metrics so counts stay steady while filtering)
   const moduleFiltered = useMemo(() => {
     let list = approvals
       .filter((a) => !deletedIds.has(a.id) && !deletedIds.has(a.referenceId) && !deletedIds.has(a.referenceNumber))
@@ -600,37 +333,27 @@ export default function ApprovalsPage() {
     return list;
   }, [approvals, optimisticMap, moduleFilter, search]);
 
-  // Helper to determine effective status from user's perspective
   const getEffectiveStatus = useCallback((a: ApprovalRequest): ApprovalStatusType => {
     if (a.status === 'APPROVED') return 'APPROVED';
     if (a.status === 'REJECTED') return 'REJECTED';
     if (a.status === 'RETURNED') return 'RETURNED';
 
     if (a.status === 'PENDING') {
-      if (a.canAct) {
-        return 'PENDING';
-      }
-      if ((a.currentLevel || 1) > 1) {
-        return 'APPROVED';
-      }
+      if (a.canAct) return 'PENDING';
+      if ((a.currentLevel || 1) > 1) return 'APPROVED';
       return 'PENDING';
     }
     return a.status;
   }, []);
 
-  const { user, roles: authRoles, hasPermission } = useAuth();
-  const canApprovePO = hasPermission('Purchase Order Approval', 'canApprove') || hasPermission('Approval Engine', 'canApprove') || hasPermission('Approvals', 'canApprove') || hasPermission('PO Creation', 'canApprove');
+  const { user, roles: authRoles } = useAuth();
   const isAdmin = useMemo(() => {
     if (!authRoles || authRoles.length === 0) return false;
-    return authRoles.some((r) =>
-      r === 'Super Admin' || r === 'Administrator' || r.toLowerCase().includes('admin')
-    );
+    return authRoles.some((r) => r === 'Super Admin' || r === 'Administrator' || r.toLowerCase().includes('admin'));
   }, [authRoles]);
 
-  // Final table list (also filtered by statusFilter)
   const filtered = useMemo(() => {
     let list = moduleFiltered;
-    // Sequential Queue Rule: Non-admin users MUST ONLY see pending requests if they can act (canAct === true) or if they created it!
     if (!isAdmin) {
       list = list.filter((a) => {
         if (a.status === 'PENDING' && !a.canAct && a.createdById !== user?.id) {
@@ -643,7 +366,6 @@ export default function ApprovalsPage() {
     return list.filter((a) => getEffectiveStatus(a) === statusFilter);
   }, [moduleFiltered, statusFilter, getEffectiveStatus, isAdmin, user?.id]);
 
-  // Summary calculated based on moduleFiltered list
   const summary = useMemo(() => ({
     total: moduleFiltered.length,
     pending: moduleFiltered.filter((a) => getEffectiveStatus(a) === 'PENDING').length,
@@ -651,11 +373,9 @@ export default function ApprovalsPage() {
     rejected: moduleFiltered.filter((a) => getEffectiveStatus(a) === 'REJECTED').length,
   }), [moduleFiltered, getEffectiveStatus]);
 
-  // Pagination
   const totalPages = Math.ceil(filtered.length / perPage);
   const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
 
-  // Action handler — show success modal INSTANTLY (0ms delay), call API in background & refresh
   const handleAction = useCallback(async () => {
     if (!actionModal) return;
     const { id } = actionModal.request;
@@ -663,7 +383,6 @@ export default function ApprovalsPage() {
     const req = actionModal.request;
     const comment = actionComment.trim() || undefined;
 
-    // Close action dialog
     setActionModal(null);
     setActionComment('');
 
@@ -673,7 +392,6 @@ export default function ApprovalsPage() {
       : actionType === 'reject' ? 'REJECTED' : 'RETURNED';
     const targetLevel = actionType === 'approve' ? ((req.currentLevel || 1) + 1) : req.currentLevel;
 
-    // 1. INSTANT OPTIMISTIC TABLE ROW STATUS UPDATE (0ms delay!)
     setOptimisticMap((prev) => ({
       ...prev,
       [id]: { status: newStatus, currentLevel: targetLevel },
@@ -685,7 +403,6 @@ export default function ApprovalsPage() {
       ? `${req.module || 'Purchase Order'} Rejected`
       : `${req.module || 'Purchase Order'} Returned for Revision`;
 
-    // 2. INSTANT OPTIMISTIC SUCCESS MODAL (0ms delay!)
     setActionSuccessData({
       actionType,
       module: req.module || 'Approval Request',
@@ -699,7 +416,6 @@ export default function ApprovalsPage() {
       ],
     });
 
-    // 3. Execute network request in the background
     try {
       let res: any;
       if (actionType === 'approve') {
@@ -739,9 +455,6 @@ export default function ApprovalsPage() {
     return `${date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}, ${date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
   };
 
-  const actionTitle = actionModal?.action === 'approve' ? 'Approve Request' : actionModal?.action === 'reject' ? 'Reject Request' : 'Return Request';
-  const actionColor = actionModal?.action === 'approve' ? 'approve' : actionModal?.action === 'reject' ? 'reject' : 'return';
-
   const pageTitle = moduleFilter === 'Purchase Order'
     ? 'Purchase Order Approval'
     : moduleFilter === 'Quotation'
@@ -757,174 +470,121 @@ export default function ApprovalsPage() {
     : 'Review, approve, or reject pending requests across modules';
 
   return (
-    <div className="approvals-page">
-      {error && <MessageStrip type="error">{error}</MessageStrip>}
+    <PageFrame>
+      {error && <MessageStrip type="error" className="mb-4">{error}</MessageStrip>}
       {toast && (
-        <MessageStrip
-          type={toast.type}
-          onClose={() => setToast(null)}
-          autoHideMs={4000}
-          style={{ marginBottom: 16 }}
-        >
+        <MessageStrip type={toast.type} onClose={() => setToast(null)} autoHideMs={4000} className="mb-4">
           {toast.message}
         </MessageStrip>
       )}
+
       {/* Header */}
-      <div className="approvals-page__header">
-        <div className="approvals-page__header-left">
-          <h1>{pageTitle}</h1>
-          <p>{pageSubtitle}</p>
-        </div>
-      </div>
+      <PageLead
+        title={pageTitle}
+        description={pageSubtitle}
+      />
 
-
-
-      {/* Summary Cards (Clickable Filter Buttons) */}
-      <div className="approvals-summary">
-        {[
-          { icon: <CheckSquare size={22} />, value: summary.total, label: 'Total Requests', cls: 'total', statusKey: 'ALL' },
-          { icon: <Clock size={22} />, value: summary.pending, label: 'Pending', cls: 'pending', statusKey: 'PENDING' },
-          { icon: <CheckCircle2 size={22} />, value: summary.approved, label: 'Approved', cls: 'approved', statusKey: 'APPROVED' },
-          { icon: <XCircle size={22} />, value: summary.rejected, label: 'Rejected', cls: 'rejected', statusKey: 'REJECTED' },
-        ].map((c) => {
-          const isActive = statusFilter === c.statusKey;
-          return (
-            <div
-              key={c.cls}
-              className={`approvals-summary-card approvals-summary-card--clickable ${isActive ? 'approvals-summary-card--active' : ''}`}
-              onClick={() => {
-                setStatusFilter(c.statusKey);
-                setCurrentPage(1);
-              }}
-              title={`Filter table by ${c.label}`}
-              role="button"
-              tabIndex={0}
-            >
-              <div className={`approvals-summary-card__icon approvals-summary-card__icon--${c.cls}`}>{c.icon}</div>
-              <div className="approvals-summary-card__info">
-                <span className="approvals-summary-card__value">{c.value}</span>
-                <span className="approvals-summary-card__label">{c.label}</span>
-              </div>
-            </div>
-          );
-        })}
+      {/* Metric Cards */}
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard
+          icon={CheckSquare}
+          label="Total Requests"
+          value={summary.total}
+          tone="primary"
+          className="cursor-pointer"
+          onClick={() => { setStatusFilter('ALL'); setCurrentPage(1); }}
+        />
+        <MetricCard
+          icon={Clock}
+          label="Pending"
+          value={summary.pending}
+          tone="warning"
+          className="cursor-pointer"
+          onClick={() => { setStatusFilter('PENDING'); setCurrentPage(1); }}
+        />
+        <MetricCard
+          icon={CheckCircle2}
+          label="Approved"
+          value={summary.approved}
+          tone="success"
+          className="cursor-pointer"
+          onClick={() => { setStatusFilter('APPROVED'); setCurrentPage(1); }}
+        />
+        <MetricCard
+          icon={XCircle}
+          label="Rejected"
+          value={summary.rejected}
+          tone="danger"
+          className="cursor-pointer"
+          onClick={() => { setStatusFilter('REJECTED'); setCurrentPage(1); }}
+        />
       </div>
 
       {/* Toolbar */}
-      <div className="approvals-toolbar">
-        <div className="approvals-toolbar__search">
-          <Search size={16} className="approvals-toolbar__search-icon" />
-          <input
-            type="text"
-            placeholder="Search by reference, title, requester, or module..."
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
-          />
+      <Card className="mb-6 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+            {['Purchase Order', 'Quotation', 'RFQ', 'Contract', 'ALL'].map(m => (
+              <button
+                key={m}
+                onClick={() => { setModuleFilter(m); setCurrentPage(1); }}
+                className={cn(
+                  'inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all',
+                  moduleFilter === m
+                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+                )}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+          <div className="relative min-w-0 flex-1 max-w-xs">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search approval requests..."
+              value={search}
+              onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
+              className="pl-9"
+            />
+          </div>
         </div>
-      </div>
+      </Card>
 
-      {/* Table */}
-      {loading ? (
-        <div className="approvals-table-card">
-          <TableSkeleton rows={4} columns={5} />
-        </div>
-      ) : paginated.length > 0 ? (
-        <div className="approvals-table-card">
-          <div className="approvals-table-wrap">
-            <table className="approvals-table" style={{ tableLayout: 'fixed', minWidth: '750px' }}>
-              <colgroup>
-                {visibleColumns.map((col) => (
-                  <col key={col.key} style={{ width: col.width || 'auto' }} />
-                ))}
-                <col style={{ width: '130px' }} />
-              </colgroup>
+      {/* Content Table */}
+      <Card className="overflow-hidden">
+        {loading ? (
+          <div className="p-6">
+            <TableSkeleton rows={4} columns={6} />
+          </div>
+        ) : paginated.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
               <thead>
-                <tr>
-                  {visibleColumns.map((col) => (
-                    <th key={col.key} style={{ textAlign: col.align || 'left' }}>{col.label}</th>
-                  ))}
-                  <th>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                      <span>Actions</span>
-                      <div className="col-btn-wrap">
-                        <button
-                          ref={colBtnRef}
-                          className={`col-btn ${showColPanel ? 'col-btn--active' : ''}`}
-                          onClick={() => setShowColPanel((v) => !v)}
-                          title="Customize columns"
-                          aria-label="Customize columns"
-                          aria-expanded={showColPanel}
-                        >
-                          <span /><span /><span />
-                        </button>
-                        {showColPanel && (
-                          <ColumnCustomizer
-                            columnOrder={columnOrder}
-                            visibleKeys={visibleKeys}
-                            allColumns={ALL_COLUMNS}
-                            onToggle={handleToggleColumn}
-                            onReorder={setColumnOrder}
-                            onReset={handleResetColumns}
-                            onClose={() => setShowColPanel(false)}
-                            anchorRef={colBtnRef}
-                          />
-                        )}
-                      </div>
-                    </div>
-                  </th>
+                <tr className="border-b border-border/70 bg-muted/40 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  {visibleColumns.map(col => <th key={col.key} className="px-5 py-3.5">{col.label}</th>)}
+                  <th className="px-5 py-3.5 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody>
-                {paginated.map((req) => (
-                  <tr key={req.id} className={`approvals-row--${req.status.toLowerCase()}`}>
-                    {visibleColumns.map((col) => (
-                      <td key={col.key} style={{ textAlign: col.align || 'left' }}>
-                        {col.render(req, formatDateTime)}
-                      </td>
-                    ))}
-                    <td>
-                      <div className="approvals-table__actions">
-                        <button className="approvals-table__action-btn" title="View Details" onClick={() => setDetailRequest(req)}>
-                          <Eye size={15} />
-                        </button>
-                        <button className="approvals-table__action-btn" title="Print Request / Document" onClick={() => setPrintRequest(req)}>
-                          <Printer size={15} />
-                        </button>
-                        {req.status === 'PENDING' && req.canAct ? (
+              <tbody className="divide-y divide-border/50">
+                {paginated.map(req => (
+                  <tr key={req.id} className="transition-colors hover:bg-muted/30">
+                    {visibleColumns.map(col => <td key={col.key} className="px-5 py-3.5">{col.render(req, formatDateTime)}</td>)}
+                    <td className="px-5 py-3.5 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="View Details" onClick={() => setDetailRequest(req)}>
+                          <Eye className="size-4" />
+                        </Button>
+                        {req.canAct && (
                           <>
-                            <button
-                              className={`approvals-table__action-btn approvals-table__action-btn--approve ${!canApprovePO ? 'approvals-table__action-btn--disabled' : ''}`}
-                              title={!canApprovePO ? 'Admin has not allowed this action. You do not have permission to approve items.' : 'Approve'}
-                              onClick={canApprovePO ? () => openAction(req, 'approve') : undefined}
-                              disabled={!canApprovePO}
-                              style={!canApprovePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                            >
-                              <ThumbsUp size={15} />
-                            </button>
-                            <button
-                              className={`approvals-table__action-btn approvals-table__action-btn--reject ${!canApprovePO ? 'approvals-table__action-btn--disabled' : ''}`}
-                              title={!canApprovePO ? 'Admin has not allowed this action. You do not have permission to reject items.' : 'Reject'}
-                              onClick={canApprovePO ? () => openAction(req, 'reject') : undefined}
-                              disabled={!canApprovePO}
-                              style={!canApprovePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                            >
-                              <ThumbsDown size={15} />
-                            </button>
-                            <button
-                              className={`approvals-table__action-btn approvals-table__action-btn--return ${!canApprovePO ? 'approvals-table__action-btn--disabled' : ''}`}
-                              title={!canApprovePO ? 'Admin has not allowed this action. You do not have permission to return items.' : 'Return'}
-                              onClick={canApprovePO ? () => openAction(req, 'return') : undefined}
-                              disabled={!canApprovePO}
-                              style={!canApprovePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                            >
-                              <RotateCcw size={15} />
-                            </button>
+                            <Button variant="outline" size="sm" className="h-8 text-xs gap-1 text-emerald-600 hover:text-emerald-700" onClick={() => openAction(req, 'approve')}>
+                              <ThumbsUp className="size-3.5" /> Approve
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 text-destructive hover:text-destructive" onClick={() => openAction(req, 'reject')}>
+                              <ThumbsDown className="size-3.5" /> Reject
+                            </Button>
                           </>
-                        ) : req.status === 'PENDING' ? (
-                          <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontStyle: 'italic', padding: '2px 6px', background: 'var(--surface-elevated, #f0f2f5)', borderRadius: 4, border: '1px solid var(--border)' }} title={`Awaiting Level ${req.currentLevel} approval by ${req.requiredRole}`}>
-                            L{req.currentLevel} ({req.requiredRole})
-                          </span>
-                        ) : null}
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -932,285 +592,94 @@ export default function ApprovalsPage() {
               </tbody>
             </table>
           </div>
+        ) : (
+          <EmptyState
+            icon={CheckSquare}
+            title="No approval requests"
+            description={search ? 'Try adjusting your search criteria.' : 'You have no pending approval requests at this time.'}
+          />
+        )}
 
-          {/* Pagination */}
-          {filtered.length > perPage && (
-            <div className="approvals-pagination">
-              <span className="approvals-pagination__info">
-                Showing {(currentPage - 1) * perPage + 1}–{Math.min(currentPage * perPage, filtered.length)} of {filtered.length}
-              </span>
-              <div className="approvals-pagination__btns">
-                <button className="approvals-pagination__btn" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)}>
-                  <ChevronLeft size={14} />
-                </button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                  <button key={p} className={`approvals-pagination__btn ${currentPage === p ? 'approvals-pagination__btn--active' : ''}`} onClick={() => setCurrentPage(p)}>
-                    {p}
-                  </button>
-                ))}
-                <button className="approvals-pagination__btn" disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => p + 1)}>
-                  <ChevronRight size={14} />
-                </button>
-              </div>
+        {filtered.length > perPage && (
+          <div className="flex items-center justify-between border-t border-border/60 px-5 py-3 text-xs text-muted-foreground">
+            <span>Showing {(currentPage-1)*perPage+1}–{Math.min(currentPage*perPage, filtered.length)} of {filtered.length}</span>
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="sm" disabled={currentPage===1} onClick={() => setCurrentPage(p=>p-1)} className="h-8 w-8 p-0">
+                <ChevronLeft className="size-4" />
+              </Button>
+              {Array.from({length:totalPages},(_,i)=>i+1).map(p=>(
+                <Button
+                  key={p}
+                  variant={currentPage===p?'default':'outline'}
+                  size="sm"
+                  onClick={()=>setCurrentPage(p)}
+                  className="h-8 w-8 p-0"
+                >
+                  {p}
+                </Button>
+              ))}
+              <Button variant="outline" size="sm" disabled={currentPage===totalPages} onClick={()=>setCurrentPage(p=>p+1)} className="h-8 w-8 p-0">
+                <ChevronRight className="size-4" />
+              </Button>
             </div>
-          )}
-        </div>
-      ) : (
-        <div className="approvals-table-card">
-          <div className="approvals-empty">
-            <div className="approvals-empty__icon"><CheckSquare size={48} /></div>
-            <div className="approvals-empty__title">No requests found</div>
-            <div className="approvals-empty__desc">{search ? 'Try adjusting your search.' : 'All caught up! No approval requests at the moment.'}</div>
           </div>
-        </div>
-      )}
+        )}
+      </Card>
 
-      {/* Action Modal (Approve / Reject / Return) */}
-      {actionModal && (
-        <div className="approvals-modal-backdrop" onClick={() => setActionModal(null)}>
-          <div className="approvals-modal" onClick={(e) => e.stopPropagation()}>
-            <div className={`approvals-modal__header approvals-modal__header--${actionColor}`}>
-              <div className="approvals-modal__title">
-                {actionModal.action === 'approve' ? <ThumbsUp size={20} /> : actionModal.action === 'reject' ? <ThumbsDown size={20} /> : <RotateCcw size={20} />}
-                <span>{actionTitle}</span>
+      {/* Action Dialog */}
+      <Dialog open={!!actionModal} onOpenChange={() => setActionModal(null)}>
+        {actionModal && (
+          <DialogContent className="sm:max-w-[440px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                {actionModal.action === 'approve' ? <ThumbsUp className="size-5 text-emerald-600" /> : <ThumbsDown className="size-5 text-destructive" />}
+                {actionModal.action === 'approve' ? 'Approve Request' : actionModal.action === 'reject' ? 'Reject Request' : 'Return Request'}
+              </DialogTitle>
+              <DialogDescription>
+                Confirm decision for request <strong>{actionModal.request.referenceNumber}</strong>.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2 text-xs">
+              <div className="rounded-lg border border-border/50 bg-muted/30 p-3 space-y-1.5">
+                <div className="flex justify-between"><span className="text-muted-foreground">Title:</span> <strong className="text-foreground">{actionModal.request.title}</strong></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Amount:</span> <strong className="text-foreground font-mono">{actionModal.request.amount}</strong></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Requested By:</span> <strong className="text-foreground">{actionModal.request.requestedBy}</strong></div>
               </div>
-              <button className="approvals-modal__close" onClick={() => setActionModal(null)}><X size={18} /></button>
-            </div>
-            <div className="approvals-modal__body">
-              <div className="approvals-modal__request-summary">
-                <div className="approvals-modal__summary-row">
-                  <span className="approvals-modal__summary-label">Reference</span>
-                  <span className="approvals-modal__summary-value">{actionModal.request.referenceNumber}</span>
-                </div>
-                <div className="approvals-modal__summary-row">
-                  <span className="approvals-modal__summary-label">Title</span>
-                  <span className="approvals-modal__summary-value">{actionModal.request.title}</span>
-                </div>
-                <div className="approvals-modal__summary-row">
-                  <span className="approvals-modal__summary-label">Amount</span>
-                  <span className="approvals-modal__summary-value approvals-modal__summary-value--amount">{actionModal.request.amount}</span>
-                </div>
-                <div className="approvals-modal__summary-row">
-                  <span className="approvals-modal__summary-label">Requested By</span>
-                  <span className="approvals-modal__summary-value">{actionModal.request.requestedBy}</span>
-                </div>
-              </div>
-              {actionModal.action === 'return' && (
-                <div style={{ margin: '14px 0 6px', padding: 12, background: 'var(--surface-card, #f7f9fa)', border: '1px solid var(--border, #d9d9d9)', borderRadius: 6 }}>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary, #32363a)', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    Return Destination
-                  </label>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 13, color: 'var(--text-primary, #32363a)' }}>
-                      <input
-                        type="radio"
-                        name="approvalReturnTarget"
-                        value="ORIGINATOR"
-                        checked={actionReturnTarget === 'ORIGINATOR'}
-                        onChange={() => setActionReturnTarget('ORIGINATOR')}
-                        style={{ marginTop: 3, accentColor: '#0a6ed1' }}
-                      />
-                      <div>
-                        <div style={{ fontWeight: 600, color: '#e9730c' }}>Return to Originator for Revision</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-secondary, #6a6d70)', marginTop: 2 }}>
-                          Mark request as Returned & notify creator so they can revise and resubmit
-                        </div>
-                      </div>
-                    </label>
-                    {(actionModal.request.module === 'Quotation' || actionModal.request.module === 'Quotations') && (
-                      <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 13, color: 'var(--text-primary, #32363a)' }}>
-                        <input
-                          type="radio"
-                          name="approvalReturnTarget"
-                          value="VENDOR"
-                          checked={actionReturnTarget === 'VENDOR'}
-                          onChange={() => setActionReturnTarget('VENDOR')}
-                          style={{ marginTop: 3, accentColor: '#0a6ed1' }}
-                        />
-                        <div>
-                          <div style={{ fontWeight: 600, color: '#bb0000' }}>Return to Vendor for Resubmission</div>
-                          <div style={{ fontSize: 11, color: 'var(--text-secondary, #6a6d70)', marginTop: 2 }}>
-                            Send feedback to Vendor so they can revise and resubmit
-                          </div>
-                        </div>
-                      </label>
-                    )}
-                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 13, color: 'var(--text-primary, #32363a)' }}>
-                      <input
-                        type="radio"
-                        name="approvalReturnTarget"
-                        value="LEVEL_1"
-                        checked={actionReturnTarget === 'LEVEL_1'}
-                        onChange={() => setActionReturnTarget('LEVEL_1')}
-                        style={{ marginTop: 3, accentColor: '#0a6ed1' }}
-                      />
-                      <div>
-                        <div style={{ fontWeight: 600, color: '#0070c0' }}>Restart at Level 1</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-secondary, #6a6d70)', marginTop: 2 }}>
-                          Immediately restart internal approval chain at Level 1 (creates new pending Level 1 request)
-                        </div>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-              )}
-              <div className="approvals-modal__field">
-                <label className="approvals-modal__label">
-                  <MessageSquare size={13} style={{ marginRight: 4 }} />
-                  Comments {actionModal.action !== 'approve' && <span>*</span>}
+
+              <div className="space-y-1.5">
+                <label className="font-semibold text-foreground flex items-center gap-1">
+                  <MessageSquare className="size-3.5" /> Comments
                 </label>
                 <textarea
-                  className="approvals-modal__textarea"
-                  rows={4}
-                  placeholder={actionModal.action === 'approve' ? 'Optional comments...' : 'Provide a reason...'}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring min-h-[80px]"
+                  placeholder="Optional comments or notes..."
                   value={actionComment}
-                  onChange={(e) => setActionComment(e.target.value)}
+                  onChange={e => setActionComment(e.target.value)}
                 />
               </div>
             </div>
-            <div className="approvals-modal__footer">
-              <button className="approvals-modal__btn approvals-modal__btn--secondary" onClick={() => setActionModal(null)}>Cancel</button>
-              <button
-                className={`approvals-modal__btn approvals-modal__btn--${actionColor}`}
-                disabled={actionModal.action !== 'approve' && !actionComment.trim()}
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setActionModal(null)}>Cancel</Button>
+              <Button
+                variant={actionModal.action === 'reject' ? 'destructive' : 'default'}
                 onClick={handleAction}
               >
-                {actionModal.action === 'approve' ? <ThumbsUp size={16} /> : actionModal.action === 'reject' ? <ThumbsDown size={16} /> : <RotateCcw size={16} />}
-                {actionModal.action === 'approve' ? 'Approve' : actionModal.action === 'reject' ? 'Reject' : 'Return'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+                Confirm Decision
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        )}
+      </Dialog>
 
-      {/* Detail Modal */}
-      {detailRequest && (
-        <div className="approvals-modal-backdrop" onClick={() => setDetailRequest(null)}>
-          <div className="approvals-modal approvals-modal--detail" onClick={(e) => e.stopPropagation()}>
-            <div className="approvals-modal__header">
-              <div className="approvals-modal__title"><Eye size={20} /><span>Request Details</span></div>
-              <button className="approvals-modal__close" onClick={() => setDetailRequest(null)}><X size={18} /></button>
-            </div>
-            <div className="approvals-modal__body">
-              <div className="approvals-detail-grid">
-                {[
-                  { label: 'Reference', value: detailRequest.referenceNumber },
-                  { label: 'Module', value: detailRequest.module },
-                  { label: 'Title', value: detailRequest.title },
-                  { label: 'Amount', value: detailRequest.amount },
-                  { label: 'Requested By', value: detailRequest.requestedBy },
-                  { label: 'Department', value: detailRequest.department },
-                  { label: 'Priority', value: detailRequest.priority },
-                  { label: 'Status', value: STATUS_LABELS[detailRequest.status] },
-                  { label: 'Approval Level', value: `Level ${detailRequest.currentLevel} of ${detailRequest.totalLevels}` },
-                  { label: 'Required Role', value: detailRequest.requiredRole },
-                  { label: 'Submitted', value: formatDateTime(detailRequest.submittedAt) },
-                ].map((item) => (
-                  <div key={item.label} className="approvals-detail-grid__item">
-                    <span className="approvals-detail-grid__label">{item.label}</span>
-                    <span className="approvals-detail-grid__value">{item.value}</span>
-                  </div>
-                ))}
-              </div>
-              {detailRequest.comments && (
-                <div className="approvals-detail-comments">
-                  <span className="approvals-detail-comments__label"><MessageSquare size={13} /> Comments</span>
-                  <p className="approvals-detail-comments__text">{detailRequest.comments}</p>
-                </div>
-              )}
-              {detailRequest.module === 'Contract' && (
-                <button
-                  className="approvals-modal__btn approvals-modal__btn--view-contract"
-                  onClick={() => window.open(`/contracts/${detailRequest.referenceId}`, '_blank')}
-                  style={{ width: '100%', justifyContent: 'center' }}
-                >
-                  <ExternalLink size={16} /> View Contract
-                </button>
-              )}
-              <button
-                className="approvals-modal__btn approvals-modal__btn--view-contract"
-                onClick={() => setChainModal({ module: CANONICAL_MODULE[detailRequest.module] || detailRequest.module, referenceId: detailRequest.referenceId })}
-                style={{ width: '100%', justifyContent: 'center' }}
-              >
-                <Clock size={16} /> View Approval Chain
-              </button>
-            </div>
-            <div className="approvals-modal__footer">
-              <button className="approvals-modal__btn approvals-modal__btn--secondary" onClick={() => setDetailRequest(null)}>Close</button>
-              <button
-                className="approvals-modal__btn"
-                style={{ background: '#10b981', color: '#ffffff', border: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                onClick={() => setPrintRequest(detailRequest)}
-              >
-                <Printer size={16} /> Print {detailRequest.module === 'Purchase Order' || detailRequest.module === 'PO' ? 'Purchase Order' : detailRequest.module === 'Purchase Invoice' || detailRequest.module === 'AccountsPayable' ? 'Purchase Invoice' : 'Document'}
-              </button>
-              {detailRequest.status === 'PENDING' && detailRequest.canAct && (
-                <>
-                  <button
-                    className="approvals-modal__btn approvals-modal__btn--approve"
-                    onClick={canApprovePO ? () => { setDetailRequest(null); openAction(detailRequest, 'approve'); } : undefined}
-                    disabled={!canApprovePO}
-                    title={!canApprovePO ? 'Admin has not allowed this action. You do not have permission to approve items.' : 'Approve'}
-                    style={!canApprovePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                  >
-                    <ThumbsUp size={16} /> Approve
-                  </button>
-                  <button
-                    className="approvals-modal__btn approvals-modal__btn--reject"
-                    onClick={canApprovePO ? () => { setDetailRequest(null); openAction(detailRequest, 'reject'); } : undefined}
-                    disabled={!canApprovePO}
-                    title={!canApprovePO ? 'Admin has not allowed this action. You do not have permission to reject items.' : 'Reject'}
-                    style={!canApprovePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                  >
-                    <ThumbsDown size={16} /> Reject
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Approval Chain Modal */}
-      {chainModal && (
-        <ApprovalChainView
-          module={chainModal.module}
-          referenceId={chainModal.referenceId}
-          onClose={() => setChainModal(null)}
+      {/* Success Modal */}
+      {actionSuccessData && (
+        <ActionSuccessModal
+          data={actionSuccessData}
+          onClose={() => setActionSuccessData(null)}
         />
       )}
-
-      {/* Action Success Modal */}
-      <ActionSuccessModal
-        data={actionSuccessData}
-        onClose={() => setActionSuccessData(null)}
-      />
-
-      {/* Print Document Modal */}
-      {printRequest && (
-        printRequest.module === 'Purchase Invoice' || printRequest.module === 'AccountsPayable' ? (
-          <PrintPurchaseInvoiceModal
-            data={{
-              invoiceNumber: printRequest.referenceNumber,
-              poNumber: printRequest.title.includes('(PO: ') ? printRequest.title.split('(PO: ')[1]?.replace(')', '') : '—',
-              vendorName: printRequest.title.includes('for ') ? printRequest.title.split('for ')[1]?.split(' — ')[0] : 'Vendor',
-              amount: typeof printRequest.amount === 'number' ? printRequest.amount : parseFloat(String(printRequest.amount).replace(/[^0-9.]/g, '')) || 0,
-              dueDate: printRequest.submittedAt,
-              invoiceDate: printRequest.submittedAt,
-              status: printRequest.status,
-              paymentTerms: 'Net 30',
-              department: printRequest.department || 'Finance',
-              comments: printRequest.comments,
-            }}
-            onClose={() => setPrintRequest(null)}
-          />
-        ) : (
-          <PrintPurchaseOrderModal
-            data={printRequest}
-            onClose={() => setPrintRequest(null)}
-          />
-        )
-      )}
-    </div>
+    </PageFrame>
   );
 }

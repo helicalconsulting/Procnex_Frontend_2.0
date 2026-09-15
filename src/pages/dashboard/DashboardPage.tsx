@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { createPortal } from 'react-dom';
+import { AnimatePresence, motion } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
 import { useDashboardWidgets } from '../../hooks/useDashboardWidgets';
-import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { WIDGET_REGISTRY, type WidgetDefinition } from './widgets';
 import HeaderCalendarPopover from '../../components/layout/HeaderCalendarPopover';
 import {
   CalendarDays,
   Sparkles,
-  X,
   GripVertical,
   LayoutGrid,
   BarChart3,
@@ -21,7 +19,13 @@ import {
   Check,
   ChevronDown,
 } from 'lucide-react';
-import './DashboardPage.css';
+import { Button } from '../../components/ui/button';
+import { Card } from '../../components/ui/card';
+import { Badge } from '../../components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../components/ui/dialog';
+import { EmptyState } from '../../components/ui/product';
+import { cn } from '../../lib/utils';
+import { motionTransition } from '../../lib/motion';
 
 // ─── Icon mapping for widget gallery ────────────────────────
 
@@ -48,12 +52,6 @@ const CATEGORY_ORDER = ['kpis', 'data', 'actions'] as const;
 interface WidgetDragState {
   widgetId: string;
   name: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  offsetX: number;
-  offsetY: number;
 }
 
 function reorderWidgetIds(
@@ -68,7 +66,7 @@ function reorderWidgetIds(
   const [item] = next.splice(from, 1);
   next.splice(to, 0, item);
   return next;
-}  // ─── Component ──────────────────────────────────────────────
+}
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -84,16 +82,6 @@ export default function DashboardPage() {
     closeGallery,
   } = useDashboardWidgets();
 
-  useBodyScrollLock(isGalleryOpen);
-
-  // Escape key closes gallery
-  useEffect(() => {
-    if (!isGalleryOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeGallery(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [isGalleryOpen, closeGallery]);
-
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [dragState, setDragState] = useState<WidgetDragState | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
@@ -101,7 +89,6 @@ export default function DashboardPage() {
     move: (e: PointerEvent) => void;
     up: (e: PointerEvent) => void;
   } | null>(null);
-  const ghostContentRef = useRef<HTMLDivElement>(null);
 
   const today = new Date().toLocaleDateString('en-IN', {
     weekday: 'long',
@@ -138,7 +125,6 @@ export default function DashboardPage() {
   useEffect(() => {
     return () => {
       cleanupDragListeners();
-      document.body.classList.remove('dash-is-dragging');
     };
   }, [cleanupDragListeners]);
 
@@ -165,8 +151,6 @@ export default function DashboardPage() {
       cleanupDragListeners();
       setDragState(null);
       setDropTargetId(null);
-      document.body.classList.remove('dash-is-dragging');
-      if (ghostContentRef.current) ghostContentRef.current.innerHTML = '';
     },
     [activeWidgets, cleanupDragListeners, findWidgetIdAtPoint, reorderWidgets]
   );
@@ -182,38 +166,17 @@ export default function DashboardPage() {
       ) as HTMLElement | null;
       if (!wrapper) return;
 
-      const rect = wrapper.getBoundingClientRect();
-      const offsetX = e.clientX - rect.left;
-      const offsetY = e.clientY - rect.top;
-
       const initial: WidgetDragState = {
         widgetId,
         name: widgetName,
-        x: rect.left,
-        y: rect.top,
-        width: rect.width,
-        height: rect.height,
-        offsetX,
-        offsetY,
       };
 
       setDragState(initial);
       setDropTargetId(null);
-      document.body.classList.add('dash-is-dragging');
 
       let latestTarget: string | null = null;
 
       const onMove = (ev: PointerEvent) => {
-        setDragState((prev) =>
-          prev
-            ? {
-                ...prev,
-                x: ev.clientX - prev.offsetX,
-                y: ev.clientY - prev.offsetY,
-              }
-            : null
-        );
-
         const overId = findWidgetIdAtPoint(ev.clientX, ev.clientY, widgetId);
         latestTarget = overId;
         setDropTargetId(overId);
@@ -235,311 +198,154 @@ export default function DashboardPage() {
     cleanupDragListeners();
     setDragState(null);
     setDropTargetId(null);
-    document.body.classList.remove('dash-is-dragging');
-    if (ghostContentRef.current) ghostContentRef.current.innerHTML = '';
   }, [cleanupDragListeners]);
 
-  useEffect(() => {
-    if (!dragState) return;
-
-    const frame = requestAnimationFrame(() => {
-      const wrapper = document.querySelector(
-        `[data-widget-id="${dragState.widgetId}"]`
-      ) as HTMLElement | null;
-      if (!wrapper || !ghostContentRef.current) return;
-
-      const clone = wrapper.cloneNode(true) as HTMLElement;
-      clone.classList.add('dash-drag-ghost__clone');
-      clone.querySelector('.dash-widget__remove')?.remove();
-      clone
-        .querySelectorAll('.dash-widget__drag-bar')
-        .forEach((bar) => bar.classList.add('dash-widget__drag-bar--ghost'));
-
-      ghostContentRef.current.innerHTML = '';
-      ghostContentRef.current.appendChild(clone);
-    });
-
-    return () => cancelAnimationFrame(frame);
-  }, [dragState?.widgetId]);
+  const moveWidgetWithKeyboard = useCallback((widgetId: string, direction: -1 | 1) => {
+    const currentIndex = activeWidgets.indexOf(widgetId);
+    const targetIndex = currentIndex + direction;
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= activeWidgets.length) return;
+    reorderWidgets(reorderWidgetIds(activeWidgets, widgetId, activeWidgets[targetIndex]));
+  }, [activeWidgets, reorderWidgets]);
 
   return (
-    <div className="dashboard">
-      {/* ── SAP Fiori Enterprise Header ─────────────────────── */}
-      <header className="dash-header">
-        <div className="dash-header__text">
-          <h1>Procurement Overview</h1>
-          <p>
-            {user?.fullName ? `${user.fullName} · ` : ''}Real-time purchasing metrics, requisition tracking & operational workflows
+    <div className="w-full">
+      <header className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-primary">Command center</span>
+          <h1 className="mt-2 text-2xl font-semibold leading-[1.15] tracking-[-0.035em] text-foreground">Procurement overview</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+            {user?.fullName ? `${user.fullName} · ` : ''}Purchasing metrics, requisition progress, and priority workflows in one view.
           </p>
         </div>
-        <div className="dash-header__actions">
-          <div style={{ position: 'relative' }}>
-            <button
-              type="button"
-              className={`dash-header__date dash-header__date--clickable ${
-                isCalendarOpen ? 'dash-header__date--active' : ''
-              }`}
-              onClick={() => setIsCalendarOpen(!isCalendarOpen)}
-              title="Click to open laptop calendar"
-              aria-expanded={isCalendarOpen}
-            >
-              <CalendarDays size={15} />
-              <span>{today}</span>
-              <ChevronDown
-                size={14}
-                style={{
-                  transform: isCalendarOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                  transition: 'transform 0.2s ease',
-                  opacity: 0.7,
-                }}
-              />
-            </button>
-
-            {isCalendarOpen && (
-              <HeaderCalendarPopover onClose={() => setIsCalendarOpen(false)} />
-            )}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Button variant="outline" className={cn('max-w-full', isCalendarOpen && 'border-primary/40 bg-primary/5')} onClick={() => setIsCalendarOpen(!isCalendarOpen)} aria-expanded={isCalendarOpen}>
+              <CalendarDays size={16} />
+              <span className="hidden max-w-52 truncate sm:inline">{today}</span>
+              <ChevronDown size={14} className={cn('transition-transform', isCalendarOpen && 'rotate-180')} />
+            </Button>
+            {isCalendarOpen && <HeaderCalendarPopover onClose={() => setIsCalendarOpen(false)} />}
           </div>
-          <button
-            className="dash-customize-btn"
-            onClick={openGallery}
-            id="customize-dashboard-btn"
-          >
-            <Sparkles size={16} />
-            <span>Customize</span>
-            {hasWidgets && (
-              <span className="dash-customize-btn__badge">{activeWidgets.length}</span>
-            )}
-          </button>
+          <Button onClick={openGallery} id="customize-dashboard-btn">
+            <Sparkles size={16} /> Customize
+            {hasWidgets && <Badge className="min-h-5 border-white/20 bg-white/15 px-1.5 text-primary-foreground" tone="primary">{activeWidgets.length}</Badge>}
+          </Button>
         </div>
       </header>
 
       {hasWidgets && (
-        <div className="dash-hero">
-          <div className="dash-hero__glow dash-hero__glow--1" />
-          <div className="dash-hero__glow dash-hero__glow--2" />
-          <div className="dash-hero__content">
-            <span className="dash-hero__stat">
-              <strong>{activeWidgets.length}</strong> active widgets
-            </span>
-            <span className="dash-hero__divider" />
-            <span className="dash-hero__stat">
-              <strong>{availableWidgets.length}</strong> available for your role
-            </span>
-            <span className="dash-hero__divider" />
-            <span className="dash-hero__hint">
-              <GripVertical size={14} aria-hidden />
-              Drag top bar to reorder widgets
-            </span>
+        <Card variant="glass" className="mt-6 flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
+            <span><strong className="font-semibold tabular-nums text-foreground">{activeWidgets.length}</strong> active widgets</span>
+            <span><strong className="font-semibold tabular-nums text-foreground">{availableWidgets.length}</strong> available for your role</span>
           </div>
-        </div>
+          <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><GripVertical size={14} /> Use each widget handle or arrow keys to reorder</span>
+        </Card>
       )}
 
-      {/* ── Empty State ────────────────────────────────────── */}
       {!hasWidgets && (
-        <div className="dash-empty">
-          <div className="dash-empty__visual">
-            {/* Animated rings */}
-            <div className="dash-empty__ring dash-empty__ring--1" />
-            <div className="dash-empty__ring dash-empty__ring--2" />
-            <div className="dash-empty__ring dash-empty__ring--3" />
-            <div className="dash-empty__icon">
-              <LayoutGrid size={48} />
-            </div>
-          </div>
-          <h2 className="dash-empty__title">Your Dashboard, Your Way</h2>
-          <p className="dash-empty__subtitle">
-            Add widgets to build your personalized command center.
-            Choose exactly the data that matters to your role.
-          </p>
-          <button
-            className="dash-empty__cta"
-            onClick={openGallery}
-            id="empty-open-gallery-btn"
-          >
-            <Sparkles size={18} />
-            Open Widget Gallery
-          </button>
-
-          {/* Floating particles */}
-          <div className="dash-empty__particles">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className={`dash-empty__particle dash-empty__particle--${i + 1}`} />
-            ))}
-          </div>
-        </div>
+        <EmptyState className="mt-6" icon={LayoutGrid} title="Build your dashboard" description="Add the widgets that match your role and the work you need to follow." action={<Button onClick={openGallery} id="empty-open-gallery-btn"><Sparkles size={17} /> Open widget gallery</Button>} />
       )}
 
-      {/* ── Widget Grid ────────────────────────────────────── */}
       {hasWidgets && (
-        <div
-          className={`dash-widget-grid${draggedId ? ' dash-widget-grid--dragging' : ''}`}
-        >
-          {activeWidgetDefs.map((widget, index) => {
+        <div className="mt-5 grid gap-5 lg:grid-cols-2">
+          <AnimatePresence initial={false} mode="popLayout">
+          {activeWidgetDefs.map((widget) => {
             const WidgetComponent = widget.component;
-            const isFullWidth = widget.fullWidth;
             const isDragging = draggedId === widget.id;
             const isDropTarget = dropTargetId === widget.id;
 
             return (
-              <div
+              <motion.div
                 key={widget.id}
                 data-widget-id={widget.id}
-                className={[
-                  'dash-widget-wrapper',
-                  isFullWidth ? 'dash-widget-wrapper--full' : '',
-                  isDragging ? 'dash-widget-wrapper--dragging' : '',
-                  isDropTarget ? 'dash-widget-wrapper--drop-target' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                style={{ animationDelay: `${index * 0.06}s` }}
+                className={cn(
+                  'group/widget relative min-w-0',
+                  widget.fullWidth && 'lg:col-span-2',
+                )}
+                layout="position"
+                initial={{ opacity: 0, scale: 0.98, y: 8 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.97, y: -6 }}
+                transition={motionTransition.softSpring}
               >
-                <div
-                  className="dash-widget__drag-bar"
-                  onPointerDown={(e) =>
-                    startWidgetDrag(e, widget.id, widget.name)
-                  }
-                  title={`Drag ${widget.name} to reorder`}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`Drag ${widget.name} to reorder`}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') cancelWidgetDrag();
-                  }}
-                >
-                  <GripVertical size={16} className="dash-widget__drag-bar-icon" />
-                  <span className="dash-widget__drag-bar-hint">Drag to reorder</span>
+              <Card
+                className={cn(
+                  'h-full min-w-0 overflow-hidden transition-[opacity,border-color,box-shadow] duration-200',
+                  isDragging && 'opacity-45',
+                  isDropTarget && 'border-primary/60 ring-4 ring-primary/10',
+                )}
+              >
+                <div className="flex h-11 items-center justify-between border-b border-border/70 bg-muted/30 px-2">
+                  <button
+                    type="button"
+                    className="inline-flex size-10 cursor-grab touch-none items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
+                    onPointerDown={(event) => startWidgetDrag(event, widget.id, widget.name)}
+                    title={`Reorder ${widget.name}`}
+                    aria-label={`Reorder ${widget.name}. Use arrow keys to move.`}
+                    onKeyDown={(event) => {
+                      if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') { event.preventDefault(); moveWidgetWithKeyboard(widget.id, -1); }
+                      if (event.key === 'ArrowRight' || event.key === 'ArrowDown') { event.preventDefault(); moveWidgetWithKeyboard(widget.id, 1); }
+                      if (event.key === 'Escape') cancelWidgetDrag();
+                    }}
+                  >
+                    <GripVertical size={17} />
+                  </button>
+                  <span className="min-w-0 truncate px-2 text-[11px] font-medium text-muted-foreground">{widget.name}</span>
+                  <button type="button" className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:ring-2 focus-visible:ring-destructive" onClick={() => removeWidget(widget.id)} title={`Remove ${widget.name}`} aria-label={`Remove ${widget.name}`}>
+                    <span aria-hidden="true" className="text-xl font-light leading-none">×</span>
+                  </button>
                 </div>
-
-                <button
-                  type="button"
-                  className="dash-widget__remove"
-                  onClick={() => removeWidget(widget.id)}
-                  title={`Remove ${widget.name}`}
-                  aria-label={`Remove ${widget.name}`}
-                >
-                  <X size={14} />
-                </button>
-
-                {/* The widget itself */}
-                <div className={`dash-widget-content ${isFullWidth ? '' : 'dash-card'}`}>
-                  <WidgetComponent />
-                </div>
-              </div>
+                <div className={cn('min-w-0', widget.id === 'kpi-stats' && 'p-3 sm:p-4')}><WidgetComponent /></div>
+              </Card>
+              </motion.div>
             );
           })}
+          </AnimatePresence>
         </div>
       )}
 
-      {dragState &&
-        createPortal(
-          <div
-            className="dash-drag-ghost"
-            style={{
-              left: dragState.x,
-              top: dragState.y,
-              width: dragState.width,
-            }}
-            aria-hidden
-          >
-            <div ref={ghostContentRef} className="dash-drag-ghost__content" />
-          </div>,
-          document.body
-        )}
+      <Dialog open={isGalleryOpen} onOpenChange={(open) => open ? openGallery() : closeGallery()}>
+        <DialogContent id="widget-gallery" className="max-h-[min(90vh,900px)] max-w-4xl grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0">
+          <div className="border-b border-border bg-muted/35 px-5 py-5 pr-14 sm:px-7">
+            <DialogHeader>
+              <span className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-primary"><Sparkles size={14} /> Personalize</span>
+              <DialogTitle className="text-xl">Widget gallery</DialogTitle>
+              <DialogDescription>Choose the information and shortcuts that belong on your dashboard.</DialogDescription>
+            </DialogHeader>
+          </div>
 
-      {/* ── Widget Gallery Drawer ──────────────────────────── */}
-      {createPortal(
-        <>
-          <div
-            className={`gallery-backdrop ${isGalleryOpen ? 'gallery-backdrop--visible' : ''}`}
-            onClick={closeGallery}
-          />
-          <aside
-            className={`gallery ${isGalleryOpen ? 'gallery--open' : ''}`}
-            id="widget-gallery"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="widget-gallery-title"
-          >
-            <div className="gallery__header">
-              <div className="gallery__header-text">
-                <Sparkles size={20} />
-                <div>
-                  <h2 id="widget-gallery-title">Widget Gallery</h2>
-                  <p>Toggle widgets on or off</p>
+          <div className="grid min-h-0 gap-7 overflow-y-auto p-5 sm:p-7">
+            {groupedWidgets.map((group) => (
+              <section key={group.category}>
+                <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{group.label}</h3>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {group.widgets.map((widget) => {
+                    const isActive = isWidgetActive(widget.id);
+                    const IconComponent = WIDGET_ICONS[widget.icon] || BarChart3;
+                    return (
+                      <button key={widget.id} type="button" aria-pressed={isActive} className={cn('flex min-h-[126px] flex-col rounded-2xl border p-4 text-left outline-none transition-[border-color,background-color,box-shadow] hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring', isActive ? 'border-primary/35 bg-primary/[0.045] shadow-sm' : 'border-border/80 bg-card')} onClick={() => toggleWidget(widget.id)}>
+                        <div className="flex w-full items-start justify-between gap-3">
+                          <span className="flex size-10 items-center justify-center rounded-xl" style={{ backgroundColor: `${widget.accentColor}15`, color: widget.accentColor }}><IconComponent size={19} /></span>
+                          <span className={cn('flex h-6 w-11 items-center rounded-full p-0.5 transition-colors', isActive ? 'justify-end bg-primary' : 'justify-start bg-muted ring-1 ring-border')}><span className={cn('flex size-5 items-center justify-center rounded-full bg-white shadow-sm', isActive && 'text-primary')}>{isActive && <Check size={11} strokeWidth={3} />}</span></span>
+                        </div>
+                        <span className="mt-3 text-[13px] font-semibold text-foreground">{widget.name}</span>
+                        <span className="mt-1 line-clamp-2 text-[11px] leading-4 text-muted-foreground">{widget.description}</span>
+                        {widget.fullWidth && <Badge className="mt-2 w-fit" tone="neutral">Full width</Badge>}
+                      </button>
+                    );
+                  })}
                 </div>
-              </div>
-              <button
-                className="gallery__close"
-                onClick={closeGallery}
-                aria-label="Close gallery"
-              >
-                <X size={20} />
-              </button>
-            </div>
+              </section>
+            ))}
+          </div>
 
-            <div className="gallery__body">
-              {groupedWidgets.map((group) => (
-                <div key={group.category} className="gallery__section">
-                  <h3 className="gallery__section-title">{group.label}</h3>
-                  <div className="gallery__cards">
-                    {group.widgets.map((widget, idx) => {
-                      const isActive = isWidgetActive(widget.id);
-                      const IconComponent = WIDGET_ICONS[widget.icon] || BarChart3;
-
-                      return (
-                        <button
-                          key={widget.id}
-                          className={`gallery-card ${isActive ? 'gallery-card--active' : ''}`}
-                          onClick={() => toggleWidget(widget.id)}
-                          style={{
-                            animationDelay: `${idx * 0.05}s`,
-                            '--widget-accent': widget.accentColor,
-                          } as React.CSSProperties}
-                        >
-                          <div className="gallery-card__top">
-                            <div
-                              className="gallery-card__icon"
-                              style={{
-                                background: `${widget.accentColor}15`,
-                                color: widget.accentColor,
-                              }}
-                            >
-                              <IconComponent size={20} />
-                            </div>
-                            <div className={`gallery-card__toggle ${isActive ? 'gallery-card__toggle--on' : ''}`}>
-                              <div className="gallery-card__toggle-knob">
-                                {isActive && <Check size={10} />}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="gallery-card__info">
-                            <span className="gallery-card__name">{widget.name}</span>
-                            <span className="gallery-card__desc">{widget.description}</span>
-                          </div>
-                          {widget.fullWidth && (
-                            <span className="gallery-card__badge">Full Width</span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="gallery__footer">
-              <span className="gallery__footer-count">
-                {activeWidgets.length} of {availableWidgets.length} widgets active
-              </span>
-              <button className="gallery__footer-btn" onClick={closeGallery}>
-                Done
-              </button>
-            </div>
-          </aside>
-        </>,
-        document.body
-      )}
+          <div className="flex items-center justify-between gap-4 border-t border-border bg-muted/35 px-5 py-4 sm:px-7">
+            <span className="text-xs text-muted-foreground"><strong className="font-semibold tabular-nums text-foreground">{activeWidgets.length}</strong> of {availableWidgets.length} active</span>
+            <Button onClick={closeGallery}>Done</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

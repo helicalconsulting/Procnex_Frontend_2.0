@@ -3,11 +3,12 @@ import { Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useBranding } from '../../context/BrandingContext';
-import { Eye, EyeOff, AlertCircle, CheckCircle2, Sun, Moon } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, CheckCircle2, LoaderCircle } from 'lucide-react';
 import { isVendor } from '../../utils/rbac';
 import { PORTAL_NAMES } from '../../config/portalNames';
-import heliflowLogo from '../../assets/heliflow.png';
-import './LoginPage.css';
+import { AuthLayout } from '../../components/auth/AuthLayout';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
 
 export default function VendorLoginPage() {
   const [searchParams] = useSearchParams();
@@ -48,153 +49,52 @@ export default function VendorLoginPage() {
   };
 
   return (
-    <div className="sap-login">
-      {/* ── Left Panel: Branding ── */}
-      <div className="sap-login__brand-panel">
-        <div className="sap-login__brand-content">
-          <div className="sap-login__logo">
-            <img src={logoUrl || heliflowLogo} alt={companyName} className="sap-login__logo-icon" />
-          </div>
+    <AuthLayout
+      companyName={companyName}
+      logoUrl={logoUrl}
+      tagline={loginText || 'A direct, transparent workspace for supplier collaboration and order management.'}
+      features={['Respond to RFQs and submit quotations', 'Track purchase orders and invoices', 'Manage your company profile', 'Receive timely updates and notifications']}
+      supportEmail={supportEmail}
+      portalLabel={PORTAL_NAMES.secondary}
+      title="Supplier sign in"
+      description="Access RFQs, quotations, orders, and your vendor profile."
+      isDark={isDark}
+      onThemeToggle={toggleTheme}
+    >
+      {passwordSetSuccess && !error && (
+        <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3.5 py-3 text-[13px] leading-5 text-emerald-700 dark:text-emerald-300" role="status">
+          <CheckCircle2 size={17} className="mt-0.5 shrink-0" />
+          <span>Password set successfully. Sign in with your new password.</span>
+        </div>
+      )}
+      {error && (
+        <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-destructive/20 bg-destructive/10 px-3.5 py-3 text-[13px] leading-5 text-destructive" role="alert">
+          <AlertCircle size={17} className="mt-0.5 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
 
-          <h1 className="sap-login__brand-title">{companyName}</h1>
-          <p className="sap-login__brand-tagline">
-            {loginText || 'Supplier Collaboration & Order Management'}
-          </p>
-
-          <div className="sap-login__brand-divider" />
-
-          <ul className="sap-login__features">
-            <li>
-              <span className="sap-login__feature-icon">&loz;</span>
-              Respond to RFQs & submit quotations
-            </li>
-            <li>
-              <span className="sap-login__feature-icon">&loz;</span>
-              Track purchase orders & invoices
-            </li>
-            <li>
-              <span className="sap-login__feature-icon">&loz;</span>
-              Manage your company profile
-            </li>
-            <li>
-              <span className="sap-login__feature-icon">&loz;</span>
-              Real-time notifications & updates
-            </li>
-          </ul>
+      <form className="grid gap-5" onSubmit={handleSubmit}>
+        <div className="grid gap-2">
+          <label className="text-[13px] font-semibold text-foreground" htmlFor="vlogin-email">Email</label>
+          <Input id="vlogin-email" type="email" placeholder="vendor@company.com" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoFocus disabled={isSubmitting} required />
         </div>
 
-        <div className="sap-login__brand-footer">
-          <span>&copy; {new Date().getFullYear()} {supportEmail ? `${companyName} · ${supportEmail}` : `${companyName} Technologies`}</span>
-        </div>
-      </div>
-
-      {/* ── Right Panel: Login Form ── */}
-      <div className="sap-login__form-panel">
-        {/* Theme toggle */}
-        <button
-          className="sap-login__theme-toggle"
-          onClick={toggleTheme}
-          title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-          aria-label="Toggle theme"
-        >
-          {isDark ? <Sun size={16} /> : <Moon size={16} />}
-        </button>
-
-        <div className="sap-login__form-container">
-          {/* Mobile logo */}
-          <div className="sap-login__mobile-logo">
-            <img src={logoUrl || heliflowLogo} alt={companyName} className="sap-login__mobile-logo-icon" />
-            <span className="sap-login__mobile-title">{companyName}</span>
-          </div>
-
-          <div className="sap-login__form-header">
-            <h2 className="sap-login__form-title">
-              {PORTAL_NAMES.secondary} Sign In
-            </h2>
-            <p className="sap-login__form-subtitle">
-              Enter your vendor credentials to access the portal
-            </p>
-          </div>
-
-          {/* Success message after password setup */}
-          {passwordSetSuccess && !error && (
-            <div className="sap-login__success" role="status">
-              <CheckCircle2 size={16} />
-              <span>Password set successfully. Please sign in with your new password.</span>
-            </div>
-          )}
-
-          {/* Error */}
-          {error && (
-            <div className="sap-login__error" role="alert">
-              <AlertCircle size={16} />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {/* Form */}
-          <form className="sap-login__form" onSubmit={handleSubmit}>
-            <div className="sap-field">
-              <label className="sap-field__label" htmlFor="vlogin-email">
-                Email <span className="sap-field__required">*</span>
-              </label>
-              <input
-                id="vlogin-email"
-                className="sap-field__input"
-                type="email"
-                placeholder="vendor@company.com"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                autoComplete="username"
-                autoFocus
-                disabled={isSubmitting}
-              />
-            </div>
-
-            <div className="sap-field">
-              <label className="sap-field__label" htmlFor="vlogin-password">
-                Password <span className="sap-field__required">*</span>
-              </label>
-              <div className="sap-field__input-wrap">
-                <input
-                  id="vlogin-password"
-                  className="sap-field__input"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Enter password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
-                  disabled={isSubmitting}
-                />
-                <button
-                  type="button"
-                  className="sap-field__eye"
-                  onClick={() => setShowPassword(!showPassword)}
-                  tabIndex={-1}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              className="sap-login__submit"
-              disabled={isSubmitting}
-              id="vlogin-submit-btn"
-            >
-              {isSubmitting ? <span className="sap-login__spinner" /> : 'Sign In to Portal'}
+        <div className="grid gap-2">
+          <label className="text-[13px] font-semibold text-foreground" htmlFor="vlogin-password">Password</label>
+          <div className="relative">
+            <Input id="vlogin-password" className="pr-12" type={showPassword ? 'text' : 'password'} placeholder="Enter password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" disabled={isSubmitting} required />
+            <button type="button" className="absolute right-0 top-0 inline-flex size-12 items-center justify-center rounded-xl text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? 'Hide password' : 'Show password'}>
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
-          </form>
-
-          <p className="sap-login__form-footer">
-            <a href="/login" style={{ color: 'var(--primary-500)', fontSize: 16, fontWeight: 600, textDecoration: 'none' }}>
-              {primaryPortalName}? Sign in here
-            </a>
-          </p>
+          </div>
         </div>
-      </div>
-    </div>
+
+        <Button type="submit" size="lg" disabled={isSubmitting} id="vlogin-submit-btn" className="mt-1 w-full">
+          {isSubmitting && <LoaderCircle size={17} className="animate-spin" />}
+          {isSubmitting ? 'Signing in…' : 'Sign in'}
+        </Button>
+      </form>
+    </AuthLayout>
   );
 }

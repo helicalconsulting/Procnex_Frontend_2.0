@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { checkRoutePermission } from '../../../utils/permissions';
 import {
@@ -10,8 +10,7 @@ import {
   PenLine,
   Zap,
 } from 'lucide-react';
-
-// ─── Actions Config ─────────────────────────────────────────
+import { WidgetHeader, WidgetBody } from './WidgetShell';
 
 interface QuickAction {
   id: string;
@@ -20,7 +19,6 @@ interface QuickAction {
   icon: typeof FileText;
   path: string;
   accent: string;
-  roles?: string[]; // if undefined, shown to all
 }
 
 const QUICK_ACTIONS: QuickAction[] = [
@@ -74,8 +72,6 @@ const QUICK_ACTIONS: QuickAction[] = [
   },
 ];
 
-// ─── Component ──────────────────────────────────────────────
-
 export default function QuickActionsWidget() {
   const navigate = useNavigate();
   const { permissions } = useAuth();
@@ -86,37 +82,37 @@ export default function QuickActionsWidget() {
 
   return (
     <>
-      <div className="dash-card__header">
-        <span className="dash-card__title">
-          <Zap size={16} />
-          Quick Actions
-        </span>
-      </div>
-      <div className="dash-card__body">
-        <div className="quick-actions">
+      <WidgetHeader icon={<Zap size={16} />} title="Quick Actions" />
+      <WidgetBody>
+        <div className="grid gap-2.5 sm:grid-cols-2">
           {visibleActions.map((action) => {
             const Icon = action.icon;
             return (
               <button
                 key={action.id}
-                className="quick-action"
+                type="button"
+                className="group flex min-h-14 items-center gap-3 rounded-xl border border-border/80 bg-card p-3 text-left outline-none transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={() => navigate(action.path)}
               >
                 <div
-                  className="quick-action__icon"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-lg ring-1 ring-black/5"
                   style={{ background: `${action.accent}15`, color: action.accent }}
                 >
                   <Icon size={18} />
                 </div>
-                <div className="quick-action__text">
-                  <span className="quick-action__label">{action.label}</span>
-                  <span className="quick-action__desc">{action.description}</span>
+                <div className="min-w-0">
+                  <span className="block truncate text-xs font-semibold text-foreground group-hover:text-primary">
+                    {action.label}
+                  </span>
+                  <span className="block truncate text-[11px] text-muted-foreground">
+                    {action.description}
+                  </span>
                 </div>
               </button>
             );
           })}
         </div>
-      </div>
+      </WidgetBody>
     </>
   );
 }

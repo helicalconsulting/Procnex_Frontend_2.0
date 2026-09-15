@@ -30,7 +30,6 @@ import {
 } from 'lucide-react';
 import { FIELD_PALETTE } from './paletteData';
 import type { FormDefinition, FormField, FieldType } from '../../types/formBuilder';
-import './FormBuilderSidebar.css';
 
 const ICON_MAP: Record<string, React.ReactNode> = {
   Type: <Type size={16} />,
@@ -63,7 +62,6 @@ interface FormBuilderSidebarProps {
   onAddField: (type: FieldType, defaultConfig: Partial<FormField>) => void;
   sidebarTab: 'palette' | 'forms';
   setSidebarTab: (tab: 'palette' | 'forms') => void;
-  canCreateForm?: boolean;
 }
 
 export default function FormBuilderSidebar({
@@ -75,7 +73,6 @@ export default function FormBuilderSidebar({
   onAddField,
   sidebarTab,
   setSidebarTab,
-  canCreateForm = true,
 }: FormBuilderSidebarProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [paletteSearch, setPaletteSearch] = useState('');
@@ -110,13 +107,13 @@ export default function FormBuilderSidebar({
   };
 
   return (
-    <aside className="fbs-sidebar">
+    <aside className="flex min-h-0 w-full flex-col border-b border-border/70 bg-card xl:w-72 xl:shrink-0 xl:border-b-0 xl:border-r 2xl:w-80">
       {/* Top Sidebar Header & View Switcher */}
-      <div className="fbs-header">
-        <div className="fbs-nav-tabs">
+      <div className="flex flex-col gap-2.5 border-b border-border/70 p-4">
+        <div className="flex gap-1 rounded-xl border border-border bg-muted/50 p-1">
           <button
             type="button"
-            className={`fbs-tab-btn ${sidebarTab === 'palette' ? 'fbs-tab-btn--active' : ''}`}
+            className={`flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition ${sidebarTab === 'palette' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
             onClick={() => setSidebarTab('palette')}
           >
             <Layers size={15} />
@@ -124,7 +121,7 @@ export default function FormBuilderSidebar({
           </button>
           <button
             type="button"
-            className={`fbs-tab-btn ${sidebarTab === 'forms' ? 'fbs-tab-btn--active' : ''}`}
+            className={`flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition ${sidebarTab === 'forms' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
             onClick={() => setSidebarTab('forms')}
           >
             <FileText size={15} />
@@ -134,11 +131,9 @@ export default function FormBuilderSidebar({
 
         <button
           type="button"
-          className="fbs-create-btn"
-          onClick={canCreateForm ? onCreateNewForm : undefined}
-          disabled={!canCreateForm}
-          style={!canCreateForm ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-          title={!canCreateForm ? "Admin has not allowed this action. You do not have permission to create custom forms." : "Create New Form"}
+          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-primary/25 bg-primary/10 px-3 text-sm font-semibold text-primary transition hover:border-primary/50 hover:bg-primary/15"
+          onClick={onCreateNewForm}
+          title="Create New Form"
         >
           <Plus size={16} />
           Create New Form
@@ -147,44 +142,43 @@ export default function FormBuilderSidebar({
 
       {/* Tab Content: Components Palette */}
       {sidebarTab === 'palette' && (
-        <div className="fbs-content">
-          <div className="fbs-search-wrap">
-            <Search size={14} className="fbs-search-icon" />
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="relative border-b border-border/70 p-3">
+            <Search size={14} className="pointer-events-none absolute left-6 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
               placeholder="Search components..."
               value={paletteSearch}
               onChange={(e) => setPaletteSearch(e.target.value)}
-              className="fbs-search-input"
+              className="min-h-10 w-full rounded-xl border border-input bg-background pl-9 pr-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
             />
           </div>
 
-          <div className="fbs-palette-scroll">
+          <div className="flex max-h-80 flex-col gap-4 overflow-y-auto overscroll-contain p-4 xl:max-h-none xl:min-h-0 xl:flex-1">
             {filteredPalette.map((category) => (
-              <div key={category.category} className="fbs-category-group">
-                <span className="fbs-category-title">{category.category}</span>
-                <div className="fbs-category-grid">
+              <div key={category.category} className="flex flex-col gap-2">
+                <span className="px-0.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{category.category}</span>
+                <div className="flex flex-col gap-2">
                   {category.items.map((item) => (
-                    <div
+                    <button
+                      type="button"
                       key={item.type}
-                      className="fbs-palette-item"
-                      draggable={canCreateForm}
-                      onDragStart={canCreateForm ? (e) => handleDragStart(e, item.type, item.defaultConfig) : (e) => e.preventDefault()}
-                      onClick={() => canCreateForm && onAddField(item.type, item.defaultConfig)}
-                      style={!canCreateForm ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                      title={!canCreateForm ? "Admin has not allowed this action. You do not have permission to add fields." : "Drag onto canvas or click to add"}
+                      className="group flex min-h-14 cursor-grab items-center gap-2.5 rounded-xl border border-border bg-background px-3 py-2 text-left transition hover:border-primary/40 hover:bg-primary/[0.03] active:cursor-grabbing"
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, item.type, item.defaultConfig)}
+                      onClick={() => onAddField(item.type, item.defaultConfig)}
                     >
-                      <div className="fbs-item-icon">
+                      <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                         {ICON_MAP[item.icon] || <Layers size={16} />}
                       </div>
-                      <div className="fbs-item-info">
-                        <span className="fbs-item-label">{item.label}</span>
-                        <span className="fbs-item-desc">{item.description}</span>
+                      <div className="flex min-w-0 flex-1 flex-col">
+                        <span className="truncate text-xs font-semibold text-foreground">{item.label}</span>
+                        <span className="truncate text-[11px] text-muted-foreground">{item.description}</span>
                       </div>
-                      <div className="fbs-drag-indicator" title="Drag onto canvas or click to add">
+                      <div className="text-muted-foreground/60 transition group-hover:text-muted-foreground" title="Drag onto canvas or click to add">
                         <GripVertical size={14} />
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -195,24 +189,24 @@ export default function FormBuilderSidebar({
 
       {/* Tab Content: Form List */}
       {sidebarTab === 'forms' && (
-        <div className="fbs-content">
-          <div className="fbs-search-wrap">
-            <Search size={14} className="fbs-search-icon" />
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="relative border-b border-border/70 p-3">
+            <Search size={14} className="pointer-events-none absolute left-6 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
               placeholder="Search saved forms..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="fbs-search-input"
+              className="min-h-10 w-full rounded-xl border border-input bg-background pl-9 pr-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
             />
           </div>
 
-          <div className="fbs-forms-list">
+          <div className="flex max-h-80 flex-col gap-2 overflow-y-auto p-4 xl:max-h-none xl:flex-1">
             {filteredForms.length === 0 ? (
-              <div className="fbs-empty-forms">
+              <div className="flex flex-col items-center justify-center gap-3 px-4 py-12 text-center text-muted-foreground">
                 <FileText size={32} />
                 <p>No forms found</p>
-                <button type="button" className="fbs-empty-create-btn" onClick={onCreateNewForm}>
+                <button type="button" className="inline-flex min-h-10 items-center rounded-xl bg-primary px-3 text-xs font-semibold text-primary-foreground" onClick={onCreateNewForm}>
                   Create your first form
                 </button>
               </div>
@@ -222,28 +216,31 @@ export default function FormBuilderSidebar({
                 return (
                   <div
                     key={form.id}
-                    className={`fbs-form-card ${isActive ? 'fbs-form-card--active' : ''}`}
+                    className={`group relative flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2.5 transition ${isActive ? 'border-primary bg-primary/[0.06]' : 'border-border bg-background hover:border-primary/40 hover:bg-primary/[0.03]'}`}
                     onClick={() => onSelectForm(form.id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelectForm(form.id); } }}
                   >
-                    <div className="fbs-form-card__icon">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-primary">
                       <FileText size={18} />
                     </div>
-                    <div className="fbs-form-card__details">
-                      <span className="fbs-form-card__title">{form.title || 'Untitled Form'}</span>
-                      <span className="fbs-form-card__meta">
+                    <div className="flex min-w-0 flex-1 flex-col">
+                      <span className="truncate text-xs font-semibold text-foreground">{form.title || 'Untitled Form'}</span>
+                      <span className="text-[11px] capitalize text-muted-foreground">
                         {form.fields.length} field{form.fields.length !== 1 ? 's' : ''} • {form.status}
                       </span>
                     </div>
 
                     {form.approvalConfigured && (
-                      <span className="fbs-form-card__badge" title="Approval Workflow configured">
+                      <span className="text-emerald-500" title="Approval Workflow configured">
                         <CheckCircle2 size={12} />
                       </span>
                     )}
 
                     <button
                       type="button"
-                      className="fbs-form-card__delete"
+                      className="flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground opacity-100 transition hover:bg-destructive/10 hover:text-destructive xl:opacity-0 xl:group-hover:opacity-100 xl:focus:opacity-100"
                       title="Delete Form"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -262,29 +259,29 @@ export default function FormBuilderSidebar({
 
       {/* Delete Form Custom Modal Box */}
       {deletingForm && (
-        <div className="fbs-modal-backdrop" onClick={() => setDeletingForm(null)}>
-          <div className="fbs-modal-card" onClick={(e) => e.stopPropagation()}>
-            <div className="fbs-modal-header">
-              <div className="fbs-modal-icon-wrap">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm" onClick={() => setDeletingForm(null)}>
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-card shadow-2xl" role="alertdialog" aria-modal="true" aria-labelledby="delete-form-title" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
+              <div className="flex size-11 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
                 <AlertTriangle size={22} />
               </div>
-              <button type="button" className="fbs-modal-close" onClick={() => setDeletingForm(null)}>
+              <button type="button" className="flex size-10 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground" aria-label="Close delete form dialog" onClick={() => setDeletingForm(null)}>
                 <X size={18} />
               </button>
             </div>
-            <div className="fbs-modal-body">
-              <h3>Delete Custom Form?</h3>
-              <p>
+            <div className="px-5 py-5">
+              <h3 id="delete-form-title" className="text-base font-semibold text-foreground">Delete Custom Form?</h3>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
                 Are you sure you want to delete <strong>"{deletingForm.title}"</strong>? This action will permanently remove this form definition from your saved custom forms list.
               </p>
             </div>
-            <div className="fbs-modal-footer">
-              <button type="button" className="fbs-modal-btn fbs-modal-btn--secondary" onClick={() => setDeletingForm(null)}>
+            <div className="flex flex-col-reverse gap-2 border-t border-border/70 bg-muted/20 px-5 py-4 sm:flex-row sm:justify-end">
+              <button type="button" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-border bg-card px-4 text-sm font-semibold text-foreground transition hover:bg-muted" onClick={() => setDeletingForm(null)}>
                 Cancel
               </button>
               <button
                 type="button"
-                className="fbs-modal-btn fbs-modal-btn--danger"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-destructive px-4 text-sm font-semibold text-destructive-foreground transition hover:bg-destructive/90"
                 onClick={() => {
                   onDeleteForm(deletingForm.id);
                   setDeletingForm(null);

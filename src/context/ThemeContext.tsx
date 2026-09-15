@@ -5,16 +5,22 @@ import {
   useEffect,
   useCallback,
   type ReactNode,
+  type MouseEvent as ReactMouseEvent,
 } from 'react';
 
 // ─── Types ──────────────────────────────────────────────────
 
-type Theme = 'light' | 'dark';
+export type Theme = 'light' | 'dark';
+
+export type PositionOrEvent =
+  | { clientX?: number; clientY?: number; x?: number; y?: number }
+  | ReactMouseEvent
+  | MouseEvent;
 
 interface ThemeContextType {
   theme: Theme;
-  toggleTheme: () => void;
-  setTheme: (theme: Theme) => void;
+  toggleTheme: (origin?: PositionOrEvent) => void;
+  setTheme: (theme: Theme, origin?: PositionOrEvent) => void;
   isDark: boolean;
 }
 
@@ -51,11 +57,10 @@ function applyTheme(theme: Theme) {
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
-    // Priority: stored preference → system preference
     return getStoredTheme() || getSystemTheme();
   });
 
-  // Apply theme to DOM on mount and changes
+  // Apply theme to DOM on mount
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
@@ -65,9 +70,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
 
     const handler = (e: MediaQueryListEvent) => {
-      // Only follow system if user hasn't set a preference
       if (!getStoredTheme()) {
-        setThemeState(e.matches ? 'dark' : 'light');
+        const newTheme = e.matches ? 'dark' : 'light';
+        setThemeState(newTheme);
+        applyTheme(newTheme);
       }
     };
 
@@ -75,13 +81,74 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return () => mq.removeEventListener('change', handler);
   }, []);
 
-  const setTheme = useCallback((newTheme: Theme) => {
-    setThemeState(newTheme);
-    localStorage.setItem(THEME_KEY, newTheme);
+  const setTheme = useCallback((newTheme: Theme, origin?: PositionOrEvent) => {
+    const isDarkNext = newTheme === 'dark';
+
+    const supportsViewTransitions =
+      typeof document !== 'undefined' &&
+      'startViewTransition' in document &&
+      !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (!supportsViewTransitions) {
+      setThemeState(newTheme);
+      applyTheme(newTheme);
+      try {
+        localStorage.setItem(THEME_KEY, newTheme);
+      } catch {}
+      return;
+    }
+
+    let x = window.innerWidth / 2;
+    let y = window.innerHeight / 2;
+
+    if (origin) {
+      if ('clientX' in origin && typeof origin.clientX === 'number') {
+        x = origin.clientX;
+      } else if ('x' in origin && typeof origin.x === 'number') {
+        x = origin.x;
+      }
+
+      if ('clientY' in origin && typeof origin.clientY === 'number') {
+        y = origin.clientY;
+      } else if ('y' in origin && typeof origin.y === 'number') {
+        y = origin.y;
+      }
+    }
+
+    const endRadius = Math.hypot(
+      Math.max(x, window.innerWidth - x),
+      Math.max(y, window.innerHeight - y)
+    );
+
+    const transition = (document as any).startViewTransition(() => {
+      setThemeState(newTheme);
+      applyTheme(newTheme);
+      try {
+        localStorage.setItem(THEME_KEY, newTheme);
+      } catch {}
+    });
+
+    transition.ready.then(() => {
+      const clipPath = [
+        `circle(0px at ${x}px ${y}px)`,
+        `circle(${endRadius}px at ${x}px ${y}px)`,
+      ];
+
+      document.documentElement.animate(
+        {
+          clipPath,
+        },
+        {
+          duration: 450,
+          easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
+          pseudoElement: '::view-transition-new(root)',
+        }
+      );
+    });
   }, []);
 
-  const toggleTheme = useCallback(() => {
-    setTheme(theme === 'dark' ? 'light' : 'dark');
+  const toggleTheme = useCallback((origin?: PositionOrEvent) => {
+    setTheme(theme === 'dark' ? 'light' : 'dark', origin);
   }, [theme, setTheme]);
 
   return (

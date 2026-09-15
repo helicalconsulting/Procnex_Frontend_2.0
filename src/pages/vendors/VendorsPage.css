@@ -7,6 +7,10 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
 }
 
 /* Header */
@@ -19,13 +23,13 @@
 }
 
 .vendors-page__header-left h1 {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 700;
   margin: 0 0 4px;
 }
 
 .vendors-page__header-left p {
-  font-size: 14px;
+  font-size: 14.5px;
   color: var(--text-secondary);
   margin: 0;
 }
@@ -34,23 +38,22 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 20px;
-  border-radius: var(--radius-md);
+  padding: 10px 22px;
+  border-radius: 12px;
   border: none;
-  background: var(--primary-500);
+  background: linear-gradient(135deg, var(--primary-500) 0%, var(--primary-600) 100%);
   color: #fff;
-  font-size: 15px;
+  font-size: 14.5px;
   font-weight: 700;
   cursor: pointer;
   font-family: inherit;
-  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
-  box-shadow: 0 2px 8px rgba(10, 110, 209, 0.25);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 14px rgba(10, 110, 209, 0.3);
 }
 
 .vendors-page__add-btn:hover {
-  background: var(--primary-600);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 14px rgba(10, 110, 209, 0.35);
+  transform: translateY(-1.5px);
+  box-shadow: 0 6px 20px rgba(10, 110, 209, 0.4);
 }
 
 .vendors-page__add-btn--disabled {
@@ -77,7 +80,7 @@
 
 .vendors-summary-card {
   padding: 20px;
-  border-radius: 14px !important;
+  border-radius: 16px !important;
   background: rgba(255, 255, 255, 0.72) !important;
   backdrop-filter: blur(16px) saturate(180%);
   -webkit-backdrop-filter: blur(16px) saturate(180%);

@@ -772,7 +772,7 @@ export default function VendorsPage() {
     new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
   return (
-    <div className="vendors-page">
+    <div className="vendors-page w-full max-w-full m-0 p-0 flex flex-col gap-6 text-foreground">
       {error && <MessageStrip type="error">{error}</MessageStrip>}
       {pageMsg && (
         <MessageStrip
@@ -792,15 +792,15 @@ export default function VendorsPage() {
           {credentialsMsg}
         </MessageStrip>
       )}
-      {loading && <div className="vendors-page__loading">Loading vendors…</div>}
+      {loading && <div className="vendors-page__loading text-sm text-muted-foreground p-4">Loading vendors…</div>}
       {/* Header */}
-      <div className="vendors-page__header">
+      <div className="vendors-page__header flex items-center justify-between flex-wrap gap-4">
         <div className="vendors-page__header-left">
-          <h1>Vendors</h1>
-          <p>Manage vendor directory, track performance, and onboard new suppliers</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground m-0 mb-1">Vendors</h1>
+          <p className="text-sm text-muted-foreground m-0">Manage vendor directory, track performance, and onboard new suppliers</p>
         </div>
         <button
-          className={`vendors-page__add-btn ${!canCreateVendor ? 'vendors-page__add-btn--disabled' : ''}`}
+          className={`vendors-page__add-btn inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm bg-gradient-to-r from-primary to-primary-600 text-white shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all ${!canCreateVendor ? 'vendors-page__add-btn--disabled opacity-50 cursor-not-allowed shadow-none' : ''}`}
           onClick={canCreateVendor ? openAddModal : undefined}
           title={!canCreateVendor ? 'Admin has not allowed this action. You do not have permission to create vendors.' : 'Add a new vendor'}
           disabled={!canCreateVendor}
@@ -811,7 +811,7 @@ export default function VendorsPage() {
       </div>
 
       {/* Summary — clickable filter cards */}
-      <div className="vendors-summary">
+      <div className="vendors-summary grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { icon: <Users size={22} />, val: summary.total, label: 'Total Vendors', cls: 'total', mode: 'all' as const },
           { icon: <UserCheck size={22} />, val: summary.active, label: 'Active', cls: 'active', mode: 'active' as const },
@@ -820,16 +820,16 @@ export default function VendorsPage() {
         ].map((c) => (
           <div
             key={c.cls}
-            className={`vendors-summary-card ${filterMode === c.mode ? 'vendors-summary-card--active' : ''}`}
+            className={`vendors-summary-card relative overflow-hidden flex items-center gap-4 p-5 rounded-2xl bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border border-white/80 dark:border-white/10 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer ${filterMode === c.mode ? 'vendors-summary-card--active border-primary ring-2 ring-primary/20 bg-primary/5' : ''}`}
             onClick={() => {
               setFilterMode((prev) => prev === c.mode ? 'all' : c.mode);
               setCurrentPage(1);
             }}
           >
-            <div className={`vendors-summary-card__icon vendors-summary-card__icon--${c.cls}`}>{c.icon}</div>
-            <div className="vendors-summary-card__info">
-              <span className="vendors-summary-card__value">{c.val}</span>
-              <span className="vendors-summary-card__label">{c.label}</span>
+            <div className={`vendors-summary-card__icon vendors-summary-card__icon--${c.cls} w-11 h-11 rounded-xl flex items-center justify-center shrink-0`}>{c.icon}</div>
+            <div className="vendors-summary-card__info flex flex-col gap-0.5">
+              <span className="vendors-summary-card__value text-2xl font-extrabold tracking-tight text-foreground">{c.val}</span>
+              <span className="vendors-summary-card__label text-xs font-bold uppercase tracking-wider text-muted-foreground">{c.label}</span>
             </div>
           </div>
         ))}

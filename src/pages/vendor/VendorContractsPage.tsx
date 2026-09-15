@@ -1,365 +1,125 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
-import { useServiceData } from '../../hooks/useServiceData';
-import { contractService, type Contract } from '../../services/contractService';
 import {
-  FileText, Search, Eye, Download, FileSignature, Clock, CheckCircle2,
-  AlertTriangle, XCircle, ChevronDown, Calendar, IndianRupee, Building2,
-  Ban, X, Maximize2, Minimize2,
+  AlertTriangle, Ban, Building2, Calendar, CheckCircle2, ChevronDown, Clock,
+  Download, Eye, FileSignature, FileText, Search, XCircle,
 } from 'lucide-react';
-import { useCurrency } from '../../components/shared/CurrencyMaster';
-import { downloadContractAsPdf } from '../../utils/pdfDownload';
-import { sseClient } from '../../services/sseClient';
-import '../../styles/vendor-portal.css';
-import './VendorContractsPage.css';
+import { useCurrency } from '@/components/shared/CurrencyMaster';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { CollapsibleContent } from '@/components/ui/collapsible-content';
+import { EmptyState, MetricCard, PageFrame, PageLead } from '@/components/ui/product';
+import { useServiceData } from '@/hooks/useServiceData';
+import { cn } from '@/lib/utils';
+import { contractService, type Contract } from '@/services/contractService';
+import { sseClient } from '@/services/sseClient';
+import { downloadContractAsPdf } from '@/utils/pdfDownload';
 
-// ─── Types ──────────────────────────────────────────────────
-
-type ContractStatus = 'DRAFT' | 'PENDING_VENDOR_SIGNATURE' | 'AWAITING_CUSTOMER_SIGNATURE' | 'AWAITING_VENDOR_SIGNATURE' | 'VENDOR_SIGNED' | 'ACCEPTED' | 'COMPLETED' | 'ACTIVE' | 'EXPIRING_SOON' | 'EXPIRED' | 'CANCELLED' | 'TERMINATED';
-
-const STATUS_LABELS: Record<string, string> = {
-  DRAFT: 'Draft',
-  PENDING_VENDOR_SIGNATURE: 'Awaiting Your Signature',
-  AWAITING_CUSTOMER_SIGNATURE: 'Awaiting Buyer Signature',
-  AWAITING_VENDOR_SIGNATURE: 'Awaiting Your Signature',
-  VENDOR_SIGNED: 'Vendor Signed',
-  ACCEPTED: 'Accepted',
-  COMPLETED: 'Completed',
-  ACTIVE: 'Active',
-  EXPIRING_SOON: 'Expiring Soon',
-  EXPIRED: 'Expired',
-  CANCELLED: 'Cancelled',
-  TERMINATED: 'Terminated',
+type Tone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
+const STATUS: Record<string, { label: string; tone: Tone; icon: typeof FileText }> = {
+  DRAFT: { label: 'Draft', tone: 'neutral', icon: FileText },
+  PENDING_VENDOR_SIGNATURE: { label: 'Awaiting your signature', tone: 'warning', icon: Clock },
+  AWAITING_CUSTOMER_SIGNATURE: { label: 'Awaiting buyer signature', tone: 'info', icon: Clock },
+  AWAITING_VENDOR_SIGNATURE: { label: 'Awaiting your signature', tone: 'warning', icon: Clock },
+  VENDOR_SIGNED: { label: 'Vendor signed', tone: 'success', icon: CheckCircle2 },
+  ACCEPTED: { label: 'Accepted', tone: 'success', icon: CheckCircle2 },
+  COMPLETED: { label: 'Completed', tone: 'success', icon: CheckCircle2 },
+  ACTIVE: { label: 'Active', tone: 'success', icon: CheckCircle2 },
+  EXPIRING_SOON: { label: 'Expiring soon', tone: 'warning', icon: AlertTriangle },
+  EXPIRED: { label: 'Expired', tone: 'danger', icon: XCircle },
+  CANCELLED: { label: 'Cancelled', tone: 'danger', icon: Ban },
+  TERMINATED: { label: 'Terminated', tone: 'danger', icon: Ban },
 };
 
-const STATUS_ICONS: Record<string, React.ReactNode> = {
-  DRAFT: <FileText size={12} />,
-  PENDING_VENDOR_SIGNATURE: <Clock size={12} />,
-  AWAITING_CUSTOMER_SIGNATURE: <Clock size={12} />,
-  AWAITING_VENDOR_SIGNATURE: <Clock size={12} />,
-  VENDOR_SIGNED: <CheckCircle2 size={12} />,
-  ACCEPTED: <CheckCircle2 size={12} />,
-  COMPLETED: <CheckCircle2 size={12} />,
-  ACTIVE: <CheckCircle2 size={12} />,
-  EXPIRING_SOON: <AlertTriangle size={12} />,
-  EXPIRED: <XCircle size={12} />,
-  CANCELLED: <Ban size={12} />,
-  TERMINATED: <Ban size={12} />,
-};
-
-// ─── Component ──────────────────────────────────────────────
+function StatusBadge({ status }: { status: string }) {
+  const config = STATUS[status] ?? { label: status.replaceAll('_', ' '), tone: 'neutral' as Tone, icon: FileText };
+  const Icon = config.icon;
+  return <Badge tone={config.tone}><Icon className="size-3" />{config.label}</Badge>;
+}
 
 export default function VendorContractsPage() {
   const navigate = useNavigate();
-  useAuth();
   const { formatAmount, companyDefaultCurrency } = useCurrency();
-  const { data: contracts, loading, reload } = useServiceData(
-    () => contractService.listVendorContracts().then(r => r.contracts),
-    [] as Contract[],
-    [],
-    { cacheKey: 'vendor:contracts', cacheTtlMs: 30000 }
+  const { data: contracts, loading, error, reload } = useServiceData(
+    () => contractService.listVendorContracts().then((result) => result.contracts), [] as Contract[], [],
+    { cacheKey: 'vendor:contracts', cacheTtlMs: 30_000 },
   );
-
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [previewContract, setPreviewContract] = useState<Contract | null>(null);
-  const [previewFullscreen, setPreviewFullscreen] = useState(false);
 
-  // SSE real-time refresh — when contract signed or PO created, refresh the list
   useEffect(() => {
-    const unsubSigned = sseClient.on('contract_signed', () => reload());
-    const unsubPO = sseClient.on('po_created', () => reload());
-    return () => { unsubSigned(); unsubPO(); };
+    const unsubscribeSigned = sseClient.on('contract_signed', reload);
+    const unsubscribePurchaseOrder = sseClient.on('po_created', reload);
+    return () => { unsubscribeSigned(); unsubscribePurchaseOrder(); };
   }, [reload]);
 
   const summary = useMemo(() => ({
     total: contracts.length,
-    pendingSignature: contracts.filter(c => c.status === 'AWAITING_VENDOR_SIGNATURE' || c.status === 'PENDING_VENDOR_SIGNATURE').length,      active: contracts.filter(c => ['VENDOR_SIGNED', 'ACCEPTED', 'COMPLETED', 'ACTIVE'].includes(c.status)).length,
-    totalValue: contracts.reduce((s, c) => s + c.contractValue, 0),
+    pendingSignature: contracts.filter((contract) => ['AWAITING_VENDOR_SIGNATURE', 'PENDING_VENDOR_SIGNATURE'].includes(contract.status)).length,
+    active: contracts.filter((contract) => ['VENDOR_SIGNED', 'ACCEPTED', 'COMPLETED', 'ACTIVE'].includes(contract.status)).length,
+    totalValue: contracts.reduce((sum, contract) => sum + contract.contractValue, 0),
   }), [contracts]);
-
   const filtered = useMemo(() => {
-    let list = contracts;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(c =>
-        c.contractNumber.toLowerCase().includes(q) ||
-        c.title.toLowerCase().includes(q) ||
-        (c.rfq?.rfqNumber || '').toLowerCase().includes(q)
-      );
-    }
-    return list;
+    const query = search.trim().toLowerCase();
+    if (!query) return contracts;
+    return contracts.filter((contract) => [contract.contractNumber, contract.title, contract.rfq?.rfqNumber ?? ''].some((field) => field.toLowerCase().includes(query)));
   }, [contracts, search]);
-
-  const formatDate = (d: string | null | undefined) =>
-    d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
-
-  const formatCurrency = (val: number, curr?: string) =>
-    formatAmount(val, curr || companyDefaultCurrency);
-
-  const handleView = (id: string) => {
-    setExpandedId(expandedId === id ? null : id);
-  };
-
-  const handleSign = (id: string) => {
-    navigate(`/vendor/contracts/${id}?action=sign`);
-  };
-
-  const handleDownload = (c: Contract) => {
-    downloadContractAsPdf(
-      c.contentSnapshot,
-      c.contractNumber,
-      c.title,
-    );
-  };
-
-  const handlePreview = (c: Contract) => {
-    setPreviewContract(c);
-  };
-
-  const closePreview = () => {
-    setPreviewContract(null);
-  };
+  const formatDate = (date: string | null | undefined) => date ? new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+  const formatCurrency = (value: number, currency?: string) => formatAmount(value, currency || companyDefaultCurrency);
+  const needsVendorSignature = (contract: Contract) => ['AWAITING_VENDOR_SIGNATURE', 'PENDING_VENDOR_SIGNATURE'].includes(contract.status);
 
   return (
-    <div className="vendor-portal">
-      <div className="vendor-portal__container">
-        {/* Hero Banner */}
-        <div className="vc-hero">
-          <div className="vc-hero__content">
-            <h1 className="vc-hero__title">
-              <FileText size={24} />
-              My Contracts
-            </h1>
-            <p className="vc-hero__subtitle">View, download, and sign contracts awarded to your company.</p>
-            <div className="vc-hero__stats">
-              <div className="vc-hero__stat">
-                <span className="vc-hero__stat-value">{summary.total}</span>
-                <span className="vc-hero__stat-label">Total Contracts</span>
-              </div>
-              <div className="vc-hero__stat">
-                <span className="vc-hero__stat-value">{summary.pendingSignature}</span>
-                <span className="vc-hero__stat-label">Need Signature</span>
-              </div>
-              <div className="vc-hero__stat">
-                <span className="vc-hero__stat-value">{summary.active}</span>
-                <span className="vc-hero__stat-label">Active</span>
-              </div>
-              <div className="vc-hero__stat">
-                <span className="vc-hero__stat-value">{formatAmount(summary.totalValue, companyDefaultCurrency)}</span>
-                <span className="vc-hero__stat-label">Total Value</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Search */}
-        {/* Search */}
-      <div className="vo-toolbar" style={{ marginTop: 0 }}>
-          <div className="vo-toolbar__search">
-            <Search size={16} className="vo-toolbar__search-icon" />
-            <input
-              type="text"
-              placeholder="Search by contract number, title, or RFQ..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-          </div>
-        </div>
-
-        {/* Contracts List */}
-        {loading ? (
-          <div className="vendor-empty-state">
-            <div className="vendor-empty-state__icon">⏳</div>
-            <div className="vendor-empty-state__title">Loading contracts…</div>
-          </div>
-        ) : filtered.length > 0 ? (
-          <div className="vc-contracts">
-            {filtered.map(contract => {
-              const status = contract.status as ContractStatus;
-              const isExpanded = expandedId === contract.id;
-
-              return (
-                <div key={contract.id} className={`vc-card ${isExpanded ? 'vc-card--expanded' : ''}`}>
-                  <div className="vc-card__header" onClick={() => handleView(contract.id)}>
-                    <div className="vc-card__left">
-                      <div className="vc-card__top-row">
-                        <span className="vc-card__number">{contract.contractNumber}</span>
-                        <span className="vc-card__title">{contract.title}</span>
-                      </div>
-                      <div className="vc-card__meta">
-                        <span className="vc-card__meta-item"><Building2 size={12} /> {contract.rfq?.rfqNumber || '—'}</span>
-                        <span className="vc-card__meta-item"><Calendar size={12} /> {formatDate(contract.effectiveDate)}</span>
-                      </div>
-                    </div>
-                    <div className="vc-card__right">
-                      <span className="vc-card__value">{formatCurrency(contract.contractValue, contract.currency)}</span>
-                      <span className={`vc-status vc-status--${status}`}>
-                        {STATUS_ICONS[status]} {STATUS_LABELS[status]}
-                      </span>
-                      <ChevronDown size={18} className={`vc-card__chevron ${isExpanded ? 'vc-card__chevron--open' : ''}`} />
-                    </div>
-                  </div>
-
-                  {isExpanded && (
-                    <div className="vc-card__body">
-                      <div className="vc-card__grid">
-                        <div className="vc-card__section">
-                          <div className="vc-card__section-title">Contract Details</div>
-                          <div className="vc-card__row">
-                            <span className="vc-card__row-label">Type</span>
-                            <span className="vc-card__row-value">{contract.contractType?.replace(/_/g, ' ')}</span>
-                          </div>
-                          <div className="vc-card__row">
-                            <span className="vc-card__row-label">Value</span>
-                            <span className="vc-card__row-value">{formatCurrency(contract.contractValue, contract.currency)}</span>
-                          </div>
-                          <div className="vc-card__row">
-                            <span className="vc-card__row-label">Currency</span>
-                            <span className="vc-card__row-value">{contract.currency || companyDefaultCurrency}</span>
-                          </div>
-                          <div className="vc-card__row">
-                            <span className="vc-card__row-label">Priority</span>
-                            <span className="vc-card__row-value">{contract.priority || 'Medium'}</span>
-                          </div>
-                        </div>
-                        <div className="vc-card__section">
-                          <div className="vc-card__section-title">Buyer Company</div>
-                          <div className="vc-card__row">
-                            <span className="vc-card__row-label">Contact</span>
-                            <span className="vc-card__row-value">{contract.contractOwner?.fullName || '—'}</span>
-                          </div>
-                          <div className="vc-card__row">
-                            <span className="vc-card__row-label">Source RFQ</span>
-                            <span className="vc-card__row-value">{contract.rfq?.rfqNumber || '—'}</span>
-                          </div>
-                          {contract.rfq?.title && (
-                            <div className="vc-card__row">
-                              <span className="vc-card__row-label">RFQ Title</span>
-                              <span className="vc-card__row-value">{contract.rfq.title}</span>
-                            </div>
-                          )}
-                          <div className="vc-card__row">
-                            <span className="vc-card__row-label">Payment Terms</span>
-                            <span className="vc-card__row-value">{contract.paymentTerms || '—'}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="vc-card__actions">
-                        <button
-                          className="vc-btn vc-btn--primary"
-                          onClick={(e) => { e.stopPropagation(); navigate(`/vendor/contracts/${contract.id}`); }}
-                        >
-                          <Eye size={15} /> View Details
-                        </button>
-                        <button
-                          className="vc-btn vc-btn--secondary"
-                          onClick={(e) => { e.stopPropagation(); handleDownload(contract); }}
-                        >
-                          <Download size={15} /> Download
-                        </button>
-                        {(status === 'AWAITING_VENDOR_SIGNATURE' || status === 'PENDING_VENDOR_SIGNATURE' || status === 'AWAITING_CUSTOMER_SIGNATURE') && (
-                          <button
-                            className="vc-btn vc-btn--primary"
-                            style={{ background: 'linear-gradient(135deg, #107e3e, #059669)' }}
-                            onClick={(e) => { e.stopPropagation(); handleSign(contract.id); }}
-                          >
-                            <FileSignature size={15} /> Sign Contract
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="vendor-empty-state">
-            <div className="vendor-empty-state__icon">📄</div>
-            <div className="vendor-empty-state__title">No Contracts Found</div>
-            <div className="vendor-empty-state__text">
-              {search
-                ? 'Try adjusting your search.'
-                : 'Contracts awarded to your company will appear here for review and signing.'}
-            </div>
-          </div>
-        )}
+    <PageFrame>
+      <PageLead title="My Contracts" description="Review, download, and sign contracts awarded to your company." />
+      {error && <Card className="mb-4 border-destructive/25 bg-destructive/8 p-4 text-sm text-destructive">{error}</Card>}
+      <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <MetricCard label="Total contracts" value={summary.total} detail="All awarded contracts" icon={FileText} />
+        <MetricCard label="Need signature" value={summary.pendingSignature} detail="Action required" icon={FileSignature} tone="warning" />
+        <MetricCard label="Active" value={summary.active} detail="Signed or completed" icon={CheckCircle2} tone="success" />
+        <MetricCard label="Total value" value={formatAmount(summary.totalValue, companyDefaultCurrency)} detail="Across all contracts" icon={Building2} tone="violet" />
       </div>
+      <Card className="mb-4 p-3 sm:p-4"><div className="relative max-w-xl"><Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="h-10 pl-10" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search number, title, or RFQ" aria-label="Search contracts" /></div></Card>
 
-      {/* ── Document Preview Modal ── */}
-      {previewContract && (
-        <div className="vc-preview-backdrop" onClick={closePreview}>
-          <div className={`vc-preview-modal ${previewFullscreen ? 'vc-preview-modal--fullscreen' : ''}`} onClick={e => e.stopPropagation()}>
-            <div className="vc-preview-modal__header">
-              <div className="vc-preview-modal__title">
-                <Eye size={18} />
-                <div>
-                  <span>{previewContract.contractNumber}</span>
-                  <small>{previewContract.title}</small>
-                </div>
-              </div>
-              <div className="vc-preview-modal__header-actions">
-                <button className="vc-preview-btn" onClick={() => handleDownload(previewContract)} title="Download">
-                  <Download size={16} />
+      {loading ? (
+        <Card className="grid min-h-64 place-items-center text-sm text-muted-foreground">Loading contracts…</Card>
+      ) : filtered.length === 0 ? (
+        <EmptyState icon={FileText} title="No contracts found" description={search ? 'Try another search term.' : 'Awarded contracts will appear here for review and signing.'} action={search ? <Button variant="secondary" onClick={() => setSearch('')}>Clear search</Button> : undefined} />
+      ) : (
+        <div className="grid gap-3">
+          {filtered.map((contract) => {
+            const expanded = expandedId === contract.id;
+            return (
+              <Card key={contract.id} className={cn('overflow-hidden transition-shadow', expanded && 'shadow-md')}>
+                <button type="button" className="flex w-full flex-col gap-3 p-4 text-left outline-none transition hover:bg-accent/35 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40 sm:flex-row sm:items-center sm:justify-between sm:p-5" onClick={() => setExpandedId(expanded ? null : contract.id)} aria-expanded={expanded}>
+                  <span className="min-w-0"><span className="flex flex-wrap items-center gap-2"><span className="font-semibold text-primary">{contract.contractNumber}</span><span className="truncate text-sm font-medium">{contract.title}</span></span><span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"><span className="flex items-center gap-1"><Building2 className="size-3" />{contract.rfq?.rfqNumber || 'No RFQ reference'}</span><span className="flex items-center gap-1"><Calendar className="size-3" />{formatDate(contract.effectiveDate)}</span></span></span>
+                  <span className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end"><span className="font-semibold tabular-nums">{formatCurrency(contract.contractValue, contract.currency)}</span><StatusBadge status={contract.status} /><ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform', expanded && 'rotate-180')} /></span>
                 </button>
-                <button
-                  className="vc-preview-btn"
-                  onClick={() => setPreviewFullscreen(!previewFullscreen)}
-                  title={previewFullscreen ? 'Exit full screen' : 'Full screen'}
-                >
-                  {previewFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-                </button>
-                <button className="vc-preview-btn" onClick={closePreview} title="Close">
-                  <X size={18} />
-                </button>
-              </div>
-            </div>
-            <div className="vc-preview-modal__body">
-              {previewContract.contentSnapshot ? (
-                <div className="vc-preview-doc" dangerouslySetInnerHTML={{ __html: previewContract.contentSnapshot }} />
-              ) : (
-                <div className="vc-preview-empty">
-                  <FileText size={48} />
-                  <p>No document content available for preview.</p>
-                  <button
-                    className="vc-btn vc-btn--primary"
-                    onClick={() => navigate(`/vendor/contracts/${previewContract.id}`)}
-                  >
-                    <Maximize2 size={15} /> View Full Details
-                  </button>
-                </div>
-              )}
-            </div>
-            <div className="vc-preview-modal__footer">
-              <span className="vc-preview-modal__status">
-                Status: <span className={`vc-status vc-status--${previewContract.status}`}>
-                  {STATUS_ICONS[previewContract.status]} {STATUS_LABELS[previewContract.status]}
-                </span>
-              </span>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button
-                  className="vc-btn vc-btn--primary"
-                  onClick={() => { closePreview(); navigate(`/vendor/contracts/${previewContract.id}`); }}
-                >
-                  <Eye size={15} /> View Full Details
-                </button>
-                {(previewContract.status === 'AWAITING_VENDOR_SIGNATURE' || previewContract.status === 'PENDING_VENDOR_SIGNATURE') && (
-                  <button
-                    className="vc-btn vc-btn--primary"
-                    style={{ background: 'linear-gradient(135deg, #107e3e, #059669)' }}
-                    onClick={() => { closePreview(); handleSign(previewContract.id); }}
-                  >
-                    <FileSignature size={15} /> Sign This Contract
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
+                <CollapsibleContent open={expanded} className="border-t border-border/65 bg-secondary/20 p-4 sm:p-5">
+                    <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      {[
+                        ['Contract type', contract.contractType?.replaceAll('_', ' ') || '—'],
+                        ['Value', formatCurrency(contract.contractValue, contract.currency)],
+                        ['Currency', contract.currency || companyDefaultCurrency],
+                        ['Priority', contract.priority || 'Medium'],
+                        ['Buyer contact', contract.contractOwner?.fullName || '—'],
+                        ['Source RFQ', contract.rfq?.rfqNumber || '—'],
+                        ['RFQ title', contract.rfq?.title || '—'],
+                        ['Payment terms', contract.paymentTerms || '—'],
+                      ].map(([label, value]) => <div key={label} className="rounded-xl border border-border/60 bg-card p-3"><dt className="text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{label}</dt><dd className="mt-1 break-words text-sm font-medium">{value}</dd></div>)}
+                    </dl>
+                    <div className="mt-4 flex flex-wrap gap-2 border-t border-border/60 pt-4">
+                      <Button size="sm" onClick={() => navigate(`/vendor/contracts/${contract.id}`)}><Eye />View details</Button>
+                      <Button variant="secondary" size="sm" onClick={() => downloadContractAsPdf(contract.contentSnapshot, contract.contractNumber, contract.title)}><Download />Download</Button>
+                      {needsVendorSignature(contract) && <Button size="sm" className="border-emerald-600 bg-emerald-600 hover:bg-emerald-700" onClick={() => navigate(`/vendor/contracts/${contract.id}?action=sign`)}><FileSignature />Sign contract</Button>}
+                    </div>
+                </CollapsibleContent>
+              </Card>
+            );
+          })}
         </div>
       )}
-    </div>
+    </PageFrame>
   );
 }

@@ -1,170 +1,120 @@
-import { Link } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
-import { useServiceData } from '../../hooks/useServiceData';
-import { vendorPortalService } from '../../services/vendorPortalService';
-import type { VendorInvoiceMock } from '../../mocks/vendorPortal.mock';
-import {
-  Receipt, Search, CheckCircle2, Clock,
-  XCircle,  AlertTriangle, Calendar, FileText, Plus
-} from 'lucide-react';
-import { useCurrency, CurrencySelector, CurrencyBadge } from '../../components/shared/CurrencyMaster';
-import '../../styles/vendor-portal.css';
-
-// ─── Types ──────────────────────────────────────────────────
+import { useMemo, useState } from 'react';
+import { AlertTriangle, Calendar, CheckCircle2, Clock, FileText, Receipt, Search, XCircle } from 'lucide-react';
+import { CurrencyBadge, CurrencySelector, useCurrency } from '@/components/shared/CurrencyMaster';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { DataTableViewport } from '@/components/ui/data-table-viewport';
+import { EmptyState, MetricCard, PageFrame, PageLead } from '@/components/ui/product';
+import { useServiceData } from '@/hooks/useServiceData';
+import type { VendorInvoiceMock } from '@/mocks/vendorPortal.mock';
+import { vendorPortalService } from '@/services/vendorPortalService';
 
 type InvStatus = 'PENDING' | 'APPROVED' | 'PAID' | 'REJECTED' | 'OVERDUE';
+type Tone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
 
-type VendorInvoice = VendorInvoiceMock;
-
-const STATUS_CONFIG: Record<InvStatus, { label: string; cls: string; icon: React.ReactNode }> = {
-  PENDING: { label: 'Pending', cls: 'pending', icon: <Clock size={13} /> },
-  APPROVED: { label: 'Approved', cls: 'approved', icon: <CheckCircle2 size={13} /> },
-  PAID: { label: 'Paid', cls: 'paid', icon: <CheckCircle2 size={13} /> },
-  REJECTED: { label: 'Rejected', cls: 'rejected', icon: <XCircle size={13} /> },
-  OVERDUE: { label: 'Overdue', cls: 'overdue', icon: <AlertTriangle size={13} /> },
+const STATUS_CONFIG: Record<InvStatus, { label: string; tone: Tone; icon: typeof Clock }> = {
+  PENDING: { label: 'Pending', tone: 'warning', icon: Clock },
+  APPROVED: { label: 'Approved', tone: 'primary', icon: CheckCircle2 },
+  PAID: { label: 'Paid', tone: 'success', icon: CheckCircle2 },
+  REJECTED: { label: 'Rejected', tone: 'danger', icon: XCircle },
+  OVERDUE: { label: 'Overdue', tone: 'danger', icon: AlertTriangle },
 };
 
-// ─── Component ──────────────────────────────────────────────
+function StatusBadge({ status }: { status: InvStatus }) {
+  const config = STATUS_CONFIG[status];
+  const Icon = config.icon;
+  return <Badge tone={config.tone}><Icon className="size-3" />{config.label}</Badge>;
+}
 
 export default function VendorInvoicesPage() {
-  useAuth();
   const { formatAmount, companyDefaultCurrency } = useCurrency();
-  const [displayCurrency, setDisplayCurrency] = useState<string>(companyDefaultCurrency);
-  useEffect(() => { setDisplayCurrency(companyDefaultCurrency); }, [companyDefaultCurrency]);
-  const { data: invoices } = useServiceData(
-    () => vendorPortalService.listInvoices(),
-    [] as VendorInvoice[]
+  const [displayCurrency, setDisplayCurrency] = useState(companyDefaultCurrency);
+  const { data: invoices, loading, error } = useServiceData(
+    () => vendorPortalService.listInvoices(), [] as VendorInvoiceMock[],
   );
   const [search, setSearch] = useState('');
-
   const summary = useMemo(() => ({
-    totalAmount: invoices.reduce((s, i) => s + i.totalAmount, 0),
-    paid: invoices.filter(i => i.status === 'PAID').reduce((s, i) => s + i.totalAmount, 0),
-    pending: invoices.filter(i => ['PENDING', 'APPROVED'].includes(i.status)).reduce((s, i) => s + i.totalAmount, 0),
-    overdue: invoices.filter(i => i.status === 'OVERDUE').reduce((s, i) => s + i.totalAmount, 0),
+    totalAmount: invoices.reduce((sum, invoice) => sum + invoice.totalAmount, 0),
+    paid: invoices.filter((invoice) => invoice.status === 'PAID').reduce((sum, invoice) => sum + invoice.totalAmount, 0),
+    pending: invoices.filter((invoice) => ['PENDING', 'APPROVED'].includes(invoice.status)).reduce((sum, invoice) => sum + invoice.totalAmount, 0),
+    overdue: invoices.filter((invoice) => invoice.status === 'OVERDUE').reduce((sum, invoice) => sum + invoice.totalAmount, 0),
   }), [invoices]);
-
   const filtered = useMemo(() => {
-    let list = invoices;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(i => i.invoiceNumber.toLowerCase().includes(q) || i.poNumber.toLowerCase().includes(q) || i.description.toLowerCase().includes(q));
-    }
-    return list;
+    const query = search.trim().toLowerCase();
+    if (!query) return invoices;
+    return invoices.filter((invoice) => [invoice.invoiceNumber, invoice.poNumber, invoice.description].some((field) => field.toLowerCase().includes(query)));
   }, [invoices, search]);
 
-
-  const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  const amount = (value: number) => formatAmount(value, displayCurrency);
+  const formatDate = (date: string) => new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
   return (
-    <div className="vendor-portal">
-      <div className="vendor-portal__container">
-
-        {/* ── Header ────────────────────────────────── */}
-        <div className="vendor-header">
-          <div className="vendor-header__content">
-            <h1>My Invoices 🧾</h1>
-            <p>Track your invoices and payment status</p>
-          </div>
-          <div className="vendor-header__actions" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <Link to="/vendor/create-invoice" className="vendor-btn vendor-btn--primary" style={{ textDecoration: 'none' }}>
-              <Plus size={15} /> Create & Send Invoice
-            </Link>
-            <CurrencySelector value={displayCurrency} onChange={setDisplayCurrency} size="sm" />
-          </div>
-        </div>
-
-        {/* ── KPI Cards ─────────────────────────────── */}
-        <div className="vendor-kpis">
-          {[
-            { icon: <Receipt size={24} />, value: formatAmount(summary.totalAmount, displayCurrency), label: 'Total Invoiced', sub: `${invoices.length} invoices` },
-            { icon: <CheckCircle2 size={24} />, value: formatAmount(summary.paid, displayCurrency), label: 'Paid', sub: 'Received', style: { background: 'rgba(16,126,62,0.1)', color: '#107e3e' } },
-            { icon: <Clock size={24} />, value: formatAmount(summary.pending, displayCurrency), label: 'Pending', sub: 'Awaiting payment', style: { background: 'rgba(233,115,12,0.1)', color: '#e9730c' } },
-            { icon: <AlertTriangle size={24} />, value: formatAmount(summary.overdue, displayCurrency), label: 'Overdue', sub: 'Past due date', style: { background: 'rgba(187,0,0,0.08)', color: '#bb0000' } },
-          ].map(k => (
-            <div key={k.label} className="vendor-kpi-card">
-              <div className="vendor-kpi-icon" style={k.style}>{k.icon}</div>
-              <div>
-                <div className="vendor-kpi-label">{k.label}</div>
-                <div className="vendor-kpi-value" style={{ fontSize: 22 }}>{k.value}</div>
-                <div className="vendor-kpi-subtext">{k.sub}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* ── Search & Filters ──────────────────────── */}
-        <div className="vo-toolbar">
-          <div className="vo-toolbar__search">
-            <Search size={16} className="vo-toolbar__search-icon" />
-            <input type="text" placeholder="Search by invoice number, PO, or description..." value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
-        </div>
-
-        {/* ── Invoice Table ─────────────────────────── */}
-        {filtered.length > 0 ? (
-          <div className="vendor-table-container">
-            <table className="vendor-table">
-              <thead>
-                <tr>
-                  <th>Invoice</th>
-                  <th>PO Reference</th>
-                  <th>Description</th>
-                  <th>Amount</th>
-                  <th>GST</th>
-                  <th>Total</th>
-                  <th>Submitted</th>
-                  <th>Due Date</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(inv => {
-                  const cfg = STATUS_CONFIG[inv.status];
-                  return (
-                    <tr key={inv.id}>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <FileText size={15} style={{ color: 'var(--vendor-primary)', flexShrink: 0 }} />
-                          <div>
-                            <div style={{ fontWeight: 700, color: 'var(--vendor-primary)' }}>{inv.invoiceNumber}</div>
-                            <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{inv.rfqNumber}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td style={{ fontWeight: 600, fontSize: 13 }}>{inv.poNumber}</td>
-                      <td style={{ fontSize: 13, color: 'var(--text-secondary)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inv.description}</td>
-                      <td style={{ fontWeight: 600 }}>{formatAmount(inv.amount, displayCurrency)}</td>
-                      <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{formatAmount(inv.gst, displayCurrency)}</td>
-                      <td style={{ fontWeight: 700 }}>{formatAmount(inv.totalAmount, displayCurrency)} <CurrencyBadge currency={displayCurrency} size="sm" /></td>
-                      <td className="text-secondary" style={{ fontSize: 12 }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <Calendar size={12} />{fmtDate(inv.submittedDate)}
-                        </span>
-                      </td>
-                      <td className="text-secondary" style={{ fontSize: 12 }}>
-                        {fmtDate(inv.dueDate)}
-                        {inv.paymentDate && <div style={{ color: '#107e3e', fontWeight: 600, marginTop: 2 }}>Paid: {fmtDate(inv.paymentDate)}</div>}
-                      </td>
-                      <td>
-                        <span className={`vendor-badge vendor-badge--${cfg.cls}`}>
-                          {cfg.icon} {cfg.label}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="vendor-empty-state">
-            <div className="vendor-empty-state__icon">🧾</div>
-            <div className="vendor-empty-state__title">No Invoices Found</div>
-            <div className="vendor-empty-state__text">{search ? 'Try adjusting your search.' : 'Upload your first invoice to get started.'}</div>
-          </div>
-        )}
+    <PageFrame>
+      <PageLead title="My Invoices" description="Track invoice review, due dates, and payment status." actions={<CurrencySelector value={displayCurrency} onChange={setDisplayCurrency} size="sm" />} />
+      {error && <Card className="mb-4 border-destructive/25 bg-destructive/8 p-4 text-sm text-destructive">{error}</Card>}
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard label="Total invoiced" value={amount(summary.totalAmount)} detail={`${invoices.length} invoices`} icon={Receipt} />
+        <MetricCard label="Paid" value={amount(summary.paid)} detail="Received" icon={CheckCircle2} tone="success" />
+        <MetricCard label="Pending" value={amount(summary.pending)} detail="Awaiting payment" icon={Clock} tone="warning" />
+        <MetricCard label="Overdue" value={amount(summary.overdue)} detail="Past due date" icon={AlertTriangle} tone="danger" />
       </div>
-    </div>
+
+      <Card className="mb-4 p-3 sm:p-4">
+        <div className="relative max-w-xl">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input className="h-10 pl-10" placeholder="Search invoice, PO, or description" value={search} onChange={(event) => setSearch(event.target.value)} aria-label="Search invoices" />
+        </div>
+      </Card>
+
+      {loading ? (
+        <Card className="grid min-h-64 place-items-center text-sm text-muted-foreground">Loading invoices…</Card>
+      ) : filtered.length === 0 ? (
+        <EmptyState icon={Receipt} title="No invoices found" description={search ? 'Try another search term.' : 'Your first submitted invoice will appear here.'} action={search ? <Button variant="secondary" onClick={() => setSearch('')}>Clear search</Button> : undefined} />
+      ) : (
+        <>
+          <Card className="hidden overflow-hidden lg:block">
+            <DataTableViewport label="Vendor invoices" showHint={false}>
+              <table className="w-full min-w-[980px] text-left text-sm">
+                <thead className="border-b border-border/70 bg-secondary/55 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  <tr>{['Invoice', 'PO reference', 'Description', 'Amount', 'GST', 'Total', 'Submitted', 'Due date', 'Status'].map((heading) => <th key={heading} className="px-4 py-3">{heading}</th>)}</tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {filtered.map((invoice) => (
+                    <tr key={invoice.id} className="transition-colors hover:bg-accent/35">
+                      <td className="px-4 py-3.5"><div className="flex items-center gap-2.5"><span className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary"><FileText className="size-4" /></span><div><div className="font-semibold text-primary">{invoice.invoiceNumber}</div><div className="mt-0.5 text-[11px] text-muted-foreground">{invoice.rfqNumber}</div></div></div></td>
+                      <td className="px-4 py-3.5 font-medium">{invoice.poNumber}</td>
+                      <td className="max-w-48 truncate px-4 py-3.5 text-xs text-muted-foreground" title={invoice.description}>{invoice.description}</td>
+                      <td className="px-4 py-3.5 font-medium tabular-nums">{amount(invoice.amount)}</td>
+                      <td className="px-4 py-3.5 text-xs text-muted-foreground tabular-nums">{amount(invoice.gst)}</td>
+                      <td className="px-4 py-3.5 font-semibold tabular-nums">{amount(invoice.totalAmount)} <CurrencyBadge currency={displayCurrency} size="sm" /></td>
+                      <td className="px-4 py-3.5 text-xs text-muted-foreground"><span className="flex items-center gap-1"><Calendar className="size-3" />{formatDate(invoice.submittedDate)}</span></td>
+                      <td className="px-4 py-3.5 text-xs text-muted-foreground"><div>{formatDate(invoice.dueDate)}</div>{invoice.paymentDate && <div className="mt-1 font-semibold text-emerald-600">Paid {formatDate(invoice.paymentDate)}</div>}</td>
+                      <td className="px-4 py-3.5"><StatusBadge status={invoice.status} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </DataTableViewport>
+          </Card>
+
+          <div className="grid gap-3 lg:hidden">
+            {filtered.map((invoice) => (
+              <Card key={invoice.id} className="p-4">
+                <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="font-semibold text-primary">{invoice.invoiceNumber}</div><div className="mt-1 truncate text-xs text-muted-foreground">PO {invoice.poNumber} · {invoice.rfqNumber}</div></div><StatusBadge status={invoice.status} /></div>
+                <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-muted-foreground">{invoice.description}</p>
+                <dl className="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-secondary/45 p-3 text-xs">
+                  <div><dt className="text-muted-foreground">Total</dt><dd className="mt-1 font-semibold tabular-nums">{amount(invoice.totalAmount)}</dd></div>
+                  <div><dt className="text-muted-foreground">GST</dt><dd className="mt-1 font-medium tabular-nums">{amount(invoice.gst)}</dd></div>
+                  <div><dt className="text-muted-foreground">Submitted</dt><dd className="mt-1 font-medium">{formatDate(invoice.submittedDate)}</dd></div>
+                  <div><dt className="text-muted-foreground">Due</dt><dd className="mt-1 font-medium">{formatDate(invoice.dueDate)}</dd></div>
+                </dl>
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
+    </PageFrame>
   );
 }

@@ -807,7 +807,7 @@ export default function UsersPage() {
   }, [summary.active, maxUsersAllowed]);
 
   return (
-    <div className="users-page">
+    <div className="users-page w-full max-w-full m-0 p-0 flex flex-col gap-6 text-foreground">
       {error && <MessageStrip type="error">{error}</MessageStrip>}
       {pageMsg && (
         <MessageStrip
@@ -820,30 +820,19 @@ export default function UsersPage() {
       )}
 
       {/* ── Header ─────────────────────────────────────────── */}
-      <div className="users-page__header">
+      <div className="users-page__header flex items-center justify-between flex-wrap gap-4">
         <div className="users-page__header-left">
-          <h1>User Management</h1>
-          <p>Manage users, assign roles, and control access</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground m-0 mb-1">User Management</h1>
+          <p className="text-sm text-muted-foreground m-0">Manage users, assign roles, and control access</p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '8px 14px',
-            borderRadius: 'var(--radius-md, 8px)',
-            background: isUserLimitReached ? 'rgba(239, 68, 68, 0.12)' : 'var(--surface-hover)',
-            border: isUserLimitReached ? '1px solid #ef4444' : '1px solid var(--border)',
-            color: isUserLimitReached ? '#ef4444' : 'var(--text-primary)',
-            fontSize: '13px',
-            fontWeight: 700,
-          }}>
+        <div className="flex items-center gap-3">
+          <div className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${isUserLimitReached ? 'bg-red-500/10 border-red-500 text-red-500' : 'bg-muted/60 border-border text-foreground'}`}>
             <Users size={16} />
             <span>Active Users: {summary.active} / {maxUsersAllowed} Limit</span>
           </div>
 
           <button
-            className="users-page__add-btn"
+            className="users-page__add-btn inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm bg-gradient-to-r from-primary to-primary-600 text-white shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all"
             onClick={(!isUserLimitReached && hasPermission('User Management', 'canCreate')) ? openAddModal : undefined}
             disabled={isUserLimitReached || !hasPermission('User Management', 'canCreate')}
             title={!hasPermission('User Management', 'canCreate') ? 'Admin has not allowed this action. You do not have permission to add users.' : isUserLimitReached ? 'Company user limit reached. Please contact Procnex Support to upgrade.' : 'Add new staff user'}
@@ -856,7 +845,7 @@ export default function UsersPage() {
       </div>
 
       {isUserLimitReached && (
-        <div style={{ marginBottom: '16px' }}>
+        <div className="mb-4">
           <MessageStrip type="warning">
             ⚠️ <strong>Company User Limit Reached:</strong> Your organization has reached its maximum active user limit ({summary.active} / {maxUsersAllowed} active users). Please contact your service provider (Procnex Support) to upgrade your user limit.
           </MessageStrip>
@@ -864,7 +853,7 @@ export default function UsersPage() {
       )}
 
       {/* ── Summary Cards ──────────────────────────────────── */}
-      <div className="users-summary">
+      <div className="users-summary grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { icon: <Users size={22} />, val: summary.total, label: 'Total Users', cls: 'total', mode: 'all' as const },
           { icon: <UserCheck size={22} />, val: summary.active, label: 'Active', cls: 'active', mode: 'active' as const },
@@ -873,17 +862,16 @@ export default function UsersPage() {
         ].map((c) => (
           <div
             key={c.cls}
-            className={`users-summary-card ${statusFilter === c.mode ? 'users-summary-card--active' : ''}`}
+            className={`users-summary-card relative overflow-hidden flex items-center gap-4 p-5 rounded-2xl bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border border-white/80 dark:border-white/10 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer ${statusFilter === c.mode ? 'users-summary-card--active border-primary ring-2 ring-primary/20 bg-primary/5' : ''}`}
             onClick={() => {
               setStatusFilter((prev) => prev === c.mode ? 'all' : c.mode);
               setCurrentPage(1);
             }}
-            style={{ cursor: 'pointer' }}
           >
-            <div className={`users-summary-card__icon users-summary-card__icon--${c.cls}`}>{c.icon}</div>
-            <div className="users-summary-card__info">
-              <span className="users-summary-card__value">{c.val}</span>
-              <span className="users-summary-card__label">{c.label}</span>
+            <div className={`users-summary-card__icon users-summary-card__icon--${c.cls} w-11 h-11 rounded-xl flex items-center justify-center shrink-0`}>{c.icon}</div>
+            <div className="users-summary-card__info flex flex-col gap-0.5">
+              <span className="users-summary-card__value text-2xl font-extrabold tracking-tight text-foreground">{c.val}</span>
+              <span className="users-summary-card__label text-xs font-bold uppercase tracking-wider text-muted-foreground">{c.label}</span>
             </div>
           </div>
         ))}

@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useAuth } from '../../context/AuthContext';
@@ -27,8 +27,7 @@ import {
   Type,
   AlignLeft,
   Trash2,
-  Maximize2,
-  Minimize2,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   MODULE_CAPABILITIES,
@@ -43,7 +42,6 @@ import {
 } from '../../config/modulePermissions';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { CardSkeleton } from '../../components/shared/Skeleton';
-import './RolesPermissionsPage.css';
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -131,10 +129,10 @@ function PermissionDisplayChip({
   granted: boolean;
 }) {
   if (!moduleSupports(module, field)) {
-    return <span className="roles-perm-chip roles-perm-chip--na">—</span>;
+    return <span className="inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold bg-muted text-muted-foreground">—</span>;
   }
   return (
-    <span className={`roles-perm-chip ${granted ? 'roles-perm-chip--granted' : 'roles-perm-chip--denied'}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ${granted ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-rose-500/10 text-rose-700 dark:text-rose-300'}`}>
       {granted ? <Unlock size={12} /> : <Lock size={12} />}
       {granted ? 'Yes' : 'No'}
     </span>
@@ -153,14 +151,20 @@ function PermissionToggleCell({
   onToggle: () => void;
 }) {
   if (!moduleSupports(module, field)) {
-    return <span className="roles-perm-chip roles-perm-chip--na" title="Not applicable">—</span>;
+    return <span className="inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold bg-muted text-muted-foreground" title="Not applicable">—</span>;
   }
   return (
-    <div className="roles-modal-toggle" onClick={onToggle} role="button" tabIndex={0}>
-      <div className={`roles-modal-toggle__track ${value ? 'roles-modal-toggle__track--active' : ''}`}>
-        <div className="roles-modal-toggle__knob" />
-      </div>
-    </div>
+    <button
+      type="button"
+      className="inline-flex min-h-10 items-center"
+      onClick={onToggle}
+      aria-pressed={value}
+      aria-label={`${field.replace('can', '')} permission for ${module}`}
+    >
+      <span className={`relative h-6 w-11 rounded-full transition-colors ${value ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-700'}`}>
+        <span className={`absolute top-1 left-1 size-4 rounded-full bg-white shadow transition-transform ${value ? 'translate-x-5' : 'translate-x-0'}`} />
+      </span>
+    </button>
   );
 }
 
@@ -169,24 +173,21 @@ function PermissionMatrixRow({
   striped,
   mode,
   onToggle,
-  variant = 'card',
 }: {
   perm: ModulePermission;
   striped: boolean;
   mode: 'view' | 'edit';
   onToggle?: (field: PermissionField) => void;
-  variant?: 'card' | 'modal';
 }) {
   const hint = getModuleCapability(perm.module).hint;
-  const p = variant === 'modal' ? 'roles-modal-matrix' : 'roles-perm-matrix';
   return (
-    <div className={`${p}__row ${striped ? `${p}__row--striped` : ''}`}>
-      <div className={`${p}__module-col`}>
-        <span className={`${p}__module-name`}>{perm.module}</span>
-        {hint && <span className={`${p}__module-hint`}>{hint}</span>}
+    <div className={`grid min-w-[680px] grid-cols-[minmax(220px,1fr)_110px_110px_110px] items-center border-b border-border/60 px-4 py-3 ${striped ? 'bg-muted/25' : ''}`}>
+      <div className="min-w-0 pr-3">
+        <span className="block text-xs font-semibold text-foreground">{perm.module}</span>
+        {hint && <span className="mt-0.5 block text-[11px] text-muted-foreground">{hint}</span>}
       </div>
       {(['canView', 'canCreate', 'canApprove'] as PermissionField[]).map((field) => (
-        <div key={field} className={`${p}__perm-col`}>
+        <div key={field} className="flex justify-center">
           {mode === 'view' ? (
             <PermissionDisplayChip module={perm.module} field={field} granted={perm[field]} />
           ) : (
@@ -211,14 +212,6 @@ const ROLE_ICON_MAP: Record<RoleName, React.ReactNode> = {
   Staff: <Users size={20} />,
 };
 
-const ROLE_CLASS_MAP: Record<RoleName, string> = {
-  'Super Admin': 'super-admin',
-  Administrator: 'administrator',
-  Manager: 'manager',
-  'Finance Approver': 'finance-approver',
-  Staff: 'staff',
-};
-
 // ─── Component ──────────────────────────────────────────────
 
 export default function RolesPermissionsPage() {
@@ -237,7 +230,6 @@ export default function RolesPermissionsPage() {
   const [expandedRole, setExpandedRole] = useState<number | null>(null);
   const [editingRole, setEditingRole] = useState<RoleData | null>(null);
   const [editPermissions, setEditPermissions] = useState<ModulePermission[]>([]);
-  const [isFullScreen, setIsFullScreen] = useState(false);
 
   // Modules list inline expand
   const [showModulesList, setShowModulesList] = useState(false);
@@ -268,13 +260,11 @@ export default function RolesPermissionsPage() {
   // Filter
   const filtered = useMemo(() => {
     let result = roles;
-    // Filter by type
     if (roleFilter === 'system') {
       result = result.filter((r) => r.isSystem);
     } else if (roleFilter === 'custom') {
       result = result.filter((r) => !r.isSystem);
     }
-    // Filter by search
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter(
@@ -296,7 +286,6 @@ export default function RolesPermissionsPage() {
     setSaveError(null);
     setEditingRole(role);
     setEditPermissions(role.permissions.map((p) => ({ ...p })));
-    setIsFullScreen(true);
   }, []);
 
   // Toggle a permission in the edit modal
@@ -359,7 +348,6 @@ export default function RolesPermissionsPage() {
     setNewRoleName('');
     setNewRoleDesc('');
     setNewRolePerms(buildDefaultPermissions());
-    setIsFullScreen(true);
     setShowCreateModal(true);
   }, []);
 
@@ -407,20 +395,20 @@ export default function RolesPermissionsPage() {
   }, [deleteTarget, expandedRole, forceRefresh]);
 
   return (
-    <div className="roles-page">
+    <div className="flex w-full flex-col gap-6 pb-10">
       {error && <MessageStrip type="error">{error}</MessageStrip>}
+      
       {/* ── Header ─────────────────────────────────────────── */}
-      <div className="roles-page__header">
-        <div className="roles-page__header-left">
-          <h1>Roles & Permissions</h1>
-          <p>Manage roles, define access levels, and configure module permissions</p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-[-0.035em] text-foreground">Roles & Permissions</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Manage roles, define access levels, and configure module permissions</p>
         </div>
         <button
-          className={`roles-page__add-btn ${!hasPermission('Roles & Permissions', 'canCreate') ? 'roles-page__add-btn--disabled' : ''}`}
-          onClick={hasPermission('Roles & Permissions', 'canCreate') ? openCreateModal : undefined}
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={openCreateModal}
           disabled={!hasPermission('Roles & Permissions', 'canCreate')}
           title={!hasPermission('Roles & Permissions', 'canCreate') ? 'Admin has not allowed this action. You do not have permission to create roles.' : 'Create new role'}
-          style={!hasPermission('Roles & Permissions', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
         >
           <Plus size={18} />
           Create Role
@@ -428,101 +416,92 @@ export default function RolesPermissionsPage() {
       </div>
 
       {/* ── Summary Cards ──────────────────────────────────── */}
-      <div className="roles-summary">
-        <div
-          className={`roles-summary-card ${roleFilter === 'all' && !showModulesList ? 'roles-summary-card--active' : ''}`}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <button
+          type="button"
+          className={`flex min-h-24 items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md ${roleFilter === 'all' && !showModulesList ? 'border-primary ring-2 ring-primary/10' : 'border-border/70'}`}
           onClick={() => { setRoleFilter('all'); setShowModulesList(false); }}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { setRoleFilter('all'); setShowModulesList(false); } }}
-          title="Show all roles"
         >
-          <div className="roles-summary-card__icon roles-summary-card__icon--total">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <Shield size={22} />
           </div>
-          <div className="roles-summary-card__info">
-            <span className="roles-summary-card__value">{summary.totalRoles}</span>
-            <span className="roles-summary-card__label">Total Roles</span>
+          <div className="flex flex-col">
+            <span className="text-2xl font-semibold tracking-tight text-foreground">{summary.totalRoles}</span>
+            <span className="text-sm text-muted-foreground">Total Roles</span>
           </div>
-        </div>
-        <div
-          className={`roles-summary-card ${showModulesList ? 'roles-summary-card--active' : ''}`}
-          onClick={() => setShowModulesList((prev) => !prev)}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setShowModulesList((prev) => !prev); }}
-          title={showModulesList ? 'Hide modules list' : 'Show all modules and their capabilities'}
+        </button>
+
+        <button
+          type="button"
+          className={`flex min-h-24 items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md ${showModulesList ? 'border-primary ring-2 ring-primary/10' : 'border-border/70'}`}
+          onClick={() => { setRoleFilter('all'); setShowModulesList((prev) => !prev); }}
         >
-          <div className="roles-summary-card__icon roles-summary-card__icon--perms">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600">
             <Lock size={22} />
           </div>
-          <div className="roles-summary-card__info">
-            <span className="roles-summary-card__value">{PERMISSION_MODULE_NAMES.length}</span>
-            <span className="roles-summary-card__label">Modules</span>
+          <div className="flex flex-col">
+            <span className="text-2xl font-semibold tracking-tight text-foreground">{PERMISSION_MODULE_NAMES.length}</span>
+            <span className="text-sm text-muted-foreground">Modules</span>
           </div>
-        </div>
-        <div
-          className={`roles-summary-card ${roleFilter === 'system' ? 'roles-summary-card--active' : ''}`}
+        </button>
+
+        <button
+          type="button"
+          className={`flex min-h-24 items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md ${roleFilter === 'system' ? 'border-primary ring-2 ring-primary/10' : 'border-border/70'}`}
           onClick={() => { setRoleFilter(roleFilter === 'system' ? 'all' : 'system'); setShowModulesList(false); }}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { setRoleFilter(roleFilter === 'system' ? 'all' : 'system'); setShowModulesList(false); } }}
-          title="Show only system roles"
         >
-          <div className="roles-summary-card__icon roles-summary-card__icon--system">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600">
             <ShieldCheck size={22} />
           </div>
-          <div className="roles-summary-card__info">
-            <span className="roles-summary-card__value">{summary.systemRoles}</span>
-            <span className="roles-summary-card__label">System Roles</span>
+          <div className="flex flex-col">
+            <span className="text-2xl font-semibold tracking-tight text-foreground">{summary.systemRoles}</span>
+            <span className="text-sm text-muted-foreground">System Roles</span>
           </div>
-        </div>
-        <div
-          className={`roles-summary-card ${roleFilter === 'custom' ? 'roles-summary-card--active' : ''}`}
+        </button>
+
+        <button
+          type="button"
+          className={`flex min-h-24 items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md ${roleFilter === 'custom' ? 'border-primary ring-2 ring-primary/10' : 'border-border/70'}`}
           onClick={() => { setRoleFilter(roleFilter === 'custom' ? 'all' : 'custom'); setShowModulesList(false); }}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { setRoleFilter(roleFilter === 'custom' ? 'all' : 'custom'); setShowModulesList(false); } }}
-          title="Show only custom roles"
         >
-          <div className="roles-summary-card__icon roles-summary-card__icon--custom">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-violet-500/10 text-violet-600">
             <ShieldAlert size={22} />
           </div>
-          <div className="roles-summary-card__info">
-            <span className="roles-summary-card__value">{summary.customRoles}</span>
-            <span className="roles-summary-card__label">Custom Roles</span>
+          <div className="flex flex-col">
+            <span className="text-2xl font-semibold tracking-tight text-foreground">{summary.customRoles}</span>
+            <span className="text-sm text-muted-foreground">Custom Roles</span>
           </div>
-        </div>
+        </button>
       </div>
 
       {/* ── Inline Modules List ────────────────────────────── */}
       {showModulesList && (
-        <div className="roles-modules-list">
-          <div className="roles-modules-list__header">
-            <Lock size={16} />
+        <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
+          <div className="flex items-center gap-2 border-b border-border/70 bg-muted/30 px-4 py-3 text-sm font-semibold text-foreground">
+            <Lock size={16} className="text-primary" />
             <span>All Modules ({PERMISSION_MODULE_NAMES.length})</span>
           </div>
-          <div className="roles-modules-matrix">
-            <div className="roles-modules-matrix__header">
-              <div className="roles-modules-matrix__module-col">Module</div>
-              <div className="roles-modules-matrix__perm-col">View</div>
-              <div className="roles-modules-matrix__perm-col">Create</div>
-              <div className="roles-modules-matrix__perm-col">Approve</div>
+          <div className="overflow-x-auto">
+            <div className="grid min-w-[680px] grid-cols-[minmax(220px,1fr)_110px_110px_110px] border-b border-border/70 bg-muted/40 px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              <div className="min-w-0 pr-3">Module</div>
+              <div className="flex justify-center">View</div>
+              <div className="flex justify-center">Create</div>
+              <div className="flex justify-center">Approve</div>
             </div>
             {MODULE_CAPABILITIES.map((mod, idx) => (
               <div
                 key={mod.module}
-                className={`roles-modules-matrix__row ${idx % 2 === 0 ? 'roles-modules-matrix__row--striped' : ''}`}
+                className={`grid min-w-[680px] grid-cols-[minmax(220px,1fr)_110px_110px_110px] items-center border-b border-border/60 px-4 py-3 ${idx % 2 === 0 ? 'bg-muted/15' : ''}`}
               >
-                <div className="roles-modules-matrix__module-col">
-                  <span className="roles-modules-matrix__module-name">{mod.module}</span>
-                  <span className="roles-modules-matrix__module-hint">{mod.hint}</span>
+                <div className="min-w-0 pr-3">
+                  <span className="block text-xs font-semibold text-foreground">{mod.module}</span>
+                  <span className="mt-0.5 block text-[11px] text-muted-foreground">{mod.hint}</span>
                 </div>
                 {(['canView', 'canCreate', 'canApprove'] as PermissionField[]).map((field) => {
                   const supported = mod.supports.includes(field);
                   return (
-                    <div key={field} className="roles-modules-matrix__perm-col">
-                      <span className={`roles-module-tag ${supported ? 'roles-module-tag--yes' : 'roles-module-tag--no'}`}>
+                    <div key={field} className="flex justify-center">
+                      <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${supported ? 'bg-emerald-500/10 text-emerald-600' : 'bg-muted text-muted-foreground'}`}>
                         {supported ? field.replace('can', '') : '—'}
                       </span>
                     </div>
@@ -535,11 +514,12 @@ export default function RolesPermissionsPage() {
       )}
 
       {/* ── Toolbar ────────────────────────────────────────── */}
-      <div className="roles-toolbar">
-        <div className="roles-toolbar__search">
-          <Search size={16} className="roles-toolbar__search-icon" />
+      <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative min-w-0 flex-1 sm:max-w-xl">
+          <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
-            type="text"
+            className="min-h-11 w-full rounded-xl border border-input bg-background pl-10 pr-4 text-sm outline-none transition placeholder:text-muted-foreground focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+            type="search"
             placeholder="Search roles by name or description..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -548,208 +528,153 @@ export default function RolesPermissionsPage() {
       </div>
 
       {/* ── Role Cards ─────────────────────────────────────── */}
-      <div className="roles-cards">
+      <div className="space-y-3">
         {loading ? (
           <CardSkeleton count={3} />
         ) : (
           filtered.map((role) => {
-          const isExpanded = expandedRole === role.id;
-          const { granted: permCount, applicable: permTotal } = countGrantedPermissions(role.permissions);
-          const permPercent = permTotal > 0 ? Math.round((permCount / permTotal) * 100) : 0;
+            const isExpanded = expandedRole === role.id;
+            const { granted: permCount, applicable: permTotal } = countGrantedPermissions(role.permissions);
+            const permPercent = permTotal > 0 ? Math.round((permCount / permTotal) * 100) : 0;
 
-          return (
-            <div
-              key={role.id}
-              className={`roles-card ${isExpanded ? 'roles-card--expanded' : ''}`}
-            >
-              {/* Card Header */}
-              <div className="roles-card__header" onClick={() => toggleExpand(role.id)}>
-                <div className="roles-card__header-left">
-                  <div className={`roles-card__icon roles-card__icon--${ROLE_CLASS_MAP[role.iconRole] ?? 'staff'}`}>
-                    {ROLE_ICON_MAP[role.iconRole] ?? <Users size={20} />}
-                  </div>
-                  <div className="roles-card__meta">
-                    <div className="roles-card__name-row">
-                      <span className="roles-card__name">{role.roleName}</span>
-                      {role.isSystem && (
-                        <span className="roles-card__system-badge">
-                          <Lock size={10} />
-                          System
-                        </span>
-                      )}
+            return (
+              <div
+                key={role.id}
+                className={`overflow-hidden rounded-2xl border bg-card shadow-sm transition ${isExpanded ? 'border-primary/40 ring-2 ring-primary/10' : 'border-border/70'}`}
+              >
+                {/* Card Header */}
+                <div
+                  className="flex cursor-pointer items-center justify-between gap-4 p-5 transition hover:bg-muted/20"
+                  onClick={() => toggleExpand(role.id)}
+                >
+                  <div className="flex min-w-0 items-center gap-4">
+                    <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      {ROLE_ICON_MAP[role.iconRole] ?? <Users size={20} />}
                     </div>
-                    <span className="roles-card__desc">{role.description}</span>
-                  </div>
-                </div>
-                <div className="roles-card__header-right">
-                  <div className="roles-card__stats">
-                    <div className="roles-card__stat">
-                      <Users size={14} />
-                      <span>{role.userCount} user{role.userCount !== 1 ? 's' : ''}</span>
-                    </div>
-                    <div className="roles-card__perm-bar-wrap">
-                      <div className="roles-card__perm-bar">
-                        <div
-                          className={`roles-card__perm-fill roles-card__perm-fill--${ROLE_CLASS_MAP[role.iconRole] ?? 'staff'}`}
-                          style={{ width: `${permPercent}%` }}
-                        />
+                    <div className="flex min-w-0 flex-col">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate text-base font-semibold text-foreground">{role.roleName}</span>
+                        {role.isSystem && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                            <Lock size={10} />
+                            System
+                          </span>
+                        )}
                       </div>
-                      <span className="roles-card__perm-label">{permCount}/{permTotal} perms</span>
+                      <span className="mt-0.5 truncate text-xs text-muted-foreground">{role.description}</span>
                     </div>
                   </div>
-                  <div className="roles-card__actions">
-                    <>
+
+                  <div className="flex shrink-0 items-center gap-4">
+                    <div className="hidden items-center gap-4 sm:flex">
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                        <Users size={14} />
+                        <span>{role.userCount} user{role.userCount !== 1 ? 's' : ''}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="h-2 w-24 overflow-hidden rounded-full bg-muted">
+                          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${permPercent}%` }} />
+                        </div>
+                        <span className="text-xs font-semibold text-muted-foreground">{permCount}/{permTotal}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                       <button
-                        className="roles-card__action-btn"
-                        title={hasPermission('Roles & Permissions', 'canCreate') ? "Edit Permissions" : "Admin has not allowed this action. You do not have permission to edit roles."}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (hasPermission('Roles & Permissions', 'canCreate')) openEditModal(role);
-                        }}
+                        type="button"
+                        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-primary/10 hover:text-primary disabled:opacity-40"
+                        title="Edit Permissions"
+                        onClick={() => openEditModal(role)}
                         disabled={!hasPermission('Roles & Permissions', 'canCreate')}
-                        style={!hasPermission('Roles & Permissions', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                       >
                         <Edit3 size={15} />
                       </button>
                       {role.roleName !== 'Super Admin' && canDeleteRoles && (
                         <button
-                          className="roles-card__action-btn roles-card__action-btn--danger"
-                          title={hasPermission('Roles & Permissions', 'canCreate') ? "Delete Role" : "Admin has not allowed this action. You do not have permission to delete roles."}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (hasPermission('Roles & Permissions', 'canCreate')) {
-                              setSaveError(null);
-                              setDeleteTarget(role);
-                            }
-                          }}
+                          type="button"
+                          className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
+                          title="Delete Role"
+                          onClick={() => setDeleteTarget(role)}
                           disabled={!hasPermission('Roles & Permissions', 'canCreate')}
-                          style={!hasPermission('Roles & Permissions', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                         >
                           <Trash2 size={15} />
                         </button>
                       )}
-                    </>
-                    <button
-                      className="roles-card__action-btn"
-                      title="View Permissions"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleExpand(role.id);
-                      }}
-                    >
-                      <Eye size={15} />
-                    </button>
-                    <div className="roles-card__chevron">
-                      {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                      <button
+                        type="button"
+                        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted"
+                        onClick={() => toggleExpand(role.id)}
+                      >
+                        {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                      </button>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Expanded Permission Matrix */}
-              {isExpanded && (
-                <div className="roles-card__body">
-                  <div className="roles-perm-matrix">
-                    <div className="roles-perm-matrix__header">
-                      <div className="roles-perm-matrix__module-col">Module</div>
-                      <div className="roles-perm-matrix__perm-col">
-                        <Eye size={13} />
-                        <span>View</span>
+                {/* Expanded Matrix */}
+                {isExpanded && (
+                  <div className="border-t border-border/70 bg-muted/10 p-5">
+                    <div className="overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm">
+                      <div className="grid min-w-[680px] grid-cols-[minmax(220px,1fr)_110px_110px_110px] border-b border-border/70 bg-muted/40 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        <div>Module</div>
+                        <div className="flex justify-center">View</div>
+                        <div className="flex justify-center">Create</div>
+                        <div className="flex justify-center">Approve</div>
                       </div>
-                      <div className="roles-perm-matrix__perm-col">
-                        <Plus size={13} />
-                        <span>Create</span>
-                      </div>
-                      <div className="roles-perm-matrix__perm-col">
-                        <Check size={13} />
-                        <span>Approve</span>
-                      </div>
+                      {role.permissions.map((perm, idx) => (
+                        <PermissionMatrixRow
+                          key={perm.module}
+                          perm={perm}
+                          striped={idx % 2 === 0}
+                          mode="view"
+                        />
+                      ))}
                     </div>
-                    {role.permissions.map((perm, idx) => (
-                      <PermissionMatrixRow
-                        key={perm.module}
-                        perm={perm}
-                        striped={idx % 2 === 0}
-                        mode="view"
-                      />
-                    ))}
                   </div>
-                  <div className="roles-card__body-actions">
-                    <button
-                      className="roles-card__edit-btn"
-                      onClick={() => hasPermission('Roles & Permissions', 'canCreate') && openEditModal(role)}
-                      disabled={!hasPermission('Roles & Permissions', 'canCreate')}
-                      title={!hasPermission('Roles & Permissions', 'canCreate') ? 'Admin has not allowed this action. You do not have permission to edit roles.' : undefined}
-                      style={!hasPermission('Roles & Permissions', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                    >
-                      <Edit3 size={15} />
-                      Edit Permissions
-                    </button>
-                  </div>
-                  {role.isSystem && (
-                    <div className="roles-card__system-notice">
-                      <Info size={14} />
-                      <span>System role — changes will affect all users with this role.</span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })
+                )}
+              </div>
+            );
+          })
         )}
       </div>
 
-      {filtered.length === 0 && (
-        <div className="roles-empty">
-          <div className="roles-empty__icon">
-            <Shield size={48} />
+      {filtered.length === 0 && !loading && (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/80 bg-card py-12 text-center shadow-sm">
+          <div className="flex size-14 items-center justify-center rounded-2xl bg-muted/60 text-muted-foreground">
+            <Shield size={28} />
           </div>
-          <div className="roles-empty__title">No roles found</div>
-          <div className="roles-empty__desc">
-            {search ? 'Try adjusting your search.' : 'Create a new role to get started.'}
-          </div>
+          <h3 className="mt-4 text-base font-semibold text-foreground">No roles found</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Try adjusting your filter or search criteria.</p>
         </div>
       )}
 
       {/* ── Edit Permissions Modal ──────────────────────────── */}
       {editingRole && (
-        <div className="roles-modal-backdrop" onClick={() => { setEditingRole(null); setIsFullScreen(false); }}>
-          <div className={`roles-modal ${isFullScreen ? 'roles-modal--fullscreen' : ''}`} onClick={(e) => e.stopPropagation()}>
-            <div className="roles-modal__header">
-              <div className="roles-modal__title">
-                <Shield size={20} />
-                <span>Edit Permissions — {editingRole.roleName}</span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setEditingRole(null)}>
+          <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-border/70 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Shield size={20} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-foreground">Edit Permissions</h2>
+                  <p className="text-xs text-muted-foreground">Configure access level for role: <span className="font-semibold text-foreground">{editingRole.roleName}</span></p>
+                </div>
               </div>
-              <div className="roles-modal__header-actions">
-                <button
-                  type="button"
-                  className="roles-modal__fullscreen-btn"
-                  onClick={() => setIsFullScreen((prev) => !prev)}
-                  title={isFullScreen ? 'Exit Full Screen' : 'Full Screen'}
-                >
-                  {isFullScreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
-                </button>
-                <button className="roles-modal__close" onClick={() => { setEditingRole(null); setIsFullScreen(false); }}>
-                  <X size={18} />
-                </button>
-              </div>
+              <button type="button" className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted" onClick={() => setEditingRole(null)}>
+                <X size={18} />
+              </button>
             </div>
 
-            <div className="roles-modal__info-bar">
-              <Info size={14} />
-              <span>
-                Only relevant actions are shown per module (— = not applicable). Turning off View also clears Create and Approve for that module.
-              </span>
-            </div>
-
-            <div className="roles-modal__body">
-              <div className="roles-modal-matrix">
-                <div className="roles-modal-matrix__header">
-                  <div className="roles-modal-matrix__module-col">Module</div>
-                  <div className="roles-modal-matrix__perm-col">View</div>
-                  <div className="roles-modal-matrix__perm-col">Create</div>
-                  <div className="roles-modal-matrix__perm-col">Approve</div>
+            <div className="flex-1 overflow-y-auto p-6">
+              {saveError && <MessageStrip type="error" className="mb-4">{saveError}</MessageStrip>}
+              <div className="overflow-hidden rounded-xl border border-border/70 bg-card">
+                <div className="grid min-w-[680px] grid-cols-[minmax(220px,1fr)_110px_110px_110px] border-b border-border/70 bg-muted/40 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <div>Module</div>
+                  <div className="flex justify-center">View</div>
+                  <div className="flex justify-center">Create</div>
+                  <div className="flex justify-center">Approve</div>
                 </div>
                 {editPermissions.map((perm, idx) => (
                   <PermissionMatrixRow
@@ -757,33 +682,16 @@ export default function RolesPermissionsPage() {
                     perm={perm}
                     striped={idx % 2 === 0}
                     mode="edit"
-                    variant="modal"
                     onToggle={(field) => togglePermission(idx, field)}
                   />
                 ))}
               </div>
             </div>
 
-            {saveError && (
-              <MessageStrip type="error" compact style={{ margin: '0 24px' }}>
-                {saveError}
-              </MessageStrip>
-            )}
-            <div className="roles-modal__footer">
-              <button
-                className="roles-modal__btn roles-modal__btn--secondary"
-                onClick={() => setEditingRole(null)}
-                disabled={saving}
-              >
-                Cancel
-              </button>
-              <button
-                className="roles-modal__btn roles-modal__btn--primary"
-                onClick={savePermissions}
-                disabled={saving}
-              >
-                <Check size={16} />
-                {saving ? 'Saving…' : 'Save Permissions'}
+            <div className="flex items-center justify-end gap-3 border-t border-border/70 bg-muted/20 px-6 py-4">
+              <button type="button" className="min-h-11 rounded-xl border border-input bg-background px-5 text-sm font-semibold text-foreground transition hover:bg-muted" onClick={() => setEditingRole(null)} disabled={saving}>Cancel</button>
+              <button type="button" className="min-h-11 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50" onClick={savePermissions} disabled={saving}>
+                {saving ? 'Saving...' : 'Save Permissions'}
               </button>
             </div>
           </div>
@@ -792,149 +700,93 @@ export default function RolesPermissionsPage() {
 
       {/* ── Create Role Modal ───────────────────────────────── */}
       {showCreateModal && (
-        <div className="roles-modal-backdrop" onClick={() => { setShowCreateModal(false); setIsFullScreen(false); }}>
-          <div className={`roles-modal roles-modal--create ${isFullScreen ? 'roles-modal--fullscreen' : ''}`} onClick={(e) => e.stopPropagation()}>
-            <div className="roles-modal__header">
-              <div className="roles-modal__title">
-                <ShieldPlus size={20} />
-                <span>Create New Role</span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setShowCreateModal(false)}>
+          <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-border/70 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <ShieldPlus size={20} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-foreground">Create New Role</h2>
+                  <p className="text-xs text-muted-foreground">Define role name, description, and module permission rules</p>
+                </div>
               </div>
-              <div className="roles-modal__header-actions">
-                <button
-                  type="button"
-                  className="roles-modal__fullscreen-btn"
-                  onClick={() => setIsFullScreen((prev) => !prev)}
-                  title={isFullScreen ? 'Exit Full Screen' : 'Full Screen'}
-                >
-                  {isFullScreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
-                </button>
-                <button className="roles-modal__close" onClick={() => { setShowCreateModal(false); setIsFullScreen(false); }}>
-                  <X size={18} />
-                </button>
-              </div>
+              <button type="button" className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted" onClick={() => setShowCreateModal(false)}>
+                <X size={18} />
+              </button>
             </div>
 
-            <div className="roles-modal__body">
-              {/* Role details section */}
-              <div className="roles-create-fields">
-                <div className="roles-create-field">
-                  <label className="roles-create-field__label">
-                    <Type size={13} style={{ marginRight: 4 }} />
-                    Role Name <span>*</span>
-                  </label>
+            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+              {saveError && <MessageStrip type="error">{saveError}</MessageStrip>}
+              
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-foreground">Role Name *</label>
                   <input
-                    className="roles-create-field__input"
                     type="text"
-                    placeholder="e.g. Procurement Lead"
+                    className="min-h-11 w-full rounded-xl border border-input bg-background px-4 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                    placeholder="e.g. Regional Procurement Officer"
                     value={newRoleName}
                     onChange={(e) => setNewRoleName(e.target.value)}
                   />
                 </div>
-                <div className="roles-create-field">
-                  <label className="roles-create-field__label">
-                    <AlignLeft size={13} style={{ marginRight: 4 }} />
-                    Description
-                  </label>
-                  <textarea
-                    className="roles-create-field__textarea"
-                    placeholder="Brief description of this role's responsibilities..."
-                    rows={3}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-foreground">Description</label>
+                  <input
+                    type="text"
+                    className="min-h-11 w-full rounded-xl border border-input bg-background px-4 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                    placeholder="Role responsibilities overview..."
                     value={newRoleDesc}
                     onChange={(e) => setNewRoleDesc(e.target.value)}
                   />
                 </div>
               </div>
 
-              {/* Permissions section */}
-              <div className="roles-create-perms-section">
-                <div className="roles-create-perms-section__title">
-                  <Shield size={15} />
-                  <span>Module Permissions</span>
+              <div className="overflow-hidden rounded-xl border border-border/70 bg-card">
+                <div className="grid min-w-[680px] grid-cols-[minmax(220px,1fr)_110px_110px_110px] border-b border-border/70 bg-muted/40 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <div>Module</div>
+                  <div className="flex justify-center">View</div>
+                  <div className="flex justify-center">Create</div>
+                  <div className="flex justify-center">Approve</div>
                 </div>
-                <div className="roles-modal-matrix">
-                  <div className="roles-modal-matrix__header">
-                    <div className="roles-modal-matrix__module-col">Module</div>
-                    <div className="roles-modal-matrix__perm-col">View</div>
-                    <div className="roles-modal-matrix__perm-col">Create</div>
-                    <div className="roles-modal-matrix__perm-col">Approve</div>
-                  </div>
-                  {newRolePerms.map((perm, idx) => (
-                    <PermissionMatrixRow
-                      key={perm.module}
-                      perm={perm}
-                      striped={idx % 2 === 0}
-                      mode="edit"
-                      variant="modal"
-                      onToggle={(field) => toggleNewPerm(idx, field)}
-                    />
-                  ))}
-                </div>
+                {newRolePerms.map((perm, idx) => (
+                  <PermissionMatrixRow
+                    key={perm.module}
+                    perm={perm}
+                    striped={idx % 2 === 0}
+                    mode="edit"
+                    onToggle={(field) => toggleNewPerm(idx, field)}
+                  />
+                ))}
               </div>
             </div>
 
-            {saveError && (
-              <MessageStrip type="error" compact style={{ margin: '0 24px' }}>
-                {saveError}
-              </MessageStrip>
-            )}
-            <div className="roles-modal__footer">
-              <button
-                className="roles-modal__btn roles-modal__btn--secondary"
-                onClick={() => setShowCreateModal(false)}
-                disabled={saving}
-              >
-                Cancel
-              </button>
-              <button
-                className="roles-modal__btn roles-modal__btn--primary"
-                disabled={!newRoleName.trim() || saving}
-                onClick={handleCreateRole}
-              >
-                <ShieldPlus size={16} />
-                {saving ? 'Creating…' : 'Create Role'}
+            <div className="flex items-center justify-end gap-3 border-t border-border/70 bg-muted/20 px-6 py-4">
+              <button type="button" className="min-h-11 rounded-xl border border-input bg-background px-5 text-sm font-semibold text-foreground transition hover:bg-muted" onClick={() => setShowCreateModal(false)} disabled={saving}>Cancel</button>
+              <button type="button" className="min-h-11 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50" onClick={handleCreateRole} disabled={saving || !newRoleName.trim()}>
+                {saving ? 'Creating...' : 'Create Role'}
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* ── Delete Confirmation Modal ──────────────────────── */}
       {deleteTarget && (
-        <div className="roles-modal-backdrop" onClick={() => !saving && setDeleteTarget(null)}>
-          <div className="roles-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="roles-modal__header">
-              <div className="roles-modal__title">
-                <Trash2 size={20} />
-                <span>Delete role?</span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setDeleteTarget(null)}>
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-border/70 bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6 text-center">
+              <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+                <AlertTriangle size={28} />
               </div>
-              <button className="roles-modal__close" onClick={() => setDeleteTarget(null)}>
-                <X size={18} />
-              </button>
+              <h3 className="mt-4 text-lg font-semibold text-foreground">Delete Role?</h3>
+              <p className="mt-2 text-sm text-muted-foreground">Are you sure you want to delete role <span className="font-semibold text-foreground">"{deleteTarget.roleName}"</span>? This action cannot be undone.</p>
             </div>
-            <div className="roles-modal__body">
-              <p style={{ margin: 0 }}>
-                Delete <strong>{deleteTarget.roleName}</strong>? This cannot be undone.
-              </p>
-              {saveError && (
-                <MessageStrip type="error" compact style={{ marginTop: 12 }}>
-                  {saveError}
-                </MessageStrip>
-              )}
-            </div>
-            <div className="roles-modal__footer">
-              <button
-                className="roles-modal__btn roles-modal__btn--secondary"
-                onClick={() => setDeleteTarget(null)}
-                disabled={saving}
-              >
-                Cancel
-              </button>
-              <button
-                className="roles-modal__btn roles-modal__btn--primary"
-                style={{ background: '#dc2626' }}
-                onClick={handleDeleteRole}
-                disabled={saving}
-              >
-                {saving ? 'Deleting…' : 'Delete Role'}
+            <div className="flex items-center justify-end gap-3 border-t border-border/70 bg-muted/20 px-6 py-4">
+              <button type="button" className="min-h-11 rounded-xl border border-input bg-background px-4 text-sm font-semibold text-foreground transition hover:bg-muted" onClick={() => setDeleteTarget(null)} disabled={saving}>Cancel</button>
+              <button type="button" className="min-h-11 rounded-xl bg-destructive px-4 text-sm font-semibold text-destructive-foreground transition hover:bg-destructive/90 disabled:opacity-50" onClick={handleDeleteRole} disabled={saving}>
+                {saving ? 'Deleting...' : 'Delete Role'}
               </button>
             </div>
           </div>

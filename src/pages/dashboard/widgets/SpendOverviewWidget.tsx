@@ -2,8 +2,7 @@ import { TrendingUp } from 'lucide-react';
 import { useServiceData } from '../../../hooks/useServiceData';
 import { dashboardService } from '../../../services/dashboardService';
 import { useCurrency } from '../../../components/shared/CurrencyMaster';
-
-// ─── Component ──────────────────────────────────────────────
+import { WidgetHeader, WidgetBody, WidgetLoading } from './WidgetShell';
 
 export default function SpendOverviewWidget() {
   const { formatAmount, companyDefaultCurrency } = useCurrency();
@@ -17,65 +16,57 @@ export default function SpendOverviewWidget() {
 
   return (
     <>
-      <div className="dash-card__header">
-        <span className="dash-card__title">
-          <TrendingUp size={16} />
-          Spend Overview
-        </span>
-        <span className="dash-card__subtitle">Monthly Trend & Breakdown</span>
-      </div>
-      <div className="dash-card__body">
-        <div className="spend-widget">
-          {/* Mini bar chart */}
-          <div className="spend-chart">
-            {loading ? (
-              <p className="dash-card__loading">Loading…</p>
-            ) : (
-              data.monthlyTrend.map((item) => (
-                <div key={item.month} className="spend-chart__col">
-                  <div className="spend-chart__bar-track">
+      <WidgetHeader icon={<TrendingUp size={16} />} title="Spend Overview" subtitle="Monthly Trend & Breakdown" />
+      <WidgetBody className="grid gap-6">
+        {loading ? (
+          <WidgetLoading />
+        ) : (
+          <>
+            {/* Bar chart */}
+            <div className="flex h-36 items-end gap-2 border-b border-border/70 pb-2 pt-4">
+              {data.monthlyTrend.map((item) => (
+                <div key={item.month} className="flex h-full flex-1 flex-col items-center justify-end gap-1.5">
+                  <div className="flex w-full flex-1 items-end justify-center rounded-lg bg-muted/40 p-0.5">
                     <div
-                      className="spend-chart__bar-fill"
+                      className="w-full rounded-md bg-primary transition-all duration-300 hover:bg-primary/80"
                       style={{ height: `${(item.value / maxValue) * 100}%` }}
+                      title={`${item.month}: ${formatAmount(item.value, companyDefaultCurrency)}`}
                     />
                   </div>
-                  <span className="spend-chart__label">{item.month}</span>
+                  <span className="text-[11px] font-medium text-muted-foreground">{item.month}</span>
                 </div>
-              ))
-            )}
-          </div>
+              ))}
+            </div>
 
-          {/* Category breakdown */}
-          <div className="spend-categories">
-            {loading ? null : (
-              data.categories.map((cat, idx) => {
-                const colors = ['#0a6ed1', '#059669', '#8b5cf6', '#e9730c', '#ec4899'];
-                const color = colors[idx % colors.length];
+            {/* Category breakdown */}
+            <div className="grid gap-3">
+              {data.categories.map((cat, idx) => {
+                const colors = ['bg-blue-500', 'bg-emerald-500', 'bg-violet-500', 'bg-amber-500', 'bg-pink-500'];
+                const colorClass = colors[idx % colors.length];
                 return (
-                  <div key={cat.label} className="spend-cat">
-                    <div className="spend-cat__info">
-                      <span
-                        className="spend-cat__dot"
-                        style={{ background: color }}
-                      />
-                      <span className="spend-cat__label">{cat.label}</span>
-                      <span className="spend-cat__amount">
+                  <div key={cat.label} className="grid gap-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2 font-medium text-foreground">
+                        <span className={`size-2 rounded-full ${colorClass}`} />
+                        <span>{cat.label}</span>
+                      </div>
+                      <span className="font-semibold tabular-nums text-foreground">
                         {formatAmount(cat.amount, companyDefaultCurrency)}
                       </span>
                     </div>
-                    <div className="spend-cat__bar-track">
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                       <div
-                        className="spend-cat__bar-fill"
-                        style={{ width: `${cat.percent}%`, background: color }}
+                        className={`h-full rounded-full ${colorClass} transition-all duration-300`}
+                        style={{ width: `${cat.percent}%` }}
                       />
                     </div>
                   </div>
                 );
-              })
-            )}
-          </div>
-        </div>
-      </div>
+              })}
+            </div>
+          </>
+        )}
+      </WidgetBody>
     </>
   );
 }

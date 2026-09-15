@@ -1,8 +1,128 @@
 @import './components/shared/MessageStrip.css';
 @import './components/shared/Skeleton.css';
+@import "tailwindcss";
 
-/* ─── Heliflow Premium Typography (Inter & JetBrains Mono) ─── */
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Roboto+Mono:ital,wght@0,100..700;1,100..700&display=swap');
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-new(root) {
+  z-index: 2147483646;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+@keyframes dialog-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes dialog-overlay-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes dialog-content-in {
+  from { opacity: 0; transform: translate(-50%, -48%) scale(0.975); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes dialog-content-out {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to { opacity: 0; transform: translate(-50%, -49%) scale(0.985); }
+}
+
+@keyframes skeleton-shimmer {
+  from { transform: translateX(-115%); }
+  to { transform: translateX(115%); }
+}
+
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-shimmer::after {
+  position: absolute;
+  inset: 0;
+  content: '';
+  background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, 0.52) 48%, transparent 76%);
+  animation: skeleton-shimmer 1.45s ease-in-out infinite;
+}
+
+[data-theme="dark"] .skeleton-shimmer::after {
+  background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, 0.075) 48%, transparent 76%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .motion-dialog-overlay[data-state="open"] {
+    animation: dialog-overlay-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .motion-dialog-overlay[data-state="closed"] {
+    animation: dialog-overlay-out 140ms ease-in;
+  }
+
+  .motion-dialog-content[data-state="open"] {
+    animation: dialog-content-in 210ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .motion-dialog-content[data-state="closed"] {
+    animation: dialog-content-out 140ms ease-in;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .skeleton-shimmer::after {
+    animation: none;
+  }
+}
+
+@theme inline {
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 3px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+}
 
 /* ═══════════════════════════════════════════════════════════
    Heliflow Design System — Light/Dark Mode
@@ -36,39 +156,58 @@
   --danger-500: #bb0000;
   --danger-700: #910000;
 
-  /* Fonts (Inter + JetBrains Mono) */
-  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-heading: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', Consolas, monospace;
+  /* Repnex-aligned typography */
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-heading: 'Geist Variable', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'SFMono-Regular', 'Cascadia Code', Consolas, monospace;
 
-  /* Sizing (SAP Fiori Sharp Edges Standard) */
-  --radius-sm: 4px;
-  --radius-md: 4px;
-  --radius-lg: 4px;
-  --radius-xl: 4px;
+  --radius: 14px;
+  --radius-sm: 8px;
+  --radius-md: 11px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
 }
 
 /* ─── Light Mode (default) ────────────────────────────────── */
 
 :root,
 [data-theme="light"] {
-  --surface: #ffffff;
-  --surface-elevated: #f7f7f7;
-  --surface-hover: #f0f0f0;
-  --surface-card: #ffffff;
+  --background: #f4f7fb;
+  --foreground: #152033;
+  --card: #ffffff;
+  --card-foreground: #152033;
+  --popover: #ffffff;
+  --popover-foreground: #152033;
+  --primary: var(--primary-500);
+  --primary-foreground: #ffffff;
+  --secondary: #eaf0f7;
+  --secondary-foreground: #25334a;
+  --muted: #edf2f7;
+  --muted-foreground: #68758a;
+  --accent: var(--primary-50);
+  --accent-foreground: var(--primary-700);
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --input: #ccd7e4;
+  --ring: var(--primary-400);
 
-  --text-primary: #32363a;
-  --text-secondary: #6a6d70;
-  --text-placeholder: #a9acae;
+  --surface: var(--background);
+  --surface-elevated: #edf2f7;
+  --surface-hover: #e6edf6;
+  --surface-card: rgba(255, 255, 255, 0.94);
+
+  --text-primary: var(--foreground);
+  --text-secondary: var(--muted-foreground);
+  --text-placeholder: #94a0b2;
   --text-inverse: #ffffff;
 
-  --border: #d9d9d9;
-  --border-strong: #bfbfbf;
-  --border-focus: #0a6ed1;
+  --border: #d6e0eb;
+  --border-strong: #becbd9;
+  --border-focus: var(--primary-500);
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --shadow-sm: 0 1px 2px rgba(15, 31, 53, 0.045);
+  --shadow-md: 0 10px 30px -18px rgba(15, 31, 53, 0.3), 0 2px 8px rgba(15, 31, 53, 0.05);
+  --shadow-lg: 0 24px 70px -32px rgba(15, 31, 53, 0.5), 0 10px 24px rgba(15, 31, 53, 0.08);
 
   --overlay: rgba(0, 0, 0, 0.5);
 
@@ -95,19 +234,38 @@
 /* ─── Dark Mode ───────────────────────────────────────────── */
 
 [data-theme="dark"] {
-  --surface: #12171c;
-  --surface-elevated: #1a2029;
-  --surface-hover: #222a35;
-  --surface-card: #1e2530;
+  --background: #0b111b;
+  --foreground: #edf3f9;
+  --card: #121a27;
+  --card-foreground: #edf3f9;
+  --popover: #151e2d;
+  --popover-foreground: #edf3f9;
+  --primary: #5ea2ff;
+  --primary-foreground: #07111f;
+  --secondary: #1a2534;
+  --secondary-foreground: #e4ebf3;
+  --muted: #182331;
+  --muted-foreground: #9ba9b9;
+  --accent: #1b3150;
+  --accent-foreground: #d7e8ff;
+  --destructive: #f05252;
+  --destructive-foreground: #ffffff;
+  --input: #334154;
+  --ring: #6eacff;
 
-  --text-primary: #e8eaed;
-  --text-secondary: #8d9399;
-  --text-placeholder: #5a6068;
-  --text-inverse: #12171c;
+  --surface: var(--background);
+  --surface-elevated: #101926;
+  --surface-hover: #1a2635;
+  --surface-card: rgba(18, 26, 39, 0.94);
 
-  --border: #2d3640;
-  --border-strong: #3d4a57;
-  --border-focus: #4db1ff;
+  --text-primary: var(--foreground);
+  --text-secondary: var(--muted-foreground);
+  --text-placeholder: #69778a;
+  --text-inverse: #0b111b;
+
+  --border: #283548;
+  --border-strong: #3a495d;
+  --border-focus: var(--ring);
 
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4);
@@ -137,6 +295,7 @@
 
 /* ─── Base Reset ──────────────────────────────────────────── */
 
+@layer base {
 *,
 *::before,
 *::after {
@@ -152,41 +311,16 @@ body,
 }
 
 html {
-  font-size: 16.5px;
+  font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 
-/* ═══════════════════════════════════════════════════════════
-   Global Heliflow Typography & Font Sizing Elevation
-   ═══════════════════════════════════════════════════════════ */
-
-/* Global Tables (Headers & Data Rows across all modules) */
-table th,
-[class*="-table"] th,
-[class*="__table"] th {
-  font-size: 12.5px;
-  font-weight: 700;
-}
-
-table td,
-[class*="-table"] td,
-[class*="__table"] td {
-  font-size: 14px;
-}
-
-/* Form Inputs, Selects & Searches across all modules */
-input:not([type="checkbox"]):not([type="radio"]),
-select,
-textarea {
-  font-size: 14.5px;
-}
-
 body {
-  font-family: var(--font-sans) !important;
-  font-size: 1rem;
-  line-height: 1.55;
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  line-height: 1.5;
   color: var(--text-primary);
   background: var(--surface);
   transition: background-color 0.25s ease, color 0.25s ease;
@@ -195,15 +329,15 @@ body {
 }
 
 button, input, select, textarea, table, th, td {
-  font-family: var(--font-sans) !important;
+  font-family: var(--font-sans);
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-heading) !important;
-  font-weight: 700;
-  line-height: 1.2;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  line-height: 1.15;
   color: var(--text-primary);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.025em;
 }
 
 /* SAP Fiori Tabular Numerals & Clean Letter-Spacing */
@@ -225,13 +359,32 @@ button {
   font-family: inherit;
 }
 
-button:focus {
-  outline: none;
+/* Native single-selects share one inset chevron across every feature surface. */
+select:not([multiple]):not(.appearance-none) {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-inline-end: 2.75rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-position: right 1rem center;
+  background-repeat: no-repeat;
+  background-size: 1rem;
+}
+
+[data-theme="dark"] select:not([multiple]):not(.appearance-none) {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+button:focus:not(:focus-visible) { outline: none; }
+
+:where(button, a, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--ring) 80%, white);
+  outline-offset: 2px;
 }
 
 img {
   max-width: 100%;
   display: block;
+}
 }
 
 /* ─── Sleek Custom Scrollbars ─────────────────────────────── */
@@ -309,230 +462,6 @@ img {
 
 /* ─── Modal Open State — Freeze Background Scroll ─────────── */
 
-
-.sap-dialog {
-  background: var(--surface-card, #ffffff);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.08);
-  width: 100%;
-  max-width: 480px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  animation: sapDialogPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  position: relative;
-}
-
-@keyframes sapDialogPop {
-  from {
-    opacity: 0;
-    transform: scale(0.94) translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-}
-
-/* ── Header ── */
-.sap-dialog__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 18px 22px;
-  border-bottom: 1px solid var(--border);
-  background: linear-gradient(180deg, var(--surface-elevated, #1e293b), var(--surface-card, #0f172a));
-}
-
-.sap-dialog__title-wrap {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.sap-dialog__icon-badge {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.sap-dialog__icon-badge--danger {
-  background: rgba(239, 68, 68, 0.14);
-  color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.25);
-}
-
-.sap-dialog__title-group {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.sap-dialog__title {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0;
-  letter-spacing: -0.2px;
-}
-
-.sap-dialog__subtitle {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-secondary);
-}
-
-.sap-dialog__close-btn {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text-secondary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.sap-dialog__close-btn:hover:not(:disabled) {
-  background: var(--surface-hover);
-  color: var(--text-primary);
-  border-color: var(--border-strong);
-}
-
-/* ── Body & Callout Box ── */
-.sap-dialog__body {
-  padding: 22px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.sap-dialog__callout {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 16px 18px;
-  border-radius: 10px;
-}
-
-.sap-dialog__callout--danger {
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-  border-left: 4px solid #ef4444;
-}
-
-.sap-dialog__callout-icon {
-  color: #ef4444;
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-.sap-dialog__callout-content {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.sap-dialog__message {
-  font-size: 14px;
-  color: var(--text-primary);
-  margin: 0;
-  line-height: 1.5;
-}
-
-.sap-dialog__message strong {
-  font-weight: 700;
-  color: #ef4444;
-}
-
-.sap-dialog__submessage {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin: 0;
-  line-height: 1.4;
-}
-
-/* ── Footer & Action Buttons ── */
-.sap-dialog__footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 14px 24px;
-  border-top: 1px solid var(--border);
-  background: var(--surface-elevated, #1e293b);
-}
-
-.sap-btn--danger {
-  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-  color: #ffffff !important;
-  border: 1px solid #dc2626 !important;
-  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
-}
-
-.sap-btn--danger:hover:not(:disabled) {
-}
-
-/* ─── Modal Open State — Freeze Background Scroll ─────────── */
-
-body.modal-open,
-html.modal-open {
-  overflow: hidden !important;
-}
-
-body.modal-open .app-layout__main,
-html.modal-open .app-layout__main,
-body.modal-open main,
-body.modal-open .app-content,
-body.modal-open .app-layout__content {
-  overflow: hidden !important;
-}
-
-/* Ensure modal containers use flex layout so modal bodies scroll properly with touchpad / mouse wheel */
-[class*="-modal-backdrop"] > [class*="-modal"],
-[class*="__modal-backdrop"] > [class*="-modal"] {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-/* Ensure modal bodies & scroll containers ALWAYS allow vertical scrolling */
-.quot-compare-modal__body,
-[class*="-modal__body"],
-[class*="-modal-body"],
-[class*="__modal-body"],
-[class*="-modal__content"],
-[class*="-modal-content"] {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto !important;
-  touch-action: pan-y !important;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Allow Recharts containers & surfaces to handle touch & wheel scroll events */
-.recharts-responsive-container,
-.recharts-wrapper,
-.recharts-surface,
-.rq-charts,
-.rq-charts__body {
-  touch-action: pan-y !important;
-}
-
-/* ═══════════════════════════════════════════════════════════
-   SAP Fiori Enterprise Dialog Design System
-   ═══════════════════════════════════════════════════════════ */
 
 .sap-dialog {
   background: var(--surface-card, #ffffff);
@@ -803,21 +732,6 @@ body.modal-open .app-layout__content {
   opacity: 1 !important;
 }
 
-/* ─── Stacked Sub-Modals & Custom Plan Dialogs (Always Above Parent Modals) ─── */
-.custom-plan-modal-backdrop,
-.view-plan-modal-backdrop,
-.vquot-modal-backdrop.custom-plan-modal-backdrop,
-.vquot-modal-backdrop.view-plan-modal-backdrop {
-  z-index: 999998 !important;
-}
-
-.custom-plan-modal,
-.view-plan-modal,
-.vquot-modal.custom-plan-modal,
-.vquot-modal.view-plan-modal {
-  z-index: 999999 !important;
-}
-
 /* ─── SAP Fiori Global Sharp Edges Enforcement (4px Radius Standard) ─── */
 [class*="-card"],
 [class*="__card"],
@@ -905,15 +819,15 @@ body.modal-open .app-layout__content {
    ═══════════════════════════════════════════════════════════ */
 
 :root {
-  --card-glow-border: #2563eb;
-  --card-glow-shadow: 0 4px 14px rgba(37, 99, 235, 0.15);
-  --card-glow-bg: rgba(37, 99, 235, 0.08);
+  --card-glow-border: #1a80e0;
+  --card-glow-shadow: 0 0 0 3px rgba(26, 128, 224, 0.12), 0 14px 34px -24px rgba(26, 128, 224, 0.5);
+  --card-glow-bg: rgba(26, 128, 224, 0.045);
 }
 
 [data-theme="dark"] {
-  --card-glow-border: #3b82f6;
-  --card-glow-shadow: 0 4px 14px rgba(59, 130, 246, 0.2);
-  --card-glow-bg: rgba(59, 130, 246, 0.12);
+  --card-glow-border: #388bfd;
+  --card-glow-shadow: 0 0 0 3px rgba(94, 162, 255, 0.14), 0 16px 38px -24px rgba(56, 139, 253, 0.58);
+  --card-glow-bg: rgba(56, 139, 253, 0.075);
 }
 
 /* Master Active / Selected Card Glow Selector */
@@ -1037,7 +951,7 @@ body.modal-open .app-layout__content {
   border: 1.5px solid var(--card-glow-border) !important;
   box-shadow: var(--card-glow-shadow) !important;
   background: var(--card-glow-bg) !important;
-  transform: translateY(-2px) scale(1.008) !important;
+  transform: translateY(-1px) !important;
   transition: border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
@@ -1080,10 +994,7 @@ body.modal-open .app-layout__content {
 .glass-card:hover:not(.active),
 .po-card:hover:not(.active),
 .docs-card:hover:not(.active) {
-  border-color: rgba(37, 99, 235, 0.4) !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
-  transform: translateY(-2px) !important;
+  border-color: rgba(56, 139, 253, 0.4) !important;
+  box-shadow: 0 12px 30px -24px rgba(56, 139, 253, 0.55) !important;
+  transform: translateY(-1px) !important;
 }
-
-
-

@@ -1,8 +1,10 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { AnimatePresence, motion } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useBranding } from '../../context/BrandingContext';
+import { useLanguage } from '../../context/LanguageContext';
 import {
   Menu,
   Sun,
@@ -15,12 +17,12 @@ import {
   CalendarDays,
   Globe,
 } from 'lucide-react';
-import { useLanguage } from '../../context/LanguageContext';
 import { isVendor } from '../../utils/rbac';
 import VendorNotificationBell from './VendorNotificationBell';
 import AdminNotificationBell from './AdminNotificationBell';
 import HeaderCalendarPopover from './HeaderCalendarPopover';
-import './TopBar.css';
+import { cn } from '../../lib/utils';
+import { motionTransition } from '../../lib/motion';
 
 // ─── Page title mapping ─────────────────────────────────────
 
@@ -68,7 +70,6 @@ const PAGE_TITLES: Record<string, string> = {
   '/reports': 'Reports',
 };
 
-// Section mapping for breadcrumbs (e.g. Home > Procurement > PO Creation & Orders)
 const SECTION_MAP: Record<string, string> = {
   '/dashboard': 'Main',
   '/rfq': 'Procurement',
@@ -124,13 +125,15 @@ function getSection(pathname: string): string {
   return match ? SECTION_MAP[match] : '';
 }
 
-// ─── Component ──────────────────────────────────────────────
-
 interface TopBarProps {
+  mobileOpen: boolean;
   onMenuClick: () => void;
+  isSidebarExpanded?: boolean;
 }
 
-export default function TopBar({ onMenuClick }: TopBarProps) {
+const iconButtonClass = 'relative inline-flex size-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card active:scale-[0.97]';
+
+export default function TopBar({ mobileOpen, onMenuClick, isSidebarExpanded }: TopBarProps) {
   const { user, roles, logout } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const { language, toggleLanguage } = useLanguage();
@@ -140,6 +143,7 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const accountButtonRef = useRef<HTMLButtonElement>(null);
   const dropdownPopupRef = useRef<HTMLDivElement>(null);
   const calendarRef = useRef<HTMLDivElement>(null);
 
@@ -177,6 +181,39 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [dropdownOpen]);
 
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setDropdownOpen(false);
+        setIsCalendarOpen(false);
+        if (dropdownOpen) requestAnimationFrame(() => accountButtonRef.current?.focus());
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [dropdownOpen]);
+
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    requestAnimationFrame(() => {
+      dropdownPopupRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+    });
+  }, [dropdownOpen]);
+
+  const handleAccountMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]'));
+    if (items.length === 0) return;
+    event.preventDefault();
+    const currentIndex = items.indexOf(document.activeElement as HTMLElement);
+    const nextIndex = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? items.length - 1
+        : (Math.max(0, currentIndex) + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+    items[nextIndex].focus();
+  };
+
   const pageTitle = getPageTitle(location.pathname, companyName);
   const section = getSection(location.pathname);
 
@@ -193,52 +230,58 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
   const dashboardPath = isVendor(roles) ? '/vendor/dashboard' : '/dashboard';
 
   return (
-    <header className="topbar">
-      {/* Left — Breadcrumb */}
-      <div className="topbar__left">
+    <header
+      className={cn(
+        'fixed inset-x-0 top-0 z-30 flex h-16 items-center justify-between border-b border-border/80 bg-card/95 px-2 transition-[left] duration-200 ease-out supports-[backdrop-filter:blur(1px)]:bg-card/85 supports-[backdrop-filter:blur(1px)]:backdrop-blur-xl sm:px-4 lg:right-0 lg:px-5',
+        isSidebarExpanded ? 'lg:left-[280px]' : 'lg:left-20'
+      )}
+    >
+      <div className="flex min-w-0 items-center gap-1 sm:gap-3">
         <button
-          className="topbar__hamburger"
+          type="button"
+          id="navigation-trigger"
+          className={cn(iconButtonClass, 'lg:hidden')}
           onClick={onMenuClick}
-          aria-label="Toggle menu"
+          aria-label="Open navigation"
+          aria-controls="primary-navigation"
+          aria-expanded={mobileOpen}
         >
           <Menu size={20} />
         </button>
 
-        <nav className="topbar__breadcrumb">
-          <Home
-            size={16}
-            className="topbar__breadcrumb-home"
+        <nav aria-label="Breadcrumb" className="hidden min-w-0 items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground sm:flex">
+          <button
+            ref={accountButtonRef}
+            type="button"
+            className="inline-flex size-8 items-center justify-center rounded-lg outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => navigate(dashboardPath)}
-            title="Go to Dashboard"
-          />
+            aria-label="Go to dashboard"
+          >
+            <Home size={14} />
+          </button>
           {section && (
             <>
-              <ChevronRight size={14} className="topbar__breadcrumb-sep" />
-              <span
-                className="topbar__breadcrumb-section"
-                onClick={() => navigate(dashboardPath)}
-                title="Go to Dashboard"
-              >
-                {section}
-              </span>
+              <ChevronRight size={12} className="text-border-strong" />
+              <span className="hidden font-medium md:inline">{section}</span>
             </>
           )}
-          <ChevronRight size={14} className="topbar__breadcrumb-sep" />
-          <span className="topbar__breadcrumb-current">{pageTitle}</span>
+          <ChevronRight size={12} className="text-border-strong" />
+          <span className="max-w-[240px] truncate font-semibold text-foreground">{pageTitle}</span>
         </nav>
+        <span className="truncate pr-2 text-sm font-semibold text-foreground sm:hidden">{pageTitle}</span>
       </div>
 
-      {/* Right — Actions */}
-      <div className="topbar__right">
-        {/* Calendar toggle */}
-        <div style={{ position: 'relative' }} ref={calendarRef}>
+      <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
+        <div className="relative" ref={calendarRef}>
           <button
-            className="topbar__icon-btn"
+            type="button"
+            className={iconButtonClass}
             onClick={() => setIsCalendarOpen(!isCalendarOpen)}
-            title="Open Laptop Calendar"
-            aria-label="Toggle calendar"
+            title="Open calendar"
+            aria-label="Open calendar"
+            aria-expanded={isCalendarOpen}
           >
-            <CalendarDays size={19} />
+            <CalendarDays size={18} />
           </button>
           {isCalendarOpen && (
             <HeaderCalendarPopover onClose={() => setIsCalendarOpen(false)} />
@@ -247,78 +290,95 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
 
         {/* Language toggle */}
         <button
-          className="topbar__icon-btn"
+          type="button"
+          className={iconButtonClass}
           onClick={toggleLanguage}
           title={language === 'fr' ? 'Switch to English 🇺🇸' : 'Changer en Français 🇫🇷'}
           aria-label="Toggle language"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '0 8px', fontSize: 12, fontWeight: 700 }}
         >
-          <Globe size={16} />
-          <span>{language === 'fr' ? 'FR 🇫🇷' : 'EN 🇺🇸'}</span>
+          <span className="flex items-center gap-1 text-[11px] font-bold">
+            <Globe size={15} />
+            <span>{language === 'fr' ? 'FR' : 'EN'}</span>
+          </span>
         </button>
 
         {/* Theme toggle */}
         <button
-          className="topbar__icon-btn"
-          onClick={toggleTheme}
+          type="button"
+          className={iconButtonClass}
+          onClick={(e) => toggleTheme(e)}
           title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-          aria-label="Toggle theme"
+          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
         >
-          {isDark ? <Sun size={19} /> : <Moon size={19} />}
+          <AnimatePresence initial={false} mode="wait">
+            <motion.span
+              key={isDark ? 'sun' : 'moon'}
+              className="grid place-items-center"
+              initial={{ opacity: 0, rotate: -24, scale: 0.75 }}
+              animate={{ opacity: 1, rotate: 0, scale: 1 }}
+              exit={{ opacity: 0, rotate: 24, scale: 0.75 }}
+              transition={motionTransition.fast}
+            >
+              {isDark ? <Sun size={18} /> : <Moon size={18} />}
+            </motion.span>
+          </AnimatePresence>
         </button>
 
         {/* Notifications */}
         {isVendor(roles) ? <VendorNotificationBell /> : <AdminNotificationBell />}
 
-        <span className="topbar__divider" />
+        <span aria-hidden="true" className="mx-1 hidden h-6 w-px bg-border sm:block" />
 
-        {/* User */}
-        <div
-          className="topbar__user"
-          ref={dropdownRef}
-          onClick={() => setDropdownOpen(!dropdownOpen)}
-        >
-          <span className="topbar__avatar">{initials}</span>
-          <div className="topbar__user-info">
-            <span className="topbar__user-name">{user?.fullName}</span>
-            <span className="topbar__user-role">{roles.join(', ')}</span>
-          </div>
-          <ChevronDown
-            size={16}
-            className={`topbar__chevron ${dropdownOpen ? 'topbar__chevron--open' : ''}`}
-          />
+        <div className="relative" ref={dropdownRef}>
+          <button
+            type="button"
+            className="flex min-h-11 items-center gap-2 rounded-xl p-1 pr-2 text-left outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => setDropdownOpen(!dropdownOpen)}
+            aria-haspopup="menu"
+            aria-expanded={dropdownOpen}
+            aria-controls="account-menu"
+          >
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-xs font-semibold text-primary ring-1 ring-primary/15 dark:bg-primary dark:text-primary-foreground">{initials}</span>
+            <span className="hidden min-w-0 flex-col lg:flex">
+              <span className="max-w-40 truncate text-[13px] font-semibold leading-4 text-foreground">{user?.fullName || 'Account'}</span>
+              <span className="max-w-40 truncate text-[11px] leading-4 text-muted-foreground">{roles.join(', ')}</span>
+            </span>
+            <ChevronDown size={14} className={cn('hidden text-muted-foreground transition-transform lg:block', dropdownOpen && 'rotate-180')} />
+          </button>
 
-          {/* Dropdown popup — positioned with CSS absolute, no FloatingMenu to avoid zoom/fixed conflict */}
+          <AnimatePresence initial={false}>
           {dropdownOpen && (
-            <div className="topbar__dropdown-popup" ref={dropdownPopupRef}>
-              <div className="topbar__dropdown-popup__body">
-                <div className="topbar__dropdown-header">
-                  <span className="topbar__dropdown-avatar">{initials}</span>
-                  <div>
-                    <div className="topbar__dropdown-name">{user?.fullName}</div>
-                    <div className="topbar__dropdown-email">{user?.email || roles.join(', ')}</div>
+            <motion.div
+              id="account-menu"
+              role="menu"
+              ref={dropdownPopupRef}
+              onKeyDown={handleAccountMenuKeyDown}
+              initial={{ opacity: 0, y: -5, scale: 0.985 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -4, scale: 0.985 }}
+              transition={motionTransition.fast}
+              className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[min(20rem,calc(100vw-1rem))] overflow-hidden rounded-2xl border border-border/80 bg-card/95 p-1.5 shadow-2xl shadow-slate-950/15 backdrop-blur-xl"
+            >
+              <div className="rounded-xl bg-muted/70 p-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary text-xs font-semibold text-primary-foreground">{initials}</span>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-foreground">{user?.fullName || 'Account'}</div>
+                    <div className="truncate text-xs text-muted-foreground">{user?.email || roles.join(', ')}</div>
                   </div>
                 </div>
-                <div className="topbar__dropdown-divider" />
-                <button type="button" className="topbar__dropdown-item" onClick={handleMyProfile}>
-                  <User size={16} />
-                  My Profile
-                </button>
-                <div className="topbar__dropdown-divider" />
-                <button
-                  type="button"
-                  className="topbar__dropdown-item topbar__dropdown-item--danger"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    logout();
-                  }}
-                >
-                  <LogOut size={16} />
-                  Sign Out
-                </button>
               </div>
-            </div>
+              <div className="my-1 h-px bg-border" />
+              <button type="button" role="menuitem" className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring" onClick={handleMyProfile}>
+                <User size={17} /> My Profile
+              </button>
+              <div className="my-1 h-px bg-border" />
+              <button type="button" role="menuitem" className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium text-destructive outline-none transition-colors hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-destructive" onClick={logout}>
+                <LogOut size={17} /> Sign Out
+              </button>
+            </motion.div>
           )}
+          </AnimatePresence>
         </div>
       </div>
     </header>

@@ -11,7 +11,6 @@ import {
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TableSkeleton } from '../../components/shared/Skeleton';
 import { AuditExportModal } from './AuditExportModal';
-import './AuditTrailPage.css';
 
 type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'APPROVE' | 'REJECT' | 'LOGIN' | 'EXPORT';
 type AuditModule = 'RFQ' | 'Purchase Order' | 'Quotation' | 'Users' | 'Roles' | 'Vendors' | 'Approvals' | 'Auth' | 'Documents';
@@ -22,12 +21,14 @@ interface AuditEntry {
   ipAddress: string; referenceId: string; timestamp: string;
 }
 
-const ACTION_ICONS: Record<AuditAction, React.ReactNode> = {
-  CREATE: <Plus size={14} />, UPDATE: <Edit3 size={14} />, DELETE: <Trash2 size={14} />,
-  APPROVE: <CheckSquare size={14} />, REJECT: <X size={14} />, LOGIN: <LogIn size={14} />, EXPORT: <Download size={14} />,
-};
-const ACTION_CLS: Record<AuditAction, string> = {
-  CREATE: 'create', UPDATE: 'update', DELETE: 'delete', APPROVE: 'approve', REJECT: 'reject', LOGIN: 'login', EXPORT: 'export',
+const ACTION_CONFIG: Record<AuditAction, { icon: any; classes: string }> = {
+  CREATE: { icon: Plus, classes: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' },
+  UPDATE: { icon: Edit3, classes: 'bg-sky-500/10 text-sky-700 dark:text-sky-300' },
+  DELETE: { icon: Trash2, classes: 'bg-destructive/10 text-destructive' },
+  APPROVE: { icon: CheckSquare, classes: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' },
+  REJECT: { icon: X, classes: 'bg-destructive/10 text-destructive' },
+  LOGIN: { icon: LogIn, classes: 'bg-primary/10 text-primary' },
+  EXPORT: { icon: Download, classes: 'bg-amber-500/10 text-amber-700 dark:text-amber-300' },
 };
 
 function mapAuditEntry(e: any): AuditEntry {
@@ -206,7 +207,6 @@ export default function AuditTrailPage() {
   useBodyScrollLock(!!detail || exportModalOpen);
   const perPage = 10;
 
-  // Dynamically extract created system users (from User Management DB) + users in audit logs
   const uniqueUsers = useMemo(() => {
     const set = new Set<string>();
 
@@ -243,8 +243,6 @@ export default function AuditTrailPage() {
 
   const uniqueModules = useMemo(() => {
     const set = new Set<string>();
-
-    // Heliflow 3.0 System Modules (Filtered)
     const allowedModules = [
       'RFQ',
       'Quotation',
@@ -309,7 +307,6 @@ export default function AuditTrailPage() {
     return c;
   }, [auditLog]);
 
-  // Master Filter Engine: User-wise, Module-wise, Date/Month/Year-wise, Action-wise & Search
   const filtered = useMemo(() => {
     let list = auditLog;
 
@@ -400,6 +397,7 @@ export default function AuditTrailPage() {
     if (isNaN(date.getTime())) return '—';
     return `${date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}, ${date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
   };
+
   const timeAgo = (d: string) => {
     if (!d || typeof d !== 'string') return 'Just now';
     const date = new Date(d);
@@ -413,341 +411,304 @@ export default function AuditTrailPage() {
     return `${Math.floor(hrs / 24)}d ago`;
   };
 
-  const handleExportLog = useCallback(() => {
-    if (filtered.length === 0) return;
-    const header = 'ID,Action,Module,Description,Performed By,Reference ID,IP Address,Timestamp\n';
-    const rows = filtered.map(a =>
-      `"${a.id}","${a.action}","${a.module}","${a.description.replace(/"/g, '""')}","${a.performedBy}","${a.referenceId}","${a.ipAddress}","${a.timestamp}"`
-    ).join('\n');
-    const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `audit_trail_filtered_${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-  }, [filtered]);
-
   return (
-    <div className="audit-page">
+    <div className="flex w-full flex-col gap-6 pb-10">
       {error && <MessageStrip type="error">{error}</MessageStrip>}
-      <div className="audit-page__header">
-        <div className="audit-page__header-left">
-          <h1>Audit Trail</h1>
-          <p>Complete activity log & compliance tracking with User, Document Type, and Date filtering</p>
+      
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-[-0.035em] text-foreground">Audit Trail</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Complete activity log & compliance tracking with User, Document Type, and Date filtering</p>
         </div>
-        <div className="audit-page__header-actions">
+        <div className="flex items-center gap-2">
           {isFiltered && (
-            <button className="audit-page__reset-btn" onClick={resetFilters} title="Reset all filters">
+            <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-input bg-background px-4 text-sm font-semibold text-foreground transition hover:bg-muted" onClick={resetFilters} title="Reset all filters">
               <RotateCcw size={15} /> Reset Filters
             </button>
           )}
-          <button className="audit-page__export-btn" onClick={() => setExportModalOpen(true)} title="Export Audit Trail Report (Excel, PDF)">
+          <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90" onClick={() => setExportModalOpen(true)} title="Export Audit Trail Report">
             <Download size={16} /> Export Report ({filtered.length})
           </button>
         </div>
       </div>
 
-      <div className="audit-summary">
+      {/* Summary Cards */}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          { icon: <History size={22} />, val: summary.total, label: 'Total Entries', cls: 'total' },
-          { icon: <Clock size={22} />, val: summary.today, label: 'Today', cls: 'today' },
-          { icon: <Settings size={22} />, val: summary.actions, label: 'Action Types', cls: 'actions' },
-          { icon: <UserCog size={22} />, val: summary.users, label: 'Active Users', cls: 'users' },
-        ].map(c => (
-          <div key={c.cls} className="audit-summary-card">
-            <div className={`audit-summary-card__icon audit-summary-card__icon--${c.cls}`}>{c.icon}</div>
-            <div className="audit-summary-card__info"><span className="audit-summary-card__value">{c.val}</span><span className="audit-summary-card__label">{c.label}</span></div>
+          { icon: <History size={22} />, val: summary.total, label: 'Total Entries', cls: 'bg-primary/10 text-primary' },
+          { icon: <Clock size={22} />, val: summary.today, label: 'Today', cls: 'bg-sky-500/10 text-sky-600' },
+          { icon: <Settings size={22} />, val: summary.actions, label: 'Action Types', cls: 'bg-violet-500/10 text-violet-600' },
+          { icon: <UserCog size={22} />, val: summary.users, label: 'Active Users', cls: 'bg-emerald-500/10 text-emerald-600' },
+        ].map((c, i) => (
+          <div key={i} className="flex min-h-24 items-center gap-4 rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
+            <div className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${c.cls}`}>{c.icon}</div>
+            <div className="flex flex-col">
+              <span className="text-2xl font-semibold tracking-tight text-foreground">{c.val}</span>
+              <span className="text-sm text-muted-foreground">{c.label}</span>
+            </div>
           </div>
         ))}
       </div>
 
-      {/* Advanced Glassmorphic Multi-Filter Control Panel */}
-      <div className={`audit-filter-card ${isFiltered ? 'audit-filter-card--active' : ''}`}>
-        <div className="audit-filter-card__header">
-          <div className="audit-filter-card__title-group">
-            <div className="audit-filter-card__icon-wrap">
-              <Filter size={18} />
-            </div>
-            <div>
-              <h3 className="audit-filter-card__title">Filter & Audit Controls</h3>
-              <p className="audit-filter-card__subtitle">Refine log entries by user, document category, year, month, or custom date range</p>
-            </div>
+      {/* Multi-Filter Card */}
+      <div className={`rounded-2xl border bg-card p-4 shadow-sm transition ${isFiltered ? 'border-primary/40 ring-2 ring-primary/10' : 'border-border/70'}`}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/70 pb-3">
+          <div className="flex items-center gap-2">
+            <Filter size={18} className="text-primary" />
+            <h3 className="text-sm font-semibold text-foreground">Filter & Audit Controls</h3>
           </div>
-          <div className="audit-filter-card__header-right">
-            {filtered.length !== auditLog.length ? (
-              <span className="audit-filter-card__count-badge">
-                Showing {filtered.length} of {auditLog.length} logs
-              </span>
-            ) : (
-              <span className="audit-filter-card__total-badge">
-                {auditLog.length} Total Logs
-              </span>
-            )}
-            {isFiltered && (
-              <button className="audit-filter-card__clear-btn" onClick={resetFilters}>
-                <RotateCcw size={13} /> Clear All Filters
-              </button>
-            )}
-          </div>
+          {isFiltered && (
+            <button className="text-xs font-semibold text-primary hover:underline flex items-center gap-1" onClick={resetFilters}>
+              <RotateCcw size={13} /> Clear All Filters
+            </button>
+          )}
         </div>
 
-        {/* Quick Date Presets Row */}
-        <div className="audit-filter-presets">
-          <span className="audit-filter-presets__label">Quick Presets:</span>
-          {[
-            { label: 'All Time', id: 'ALL' },
-            { label: 'Today', id: 'TODAY' },
-            { label: 'This Month', id: 'THIS_MONTH' },
-            { label: 'This Year', id: 'THIS_YEAR' },
-          ].map(preset => {
-            const isPresetActive =
-              preset.id === 'TODAY' ? fromDate === new Date().toISOString().slice(0, 10) && toDate === new Date().toISOString().slice(0, 10) :
-              preset.id === 'THIS_MONTH' ? yearFilter === String(new Date().getFullYear()) && monthFilter === String(new Date().getMonth() + 1).padStart(2, '0') :
-              preset.id === 'THIS_YEAR' ? yearFilter === String(new Date().getFullYear()) && monthFilter === 'ALL' && !fromDate && !toDate :
-              preset.id === 'ALL' && !isFiltered;
-
-            return (
-              <button
-                key={preset.id}
-                type="button"
-                className={`audit-preset-chip ${isPresetActive ? 'audit-preset-chip--active' : ''}`}
-                onClick={() => {
-                  if (preset.id === 'ALL') {
-                    resetFilters();
-                  } else if (preset.id === 'TODAY') {
-                    const todayStr = new Date().toISOString().slice(0, 10);
-                    setFromDate(todayStr);
-                    setToDate(todayStr);
-                    setYearFilter('ALL');
-                    setMonthFilter('ALL');
-                    setCurrentPage(1);
-                  } else if (preset.id === 'THIS_MONTH') {
-                    const now = new Date();
-                    setYearFilter(String(now.getFullYear()));
-                    setMonthFilter(String(now.getMonth() + 1).padStart(2, '0'));
-                    setFromDate('');
-                    setToDate('');
-                    setCurrentPage(1);
-                  } else if (preset.id === 'THIS_YEAR') {
-                    const now = new Date();
-                    setYearFilter(String(now.getFullYear()));
-                    setMonthFilter('ALL');
-                    setFromDate('');
-                    setToDate('');
-                    setCurrentPage(1);
-                  }
-                }}
-              >
-                {preset.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Filter Inputs Grid */}
-        <div className="audit-filter-grid">
-          {/* User-Wise Dropdown */}
-          <div className={`audit-field-box ${userFilter !== 'ALL' ? 'audit-field-box--active' : ''}`}>
-            <label className="audit-field-box__label">
-              <User size={13} className="audit-field-box__icon" /> User / Performer
-            </label>
-            <div className="audit-field-box__input-wrap">
-              <select
-                className="audit-field-box__select"
-                value={userFilter}
-                onChange={e => { setUserFilter(e.target.value); setCurrentPage(1); }}
-              >
-                <option value="ALL">All Users ({uniqueUsers.length})</option>
-                {uniqueUsers.map(usr => (
-                  <option key={usr} value={usr}>{usr}</option>
-                ))}
-              </select>
-            </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-muted-foreground">User / Performer</label>
+            <select
+              className="min-h-11 rounded-xl border border-input bg-background px-3 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+              value={userFilter}
+              onChange={(e) => { setUserFilter(e.target.value); setCurrentPage(1); }}
+            >
+              <option value="ALL">All Users ({uniqueUsers.length})</option>
+              {uniqueUsers.map((u) => (<option key={u} value={u}>{u}</option>))}
+            </select>
           </div>
 
-          {/* Module-Wise Dropdown */}
-          <div className={`audit-field-box ${moduleFilter !== 'ALL' ? 'audit-field-box--active' : ''}`}>
-            <label className="audit-field-box__label">
-              <FileText size={13} className="audit-field-box__icon" /> Module-Wise
-            </label>
-            <div className="audit-field-box__input-wrap">
-              <select
-                className="audit-field-box__select"
-                value={moduleFilter}
-                onChange={e => { setModuleFilter(e.target.value); setCurrentPage(1); }}
-              >
-                <option value="ALL">All Modules ({uniqueModules.length})</option>
-                {uniqueModules.map(mod => (
-                  <option key={mod} value={mod}>{mod}</option>
-                ))}
-              </select>
-            </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-muted-foreground">Module</label>
+            <select
+              className="min-h-11 rounded-xl border border-input bg-background px-3 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+              value={moduleFilter}
+              onChange={(e) => { setModuleFilter(e.target.value); setCurrentPage(1); }}
+            >
+              <option value="ALL">All Modules ({uniqueModules.length})</option>
+              {uniqueModules.map((m) => (<option key={m} value={m}>{m}</option>))}
+            </select>
           </div>
 
-          {/* Year-Wise Dropdown */}
-          <div className={`audit-field-box ${yearFilter !== 'ALL' ? 'audit-field-box--active' : ''}`}>
-            <label className="audit-field-box__label">
-              <Calendar size={13} className="audit-field-box__icon" /> Year
-            </label>
-            <div className="audit-field-box__input-wrap">
-              <select
-                className="audit-field-box__select"
-                value={yearFilter}
-                onChange={e => { setYearFilter(e.target.value); setCurrentPage(1); }}
-              >
-                <option value="ALL">All Years</option>
-                {availableYears.map(yr => (
-                  <option key={yr} value={yr}>{yr}</option>
-                ))}
-              </select>
-            </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-muted-foreground">Year</label>
+            <select
+              className="min-h-11 rounded-xl border border-input bg-background px-3 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+              value={yearFilter}
+              onChange={(e) => { setYearFilter(e.target.value); setCurrentPage(1); }}
+            >
+              <option value="ALL">All Years</option>
+              {availableYears.map((y) => (<option key={y} value={y}>{y}</option>))}
+            </select>
           </div>
 
-          {/* Month-Wise Dropdown */}
-          <div className={`audit-field-box ${monthFilter !== 'ALL' ? 'audit-field-box--active' : ''}`}>
-            <label className="audit-field-box__label">
-              <Calendar size={13} className="audit-field-box__icon" /> Month
-            </label>
-            <div className="audit-field-box__input-wrap">
-              <select
-                className="audit-field-box__select"
-                value={monthFilter}
-                onChange={e => { setMonthFilter(e.target.value); setCurrentPage(1); }}
-              >
-                <option value="ALL">All Months</option>
-                {MONTHS.map(m => (
-                  <option key={m.value} value={m.value}>{m.label}</option>
-                ))}
-              </select>
-            </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-muted-foreground">Month</label>
+            <select
+              className="min-h-11 rounded-xl border border-input bg-background px-3 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+              value={monthFilter}
+              onChange={(e) => { setMonthFilter(e.target.value); setCurrentPage(1); }}
+            >
+              <option value="ALL">All Months</option>
+              {MONTHS.map((m) => (<option key={m.value} value={m.value}>{m.label}</option>))}
+            </select>
           </div>
 
-          {/* From Date */}
-          <div className={`audit-field-box ${fromDate ? 'audit-field-box--active' : ''}`}>
-            <label className="audit-field-box__label">
-              <Calendar size={13} className="audit-field-box__icon" /> From Date
-            </label>
-            <div className="audit-field-box__input-wrap">
-              <input
-                type="date"
-                className="audit-field-box__date"
-                value={fromDate}
-                onChange={e => { setFromDate(e.target.value); setCurrentPage(1); }}
-              />
-            </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-muted-foreground">From Date</label>
+            <input
+              type="date"
+              className="min-h-11 rounded-xl border border-input bg-background px-3 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+              value={fromDate}
+              onChange={(e) => { setFromDate(e.target.value); setCurrentPage(1); }}
+            />
           </div>
 
-          {/* To Date */}
-          <div className={`audit-field-box ${toDate ? 'audit-field-box--active' : ''}`}>
-            <label className="audit-field-box__label">
-              <Calendar size={13} className="audit-field-box__icon" /> To Date
-            </label>
-            <div className="audit-field-box__input-wrap">
-              <input
-                type="date"
-                className="audit-field-box__date"
-                value={toDate}
-                onChange={e => { setToDate(e.target.value); setCurrentPage(1); }}
-              />
-            </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-muted-foreground">To Date</label>
+            <input
+              type="date"
+              className="min-h-11 rounded-xl border border-input bg-background px-3 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+              value={toDate}
+              onChange={(e) => { setToDate(e.target.value); setCurrentPage(1); }}
+            />
           </div>
         </div>
       </div>
 
+      {/* Action Pills & Search Bar */}
+      <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex gap-1 overflow-x-auto rounded-xl bg-muted/60 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {ACTION_FILTERS.map((act) => (
+            <button
+              type="button"
+              key={act}
+              className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition ${actionFilter === act ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              onClick={() => { setActionFilter(act); setCurrentPage(1); }}
+            >
+              {act === 'ALL' ? 'All Actions' : act}
+              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold text-foreground">
+                {filterCounts[act] || 0}
+              </span>
+            </button>
+          ))}
+        </div>
 
-
-      <div className="audit-toolbar">
-        <div className="audit-toolbar__search">
-          <Search size={16} className="audit-toolbar__search-icon" />
-          <input type="text" placeholder="Search by description, user, module, or reference..." value={search} onChange={e => { setSearch(e.target.value); setCurrentPage(1); }} />
+        <div className="relative min-w-0 flex-1 sm:max-w-md">
+          <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="search"
+            className="min-h-11 w-full rounded-xl border border-input bg-background pl-10 pr-4 text-sm outline-none transition placeholder:text-muted-foreground focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+            placeholder="Search description, user, module, or reference..."
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+          />
         </div>
       </div>
 
-      <div className="audit-timeline-card">
-        {loading && <TableSkeleton rows={5} columns={4} />}
+      {/* Log Feed */}
+      {loading ? (
+        <TableSkeleton rows={6} columns={4} />
+      ) : paginated.length > 0 ? (
+        <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
+          <div className="divide-y divide-border/60">
+            {paginated.map((entry) => {
+              const cfg = ACTION_CONFIG[entry.action] || ACTION_CONFIG.UPDATE;
+              const IconComponent = cfg.icon;
+              return (
+                <button
+                  key={entry.id}
+                  type="button"
+                  className="flex w-full items-start gap-4 p-4 text-left transition hover:bg-muted/30 sm:p-5"
+                  onClick={() => setDetail(entry)}
+                >
+                  <div className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${cfg.classes}`}>
+                    <IconComponent size={16} />
+                  </div>
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${cfg.classes}`}>{entry.action}</span>
+                        <span className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-semibold text-foreground">{entry.module}</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Clock size={12} /> {timeAgo(entry.timestamp)}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm font-medium text-foreground">{entry.description}</p>
+                    <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1.5 font-semibold text-foreground">
+                        <span className="flex size-6 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">{entry.performedByInitials}</span>
+                        {entry.performedBy}
+                      </span>
+                      {entry.referenceId !== '—' && <span className="font-semibold text-primary">{entry.referenceId}</span>}
+                      <span>IP: {entry.ipAddress}</span>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
 
-        {!loading && paginated.length > 0 && (
-          <div className="audit-timeline">
-            {paginated.map(entry => (
-              <div key={entry.id} className="audit-entry" onClick={() => setDetail(entry)}>
-                <div className="audit-entry__connector">
-                  <div className={`audit-entry__dot audit-entry__dot--${ACTION_CLS[entry.action]}`}>{ACTION_ICONS[entry.action]}</div>
-                  <div className="audit-entry__line" />
-                </div>
-                <div className="audit-entry__content">
-                  <div className="audit-entry__top">
-                    <div className="audit-entry__left">
-                      <span className={`audit-entry__action audit-entry__action--${ACTION_CLS[entry.action]}`}>{entry.action}</span>
-                      <span className="audit-entry__module">{entry.module}</span>
-                    </div>
-                    <span className="audit-entry__time"><Clock size={11} /> {timeAgo(entry.timestamp)}</span>
-                  </div>
-                  <p className="audit-entry__desc">{entry.description}</p>
-                  <div className="audit-entry__meta">
-                    <div className="audit-entry__user">
-                      <div className={`audit-entry__avatar audit-entry__avatar--${entry.avatarMod}`}>{entry.performedByInitials}</div>
-                      <span>{entry.performedBy}</span>
-                    </div>
-                    {entry.referenceId !== '-' && <span className="audit-entry__ref">{entry.referenceId}</span>}
-                    <span className="audit-entry__ip">{entry.ipAddress}</span>
-                  </div>
-                </div>
+          {filtered.length > perPage && (
+            <div className="flex flex-col gap-3 border-t border-border/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <span className="text-xs text-muted-foreground">
+                Showing {(currentPage - 1) * perPage + 1}–{Math.min(currentPage * perPage, filtered.length)} of {filtered.length}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  className="flex size-10 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted disabled:opacity-40"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((p) => p - 1)}
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    className={`flex size-10 items-center justify-center rounded-lg border text-sm font-medium transition ${currentPage === p ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:bg-muted'}`}
+                    onClick={() => setCurrentPage(p)}
+                  >
+                    {p}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="flex size-10 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted disabled:opacity-40"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage((p) => p + 1)}
+                >
+                  <ChevronRight size={14} />
+                </button>
               </div>
-            ))}
-          </div>
-        )}
-
-        {!loading && paginated.length === 0 && (
-          <div className="audit-empty">
-            <div className="audit-empty__icon-wrap">
-              <History size={48} strokeWidth={1.5} />
             </div>
-            <h3 className="audit-empty__title">No audit entries found</h3>
-            <p className="audit-empty__desc">
-              {isFiltered ? 'No matching logs for selected user, document type, date, or search filter.' : 'No audit trail entries yet.'}
-            </p>
-            {isFiltered && (
-              <button type="button" className="audit-empty__clear-btn" onClick={resetFilters}>
-                <RotateCcw size={14} /> Clear All Filters
-              </button>
-            )}
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/80 bg-card py-14 text-center shadow-sm">
+          <div className="flex size-14 items-center justify-center rounded-2xl bg-muted/60 text-muted-foreground">
+            <History size={28} />
           </div>
-        )}
-        {filtered.length > perPage && (
-          <div className="audit-pagination">
-            <span className="audit-pagination__info">Showing {(currentPage-1)*perPage+1}–{Math.min(currentPage*perPage, filtered.length)} of {filtered.length}</span>
-            <div className="audit-pagination__btns">
-              <button className="audit-pagination__btn" disabled={currentPage===1} onClick={() => setCurrentPage(p=>p-1)}><ChevronLeft size={14} /></button>
-              {Array.from({length:totalPages},(_,i)=>i+1).map(p=>(<button key={p} className={`audit-pagination__btn ${currentPage===p?'audit-pagination__btn--active':''}`} onClick={()=>setCurrentPage(p)}>{p}</button>))}
-              <button className="audit-pagination__btn" disabled={currentPage===totalPages} onClick={()=>setCurrentPage(p=>p+1)}><ChevronRight size={14} /></button>
-            </div>
-          </div>
-        )}
-      </div>
+          <h3 className="mt-4 text-base font-semibold text-foreground">No audit entries found</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {isFiltered ? 'No matching logs for selected filters.' : 'No audit trail entries recorded yet.'}
+          </p>
+          {isFiltered && (
+            <button type="button" className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-xl border border-input bg-background px-4 text-xs font-semibold text-foreground hover:bg-muted" onClick={resetFilters}>
+              <RotateCcw size={14} /> Clear All Filters
+            </button>
+          )}
+        </div>
+      )}
 
+      {/* Detail Modal */}
       {detail && (
-        <div className="audit-modal-backdrop" onClick={() => setDetail(null)}>
-          <div className="audit-modal" onClick={e => e.stopPropagation()}>
-            <div className="audit-modal__header"><span className="audit-modal__title"><History size={20} /> Audit Entry</span><button className="audit-modal__close" onClick={() => setDetail(null)}><X size={18} /></button></div>
-            <div className="audit-modal__body">
-              <div className="audit-modal__action-row">
-                <span className={`audit-entry__action audit-entry__action--${ACTION_CLS[detail.action]}`}>{detail.action}</span>
-                <span className="audit-modal__module-label">{detail.module}</span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setDetail(null)}>
+          <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-border/70 bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-border/70 px-6 py-4">
+              <div className="flex items-center gap-2 text-base font-semibold text-foreground">
+                <History size={20} />
+                <span>Audit Entry Detail</span>
               </div>
-              <p className="audit-modal__desc">{detail.description}</p>
-              <div className="audit-modal__grid">
-                {[
-                  { l: 'Performed By', v: detail.performedBy }, { l: 'Reference', v: detail.referenceId !== '-' ? detail.referenceId : '—' },
-                  { l: 'IP Address', v: detail.ipAddress }, { l: 'Timestamp', v: formatDateTime(detail.timestamp) },
-                ].map(i => (
-                  <div key={i.l} className="audit-modal__grid-item"><span className="audit-modal__grid-label">{i.l}</span><span className="audit-modal__grid-value">{i.v}</span></div>
-                ))}
+              <button type="button" className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted" onClick={() => setDetail(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="flex items-center gap-2">
+                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${ACTION_CONFIG[detail.action]?.classes || ''}`}>{detail.action}</span>
+                <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-foreground">{detail.module}</span>
+              </div>
+              <p className="text-sm font-medium text-foreground">{detail.description}</p>
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
+                  <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Performed By</span>
+                  <span className="mt-0.5 block text-xs font-semibold text-foreground">{detail.performedBy}</span>
+                </div>
+                <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
+                  <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Reference</span>
+                  <span className="mt-0.5 block text-xs font-semibold text-foreground">{detail.referenceId}</span>
+                </div>
+                <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
+                  <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">IP Address</span>
+                  <span className="mt-0.5 block text-xs font-semibold text-foreground">{detail.ipAddress}</span>
+                </div>
+                <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
+                  <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Timestamp</span>
+                  <span className="mt-0.5 block text-xs font-semibold text-foreground">{formatDateTime(detail.timestamp)}</span>
+                </div>
               </div>
             </div>
-            <div className="audit-modal__footer"><button className="audit-modal__btn" onClick={() => setDetail(null)}>Close</button></div>
+            <div className="flex items-center justify-end border-t border-border/70 bg-muted/20 px-6 py-4">
+              <button type="button" className="min-h-11 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90" onClick={() => setDetail(null)}>Close</button>
+            </div>
           </div>
         </div>
       )}
 
+      {/* Audit Export Modal */}
       <AuditExportModal
         isOpen={exportModalOpen}
         onClose={() => setExportModalOpen(false)}
@@ -758,4 +719,3 @@ export default function AuditTrailPage() {
     </div>
   );
 }
-

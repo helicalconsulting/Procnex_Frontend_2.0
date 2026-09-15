@@ -9,7 +9,20 @@ import {
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
-import './SalesOrdersPage.css';
+import { PageFrame, PageLead, MetricCard, EmptyState } from '../../components/ui/product';
+import { Card } from '../../components/ui/card';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/ui/dialog';
+import { cn } from '../../lib/utils';
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -61,36 +74,35 @@ function mapSalesOrder(so: ServiceSalesOrder): SalesOrder {
   };
 }
 
-const STATUS_MAP: Record<SOStatus, { label: string; cls: string; icon: React.ReactNode }> = {
-  DRAFT:      { label: 'Draft',      cls: 'draft',    icon: <Clock size={13} /> },
-  CONFIRMED:  { label: 'Confirmed',  cls: 'pending',  icon: <CheckCircle2 size={13} /> },
-  PROCESSING: { label: 'Processing', cls: 'partial',  icon: <Package size={13} /> },
-  SHIPPED:    { label: 'Shipped',    cls: 'shipped',  icon: <Truck size={13} /> },
-  DELIVERED:  { label: 'Delivered',  cls: 'paid',     icon: <CheckCircle2 size={13} /> },
-  CANCELLED:  { label: 'Cancelled',  cls: 'overdue',  icon: <XCircle size={13} /> },
-  DISCARDED:  { label: 'Discarded',  cls: 'rejected', icon: <X size={13} /> },
+const STATUS_MAP: Record<SOStatus, { label: string; tone: string }> = {
+  DRAFT:      { label: 'Draft',      tone: 'bg-muted/50 text-muted-foreground border-border/60' },
+  CONFIRMED:  { label: 'Confirmed',  tone: 'bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-300' },
+  PROCESSING: { label: 'Processing', tone: 'bg-sky-500/10 text-sky-600 border-sky-500/20 dark:text-sky-300' },
+  SHIPPED:    { label: 'Shipped',    tone: 'bg-violet-500/10 text-violet-600 border-violet-500/20 dark:text-violet-300' },
+  DELIVERED:  { label: 'Delivered',  tone: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-300' },
+  CANCELLED:  { label: 'Cancelled',  tone: 'bg-rose-500/10 text-rose-600 border-rose-500/20 dark:text-rose-300' },
+  DISCARDED:  { label: 'Discarded',  tone: 'bg-muted/50 text-muted-foreground border-border/60' },
 };
 
-// Per-status action config — what buttons to show and what they do
 const ACTION_CFG: Partial<Record<SOStatus, {
   primary:   { action: ActionType; label: string; color: 'approve'; icon: React.ReactNode };
   secondary?: { action: ActionType; label: string; color: 'reject' | 'return'; icon: React.ReactNode };
 }>> = {
   DRAFT: {
-    primary:   { action: 'confirm', label: 'Confirm',      color: 'approve', icon: <ThumbsUp size={15} /> },
-    secondary: { action: 'discard', label: 'Discard',      color: 'reject',  icon: <ThumbsDown size={15} /> },
+    primary:   { action: 'confirm', label: 'Confirm',      color: 'approve', icon: <ThumbsUp className="size-4" /> },
+    secondary: { action: 'discard', label: 'Discard',      color: 'reject',  icon: <ThumbsDown className="size-4" /> },
   },
   CONFIRMED: {
-    primary:   { action: 'ship',    label: 'Mark Shipped', color: 'approve', icon: <Truck size={15} /> },
-    secondary: { action: 'cancel',  label: 'Cancel',       color: 'reject',  icon: <XCircle size={15} /> },
+    primary:   { action: 'ship',    label: 'Mark Shipped', color: 'approve', icon: <Truck className="size-4" /> },
+    secondary: { action: 'cancel',  label: 'Cancel',       color: 'reject',  icon: <XCircle className="size-4" /> },
   },
   PROCESSING: {
-    primary:   { action: 'ship',    label: 'Mark Shipped', color: 'approve', icon: <Truck size={15} /> },
-    secondary: { action: 'cancel',  label: 'Cancel',       color: 'reject',  icon: <XCircle size={15} /> },
+    primary:   { action: 'ship',    label: 'Mark Shipped', color: 'approve', icon: <Truck className="size-4" /> },
+    secondary: { action: 'cancel',  label: 'Cancel',       color: 'reject',  icon: <XCircle className="size-4" /> },
   },
   SHIPPED: {
-    primary:   { action: 'deliver', label: 'Mark Delivered', color: 'approve', icon: <CheckCircle2 size={15} /> },
-    secondary: { action: 'cancel',  label: 'Cancel',         color: 'reject',  icon: <XCircle size={15} /> },
+    primary:   { action: 'deliver', label: 'Mark Delivered', color: 'approve', icon: <CheckCircle2 className="size-4" /> },
+    secondary: { action: 'cancel',  label: 'Cancel',         color: 'reject',  icon: <XCircle className="size-4" /> },
   },
 };
 
@@ -119,22 +131,23 @@ export default function SalesOrdersPage() {
     () => localDataService.getSalesOrders().then((list) => list.map(mapSalesOrder)),
     [] as SalesOrder[]
   );
-  // Optimistic overlay for local actions (no API persistence)
+
   const [pendingActions, setPendingActions] = useState<Record<number, SalesOrder>>({});
   const orders = useMemo(() => {
     if (Object.keys(pendingActions).length === 0) return serverOrders;
     return serverOrders.map(o => pendingActions[o.id] ?? o);
   }, [serverOrders, pendingActions]);
+
   const [search, setSearch]               = useState('');
   const [actionModal, setActionModal]     = useState<{ order: SalesOrder; action: ActionType } | null>(null);
   const [actionComment, setActionComment] = useState('');
   const [detailOrder, setDetailOrder]     = useState<SalesOrder | null>(null);
   useBodyScrollLock(!!(actionModal || detailOrder));
+
   const { formatAmount, companyDefaultCurrency } = useCurrency();
   const [displayCurrency, setDisplayCurrency] = useState(companyDefaultCurrency);
   useEffect(() => { setDisplayCurrency(companyDefaultCurrency); }, [companyDefaultCurrency]);
 
-  // ── KPIs (reactive) ──
   const summary = useMemo(() => ({
     totalRevenue: orders.filter(o => !['CANCELLED','DRAFT','DISCARDED'].includes(o.status)).reduce((s, o) => s + o.amount, 0),
     active:       orders.filter(o => ['CONFIRMED','PROCESSING','SHIPPED'].includes(o.status)).length,
@@ -142,7 +155,6 @@ export default function SalesOrdersPage() {
     cancelled:    orders.filter(o => o.status === 'CANCELLED' || o.status === 'DISCARDED').length,
   }), [orders]);
 
-  // ── Filtered list ──
   const filtered = useMemo(() => {
     let list = orders;
     if (search.trim()) {
@@ -156,7 +168,6 @@ export default function SalesOrdersPage() {
     return list;
   }, [orders, search]);
 
-  // ── Action handler ──
   const handleAction = useCallback(() => {
     if (!actionModal) return;
     const newStatus = ACTION_TO_STATUS[actionModal.action];
@@ -181,176 +192,143 @@ export default function SalesOrdersPage() {
   const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
   const isCommentRequired = actionModal ? COMMENT_REQUIRED.includes(actionModal.action) : false;
-  const actionColor       = actionModal
-    ? (actionModal.action === 'cancel' || actionModal.action === 'discard' ? 'reject' : 'approve')
-    : 'approve';
 
   return (
-    <div className="fin-page">
-      {error && <MessageStrip type="error">{error}</MessageStrip>}
-      {loading && <div className="fin-page__loading">Loading sales orders…</div>}
+    <PageFrame>
+      {error && <MessageStrip type="error" className="mb-4">{error}</MessageStrip>}
 
-      {/* ── Header ── */}
-      <div className="fin-page__header">
-        <div>
-          <h1>Sales Orders</h1>
-          <p>Manage outgoing sales orders and track delivery performance</p>
+      {/* Header */}
+      <PageLead
+        title="Sales Orders"
+        description="Manage outgoing sales orders and track delivery performance"
+      />
+
+      {/* Metric Cards */}
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard icon={TrendingUp} label="Total Revenue" value={fmt(summary.totalRevenue)} tone="primary" />
+        <MetricCard icon={ShoppingBag} label="Active Orders" value={summary.active} tone="warning" />
+        <MetricCard icon={CheckCircle2} label="Delivered" value={summary.delivered} tone="success" />
+        <MetricCard icon={XCircle} label="Cancelled / Discarded" value={summary.cancelled} tone="danger" />
+      </div>
+
+      {/* Toolbar */}
+      <Card className="mb-6 p-4">
+        <div className="relative min-w-0 flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search sales orders..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-9"
+          />
         </div>
-      </div>
+      </Card>
 
-      {/* ── KPIs ── */}
-      <div className="fin-kpis">
-        <div className="fin-kpi"><div className="fin-kpi__icon fin-kpi__icon--primary"><TrendingUp size={20} /></div><div><span className="fin-kpi__value">{fmt(summary.totalRevenue)}</span><span className="fin-kpi__label">Total Revenue</span></div></div>
-        <div className="fin-kpi"><div className="fin-kpi__icon fin-kpi__icon--warning"><ShoppingBag size={20} /></div><div><span className="fin-kpi__value">{summary.active}</span><span className="fin-kpi__label">Active Orders</span></div></div>
-        <div className="fin-kpi"><div className="fin-kpi__icon fin-kpi__icon--success"><CheckCircle2 size={20} /></div><div><span className="fin-kpi__value">{summary.delivered}</span><span className="fin-kpi__label">Delivered</span></div></div>
-        <div className="fin-kpi"><div className="fin-kpi__icon fin-kpi__icon--danger"><XCircle size={20} /></div><div><span className="fin-kpi__value">{summary.cancelled}</span><span className="fin-kpi__label">Cancelled / Discarded</span></div></div>
-      </div>
-
-      {/* ── Toolbar ── */}
-      <div className="fin-toolbar">
-        <div className="fin-toolbar__search">
-          <Search size={16} className="fin-toolbar__search-icon" />
-          <input placeholder="Search sales orders..." value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-      </div>
-
-      {/* ── Table ── */}
-      <div className="fin-table-card">
-        <div style={{ overflowX: 'auto' }}>
-        <table className="fin-table" style={{ tableLayout: 'fixed', minWidth: '700px' }}>
-          <colgroup>
-            <col style={{ width: '130px' }} />
-            <col style={{ width: '180px' }} />
-            <col style={{ width: '80px' }} />
-            <col style={{ width: '120px' }} />
-            <col style={{ width: '110px' }} />
-            <col style={{ width: '110px' }} />
-            <col style={{ width: '120px' }} />
-            <col style={{ width: '130px' }} />
-            <col style={{ width: '110px' }} />
-            <col style={{ width: '140px' }} />
-          </colgroup>
-          <thead>
-            <tr>
-              <th>SO #</th>
-              <th>Customer</th>
-              <th style={{ textAlign: 'center' }}>Items</th>
-              <th style={{ textAlign: 'right' }}>Amount</th>
-              <th>Order date</th>
-              <th>Delivery</th>
-              <th>Region</th>
-              <th>Sales rep</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(so => {
-              const cfg     = STATUS_MAP[so.status];
-              const actCfg  = ACTION_CFG[so.status];
-              return (
-                <tr key={so.id} className={`fin-table__row fin-table__row--${so.status.toLowerCase()}`}>
-                  <td><span className="fin-table__ref">{so.soNumber}</span></td>
-                  <td>
-                    <div className="fin-table__vendor">
-                      <div className={`fin-table__avatar fin-table__avatar--${so.avatarMod}`}>{so.customerInitials}</div>
-                      <span className="fin-table__vendor-name">{so.customerName}</span>
-                    </div>
-                  </td>
-                  <td className="fin-table__center">{so.itemCount}</td>
-                  <td className="fin-table__amount fin-table__amount--bold">{fmt(so.amount)}</td>
-                  <td className="fin-table__date">{fmtDate(so.orderDate)}</td>
-                  <td className="fin-table__date">{fmtDate(so.deliveryDate)}</td>
-                  <td><span className="fin-region-badge">{so.region}</span></td>
-                  <td className="fin-table__secondary">{so.salesRep}</td>
-                  <td><span className={`fin-badge fin-badge--${cfg.cls}`}>{cfg.icon}{cfg.label}</span></td>
-                  <td>
-                    <div className="approvals-table__actions">
-                      {/* View */}
-                      <button
-                        className="approvals-table__action-btn"
-                        title="View Details"
-                        onClick={() => setDetailOrder(so)}
-                      >
-                        <Eye size={15} />
-                      </button>
-                      {/* Context-aware primary action */}
-                      {actCfg?.primary && (
-                        <button
-                          className="approvals-table__action-btn approvals-table__action-btn--approve"
-                          title={actCfg.primary.label}
-                          onClick={() => openAction(so, actCfg.primary.action)}
-                        >
-                          {actCfg.primary.icon}
-                        </button>
-                      )}
-                      {/* Context-aware secondary action */}
-                      {actCfg?.secondary && (
-                        <button
-                          className={`approvals-table__action-btn approvals-table__action-btn--${actCfg.secondary.color === 'reject' ? 'reject' : 'return'}`}
-                          title={actCfg.secondary.label}
-                          onClick={() => openAction(so, actCfg.secondary!.action)}
-                        >
-                          {actCfg.secondary.icon}
-                        </button>
-                      )}
-                    </div>
-                  </td>
+      {/* Content */}
+      <Card className="overflow-hidden">
+        {filtered.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-border/70 bg-muted/40 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <th className="px-5 py-3.5">SO #</th>
+                  <th className="px-5 py-3.5">Customer</th>
+                  <th className="px-5 py-3.5 text-center">Items</th>
+                  <th className="px-5 py-3.5 text-right">Amount</th>
+                  <th className="px-5 py-3.5">Order Date</th>
+                  <th className="px-5 py-3.5">Delivery</th>
+                  <th className="px-5 py-3.5">Region</th>
+                  <th className="px-5 py-3.5">Sales Rep</th>
+                  <th className="px-5 py-3.5">Status</th>
+                  <th className="px-5 py-3.5 text-right">Actions</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        </div>
-        {filtered.length === 0 && (
-          <div className="fin-empty"><span>📊</span><p>No sales orders found</p></div>
+              </thead>
+              <tbody className="divide-y divide-border/50">
+                {filtered.map(so => {
+                  const cfg    = STATUS_MAP[so.status];
+                  const actCfg = ACTION_CFG[so.status];
+                  return (
+                    <tr key={so.id} className="transition-colors hover:bg-muted/30">
+                      <td className="px-5 py-3.5 font-mono font-semibold text-foreground">{so.soNumber}</td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-2.5">
+                          <div className="grid size-7 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                            {so.customerInitials}
+                          </div>
+                          <span className="font-semibold text-foreground">{so.customerName}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 text-center text-muted-foreground">{so.itemCount}</td>
+                      <td className="px-5 py-3.5 text-right font-mono font-semibold text-foreground">{fmt(so.amount)}</td>
+                      <td className="px-5 py-3.5 text-muted-foreground">{fmtDate(so.orderDate)}</td>
+                      <td className="px-5 py-3.5 text-muted-foreground">{fmtDate(so.deliveryDate)}</td>
+                      <td className="px-5 py-3.5">
+                        <Badge variant="outline" className="text-[10px]">{so.region}</Badge>
+                      </td>
+                      <td className="px-5 py-3.5 text-muted-foreground">{so.salesRep}</td>
+                      <td className="px-5 py-3.5">
+                        <Badge variant="outline" className={cn('text-[10px]', cfg.tone)}>
+                          {cfg.label}
+                        </Badge>
+                      </td>
+                      <td className="px-5 py-3.5 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="View Details" onClick={() => setDetailOrder(so)}>
+                            <Eye className="size-4" />
+                          </Button>
+                          {actCfg?.primary && (
+                            <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={() => openAction(so, actCfg.primary.action)}>
+                              {actCfg.primary.icon} {actCfg.primary.label}
+                            </Button>
+                          )}
+                          {actCfg?.secondary && (
+                            <Button variant="ghost" size="sm" className="h-8 text-xs text-destructive hover:text-destructive gap-1" onClick={() => openAction(so, actCfg.secondary!.action)}>
+                              {actCfg.secondary.icon} {actCfg.secondary.label}
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState
+            icon={ShoppingBag}
+            title="No sales orders found"
+            description={search ? 'Try adjusting your search query.' : 'No sales orders are currently available.'}
+          />
         )}
-      </div>
+      </Card>
 
-      {/* ── Action Modal ── */}
-      {actionModal && (
-        <div className="approvals-modal-backdrop" onClick={() => setActionModal(null)}>
-          <div className="approvals-modal" onClick={e => e.stopPropagation()}>
-            <div className={`approvals-modal__header approvals-modal__header--${actionColor}`}>
-              <div className="approvals-modal__title">
-                {actionColor === 'approve' ? <ThumbsUp size={20} /> : <ThumbsDown size={20} />}
-                <span>{ACTION_TITLES[actionModal.action]}</span>
-              </div>
-              <button className="approvals-modal__close" onClick={() => setActionModal(null)}><X size={18} /></button>
-            </div>
+      {/* Action Dialog */}
+      <Dialog open={!!actionModal} onOpenChange={() => setActionModal(null)}>
+        {actionModal && (
+          <DialogContent className="sm:max-w-[440px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                {ACTION_TITLES[actionModal.action]}
+              </DialogTitle>
+              <DialogDescription>
+                Confirm action for Sales Order <strong>{actionModal.order.soNumber}</strong>.
+              </DialogDescription>
+            </DialogHeader>
 
-            <div className="approvals-modal__body">
-              <div className="approvals-modal__request-summary">
-                <div className="approvals-modal__summary-row">
-                  <span className="approvals-modal__summary-label">SO #</span>
-                  <span className="approvals-modal__summary-value">{actionModal.order.soNumber}</span>
-                </div>
-                <div className="approvals-modal__summary-row">
-                  <span className="approvals-modal__summary-label">Customer</span>
-                  <span className="approvals-modal__summary-value">{actionModal.order.customerName}</span>
-                </div>
-                <div className="approvals-modal__summary-row">
-                  <span className="approvals-modal__summary-label">Amount</span>
-                  <span className="approvals-modal__summary-value approvals-modal__summary-value--amount">{fmt(actionModal.order.amount)}</span>
-                </div>
-                <div className="approvals-modal__summary-row">
-                  <span className="approvals-modal__summary-label">Items</span>
-                  <span className="approvals-modal__summary-value">{actionModal.order.itemCount} items</span>
-                </div>
-                <div className="approvals-modal__summary-row">
-                  <span className="approvals-modal__summary-label">Delivery date</span>
-                  <span className="approvals-modal__summary-value">{fmtDate(actionModal.order.deliveryDate)}</span>
-                </div>
+            <div className="space-y-4 py-2 text-xs">
+              <div className="rounded-lg border border-border/50 bg-muted/30 p-3 space-y-2">
+                <div className="flex justify-between"><span className="text-muted-foreground">Customer:</span> <strong className="text-foreground">{actionModal.order.customerName}</strong></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Amount:</span> <strong className="text-foreground font-mono">{fmt(actionModal.order.amount)}</strong></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Delivery:</span> <strong className="text-foreground">{fmtDate(actionModal.order.deliveryDate)}</strong></div>
               </div>
 
-              <div className="approvals-modal__field">
-                <label className="approvals-modal__label">
-                  <MessageSquare size={13} style={{ marginRight: 4 }} />
-                  Comments {isCommentRequired && <span>*</span>}
+              <div className="space-y-1.5">
+                <label className="font-semibold text-foreground flex items-center gap-1">
+                  <MessageSquare className="size-3.5" /> Comments {isCommentRequired && <span className="text-destructive">*</span>}
                 </label>
                 <textarea
-                  className="approvals-modal__textarea"
-                  rows={4}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring min-h-[80px]"
                   placeholder={isCommentRequired ? 'Provide a reason...' : 'Optional comments...'}
                   value={actionComment}
                   onChange={e => setActionComment(e.target.value)}
@@ -358,81 +336,71 @@ export default function SalesOrdersPage() {
               </div>
             </div>
 
-            <div className="approvals-modal__footer">
-              <button className="approvals-modal__btn approvals-modal__btn--secondary" onClick={() => setActionModal(null)}>Cancel</button>
-              <button
-                className={`approvals-modal__btn approvals-modal__btn--${actionColor}`}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setActionModal(null)}>Cancel</Button>
+              <Button
+                variant={actionModal.action === 'cancel' || actionModal.action === 'discard' ? 'destructive' : 'default'}
                 disabled={isCommentRequired && !actionComment.trim()}
                 onClick={handleAction}
               >
                 {ACTION_TITLES[actionModal.action]}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        )}
+      </Dialog>
 
-      {/* ── Detail Modal ── */}
-      {detailOrder && (
-        <div className="approvals-modal-backdrop" onClick={() => setDetailOrder(null)}>
-          <div className="approvals-modal approvals-modal--detail" onClick={e => e.stopPropagation()}>
-            <div className="approvals-modal__header">
-              <div className="approvals-modal__title"><Eye size={20} /><span>Order Details</span></div>
-              <button className="approvals-modal__close" onClick={() => setDetailOrder(null)}><X size={18} /></button>
-            </div>
+      {/* Detail Dialog */}
+      <Dialog open={!!detailOrder} onOpenChange={() => setDetailOrder(null)}>
+        {detailOrder && (
+          <DialogContent className="sm:max-w-[480px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Eye className="size-5 text-primary" /> Sales Order Details
+              </DialogTitle>
+              <DialogDescription>
+                Order specification and delivery summary.
+              </DialogDescription>
+            </DialogHeader>
 
-            <div className="approvals-modal__body">
-              <div className="approvals-detail-grid">
-                {[
-                  { label: 'SO #',          value: detailOrder.soNumber },
-                  { label: 'Customer',      value: detailOrder.customerName },
-                  { label: 'Amount',        value: fmt(detailOrder.amount) },
-                  { label: 'Items',         value: `${detailOrder.itemCount} items` },
-                  { label: 'Order date',    value: fmtDate(detailOrder.orderDate) },
-                  { label: 'Delivery date', value: fmtDate(detailOrder.deliveryDate) },
-                  { label: 'Region',        value: detailOrder.region },
-                  { label: 'Sales rep',     value: detailOrder.salesRep },
-                  { label: 'Status',        value: STATUS_MAP[detailOrder.status].label },
-                ].map(item => (
-                  <div key={item.label} className="approvals-detail-grid__item">
-                    <span className="approvals-detail-grid__label">{item.label}</span>
-                    <span className="approvals-detail-grid__value">{item.value}</span>
+            <div className="space-y-3 py-2 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg border border-border/50 bg-card p-3">
+                  <div className="text-muted-foreground">SO #</div>
+                  <div className="mt-1 font-semibold font-mono text-foreground">{detailOrder.soNumber}</div>
+                </div>
+                <div className="rounded-lg border border-border/50 bg-card p-3">
+                  <div className="text-muted-foreground">Customer</div>
+                  <div className="mt-1 font-semibold text-foreground">{detailOrder.customerName}</div>
+                </div>
+                <div className="rounded-lg border border-border/50 bg-card p-3">
+                  <div className="text-muted-foreground">Amount</div>
+                  <div className="mt-1 font-semibold font-mono text-foreground">{fmt(detailOrder.amount)}</div>
+                </div>
+                <div className="rounded-lg border border-border/50 bg-card p-3">
+                  <div className="text-muted-foreground">Status</div>
+                  <div className="mt-1">
+                    <Badge variant="outline" className={cn('text-[10px]', STATUS_MAP[detailOrder.status].tone)}>
+                      {STATUS_MAP[detailOrder.status].label}
+                    </Badge>
                   </div>
-                ))}
+                </div>
               </div>
+
               {detailOrder.comments && (
-                <div className="approvals-detail-comments">
-                  <span className="approvals-detail-comments__label"><MessageSquare size={13} /> Comments</span>
-                  <p className="approvals-detail-comments__text">{detailOrder.comments}</p>
+                <div className="rounded-lg border border-border/50 bg-card p-3">
+                  <div className="text-muted-foreground">Comments</div>
+                  <div className="mt-1 text-foreground">{detailOrder.comments}</div>
                 </div>
               )}
             </div>
 
-            <div className="approvals-modal__footer">
-              <button className="approvals-modal__btn approvals-modal__btn--secondary" onClick={() => setDetailOrder(null)}>Close</button>
-              {ACTION_CFG[detailOrder.status]?.primary && (
-                <button
-                  className="approvals-modal__btn approvals-modal__btn--approve"
-                  onClick={() => { setDetailOrder(null); openAction(detailOrder, ACTION_CFG[detailOrder.status]!.primary.action); }}
-                >
-                  {ACTION_CFG[detailOrder.status]!.primary.icon}
-                  {ACTION_CFG[detailOrder.status]!.primary.label}
-                </button>
-              )}
-              {ACTION_CFG[detailOrder.status]?.secondary && (
-                <button
-                  className="approvals-modal__btn approvals-modal__btn--reject"
-                  onClick={() => { setDetailOrder(null); openAction(detailOrder, ACTION_CFG[detailOrder.status]!.secondary!.action); }}
-                >
-                  {ACTION_CFG[detailOrder.status]!.secondary!.icon}
-                  {ACTION_CFG[detailOrder.status]!.secondary!.label}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-    </div>
+            <DialogFooter>
+              <Button onClick={() => setDetailOrder(null)}>Close</Button>
+            </DialogFooter>
+          </DialogContent>
+        )}
+      </Dialog>
+    </PageFrame>
   );
 }

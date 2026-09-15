@@ -23,7 +23,11 @@ import {
   Download,
 } from 'lucide-react';
 import { downloadDocument } from '../../utils/download';
-import './MyProfilePage.css';
+import { PageFrame, PageLead } from '../../components/ui/product';
+import { Card } from '../../components/ui/card';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
 
 function initials(name: string): string {
   return name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
@@ -117,218 +121,294 @@ export default function MyProfilePage() {
 
   if (!user) {
     return (
-      <div className="sap-profile__loading">
-        <Loader2 size={22} className="spin" /> Loading profile…
-      </div>
+      <PageFrame className="flex items-center justify-center min-h-[400px]">
+        <div className="flex items-center gap-2 text-muted-foreground text-sm">
+          <Loader2 className="size-5 animate-spin text-primary" /> Loading profile…
+        </div>
+      </PageFrame>
     );
   }
 
   const displayRoles = roles.filter((r) => r !== 'Vendor');
 
   return (
-    <div className="sap-profile">
-      {/* SAP Object Page Header */}
-      <header className="sap-profile__hero">
-        <div className="sap-profile__avatar">{initials(user.fullName)}</div>
-        <div className="sap-profile__hero-body">
-          <h1>{user.fullName}</h1>
-          <p className="sap-profile__hero-sub">@{user.username} · {user.email}</p>
-          <div className="sap-profile__badges">
-            {displayRoles.map((role) => (
-              <span key={role} className="sap-profile__badge">
-                <Shield size={11} /> {role}
-              </span>
-            ))}
-            <span className={`sap-profile__badge ${user.isActive ? 'sap-profile__badge--active' : ''}`}>
-              <BadgeCheck size={11} /> {user.isActive ? 'Active' : 'Inactive'}
-            </span>
+    <PageFrame>
+      {/* Hero Header */}
+      <Card className="mb-6 overflow-hidden p-6">
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="grid size-16 shrink-0 place-items-center rounded-2xl bg-primary/10 font-bold text-2xl text-primary ring-1 ring-primary/20">
+              {initials(user.fullName)}
+            </div>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight text-foreground">{user.fullName}</h1>
+              <p className="text-xs text-muted-foreground mt-0.5">@{user.username} · {user.email}</p>
+              <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                {displayRoles.map((role) => (
+                  <Badge key={role} variant="secondary" className="gap-1 text-[10px]">
+                    <Shield className="size-3" /> {role}
+                  </Badge>
+                ))}
+                <Badge variant={user.isActive ? 'default' : 'destructive'} className="gap-1 text-[10px]">
+                  <BadgeCheck className="size-3" /> {user.isActive ? 'Active' : 'Inactive'}
+                </Badge>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-col gap-1 border-t border-border/60 pt-4 text-xs text-muted-foreground sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0">
+            <span>Company Code: <strong className="text-foreground font-mono">{user.companyCode}</strong></span>
+            <span>Member since: <strong className="text-foreground">{formatDate(user.createdAt)}</strong></span>
+            <span>Last login: <strong className="text-foreground">{formatDateTime(user.lastLoginAt)}</strong></span>
           </div>
         </div>
-        <div className="sap-profile__hero-meta">
-          <span>Company: {user.companyCode}</span>
-          <span>Member since {formatDate(user.createdAt)}</span>
-          <span>Last login: {formatDateTime(user.lastLoginAt)}</span>
-        </div>
-      </header>
+      </Card>
 
-      <div className="sap-profile__grid">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Personal Information */}
-        <section className="sap-panel">
-          <div className="sap-panel__header">
-            <h2 className="sap-panel__title"><User size={16} /> Personal Information</h2>
+        <Card className="p-6">
+          <div className="flex items-center justify-between border-b border-border/60 pb-4 mb-4">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <User className="size-4 text-primary" /> Personal Information
+            </h2>
             {!editing ? (
-              <button type="button" className="sap-panel__action" onClick={startEdit}>
-                <Edit3 size={13} /> Edit
-              </button>
+              <Button variant="ghost" size="sm" onClick={startEdit} className="h-8 gap-1.5 text-xs">
+                <Edit3 className="size-3.5" /> Edit
+              </Button>
             ) : (
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button type="button" className="sap-panel__action" onClick={cancelEdit}>
-                  <X size={13} /> Cancel
-                </button>
-                <button type="button" className="sap-panel__action" onClick={handleSaveProfile} disabled={profileSaving}>
-                  <Save size={13} /> {profileSaving ? 'Saving…' : 'Save'}
-                </button>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={cancelEdit} className="h-8 gap-1 text-xs">
+                  <X className="size-3.5" /> Cancel
+                </Button>
+                <Button size="sm" onClick={handleSaveProfile} disabled={profileSaving} className="h-8 gap-1 text-xs">
+                  <Save className="size-3.5" /> {profileSaving ? 'Saving…' : 'Save'}
+                </Button>
               </div>
             )}
           </div>
+
           {profileMsg && (
             <MessageStrip
               type={inferMessageType(profileMsg)}
               compact
               onClose={() => setProfileMsg('')}
               autoHideMs={5000}
-              style={{ margin: '0 20px 12px' }}
+              className="mb-4"
             >
               {profileMsg}
             </MessageStrip>
           )}
-          <div className="sap-panel__body">
-            <div className="sap-form-row">
-              <span className="sap-form-row__label">Full Name</span>
-              <span className="sap-form-row__value">{user.fullName}</span>
-            </div>
-            <div className="sap-form-row">
-              <span className="sap-form-row__label">Username</span>
-              <span className="sap-form-row__value">@{user.username}</span>
-            </div>
-            <div className="sap-form-row">
-              <span className="sap-form-row__label">Email</span>
-              <span className="sap-form-row__value"><Mail size={13} style={{ verticalAlign: -2, marginRight: 6, opacity: 0.5 }} />{user.email}</span>
-            </div>
-            <div className="sap-form-row">
-              <span className="sap-form-row__label">Phone</span>
-              {editing ? (
-                <input className="sap-form-row__input" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 XXXXX XXXXX" />
-              ) : (
-                <span className="sap-form-row__value"><Phone size={13} style={{ verticalAlign: -2, marginRight: 6, opacity: 0.5 }} />{user.phone || '—'}</span>
-              )}
-            </div>
-          </div>
-        </section>
 
-        {/* Organization & Access */}
-        <section className="sap-panel">
-          <div className="sap-panel__header">
-            <h2 className="sap-panel__title"><Building2 size={16} /> Organization & Access</h2>
-          </div>
-          <div className="sap-panel__body">
-            <div className="sap-form-row">
-              <span className="sap-form-row__label">Company Code</span>
-              <span className="sap-form-row__value">{user.companyCode}</span>
+          <div className="space-y-3.5 text-xs">
+            <div className="flex items-center justify-between py-1.5 border-b border-border/40">
+              <span className="text-muted-foreground font-medium">Full Name</span>
+              <span className="font-semibold text-foreground">{user.fullName}</span>
             </div>
-            <div className="sap-form-row">
-              <span className="sap-form-row__label">Department</span>
-              {editing ? (
-                <input className="sap-form-row__input" type="text" value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="Department" />
-              ) : (
-                <span className="sap-form-row__value">{user.department || '—'}</span>
-              )}
+            <div className="flex items-center justify-between py-1.5 border-b border-border/40">
+              <span className="text-muted-foreground font-medium">Username</span>
+              <span className="font-mono text-foreground">@{user.username}</span>
             </div>
-            <div className="sap-form-row">
-              <span className="sap-form-row__label">Assigned Roles</span>
-              <span className="sap-form-row__value">{displayRoles.join(', ') || '—'}</span>
-            </div>
-            <div className="sap-form-row">
-              <span className="sap-form-row__label">Account Status</span>
-              <span className="sap-form-row__value" style={{ color: user.isActive ? 'var(--success-500)' : 'var(--danger-500)' }}>
-                {user.isActive ? 'Active' : 'Inactive'}
+            <div className="flex items-center justify-between py-1.5 border-b border-border/40">
+              <span className="text-muted-foreground font-medium">Email</span>
+              <span className="flex items-center gap-1.5 text-foreground">
+                <Mail className="size-3.5 text-muted-foreground" /> {user.email}
               </span>
             </div>
-            <div className="sap-form-row">
-              <span className="sap-form-row__label">Created On</span>
-              <span className="sap-form-row__value"><Calendar size={13} style={{ verticalAlign: -2, marginRight: 6, opacity: 0.5 }} />{formatDate(user.createdAt)}</span>
+            <div className="flex items-center justify-between py-1.5 border-b border-border/40">
+              <span className="text-muted-foreground font-medium">Phone</span>
+              {editing ? (
+                <Input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+91 XXXXX XXXXX"
+                  className="h-8 text-xs max-w-[200px]"
+                />
+              ) : (
+                <span className="flex items-center gap-1.5 text-foreground">
+                  <Phone className="size-3.5 text-muted-foreground" /> {user.phone || '—'}
+                </span>
+              )}
             </div>
           </div>
-        </section>
+        </Card>
+
+        {/* Organization & Access */}
+        <Card className="p-6">
+          <div className="flex items-center justify-between border-b border-border/60 pb-4 mb-4">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <Building2 className="size-4 text-primary" /> Organization & Access
+            </h2>
+          </div>
+
+          <div className="space-y-3.5 text-xs">
+            <div className="flex items-center justify-between py-1.5 border-b border-border/40">
+              <span className="text-muted-foreground font-medium">Company Code</span>
+              <span className="font-mono font-semibold text-foreground">{user.companyCode}</span>
+            </div>
+            <div className="flex items-center justify-between py-1.5 border-b border-border/40">
+              <span className="text-muted-foreground font-medium">Department</span>
+              {editing ? (
+                <Input
+                  type="text"
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value)}
+                  placeholder="Department"
+                  className="h-8 text-xs max-w-[200px]"
+                />
+              ) : (
+                <span className="font-medium text-foreground">{user.department || '—'}</span>
+              )}
+            </div>
+            <div className="flex items-center justify-between py-1.5 border-b border-border/40">
+              <span className="text-muted-foreground font-medium">Assigned Roles</span>
+              <span className="font-medium text-foreground">{displayRoles.join(', ') || '—'}</span>
+            </div>
+            <div className="flex items-center justify-between py-1.5 border-b border-border/40">
+              <span className="text-muted-foreground font-medium">Account Status</span>
+              <Badge variant={user.isActive ? 'default' : 'destructive'} className="text-[10px]">
+                {user.isActive ? 'Active' : 'Inactive'}
+              </Badge>
+            </div>
+            <div className="flex items-center justify-between py-1.5 border-b border-border/40">
+              <span className="text-muted-foreground font-medium">Created On</span>
+              <span className="flex items-center gap-1.5 text-foreground">
+                <Calendar className="size-3.5 text-muted-foreground" /> {formatDate(user.createdAt)}
+              </span>
+            </div>
+          </div>
+        </Card>
 
         {/* Onboarding Documents */}
-        <section className="sap-panel sap-profile__grid--full">
-          <div className="sap-panel__header">
-            <h2 className="sap-panel__title"><FileText size={16} /> Onboarding Documents</h2>
-            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+        <Card className="p-6 lg:col-span-2">
+          <div className="flex items-center justify-between border-b border-border/60 pb-4 mb-4">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <FileText className="size-4 text-primary" /> Onboarding Documents
+            </h2>
+            <span className="text-xs text-muted-foreground">
               {documents.length} document{documents.length !== 1 ? 's' : ''} on file
             </span>
           </div>
-          <div className="sap-panel__body">
-            {docsLoading ? (
-              <div className="sap-doc-empty"><Loader2 size={18} className="spin" /> Loading documents…</div>
-            ) : documents.length === 0 ? (
-              <div className="sap-doc-empty">No onboarding documents uploaded for this account.</div>
-            ) : (
-              <div className="sap-doc-list">
-                {documents.map((doc) => (
-                  <div key={doc.id} className="sap-doc-item">
-                    <div className="sap-doc-item__icon"><FileText size={18} /></div>
-                    <div className="sap-doc-item__info">
-                      <div className="sap-doc-item__type">{doc.documentType}</div>
-                      <div className="sap-doc-item__name">{doc.originalName} · {formatFileSize(doc.fileSize)}</div>
+
+          {docsLoading ? (
+            <div className="flex items-center justify-center py-8 text-xs text-muted-foreground gap-2">
+              <Loader2 className="size-4 animate-spin text-primary" /> Loading documents…
+            </div>
+          ) : documents.length === 0 ? (
+            <div className="py-8 text-center text-xs text-muted-foreground">
+              No onboarding documents uploaded for this account.
+            </div>
+          ) : (
+            <div className="divide-y divide-border/50">
+              {documents.map((doc) => (
+                <div key={doc.id} className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="grid size-9 place-items-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
+                      <FileText className="size-4" />
                     </div>
-                    <span className="sap-doc-item__date">{formatDate(doc.uploadedAt)}</span>
-                    <div className="sap-doc-item__actions">
+                    <div>
+                      <div className="text-xs font-semibold text-foreground">{doc.documentType}</div>
+                      <div className="text-[11px] text-muted-foreground">{doc.originalName} · {formatFileSize(doc.fileSize)}</div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4 text-xs">
+                    <span className="text-muted-foreground">{formatDate(doc.uploadedAt)}</span>
+                    <div className="flex items-center gap-2">
                       <a
                         href={doc.publicUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="sap-doc-item__link"
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
                       >
-                        <Eye size={13} /> View <ExternalLink size={11} />
+                        <Eye className="size-3.5" /> View <ExternalLink className="size-3" />
                       </a>
-                      <button
-                        type="button"
-                        className="sap-doc-item__link"
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1.5 text-xs"
                         onClick={() => downloadDocument(doc.publicUrl, doc.originalName)}
-                        title="Download document"
-                        aria-label="Download document"
                       >
-                        <Download size={13} /> Download
-                      </button>
+                        <Download className="size-3.5" /> Download
+                      </Button>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
 
         {/* Security */}
-        <section className="sap-panel sap-profile__grid--full">
-          <div className="sap-panel__header">
-            <h2 className="sap-panel__title"><Lock size={16} /> Security</h2>
+        <Card className="p-6 lg:col-span-2">
+          <div className="flex items-center justify-between border-b border-border/60 pb-4 mb-4">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <Lock className="size-4 text-primary" /> Security
+            </h2>
           </div>
+
           {pwMsg && (
             <MessageStrip
               type={inferMessageType(pwMsg)}
               compact
               onClose={() => setPwMsg('')}
               autoHideMs={5000}
-              style={{ margin: '0 20px 12px' }}
+              className="mb-4"
             >
               {pwMsg}
             </MessageStrip>
           )}
-          <form className="sap-pw-form" onSubmit={handleChangePassword}>
-            <div className="sap-profile__grid" style={{ gap: 14 }}>
-              <div className="sap-pw-field">
-                <label>Current Password</label>
-                <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} autoComplete="current-password" required />
+
+          <form onSubmit={handleChangePassword} className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Current Password</label>
+                <Input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  autoComplete="current-password"
+                  required
+                />
               </div>
-              <div className="sap-pw-field">
-                <label>New Password</label>
-                <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" placeholder="Min 8 characters" required />
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">New Password</label>
+                <Input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  autoComplete="new-password"
+                  placeholder="Min 8 characters"
+                  required
+                />
               </div>
-              <div className="sap-pw-field">
-                <label>Confirm New Password</label>
-                <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" required />
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Confirm New Password</label>
+                <Input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  autoComplete="new-password"
+                  required
+                />
               </div>
             </div>
-            <div className="sap-pw-actions">
-              <button type="submit" className="sap-btn-primary" disabled={pwLoading}>
-                {pwLoading ? <><Loader2 size={14} className="spin" /> Updating…</> : <><Lock size={14} /> Change Password</>}
-              </button>
+
+            <div className="flex justify-end pt-2">
+              <Button type="submit" disabled={pwLoading}>
+                {pwLoading ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 animate-spin" /> Updating…
+                  </>
+                ) : (
+                  <>
+                    <Lock className="mr-2 size-4" /> Change Password
+                  </>
+                )}
+              </Button>
             </div>
           </form>
-        </section>
+        </Card>
       </div>
-    </div>
+    </PageFrame>
   );
 }

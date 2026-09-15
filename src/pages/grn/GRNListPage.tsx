@@ -17,13 +17,33 @@ import {
 } from 'lucide-react';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
 import { useAuth } from '../../context/AuthContext';
-import './GRNListPage.css';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Card } from '../../components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/ui/dialog';
+import { Input } from '../../components/ui/input';
+import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
+import { cn } from '../../lib/utils';
 
 export default function GRNListPage() {
   const navigate = useNavigate();
   const { hasPermission } = useAuth();
-  const canCreateGRN = hasPermission('PO Creation', 'canCreate') || hasPermission('Goods Received Note', 'canCreate') || hasPermission('GRN', 'canCreate');
-  const canCreateInvoice = hasPermission('Create Purchase Invoice', 'canCreate') || hasPermission('Purchase Invoice', 'canCreate') || hasPermission('Invoices', 'canCreate') || hasPermission('Accounts Payable', 'canCreate');
+  const canCreateGRN =
+    hasPermission('PO Creation', 'canCreate') ||
+    hasPermission('Goods Received Note', 'canCreate') ||
+    hasPermission('GRN', 'canCreate');
+  const canCreateInvoice =
+    hasPermission('Create Purchase Invoice', 'canCreate') ||
+    hasPermission('Purchase Invoice', 'canCreate') ||
+    hasPermission('Invoices', 'canCreate') ||
+    hasPermission('Accounts Payable', 'canCreate');
   const { companyDefaultCurrency, formatAmount } = useCurrency();
 
   const [search, setSearch] = useState('');
@@ -66,7 +86,14 @@ export default function GRNListPage() {
   const filteredPOs = useMemo(() => {
     let list = poList.filter((po) => {
       const s = String(po?.status || '').toUpperCase();
-      return s === 'APPROVED' || s === 'CONFIRMED' || s === 'SENT_TO_VENDOR' || s === 'PROCESSING' || s === 'SHIPPED' || s === 'GRN_RECEIVED';
+      return (
+        s === 'APPROVED' ||
+        s === 'CONFIRMED' ||
+        s === 'SENT_TO_VENDOR' ||
+        s === 'PROCESSING' ||
+        s === 'SHIPPED' ||
+        s === 'GRN_RECEIVED'
+      );
     });
 
     if (kpiFilter === 'PENDING') {
@@ -76,7 +103,12 @@ export default function GRNListPage() {
       const q = search.toLowerCase();
       list = list.filter((po) => {
         const poNum = String(po?.poNumber || '');
-        const vName = typeof po?.vendor === 'object' && po?.vendor?.name ? String(po.vendor.name) : (typeof po?.vendor === 'string' ? po.vendor : '');
+        const vName =
+          typeof po?.vendor === 'object' && po?.vendor?.name
+            ? String(po.vendor.name)
+            : typeof po?.vendor === 'string'
+            ? po.vendor
+            : '';
         const statusStr = String(po?.status || '');
         return (
           poNum.toLowerCase().includes(q) ||
@@ -95,7 +127,10 @@ export default function GRNListPage() {
     return grns.filter((g) => {
       const gNum = String(g?.grnNumber || '');
       const poNum = String(g?.purchaseOrder?.poNumber || '');
-      const vName = typeof g?.purchaseOrder?.vendor === 'object' && g?.purchaseOrder?.vendor?.name ? String(g.purchaseOrder.vendor.name) : '';
+      const vName =
+        typeof g?.purchaseOrder?.vendor === 'object' && g?.purchaseOrder?.vendor?.name
+          ? String(g.purchaseOrder.vendor.name)
+          : '';
       return (
         gNum.toLowerCase().includes(q) ||
         poNum.toLowerCase().includes(q) ||
@@ -108,7 +143,14 @@ export default function GRNListPage() {
   const approvedOrders = useMemo(() => {
     return poList.filter((po) => {
       const s = String(po?.status || '').toUpperCase();
-      return s === 'APPROVED' || s === 'CONFIRMED' || s === 'SENT_TO_VENDOR' || s === 'PROCESSING' || s === 'SHIPPED' || s === 'GRN_RECEIVED';
+      return (
+        s === 'APPROVED' ||
+        s === 'CONFIRMED' ||
+        s === 'SENT_TO_VENDOR' ||
+        s === 'PROCESSING' ||
+        s === 'SHIPPED' ||
+        s === 'GRN_RECEIVED'
+      );
     });
   }, [poList]);
 
@@ -122,317 +164,311 @@ export default function GRNListPage() {
   }, [approvedOrders, grns]);
 
   return (
-    <div className="grn-page">
-      {/* Header */}
-      <div className="grn-header">
-        <div>
-          <h1>My Invoices & Dispatches 📦</h1>
-          <p>View all purchase orders, generate dispatch notes, and manage received delivery notes</p>
-        </div>
-      </div>
+    <PageFrame>
+      <PageLead
+        title="My Invoices & Dispatches 📦"
+        description="View all purchase orders, generate dispatch notes, and manage received delivery notes."
+      />
 
-      {/* Clickable Filter KPI Cards */}
-      <div className="grn-kpis">
-        {/* Card 1: Total Approved Orders */}
-        <div
-          className={`grn-kpi-card ${kpiFilter === 'ALL' ? 'grn-kpi-card--active-primary' : ''}`}
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <MetricCard
+          role="button"
+          tabIndex={0}
+          aria-pressed={kpiFilter === 'ALL'}
+          className={cn(
+            'cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+            kpiFilter === 'ALL' && 'border-primary/40 ring-2 ring-primary/10'
+          )}
           onClick={() => setKpiFilter('ALL')}
-          title="Click to view all approved orders"
-        >
-          <div className="grn-kpi-icon" style={{ background: 'rgba(10, 110, 209, 0.1)', color: 'var(--primary-500)' }}>
-            <ShoppingCart size={22} />
-          </div>
-          <div>
-            <div className="grn-kpi-label">Total Approved Orders</div>
-            <div className="grn-kpi-value">{kpis.totalOrders}</div>
-          </div>
-        </div>
-
-        {/* Card 2: Orders Pending Dispatch Note */}
-        <div
-          className={`grn-kpi-card ${kpiFilter === 'PENDING' ? 'grn-kpi-card--active-warning' : ''}`}
+          icon={ShoppingCart}
+          label="Total Approved Orders"
+          value={kpis.totalOrders}
+          detail="Click to view all approved orders"
+          tone="primary"
+        />
+        <MetricCard
+          role="button"
+          tabIndex={0}
+          aria-pressed={kpiFilter === 'PENDING'}
+          className={cn(
+            'cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+            kpiFilter === 'PENDING' && 'border-amber-500/40 ring-2 ring-amber-500/10'
+          )}
           onClick={() => setKpiFilter('PENDING')}
-          title="Click to view orders pending dispatch note"
-        >
-          <div className="grn-kpi-icon" style={{ background: 'rgba(234, 179, 8, 0.1)', color: '#eab308' }}>
-            <Truck size={22} />
-          </div>
-          <div>
-            <div className="grn-kpi-label">Orders Pending Dispatch</div>
-            <div className="grn-kpi-value">{kpis.pendingGrns}</div>
-          </div>
-        </div>
-
-        {/* Card 3: Recorded Dispatch Notes */}
-        <div
-          className={`grn-kpi-card ${kpiFilter === 'GRN' ? 'grn-kpi-card--active-success' : ''}`}
+          icon={Truck}
+          label="Orders Pending Dispatch"
+          value={kpis.pendingGrns}
+          detail="Click to view orders pending dispatch note"
+          tone="warning"
+        />
+        <MetricCard
+          role="button"
+          tabIndex={0}
+          aria-pressed={kpiFilter === 'GRN'}
+          className={cn(
+            'cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+            kpiFilter === 'GRN' && 'border-emerald-500/40 ring-2 ring-emerald-500/10'
+          )}
           onClick={() => setKpiFilter('GRN')}
-          title="Click to view recorded dispatch notes"
-        >
-          <div className="grn-kpi-icon" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981' }}>
-            <PackageCheck size={22} />
-          </div>
-          <div>
-            <div className="grn-kpi-label">Recorded Dispatches</div>
-            <div className="grn-kpi-value">{kpis.recordedGrns}</div>
-          </div>
-        </div>
+          icon={PackageCheck}
+          label="Recorded Dispatches"
+          value={kpis.recordedGrns}
+          detail="Click to view recorded dispatch notes"
+          tone="success"
+        />
       </div>
 
-      {/* Horizontally Full Length Search Bar */}
-      <div className="grn-toolbar">
-        <div className="grn-search-box">
-          <Search size={18} style={{ color: 'var(--text-secondary)' }} />
-          <input
+      <Card className="mb-4 p-3 sm:p-4">
+        <div className="relative w-full">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="h-10 pl-10 pr-10"
             type="text"
             placeholder={
               kpiFilter === 'GRN'
                 ? 'Search across recorded dispatch notes by dispatch note number, PO number, or supplier...'
-                : 'Search across all approved orders by PO number or supplier name in full length...'
+                : 'Search across all approved orders by PO number or supplier name...'
             }
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
           {search && (
-            <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>
-              <X size={16} />
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              className="absolute right-1.5 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-lg text-muted-foreground hover:bg-accent"
+            >
+              <X className="size-4" />
             </button>
           )}
         </div>
-      </div>
+      </Card>
 
-      {/* Conditional Table Display based on Clicked KPI Card */}
       {kpiFilter !== 'GRN' ? (
-        /* Orders Table (ALL or PENDING) */
-        <div className="grn-table-wrap">
-          <table className="grn-table">
-            <thead>
-              <tr>
-                <th>PO Number</th>
-                <th>Supplier / Vendor</th>
-                <th>Total Value</th>
-                <th>Order Date</th>
-                <th>Status</th>
-                <th style={{ textAlign: 'right' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {poLoading ? (
-                <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-secondary)' }}>
-                    Loading Purchase Orders…
-                  </td>
-                </tr>
-              ) : filteredPOs.length === 0 ? (
-                <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '48px' }}>
-                    <div style={{ fontSize: 32, marginBottom: 8 }}>🛒</div>
-                    <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>
-                      {kpiFilter === 'PENDING' ? 'No Orders Pending Dispatch Note' : 'No Purchase Orders Found'}
-                    </div>
-                    <div style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 4 }}>
-                      {search ? 'Try adjusting your full length search query.' : 'Once purchase orders are generated, they will appear here.'}
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                filteredPOs.map((po) => {
-                  const poNum = String(po?.poNumber || '');
-                  const vName = typeof po?.vendor === 'object' && po?.vendor?.name ? String(po.vendor.name) : (typeof po?.vendor === 'string' ? po.vendor : 'Supplier');
-                  const statusStr = String(po?.status || 'APPROVED');
-                  return (
-                    <tr key={String(po.id)}>
-                      <td style={{ fontWeight: 700, color: 'var(--primary-500)' }}>{poNum}</td>
-                      <td style={{ fontWeight: 600 }}>{vName}</td>
-                      <td style={{ fontWeight: 700 }}>{formatAmount(po.totalAmount, companyDefaultCurrency)}</td>
-                      <td>{new Date(po.createdAt || Date.now()).toLocaleDateString()}</td>
-                      <td>
-                        <span className="grn-status-badge grn-status-badge--po">
-                          {statusStr}
-                        </span>
-                      </td>
-                    <td style={{ textAlign: 'right' }}>
-                      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                        <button
-                          className="grn-action-btn-generate"
-                          onClick={() => canCreateGRN && navigate(`/procurement/create-grn?poId=${po.id}`)}
-                          disabled={!canCreateGRN}
-                          style={!canCreateGRN ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                          title={!canCreateGRN ? "Admin has not allowed this action. You do not have permission to generate dispatch notes." : undefined}
-                        >
-                          <Truck size={14} /> Generate Dispatch Note
-                        </button>
-                        <button
-                          className="grn-action-btn-invoice"
-                          onClick={() => canCreateInvoice && navigate(`/procurement/create-purchase-invoice?poId=${po.id}`)}
-                          disabled={!canCreateInvoice}
-                          style={!canCreateInvoice ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                          title={!canCreateInvoice ? "Admin has not allowed this action. You do not have permission to create purchase invoices." : undefined}
-                        >
-                          <Receipt size={14} /> Create Invoice
-                        </button>
-                      </div>
-                    </td>
+        <Card className="overflow-hidden">
+          {poLoading ? (
+            <div className="flex min-h-[300px] items-center justify-center text-sm text-muted-foreground">
+              Loading Purchase Orders…
+            </div>
+          ) : filteredPOs.length === 0 ? (
+            <EmptyState
+              icon={ShoppingCart}
+              title={kpiFilter === 'PENDING' ? 'No Orders Pending Dispatch Note' : 'No Purchase Orders Found'}
+              description={search ? 'Try adjusting your search query.' : 'Once purchase orders are generated, they will appear here.'}
+              action={search ? <Button variant="secondary" onClick={() => setSearch('')}>Clear search</Button> : undefined}
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[800px] border-collapse text-left text-sm">
+                <thead className="border-b border-border/70 bg-secondary/55 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3">PO Number</th>
+                    <th className="px-4 py-3">Supplier / Vendor</th>
+                    <th className="px-4 py-3 font-right">Total Value</th>
+                    <th className="px-4 py-3">Order Date</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
-                );
-              })
-              )}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        /* Recorded GRNs Table */
-        <div className="grn-table-wrap">
-          <table className="grn-table">
-            <thead>
-              <tr>
-                <th>Dispatch Note Number</th>
-                <th>Linked PO Number</th>
-                <th>Supplier / Vendor</th>
-                <th>Received Date</th>
-                <th>Items Count</th>
-                <th>Status</th>
-                <th style={{ textAlign: 'right' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {grnLoading ? (
-                <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-secondary)' }}>
-                    Loading Dispatch Notes…
-                  </td>
-                </tr>
-              ) : filteredGRNs.length === 0 ? (
-                <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: '48px' }}>
-                    <div style={{ fontSize: 32, marginBottom: 8 }}>📦</div>
-                    <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>No Dispatch Notes Recorded Yet</div>
-                    <div style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 4 }}>
-                      Click "Total Approved Orders" card above to select an order and generate a dispatch note.
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                filteredGRNs.map((grn) => {
-                  const poNum = String(grn.purchaseOrder?.poNumber || '').toLowerCase();
-                  const poId = String(grn.poId || grn.purchaseOrder?.id || '').toLowerCase();
-                  const grnNum = String(grn.grnNumber || '').toLowerCase();
-                  const grnId = String(grn.id || '').toLowerCase();
-
-                  const poObj = poList.find((p) => String(p.id) === String(grn.poId) || String(p.poNumber) === String(grn.purchaseOrder?.poNumber));
-                  const isPoInvoiced = poObj && (poObj.status === 'INVOICED' || poObj.status === 'CLOSED');
-
-                  const isInvoiced =
-                    isPoInvoiced ||
-                    (poNum && invoicedPoNumbers.has(poNum)) ||
-                    (poId && invoicedPoNumbers.has(poId)) ||
-                    (grnNum && invoicedPoNumbers.has(grnNum)) ||
-                    (grnId && invoicedPoNumbers.has(grnId));
-
-                  return (
-                    <tr key={grn.id}>
-                      <td style={{ fontWeight: 700, color: 'var(--primary-500)' }}>{grn.grnNumber}</td>
-                      <td style={{ fontWeight: 600 }}>{grn.purchaseOrder?.poNumber || '—'}</td>
-                      <td>{grn.purchaseOrder?.vendor?.name || 'Supplier'}</td>
-                      <td>{new Date(grn.receivedDate).toLocaleDateString()}</td>
-                      <td>{grn.items?.length || 0} line item(s)</td>
-                      <td>
-                        {isInvoiced ? (
-                          <span className="grn-status-badge grn-status-badge--invoiced">
-                            <CheckCircle2 size={12} /> INVOICED
-                          </span>
-                        ) : (
-                          <span className="grn-status-badge grn-status-badge--received">
-                            RECEIVED
-                          </span>
-                        )}
-                      </td>
-                      <td style={{ textAlign: 'right', minWidth: '270px' }}>
-                        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', alignItems: 'center' }}>
-                          <button
-                            className="grn-btn-view"
-                            onClick={() => setSelectedGrn(grn)}
-                          >
-                            <Eye size={14} /> View Details
-                          </button>
-                          {isInvoiced ? (
-                            <button className="grn-btn-invoiced" disabled title="Invoice already sent for this order">
-                              <CheckCircle2 size={14} /> Invoice Sent
-                            </button>
-                          ) : (
-                            <button
-                              className="grn-btn-create-invoice"
-                              onClick={() => {
-                                if (!canCreateInvoice) return;
-                                const targetPo = grn.purchaseOrder?.poNumber || grn.poId || grn.purchaseOrder?.id;
-                                const targetGrn = grn.grnNumber || grn.id;
-                                navigate(`/procurement/create-purchase-invoice?poId=${targetPo}&grnId=${targetGrn}`);
-                              }}
-                              disabled={!canCreateInvoice}
-                              style={!canCreateInvoice ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                              title={!canCreateInvoice ? "Admin has not allowed this action. You do not have permission to create purchase invoices." : undefined}
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {filteredPOs.map((po) => {
+                    const poNum = String(po?.poNumber || '');
+                    const vName =
+                      typeof po?.vendor === 'object' && po?.vendor?.name
+                        ? String(po.vendor.name)
+                        : typeof po?.vendor === 'string'
+                        ? po.vendor
+                        : 'Supplier';
+                    const statusStr = String(po?.status || 'APPROVED');
+                    return (
+                      <tr key={String(po.id)} className="transition-colors hover:bg-accent/35">
+                        <td className="px-4 py-3.5 font-bold text-primary">{poNum}</td>
+                        <td className="px-4 py-3.5 font-medium">{vName}</td>
+                        <td className="px-4 py-3.5 font-semibold tabular-nums">{formatAmount(po.totalAmount, companyDefaultCurrency)}</td>
+                        <td className="px-4 py-3.5 text-xs text-muted-foreground">{new Date(po.createdAt || Date.now()).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                        <td className="px-4 py-3.5">
+                          <Badge tone="info">{statusStr}</Badge>
+                        </td>
+                        <td className="px-4 py-3.5 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={!canCreateGRN}
+                              onClick={() => canCreateGRN && navigate(`/procurement/create-grn?poId=${po.id}`)}
+                              title={!canCreateGRN ? 'You do not have permission to generate dispatch notes.' : undefined}
                             >
-                              <Receipt size={14} /> Create Invoice <ArrowRight size={13} />
-                            </button>
+                              <Truck className="size-3.5" /> Generate Dispatch Note
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              disabled={!canCreateInvoice}
+                              onClick={() => canCreateInvoice && navigate(`/procurement/create-purchase-invoice?poId=${po.id}`)}
+                              title={!canCreateInvoice ? 'You do not have permission to create purchase invoices.' : undefined}
+                            >
+                              <Receipt className="size-3.5" /> Create Invoice
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      ) : (
+        <Card className="overflow-hidden">
+          {grnLoading ? (
+            <div className="flex min-h-[300px] items-center justify-center text-sm text-muted-foreground">
+              Loading Dispatch Notes…
+            </div>
+          ) : filteredGRNs.length === 0 ? (
+            <EmptyState
+              icon={PackageCheck}
+              title="No Dispatch Notes Recorded Yet"
+              description="Click 'Total Approved Orders' card above to select an order and generate a dispatch note."
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[850px] border-collapse text-left text-sm">
+                <thead className="border-b border-border/70 bg-secondary/55 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3">Dispatch Note Number</th>
+                    <th className="px-4 py-3">Linked PO Number</th>
+                    <th className="px-4 py-3">Supplier / Vendor</th>
+                    <th className="px-4 py-3">Received Date</th>
+                    <th className="px-4 py-3">Items Count</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {filteredGRNs.map((grn) => {
+                    const poNum = String(grn.purchaseOrder?.poNumber || '').toLowerCase();
+                    const poId = String(grn.poId || grn.purchaseOrder?.id || '').toLowerCase();
+                    const grnNum = String(grn.grnNumber || '').toLowerCase();
+                    const grnId = String(grn.id || '').toLowerCase();
+
+                    const poObj = poList.find(
+                      (p) => String(p.id) === String(grn.poId) || String(p.poNumber) === String(grn.purchaseOrder?.poNumber)
+                    );
+                    const isPoInvoiced = poObj && (poObj.status === 'INVOICED' || poObj.status === 'CLOSED');
+
+                    const isInvoiced =
+                      isPoInvoiced ||
+                      (poNum && invoicedPoNumbers.has(poNum)) ||
+                      (poId && invoicedPoNumbers.has(poId)) ||
+                      (grnNum && invoicedPoNumbers.has(grnNum)) ||
+                      (grnId && invoicedPoNumbers.has(grnId));
+
+                    return (
+                      <tr key={grn.id} className="transition-colors hover:bg-accent/35">
+                        <td className="px-4 py-3.5 font-bold text-primary">{grn.grnNumber}</td>
+                        <td className="px-4 py-3.5 font-medium">{grn.purchaseOrder?.poNumber || '—'}</td>
+                        <td className="px-4 py-3.5">{grn.purchaseOrder?.vendor?.name || 'Supplier'}</td>
+                        <td className="px-4 py-3.5 text-xs text-muted-foreground">{new Date(grn.receivedDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                        <td className="px-4 py-3.5">{grn.items?.length || 0} line item(s)</td>
+                        <td className="px-4 py-3.5">
+                          {isInvoiced ? (
+                            <Badge tone="success">
+                              <CheckCircle2 className="size-3" /> INVOICED
+                            </Badge>
+                          ) : (
+                            <Badge tone="info">RECEIVED</Badge>
                           )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                        </td>
+                        <td className="px-4 py-3.5 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSelectedGrn(grn)}
+                            >
+                              <Eye className="size-3.5" /> View Details
+                            </Button>
+                            {isInvoiced ? (
+                              <Button variant="outline" size="sm" disabled>
+                                <CheckCircle2 className="size-3.5" /> Invoice Sent
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="default"
+                                size="sm"
+                                disabled={!canCreateInvoice}
+                                onClick={() => {
+                                  if (!canCreateInvoice) return;
+                                  const targetPo = grn.purchaseOrder?.poNumber || grn.poId || grn.purchaseOrder?.id;
+                                  const targetGrn = grn.grnNumber || grn.id;
+                                  navigate(`/procurement/create-purchase-invoice?poId=${targetPo}&grnId=${targetGrn}`);
+                                }}
+                                title={!canCreateInvoice ? 'You do not have permission to create purchase invoices.' : undefined}
+                              >
+                                <Receipt className="size-3.5" /> Create Invoice <ArrowRight className="size-3" />
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
       )}
 
       {/* Details Modal */}
-      {selectedGrn && (
-        <div className="grn-modal-overlay" onClick={() => setSelectedGrn(null)}>
-          <div className="grn-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="grn-modal__header">
-              <div>
-                <h2>{selectedGrn.grnNumber}</h2>
-                <p>Linked PO: {selectedGrn.purchaseOrder?.poNumber} | Supplier: {selectedGrn.purchaseOrder?.vendor?.name}</p>
-              </div>
-              <button className="grn-close-btn" onClick={() => setSelectedGrn(null)}>
-                <X size={18} />
-              </button>
-            </div>
-            <div className="grn-modal__body">
-              <h4 style={{ margin: '0 0 12px 0' }}>Received Items Breakdown</h4>
-              <table className="grn-table">
-                <thead>
-                  <tr>
-                    <th>Item Name</th>
-                    <th>Ordered Qty</th>
-                    <th>Delivered / Received Qty</th>
-                    <th>Remarks</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedGrn.items?.map((it) => (
-                    <tr key={it.id}>
-                      <td style={{ fontWeight: 600 }}>{it.itemName}</td>
-                      <td>{it.orderedQty}</td>
-                      <td style={{ fontWeight: 700, color: 'var(--primary-500)' }}>{it.receivedQty}</td>
-                      <td style={{ color: 'var(--text-secondary)' }}>{it.remarks || '—'}</td>
+      <Dialog open={!!selectedGrn} onOpenChange={(open) => { if (!open) setSelectedGrn(null); }}>
+        {selectedGrn && (
+          <DialogContent className="max-w-2xl">
+            <DialogHeader className="pr-10">
+              <DialogTitle>{selectedGrn.grnNumber}</DialogTitle>
+              <DialogDescription>
+                Linked PO: {selectedGrn.purchaseOrder?.poNumber} | Supplier: {selectedGrn.purchaseOrder?.vendor?.name}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Received Items Breakdown</h4>
+              <div className="overflow-hidden rounded-xl border border-border/70">
+                <table className="w-full text-left text-xs">
+                  <thead className="border-b border-border/70 bg-muted/40 font-semibold text-muted-foreground">
+                    <tr>
+                      <th className="px-3 py-2">Item Name</th>
+                      <th className="px-3 py-2">Ordered Qty</th>
+                      <th className="px-3 py-2">Received Qty</th>
+                      <th className="px-3 py-2">Remarks</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-border/50">
+                    {selectedGrn.items?.map((it) => (
+                      <tr key={it.id}>
+                        <td className="px-3 py-2.5 font-medium">{it.itemName}</td>
+                        <td className="px-3 py-2.5 text-muted-foreground">{it.orderedQty}</td>
+                        <td className="px-3 py-2.5 font-bold text-primary">{it.receivedQty}</td>
+                        <td className="px-3 py-2.5 text-muted-foreground">{it.remarks || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
               {selectedGrn.notes && (
-                <div style={{ marginTop: 16 }}>
-                  <strong>Notes / Remarks:</strong>
-                  <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)' }}>{selectedGrn.notes}</p>
+                <div className="rounded-xl border border-border/60 bg-muted/20 p-3 text-xs">
+                  <span className="font-semibold text-foreground">Notes / Remarks:</span>
+                  <p className="mt-1 text-muted-foreground">{selectedGrn.notes}</p>
                 </div>
               )}
             </div>
-            <div className="grn-modal__footer">
-              <button className="cpo-btn cpo-btn--secondary" onClick={() => setSelectedGrn(null)}>
+
+            <DialogFooter>
+              <Button variant="secondary" onClick={() => setSelectedGrn(null)}>
                 Close
-              </button>
+              </Button>
               {(() => {
                 const safeStr = (v: any) => {
                   if (!v) return '';
@@ -465,15 +501,14 @@ export default function GRNListPage() {
 
                 if (isModalGrnInvoiced) {
                   return (
-                    <button className="grn-btn-invoiced" disabled style={{ padding: '9px 18px', fontSize: '13.5px' }}>
-                      <CheckCircle2 size={16} /> Invoice Sent for this Dispatch Note
-                    </button>
+                    <Button variant="outline" disabled>
+                      <CheckCircle2 className="size-4" /> Invoice Sent for this Dispatch Note
+                    </Button>
                   );
                 }
 
                 return (
-                  <button
-                    className="grn-btn-create-invoice"
+                  <Button
                     onClick={() => {
                       const targetPo = selectedGrn.purchaseOrder?.poNumber || selectedGrn.poId || selectedGrn.purchaseOrder?.id;
                       const targetGrn = selectedGrn.grnNumber || selectedGrn.id;
@@ -481,14 +516,14 @@ export default function GRNListPage() {
                       navigate(`/procurement/create-purchase-invoice?poId=${targetPo}&grnId=${targetGrn}`);
                     }}
                   >
-                    <Receipt size={15} /> Create Purchase Invoice for this Dispatch Note
-                  </button>
+                    <Receipt className="size-4" /> Create Purchase Invoice
+                  </Button>
                 );
               })()}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+            </DialogFooter>
+          </DialogContent>
+        )}
+      </Dialog>
+    </PageFrame>
   );
 }

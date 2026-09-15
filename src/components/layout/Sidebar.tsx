@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -22,8 +23,6 @@ import {
   Receipt,
   UserCircle,
   FileSignature,
-  ChevronLeft,
-  ChevronRight,
   FormInput,
   Truck,
 } from 'lucide-react';
@@ -34,7 +33,8 @@ import { useRoutePrefetch } from '../../hooks/useRoutePrefetch';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { isVendor } from '../../utils/rbac';
-import './Sidebar.css';
+import { cn } from '../../lib/utils';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 
 // ─── Navigation config ──────────────────────────────────────
 
@@ -49,7 +49,6 @@ interface NavSection {
   items: NavItem[];
 }
 
-// Icon mapping for menu items
 const ICON_MAP: Record<string, React.ReactNode> = {
   Dashboard: <LayoutDashboard size={19} />,
   'RFQ Management': <FileText size={19} />,
@@ -60,7 +59,7 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   'PO Approval': <ShoppingCart size={19} />,
   'Accounts Payable': <Wallet size={19} />,
   'Purchase Invoice Approval': <Wallet size={19} />,
-  'Payments': <CreditCard size={19} />,
+  Payments: <CreditCard size={19} />,
   'Payment Voucher Approval': <CreditCard size={19} />,
   'Sales Orders': <TrendingUp size={19} />,
   Vendors: <Users size={19} />,
@@ -82,7 +81,7 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   'My Quotations': <ClipboardList size={19} />,
   'My Orders': <Package size={19} />,
   'My Invoices': <Receipt size={19} />,
-  'Agreements': <FileSignature size={19} />,
+  Agreements: <FileSignature size={19} />,
   'My Profile': <UserCircle size={19} />,
   'Custom Form Builder': <FormInput size={19} />,
   Forms: <ClipboardList size={19} />,
@@ -130,20 +129,18 @@ const FR_SECTION_MAP: Record<string, string> = {
   Admin: 'Administration',
 };
 
-// ─── Component ──────────────────────────────────────────────
-
 interface SidebarProps {
-  collapsed: boolean;
   mobileOpen: boolean;
-  onToggle: () => void;
   onMobileClose: () => void;
+  isHovered: boolean;
+  onHoverChange: (hovered: boolean) => void;
 }
 
 export default function Sidebar({
-  collapsed,
   mobileOpen,
-  onToggle,
   onMobileClose,
+  isHovered,
+  onHoverChange,
 }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -152,10 +149,37 @@ export default function Sidebar({
   const prefetch = useRoutePrefetch();
   const { companyName, logoUrl } = useBranding();
   const { isFrench } = useLanguage();
+  const sidebarRef = useRef<HTMLElement>(null);
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
 
+  const collapsed = !isHovered;
   const dashboardPath = isVendor(roles) ? '/vendor/dashboard' : '/dashboard';
 
-  // Convert menu items to nav sections
+  useEffect(() => {
+    if (!mobileOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onMobileClose();
+        requestAnimationFrame(() => document.getElementById('navigation-trigger')?.focus());
+      }
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [mobileOpen, onMobileClose]);
+
+  useEffect(() => {
+    if (mobileOpen && !isDesktop) {
+      requestAnimationFrame(() => sidebarRef.current?.querySelector<HTMLElement>('a')?.focus());
+    }
+  }, [isDesktop, mobileOpen]);
+
   const NAV_SECTIONS: NavSection[] = [
     {
       title: 'Main',
@@ -253,7 +277,6 @@ export default function Sidebar({
         ...menuItems
           .filter((item) => item.id === 'signature')
           .map((item) => ({ label: item.label, icon: ICON_MAP[item.label] || <PenLine size={19} />, path: item.path })),
-        // Admin children (Users, Roles, Approval Levels)
         ...menuItems
           .filter((item) => item.id === 'admin')
           .flatMap((item) =>
@@ -267,31 +290,39 @@ export default function Sidebar({
     },
   ].filter((section) => section.items.length > 0);
 
-  const sidebarClasses = [
-    'sidebar',
-    collapsed ? 'sidebar--collapsed' : '',
-    mobileOpen ? 'sidebar--mobile-open' : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
-
   return (
     <>
-      {/* Mobile backdrop */}
-      <div
-        className={`sidebar__backdrop ${mobileOpen ? 'sidebar__backdrop--visible' : ''}`}
+      <button
+        type="button"
+        aria-label="Close navigation"
+        tabIndex={mobileOpen ? 0 : -1}
+        aria-hidden={!mobileOpen}
+        className={cn(
+          'fixed inset-0 z-40 bg-slate-950/55 backdrop-blur-sm transition-opacity duration-200 lg:hidden',
+          mobileOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0',
+        )}
         onClick={onMobileClose}
       />
 
-      <aside className={sidebarClasses}>
-        {/* Logo */}
+      <aside
+        id="primary-navigation"
+        ref={sidebarRef}
+        aria-label="Primary navigation"
+        aria-hidden={!isDesktop && !mobileOpen}
+        onMouseEnter={() => onHoverChange(true)}
+        onMouseLeave={() => onHoverChange(false)}
+        className={cn(
+          'fixed inset-y-0 left-0 z-50 flex flex-col overflow-hidden border-r border-white/10 [background:var(--shell-bg)] text-[var(--shell-text)] shadow-2xl shadow-slate-950/20 transition-[width,transform] duration-200 ease-out lg:translate-x-0',
+          mobileOpen ? 'translate-x-0 w-[280px]' : '-translate-x-full',
+          collapsed ? 'lg:w-20' : 'lg:w-[280px]',
+        )}
+      >
         <div
-          className="sidebar__logo"
+          className="flex h-16 shrink-0 cursor-pointer items-center gap-3 border-b border-white/10 px-5"
           onClick={() => {
             navigate(dashboardPath);
             onMobileClose();
           }}
-          title="Go to Dashboard"
           role="button"
           tabIndex={0}
           onKeyDown={(e) => {
@@ -304,16 +335,27 @@ export default function Sidebar({
           <img
             src={logoUrl || heliflowLogo}
             alt={companyName}
-            className="sidebar__logo-img"
+            className="h-9 w-9 shrink-0 rounded-xl object-contain ring-1 ring-white/10"
           />
-          <span className="sidebar__logo-text">{companyName}</span>
+          <span
+            className={cn(
+              'min-w-0 truncate text-[17px] font-semibold tracking-[-0.03em] text-white transition-opacity',
+              collapsed && 'lg:pointer-events-none lg:opacity-0',
+            )}
+          >
+            {companyName}
+          </span>
         </div>
 
-        {/* Navigation */}
-        <nav className="sidebar__nav">
+        <nav className="flex-1 overflow-x-hidden overflow-y-auto px-3 py-3 [scrollbar-color:rgba(255,255,255,0.18)_transparent] [scrollbar-width:thin]">
           {NAV_SECTIONS.map((section) => (
-            <div key={section.title} className="sidebar__section">
-              <span className="sidebar__section-label">
+            <div key={section.title} className="mb-2">
+              <span
+                className={cn(
+                  'block px-3 pb-1.5 pt-4 text-[10px] font-semibold uppercase tracking-[0.1em] text-white/40 transition-opacity',
+                  collapsed && 'lg:h-2 lg:overflow-hidden lg:px-0 lg:py-0 lg:opacity-0',
+                )}
+              >
                 {isFrench ? (FR_SECTION_MAP[section.title] || section.title) : section.title}
               </span>
               {section.items.map((item) => {
@@ -328,15 +370,30 @@ export default function Sidebar({
                   <NavLink
                     key={item.path}
                     to={item.path}
-                    className={`sidebar__item ${isActive ? 'sidebar__item--active' : ''}`}
+                    aria-current={isActive ? 'page' : undefined}
+                    title={collapsed ? displayLabel : undefined}
+                    className={cn(
+                      'group relative my-1 flex min-h-11 items-center gap-3 overflow-hidden rounded-xl px-3 text-[13px] font-medium text-white/65 outline-none transition-colors hover:bg-white/[0.08] hover:text-white focus-visible:ring-2 focus-visible:ring-[var(--shell-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900',
+                      collapsed && 'lg:justify-center lg:px-0',
+                      isActive && 'bg-white/[0.12] font-semibold text-white shadow-sm shadow-black/10',
+                    )}
                     onClick={() => {
                       onMobileClose();
                     }}
                     onMouseEnter={prefetch(item.path)}
                   >
-                    <span className="sidebar__item-icon">{item.icon}</span>
-                    <span className="sidebar__item-label">{displayLabel}</span>
-                    <span className="sidebar__item-tooltip">{displayLabel}</span>
+                    {isActive && (
+                      <span className="absolute inset-y-2 left-0 w-0.5 rounded-r-full bg-[var(--shell-accent)]" />
+                    )}
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center">{item.icon}</span>
+                    <span
+                      className={cn(
+                        'min-w-0 truncate transition-opacity',
+                        collapsed && 'lg:absolute lg:pointer-events-none lg:opacity-0',
+                      )}
+                    >
+                      {displayLabel}
+                    </span>
                   </NavLink>
                 );
               })}

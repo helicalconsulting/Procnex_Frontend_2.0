@@ -1,431 +1,144 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
-import { useServiceData } from '../../hooks/useServiceData';
-import { vendorPortalService } from '../../services/vendorPortalService';
-import type { VendorOrderMock } from '../../mocks/vendorPortal.mock';
 import {
-  Package,
-  Truck,
-  CheckCircle2,
-  Clock,
-  XCircle,
-  Search,
-  ChevronDown,
-  MapPin,
-  Calendar,
-  IndianRupee,
-  FileText,
-  AlertCircle,
-  Upload,
-  MessageSquare,
-  Download,
+  AlertCircle, Calendar, CheckCircle2, ChevronDown, Clock, Download, FileText,
+  IndianRupee, MapPin, Package, Receipt, Search, Truck, XCircle,
 } from 'lucide-react';
-import { useCurrency, CurrencySelector, CurrencyBadge } from '../../components/shared/CurrencyMaster';
-import { downloadPurchaseOrderAsPdf } from '../../utils/pdfDownload';
-import '../../styles/vendor-portal.css';
-import '../../styles/vendor-orders.css';
+import { CurrencyBadge, CurrencySelector, useCurrency } from '@/components/shared/CurrencyMaster';
+import { Badge } from '@/components/ui/badge';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { CollapsibleContent } from '@/components/ui/collapsible-content';
+import { DataTableViewport } from '@/components/ui/data-table-viewport';
+import { EmptyState, MetricCard, PageFrame, PageLead } from '@/components/ui/product';
+import { useServiceData } from '@/hooks/useServiceData';
+import { cn } from '@/lib/utils';
+import type { VendorOrderMock } from '@/mocks/vendorPortal.mock';
+import { vendorPortalService } from '@/services/vendorPortalService';
+import { downloadPurchaseOrderAsPdf } from '@/utils/pdfDownload';
 
-// ─── Order Status Types ─────────────────────────────────────
+type OrderStatus = 'CONFIRMED' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED';
+type Tone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
 
-type OrderStatus =
-  | 'CONFIRMED'
-  | 'PROCESSING'
-  | 'SHIPPED'
-  | 'DELIVERED'
-  | 'CANCELLED';
-
-type VendorOrder = VendorOrderMock;
-
-const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; bg: string; border: string; icon: React.ReactNode }> = {
-  CONFIRMED: {
-    label: 'Confirmed',
-    color: '#0a6ed1',
-    bg: 'rgba(10,110,209,0.08)',
-    border: 'rgba(10,110,209,0.2)',
-    icon: <CheckCircle2 size={14} />,
-  },
-  PROCESSING: {
-    label: 'Processing',
-    color: '#e9730c',
-    bg: 'rgba(233,115,12,0.08)',
-    border: 'rgba(233,115,12,0.2)',
-    icon: <Clock size={14} />,
-  },
-  SHIPPED: {
-    label: 'Shipped',
-    color: '#8b5cf6',
-    bg: 'rgba(139,92,246,0.08)',
-    border: 'rgba(139,92,246,0.2)',
-    icon: <Truck size={14} />,
-  },
-  DELIVERED: {
-    label: 'Delivered',
-    color: '#107e3e',
-    bg: 'rgba(16,126,62,0.08)',
-    border: 'rgba(16,126,62,0.2)',
-    icon: <CheckCircle2 size={14} />,
-  },
-  CANCELLED: {
-    label: 'Cancelled',
-    color: '#bb0000',
-    bg: 'rgba(187,0,0,0.06)',
-    border: 'rgba(187,0,0,0.2)',
-    icon: <XCircle size={14} />,
-  },
+const STATUS_CONFIG: Record<OrderStatus, { label: string; tone: Tone; icon: typeof Truck }> = {
+  CONFIRMED: { label: 'Confirmed', tone: 'primary', icon: CheckCircle2 },
+  PROCESSING: { label: 'Processing', tone: 'warning', icon: Clock },
+  SHIPPED: { label: 'Shipped', tone: 'info', icon: Truck },
+  DELIVERED: { label: 'Delivered', tone: 'success', icon: CheckCircle2 },
+  CANCELLED: { label: 'Cancelled', tone: 'danger', icon: XCircle },
 };
+const STEPS = ['Confirmed', 'Processing', 'Shipped', 'Delivered'];
+const STATUS_INDEX: Record<OrderStatus, number> = { CONFIRMED: 0, PROCESSING: 1, SHIPPED: 2, DELIVERED: 3, CANCELLED: -1 };
 
-// ─── Component ──────────────────────────────────────────────
+function StatusBadge({ status }: { status: OrderStatus }) {
+  const config = STATUS_CONFIG[status];
+  const Icon = config.icon;
+  return <Badge tone={config.tone}><Icon className="size-3" />{config.label}</Badge>;
+}
 
 export default function VendorOrdersPage() {
-  useAuth();
   const { formatAmount, companyDefaultCurrency } = useCurrency();
-  const [displayCurrency, setDisplayCurrency] = useState<string>(companyDefaultCurrency);
-  // Sync display currency when company default changes
-  useEffect(() => { setDisplayCurrency(companyDefaultCurrency); }, [companyDefaultCurrency]);
-  const { data: orderList } = useServiceData(
-    () => vendorPortalService.listOrders(),
-    [] as VendorOrder[]
+  const [displayCurrency, setDisplayCurrency] = useState(companyDefaultCurrency);
+  const { data: orders, loading, error } = useServiceData(
+    () => vendorPortalService.listOrders(), [] as VendorOrderMock[],
   );
   const [search, setSearch] = useState('');
   const [expandedOrder, setExpandedOrder] = useState<number | null>(null);
-
-  // Deduplicate orders list by RFQ number or PO number
-  const uniqueOrderList = useMemo(() => {
-    const map = new Map<string, VendorOrder>();
-    for (const o of orderList) {
-      const key = (o.rfqNumber && o.rfqNumber !== 'RFQ-N/A')
-        ? `rfq_${o.rfqNumber}`
-        : `po_${o.poNumber}`;
-      if (!map.has(key)) {
-        map.set(key, o);
-      }
-    }
-    return Array.from(map.values());
-  }, [orderList]);
-
   const summary = useMemo(() => ({
-    total: uniqueOrderList.length,
-    active: uniqueOrderList.filter(o => ['CONFIRMED', 'PROCESSING', 'SHIPPED'].includes(o.status)).length,
-    delivered: uniqueOrderList.filter(o => o.status === 'DELIVERED').length,
-    cancelled: uniqueOrderList.filter(o => o.status === 'CANCELLED').length,
-  }), [uniqueOrderList]);
-
+    total: orders.length,
+    active: orders.filter((order) => ['CONFIRMED', 'PROCESSING', 'SHIPPED'].includes(order.status)).length,
+    delivered: orders.filter((order) => order.status === 'DELIVERED').length,
+    cancelled: orders.filter((order) => order.status === 'CANCELLED').length,
+  }), [orders]);
   const filtered = useMemo(() => {
-    let orders = uniqueOrderList;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      orders = orders.filter(o =>
-        o.poNumber.toLowerCase().includes(q) ||
-        o.rfqNumber.toLowerCase().includes(q) ||
-        o.buyerName.toLowerCase().includes(q) ||
-        o.items.some(item => item.name.toLowerCase().includes(q))
-      );
-    }
-    return orders;
-  }, [uniqueOrderList, search]);
-
-
-
-  const formatDate = (d: string) =>
-    new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-
-  // Progress tracker steps
-  const getProgressSteps = (status: OrderStatus) => {
-    const steps = ['Confirmed', 'Processing', 'Shipped', 'Delivered'];
-    const statusIndex: Record<OrderStatus, number> = {
-      CONFIRMED: 0,
-      PROCESSING: 1,
-      SHIPPED: 2,
-      DELIVERED: 3,
-      CANCELLED: -1,
-    };
-    return { steps, current: statusIndex[status] };
-  };
+    const query = search.trim().toLowerCase();
+    if (!query) return orders;
+    return orders.filter((order) => [order.poNumber, order.rfqNumber, order.buyerName, ...order.items.map((item) => item.name)].some((field) => field.toLowerCase().includes(query)));
+  }, [orders, search]);
+  const amount = (value: number) => formatAmount(value, displayCurrency);
+  const formatDate = (date: string) => new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
   return (
-    <div className="vendor-portal">
-      <div className="vendor-portal__container">
-
-        {/* ── Header ────────────────────────────────── */}
-        <div className="vendor-header">
-          <div className="vendor-header__content">
-            <h1>My Orders 📦</h1>
-            <p>Track and manage all your purchase orders in one place.</p>
-          </div>
-          <div className="vendor-header__actions">
-            <CurrencySelector value={displayCurrency} onChange={setDisplayCurrency} size="sm" />
-          </div>
-        </div>
-
-        {/* ── KPI Cards ─────────────────────────────── */}
-        <div className="vendor-kpis">
-          <div className="vendor-kpi-card">
-            <div className="vendor-kpi-icon">
-              <Package size={24} />
-            </div>
-            <div>
-              <div className="vendor-kpi-label">Total Orders</div>
-              <div className="vendor-kpi-value">{summary.total}</div>
-              <div className="vendor-kpi-subtext">All time</div>
-            </div>
-          </div>
-          <div className="vendor-kpi-card">
-            <div className="vendor-kpi-icon" style={{ background: 'rgba(233,115,12,0.1)', color: '#e9730c' }}>
-              <Truck size={24} />
-            </div>
-            <div>
-              <div className="vendor-kpi-label">Active Orders</div>
-              <div className="vendor-kpi-value">{summary.active}</div>
-              <div className="vendor-kpi-subtext">In progress</div>
-            </div>
-          </div>
-          <div className="vendor-kpi-card">
-            <div className="vendor-kpi-icon" style={{ background: 'rgba(16,126,62,0.1)', color: '#107e3e' }}>
-              <CheckCircle2 size={24} />
-            </div>
-            <div>
-              <div className="vendor-kpi-label">Delivered</div>
-              <div className="vendor-kpi-value">{summary.delivered}</div>
-              <div className="vendor-kpi-subtext">Completed</div>
-            </div>
-          </div>
-          <div className="vendor-kpi-card">
-            <div className="vendor-kpi-icon" style={{ background: 'rgba(187,0,0,0.08)', color: '#bb0000' }}>
-              <XCircle size={24} />
-            </div>
-            <div>
-              <div className="vendor-kpi-label">Cancelled</div>
-              <div className="vendor-kpi-value">{summary.cancelled}</div>
-              <div className="vendor-kpi-subtext">All time</div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Search & Filter Bar ────────────────── */}
-        <div className="vo-toolbar">
-          <div className="vo-toolbar__search">
-            <Search size={16} className="vo-toolbar__search-icon" />
-            <input
-              type="text"
-              placeholder="Search by PO number, RFQ, buyer or item name..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-          </div>
-        </div>
-
-        {/* ── Orders List ────────────────────────── */}
-        {filtered.length > 0 ? (
-          <div className="vo-orders">
-            {filtered.map(order => {
-              const statusConf = STATUS_CONFIG[order.status];
-              const isExpanded = expandedOrder === order.id;
-              const { steps, current } = getProgressSteps(order.status);
-
-              return (
-                <div
-                  key={order.id}
-                  className={`vo-order-card ${isExpanded ? 'vo-order-card--expanded' : ''}`}
-                >
-                  {/* Order Header */}
-                  <div
-                    className="vo-order-card__header"
-                    onClick={() => setExpandedOrder(isExpanded ? null : order.id)}
-                  >
-                    <div className="vo-order-card__left">
-                      <div className="vo-order-card__po">
-                        <FileText size={16} style={{ color: 'var(--vendor-primary)' }} />
-                        <span className="vo-order-card__po-number">{order.poNumber}</span>
-                        <span className="vo-order-card__rfq">{order.rfqNumber}</span>
-                      </div>
-                      <div className="vo-order-card__meta">
-                        <span className="vo-order-card__buyer">{order.buyerCompany}</span>
-                        <span className="vo-order-card__dot">·</span>
-                        <span className="vo-order-card__items-count">
-                          {order.items.length} item{order.items.length > 1 ? 's' : ''}
-                        </span>
-                        <span className="vo-order-card__dot">·</span>
-                        <span className="vo-order-card__date">
-                          <Calendar size={12} />
-                          {formatDate(order.orderDate)}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="vo-order-card__right">
-                      <span className="vo-order-card__amount">{formatAmount(order.totalAmount, displayCurrency)}</span>
-                      <span
-                        className="vo-order-card__status"
-                        style={{
-                          color: statusConf.color,
-                          background: statusConf.bg,
-                          borderColor: statusConf.border,
-                        }}
-                      >
-                        {statusConf.icon}
-                        {statusConf.label}
-                      </span>
-                      <ChevronDown
-                        size={18}
-                        className={`vo-order-card__chevron ${isExpanded ? 'vo-order-card__chevron--open' : ''}`}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Expanded Content */}
-                  {isExpanded && (
-                    <div className="vo-order-card__body">
-                      {/* Progress Tracker */}
-                      {order.status !== 'CANCELLED' ? (
-                        <div className="vo-progress">
-                          {steps.map((step, i) => (
-                            <div
-                              key={step}
-                              className={`vo-progress__step ${
-                                i <= current ? 'vo-progress__step--done' : ''
-                              } ${i === current ? 'vo-progress__step--current' : ''}`}
-                            >
-                              <div className="vo-progress__dot">
-                                {i <= current ? <CheckCircle2 size={16} /> : <div className="vo-progress__dot-circle" />}
-                              </div>
-                              {i < steps.length - 1 && <div className="vo-progress__line" />}
-                              <span className="vo-progress__label">{step}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="vo-cancelled-notice">
-                          <AlertCircle size={16} />
-                          <span>This order was cancelled</span>
-                        </div>
-                      )}
-
-                      {/* Order Details Grid */}
-                      <div className="vo-order-details">
-                        <div className="vo-order-details__section">
-                          <h4>Order Items</h4>
-                          <table className="vo-items-table">
-                            <thead>
-                              <tr>
-                                <th>Item</th>
-                                <th>Qty</th>
-                                <th>Unit Price</th>
-                                <th>Total</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {order.items.map((item, idx) => (
-                                <tr key={idx}>
-                                  <td className="vo-items-table__name">{item.name}</td>
-                                  <td>{item.quantity} {item.unit}</td>
-                                  <td>{formatAmount(item.unitPrice, displayCurrency)}</td>
-                                  <td className="vo-items-table__total">
-                                    {formatAmount(item.quantity * item.unitPrice, displayCurrency)}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                            <tfoot>
-                              <tr>
-                                <td colSpan={3} className="vo-items-table__grand-label">Grand Total</td>
-                                <td className="vo-items-table__grand-total">
-                                    {formatAmount(order.totalAmount, displayCurrency)}
-                                    <CurrencyBadge currency={displayCurrency} size="sm" style={{ marginLeft: 6 }} />
-                                  </td>
-                              </tr>
-                            </tfoot>
-                          </table>
-                        </div>
-
-                        <div className="vo-order-details__info">
-                          <h4>Shipping & Payment</h4>
-                          <div className="vo-info-rows">
-                            <div className="vo-info-row">
-                              <MapPin size={14} />
-                              <div>
-                                <span className="vo-info-row__label">Delivery Address</span>
-                                <span className="vo-info-row__value">{order.shippingAddress}</span>
-                              </div>
-                            </div>
-                            <div className="vo-info-row">
-                              <Calendar size={14} />
-                              <div>
-                                <span className="vo-info-row__label">Expected Delivery</span>
-                                <span className="vo-info-row__value">{formatDate(order.expectedDelivery)}</span>
-                              </div>
-                            </div>
-                            {order.deliveredDate && (
-                              <div className="vo-info-row">
-                                <CheckCircle2 size={14} />
-                                <div>
-                                  <span className="vo-info-row__label">Delivered On</span>
-                                  <span className="vo-info-row__value vo-info-row__value--success">{formatDate(order.deliveredDate)}</span>
-                                </div>
-                              </div>
-                            )}
-                            <div className="vo-info-row">
-                              <IndianRupee size={14} />
-                              <div>
-                                <span className="vo-info-row__label">Payment Terms</span>
-                                <span className="vo-info-row__value">{order.paymentTerms}</span>
-                              </div>
-                            </div>
-                            {order.trackingId && (
-                              <div className="vo-info-row">
-                                <Truck size={14} />
-                                <div>
-                                  <span className="vo-info-row__label">Tracking ID</span>
-                                  <span className="vo-info-row__value vo-info-row__value--primary">{order.trackingId}</span>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Action Buttons */}
-                      <div style={{ display: 'flex', gap: 12, paddingTop: 16, borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
-                        <button
-                          className="vendor-btn vendor-btn--primary"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            downloadPurchaseOrderAsPdf(order, formatAmount, displayCurrency);
-                          }}
-                        >
-                          <Download size={15} /> Download PO (PDF)
-                        </button>
-                        {order.status !== 'CANCELLED' && (
-                          <Link to={`/procurement/create-grn?poId=${order.id}`} className="vendor-btn vendor-btn--primary" style={{ textDecoration: 'none', background: 'linear-gradient(135deg, #10b981, #059669)', borderColor: '#10b981' }}>
-                            <Truck size={15} /> Generate Dispatch Note
-                          </Link>
-                        )}
-                        {order.status === 'DELIVERED' && (
-                          <Link to={`/vendor/create-invoice?poId=${order.id}`} className="vendor-btn vendor-btn--primary" style={{ textDecoration: 'none' }}>
-                            <Upload size={15} /> Upload Invoice
-                          </Link>
-                        )}
-                        <button className="vendor-btn vendor-btn--secondary">
-                          <MessageSquare size={15} /> Contact Buyer
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="vendor-empty-state">
-            <div className="vendor-empty-state__icon">📦</div>
-            <div className="vendor-empty-state__title">No Orders Found</div>
-            <div className="vendor-empty-state__text">
-              {search
-                ? 'Try adjusting your search.'
-                : 'When purchase orders are issued to your company, they will appear here.'}
-            </div>
-          </div>
-        )}
+    <PageFrame>
+      <PageLead title="My Orders" description="Track fulfilment milestones and purchase-order details." actions={<CurrencySelector value={displayCurrency} onChange={setDisplayCurrency} size="sm" />} />
+      {error && <Card className="mb-4 border-destructive/25 bg-destructive/8 p-4 text-sm text-destructive">{error}</Card>}
+      <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <MetricCard label="Total orders" value={summary.total} detail="All time" icon={Package} />
+        <MetricCard label="Active orders" value={summary.active} detail="In progress" icon={Truck} tone="warning" />
+        <MetricCard label="Delivered" value={summary.delivered} detail="Completed" icon={CheckCircle2} tone="success" />
+        <MetricCard label="Cancelled" value={summary.cancelled} detail="All time" icon={XCircle} tone="danger" />
       </div>
-    </div>
+      <Card className="mb-4 p-3 sm:p-4">
+        <div className="relative max-w-xl"><Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="h-10 pl-10" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search PO, RFQ, buyer, or item" aria-label="Search orders" /></div>
+      </Card>
+
+      {loading ? (
+        <Card className="grid min-h-64 place-items-center text-sm text-muted-foreground">Loading orders…</Card>
+      ) : filtered.length === 0 ? (
+        <EmptyState icon={Package} title="No orders found" description={search ? 'Try another search term.' : 'Issued purchase orders will appear here.'} action={search ? <Button variant="secondary" onClick={() => setSearch('')}>Clear search</Button> : undefined} />
+      ) : (
+        <div className="grid gap-3">
+          {filtered.map((order) => {
+            const expanded = expandedOrder === order.id;
+            const currentStep = STATUS_INDEX[order.status];
+            return (
+              <Card key={order.id} className={cn('overflow-hidden transition-shadow', expanded && 'shadow-md')}>
+                <button type="button" className="flex w-full flex-col gap-3 p-4 text-left outline-none transition hover:bg-accent/35 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40 sm:flex-row sm:items-center sm:justify-between sm:p-5" onClick={() => setExpandedOrder(expanded ? null : order.id)} aria-expanded={expanded}>
+                  <span className="min-w-0">
+                    <span className="flex flex-wrap items-center gap-2"><FileText className="size-4 text-primary" /><span className="font-semibold text-primary">{order.poNumber}</span><Badge>{order.rfqNumber}</Badge></span>
+                    <span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"><span>{order.buyerCompany}</span><span>{order.items.length} item{order.items.length === 1 ? '' : 's'}</span><span className="flex items-center gap-1"><Calendar className="size-3" />{formatDate(order.orderDate)}</span></span>
+                  </span>
+                  <span className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end"><span className="font-semibold tabular-nums">{amount(order.totalAmount)}</span><StatusBadge status={order.status} /><ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform', expanded && 'rotate-180')} /></span>
+                </button>
+
+                <CollapsibleContent open={expanded} className="border-t border-border/65 bg-secondary/20 p-4 sm:p-5">
+                    {order.status === 'CANCELLED' ? (
+                      <div className="mb-5 flex items-center gap-2 rounded-xl border border-destructive/20 bg-destructive/8 p-3 text-sm font-medium text-destructive"><AlertCircle className="size-4" />This order was cancelled.</div>
+                    ) : (
+                      <ol className="mb-6 grid grid-cols-4 gap-1" aria-label="Order progress">
+                        {STEPS.map((step, index) => {
+                          const done = index <= currentStep;
+                          return <li key={step} className="relative flex min-w-0 flex-col items-center text-center before:absolute before:left-[calc(50%+16px)] before:right-[calc(-50%+16px)] before:top-3 before:h-px before:bg-border last:before:hidden"><span className={cn('relative z-10 grid size-6 place-items-center rounded-full border bg-card', done ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground')}>{done ? <CheckCircle2 className="size-3.5" /> : <span className="size-1.5 rounded-full bg-current" />}</span><span className={cn('mt-2 truncate text-[10px] font-medium sm:text-xs', done ? 'text-foreground' : 'text-muted-foreground')}>{step}</span></li>;
+                        })}
+                      </ol>
+                    )}
+
+                    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(260px,.75fr)]">
+                      <Card className="overflow-hidden border-border/60 shadow-none">
+                        <div className="border-b border-border/60 px-4 py-3 text-sm font-semibold">Order items</div>
+                        <DataTableViewport label={`Items in ${order.poNumber}`}>
+                          <table className="w-full min-w-[560px] text-left text-xs">
+                            <thead className="bg-secondary/45 text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground"><tr><th className="px-4 py-2.5">Item</th><th className="px-4 py-2.5 text-right">Quantity</th><th className="px-4 py-2.5 text-right">Unit price</th><th className="px-4 py-2.5 text-right">Total</th></tr></thead>
+                            <tbody className="divide-y divide-border/55">{order.items.map((item, index) => <tr key={`${item.name}-${index}`}><td className="px-4 py-3 font-medium">{item.name}</td><td className="px-4 py-3 text-right">{item.quantity} {item.unit}</td><td className="px-4 py-3 text-right tabular-nums">{amount(item.unitPrice)}</td><td className="px-4 py-3 text-right font-semibold tabular-nums">{amount(item.quantity * item.unitPrice)}</td></tr>)}</tbody>
+                            <tfoot className="border-t border-border bg-secondary/45"><tr><td colSpan={3} className="px-4 py-3 text-right font-semibold">Grand total</td><td className="px-4 py-3 text-right font-semibold tabular-nums">{amount(order.totalAmount)} <CurrencyBadge currency={displayCurrency} size="sm" /></td></tr></tfoot>
+                          </table>
+                        </DataTableViewport>
+                      </Card>
+
+                      <Card className="border-border/60 p-4 shadow-none">
+                        <h3 className="text-sm font-semibold">Shipping & payment</h3>
+                        <dl className="mt-4 grid gap-4">
+                          {[
+                            { icon: MapPin, label: 'Delivery address', value: order.shippingAddress },
+                            { icon: Calendar, label: 'Expected delivery', value: formatDate(order.expectedDelivery) },
+                            ...(order.deliveredDate ? [{ icon: CheckCircle2, label: 'Delivered on', value: formatDate(order.deliveredDate) }] : []),
+                            { icon: IndianRupee, label: 'Payment terms', value: order.paymentTerms },
+                            ...(order.trackingId ? [{ icon: Truck, label: 'Tracking ID', value: order.trackingId }] : []),
+                          ].map((item) => <div key={item.label} className="flex items-start gap-2.5"><item.icon className="mt-0.5 size-4 shrink-0 text-primary" /><div><dt className="text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{item.label}</dt><dd className="mt-1 text-xs font-medium leading-relaxed">{item.value}</dd></div></div>)}
+                        </dl>
+                      </Card>
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2 border-t border-border/60 pt-4">
+                      <Button size="sm" onClick={() => downloadPurchaseOrderAsPdf(order, formatAmount, displayCurrency)}><Download />Download PO</Button>
+                      {order.status === 'DELIVERED' && <Link to="/vendor/invoices" className={buttonVariants({ variant: 'secondary', size: 'sm' })}><Receipt className="size-4" />View invoices</Link>}
+                    </div>
+                </CollapsibleContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </PageFrame>
   );
 }

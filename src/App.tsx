@@ -123,12 +123,15 @@ const queryClient = new QueryClient({
   },
 });
 
+import { AppMotionProvider } from './components/motion/AppMotionProvider';
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <BrandingProvider>
-          <LanguageProvider>
+        <AppMotionProvider>
+          <BrandingProvider>
+            <LanguageProvider>
             <BrowserRouter>
               <AuthProvider>
                 <CurrencyProviderWithAuth>
@@ -281,7 +284,8 @@ export default function App() {
             </BrowserRouter>
           </LanguageProvider>
         </BrandingProvider>
-      </ThemeProvider>
+      </AppMotionProvider>
+    </ThemeProvider>
     </QueryClientProvider>
   );
 }

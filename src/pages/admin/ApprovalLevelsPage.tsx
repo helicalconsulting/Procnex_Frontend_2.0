@@ -1,7 +1,8 @@
-import { useState, useMemo, useCallback, useEffect, type ReactNode } from 'react';
+import { useState, useMemo, useCallback, type ReactNode } from 'react';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useServiceData } from '../../hooks/useServiceData';
 import { adminService, type AdminRoleRecord } from '../../services/adminService';
+import { companySettingsService, type Position } from '../../services/companySettingsService';
 import { useAuth } from '../../context/AuthContext';
 import type { ApprovalLevel } from '../../types';
 import {
@@ -13,6 +14,7 @@ import {
   Trash2,
   ArrowUp,
   ArrowDown,
+  ArrowRight,
   Shield,
   FileText,
   ShoppingCart,
@@ -27,14 +29,11 @@ import {
   AlertTriangle,
   Lock,
   Zap,
-  IndianRupee,
   Banknote,
 } from 'lucide-react';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
 import { CardSkeleton } from '../../components/shared/Skeleton';
 import { CurrencySelector, useCurrency, CurrencyBadge, formatCurrency } from '../../components/shared/CurrencyMaster';
-import '../../components/shared/CurrencyMaster.css';
-import './ApprovalLevelsPage.css';
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -82,6 +81,15 @@ const MODULE_DEFS: ApprovalModuleDef[] = [
     icon: <Wallet size={16} />,
   },
   { key: 'Payments', label: 'Payment Voucher Approval', system: 'heliflow', color: 'payments', aliases: ['Payments', 'Payment Voucher Approval'], icon: <CreditCard size={16} /> },
+  {
+    key: 'SalesOrders',
+    label: 'Sales Orders',
+    system: 'heliflow',
+    color: 'sales',
+    aliases: ['Sales Orders', 'SalesOrder'],
+    icon: <TrendingUp size={16} />,
+  },
+  { key: 'Approvals', label: 'Approvals', system: 'heliflow', color: 'approvals', icon: <CheckSquare size={16} /> },
 ];
 
 const MODULES = MODULE_DEFS.map((m) => m.key);
@@ -95,20 +103,10 @@ const MODULE_ALIAS_TO_KEY = MODULE_DEFS.reduce<Record<string, string>>((acc, mod
   return acc;
 }, {});
 
-const DEFAULT_ROLES = [
-  'Procurement Manager',
-  'purchase_clerk',
-  'Finance Approver',
-  'Administrator',
-  'Super Admin',
-];
-
 const SYSTEM_LABELS: Record<SystemType, string> = {
   rfq: 'RFQ System',
   heliflow: 'Procnex System',
 };
-
-// ─── Mock Data ──────────────────────────────────────────────
 
 const TIME_LIMIT_PRESETS = [2, 4, 8, 12, 24, 48, 72];
 
@@ -150,8 +148,8 @@ export default function ApprovalLevelsPage() {
     [],
     { cacheKey: 'approvalLevels:dbRoles' }
   );
+
   const roleOptions = useMemo(() => {
-    // Merge DB roles + Company Settings positions into one list
     const dbRoleNames = dbRoles.map((r) => r.roleName).filter(Boolean);
     const positionNames = positions
       .filter((p) => p.isActive)
@@ -160,6 +158,7 @@ export default function ApprovalLevelsPage() {
     const all = ['Super Admin', ...dbRoleNames, ...positionNames].sort();
     return [...new Set(all)];
   }, [positions, dbRoles]);
+
   const [selectedModule, setSelectedModule] = useState<string>('ALL');
   const [activeSystem, setActiveSystem] = useState<SystemType>('heliflow');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -197,22 +196,8 @@ export default function ApprovalLevelsPage() {
     return map;
   }, [levels]);
 
-  // Filtered & sorted modules: Active system modules appear FIRST at the top
-  const displayModules = useMemo(() => {
-    const base = selectedModule === 'ALL' ? MODULES : [selectedModule];
-    return [...base].sort((a, b) => {
-      const sysA = MODULE_BY_KEY[a]?.system === activeSystem ? 0 : 1;
-      const sysB = MODULE_BY_KEY[b]?.system === activeSystem ? 0 : 1;
-      return sysA - sysB;
-    });
-  }, [selectedModule, activeSystem]);
-
-  const handleSystemToggle = useCallback((sys: SystemType) => {
-    setActiveSystem(sys);
-    if (selectedModule !== 'ALL' && MODULE_BY_KEY[selectedModule]?.system !== sys) {
-      setSelectedModule('ALL');
-    }
-  }, [selectedModule]);
+  // Filtered modules
+  const displayModules = selectedModule === 'ALL' ? MODULES : [selectedModule];
 
   // Format time for display
   const formatTimeLimit = (hours: number) => {
@@ -316,169 +301,180 @@ export default function ApprovalLevelsPage() {
   }, [reload, canCreateLevels]);
 
   return (
-    <div className="alvl-page">
+    <div className="flex w-full flex-col gap-6 pb-10">
       {error && <MessageStrip type="error">{error}</MessageStrip>}
       {pageMsg && (
         <MessageStrip
           type={inferMessageType(pageMsg)}
           onClose={() => setPageMsg(null)}
           autoHideMs={5000}
-          className="sap-message-strip--toast"
         >
           {pageMsg}
         </MessageStrip>
       )}
+
       {/* Header */}
-      <div className="alvl-page__header">
-        <div className="alvl-page__header-left">
-          <h1>Approval Levels</h1>
-          <p>Configure multi-level approval chains for each module</p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-[-0.035em] text-foreground">Approval Levels</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Configure multi-level approval chains for each module</p>
         </div>
         <button
-          className={`alvl-page__add-btn ${!hasPermission('Approval Levels', 'canCreate') ? 'alvl-page__add-btn--disabled' : ''}`}
-          onClick={hasPermission('Approval Levels', 'canCreate') ? () => openAddModal() : undefined}
-          disabled={!hasPermission('Approval Levels', 'canCreate')}
-          title={!hasPermission('Approval Levels', 'canCreate') ? 'Admin has not allowed this action. You do not have permission to add approval levels.' : 'Add new approval level'}
-          style={!hasPermission('Approval Levels', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={() => openAddModal()}
+          disabled={!canCreateLevels}
+          title={!canCreateLevels ? noPermissionTitle : 'Add level'}
         >
           <Plus size={18} />
           Add Level
         </button>
       </div>
 
-      {/* Summary */}
-      <div className="alvl-summary">
+      {/* Summary Cards */}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          { icon: <Layers size={22} />, value: summary.totalLevels, label: 'Total Levels', cls: 'total' },
-          { icon: <CheckSquare size={22} />, value: summary.totalModules, label: 'Modules', cls: 'modules' },
-          { icon: <ArrowDown size={22} />, value: summary.avgLevels, label: 'Avg. Depth', cls: 'avg' },
-          { icon: <Shield size={22} />, value: summary.maxChain, label: 'Max Chain', cls: 'max' },
-        ].map((c) => (
-          <div key={c.cls} className="alvl-summary-card">
-            <div className={`alvl-summary-card__icon alvl-summary-card__icon--${c.cls}`}>{c.icon}</div>
-            <div className="alvl-summary-card__info">
-              <span className="alvl-summary-card__value">{c.value}</span>
-              <span className="alvl-summary-card__label">{c.label}</span>
+          { icon: <Layers size={22} />, value: summary.totalLevels, label: 'Total Levels', cls: 'bg-primary/10 text-primary' },
+          { icon: <CheckSquare size={22} />, value: summary.totalModules, label: 'Modules', cls: 'bg-emerald-500/10 text-emerald-600' },
+          { icon: <ArrowDown size={22} />, value: summary.avgLevels, label: 'Avg. Depth', cls: 'bg-violet-500/10 text-violet-600' },
+          { icon: <Shield size={22} />, value: summary.maxChain, label: 'Max Chain', cls: 'bg-amber-500/10 text-amber-600' },
+        ].map((c, i) => (
+          <div key={i} className="flex min-h-24 items-center gap-4 rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
+            <div className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${c.cls}`}>{c.icon}</div>
+            <div className="flex flex-col">
+              <span className="text-2xl font-semibold tracking-tight text-foreground">{c.value}</span>
+              <span className="text-sm text-muted-foreground">{c.label}</span>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Module Filter */}
-      <div className="alvl-module-filter">
+      {/* Module Filter Pills */}
+      <div className="flex gap-2 overflow-x-auto rounded-2xl border border-border/70 bg-card p-2 shadow-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <button
-          className={`alvl-module-pill ${selectedModule === 'ALL' ? 'alvl-module-pill--active' : ''}`}
+          type="button"
+          className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl px-3.5 text-xs font-semibold transition ${selectedModule === 'ALL' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
           onClick={() => setSelectedModule('ALL')}
         >
           All Modules
-          <span className="alvl-module-pill__count">{levels.length}</span>
+          <span className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-bold ${selectedModule === 'ALL' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted text-foreground'}`}>
+            {levels.length}
+          </span>
         </button>
         {MODULES.map((m) => (
           <button
             key={m}
-            className={`alvl-module-pill ${selectedModule === m ? 'alvl-module-pill--active' : ''}`}
-            onClick={() => setSelectedModule(m)}
+            type="button"
+            className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl px-3.5 text-xs font-semibold transition ${selectedModule === m ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+            onClick={() => {
+              setSelectedModule(m);
+              setActiveSystem(MODULE_BY_KEY[m].system);
+            }}
           >
             {MODULE_BY_KEY[m].icon}
             {MODULE_BY_KEY[m].label}
-            <span className="alvl-module-pill__count">{grouped[m]?.length || 0}</span>
+            <span className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-bold ${selectedModule === m ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted text-foreground'}`}>
+              {grouped[m]?.length || 0}
+            </span>
           </button>
         ))}
       </div>
 
-      {/* System Toggle */}
-      <div className="alvl-system-toggle">
-        <button
-          className={`alvl-system-toggle__btn alvl-system-toggle__btn--rfq ${activeSystem === 'rfq' ? 'alvl-system-toggle__btn--active' : ''}`}
-          onClick={() => handleSystemToggle('rfq')}
-        >
-          <ShoppingCart size={15} />
-          RFQ System
-          <span className="alvl-system-toggle__sub">RFQ & Quotations</span>
-        </button>
-        <button
-          className={`alvl-system-toggle__btn alvl-system-toggle__btn--heliflow ${activeSystem === 'heliflow' ? 'alvl-system-toggle__btn--active' : ''}`}
-          onClick={() => handleSystemToggle('heliflow')}
-        >
-          <Zap size={15} />
-          Procnex System
-          <span className="alvl-system-toggle__sub">PO, AP & Payments</span>
-        </button>
+      {/* System Toggle Banner */}
+      <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-foreground">System scope</p>
+          <p className="text-xs text-muted-foreground">Choose which approval workflow family to configure.</p>
+        </div>
+        <div className="inline-flex rounded-xl bg-muted p-1">
+          <button
+            type="button"
+            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition ${activeSystem === 'rfq' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            onClick={() => setActiveSystem('rfq')}
+          >
+            <ShoppingCart size={15} />
+            RFQ System
+          </button>
+          <button
+            type="button"
+            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition ${activeSystem === 'heliflow' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            onClick={() => setActiveSystem('heliflow')}
+          >
+            <Zap size={15} />
+            Procnex System
+          </button>
+        </div>
       </div>
 
-      {/* Approval Chains */}
-      <div className="alvl-chains">
+      {/* Approval Chains Display */}
+      <div className="space-y-4">
         {loading ? (
           <CardSkeleton count={3} />
         ) : (
           displayModules.map((mod) => {
-          const chain = grouped[mod] || [];
-          const moduleDef = MODULE_BY_KEY[mod];
-          const modSystem = moduleDef.system;
-          const isDisabled = modSystem !== activeSystem;
-          return (
-            <div key={mod} className={`alvl-chain-card ${isDisabled ? 'alvl-chain-card--disabled' : ''}`}>
-              <div className="alvl-chain-card__header">
-                <div className="alvl-chain-card__header-left">
-                  <div className={`alvl-chain-card__module-icon alvl-chain-card__module-icon--${moduleDef.color}`}>
-                    {moduleDef.icon}
+            const chain = grouped[mod] || [];
+            const moduleDef = MODULE_BY_KEY[mod];
+            const modSystem = moduleDef.system;
+            const isDisabled = modSystem !== activeSystem;
+            return (
+              <section key={mod} className={`overflow-hidden rounded-2xl border bg-card shadow-sm transition ${isDisabled ? 'opacity-60' : 'border-border/70'}`}>
+                <div className="flex items-center justify-between border-b border-border/70 bg-muted/20 px-5 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      {moduleDef.icon}
+                    </div>
+                    <div>
+                      <h2 className="text-base font-semibold text-foreground">{moduleDef.label}</h2>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>{chain.length} level{chain.length !== 1 ? 's' : ''}</span>
+                        <span>•</span>
+                        <span className="font-medium text-primary">{SYSTEM_LABELS[modSystem]}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <span className="alvl-chain-card__module-name">{moduleDef.label}</span>
-                    <span className="alvl-chain-card__level-count">
-                      {chain.length} level{chain.length !== 1 ? 's' : ''}
-                      <span className={`alvl-chain-card__system-tag alvl-chain-card__system-tag--${modSystem}`}>
-                        {SYSTEM_LABELS[modSystem]}
-                      </span>
-                    </span>
-                  </div>
-                </div>
-                {isDisabled ? (
-                  <div className="alvl-chain-card__locked-badge">
-                    <Lock size={13} />
-                    <span>{activeSystem === 'rfq' ? 'Procnex Only' : 'RFQ Only'}</span>
-                  </div>
-                ) : (
-                  <button
-                    className="alvl-chain-card__add-btn"
-                    onClick={canCreateLevels ? () => openAddModal(mod) : undefined}
-                    disabled={!canCreateLevels}
-                    style={!canCreateLevels ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                    title={!canCreateLevels ? noPermissionTitle : `Add level to ${moduleDef.label}`}
-                  >
-                    <Plus size={14} />
-                    Add
-                  </button>
-                )}
-              </div>
 
-              {chain.length > 0 ? (
-                <div className="alvl-chain-card__body">
-                  <div className="alvl-pipeline">
-                    {chain.map((level, idx) => (
-                      <div key={level.id} className="alvl-pipeline__step">
-                        <div className="alvl-pipeline__connector">
-                          <div className={`alvl-pipeline__dot alvl-pipeline__dot--${moduleDef.color}`}>
-                            {level.levelNumber}
-                          </div>
-                          {idx < chain.length - 1 && <div className={`alvl-pipeline__line alvl-pipeline__line--${moduleDef.color}`} />}
-                        </div>
-                        <div className="alvl-pipeline__content">
-                          <div className="alvl-pipeline__role-card">
-                            <div className="alvl-pipeline__role-info">
-                              <span className="alvl-pipeline__level-label">Level {level.levelNumber}</span>
-                              <span className="alvl-pipeline__role-name">{level.requiredRole}</span>
-                              <div className="alvl-pipeline__time-badge">
-                                <Clock size={11} />
-                                <span>{formatTimeLimit(level.timeLimitHours)}</span>
-                                {idx < chain.length - 1 && (
-                                  <span className="alvl-pipeline__time-hint">• auto-forwards after timeout</span>
-                                )}
+                  {isDisabled ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs font-semibold text-muted-foreground">
+                      <Lock size={12} />
+                      {activeSystem === 'rfq' ? 'Procnex Only' : 'RFQ Only'}
+                    </span>
+                  ) : (
+                    <button
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary/10 disabled:opacity-40"
+                      onClick={() => openAddModal(mod)}
+                      disabled={!canCreateLevels}
+                      title={!canCreateLevels ? noPermissionTitle : undefined}
+                    >
+                      <Plus size={14} />
+                      Add Level
+                    </button>
+                  )}
+                </div>
+
+                {chain.length > 0 ? (
+                  <div className="overflow-x-auto p-5">
+                    <ol className="flex items-stretch gap-4" aria-label={`${moduleDef.label} approval chain`}>
+                      {chain.map((level, idx) => (
+                        <li key={level.id} className="flex items-center gap-4">
+                          <article className="flex min-h-[180px] w-[300px] flex-col rounded-2xl border border-border/70 bg-background p-4 shadow-sm transition hover:border-primary/30">
+                            <div className="flex items-center gap-3">
+                              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground shadow-sm">
+                                {level.levelNumber}
+                              </span>
+                              <div className="min-w-0">
+                                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Level {level.levelNumber}</span>
+                                <h4 className="truncate text-sm font-semibold text-foreground">{level.requiredRole}</h4>
+                              </div>
+                            </div>
+
+                            <div className="mt-4 space-y-2 border-t border-border/60 pt-3 text-xs text-muted-foreground">
+                              <div className="flex items-center gap-1.5">
+                                <Clock size={13} className="text-amber-500" />
+                                <span>{formatTimeLimit(level.timeLimitHours)} time limit</span>
                               </div>
                               {(level.minValue !== null || level.maxValue !== null) && (
-                                <div className="alvl-pipeline__value-badge">
-                                  <Banknote size={11} />
-                                  <span>
+                                <div className="flex items-center gap-1.5">
+                                  <Banknote size={13} className="text-emerald-500" />
+                                  <span className="font-semibold text-foreground">
                                     {formatCurrency(level.minValue ?? 0, level.currency || companyDefaultCurrency)}
                                     {' — '}
                                     {level.maxValue !== null ? formatCurrency(level.maxValue, level.currency || companyDefaultCurrency) : '∞'}
@@ -487,232 +483,168 @@ export default function ApprovalLevelsPage() {
                                 </div>
                               )}
                             </div>
-                            <div className="alvl-pipeline__actions">
+
+                            <div className="mt-auto flex items-center justify-end gap-1 border-t border-border/60 pt-3">
                               <button
-                                className="alvl-pipeline__action-btn"
-                                title={!canCreateLevels ? noPermissionTitle : "Move Up"}
+                                className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
+                                title="Move Up"
                                 disabled={idx === 0 || !canCreateLevels}
-                                style={!canCreateLevels ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                                 onClick={() => moveLevel(level.id, 'up')}
                               >
                                 <ArrowUp size={14} />
                               </button>
                               <button
-                                className="alvl-pipeline__action-btn"
-                                title={!canCreateLevels ? noPermissionTitle : "Move Down"}
+                                className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
+                                title="Move Down"
                                 disabled={idx === chain.length - 1 || !canCreateLevels}
-                                style={!canCreateLevels ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                                 onClick={() => moveLevel(level.id, 'down')}
                               >
                                 <ArrowDown size={14} />
                               </button>
                               <button
-                                className="alvl-pipeline__action-btn"
-                                title={!canCreateLevels ? noPermissionTitle : "Edit"}
+                                className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-primary/10 hover:text-primary disabled:opacity-30"
+                                title="Edit"
                                 disabled={!canCreateLevels}
-                                style={!canCreateLevels ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                                onClick={canCreateLevels ? () => openEditModal(level) : undefined}
+                                onClick={() => openEditModal(level)}
                               >
                                 <Edit3 size={14} />
                               </button>
                               <button
-                                className="alvl-pipeline__action-btn alvl-pipeline__action-btn--danger"
-                                title={!canCreateLevels ? noPermissionTitle : "Remove"}
+                                className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-30"
+                                title="Remove"
                                 disabled={!canCreateLevels}
-                                style={!canCreateLevels ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                                onClick={canCreateLevels ? () => handleDelete(level.id) : undefined}
+                                onClick={() => handleDelete(level.id)}
                               >
                                 <Trash2 size={14} />
                               </button>
                             </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                          </article>
+                          {idx < chain.length - 1 && (
+                            <ArrowRight size={18} className="shrink-0 text-muted-foreground/40" />
+                          )}
+                        </li>
+                      ))}
+                    </ol>
                   </div>
-                </div>
-              ) : (
-                <div className="alvl-chain-card__empty">
-                  <Info size={16} />
-                  <span>No approval levels configured. Add a level to start.</span>
-                </div>
-              )}
-            </div>
-          );
-        })
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-8 text-center text-xs text-muted-foreground">
+                    <Info size={18} className="mb-1" />
+                    <span>No approval levels configured for this module.</span>
+                  </div>
+                )}
+              </section>
+            );
+          })
         )}
       </div>
 
       {/* Add/Edit Modal */}
       {showAddModal && (
-        <div className="alvl-modal-backdrop" onClick={() => setShowAddModal(false)}>
-          <div className="alvl-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="alvl-modal__header">
-              <div className="alvl-modal__title">
-                <Layers size={20} />
-                <span>{editingLevel ? 'Edit Approval Level' : 'Add Approval Level'}</span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setShowAddModal(false)}>
+          <div className="flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-border/70 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Layers size={20} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-foreground">{editingLevel ? 'Edit Approval Level' : 'Add Approval Level'}</h2>
+                  <p className="text-xs text-muted-foreground">Specify required role and threshold conditions</p>
+                </div>
               </div>
-              <button className="alvl-modal__close" onClick={() => setShowAddModal(false)}>
+              <button type="button" className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted" onClick={() => setShowAddModal(false)}>
                 <X size={18} />
               </button>
             </div>
-            <div className="alvl-modal__body">
-                {editingLevel || !formModule ? (
-                <div className="alvl-modal__field">
-                  <label className="alvl-modal__label">
-                    Module <span>*</span>
-                  </label>
-                  <div className="alvl-modal__select-wrap">
-                    <select
-                      className="alvl-modal__select"
-                      value={formModule}
-                      onChange={(e) => handleModuleSelect(e.target.value)}
-                      disabled={!!editingLevel}
-                    >
-                      <option value="">Select module</option>
-                      {MODULES.map((m) => (
-                        <option key={m} value={m}>{MODULE_BY_KEY[m].label}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={14} className="alvl-modal__select-icon" />
-                  </div>
-                </div>
-              ) : (
-                <div className="alvl-modal__field">
-                  <label className="alvl-modal__label">Module</label>
-                  <div className="alvl-modal__module-badge">
-                    {MODULE_BY_KEY[formModule]?.icon}
-                    <span>{MODULE_BY_KEY[formModule]?.label}</span>
-                  </div>
-                </div>
-              )}
 
-
-              <div className="alvl-modal__field">
-                <label className="alvl-modal__label">
-                  Required Role <span>*</span>
-                </label>
-                <div className="alvl-modal__select-wrap">
-                  <select
-                    className="alvl-modal__select"
-                    value={formRole}
-                    onChange={(e) => setFormRole(e.target.value)}
-                  >
-                    <option value="">Select role</option>
-                    {roleOptions.map((r) => (
-                      <option key={r} value={r}>{r}</option>
-                    ))}
-                  </select>
-                  <ChevronDown size={14} className="alvl-modal__select-icon" />
-                </div>
+            <div className="p-6 space-y-4">
+              {formError && <MessageStrip type="error">{formError}</MessageStrip>}
+              
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Module *</label>
+                <select
+                  className="min-h-11 w-full rounded-xl border border-input bg-background px-4 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15 disabled:opacity-60"
+                  value={formModule}
+                  onChange={(e) => handleModuleSelect(e.target.value)}
+                  disabled={!!editingLevel}
+                >
+                  <option value="">Select module</option>
+                  {MODULES.map((m) => (
+                    <option key={m} value={m}>{MODULE_BY_KEY[m].label}</option>
+                  ))}
+                </select>
               </div>
-              <div className="alvl-modal__field">
-                <label className="alvl-modal__label">
-                  <Clock size={13} style={{ marginRight: 4, verticalAlign: '-2px' }} />
-                  Time Limit <span>*</span>
-                </label>
-                <div className="alvl-modal__time-input-row">
-                  <div className="alvl-modal__time-input-wrap">
-                    <input
-                      className="alvl-modal__input"
-                      type="number"
-                      min={1}
-                      max={168}
-                      value={formTimeLimit}
-                      onChange={(e) => setFormTimeLimit(Math.max(1, parseInt(e.target.value) || 1))}
-                    />
-                    <span className="alvl-modal__time-unit">hours</span>
-                  </div>
-                  <div className="alvl-modal__time-presets">
-                    {TIME_LIMIT_PRESETS.map((h) => (
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Required Role *</label>
+                <select
+                  className="min-h-11 w-full rounded-xl border border-input bg-background px-4 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                  value={formRole}
+                  onChange={(e) => setFormRole(e.target.value)}
+                >
+                  <option value="">Select role</option>
+                  {roleOptions.map((r) => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Time Limit (Hours) *</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={168}
+                    className="min-h-11 w-full rounded-xl border border-input bg-background px-4 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                    value={formTimeLimit}
+                    onChange={(e) => setFormTimeLimit(Math.max(1, parseInt(e.target.value) || 1))}
+                  />
+                  <div className="flex gap-1">
+                    {TIME_LIMIT_PRESETS.slice(0, 4).map((h) => (
                       <button
                         key={h}
                         type="button"
-                        className={`alvl-modal__time-preset ${formTimeLimit === h ? 'alvl-modal__time-preset--active' : ''}`}
+                        className={`rounded-lg border px-2.5 py-2 text-xs font-medium ${formTimeLimit === h ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background text-muted-foreground hover:bg-muted'}`}
                         onClick={() => setFormTimeLimit(h)}
                       >
-                        {h < 24 ? `${h}h` : `${h / 24}d`}
+                        {h}h
                       </button>
                     ))}
                   </div>
                 </div>
-                <div className="alvl-modal__time-note">
-                  <AlertTriangle size={12} />
-                  <span>If the approver doesn't act within this time, the request will auto-forward to the next level.</span>
-                </div>
               </div>
 
-              {/* ── Value Range with Currency ───────────────────── */}
-              <div className="alvl-modal__field">
-                <label className="alvl-modal__label">
-                  <Banknote size={13} style={{ marginRight: 4, verticalAlign: '-2px' }} />
-                  Value Range <span style={{ fontWeight: 400, color: 'var(--text-placeholder)' }}>optional</span>
-                </label>
-                <div className="alvl-modal__currency-row">
-                  <CurrencySelector
-                    value={formCurrency}
-                    onChange={setFormCurrency}
-                    size="sm"
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Value Threshold Range</label>
+                <div className="mb-2">
+                  <CurrencySelector value={formCurrency} onChange={setFormCurrency} size="sm" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="Min amount"
+                    className="min-h-11 w-full rounded-xl border border-input bg-background px-4 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                    value={formMinValue}
+                    onChange={(e) => setFormMinValue(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="Max amount (leave empty for ∞)"
+                    className="min-h-11 w-full rounded-xl border border-input bg-background px-4 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                    value={formMaxValue}
+                    onChange={(e) => setFormMaxValue(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
                   />
                 </div>
-                <div className="alvl-modal__value-row">
-                  <div className="alvl-modal__value-input-wrap">
-                    <input
-                      className="alvl-modal__input alvl-modal__input--value"
-                      type="number"
-                      min={0}
-                      placeholder="Min amount"
-                      value={formMinValue}
-                      onChange={(e) => setFormMinValue(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
-                    />
-                  </div>
-                  <span className="alvl-modal__value-sep">to</span>
-                  <div className="alvl-modal__value-input-wrap">
-                    <input
-                      className="alvl-modal__input alvl-modal__input--value"
-                      type="number"
-                      min={0}
-                      placeholder="Max amount"
-                      value={formMaxValue}
-                      onChange={(e) => setFormMaxValue(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
-                    />
-                  </div>
-                </div>
-
-                <div className="alvl-modal__value-note">
-                  <Info size={12} />
-                  <span>Leave blank for all amounts. This level only applies to documents within this amount range.</span>
-                </div>
               </div>
-
-              {!editingLevel && formModule && (
-                <div className="alvl-modal__preview">
-                  <Info size={14} />
-                  <span>
-                    This will be added as <strong>Level {(grouped[formModule]?.length || 0) + 1}</strong> in the {MODULE_BY_KEY[formModule]?.label || formModule} approval chain.
-                  </span>
-                </div>
-              )}
             </div>
-              {formError && (
-                <MessageStrip type="error" compact style={{ margin: '0 20px 12px' }}>
-                  {formError}
-                </MessageStrip>
-              )}
-            <div className="alvl-modal__footer">
-              <button type="button" className="alvl-modal__btn alvl-modal__btn--secondary" onClick={() => setShowAddModal(false)}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="alvl-modal__btn alvl-modal__btn--primary"
-                disabled={!formModule || !formRole || saveLoading || !canCreateLevels}
-                style={!canCreateLevels ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                title={!canCreateLevels ? noPermissionTitle : undefined}
-                onClick={handleSave}
-              >
-                <Check size={16} />
-                {saveLoading ? 'Saving…' : editingLevel ? 'Update Level' : 'Add Level'}
+
+            <div className="flex items-center justify-end gap-3 border-t border-border/70 bg-muted/20 px-6 py-4">
+              <button type="button" className="min-h-11 rounded-xl border border-input bg-background px-5 text-sm font-semibold text-foreground transition hover:bg-muted" onClick={() => setShowAddModal(false)} disabled={saveLoading}>Cancel</button>
+              <button type="button" className="min-h-11 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50" onClick={handleSave} disabled={!formModule || !formRole || saveLoading}>
+                {saveLoading ? 'Saving...' : editingLevel ? 'Update Level' : 'Add Level'}
               </button>
             </div>
           </div>
@@ -721,30 +653,20 @@ export default function ApprovalLevelsPage() {
 
       {/* Delete Confirmation Modal */}
       {deleteConfirmLevelId !== null && (
-        <div className="alvl-modal-backdrop" onClick={() => setDeleteConfirmLevelId(null)}>
-          <div className="alvl-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460 }}>
-            <div className="alvl-modal__header">
-              <div className="alvl-modal__title">
-                <Trash2 size={20} style={{ color: 'var(--danger-500)' }} />
-                <span>Remove Approval Level?</span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setDeleteConfirmLevelId(null)}>
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-border/70 bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6 text-center">
+              <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+                <AlertTriangle size={28} />
               </div>
-              <button className="alvl-modal__close" onClick={() => setDeleteConfirmLevelId(null)}>
-                <X size={18} />
-              </button>
+              <h3 className="mt-4 text-lg font-semibold text-foreground">Remove Approval Level?</h3>
+              <p className="mt-2 text-sm text-muted-foreground">Are you sure you want to remove this approval level from the chain? This will adjust step numbers for remaining levels.</p>
             </div>
-            <div className="alvl-modal__body">
-              <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
-                Are you sure you want to remove this approval level from the chain?
-              </p>
-            </div>
-            <div className="alvl-modal__footer">
-              <button type="button" className="alvl-modal__btn alvl-modal__btn--secondary" onClick={() => setDeleteConfirmLevelId(null)}>
-                Cancel
-              </button>
+            <div className="flex items-center justify-end gap-3 border-t border-border/70 bg-muted/20 px-6 py-4">
+              <button type="button" className="min-h-11 rounded-xl border border-input bg-background px-4 text-sm font-semibold text-foreground transition hover:bg-muted" onClick={() => setDeleteConfirmLevelId(null)}>Cancel</button>
               <button
                 type="button"
-                className="alvl-modal__btn alvl-modal__btn--primary"
-                style={{ background: 'var(--danger-500)', borderColor: 'var(--danger-500)' }}
+                className="min-h-11 rounded-xl bg-destructive px-4 text-sm font-semibold text-destructive-foreground transition hover:bg-destructive/90"
                 onClick={async () => {
                   const id = deleteConfirmLevelId;
                   setDeleteConfirmLevelId(null);

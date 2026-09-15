@@ -7,11 +7,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import {
-  Plus, Search, FileText, Eye, Trash2, Copy, Users, Package,
-  ArrowUpDown, ChevronLeft, ChevronRight, X, CalendarDays,
-  Building2, Tag, Banknote, ClipboardList, Send, ChevronDown,
-  ChevronUp, Minus, Maximize2, Minimize2,
-  AlertTriangle, Clock, CheckCircle2, XCircle, ThumbsUp, ThumbsDown, Undo2, RotateCcw, MessageSquare, CheckSquare,
+  Plus, Search, FileText, Eye, Trash2, Users, Package,
+  ArrowUpDown, ChevronLeft, ChevronRight, CalendarDays,
+  ClipboardList, ChevronDown, AlertTriangle, Clock, CheckCircle2,
+  XCircle, ThumbsUp, ThumbsDown, RotateCcw, MessageSquare, CheckSquare,
 } from 'lucide-react';
 import type { RFQStatus } from '../../types';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
@@ -19,32 +18,42 @@ import RFQDetailModal from '../../components/rfq/RFQDetailModal';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TableSkeleton } from '../../components/shared/Skeleton';
 import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Card } from '../../components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/ui/dialog';
+import { Input } from '../../components/ui/input';
+import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
+import { cn } from '../../lib/utils';
 import '../../components/shared/ColumnCustomizer.css';
-import './RFQPage.css';
 
 // ─── Types ───────────────────────────────────────────────────
 
 type MockRFQ = RFQTableRow;
 
 // ─── Column definitions ───────────────────────────────────────
-// These map to fields available from "DB" — user can toggle & reorder
 
 export interface ColumnDef {
   key: string;
   label: string;
   defaultVisible: boolean;
-  required?: boolean;        // cannot be hidden (e.g. RFQ #)
+  required?: boolean;
   render: (rfq: MockRFQ, formatDate: (d: string) => string, openDetail?: (rfq: MockRFQ) => void) => React.ReactNode;
   headerRender?: () => React.ReactNode;
   width?: string;
 }
 
-// Column widths — fixed so layout never breaks regardless of which are visible
-// width + align per column
 const COL_META: Record<string, { width: string; align?: 'left'|'center'|'right' }> = {
-  rfqNumber:    { width: '210px', align: 'left'   },
+  rfqNumber:    { width: '160px', align: 'left'   },
   title:        { width: '220px', align: 'left'   },
-  status:       { width: '190px', align: 'left'   },
+  status:       { width: '160px', align: 'left'   },
   creator:      { width: '150px', align: 'left'   },
   createdAt:    { width: '110px', align: 'left'   },
   itemCount:    { width:  '70px', align: 'center' },
@@ -55,7 +64,6 @@ const COL_META: Record<string, { width: string; align?: 'left'|'center'|'right' 
   department:   { width: '120px', align: 'left'   },
   closingDate:  { width: '110px', align: 'left'   },
   currency:     { width:  '76px', align: 'center' },
-  rfqType:      { width: '100px', align: 'center' },
 };
 const COL_WIDTHS: Record<string, string> = Object.fromEntries(
   Object.entries(COL_META).map(([k, v]) => [k, v.width])
@@ -68,11 +76,11 @@ const ALL_COLUMNS: ColumnDef[] = [
     defaultVisible: true,
     required: true,
     render: (rfq: MockRFQ, _formatDate: (d: string) => string, openDetail?: (rfq: MockRFQ) => void) => (
-      <button className="rfq-table__num-btn" onClick={() => (openDetail as any)(rfq)}>
+      <button className="font-semibold text-primary transition-colors hover:text-primary/75 hover:underline" onClick={() => (openDetail as any)(rfq)}>
         {rfq.rfqNumber}
       </button>
     ),
-    headerRender: () => <><ArrowUpDown size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />RFQ #</>,
+    headerRender: () => <span className="inline-flex items-center gap-1"><ArrowUpDown size={12} />RFQ #</span>,
   },
   {
     key: 'title',
@@ -80,9 +88,9 @@ const ALL_COLUMNS: ColumnDef[] = [
     defaultVisible: true,
     required: true,
     render: (rfq) => (
-      <div className="rfq-table__title-cell">
-        <span className="rfq-table__title">{rfq.title}</span>
-        <span className="rfq-table__desc">{rfq.description}</span>
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span className="truncate font-medium text-foreground">{rfq.title}</span>
+        <span className="line-clamp-1 text-xs text-muted-foreground">{rfq.description}</span>
       </div>
     ),
   },
@@ -107,10 +115,10 @@ const ALL_COLUMNS: ColumnDef[] = [
         ? 'Accepted'
         : (STATUS_LABELS[rfq.status as RFQStatus] || displayStatus);
       return (
-        <span className={`rfq-badge rfq-badge--${displayStatus}`}>
-          <span className="rfq-badge__dot" />
+        <Badge tone={statusTone(displayStatus)}>
+          <span className="size-1.5 rounded-full bg-current" />
           {label}
-        </span>
+        </Badge>
       );
     },
   },
@@ -119,9 +127,9 @@ const ALL_COLUMNS: ColumnDef[] = [
     label: 'Created By',
     defaultVisible: true,
     render: (rfq) => (
-      <div className="rfq-table__creator">
-        <span className="rfq-table__avatar">{rfq.creatorInitials}</span>
-        <span className="rfq-table__creator-name">{rfq.creator}</span>
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary ring-1 ring-primary/15">{rfq.creatorInitials}</span>
+        <span className="truncate text-sm text-foreground">{rfq.creator}</span>
       </div>
     ),
   },
@@ -130,24 +138,24 @@ const ALL_COLUMNS: ColumnDef[] = [
     label: 'Date',
     defaultVisible: true,
     render: (rfq, formatDate) => (
-      <span className="rfq-table__date">{formatDate(rfq.createdAt)}</span>
+      <span className="whitespace-nowrap text-sm text-muted-foreground">{formatDate(rfq.createdAt)}</span>
     ),
   },
   {
     key: 'itemCount',
     label: 'Items',
     defaultVisible: true,
-    headerRender: () => <><Package size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />Items</>,
-    render: (rfq) => <span className="rfq-table__num-cell">{rfq.itemCount}</span>,
+    headerRender: () => <span className="inline-flex items-center gap-1"><Package size={12} />Items</span>,
+    render: (rfq) => <span className="tabular-nums text-foreground">{rfq.itemCount}</span>,
   },
   {
     key: 'vendorCount',
     label: 'Vendors',
     defaultVisible: true,
-    headerRender: () => <><Users size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />Vendors</>,
+    headerRender: () => <span className="inline-flex items-center gap-1"><Users size={12} />Vendors</span>,
     render: (rfq) => (
-      <span className="rfq-table__vendors-cell">
-        <Users size={13} className="rfq-table__vendors-icon" />{rfq.vendorCount}
+      <span className="inline-flex items-center justify-center gap-1.5 tabular-nums text-muted-foreground">
+        <Users size={13} />{rfq.vendorCount}
       </span>
     ),
   },
@@ -155,9 +163,9 @@ const ALL_COLUMNS: ColumnDef[] = [
     key: 'quotationCount',
     label: 'Quotes',
     defaultVisible: true,
-    headerRender: () => <><FileText size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />Quotes</>,
+    headerRender: () => <span className="inline-flex items-center gap-1"><FileText size={12} />Quotes</span>,
     render: (rfq) => (
-      <span className={`rfq-table__quotes-cell ${rfq.quotationCount > 0 ? 'rfq-table__quotes-cell--has' : ''}`}>
+      <span className={cn('inline-flex min-w-7 justify-center rounded-lg px-2 py-1 text-xs font-semibold tabular-nums', rfq.quotationCount > 0 ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground')}>
         {rfq.quotationCount}
       </span>
     ),
@@ -166,50 +174,46 @@ const ALL_COLUMNS: ColumnDef[] = [
     key: 'totalEstimate',
     label: 'Estimate',
     defaultVisible: true,
-    render: (rfq) => <span className="rfq-table__estimate">{rfq.totalEstimate}</span>,
+    render: (rfq) => <span className="whitespace-nowrap font-semibold tabular-nums text-foreground">{rfq.totalEstimate}</span>,
   },
-  // ── Extra DB fields (hidden by default) ──────────────────
   {
     key: 'priority',
     label: 'Priority',
     defaultVisible: false,
-    render: (rfq) => {
-      const cls: Record<string, string> = { Low: 'low', Medium: 'medium', High: 'high', Critical: 'critical' };
-      return (
-        <span className={`rfq-table__priority-chip rfq-table__priority-chip--${cls[rfq.priority]}`}>
-          {rfq.priority}
-        </span>
-      );
-    },
+    render: (rfq) => (
+      <Badge tone={rfq.priority === 'Critical' ? 'danger' : rfq.priority === 'High' ? 'warning' : rfq.priority === 'Low' ? 'neutral' : 'info'}>
+        {rfq.priority}
+      </Badge>
+    ),
   },
   {
     key: 'department',
     label: 'Department',
     defaultVisible: false,
-    render: (rfq) => <span className="rfq-table__cell-text">{rfq.department || '—'}</span>,
+    render: (rfq) => <span className="text-sm text-muted-foreground">{rfq.department || '—'}</span>,
   },
   {
     key: 'closingDate',
     label: 'Closing Date',
     defaultVisible: false,
     render: (rfq, formatDate) => (
-      <span className="rfq-table__date">{formatDate(rfq.closingDate)}</span>
+      <span className="whitespace-nowrap text-sm text-muted-foreground">{formatDate(rfq.closingDate)}</span>
     ),
   },
   {
     key: 'currency',
     label: 'Currency',
     defaultVisible: false,
-    render: (rfq) => <span className="rfq-table__cell-text">{rfq.currency}</span>,
+    render: (rfq) => <span className="text-sm font-medium text-muted-foreground">{rfq.currency}</span>,
   },
   {
     key: 'rfqType',
     label: 'RFQ Type',
     defaultVisible: true,
     render: (rfq) => (
-      <span className={`rfq-badge rfq-type-badge rfq-type-badge--${rfq.rfqType}`}>
+      <Badge tone={rfq.rfqType === 'TENDER' ? 'info' : 'primary'}>
         {rfq.rfqType === 'TENDER' ? 'Tender' : 'RFQ'}
-      </span>
+      </Badge>
     ),
   },
 ];
@@ -228,19 +232,20 @@ const STATUS_LABELS: Record<string, string> = {
   RETURNED: 'Returned',
 };
 
-const PRIORITY_CLASS: Record<string, string> = {
-  Low: 'low', Medium: 'medium', High: 'high', Critical: 'critical',
-};
-
-// ColumnCustomizer is now imported from shared components
-
-// ─── Main Component ───────────────────────────────────────────
+function statusTone(status: string): 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info' {
+  if (['APPROVED', 'SENT', 'IN_PROGRESS', 'ACCEPTED'].includes(status)) return 'success';
+  if (status === 'PENDING_APPROVAL') return 'warning';
+  if (['REJECTED', 'CANCELLED', 'RETURNED'].includes(status)) return 'danger';
+  if (status === 'CLOSED') return 'info';
+  return 'neutral';
+}
 
 export default function RFQPage() {
   const navigate = useNavigate();
   const { hasPermission } = useAuth();
   const canCreateRFQ = hasPermission('RFQ Management', 'canCreate') || hasPermission('RFQ', 'canCreate');
   const canApproveRFQ = hasPermission('RFQ Management', 'canApprove') || hasPermission('RFQ', 'canApprove') || canCreateRFQ;
+
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [currentPage, setCurrentPage] = useState(1);
@@ -262,12 +267,12 @@ export default function RFQPage() {
   const [deleteTarget, setDeleteTarget] = useState<MockRFQ | null>(null);
   const [deleteForceRequired, setDeleteForceRequired] = useState(false);
 
-  // ── Bulk Selection & Delete State ─────────────────────────────
+  // Bulk Selection & Delete State
   const [selectedRfqIds, setSelectedRfqIds] = useState<string[]>([]);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
-  // ── Approval Action State for RFQs ─────────────────────
+  // Approval Action State
   const [pendingApprovalsMap, setPendingApprovalsMap] = useState<Map<string, any>>(new Map());
   const [myApprovedMap, setMyApprovedMap] = useState<Set<string>>(new Set());
   const [myReturnedMap, setMyReturnedMap] = useState<Set<string>>(new Set());
@@ -345,7 +350,6 @@ export default function RFQPage() {
       return;
     }
 
-    // ⚡ INSTANT 0ms Success Modal Popup!
     const modalType = action === 'approve' ? 'approve' : action === 'reject' ? 'reject' : 'return';
     const defaultMsg = action === 'approve'
       ? `RFQ #${rfq.rfqNumber} Level approved successfully!`
@@ -370,7 +374,6 @@ export default function RFQPage() {
     setApprovalComment('');
     setApprovalActionLoading(false);
 
-    // ── Background API Execution & Table Sync ──
     const apiCall = action === 'approve'
       ? approvalService.approve(approvalId, comment)
       : action === 'reject'
@@ -387,7 +390,7 @@ export default function RFQPage() {
       })
       .catch((err) => {
         setActionSuccessData(null);
-        setToast({ message: err instanceof Error ? err.message : 'Action failed', type: 'error' });
+        setApprovalActionMessage({ type: 'error', text: err instanceof Error ? err.message : 'Action failed' });
       });
   }, [approvalActionModal, approvalComment, actionReturnTarget, reload, fetchPendingApprovals]);
 
@@ -403,10 +406,6 @@ export default function RFQPage() {
       draftOrPending: cleanList.filter((r) => r.status === 'DRAFT' || r.status === 'PENDING_APPROVAL').length,
       approved: cleanList.filter((r) => r.status === 'APPROVED' || r.status === 'SENT' || r.status === 'IN_PROGRESS' || r.status === 'ACCEPTED').length,
       rejected: cleanList.filter((r) => r.status === 'REJECTED').length,
-      sent: cleanList.filter((r) => r.status === 'SENT' || r.status === 'APPROVED' || r.status === 'ACCEPTED').length,
-      inProgress: 0,
-      closed: cleanList.filter((r) => r.status === 'CLOSED').length,
-      cancelled: cleanList.filter((r) => r.status === 'CANCELLED').length,
     };
   }, [rfqList]);
 
@@ -513,8 +512,6 @@ export default function RFQPage() {
     }
   }, [deleteTarget, detailRFQ?.id, reload]);
 
-  // ── Auto-clear deleteSuccess/deleteError after timeout ─────
-  // Using a single effect with a ref map to handle both success & error
   useEffect(() => {
     if (!deleteSuccess && !deleteError) return;
     const timer = window.setTimeout(() => {
@@ -524,7 +521,7 @@ export default function RFQPage() {
     return () => window.clearTimeout(timer);
   }, [deleteSuccess, deleteError]);
 
-  // ── Column state ──────────────────────────────────────────
+  // Column state
   const defaultOrder = ALL_COLUMNS.map((c) => c.key);
   const defaultVisible = new Set(ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key));
 
@@ -557,8 +554,9 @@ export default function RFQPage() {
     return list;
   }, [rfqList, statusFilter, search]);
 
-  const totalPages = Math.ceil(filtered.length / perPage);
-  const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginated = filtered.slice((safePage - 1) * perPage, safePage * perPage);
 
   const isAllSelected = useMemo(() => {
     return (
@@ -605,7 +603,6 @@ export default function RFQPage() {
   const formatDate = (d: string) =>
     d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
-  // Visible columns in order
   const visibleColumns = useMemo(
     () => columnOrder
       .map((k) => ALL_COLUMNS.find((c) => c.key === k)!)
@@ -645,7 +642,7 @@ export default function RFQPage() {
   };
 
   return (
-    <div className="rfq-page">
+    <PageFrame>
       {error && <MessageStrip type="error">{error}</MessageStrip>}
       {deleteError && <MessageStrip type="error" onClose={() => setDeleteError(null)} autoHideMs={5000}>{deleteError}</MessageStrip>}
       {deleteSuccess && <MessageStrip type="success" onClose={() => setDeleteSuccess(null)} autoHideMs={2000}>{deleteSuccess}</MessageStrip>}
@@ -659,164 +656,144 @@ export default function RFQPage() {
         </MessageStrip>
       )}
 
-      {/* ── Header ─────────────────────────────────────────── */}
-      <div className="rfq-page__header">
-        <div className="rfq-page__header-left">
-          <h1>RFQs</h1>
-          <p>Manage procurement requests</p>
-        </div>
-        <button
-          className={`rfq-page__create-btn ${!hasPermission('RFQ', 'canCreate') ? 'rfq-page__create-btn--disabled' : ''}`}
-          onClick={hasPermission('RFQ', 'canCreate') ? () => navigate('/rfq/create') : undefined}
-          disabled={!hasPermission('RFQ', 'canCreate')}
-          title={!hasPermission('RFQ', 'canCreate') ? 'Admin has not allowed this action. You do not have permission to create RFQs.' : 'Create new RFQ'}
-          style={!hasPermission('RFQ', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-        >
-          <Plus size={18} /> New RFQ
-        </button>
-      </div>
+      <PageLead
+        title="Request for quotations"
+        description="Track requests, approvals, vendor participation, and quoted value from one workspace."
+        actions={
+          <Button
+            onClick={canCreateRFQ ? () => navigate('/rfq/create') : undefined}
+            disabled={!canCreateRFQ}
+            title={!canCreateRFQ ? 'You do not have permission to create RFQs.' : 'Create new RFQ'}
+          >
+            <Plus /> New RFQ
+          </Button>
+        }
+      />
 
-      {/* ── KPI Cards ──────────────────────────────────────── */}
-      <div className="rfq-summary">
+      {/* KPI Cards */}
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          { icon: <ClipboardList size={22}/>, mod: 'total',     value: stats.total,           label: 'Total RFQs',      filter: null as StatusFilter | null },
-          { icon: <Clock size={22}/>,         mod: 'pending',   value: stats.draftOrPending,  label: 'Pending Approval / Drafts', filter: 'DRAFT_OR_PENDING' as StatusFilter },
-          { icon: <CheckCircle2 size={22}/>,  mod: 'approved',  value: stats.approved,        label: 'Approved',         filter: 'APPROVED' as StatusFilter },
-          { icon: <XCircle size={22}/>,       mod: 'rejected',  value: stats.rejected,        label: 'Rejected',         filter: 'REJECTED' as StatusFilter },
-        ].map(c => {
-          const isActive = c.mod === 'total' ? !statusFilter || statusFilter === 'ALL' : statusFilter === c.filter;
+          { icon: ClipboardList, tone: 'primary' as const, value: stats.total, label: 'Total RFQs', detail: 'All requests', filter: null as StatusFilter | null },
+          { icon: Clock, tone: 'warning' as const, value: stats.draftOrPending, label: 'Needs attention', detail: 'Pending approval or draft', filter: 'DRAFT_OR_PENDING' as StatusFilter },
+          { icon: CheckCircle2, tone: 'success' as const, value: stats.approved, label: 'Approved', detail: 'Ready or in progress', filter: 'APPROVED' as StatusFilter },
+          { icon: XCircle, tone: 'danger' as const, value: stats.rejected, label: 'Rejected', detail: 'Requires review', filter: 'REJECTED' as StatusFilter },
+        ].map((c) => {
+          const isActive = c.filter === null ? !statusFilter || statusFilter === 'ALL' : statusFilter === c.filter;
           return (
-            <div
-              key={c.mod}
-              className={`rfq-summary-card ${isActive ? 'rfq-summary-card--active' : ''}`}
+            <MetricCard
+              key={c.label}
+              icon={c.icon}
+              tone={c.tone}
+              value={c.value}
+              label={c.label}
+              detail={c.detail}
+              className={cn('cursor-pointer select-none', isActive && 'border-primary/45 ring-2 ring-primary/10')}
               onClick={() => handleKpiClick(c.filter)}
               role="button"
               tabIndex={0}
+              aria-pressed={isActive}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleKpiClick(c.filter); } }}
-            >
-              <div className={`rfq-summary-card__icon rfq-summary-card__icon--${c.mod}`}>{c.icon}</div>
-              <div className="rfq-summary-card__info">
-                <span className="rfq-summary-card__value">{c.value}</span>
-                <span className="rfq-summary-card__label">{c.label}</span>
-              </div>
-            </div>
+            />
           );
         })}
       </div>
 
-      {/* ── Toolbar ────────────────────────────────────────── */}
-      <div className="rfq-toolbar__search">
-        <Search size={16} className="rfq-toolbar__search-icon" />
-        <input
+      <div className="relative mb-4 max-w-xl">
+        <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          className="h-11 rounded-xl pl-10"
           type="text"
-          placeholder="Search RFQ, title, creator..."
+          placeholder="Search by RFQ, title, or creator"
+          aria-label="Search requests for quotation"
           value={search}
           onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
         />
       </div>
 
-      {/* ── Floating Bulk Action Banner ── */}
-      {selectedRfqIds.length > 0 && !showBulkDeleteModal && (
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          background: 'var(--surface-card)', border: '1px solid var(--primary-500)',
-          padding: '12px 18px', borderRadius: 'var(--radius-md)', marginBottom: '16px',
-          boxShadow: '0 4px 14px rgba(0,0,0,0.12)', transition: 'all 0.2s ease'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-            <CheckSquare size={18} style={{ color: 'var(--primary-500)' }} />
-            <span><strong>{selectedRfqIds.length}</strong> RFQ(s) selected</span>
+      {/* Floating Bulk Action Banner */}
+      {selectedRfqIds.length > 0 && (
+        <Card className="mb-4 flex flex-col gap-3 border-primary/35 bg-primary/[0.045] p-3 shadow-md sm:flex-row sm:items-center sm:justify-between sm:px-4">
+          <div className="flex items-center gap-2.5 text-sm font-semibold text-foreground">
+            <CheckSquare size={18} className="text-primary" />
+            <span>{selectedRfqIds.length} {selectedRfqIds.length === 1 ? 'RFQ' : 'RFQs'} selected</span>
           </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button
+          <div className="flex flex-wrap gap-2">
+            <Button
               type="button"
-              className="rfq-modal__btn rfq-modal__btn--secondary"
-              style={{ padding: '6px 14px', fontSize: 12 }}
+              variant="secondary"
+              size="sm"
               onClick={() => setSelectedRfqIds([])}
             >
-              Cancel Selection
-            </button>
-            <button
+              Clear selection
+            </Button>
+            <Button
               type="button"
+              variant="destructive"
+              size="sm"
               disabled={!canCreateRFQ}
-              style={{
-                background: canCreateRFQ ? '#dc2626' : '#64748b',
-                color: '#ffffff', border: 'none',
-                padding: '6px 14px', fontSize: 12, fontWeight: 600,
-                borderRadius: 'var(--radius-sm)',
-                cursor: canCreateRFQ ? 'pointer' : 'not-allowed',
-                opacity: canCreateRFQ ? 1 : 0.5,
-                pointerEvents: 'auto',
-                display: 'inline-flex', alignItems: 'center', gap: 6
-              }}
-              title={!canCreateRFQ ? "Admin has not allowed this action. You do not have permission to delete RFQs." : undefined}
-              onClick={() => {
-                if (!canCreateRFQ) return;
-                setShowBulkDeleteModal(true);
-              }}
+              onClick={() => canCreateRFQ && setShowBulkDeleteModal(true)}
             >
-              <Trash2 size={14} /> Delete Selected ({selectedRfqIds.length})
-            </button>
+              <Trash2 /> Delete selected
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
 
-      {/* ── Table Card ─────────────────────────────────────── */}
-      <div className="rfq-table-card">
+      {/* Table Card */}
+      <Card className="overflow-hidden">
         {loading ? (
           <TableSkeleton rows={5} columns={6} />
         ) : paginated.length > 0 ? (
           <>
-            {/* Desktop Table */}
-            <div className="rfq-table-wrap">
-              <table className="rfq-table">
-                {/* colgroup — array expression avoids whitespace text nodes which cause hydration errors */}
+            <div className="hidden overflow-x-auto lg:block">
+              <table className="w-full min-w-[1080px] border-collapse text-sm">
                 <colgroup>
-                  {[
-                    <col key="__select" style={{ width: '42px' }} />,
-                    ...visibleColumns.map((col) => (
-                      <col key={col.key} style={{ width: COL_WIDTHS[col.key] || 'auto' }} />
-                    )),
-                    <col key="__actions" style={{ width: '160px' }} />
-                  ]}
+                  <col className="w-[42px]" />
+                  {visibleColumns.map((col) => (
+                    <col key={col.key} style={{ width: COL_WIDTHS[col.key] || 'auto' }} />
+                  ))}
+                  <col className="w-[160px]" />
                 </colgroup>
                 <thead>
-                  <tr>
-                    <th style={{ width: '42px', textAlign: 'center' }}>
+                  <tr className="border-b border-border/75 bg-muted/45 text-left text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                    <th className="px-3 py-3 text-center">
                       <input
                         type="checkbox"
                         disabled={!canCreateRFQ}
-                        style={{ width: 16, height: 16, cursor: canCreateRFQ ? 'pointer' : 'not-allowed', accentColor: 'var(--primary-500)' }}
+                        className="size-4 cursor-pointer rounded border-border text-primary focus:ring-primary/40"
                         checked={isAllSelected}
                         onChange={canCreateRFQ ? handleToggleSelectAll : undefined}
-                        title={!canCreateRFQ ? "Admin has not allowed this action. You do not have permission to select RFQs." : "Select All RFQs"}
+                        aria-label="Select all RFQs on this page"
                       />
                     </th>
                     {visibleColumns.map((col) => {
                       const align = COL_META[col.key]?.align ?? 'left';
                       return (
-                        <th key={col.key} style={{ textAlign: align }}>
+                        <th
+                          key={col.key}
+                          className="px-3 py-3"
+                          style={{ textAlign: align }}
+                        >
                           {col.headerRender ? col.headerRender() : col.label}
                         </th>
                       );
                     })}
-                    {/* Actions col + 3-dot button */}
-                    <th className="rfq-table__actions-th">
-                      <div className="rfq-table__actions-header">
+                    <th className="px-3 py-3 text-right">
+                      <div className="flex items-center justify-between gap-2">
                         <span>Actions</span>
-                        <div className="rfq-table__col-btn-wrap">
-                          <button
+                        <div className="relative">
+                          <Button
                             ref={colBtnRef}
-                            className={`rfq-table__col-btn ${showColPanel ? 'rfq-table__col-btn--active' : ''}`}
+                            variant={showColPanel ? 'secondary' : 'ghost'}
+                            size="icon-sm"
                             onClick={() => setShowColPanel((v) => !v)}
                             title="Customize columns"
                             aria-label="Customize columns"
                             aria-expanded={showColPanel}
                           >
-                            <span /><span /><span />
-                          </button>
+                            <span className="flex gap-0.5"><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /></span>
+                          </Button>
 
-                          {/* Column Customizer Panel */}
                           {showColPanel && (
                             <ColumnCustomizer
                               columnOrder={columnOrder}
@@ -834,78 +811,94 @@ export default function RFQPage() {
                     </th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-border/60">
                   {paginated.map((rfq) => {
-                    const pendingApproval = pendingApprovalsMap.get(String(rfq.id)) || pendingApprovalsMap.get(rfq.rfqNumber);
-                    const canAct = rfq.status === 'PENDING_APPROVAL' && !!pendingApproval && pendingApproval.canAct !== false;
-                    const isApprovedByMe = (myApprovedMap.has(String(rfq.id)) || myApprovedMap.has(rfq.rfqNumber)) && !canAct;
-                    const isReturnedByMe = (myReturnedMap.has(String(rfq.id)) || myReturnedMap.has(rfq.rfqNumber)) && !canAct;
-                    const enrichedRfq = { ...rfq, _isApprovedByMe: isApprovedByMe, _isReturnedByMe: isReturnedByMe };
-                    const isSelected = selectedRfqIds.includes(String(rfq.id));
+                    const rfqIdStr = String(rfq.id);
+                    const isSelected = selectedRfqIds.includes(rfqIdStr);
+                    const isPending = rfq.status === 'PENDING_APPROVAL';
 
                     return (
-                      <tr key={rfq.id} className={`rfq-table__row rfq-table__row--${(rfq.status || '').toLowerCase()} ${isSelected ? 'rfq-tr--selected' : ''}`} onClick={() => openDetail(enrichedRfq as any)}>
-                        <td style={{ textAlign: 'center', width: '42px' }} onClick={(e) => e.stopPropagation()}>
+                      <tr
+                        key={rfq.id}
+                        className={cn(
+                          'cursor-pointer transition-colors hover:bg-accent/35',
+                          isSelected && 'bg-primary/[0.035]'
+                        )}
+                        onClick={() => openDetail(rfq)}
+                      >
+                        <td className="px-3 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
                           <input
                             type="checkbox"
                             disabled={!canCreateRFQ}
-                            style={{ width: 16, height: 16, cursor: canCreateRFQ ? 'pointer' : 'not-allowed', accentColor: 'var(--primary-500)' }}
+                            className="size-4 cursor-pointer rounded border-border text-primary focus:ring-primary/40"
                             checked={isSelected}
-                            onChange={() => canCreateRFQ && handleToggleSelectRow(String(rfq.id))}
-                            title={!canCreateRFQ ? "Admin has not allowed this action. You do not have permission to select RFQs." : undefined}
+                            onChange={canCreateRFQ ? () => handleToggleSelectRow(rfqIdStr) : undefined}
                           />
                         </td>
+
                         {visibleColumns.map((col) => {
                           const align = COL_META[col.key]?.align ?? 'left';
                           return (
-                            <td
-                              key={col.key}
-                              className={`rfq-td rfq-td--${col.key}`}
-                              style={{ textAlign: align }}
-                              onClick={col.key === 'rfqNumber' ? (e) => e.stopPropagation() : undefined}
-                            >
-                              {col.render(enrichedRfq as any, formatDate, openDetail as any)}
+                            <td key={col.key} className="px-3 py-3.5" style={{ textAlign: align }}>
+                              {col.render(rfq, formatDate, openDetail)}
                             </td>
                           );
                         })}
-                        <td className="rfq-td rfq-td--actions" onClick={(e) => e.stopPropagation()}>
-                          <div className="rfq-table__actions">
-                            <button className="rfq-table__action-btn" title="View" onClick={() => openDetail(enrichedRfq as any)}><Eye size={15} /></button>
-                            {canAct ? (
+
+                        <td className="px-3 py-3.5" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1">
+                            {isPending && canApproveRFQ && (
                               <>
-                                <button
-                                  className="rfq-table__action-btn rfq-table__action-btn--approve"
-                                  title={!canApproveRFQ ? "Admin has not allowed this action. You do not have permission to approve RFQs." : "Approve RFQ"}
-                                  onClick={() => canApproveRFQ && openApprovalAction(rfq, 'approve')}
-                                  disabled={!canApproveRFQ}
-                                  style={!canApproveRFQ ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  className="text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-700"
+                                  onClick={() => openApprovalAction(rfq, 'approve')}
+                                  title="Approve RFQ Level"
                                 >
-                                  <ThumbsUp size={15} />
-                                </button>
-                                <button
-                                  className="rfq-table__action-btn rfq-table__action-btn--reject"
-                                  title={!canApproveRFQ ? "Admin has not allowed this action. You do not have permission to reject RFQs." : "Reject RFQ"}
-                                  onClick={() => canApproveRFQ && openApprovalAction(rfq, 'reject')}
-                                  disabled={!canApproveRFQ}
-                                  style={!canApproveRFQ ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                                  <ThumbsUp className="size-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  className="text-amber-600 hover:bg-amber-500/10 hover:text-amber-700"
+                                  onClick={() => openApprovalAction(rfq, 'return')}
+                                  title="Return RFQ for Revision"
                                 >
-                                  <ThumbsDown size={15} />
-                                </button>
-                                <button
-                                  className="rfq-table__action-btn rfq-table__action-btn--return"
-                                  title={!canApproveRFQ ? "Admin has not allowed this action. You do not have permission to return RFQs." : "Return RFQ"}
-                                  onClick={() => canApproveRFQ && openApprovalAction(rfq, 'return')}
-                                  disabled={!canApproveRFQ}
-                                  style={!canApproveRFQ ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+                                  <RotateCcw className="size-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  className="text-rose-600 hover:bg-rose-500/10 hover:text-rose-700"
+                                  onClick={() => openApprovalAction(rfq, 'reject')}
+                                  title="Reject RFQ"
                                 >
-                                  <RotateCcw size={15} />
-                                </button>
+                                  <ThumbsDown className="size-4" />
+                                </Button>
                               </>
-                            ) : isApprovedByMe && rfq.status === 'PENDING_APPROVAL' ? (
-                              <span className="rfq-table__action-btn rfq-table__action-btn--approve" title="You approved Level 1" style={{ cursor: 'default' }}>
-                                <CheckCircle2 size={15} />
-                              </span>
-                            ) : null}
+                            )}
+
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => openDetail(rfq)}
+                              title="View RFQ details"
+                            >
+                              <Eye className="size-4" />
+                            </Button>
+
+                            {canCreateRFQ && (
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                onClick={() => requestDeleteRFQ(rfq)}
+                                title="Delete RFQ"
+                              >
+                                <Trash2 className="size-4" />
+                              </Button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -915,355 +908,238 @@ export default function RFQPage() {
               </table>
             </div>
 
-            {/* Mobile Card List */}
-            <div className="rfq-mobile-list">
-              {paginated.map((rfq) => {
-                const pendingApproval = pendingApprovalsMap.get(String(rfq.id)) || pendingApprovalsMap.get(rfq.rfqNumber);
-                const canAct = rfq.status === 'PENDING_APPROVAL' && !!pendingApproval && pendingApproval.canAct !== false;
-                const isApprovedByMe = (myApprovedMap.has(String(rfq.id)) || myApprovedMap.has(rfq.rfqNumber)) && !canAct;
-                const isReturnedByMe = (myReturnedMap.has(String(rfq.id)) || myReturnedMap.has(rfq.rfqNumber)) && !canAct;
-                const enrichedRfq = { ...rfq, _isApprovedByMe: isApprovedByMe, _isReturnedByMe: isReturnedByMe };
-                const displayStatus = (rfq.status === 'SENT' || rfq.status === 'IN_PROGRESS' || rfq.status === 'ACCEPTED')
-                  ? 'APPROVED'
-                  : (rfq.status === 'PENDING_APPROVAL' && isReturnedByMe)
-                  ? 'RETURNED'
-                  : (rfq.status === 'PENDING_APPROVAL' && isApprovedByMe)
-                  ? 'APPROVED'
-                  : rfq.status;
-                const displayLabel = (displayStatus === 'APPROVED' || displayStatus === 'SENT') ? 'Approved' : displayStatus === 'ACCEPTED' ? 'Accepted' : (STATUS_LABELS[rfq.status] || displayStatus);
-                return (
-                  <div key={rfq.id} className="rfq-mobile-card" onClick={() => openDetail(enrichedRfq as any)}>
-                  <div className="rfq-mobile-card__top">
-                    <span className="rfq-mobile-card__num">{rfq.rfqNumber}</span>
-                    <span className={`rfq-badge rfq-badge--${displayStatus}`}>
-                      <span className="rfq-badge__dot" />{displayLabel}
-                    </span>
-                  </div>
-                  <div className="rfq-mobile-card__title">{rfq.title}</div>
-                  <div className="rfq-mobile-card__desc">{rfq.description}</div>
-                  <div className="rfq-mobile-card__meta">
-                    <div className="rfq-mobile-card__meta-item">
-                      <span className="rfq-mobile-card__avatar">{rfq.creatorInitials}</span>
-                      <span>{rfq.creator}</span>
+            {/* Mobile View */}
+            <div className="divide-y divide-border/65 lg:hidden">
+              {paginated.map((rfq) => (
+                <article key={rfq.id} className="p-4 sm:p-5">
+                  <button type="button" className="w-full text-left" onClick={() => openDetail(rfq)}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-primary">{rfq.rfqNumber}</p>
+                        <p className="mt-1 truncate text-sm font-medium">{rfq.title}</p>
+                      </div>
+                      <Badge tone={statusTone(rfq.status)} className="shrink-0">
+                        {STATUS_LABELS[rfq.status] || rfq.status}
+                      </Badge>
                     </div>
-                    <div className="rfq-mobile-card__meta-item">
-                      <CalendarDays size={12} /><span>{formatDate(rfq.createdAt)}</span>
-                    </div>
-                  </div>
-                  <div className="rfq-mobile-card__footer">
-                    <div className="rfq-mobile-card__chips">
-                      <span className="rfq-mobile-card__chip"><Package size={11} /> {rfq.itemCount} items</span>
-                      <span className="rfq-mobile-card__chip"><Users size={11} /> {rfq.vendorCount} vendors</span>
-                      <span className={`rfq-mobile-card__chip ${rfq.quotationCount > 0 ? 'rfq-mobile-card__chip--quotes' : ''}`}>
-                        <FileText size={11} /> {rfq.quotationCount} quotes
-                      </span>
-                      <span className={`rfq-mobile-card__chip rfq-mobile-card__chip--priority rfq-mobile-card__chip--${PRIORITY_CLASS[rfq.priority]}`}>
-                        {rfq.priority}
-                      </span>
-                    </div>
-                    <div className="rfq-mobile-card__footer-actions" onClick={(e) => e.stopPropagation()}>
-                      {canAct ? (
-                        <>
-                          <button
-                            className="rfq-table__action-btn rfq-table__action-btn--approve"
-                            title={!canApproveRFQ ? "Admin has not allowed this action. You do not have permission to approve RFQs." : "Approve RFQ"}
-                            onClick={() => canApproveRFQ && openApprovalAction(rfq, 'approve')}
-                            disabled={!canApproveRFQ}
-                            style={!canApproveRFQ ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                          >
-                            <ThumbsUp size={14} />
-                          </button>
-                          <button
-                            className="rfq-table__action-btn rfq-table__action-btn--reject"
-                            title={!canApproveRFQ ? "Admin has not allowed this action. You do not have permission to reject RFQs." : "Reject RFQ"}
-                            onClick={() => canApproveRFQ && openApprovalAction(rfq, 'reject')}
-                            disabled={!canApproveRFQ}
-                            style={!canApproveRFQ ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                          >
-                            <ThumbsDown size={14} />
-                          </button>
-                          <button
-                            className="rfq-table__action-btn rfq-table__action-btn--return"
-                            title={!canApproveRFQ ? "Admin has not allowed this action. You do not have permission to return RFQs." : "Return RFQ"}
-                            onClick={() => canApproveRFQ && openApprovalAction(rfq, 'return')}
-                            disabled={!canApproveRFQ}
-                            style={!canApproveRFQ ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                          >
-                            <RotateCcw size={14} />
-                          </button>
-                        </>
-                      ) : (
-                        hasPermission('RFQ', 'canCreate') && (
-                          <button
-                            className="rfq-mobile-card__delete"
-                            title="Delete RFQ"
-                            disabled={deletingId === rfq.id}
-                            onClick={() => requestDeleteRFQ(rfq)}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        )
-                      )}
-                      <span className="rfq-mobile-card__estimate">{rfq.totalEstimate}</span>
-                    </div>
-                  </div>
-                  <ChevronDown size={14} className="rfq-mobile-card__chevron" />
-                </div>
-              );
-            })}
-            </div>
-
-            {/* Pagination */}
-            <div className="rfq-pagination">
-              <span className="rfq-pagination__info">
-                {(currentPage - 1) * perPage + 1}–{Math.min(currentPage * perPage, filtered.length)} of {filtered.length}
-              </span>
-              <div className="rfq-pagination__btns">
-                <button className="rfq-pagination__btn" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)}>
-                  <ChevronLeft size={14} />
-                </button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                  <button key={p} className={`rfq-pagination__btn ${currentPage === p ? 'rfq-pagination__btn--active' : ''}`} onClick={() => setCurrentPage(p)}>
-                    {p}
+                    <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+                      <div><dt className="text-muted-foreground">Created by</dt><dd className="mt-1 font-medium">{rfq.creator}</dd></div>
+                      <div><dt className="text-muted-foreground">Estimate</dt><dd className="mt-1 font-semibold tabular-nums">{rfq.totalEstimate}</dd></div>
+                    </dl>
                   </button>
-                ))}
-                <button className="rfq-pagination__btn" disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => p + 1)}>
-                  <ChevronRight size={14} />
-                </button>
-              </div>
+                  <div className="mt-4 flex gap-2 border-t border-border/60 pt-3">
+                    <Button variant="outline" size="sm" className="flex-1" onClick={() => openDetail(rfq)}><Eye /> View</Button>
+                    {canCreateRFQ && (
+                      <Button variant="ghost" size="icon-sm" className="text-destructive" onClick={() => requestDeleteRFQ(rfq)}><Trash2 /></Button>
+                    )}
+                  </div>
+                </article>
+              ))}
             </div>
           </>
         ) : (
-          <div className="rfq-empty">
-            <div className="rfq-empty__icon"><FileText size={48} /></div>
-            <div className="rfq-empty__title">No RFQs found</div>
-            <div className="rfq-empty__desc">
-              {search ? 'Try adjusting your search or filters.' : 'Create your first RFQ to get started.'}
-            </div>
-          </div>
+          <EmptyState
+            className="m-4 min-h-64 border-0 shadow-none"
+            icon={Search}
+            title="No RFQs found"
+            description="Try adjusting your search query or clear the active status filter."
+            action={
+              <Button variant="outline" onClick={() => { setSearch(''); setStatusFilter('ALL'); }}>
+                <X /> Clear filters
+              </Button>
+            }
+          />
         )}
-      </div>
+      </Card>
 
-      {deleteTarget && (
-        <div className="rfq-confirm-backdrop" onClick={cancelDeleteRFQ} role="presentation">
-          <div
-            className="rfq-confirm"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="rfq-delete-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="rfq-confirm__icon">
-              <AlertTriangle size={22} />
-            </div>
-            <div className="rfq-confirm__content">
-              <h2 id="rfq-delete-title">Delete RFQ?</h2>
-              <p>
-                This will permanently delete <strong>{deleteTarget.rfqNumber}</strong> with its line items,
-                vendor invites, quotations, and approval records.
-              </p>
-              {deleteForceRequired ? (
-                <div className="rfq-confirm__warning-box">
-                  <p className="rfq-confirm__warning-text">
-                    {deleteError || 'Related purchase orders and/or contracts will also be deleted or disassociated.'}
-                  </p>
-                </div>
-              ) : (
-                deleteError && <MessageStrip type="error" onClose={() => setDeleteError(null)} autoHideMs={5000}>{deleteError}</MessageStrip>
-              )}
-            </div>
-            <div className="rfq-confirm__actions">
-              <button
-                className="rfq-confirm__btn rfq-confirm__btn--secondary"
-                onClick={cancelDeleteRFQ}
-                disabled={deletingId === deleteTarget.id}
+      {/* Pagination */}
+      {filtered.length > perPage && (
+        <div className="mt-4 flex flex-col gap-3 rounded-xl border border-border/65 bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <span className="text-xs text-muted-foreground">
+            {(safePage - 1) * perPage + 1}–{Math.min(safePage * perPage, filtered.length)} of {filtered.length}
+          </span>
+          <div className="flex flex-wrap gap-1">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              disabled={safePage === 1}
+              onClick={() => setCurrentPage((page) => page - 1)}
+              aria-label="Previous page"
+            >
+              <ChevronLeft />
+            </Button>
+            {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
+              <Button
+                key={page}
+                variant={safePage === page ? 'default' : 'ghost'}
+                size="icon-sm"
+                onClick={() => setCurrentPage(page)}
+                aria-label={`Page ${page}`}
               >
-                Cancel
-              </button>
-              {deleteForceRequired ? (
-                <button
-                  className="rfq-confirm__btn rfq-confirm__btn--danger rfq-confirm__btn--force"
-                  onClick={confirmForceDeleteRFQ}
-                  disabled={deletingId === deleteTarget.id}
-                >
-                  <Trash2 size={15} />
-                  {deletingId === deleteTarget.id ? 'Deleting...' : 'Delete Anyway'}
-                </button>
-              ) : (
-                <button
-                  className="rfq-confirm__btn rfq-confirm__btn--danger"
-                  onClick={confirmDeleteRFQ}
-                  disabled={deletingId === deleteTarget.id}
-                >
-                  <Trash2 size={15} />
-                  {deletingId === deleteTarget.id ? 'Deleting...' : 'Delete RFQ'}
-                </button>
-              )}
-            </div>
+                {page}
+              </Button>
+            ))}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              disabled={safePage === totalPages}
+              onClick={() => setCurrentPage((page) => page + 1)}
+              aria-label="Next page"
+            >
+              <ChevronRight />
+            </Button>
           </div>
         </div>
       )}
 
-      {approvalActionModal && (
-        <div className="rfq-confirm-backdrop" onClick={() => setApprovalActionModal(null)} role="presentation">
-          <div
-            className="rfq-confirm"
-            role="dialog"
-            aria-modal="true"
-            onClick={(e) => e.stopPropagation()}
-            style={{ display: 'flex', flexDirection: 'column', width: 'min(500px, 100%)', gap: 16 }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: 12 }}>
-              <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, color: approvalActionModal.action === 'approve' ? '#16a34a' : approvalActionModal.action === 'reject' ? '#dc2626' : '#d97706' }}>
-                {approvalActionModal.action === 'approve' ? <ThumbsUp size={18} /> : approvalActionModal.action === 'reject' ? <ThumbsDown size={18} /> : <RotateCcw size={18} />}
-                {approvalActionModal.action === 'approve' ? 'Approve RFQ' : approvalActionModal.action === 'reject' ? 'Reject RFQ' : 'Return RFQ for Revision'}
-              </h3>
-              <button
-                onClick={() => setApprovalActionModal(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}
-              >
-                <X size={18} />
-              </button>
-            </div>
+      {/* RFQ Detail Modal */}
+      {detailRFQ && (
+        <RFQDetailModal
+          rfq={detailRFQ}
+          loading={detailLoading}
+          sending={sending}
+          sendError={sendError}
+          sendSuccess={sendSuccess}
+          onClose={closeDetail}
+          onSend={handleSendRFQ}
+        />
+      )}
 
-            <div style={{ background: 'var(--surface-elevated)', padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary-500)', marginBottom: 2 }}>
-                #{approvalActionModal.rfq.rfqNumber} — {approvalActionModal.rfq.title}
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                Created by {approvalActionModal.rfq.creator} · {approvalActionModal.rfq.department || 'Procurement'}
-              </div>
+      {/* Single Delete Confirmation Modal */}
+      <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open && !deletingId) cancelDeleteRFQ(); }}>
+        <DialogContent>
+          <DialogHeader>
+            <div className="mb-2 grid size-11 place-items-center rounded-xl bg-destructive/10 text-destructive">
+              <Trash2 className="size-5" />
             </div>
+            <DialogTitle>Delete RFQ #{deleteTarget?.rfqNumber}?</DialogTitle>
+            <DialogDescription>
+              This will remove the request for quotation.
+            </DialogDescription>
+          </DialogHeader>
 
-            {approvalActionModal.action === 'return' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>Return Destination:</label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-                    <input
-                      type="radio"
-                      name="rfqActionReturnTarget"
-                      value="ORIGINATOR"
-                      checked={actionReturnTarget === 'ORIGINATOR'}
-                      onChange={() => setActionReturnTarget('ORIGINATOR')}
-                    />
-                    Return to Creator / Originator for Revision
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-                    <input
-                      type="radio"
-                      name="rfqActionReturnTarget"
-                      value="LEVEL_1"
-                      checked={actionReturnTarget === 'LEVEL_1'}
-                      onChange={() => setActionReturnTarget('LEVEL_1')}
-                    />
-                    Restart Approval Chain at Level 1
-                  </label>
-                </div>
-              </div>
+          {deleteForceRequired ? (
+            <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+              <span>This RFQ has associated quotations or documents. Do you want to force delete it along with all related records?</span>
+            </div>
+          ) : (
+            <div className="flex items-start gap-3 rounded-xl border border-destructive/20 bg-destructive/[0.055] p-3.5 text-sm text-destructive">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+              <span>This action is permanent and cannot be undone.</span>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={cancelDeleteRFQ} disabled={deletingId !== null}>Cancel</Button>
+            {deleteForceRequired ? (
+              <Button variant="destructive" loading={deletingId !== null} onClick={confirmForceDeleteRFQ}>
+                Force Delete RFQ
+              </Button>
+            ) : (
+              <Button variant="destructive" loading={deletingId !== null} onClick={confirmDeleteRFQ}>
+                Delete RFQ
+              </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>
-                <MessageSquare size={13} style={{ marginRight: 4, verticalAlign: 'middle' }} />
-                Comments {approvalActionModal.action !== 'approve' && <span style={{ color: '#dc2626' }}>*</span>}:
-              </label>
-              <textarea
-                rows={3}
-                value={approvalComment}
-                onChange={(e) => setApprovalComment(e.target.value)}
-                placeholder={approvalActionModal.action === 'approve' ? 'Optional comments for approval...' : 'Reason for rejection/return...'}
-                style={{
-                  width: '100%', padding: '8px 10px', borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--border)', background: 'var(--surface)',
-                  color: 'var(--text-primary)', fontSize: 13, fontFamily: 'inherit', outline: 'none',
-                }}
-              />
+      {/* Bulk Delete Modal */}
+      <Dialog open={showBulkDeleteModal} onOpenChange={(open) => { if (!open && !isBulkDeleting) setShowBulkDeleteModal(false); }}>
+        <DialogContent>
+          <DialogHeader>
+            <div className="mb-2 grid size-11 place-items-center rounded-xl bg-destructive/10 text-destructive">
+              <Trash2 className="size-5" />
+            </div>
+            <DialogTitle>Delete {selectedRfqIds.length} selected RFQ(s)?</DialogTitle>
+            <DialogDescription>
+              The selected {selectedRfqIds.length} RFQ(s) and their linked records will be permanently removed.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBulkDeleteModal(false)} disabled={isBulkDeleting}>Cancel</Button>
+            <Button variant="destructive" loading={isBulkDeleting} onClick={handleConfirmBulkDelete}>
+              Delete {selectedRfqIds.length} RFQ(s)
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Action Approval Dialog */}
+      <Dialog open={Boolean(approvalActionModal)} onOpenChange={(open) => { if (!open && !approvalActionLoading) setApprovalActionModal(null); }}>
+        {approvalActionModal && (
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                {approvalActionModal.action === 'approve'
+                  ? `Approve RFQ #${approvalActionModal.rfq.rfqNumber}`
+                  : approvalActionModal.action === 'reject'
+                  ? `Reject RFQ #${approvalActionModal.rfq.rfqNumber}`
+                  : `Return RFQ #${approvalActionModal.rfq.rfqNumber}`}
+              </DialogTitle>
+              <DialogDescription>
+                {approvalActionModal.action === 'approve'
+                  ? 'Confirm approval for this RFQ level.'
+                  : approvalActionModal.action === 'reject'
+                  ? 'Specify reason for rejecting this RFQ.'
+                  : 'Specify reason for returning this RFQ.'}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex flex-col gap-3 py-2">
+              {approvalActionModal.action === 'return' && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-foreground">Return to</label>
+                  <select
+                    className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+                    value={actionReturnTarget}
+                    onChange={(e) => setActionReturnTarget(e.target.value as any)}
+                  >
+                    <option value="ORIGINATOR">Originator (Creator)</option>
+                    <option value="LEVEL_1">Level 1 Approver</option>
+                  </select>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-foreground">
+                  Comments {approvalActionModal.action !== 'approve' && <span className="text-destructive">*</span>}
+                </label>
+                <textarea
+                  className="min-h-24 w-full rounded-xl border border-input bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                  placeholder={
+                    approvalActionModal.action === 'approve'
+                      ? 'Optional approval comments...'
+                      : 'Required comment explaining the decision...'
+                  }
+                  value={approvalComment}
+                  onChange={(e) => setApprovalComment(e.target.value)}
+                />
+              </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 4 }}>
-              <button
-                className="rfq-confirm__btn rfq-confirm__btn--secondary"
-                onClick={() => setApprovalActionModal(null)}
-                disabled={approvalActionLoading}
-              >
-                Cancel
-              </button>
-              <button
-                className="rfq-confirm__btn"
-                style={{
-                  background: approvalActionModal.action === 'approve' ? '#16a34a' : approvalActionModal.action === 'reject' ? '#dc2626' : '#d97706',
-                  color: '#fff', border: 'none'
-                }}
-                disabled={approvalActionLoading || (approvalActionModal.action !== 'approve' && !approvalComment.trim())}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setApprovalActionModal(null)} disabled={approvalActionLoading}>Cancel</Button>
+              <Button
+                variant={approvalActionModal.action === 'approve' ? 'default' : 'destructive'}
+                loading={approvalActionLoading}
                 onClick={handleExecuteApprovalAction}
               >
-                {approvalActionLoading
-                  ? 'Processing...'
-                  : approvalActionModal.action === 'approve'
-                  ? 'Confirm Approval'
-                  : approvalActionModal.action === 'reject'
-                  ? 'Confirm Rejection'
-                  : 'Confirm Return'}
-              </button>
-            </div>
-          </div>
-        </div>
+                Submit Decision
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        )}
+      </Dialog>
+
+      {/* Action Success Instant Modal */}
+      {actionSuccessData && (
+        <ActionSuccessModal
+          data={actionSuccessData}
+          onClose={() => setActionSuccessData(null)}
+        />
       )}
-
-      <RFQDetailModal
-        rfq={detailRFQ}
-        onClose={closeDetail}
-        loading={detailLoading}
-        enableSend
-        onSend={handleSendRFQ}
-        sending={sending}
-        sendError={sendError}
-        sendSuccess={sendSuccess}
-        onDismissSendSuccess={() => setSendSuccess(null)}
-        onDismissSendError={() => setSendError(null)}
-      />
-
-      {showBulkDeleteModal && (
-        <div className="rfq-confirm-backdrop" onClick={() => setShowBulkDeleteModal(false)} role="presentation">
-          <div className="rfq-confirm" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-            <div className="rfq-confirm__icon">
-              <AlertTriangle size={22} />
-            </div>
-            <div className="rfq-confirm__content">
-              <h2>Delete {selectedRfqIds.length} Selected RFQ(s)?</h2>
-              <p>
-                Are you sure you want to delete the <strong>{selectedRfqIds.length} selected RFQ(s)</strong>? This action will permanently remove the RFQ records from the system.
-              </p>
-            </div>
-            <div className="rfq-confirm__actions">
-              <button
-                type="button"
-                ref={(el) => el?.focus()}
-                className="rfq-confirm__btn rfq-confirm__btn--secondary"
-                onClick={() => setShowBulkDeleteModal(false)}
-                disabled={isBulkDeleting}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="rfq-confirm__btn rfq-confirm__btn--danger"
-                onClick={handleConfirmBulkDelete}
-                disabled={isBulkDeleting}
-              >
-                {isBulkDeleting ? 'Deleting...' : 'Yes, Delete Selected'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Action Success Modal */}
-      <ActionSuccessModal
-        data={actionSuccessData}
-        onClose={() => setActionSuccessData(null)}
-      />
-    </div>
+    </PageFrame>
   );
 }

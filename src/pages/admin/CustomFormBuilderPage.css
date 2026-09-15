@@ -1,23 +1,14 @@
 /* Edge-to-edge layout override for Custom Form Builder page */
-.app-layout:has(.cfb-builder-layout) .app-layout__content {
+main#main-content:has([data-form-builder-workspace]) {
   padding: 0 !important;
   max-width: none !important;
   margin: 0 !important;
-  width: 100% !important;
-}
-
-.app-layout:has(.cfb-builder-layout) .app-layout__body {
-  overflow: hidden !important;
-}
-
-.app-layout:has(.cfb-builder-layout) .app-layout__footer {
-  display: none !important;
 }
 
 .cfb-builder-layout {
   display: flex;
   width: 100%;
-  height: calc(100vh - 56px);
+  min-height: calc(100dvh - 56px);
   background: var(--cfb-bg-wrapper, #f1f5f9);
   overflow: hidden;
   position: relative;

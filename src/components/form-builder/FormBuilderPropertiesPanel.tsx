@@ -1,45 +1,34 @@
-import { useState, useEffect } from 'react';
 import {
   Settings,
   X,
   Plus,
   Trash2,
   Sliders,
-  AlertCircle,
-  HelpCircle,
-  Maximize2,
-  Lock,
-  CheckSquare,
-  ListPlus,
-  Text,
 } from 'lucide-react';
-import type { FormField } from '../../types/formBuilder';
-import { useAuth } from '../../context/AuthContext';
-import './FormBuilderPropertiesPanel.css';
+import type { FieldValidation, FormField } from '../../types/formBuilder';
+
+const fieldGroupClass = 'flex flex-col gap-1.5';
+const labelClass = 'text-xs font-semibold text-foreground';
+const inputClass = 'min-h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/50 focus:ring-2 focus:ring-primary/15';
 
 interface FormBuilderPropertiesPanelProps {
   selectedField: FormField | null;
   onUpdateField: (updatedField: FormField) => void;
   onClose: () => void;
-  canCreateForm?: boolean;
 }
 
 export default function FormBuilderPropertiesPanel({
   selectedField,
   onUpdateField,
   onClose,
-  canCreateForm: propCanCreateForm,
 }: FormBuilderPropertiesPanelProps) {
-  const { hasPermission } = useAuth();
-  const canCreateForm = propCanCreateForm ?? (hasPermission('Custom Form Builder', 'canCreate') || hasPermission('Form Builder', 'canCreate') || hasPermission('Forms', 'canCreate'));
-
   if (!selectedField) {
     return (
-      <aside className="fbp-panel fbp-panel--empty">
-        <div className="fbp-empty-state">
-          <Sliders size={40} className="fbp-empty-icon" />
-          <h3>No Field Selected</h3>
-          <p>Click on any field in the canvas or drag a new component to configure its properties.</p>
+      <aside className="hidden min-h-0 w-72 shrink-0 flex-col border-l border-border/70 bg-card xl:flex 2xl:w-80">
+        <div className="m-auto flex max-w-[240px] flex-col items-center px-5 text-center">
+          <div className="flex size-16 items-center justify-center rounded-2xl bg-muted text-muted-foreground"><Sliders size={30} /></div>
+          <h3 className="mt-4 text-sm font-semibold text-foreground">No Field Selected</h3>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">Click on any field in the canvas or drag a new component to configure its properties.</p>
         </div>
       </aside>
     );
@@ -49,19 +38,17 @@ export default function FormBuilderPropertiesPanel({
   const isContentField = ['heading', 'paragraph'].includes(selectedField.type);
   const isDivider = selectedField.type === 'divider';
 
-  const noPermissionTitle = "Admin has not allowed this action. You do not have permission to modify field properties.";
-  const disabledStyle = !canCreateForm ? { opacity: 0.6, cursor: 'not-allowed', pointerEvents: 'auto' as const } : undefined;
-
-  const handleChange = (key: keyof FormField, value: any) => {
-    if (!canCreateForm) return;
+  const handleChange = <K extends keyof FormField>(key: K, value: FormField[K]) => {
     onUpdateField({
       ...selectedField,
       [key]: value,
     });
   };
 
-  const handleValidationChange = (valKey: string, valValue: any) => {
-    if (!canCreateForm) return;
+  const handleValidationChange = <K extends keyof FieldValidation>(
+    valKey: K,
+    valValue: FieldValidation[K]
+  ) => {
     onUpdateField({
       ...selectedField,
       validation: {
@@ -72,84 +59,72 @@ export default function FormBuilderPropertiesPanel({
   };
 
   const handleAddOption = () => {
-    if (!canCreateForm) return;
     const currentOptions = selectedField.options || [];
     const newOptionName = `Option ${currentOptions.length + 1}`;
     handleChange('options', [...currentOptions, newOptionName]);
   };
 
   const handleUpdateOption = (index: number, value: string) => {
-    if (!canCreateForm) return;
     const currentOptions = [...(selectedField.options || [])];
     currentOptions[index] = value;
     handleChange('options', currentOptions);
   };
 
   const handleRemoveOption = (index: number) => {
-    if (!canCreateForm) return;
     const currentOptions = [...(selectedField.options || [])];
     currentOptions.splice(index, 1);
     handleChange('options', currentOptions);
   };
 
   return (
-    <aside className="fbp-panel">
+    <aside className="min-h-0 w-full overflow-hidden border-t border-border/70 bg-card xl:flex xl:w-72 xl:shrink-0 xl:flex-col xl:border-l xl:border-t-0 2xl:w-80">
       {/* Header */}
-      <div className="fbp-header">
-        <div className="fbp-header-title">
-          <Settings size={18} className="fbp-title-icon" />
+      <div className="flex items-center justify-between gap-3 border-b border-border/70 px-4 py-3.5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <Settings size={18} className="text-primary" />
           <div>
-            <h3>Field Properties</h3>
-            <span className="fbp-type-tag">{selectedField.type.replace('_', ' ')}</span>
+            <h3 className="text-sm font-semibold text-foreground">Field Properties</h3>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{selectedField.type.replace('_', ' ')}</span>
           </div>
         </div>
-        <button type="button" className="fbp-close-btn" onClick={onClose} title="Close properties">
+        <button type="button" className="flex size-10 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground" onClick={onClose} title="Close properties" aria-label="Close properties">
           <X size={16} />
         </button>
       </div>
 
       {/* Properties Scroll Body */}
-      <div className="fbp-body">
+      <div className="flex max-h-96 flex-col gap-5 overflow-y-auto overscroll-contain p-4 xl:max-h-none xl:min-h-0 xl:flex-1">
         {/* Label */}
-        <div className="fbp-field-group">
-          <label className="fbp-label">Field Label</label>
+        <div className={fieldGroupClass}>
+          <label className={labelClass}>Field Label</label>
           <input
             type="text"
-            className="fbp-input"
+            className={inputClass}
             value={selectedField.label}
             onChange={(e) => handleChange('label', e.target.value)}
             placeholder="Field Label"
-            disabled={!canCreateForm}
-            style={disabledStyle}
-            title={!canCreateForm ? noPermissionTitle : undefined}
           />
         </div>
 
         {/* Content (For Heading / Paragraph) */}
         {isContentField && (
-          <div className="fbp-field-group">
-            <label className="fbp-label">Display Content</label>
+          <div className={fieldGroupClass}>
+            <label className={labelClass}>Display Content</label>
             {selectedField.type === 'heading' ? (
               <input
                 type="text"
-                className="fbp-input"
+                className={inputClass}
                 value={selectedField.content || ''}
                 onChange={(e) => handleChange('content', e.target.value)}
                 placeholder="Heading text..."
-                disabled={!canCreateForm}
-                style={disabledStyle}
-                title={!canCreateForm ? noPermissionTitle : undefined}
               />
             ) : (
               <textarea
-                className="fbp-textarea"
+                className={`${inputClass} min-h-24 resize-y py-2.5`}
                 rows={3}
                 value={selectedField.content || ''}
                 onChange={(e) => handleChange('content', e.target.value)}
                 placeholder="Paragraph description text..."
-                disabled={!canCreateForm}
-                style={disabledStyle}
-                title={!canCreateForm ? noPermissionTitle : undefined}
               />
             )}
           </div>
@@ -157,73 +132,55 @@ export default function FormBuilderPropertiesPanel({
 
         {/* Placeholder (For Inputs & Selects) */}
         {!isContentField && !isDivider && selectedField.type !== 'signature' && selectedField.type !== 'file' && (
-          <div className="fbp-field-group">
-            <label className="fbp-label">Placeholder</label>
+          <div className={fieldGroupClass}>
+            <label className={labelClass}>Placeholder</label>
             <input
               type="text"
-              className="fbp-input"
+              className={inputClass}
               value={selectedField.placeholder || ''}
               onChange={(e) => handleChange('placeholder', e.target.value)}
               placeholder="e.g. Enter text here..."
-              disabled={!canCreateForm}
-              style={disabledStyle}
-              title={!canCreateForm ? noPermissionTitle : undefined}
             />
           </div>
         )}
 
         {/* Help Text / Description */}
         {!isDivider && (
-          <div className="fbp-field-group">
-            <label className="fbp-label">Help Text / Description</label>
+          <div className={fieldGroupClass}>
+            <label className={labelClass}>Help Text / Description</label>
             <input
               type="text"
-              className="fbp-input"
+              className={inputClass}
               value={selectedField.helpText || ''}
               onChange={(e) => handleChange('helpText', e.target.value)}
               placeholder="Subtext shown below the field..."
-              disabled={!canCreateForm}
-              style={disabledStyle}
-              title={!canCreateForm ? noPermissionTitle : undefined}
             />
           </div>
         )}
 
         {/* Options Editor for Dropdown, Multi Select, Checkbox, Radio */}
         {isSelectionField && (
-          <div className="fbp-field-group">
-            <div className="fbp-flex-between">
-              <label className="fbp-label">Choice Options</label>
-              <button
-                type="button"
-                className="fbp-add-opt-btn"
-                onClick={handleAddOption}
-                disabled={!canCreateForm}
-                style={disabledStyle}
-                title={!canCreateForm ? noPermissionTitle : undefined}
-              >
+          <div className={fieldGroupClass}>
+            <div className="flex items-center justify-between gap-2">
+              <label className={labelClass}>Choice Options</label>
+              <button type="button" className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-primary transition hover:bg-primary/10" onClick={handleAddOption}>
                 <Plus size={13} /> Add Option
               </button>
             </div>
-            <div className="fbp-options-list">
+            <div className="flex flex-col gap-2">
               {(selectedField.options || []).map((opt, idx) => (
-                <div key={idx} className="fbs-option-row">
+                <div key={idx} className="flex items-center gap-2">
                   <input
                     type="text"
-                    className="fbp-input fbp-input--opt"
+                    className={inputClass}
                     value={opt}
                     onChange={(e) => handleUpdateOption(idx, e.target.value)}
-                    disabled={!canCreateForm}
-                    style={disabledStyle}
-                    title={!canCreateForm ? noPermissionTitle : undefined}
                   />
                   <button
                     type="button"
-                    className="fbp-remove-opt-btn"
+                    className="flex size-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
                     onClick={() => handleRemoveOption(idx)}
-                    disabled={!canCreateForm}
-                    style={disabledStyle}
-                    title={!canCreateForm ? noPermissionTitle : "Remove option"}
+                    title="Remove option"
                   >
                     <Trash2 size={13} />
                   </button>
@@ -235,43 +192,34 @@ export default function FormBuilderPropertiesPanel({
 
         {/* Default Value */}
         {!isContentField && !isDivider && selectedField.type !== 'file' && selectedField.type !== 'signature' && (
-          <div className="fbp-field-group">
-            <label className="fbp-label">Default Value</label>
+          <div className={fieldGroupClass}>
+            <label className={labelClass}>Default Value</label>
             <input
               type="text"
-              className="fbp-input"
+              className={inputClass}
               value={selectedField.defaultValue || ''}
               onChange={(e) => handleChange('defaultValue', e.target.value)}
               placeholder="Optional prefilled value"
-              disabled={!canCreateForm}
-              style={disabledStyle}
-              title={!canCreateForm ? noPermissionTitle : undefined}
             />
           </div>
         )}
 
         {/* Grid Width (1 Column / 2 Column Span) */}
         {!isDivider && (
-          <div className="fbp-field-group">
-            <label className="fbp-label">Grid Width Span</label>
-            <div className="fbp-toggle-row">
+          <div className={fieldGroupClass}>
+            <label className={labelClass}>Grid Width Span</label>
+            <div className="grid grid-cols-2 gap-1 rounded-xl border border-border bg-muted/40 p-1">
               <button
                 type="button"
-                className={`fbp-toggle-btn ${selectedField.width === 'half' ? 'fbp-toggle-btn--active' : ''}`}
+                className={`min-h-10 rounded-lg px-2 text-xs font-semibold transition ${selectedField.width === 'half' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
                 onClick={() => handleChange('width', 'half')}
-                disabled={!canCreateForm}
-                style={disabledStyle}
-                title={!canCreateForm ? noPermissionTitle : undefined}
               >
                 Half Width (1 Col)
               </button>
               <button
                 type="button"
-                className={`fbp-toggle-btn ${selectedField.width === 'full' ? 'fbp-toggle-btn--active' : ''}`}
+                className={`min-h-10 rounded-lg px-2 text-xs font-semibold transition ${selectedField.width === 'full' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
                 onClick={() => handleChange('width', 'full')}
-                disabled={!canCreateForm}
-                style={disabledStyle}
-                title={!canCreateForm ? noPermissionTitle : undefined}
               >
                 Full Width (2 Cols)
               </button>
@@ -281,32 +229,44 @@ export default function FormBuilderPropertiesPanel({
 
         {/* Behavior Toggles (Required / Read Only) */}
         {!isContentField && !isDivider && (
-          <div className="fbp-section-box">
-            <span className="fbp-section-title">Field Behavior & Rules</span>
+          <div className="rounded-xl border border-border bg-muted/25 p-3.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Field Behavior & Rules</span>
 
-            <label className="fbp-checkbox-label" style={disabledStyle} title={!canCreateForm ? noPermissionTitle : undefined}>
+            <label className="mt-3 flex min-h-11 cursor-pointer items-start gap-3 rounded-lg p-2 transition hover:bg-muted">
               <input
                 type="checkbox"
                 checked={selectedField.required}
-                onChange={(e) => handleChange('required', e.target.checked)}
-                disabled={!canCreateForm}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  onUpdateField({
+                    ...selectedField,
+                    required: checked,
+                    readOnly: checked ? false : selectedField.readOnly,
+                  });
+                }}
               />
-              <div className="fbp-chk-text">
-                <span>Required Field</span>
-                <small>User must fill this before submitting</small>
+              <div className="flex flex-col text-xs">
+                <span className="font-semibold text-foreground">Required Field</span>
+                <small className="mt-0.5 leading-4 text-muted-foreground">User must fill this before submitting</small>
               </div>
             </label>
 
-            <label className="fbp-checkbox-label" style={disabledStyle} title={!canCreateForm ? noPermissionTitle : undefined}>
+            <label className="mt-1 flex min-h-11 cursor-pointer items-start gap-3 rounded-lg p-2 transition hover:bg-muted">
               <input
                 type="checkbox"
                 checked={selectedField.readOnly}
-                onChange={(e) => handleChange('readOnly', e.target.checked)}
-                disabled={!canCreateForm}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  onUpdateField({
+                    ...selectedField,
+                    readOnly: checked,
+                    required: checked ? false : selectedField.required,
+                  });
+                }}
               />
-              <div className="fbp-chk-text">
-                <span>Read Only</span>
-                <small>Field is disabled and cannot be modified by user</small>
+              <div className="flex flex-col text-xs">
+                <span className="font-semibold text-foreground">Read Only</span>
+                <small className="mt-0.5 leading-4 text-muted-foreground">Field is disabled and cannot be modified by user</small>
               </div>
             </label>
           </div>
@@ -314,76 +274,61 @@ export default function FormBuilderPropertiesPanel({
 
         {/* Advanced Validation Rules */}
         {(selectedField.type === 'number' || selectedField.type === 'text' || selectedField.type === 'currency') && (
-          <div className="fbp-section-box">
-            <span className="fbp-section-title">Validation Rules</span>
+          <div className="rounded-xl border border-border bg-muted/25 p-3.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Validation Rules</span>
 
             {selectedField.type === 'number' || selectedField.type === 'currency' ? (
-              <div className="fbp-grid-2">
+              <div className="mt-3 grid grid-cols-2 gap-3">
                 <div>
-                  <label className="fbp-sublabel">Min Value</label>
+                  <label className="mb-1.5 block text-[11px] font-semibold text-muted-foreground">Min Value</label>
                   <input
                     type="number"
-                    className="fbp-input"
+                    className={inputClass}
                     value={selectedField.validation?.min ?? ''}
                     onChange={(e) => handleValidationChange('min', e.target.value ? Number(e.target.value) : undefined)}
-                    disabled={!canCreateForm}
-                    style={disabledStyle}
-                    title={!canCreateForm ? noPermissionTitle : undefined}
                   />
                 </div>
                 <div>
-                  <label className="fbp-sublabel">Max Value</label>
+                  <label className="mb-1.5 block text-[11px] font-semibold text-muted-foreground">Max Value</label>
                   <input
                     type="number"
-                    className="fbp-input"
+                    className={inputClass}
                     value={selectedField.validation?.max ?? ''}
                     onChange={(e) => handleValidationChange('max', e.target.value ? Number(e.target.value) : undefined)}
-                    disabled={!canCreateForm}
-                    style={disabledStyle}
-                    title={!canCreateForm ? noPermissionTitle : undefined}
                   />
                 </div>
               </div>
             ) : (
-              <div className="fbp-grid-2">
+              <div className="mt-3 grid grid-cols-2 gap-3">
                 <div>
-                  <label className="fbp-sublabel">Min Length</label>
+                  <label className="mb-1.5 block text-[11px] font-semibold text-muted-foreground">Min Length</label>
                   <input
                     type="number"
-                    className="fbp-input"
+                    className={inputClass}
                     value={selectedField.validation?.min ?? ''}
                     onChange={(e) => handleValidationChange('min', e.target.value ? Number(e.target.value) : undefined)}
-                    disabled={!canCreateForm}
-                    style={disabledStyle}
-                    title={!canCreateForm ? noPermissionTitle : undefined}
                   />
                 </div>
                 <div>
-                  <label className="fbp-sublabel">Max Length</label>
+                  <label className="mb-1.5 block text-[11px] font-semibold text-muted-foreground">Max Length</label>
                   <input
                     type="number"
-                    className="fbp-input"
+                    className={inputClass}
                     value={selectedField.validation?.max ?? ''}
                     onChange={(e) => handleValidationChange('max', e.target.value ? Number(e.target.value) : undefined)}
-                    disabled={!canCreateForm}
-                    style={disabledStyle}
-                    title={!canCreateForm ? noPermissionTitle : undefined}
                   />
                 </div>
               </div>
             )}
 
-            <div className="fbp-field-group" style={{ marginTop: 10 }}>
-              <label className="fbp-sublabel">Custom Error Message</label>
+            <div className="mt-3 flex flex-col gap-1.5">
+              <label className="text-[11px] font-semibold text-muted-foreground">Custom Error Message</label>
               <input
                 type="text"
-                className="fbp-input"
+                className={inputClass}
                 placeholder="Custom validation alert message..."
                 value={selectedField.validation?.customError || ''}
                 onChange={(e) => handleValidationChange('customError', e.target.value)}
-                disabled={!canCreateForm}
-                style={disabledStyle}
-                title={!canCreateForm ? noPermissionTitle : undefined}
               />
             </div>
           </div>

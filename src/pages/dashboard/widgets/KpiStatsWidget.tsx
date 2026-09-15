@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
-import { createPortal } from 'react-dom';
+import { useMemo, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText,
@@ -10,24 +9,17 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
-  X,
-  Maximize2,
-  Minimize2,
-  ChevronUp,
   BarChart3,
-  ListChecks,
   CalendarDays,
-  Building2,
 } from 'lucide-react';
 import { MessageStrip } from '../../../components/shared/MessageStrip';
 import { useServiceData } from '../../../hooks/useServiceData';
-import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import { dashboardService } from '../../../services/dashboardService';
 import { useCurrency } from '../../../components/shared/CurrencyMaster';
 import type { DashboardPipelineItem, DashboardRecentRfq, KpiItem } from '../../../types/viewModels';
-import '../../rfq/RFQPage.css';
-
-type ModalState = 'open' | 'expanded' | 'minimized';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../../components/ui/dialog';
+import { Badge } from '../../../components/ui/badge';
+import { WidgetLoading } from './WidgetShell';
 
 interface DashboardOverview {
   rfqs: { total: number; draft: number; sent: number; pendingApproval: number };
@@ -69,13 +61,22 @@ const KPI_ICONS: Record<string, typeof FileText> = {
   tasks: Timer,
 };
 
+const KPI_TONES: Record<string, { icon: string; glow: string }> = {
+  rfq: { icon: 'bg-blue-500/10 text-blue-600 dark:text-blue-300', glow: 'hover:border-blue-500/25' },
+  approvals: { icon: 'bg-amber-500/10 text-amber-600 dark:text-amber-300', glow: 'hover:border-amber-500/25' },
+  pos: { icon: 'bg-violet-500/10 text-violet-600 dark:text-violet-300', glow: 'hover:border-violet-500/25' },
+  vendors: { icon: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-300', glow: 'hover:border-cyan-500/25' },
+  spend: { icon: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300', glow: 'hover:border-emerald-500/25' },
+  lead: { icon: 'bg-pink-500/10 text-pink-600 dark:text-pink-300', glow: 'hover:border-pink-500/25' },
+  quotes: { icon: 'bg-sky-500/10 text-sky-600 dark:text-sky-300', glow: 'hover:border-sky-500/25' },
+  tasks: { icon: 'bg-orange-500/10 text-orange-600 dark:text-orange-300', glow: 'hover:border-orange-500/25' },
+};
+
 function TrendIcon({ direction }: { direction: 'up' | 'down' | 'neutral' }) {
   if (direction === 'up') return <TrendingUp size={14} />;
   if (direction === 'down') return <TrendingDown size={14} />;
   return <Minus size={14} />;
 }
-
-
 
 function getKpiKey(kpi: KpiItem) {
   return kpi.id === 'quotes' ? 'quotes' : kpi.modifier || kpi.id;
@@ -215,7 +216,6 @@ function getRelatedRfqs(kpi: KpiItem, recentRfqs: DashboardRecentRfq[]) {
 export default function KpiStatsWidget() {
   const navigate = useNavigate();
   const [selectedKpi, setSelectedKpi] = useState<KpiItem | null>(null);
-  const [modalState, setModalState] = useState<ModalState>('open');
 
   const { data: kpis, loading, error } = useServiceData(
     () => dashboardService.getKpis(),
@@ -267,10 +267,6 @@ export default function KpiStatsWidget() {
     { cacheKey: 'dashboard-kpi-my-tasks' }
   );
 
-  const isOpen = !!selectedKpi && modalState === 'open';
-  const isExpanded = !!selectedKpi && modalState === 'expanded';
-  const isMinimized = !!selectedKpi && modalState === 'minimized';
-
   const selectedIcon = useMemo(() => {
     if (!selectedKpi) return FileText;
     return KPI_ICONS[selectedKpi.modifier] || KPI_ICONS[selectedKpi.id] || FileText;
@@ -291,20 +287,8 @@ export default function KpiStatsWidget() {
     [recentRfqs, selectedKpi]
   );
 
-  useEffect(() => {
-    if (!selectedKpi) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setSelectedKpi(null);
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [selectedKpi]);
-
-  useBodyScrollLock(!!(selectedKpi && !isMinimized));
-
   const openKpi = (kpi: KpiItem) => {
     setSelectedKpi(kpi);
-    setModalState('open');
   };
 
   const closeModal = () => setSelectedKpi(null);
@@ -319,196 +303,107 @@ export default function KpiStatsWidget() {
   }
 
   if (loading) {
-    return <div className="dash-kpis dash-kpis--loading">Loading KPIs…</div>;
+    return <WidgetLoading>Loading KPIs…</WidgetLoading>;
   }
 
   return (
     <>
-      <div className="dash-kpis">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {kpis.map((kpi) => {
           const Icon = KPI_ICONS[kpi.modifier] || KPI_ICONS[kpi.id] || FileText;
+          const tone = KPI_TONES[getKpiKey(kpi)] || KPI_TONES.rfq;
           return (
             <button
               key={kpi.id}
               type="button"
-              className={`dash-kpi dash-kpi--${kpi.modifier}`}
+              className={`group flex min-h-[112px] items-start gap-3 rounded-2xl border border-border/80 bg-card p-4 text-left shadow-sm outline-none transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring ${tone.glow}`}
               onClick={() => openKpi(kpi)}
               aria-label={`Open ${kpi.label} details`}
             >
-              <div className="dash-kpi__icon">
-                <Icon size={16} />
+              <div className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${tone.icon}`}>
+                <Icon size={17} />
               </div>
-              <div className="dash-kpi__body">
-                <span className="dash-kpi__label">{kpi.label}</span>
-                <span className="dash-kpi__value">{kpi.value}</span>
+              <div className="min-w-0 flex-1">
+                <span className="block truncate text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{kpi.label}</span>
+                <span className="mt-1.5 block text-2xl font-semibold leading-none tracking-[-0.035em] tabular-nums text-foreground">{kpi.value}</span>
+                {kpi.trend && (
+                  <span className={`mt-2 flex items-center gap-1 text-[10px] font-medium ${kpi.direction === 'down' ? 'text-rose-600 dark:text-rose-300' : kpi.direction === 'up' ? 'text-emerald-600 dark:text-emerald-300' : 'text-muted-foreground'}`}>
+                    <TrendIcon direction={kpi.direction} /> {kpi.trend}
+                  </span>
+                )}
               </div>
             </button>
           );
         })}
       </div>
 
-      {selectedKpi && createPortal(
-        <>
-          {(isOpen || isExpanded) && (
-            <div
-              className={`rfq-modal-backdrop ${isExpanded ? 'rfq-modal-backdrop--expanded' : ''}`}
-              onClick={closeModal}
-            />
-          )}
-
-          <div
-            className={[
-              'rfq-modal',
-              'dash-kpi-modal',
-              isOpen ? 'rfq-modal--open' : '',
-              isExpanded ? 'rfq-modal--expanded' : '',
-              isMinimized ? 'rfq-modal--minimized' : '',
-            ].filter(Boolean).join(' ')}
-            style={isExpanded ? {
-              position: 'fixed',
-              inset: 0,
-              top: 0,
-              right: 0,
-              bottom: 0,
-              left: 0,
-              width: '100vw',
-              height: '100vh',
-              maxHeight: '100vh',
-              borderRadius: 0,
-              transform: 'none',
-            } : undefined}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="rfq-modal__drag-handle" />
-
-            <div
-              className="rfq-modal__header"
-              onClick={isMinimized ? () => setModalState('open') : undefined}
-              style={isMinimized ? { cursor: 'pointer' } : undefined}
-            >
-              <div className="rfq-modal__header-left">
-                <span className="rfq-modal__rfq-num">KPI</span>
-                {!isMinimized && (
-                  <span className="dash-kpi-modal__header-title">{selectedKpi.label}</span>
-                )}
-                {isMinimized && (
-                  <span className="rfq-modal__minimized-title">{selectedKpi.label}</span>
-                )}
-              </div>
-
-              <div className="rfq-modal__window-controls" onClick={(e) => e.stopPropagation()}>
-                <button
-                  type="button"
-                  className="rfq-modal__wc-btn"
-                  title={isMinimized ? 'Restore' : 'Minimize'}
-                  onClick={() => setModalState(isMinimized ? 'open' : 'minimized')}
-                >
-                  {isMinimized ? <ChevronUp size={14} /> : <Minus size={14} />}
-                </button>
-                {!isMinimized && (
-                  <button
-                    type="button"
-                    className="rfq-modal__wc-btn"
-                    title={isExpanded ? 'Restore' : 'Expand'}
-                    onClick={() => setModalState(isExpanded ? 'open' : 'expanded')}
-                  >
-                    {isExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-                  </button>
-                )}
-                <div className="rfq-modal__wc-divider" />
-                <button
-                  type="button"
-                  className="rfq-modal__wc-btn rfq-modal__wc-btn--close"
-                  title="Close"
-                  onClick={closeModal}
-                >
-                  <X size={14} />
-                </button>
+      <Dialog open={!!selectedKpi} onOpenChange={(open) => !open && closeModal()}>
+        {selectedKpi && (
+          <DialogContent className="max-h-[min(90vh,860px)] max-w-4xl gap-0 overflow-hidden p-0">
+            <div className="border-b border-border bg-muted/35 px-5 py-5 pr-14 sm:px-7">
+              <div className="flex items-start gap-4">
+                <div className={`flex size-11 shrink-0 items-center justify-center rounded-2xl ${KPI_TONES[getKpiKey(selectedKpi)]?.icon || KPI_TONES.rfq.icon}`}>
+                  {(() => { const Icon = selectedIcon; return <Icon size={21} />; })()}
+                </div>
+                <DialogHeader className="min-w-0">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-primary">KPI details</span>
+                  <DialogTitle className="text-xl">{selectedKpi.label}</DialogTitle>
+                  <DialogDescription>{getKpiDescription(selectedKpi)}</DialogDescription>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <Badge tone="primary"><BarChart3 size={11} /> Value {selectedKpi.value}</Badge>
+                    {selectedKpi.trend && <Badge tone={selectedKpi.direction === 'down' ? 'danger' : selectedKpi.direction === 'up' ? 'success' : 'neutral'}><TrendIcon direction={selectedKpi.direction} /> {selectedKpi.trend}</Badge>}
+                  </div>
+                </DialogHeader>
               </div>
             </div>
 
-            {!isMinimized && (
-              <>
-                <div className="rfq-modal__hero dash-kpi-modal__hero">
-                  <div className={`dash-kpi-modal__hero-icon dash-kpi-modal__hero-icon--${selectedKpi.modifier}`}>
-                    {(() => {
-                      const Icon = selectedIcon;
-                      return <Icon size={22} />;
-                    })()}
+            <div className="grid gap-7 overflow-y-auto p-5 sm:p-7">
+              {summaryRows.length > 0 && (
+                <section>
+                  <h3 className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"><BarChart3 size={14} /> Overview</h3>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {summaryRows.map((row) => (
+                      <div key={row.label} className="rounded-xl border border-border/80 bg-card p-4">
+                        <span className="block text-[11px] font-medium text-muted-foreground">{row.label}</span>
+                        <span className="mt-1 block text-lg font-semibold tabular-nums text-foreground">{row.value}</span>
+                        {row.helper && <span className="mt-1 block text-[11px] leading-4 text-muted-foreground">{row.helper}</span>}
+                      </div>
+                    ))}
                   </div>
-                  <div className="dash-kpi-modal__hero-copy">
-                    <h2 className="rfq-modal__title">{selectedKpi.label}</h2>
-                    <p className="rfq-modal__description">{getKpiDescription(selectedKpi)}</p>
-                    <div className="rfq-modal__hero-chips">
-                      <span className="rfq-modal__dept-chip">
-                        <BarChart3 size={10} /> Value {selectedKpi.value}
-                      </span>
-                      {selectedKpi.trend && (
-                        <span className="rfq-modal__dept-chip">
-                          <TrendIcon direction={selectedKpi.direction} /> {selectedKpi.trend}
-                        </span>
-                      )}
-                    </div>
+                </section>
+              )}
+
+              {breakdownRows.length > 0 && (
+                <section>
+                  <h3 className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"><BarChart3 size={14} /> Breakdown</h3>
+                  <div className="overflow-hidden rounded-xl border border-border/80">
+                    {breakdownRows.slice(0, 6).map((row) => (
+                      <button key={`${row.label}-${row.value}`} type="button" disabled={!row.link} onClick={() => row.link && handleTaskClick(row.link)} className="flex min-h-14 w-full items-center justify-between gap-4 border-b border-border/70 px-4 py-2.5 text-left last:border-b-0 enabled:outline-none enabled:transition-colors enabled:hover:bg-muted/50 enabled:focus-visible:ring-2 enabled:focus-visible:ring-inset enabled:focus-visible:ring-ring disabled:cursor-default">
+                        <span className="min-w-0"><span className="block truncate text-[13px] font-semibold text-foreground">{row.label}</span>{row.helper && <span className="block truncate text-[11px] text-muted-foreground">{row.helper}</span>}</span>
+                        <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">{row.value}</span>
+                      </button>
+                    ))}
                   </div>
-                </div>
+                </section>
+              )}
 
-                <div className="rfq-modal__body sap-kpi-modal-body">
-                  {/* Summary Metrics Section */}
-                  {summaryRows.length > 0 && (
-                    <div className="sap-kpi-section">
-                      <div className="sap-kpi-section__title">
-                        <BarChart3 size={13} /> Key Overview Metrics
+              {relatedRfqs.length > 0 && (
+                <section>
+                  <h3 className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"><CalendarDays size={14} /> Recent related activity</h3>
+                  <div className="overflow-hidden rounded-xl border border-border/80">
+                    {relatedRfqs.slice(0, 5).map((rfq) => (
+                      <div key={rfq.id} className="flex min-h-16 items-center justify-between gap-4 border-b border-border/70 px-4 py-3 last:border-b-0">
+                        <div className="min-w-0"><span className="block truncate text-[13px] font-semibold text-foreground">{rfq.rfqNumber} · {rfq.title}</span><span className="block truncate text-[11px] text-muted-foreground">{rfq.creator} · {new Date(rfq.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span></div>
+                        <div className="shrink-0 text-right"><Badge tone="neutral">{rfq.status}</Badge><span className="mt-1 block text-[10px] text-muted-foreground">{rfq.quotations} quotes</span></div>
                       </div>
-                      <div className="rfq-modal__info-grid dash-kpi-modal__info-grid">
-                        {summaryRows.map((row) => (
-                          <div key={row.label} className="rfq-modal__info-item sap-kpi-card">
-                            <span className="rfq-modal__info-label">
-                              <BarChart3 size={12} /> {row.label}
-                            </span>
-                            <span className="rfq-modal__info-value">{row.value}</span>
-                            {row.helper && <span className="dash-kpi-modal__helper">{row.helper}</span>}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-
-                  {/* Related Activity Section */}
-                  {relatedRfqs.length > 0 && (
-                    <div className="sap-kpi-section" style={{ marginTop: 18 }}>
-                      <div className="sap-kpi-section__title">
-                        <CalendarDays size={13} /> Recent Related Activity
-                      </div>
-                      <div className="rfq-modal__quotations-panel sap-kpi-panel">
-                        {relatedRfqs.slice(0, 5).map((rfq) => (
-                          <div key={rfq.id} className="rfq-modal__quotation-row">
-                            <div className="rfq-modal__quotation-info">
-                              <span className="rfq-modal__vendor-name">{rfq.rfqNumber} · {rfq.title}</span>
-                              <span className="rfq-modal__quotation-meta">
-                                {rfq.creator} · {new Date(rfq.createdAt).toLocaleDateString('en-IN', {
-                                  day: '2-digit',
-                                  month: 'short',
-                                  year: 'numeric',
-                                })}
-                              </span>
-                            </div>
-                            <div className="rfq-modal__quotation-right">
-                              <span className="rfq-modal__quotation-status">{rfq.status}</span>
-                              <span className="rfq-modal__quotation-meta">{rfq.quotations} quotes</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        </>,
-        document.body
-      )}
+                    ))}
+                  </div>
+                </section>
+              )}
+            </div>
+          </DialogContent>
+        )}
+      </Dialog>
     </>
   );
 }

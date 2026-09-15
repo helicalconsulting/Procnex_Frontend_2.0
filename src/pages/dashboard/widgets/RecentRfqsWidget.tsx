@@ -1,9 +1,10 @@
-import { Link } from 'react-router-dom';
-import { FileText, ArrowRight } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import { useServiceData } from '../../../hooks/useServiceData';
 import { dashboardService } from '../../../services/dashboardService';
 import { MessageStrip } from '../../../components/shared/MessageStrip';
 import type { DashboardRecentRfq } from '../../../types/viewModels';
+import { WidgetHeader, WidgetBody, WidgetLoading } from './WidgetShell';
+import { Badge } from '../../../components/ui/badge';
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: 'Draft',
@@ -14,13 +15,13 @@ const STATUS_LABELS: Record<string, string> = {
   CANCELLED: 'Cancelled',
 };
 
-const STATUS_BADGE: Record<string, string> = {
-  DRAFT: 'draft',
-  SENT: 'sent',
-  IN_PROGRESS: 'closed',
-  ACCEPTED: 'closed',
-  CLOSED: 'closed',
-  CANCELLED: 'cancelled',
+const STATUS_TONE: Record<string, 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info'> = {
+  DRAFT: 'neutral',
+  SENT: 'success',
+  IN_PROGRESS: 'success',
+  ACCEPTED: 'success',
+  CLOSED: 'info',
+  CANCELLED: 'danger',
 };
 
 function formatRfqDate(d: string) {
@@ -35,47 +36,41 @@ export default function RecentRfqsWidget() {
 
   return (
     <>
-      <div className="dash-card__header">
-        <span className="dash-card__title">
-          <FileText size={16} />
-          Recent RFQs
-        </span>
-        <Link to="/rfq" className="dash-card__action">
-          View All <ArrowRight size={14} />
-        </Link>
-      </div>
-      <div className="dash-card__body dash-card__body--table">
-        {error && <MessageStrip type="error" compact>{error}</MessageStrip>}
-        {loading && <div className="dash-table__loading">Loading RFQs…</div>}
+      <WidgetHeader icon={<FileText size={16} />} title="Recent RFQs" href="/rfq" />
+      <WidgetBody className="p-0">
+        {error && <div className="p-4"><MessageStrip type="error">{error}</MessageStrip></div>}
+        {loading && <WidgetLoading>Loading RFQs…</WidgetLoading>}
         {!loading && !error && (
-          <table className="dash-table">
-            <thead>
-              <tr>
-                <th>RFQ #</th>
-                <th>Title</th>
-                <th>Status</th>
-                <th>Date</th>
-                <th>Vendors</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentRfqs.map((rfq) => (
-                <tr key={rfq.id}>
-                  <td className="dash-table__rfq-num">{rfq.rfqNumber}</td>
-                  <td className="dash-table__title">{rfq.title}</td>
-                  <td>
-                    <span className={`dash-badge dash-badge--${STATUS_BADGE[rfq.status] || 'draft'}`}>
-                      {STATUS_LABELS[rfq.status] || rfq.status}
-                    </span>
-                  </td>
-                  <td>{formatRfqDate(rfq.createdAt)}</td>
-                  <td>{rfq.quotations}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-left text-xs">
+              <thead>
+                <tr className="border-b border-border/80 bg-muted/40 font-semibold text-muted-foreground">
+                  <th className="px-4 py-2.5">RFQ #</th>
+                  <th className="px-4 py-2.5">Title</th>
+                  <th className="px-4 py-2.5">Status</th>
+                  <th className="px-4 py-2.5">Date</th>
+                  <th className="px-4 py-2.5 text-center">Quotes</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {recentRfqs.map((rfq) => (
+                  <tr key={rfq.id} className="transition-colors hover:bg-muted/40">
+                    <td className="px-4 py-3 font-semibold text-primary">{rfq.rfqNumber}</td>
+                    <td className="max-w-[200px] truncate px-4 py-3 font-medium text-foreground">{rfq.title}</td>
+                    <td className="px-4 py-3">
+                      <Badge tone={STATUS_TONE[rfq.status] || 'neutral'}>
+                        {STATUS_LABELS[rfq.status] || rfq.status}
+                      </Badge>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">{formatRfqDate(rfq.createdAt)}</td>
+                    <td className="px-4 py-3 text-center tabular-nums text-foreground">{rfq.quotations}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
-      </div>
+      </WidgetBody>
     </>
   );
 }

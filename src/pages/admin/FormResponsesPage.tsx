@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import {
@@ -15,7 +14,6 @@ import {
   Search,
   Eye,
   History,
-  ShieldCheck,
   Building,
   UserCheck,
   X,
@@ -27,15 +25,10 @@ import {
   Trash2,
   CheckSquare,
   AlertTriangle,
-  Mail,
-  FileImage,
-  ExternalLink,
+  Check,
   Download,
-  Upload,
-  Image as ImageIcon,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
-import './FormResponsesPage.css';
 
 export default function FormResponsesPage() {
   const { hasPermission } = useAuth();
@@ -82,16 +75,13 @@ export default function FormResponsesPage() {
       const ctx = canvas.getContext('2d');
       if (!ctx) return '';
 
-      // HD Modern Graphic Document Background
       ctx.fillStyle = '#1e293b';
       ctx.fillRect(0, 0, 900, 650);
 
-      // Border
       ctx.strokeStyle = '#0a6ed1';
       ctx.lineWidth = 4;
       ctx.strokeRect(16, 16, 868, 618);
 
-      // Header Bar
       ctx.fillStyle = '#0a6ed1';
       ctx.fillRect(16, 16, 868, 64);
 
@@ -104,14 +94,12 @@ export default function FormResponsesPage() {
       ctx.textAlign = 'right';
       ctx.fillText(fileName, 860, 56);
 
-      // Inner Photo Display Area
       ctx.fillStyle = '#0f172a';
       ctx.strokeStyle = '#334155';
       ctx.lineWidth = 1;
       ctx.fillRect(60, 110, 780, 460);
       ctx.strokeRect(60, 110, 780, 460);
 
-      // Image Placeholder Graphics
       ctx.fillStyle = '#38bdf8';
       ctx.beginPath();
       ctx.arc(450, 240, 48, 0, Math.PI * 2);
@@ -130,7 +118,6 @@ export default function FormResponsesPage() {
       ctx.font = '14px system-ui, sans-serif';
       ctx.fillText('High-Resolution Scanned Document Image Record', 450, 360);
 
-      // Specs Box inside Image
       ctx.fillStyle = '#1e293b';
       ctx.fillRect(160, 400, 580, 120);
       ctx.strokeStyle = '#334155';
@@ -144,13 +131,12 @@ export default function FormResponsesPage() {
       ctx.fillStyle = '#94a3b8';
       ctx.font = '12px monospace';
       ctx.fillText(`File: ${fileName}  ·  Format: JPG/PNG Image`, 450, 465);
-      ctx.fillText('Procnex Enterprise Security Engine', 450, 490);
+      ctx.fillText('Heliflow Enterprise Security Engine', 450, 490);
 
-      // Watermark
       ctx.fillStyle = '#64748b';
       ctx.font = '12px system-ui, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('Procnex Secure Image Vault · Verified Record', 450, 615);
+      ctx.fillText('Heliflow Secure Image Vault · Verified Record', 450, 615);
 
       return canvas.toDataURL('image/png');
     } catch {
@@ -195,7 +181,7 @@ export default function FormResponsesPage() {
   }, [selectedResponse, loadAllSubmissions]);
 
   const renderFieldValue = useCallback((field: any, val: any) => {
-    if (!val) return <span className="frp-res-empty">Not answered</span>;
+    if (!val) return <span className="italic text-muted-foreground">Not answered</span>;
 
     let fileName = '';
     let fileDataUrl = '';
@@ -234,31 +220,29 @@ export default function FormResponsesPage() {
           : fileDataUrl || '';
 
       return (
-        <div className="frp-file-card">
-          <div className="frp-file-header">
-            <FileText size={18} className="frp-file-icon" />
-            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{fileName || String(val)}</span>
+        <div className="rounded-xl border border-border bg-muted/20 p-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <FileText size={18} className="shrink-0 text-primary" />
+            <span className="truncate text-sm font-semibold text-foreground">{fileName || String(val)}</span>
           </div>
 
-          {/* Render inline image thumbnail if image preview is available */}
           {displayImageSrc && (isImage || displayImageSrc.startsWith('data:image/')) && (
             <div
-              className="frp-img-preview-wrap"
-              style={{ margin: '8px 0', cursor: 'pointer' }}
+              className="group relative my-2 cursor-pointer overflow-hidden rounded-xl border border-border bg-background"
               onClick={() => setViewingImage({ title: field.label || 'Image Preview', src: displayImageSrc, fileName: fileName || String(val) })}
               title="Click to view full image"
             >
-              <img src={displayImageSrc} alt={fileName || field.label} style={{ maxHeight: '140px', objectFit: 'contain' }} />
-              <div className="frp-img-overlay">
+              <img src={displayImageSrc} alt={fileName || field.label} className="mx-auto max-h-36 object-contain" />
+              <div className="absolute inset-0 flex items-center justify-center gap-1.5 bg-slate-950/55 text-xs font-semibold text-white opacity-0 transition group-hover:opacity-100">
                 <Eye size={16} /> View Image
               </div>
             </div>
           )}
 
-          <div className="frp-file-actions">
+          <div className="mt-2 flex flex-wrap gap-2">
             <button
               type="button"
-              className="frp-file-btn frp-file-btn--primary"
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground"
               onClick={() => {
                 setViewingImage({
                   title: field.label || 'Document View',
@@ -274,14 +258,14 @@ export default function FormResponsesPage() {
               <a
                 href={displayImageSrc}
                 download={fileName || 'document'}
-                className="frp-file-btn"
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground hover:bg-muted"
               >
                 <Download size={14} /> Download File
               </a>
             ) : (
               <button
                 type="button"
-                className="frp-file-btn"
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground hover:bg-muted"
                 onClick={() => {
                   alert(`Document attachment "${fileName || String(val)}" recorded with form submission.`);
                 }}
@@ -296,9 +280,9 @@ export default function FormResponsesPage() {
 
     if (field.type === 'signature') {
       return (
-        <div className="frp-digital-sig-card">
+        <div className="flex flex-col gap-1 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3 text-sm text-foreground">
           <span>✍️ {String(val)}</span>
-          <span style={{ fontSize: '11px', color: '#107e3e' }}>✓ Digital Signature</span>
+          <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">✓ Digital Signature</span>
         </div>
       );
     }
@@ -368,13 +352,6 @@ export default function FormResponsesPage() {
     );
   };
 
-  const handleDeleteSingle = async (id: string, formTitle: string) => {
-    if (!window.confirm(`Are you sure you want to delete the form response for "${formTitle}"?`)) return;
-    await formWorkflowService.deleteSubmission(id);
-    setSelectedSubmissionIds((prev) => prev.filter((x) => x !== id));
-    await loadAllSubmissions();
-  };
-
   const handleBulkDelete = () => {
     if (selectedSubmissionIds.length === 0) return;
     setShowDeleteConfirmModal(true);
@@ -395,10 +372,10 @@ export default function FormResponsesPage() {
     }
   };
 
-  const renderFormApprovalLevel = (sub: FormResponseItem) => {
+  const renderFormApprovalLevel = (sub: any) => {
     if (!sub.workflowAttached || !sub.approvalLevels || sub.approvalLevels.length === 0) {
       return (
-        <span className="frp-level-no-wf">
+        <span className="text-xs text-muted-foreground">
           {sub.status === 'completed' || sub.status === 'submitted' ? 'Direct (Completed)' : 'No Workflow'}
         </span>
       );
@@ -412,32 +389,27 @@ export default function FormResponsesPage() {
     if (isAllCompleted) current = total + 1;
 
     return (
-      <div className="approvals-level" title={`Level ${Math.min(current, total)} of ${total}`}>
-        <div className="approvals-level__steps">
+      <div className="flex items-center gap-2" title={`Level ${Math.min(current, total)} of ${total}`}>
+        <div className="flex items-center">
           {Array.from({ length: total }, (_, i) => {
             const stepNum = i + 1;
             const isDone = isAllCompleted || stepNum < current;
             const isCurrent = !isAllCompleted && stepNum === current;
             return (
-              <div key={i} className="approvals-level__step">
+              <div key={i} className="flex items-center">
                 <div
-                  className={[
-                    'approvals-level__step-circle',
-                    isDone ? 'approvals-level__step-circle--done' : '',
-                    isCurrent ? 'approvals-level__step-circle--current' : '',
-                    isRejected && isCurrent ? 'approvals-level__step-circle--rejected' : '',
-                  ].filter(Boolean).join(' ')}
+                  className={`flex size-6 items-center justify-center rounded-full border text-[10px] font-bold ${isDone ? 'border-emerald-500 bg-emerald-500 text-white' : isRejected && isCurrent ? 'border-destructive bg-destructive/10 text-destructive' : isCurrent ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-muted text-muted-foreground'}`}
                 >
                   {isDone ? '✓' : stepNum}
                 </div>
                 {i < total - 1 && (
-                  <div className={`approvals-level__step-connector ${isDone ? 'approvals-level__step-connector--done' : ''}`} />
+                  <div className={`h-0.5 w-3 ${isDone ? 'bg-emerald-500' : 'bg-border'}`} />
                 )}
               </div>
             );
           })}
         </div>
-        <span className="approvals-level__text">
+        <span className="text-[11px] font-semibold text-muted-foreground">
           L{isAllCompleted ? total : Math.min(current, total)}/{total}
         </span>
       </div>
@@ -445,143 +417,133 @@ export default function FormResponsesPage() {
   };
 
   return (
-    <div className="frp-container">
+    <div className="flex w-full flex-col gap-6 pb-10">
       {/* Top Header */}
-      <div className="frp-header">
-        <div className="frp-header-left">
-          <div className="frp-icon-badge">
-            <BarChart3 size={24} />
-          </div>
-          <div>
-            <h1 className="frp-title">Form Responses & Analytics Dashboard</h1>
-            <p className="fp-subtitle">
-              Enterprise administration overview for Custom Form Builder submissions, organization-wide responses, and workflow timelines.
-            </p>
-          </div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-[-0.035em] text-foreground">Form Responses & Analytics Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Enterprise administration overview for Custom Form Builder submissions, organization-wide responses, and workflow timelines.
+          </p>
         </div>
 
-        <div className="frp-header-actions">
-          {canCreateCustomForm ? (
-            <Link to="/admin/custom-form-builder" className="frp-btn frp-btn--primary">
-              <Plus size={16} /> Create Custom Form
-            </Link>
-          ) : (
-            <button
-              type="button"
-              disabled
-              className="frp-btn frp-btn--primary"
-              title="Admin has not allowed this action. You do not have permission to create custom forms."
-              style={{ opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' }}
-            >
-              <Plus size={16} /> Create Custom Form
-            </button>
-          )}
+        <div>
+          <Link
+            to="/admin/custom-form-builder"
+            className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 ${!canCreateCustomForm ? 'pointer-events-auto opacity-50 cursor-not-allowed' : ''}`}
+            title={!canCreateCustomForm ? "Admin has not allowed this action. You do not have permission to create custom forms." : undefined}
+            onClick={(e) => { if (!canCreateCustomForm) e.preventDefault(); }}
+          >
+            <Plus size={16} /> Create Custom Form
+          </Link>
         </div>
       </div>
 
       {/* Analytics Cards Grid */}
-      <div className="frp-analytics-grid">
-        <div
-          className={`frp-card frp-card--clickable ${statusFilter === 'ALL' ? 'frp-card--active' : ''}`}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <button
+          type="button"
+          className={`flex min-h-24 items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${statusFilter === 'ALL' ? 'border-primary/40 ring-2 ring-primary/10' : 'border-border/70'}`}
           onClick={() => setStatusFilter('ALL')}
           title="Click to view all assigned user submissions"
         >
-          <div className="frp-card__icon frp-card__icon--assigned">
+          <div className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <Users size={20} />
           </div>
-          <div className="frp-card__info">
-            <span className="frp-card__value">{metrics.totalAssigned}</span>
-            <span className="frp-card__label">Total Users Assigned</span>
+          <div className="flex flex-col">
+            <span className="text-2xl font-semibold text-foreground">{metrics.totalAssigned}</span>
+            <span className="text-sm text-muted-foreground">Total Users Assigned</span>
           </div>
-        </div>
+        </button>
 
-        <div
-          className={`frp-card frp-card--clickable ${statusFilter === 'submitted' ? 'frp-card--active' : ''}`}
+        <button
+          type="button"
+          className={`flex min-h-24 items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${statusFilter === 'submitted' ? 'border-primary/40 ring-2 ring-primary/10' : 'border-border/70'}`}
           onClick={() => setStatusFilter('submitted')}
           title="Click to view submitted responses"
         >
-          <div className="frp-card__icon frp-card__icon--submitted">
+          <div className="flex size-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600">
             <TrendingUp size={20} />
           </div>
-          <div className="frp-card__info">
-            <span className="frp-card__value">{metrics.totalSubmitted}</span>
-            <span className="frp-card__label">Responses Received</span>
+          <div className="flex flex-col">
+            <span className="text-2xl font-semibold text-foreground">{metrics.totalSubmitted}</span>
+            <span className="text-sm text-muted-foreground">Responses Received</span>
           </div>
-        </div>
+        </button>
 
-        <div
-          className={`frp-card frp-card--clickable ${statusFilter === 'pending' ? 'frp-card--active' : ''}`}
+        <button
+          type="button"
+          className={`flex min-h-24 items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${statusFilter === 'pending' ? 'border-primary/40 ring-2 ring-primary/10' : 'border-border/70'}`}
           onClick={() => setStatusFilter('pending')}
           title="Click to view pending responses"
         >
-          <div className="frp-card__icon frp-card__icon--pending">
+          <div className="flex size-11 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600">
             <Clock size={20} />
           </div>
-          <div className="frp-card__info">
-            <span className="frp-card__value">{metrics.pendingCount}</span>
-            <span className="frp-card__label">Pending Responses</span>
+          <div className="flex flex-col">
+            <span className="text-2xl font-semibold text-foreground">{metrics.pendingCount}</span>
+            <span className="text-sm text-muted-foreground">Pending Responses</span>
           </div>
-        </div>
+        </button>
 
-        <div
-          className={`frp-card frp-card--clickable ${statusFilter === 'completed' ? 'frp-card--active' : ''}`}
+        <button
+          type="button"
+          className={`flex min-h-24 items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${statusFilter === 'completed' ? 'border-primary/40 ring-2 ring-primary/10' : 'border-border/70'}`}
           onClick={() => setStatusFilter('completed')}
           title="Click to view completed workflows"
         >
-          <div className="frp-card__icon frp-card__icon--completed">
+          <div className="flex size-11 items-center justify-center rounded-xl bg-violet-500/10 text-violet-600">
             <CheckCircle2 size={20} />
           </div>
-          <div className="frp-card__info">
-            <span className="frp-card__value">{metrics.completedCount}</span>
-            <span className="frp-card__label">Completed Workflows</span>
+          <div className="flex flex-col">
+            <span className="text-2xl font-semibold text-foreground">{metrics.completedCount}</span>
+            <span className="text-sm text-muted-foreground">Completed Workflows</span>
           </div>
-        </div>
+        </button>
       </div>
 
       {/* Search & Filter Toolbar */}
-      <div className="frp-toolbar">
-        <div className="frp-search-wrap">
-          <Search size={16} className="frp-search-icon" />
+      <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative min-w-0 flex-1 sm:max-w-xl">
+          <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
-            className="frp-search-input"
+            className="min-h-11 w-full rounded-xl border border-input bg-background pl-10 pr-3 text-sm outline-none placeholder:text-muted-foreground focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
             placeholder="Search by form title, employee name, or email..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
 
-        <div className="frp-filters-right">
-          <div className="frp-filter-item">
-            <label>Audience:</label>
-            <select
-              className="frp-filter-select"
-              value={audienceFilter}
-              onChange={(e) => setAudienceFilter(e.target.value)}
-            >
-              <option value="ALL">All Audiences</option>
-              <option value="specific_users">Specific Users</option>
-              <option value="whole_org">Whole Organization</option>
-            </select>
-          </div>
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-semibold text-muted-foreground">Audience:</label>
+          <select
+            className="min-h-11 rounded-xl border border-input bg-background px-3 text-sm outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+            value={audienceFilter}
+            onChange={(e) => setAudienceFilter(e.target.value)}
+          >
+            <option value="ALL">All Audiences</option>
+            <option value="specific_users">Specific Users</option>
+            <option value="whole_org">Whole Organization</option>
+          </select>
         </div>
       </div>
 
       {/* Floating Bulk Action Bar */}
       {selectedSubmissionIds.length > 0 && (
-        <div className="frp-bulk-banner">
-          <div className="frp-bulk-info">
+        <div className="sticky top-16 z-20 flex flex-col gap-3 rounded-2xl border border-primary/25 bg-card/90 p-3 shadow-xl backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 text-sm text-foreground">
             <CheckSquare size={18} />
             <span><strong>{selectedSubmissionIds.length}</strong> form response(s) selected</span>
           </div>
-          <div className="frp-bulk-actions">
-            <button className="frp-btn frp-btn--secondary" onClick={() => setSelectedSubmissionIds([])}>
+          <div className="flex gap-2">
+            <button type="button" className="inline-flex min-h-10 items-center rounded-xl border border-border px-3 text-xs font-semibold hover:bg-muted" onClick={() => setSelectedSubmissionIds([])}>
               Cancel
             </button>
             <button
-              className="frp-btn frp-btn--danger"
+              type="button"
+              className="inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-destructive px-3 text-xs font-semibold text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={!canCreateCustomForm}
-              style={{ opacity: !canCreateCustomForm ? 0.5 : 1, cursor: !canCreateCustomForm ? 'not-allowed' : 'pointer', pointerEvents: 'auto' }}
               title={!canCreateCustomForm ? "Admin has not allowed this action. You do not have permission to delete form responses." : undefined}
               onClick={() => canCreateCustomForm && handleBulkDelete()}
             >
@@ -592,205 +554,191 @@ export default function FormResponsesPage() {
       )}
 
       {/* Submissions Table */}
-      <div className="frp-table-card">
+      <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
         {loading ? (
-          <div className="frp-loading">Loading form responses...</div>
+          <div className="px-6 py-16 text-center text-sm text-muted-foreground">Loading form responses...</div>
         ) : filteredSubmissions.length === 0 ? (
-          <div className="frp-empty-container">
-            <div className="frp-empty-icon-wrap">
+          <div className="flex min-h-80 flex-col items-center justify-center px-6 py-12 text-center">
+            <div className="flex size-16 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
               <Inbox size={32} />
             </div>
-            <h3>No Form Responses Found</h3>
-            <p>
+            <h3 className="mt-4 text-base font-semibold text-foreground">No Form Responses Found</h3>
+            <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
               There are currently no form submissions matching your filters. Go to Custom Form Builder to create and publish a form.
             </p>
-            {canCreateCustomForm ? (
-              <Link to="/admin/custom-form-builder" className="frp-btn frp-btn--primary">
-                <Plus size={16} /> Create Custom Form
-              </Link>
-            ) : (
-              <button
-                type="button"
-                disabled
-                className="frp-btn frp-btn--primary"
-                title="Admin has not allowed this action. You do not have permission to create custom forms."
-                style={{ opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' }}
-              >
-                <Plus size={16} /> Create Custom Form
-              </button>
-            )}
+            <Link to="/admin/custom-form-builder" className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground">
+              <Plus size={16} /> Create Custom Form
+            </Link>
           </div>
         ) : (
-          <table className="frp-table">
-            <thead>
-              <tr>
-                <th style={{ width: '42px', textAlign: 'center' }}>
-                  <input
-                    type="checkbox"
-                    className="frp-checkbox"
-                    checked={isAllSelected}
-                    disabled={!canCreateCustomForm}
-                    onChange={canCreateCustomForm ? handleToggleSelectAll : undefined}
-                    style={{ cursor: canCreateCustomForm ? 'pointer' : 'not-allowed' }}
-                    title={!canCreateCustomForm ? "Admin has not allowed this action. You do not have permission to select form responses." : "Select All Form Responses"}
-                  />
-                </th>
-                <th>Form Name</th>
-                <th>Audience</th>
-                <th>Assigned User</th>
-                <th>Workflow Status</th>
-                <th>Level Progress</th>
-                <th>Date Assigned</th>
-                <th style={{ textAlign: 'right' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredSubmissions.map((sub) => {
-                const returnEntry = sub.timeline?.slice().reverse().find((t) => t.action === 'Returned');
-                const returnReason = sub.returnComments || returnEntry?.comments || (sub.status === 'returned' ? 'Form returned for updates and resubmission.' : null);
-                const isSelected = selectedSubmissionIds.includes(sub.id);
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1000px] border-collapse text-left text-sm">
+              <thead>
+                <tr className="border-b border-border/70 bg-muted/35 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <th className="w-12 px-4 py-3 text-center">
+                    <input
+                      type="checkbox"
+                      className="size-4 rounded border-input accent-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                      checked={isAllSelected}
+                      disabled={!canCreateCustomForm}
+                      onChange={canCreateCustomForm ? handleToggleSelectAll : undefined}
+                      title={!canCreateCustomForm ? "Admin has not allowed this action. You do not have permission to select form responses." : "Select All Form Responses"}
+                    />
+                  </th>
+                  <th className="px-4 py-3">Form Name</th>
+                  <th className="px-4 py-3">Audience</th>
+                  <th className="px-4 py-3">Assigned User</th>
+                  <th className="px-4 py-3">Workflow Status</th>
+                  <th className="px-4 py-3">Level Progress</th>
+                  <th className="px-4 py-3">Date Assigned</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredSubmissions.map((sub) => {
+                  const isSelected = selectedSubmissionIds.includes(sub.id);
 
-                return (
-                  <tr key={sub.id} className={`frp-table__row frp-table__row--${(sub.status || '').toLowerCase()} ${isSelected ? 'frp-row--selected' : ''}`}>
-                    <td style={{ textAlign: 'center' }}>
-                      <input
-                        type="checkbox"
-                        className="frp-checkbox"
-                        checked={isSelected}
-                        disabled={!canCreateCustomForm}
-                        onChange={() => canCreateCustomForm && handleToggleSelectRow(sub.id)}
-                        style={{ cursor: canCreateCustomForm ? 'pointer' : 'not-allowed' }}
-                        title={!canCreateCustomForm ? "Admin has not allowed this action. You do not have permission to select form responses." : undefined}
-                      />
-                    </td>
-                    <td>
-                      <div className="frp-form-cell">
-                        <FileText size={16} className="frp-form-icon" />
-                        <div>
-                          <strong className="frp-form-name">{sub.formTitle}</strong>
-                          <span className="frp-form-sub">{sub.fields.length} fields configured</span>
+                  return (
+                    <tr key={sub.id} className={`border-b border-border/60 transition hover:bg-muted/25 ${isSelected ? 'bg-primary/5' : ''}`}>
+                      <td className="px-4 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          className="size-4 rounded border-input accent-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                          checked={isSelected}
+                          disabled={!canCreateCustomForm}
+                          onChange={() => canCreateCustomForm && handleToggleSelectRow(sub.id)}
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <FileText size={16} className="shrink-0 text-primary" />
+                          <div className="flex min-w-0 flex-col">
+                            <strong className="truncate text-sm font-semibold text-foreground">{sub.formTitle}</strong>
+                            <span className="text-[11px] text-muted-foreground">{sub.fields.length} fields configured</span>
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td>
-                      {sub.audienceType === 'whole_org' ? (
-                        <span className="frp-aud-badge frp-aud-badge--org">
-                          <Building size={12} /> Whole Organization
-                        </span>
-                      ) : (
-                        <span className="frp-aud-badge frp-aud-badge--users">
-                          <UserCheck size={12} /> Specific Users
-                        </span>
-                      )}
-                    </td>
-                    <td>
-                      <div className="frp-user-cell">
-                        {sub.workflowAttached ? (
-                          <>
-                            <span className="frp-user-name">Approval Workflow</span>
-                            <span className="frp-user-email">
-                              {sub.totalLevels}-Level Sequential Approval
-                            </span>
-                          </>
+                      </td>
+                      <td className="px-4 py-3">
+                        {sub.audienceType === 'whole_org' ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 px-2.5 py-1 text-[11px] font-semibold text-violet-700 dark:text-violet-300">
+                            <Building size={12} /> Whole Organization
+                          </span>
                         ) : (
-                          <>
-                            <span className="frp-user-name">{sub.assignedUserName}</span>
-                            <span className="frp-user-email">{sub.assignedUserEmail}</span>
-                          </>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2.5 py-1 text-[11px] font-semibold text-blue-700 dark:text-blue-300">
+                            <UserCheck size={12} /> Specific Users
+                          </span>
                         )}
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`fp-status-tag fp-status-tag--${sub.status}`}>
-                        {sub.status === 'completed' && <CheckCircle2 size={12} />}
-                        {sub.status === 'returned' && <RotateCcw size={12} />}
-                        {sub.status === 'submitted' && <Send size={12} />}
-                        {sub.status === 'pending' && <Clock size={12} />}
-                        {sub.status === 'draft' && <FileText size={12} />}
-                        <span>{sub.status.toUpperCase()}</span>
-                      </span>
-                    </td>
-                    <td>
-                      {renderFormApprovalLevel(sub)}
-                    </td>
-                    <td>{new Date(sub.createdAt).toLocaleDateString()}</td>
-                    <td style={{ textAlign: 'right' }}>
-                      <div className="frp-actions-cell">
-                        <button
-                          className="frp-act-btn"
-                          title="View Response Data"
-                          onClick={() => setSelectedResponse(sub)}
-                        >
-                          <Eye size={14} /> Response
-                        </button>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex min-w-0 flex-col">
+                          {sub.workflowAttached ? (
+                            <>
+                              <span className="text-xs font-semibold text-foreground">Approval Workflow</span>
+                              <span className="text-[11px] text-muted-foreground">
+                                {sub.totalLevels}-Level Sequential Approval
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-xs font-semibold text-foreground">{sub.assignedUserName}</span>
+                              <span className="truncate text-[11px] text-muted-foreground">{sub.assignedUserEmail}</span>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ${sub.status === 'completed' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : sub.status === 'returned' || sub.status === 'rejected' ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300' : sub.status === 'submitted' ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300' : sub.status === 'pending' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'bg-muted text-muted-foreground'}`}>
+                          {sub.status === 'completed' && <CheckCircle2 size={12} />}
+                          {sub.status === 'returned' && <RotateCcw size={12} />}
+                          {sub.status === 'submitted' && <Send size={12} />}
+                          {sub.status === 'pending' && <Clock size={12} />}
+                          {sub.status === 'draft' && <FileText size={12} />}
+                          <span>{sub.status.toUpperCase()}</span>
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {renderFormApprovalLevel(sub)}
+                      </td>
+                      <td className="px-4 py-3">{new Date(sub.createdAt).toLocaleDateString()}</td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold text-muted-foreground transition hover:bg-primary/10 hover:text-primary"
+                            title="View Response Data"
+                            onClick={() => setSelectedResponse(sub)}
+                          >
+                            <Eye size={14} /> Response
+                          </button>
 
-                        <button
-                          className="frp-act-btn frp-act-btn--timeline"
-                          title="View Approval Timeline (Admin Only)"
-                          onClick={() => setSelectedTimeline(sub)}
-                        >
-                          <History size={14} /> Timeline
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                          <button
+                            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold text-muted-foreground transition hover:bg-violet-500/10 hover:text-violet-600"
+                            title="View Approval Timeline (Admin Only)"
+                            onClick={() => setSelectedTimeline(sub)}
+                          >
+                            <History size={14} /> Timeline
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
-      {/* ── View Response Modal ── */}
+      {/* View Response Modal */}
       {selectedResponse && (() => {
         const retEntry = selectedResponse.timeline?.slice().reverse().find((t) => t.action === 'Returned');
         const retReason = selectedResponse.returnComments || retEntry?.comments || (selectedResponse.status === 'returned' ? 'Form returned for updates and resubmission.' : null);
 
         return (
-          <div className="frp-modal-backdrop" onClick={() => setSelectedResponse(null)}>
-            <div className="frp-response-modal" onClick={(e) => e.stopPropagation()}>
-              <div className="frp-modal-header">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setSelectedResponse(null)}>
+            <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between border-b border-border/70 px-6 py-4">
                 <div>
-                  <h2>{selectedResponse.formTitle}</h2>
-                  <p className="frp-modal-sub">
+                  <h2 className="text-lg font-semibold text-foreground">{selectedResponse.formTitle}</h2>
+                  <p className="text-xs text-muted-foreground">
                     Submitted Response by <strong>{selectedResponse.assignedUserName}</strong> ({selectedResponse.assignedUserEmail})
                   </p>
                 </div>
-                <button className="frp-close-btn" onClick={() => setSelectedResponse(null)}>
+                <button type="button" className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted" onClick={() => setSelectedResponse(null)}>
                   <X size={18} />
                 </button>
               </div>
 
-              <div className="frp-modal-body">
+              <div className="flex-1 overflow-y-auto p-6 space-y-4">
                 {selectedResponse.status === 'returned' && retReason && (
-                  <div className="frp-return-banner">
-                    <RotateCcw size={16} className="frp-return-banner-icon" />
+                  <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3.5 text-xs text-amber-700 dark:text-amber-300">
+                    <RotateCcw size={16} className="mt-0.5 shrink-0" />
                     <div>
                       <strong>Form Returned for Edits / Updates:</strong>
-                      <p>"{retReason}"</p>
+                      <p className="mt-0.5">"{retReason}"</p>
                     </div>
                   </div>
                 )}
 
-                <div className="frp-res-grid">
+                <div className="grid gap-4 sm:grid-cols-2">
                   {selectedResponse.fields.map((f) => (
-                    <div key={f.id} className="frp-res-field">
-                      <label className="frp-res-label">{f.label}</label>
-                      <div className="frp-res-val">
+                    <div key={f.id} className="rounded-xl border border-border/70 bg-background p-3.5">
+                      <label className="text-xs font-semibold text-muted-foreground">{f.label}</label>
+                      <div className="mt-1 text-sm font-medium text-foreground">
                         {renderFieldValue(f, selectedResponse.responseData[f.id])}
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-              <div className="frp-modal-footer">
-                <button className="frp-btn frp-btn--secondary" onClick={() => setSelectedResponse(null)}>
+
+              <div className="flex items-center justify-end gap-3 border-t border-border/70 bg-muted/20 px-6 py-4">
+                <button type="button" className="min-h-11 rounded-xl border border-input bg-background px-5 text-sm font-semibold text-foreground hover:bg-muted" onClick={() => setSelectedResponse(null)}>
                   Close
                 </button>
                 {selectedResponse.workflowAttached && selectedResponse.status !== 'completed' && (
                   <button
-                    className="frp-btn frp-btn--primary"
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#0a6ed1', color: '#ffffff', padding: '8px 16px', borderRadius: '6px', border: 'none', fontWeight: 600, cursor: !canApproveFormResponse ? 'not-allowed' : 'pointer', opacity: !canApproveFormResponse ? 0.5 : 1, pointerEvents: 'auto' }}
+                    type="button"
+                    className="min-h-11 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={!canApproveFormResponse}
                     title={!canApproveFormResponse ? "Admin has not allowed this action. You do not have permission to approve form responses." : undefined}
                     onClick={async () => {
@@ -825,268 +773,26 @@ export default function FormResponsesPage() {
         );
       })()}
 
-      {/* ── Admin-Only Approval Timeline Drawer ── */}
-      {selectedTimeline && (
-        <div className="frp-modal-backdrop" onClick={() => setSelectedTimeline(null)}>
-          <div className="frp-timeline-drawer" onClick={(e) => e.stopPropagation()}>
-            <div className="frp-drawer-header">
-              <div className="frp-drawer-title-wrap">
-                <History size={20} className="frp-drawer-icon" />
-                <div>
-                  <h3>Approval Timeline & Audit Trail</h3>
-                  <p>Internal admin audit log for form "{selectedTimeline.formTitle}"</p>
-                </div>
-              </div>
-              <button className="frp-close-btn" onClick={() => setSelectedTimeline(null)}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="frp-drawer-body">
-              {/* Timeline Items */}
-              <div className="frp-tl-pipeline">
-                {selectedTimeline.timeline.map((entry, idx) => (
-                  <div key={entry.id} className="frp-tl-step">
-                    <div className="frp-tl-dot-col">
-                      <div className={`frp-tl-dot frp-tl-dot--${entry.action.toLowerCase()}`}>
-                        {idx + 1}
-                      </div>
-                      {idx < selectedTimeline.timeline.length - 1 && <div className="frp-tl-line" />}
-                    </div>
-
-                    <div className="frp-tl-card">
-                      <div className="frp-tl-card__top">
-                        <span className="frp-tl-step-name">{entry.stepName}</span>
-                        <span className={`frp-tl-action-badge frp-tl-action-badge--${entry.action.toLowerCase()}`}>
-                          {entry.action}
-                        </span>
-                      </div>
-
-                      <div className="frp-tl-actor-info">
-                        <strong>{entry.actorName}</strong> ({entry.actorRole})
-                      </div>
-
-                      <div className="frp-tl-time">
-                        <Clock size={12} />
-                        <span>{new Date(entry.timestamp).toLocaleString()}</span>
-                      </div>
-
-                      {entry.comments && <div className="frp-tl-comments">"{entry.comments}"</div>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── SAP Fiori Style Delete Confirmation Modal ── */}
+      {/* Delete Confirmation Modal */}
       {showDeleteConfirmModal && (
-        <div className="frp-modal-backdrop" onClick={() => !isDeleting && setShowDeleteConfirmModal(false)}>
-          <div className="frp-confirm-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="frp-confirm-header">
-              <div className="frp-confirm-icon-wrap">
-                <AlertTriangle size={24} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setShowDeleteConfirmModal(false)}>
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-border/70 bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6 text-center">
+              <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+                <AlertTriangle size={28} />
               </div>
-              <button
-                className="frp-close-btn"
-                onClick={() => !isDeleting && setShowDeleteConfirmModal(false)}
-                disabled={isDeleting}
-                title="Close"
-              >
-                <X size={18} />
-              </button>
+              <h3 className="mt-4 text-lg font-semibold text-foreground">Delete Form Responses?</h3>
+              <p className="mt-2 text-sm text-muted-foreground">Are you sure you want to delete <span className="font-semibold text-foreground">{selectedSubmissionIds.length}</span> selected form response(s)? This action cannot be undone.</p>
             </div>
-
-            <div className="frp-confirm-body">
-              <h3>Delete Form Response{selectedSubmissionIds.length > 1 ? 's' : ''}?</h3>
-              <p>
-                Are you sure you want to permanently delete <strong>{selectedSubmissionIds.length}</strong> selected form response{selectedSubmissionIds.length > 1 ? 's' : ''}? This action cannot be undone and will remove all submission data and history timeline.
-              </p>
-            </div>
-
-            <div className="frp-confirm-footer">
-              <button
-                className="frp-btn frp-btn--secondary"
-                onClick={() => setShowDeleteConfirmModal(false)}
-                disabled={isDeleting}
-              >
-                Cancel
-              </button>
-              <button
-                className="frp-btn frp-btn--danger"
-                onClick={confirmBulkDelete}
-                disabled={isDeleting}
-              >
-                {isDeleting ? (
-                  'Deleting...'
-                ) : (
-                  <>
-                    <Trash2 size={15} /> Delete {selectedSubmissionIds.length} Response{selectedSubmissionIds.length > 1 ? 's' : ''}
-                  </>
-                )}
+            <div className="flex items-center justify-end gap-3 border-t border-border/70 bg-muted/20 px-6 py-4">
+              <button type="button" className="min-h-11 rounded-xl border border-input bg-background px-4 text-sm font-semibold text-foreground transition hover:bg-muted" onClick={() => setShowDeleteConfirmModal(false)} disabled={isDeleting}>Cancel</button>
+              <button type="button" className="min-h-11 rounded-xl bg-destructive px-4 text-sm font-semibold text-destructive-foreground transition hover:bg-destructive/90 disabled:opacity-50" onClick={confirmBulkDelete} disabled={isDeleting}>
+                {isDeleting ? 'Deleting...' : 'Delete Responses'}
               </button>
             </div>
           </div>
         </div>
       )}
-
-      {/* ── SAP Full-Screen Image / Document Lightbox Modal (Portal to body) ── */}
-      {viewingImage &&
-        createPortal(
-          <div className="frp-lightbox-backdrop" onClick={() => setViewingImage(null)}>
-            <div className="frp-lightbox-content" onClick={(e) => e.stopPropagation()}>
-              <div className="frp-lightbox-header">
-                <div>
-                  <h3>{viewingImage.title || 'Document Viewer'}</h3>
-                  <span style={{ fontSize: '12px', color: '#ffffff', opacity: 0.9 }}>{viewingImage.fileName}</span>
-                </div>
-                <button className="frp-close-btn" onClick={() => setViewingImage(null)}>
-                  <X size={20} />
-                </button>
-              </div>
-
-              <div className="frp-lightbox-img-wrap">
-                {viewingImage.src && (viewingImage.src.startsWith('data:image/') || viewingImage.src.match(/\.(jpeg|jpg|png|webp|gif|svg)$/i)) ? (
-                  <img
-                    src={viewingImage.src}
-                    alt={viewingImage.fileName}
-                    style={{
-                      maxHeight: '100%',
-                      maxWidth: '100%',
-                      objectFit: 'contain',
-                      borderRadius: '6px',
-                    }}
-                  />
-                ) : viewingImage.src && (viewingImage.src.startsWith('data:application/pdf') || viewingImage.src.endsWith('.pdf')) ? (
-                  <iframe
-                    src={viewingImage.src}
-                    title={viewingImage.fileName}
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      minHeight: '100%',
-                      border: 'none',
-                      borderRadius: '8px',
-                      background: '#ffffff',
-                    }}
-                  />
-                ) : (
-                  /* Clean SAP Document View Card */
-                  <div
-                    style={{
-                      background: 'var(--bg-card, #1e293b)',
-                      border: '1px solid var(--border, #334155)',
-                      borderRadius: '12px',
-                      padding: '36px 28px',
-                      maxWidth: '560px',
-                      width: '100%',
-                      margin: '0 auto',
-                      boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-                      textAlign: 'center',
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: '64px',
-                        height: '64px',
-                        borderRadius: '16px',
-                        background: 'rgba(8, 84, 160, 0.15)',
-                        color: '#38bdf8',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        margin: '0 auto 16px',
-                      }}
-                    >
-                      <FileText size={36} />
-                    </div>
-                    <h4 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary, #f8fafc)', margin: '0 0 6px' }}>
-                      {viewingImage.fileName}
-                    </h4>
-                    <p style={{ fontSize: '13px', color: 'var(--text-secondary, #94a3b8)', margin: '0 0 24px' }}>
-                      Submitted Form Document Attachment
-                    </p>
-
-                    <div
-                      style={{
-                        background: 'var(--bg-secondary, #0f172a)',
-                        border: '1px solid var(--border, #334155)',
-                        borderRadius: '8px',
-                        padding: '16px 20px',
-                        textAlign: 'left',
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          padding: '8px 0',
-                          borderBottom: '1px solid var(--border, #334155)',
-                          fontSize: '13px',
-                        }}
-                      >
-                        <span style={{ color: 'var(--text-secondary, #94a3b8)', fontWeight: 500 }}>Document Name:</span>
-                        <span style={{ fontWeight: 600, color: 'var(--text-primary, #f8fafc)' }}>{viewingImage.fileName}</span>
-                      </div>
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          padding: '8px 0',
-                          borderBottom: '1px solid var(--border, #334155)',
-                          fontSize: '13px',
-                        }}
-                      >
-                        <span style={{ color: 'var(--text-secondary, #94a3b8)', fontWeight: 500 }}>Classification:</span>
-                        <span style={{ fontWeight: 600, color: 'var(--text-primary, #f8fafc)' }}>
-                          {viewingImage.fileName.toLowerCase().includes('.pdf') ? 'PDF Document' : 'Uploaded File'}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', fontSize: '13px' }}>
-                        <span style={{ color: 'var(--text-secondary, #94a3b8)', fontWeight: 500 }}>Security Status:</span>
-                        <span style={{ fontWeight: 600, color: '#4ade80' }}>✓ Authenticated Form Attachment</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="frp-lightbox-footer">
-                <span style={{ fontSize: '12px', color: 'var(--text-secondary, #94a3b8)' }}>Procnex Enterprise Document Viewer</span>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  {viewingImage.src ? (
-                    <a
-                      href={viewingImage.src}
-                      download={viewingImage.fileName || 'attachment'}
-                      className="frp-btn frp-btn--primary"
-                      style={{ fontSize: '12px', padding: '6px 14px' }}
-                    >
-                      <Download size={14} /> Download Document
-                    </a>
-                  ) : (
-                    <button
-                      className="frp-btn frp-btn--primary"
-                      onClick={() => alert(`Document attachment "${viewingImage.fileName}" recorded.`)}
-                      style={{ fontSize: '12px', padding: '6px 14px' }}
-                    >
-                      <Download size={14} /> Download Document
-                    </button>
-                  )}
-                  <button
-                    className="frp-btn frp-btn--secondary"
-                    onClick={() => setViewingImage(null)}
-                    style={{ fontSize: '12px', padding: '6px 14px' }}
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
     </div>
   );
 }

@@ -1,19 +1,7 @@
-import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
-import {
-  CheckCircle2,
-  Users,
-  Building,
-  Calendar,
-  Clock,
-  GitMerge,
-  PlusCircle,
-  ListFilter,
-  FileSpreadsheet,
-  X,
-  Sparkles,
-} from 'lucide-react';
+import { Building, Calendar, CheckCircle2, Clock, FileSpreadsheet, GitMerge, ListFilter, PlusCircle, Users } from 'lucide-react';
 import type { AudienceType } from '../../services/formWorkflowService';
-import './FormPublishSuccessModal.css';
+import { Button } from '../ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 
 interface FormPublishSuccessModalProps {
   isOpen: boolean;
@@ -42,93 +30,55 @@ export default function FormPublishSuccessModal({
   onViewFormsList,
   onViewResponses,
 }: FormPublishSuccessModalProps) {
-  useBodyScrollLock(isOpen);
-
-  if (!isOpen) return null;
+  const details = [
+    {
+      icon: audienceType === 'whole_org' ? Building : Users,
+      label: 'Recipients',
+      value:
+        audienceType === 'whole_org'
+          ? `Whole organization (${recipientCount} active employees)`
+          : `${recipientCount} specific user${recipientCount === 1 ? '' : 's'}`,
+    },
+    { icon: Calendar, label: 'Due date', value: dueDate || 'No deadline' },
+    { icon: Clock, label: 'Priority', value: `${priority} priority` },
+    { icon: GitMerge, label: 'Workflow', value: hasWorkflow ? 'Approval matrix attached' : 'Direct distribution' },
+  ];
 
   return (
-    <div className="fpsm-backdrop" onClick={onClose}>
-      <div className="fpsm-modal" onClick={(e) => e.stopPropagation()}>
-        <button className="fpsm-close-btn" onClick={onClose} aria-label="Close">
-          <X size={18} />
-        </button>
-
-        {/* Top Success Header */}
-        <div className="fpsm-success-header">
-          <div className="fpsm-icon-ring">
-            <CheckCircle2 size={36} className="fpsm-check-icon" />
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-xl">
+        <DialogHeader className="items-center pr-0 text-center">
+          <div className="mb-2 grid size-14 place-items-center rounded-2xl bg-emerald-500/10 text-emerald-600 ring-1 ring-emerald-500/20">
+            <CheckCircle2 className="size-7" />
           </div>
-          <h3 className="fpsm-title">Form Published & Distributed!</h3>
-          <p className="fpsm-form-name">"{formTitle}"</p>
-        </div>
-
-        {/* Distribution Details Card */}
-        <div className="fpsm-details-card">
-          <div className="fpsm-detail-item">
-            <div className="fpsm-detail-icon">
-              {audienceType === 'whole_org' ? <Building size={16} /> : <Users size={16} />}
-            </div>
-            <div className="fpsm-detail-text">
-              <span className="fpsm-detail-label">Recipients</span>
-              <span className="fpsm-detail-val">
-                {audienceType === 'whole_org'
-                  ? `Whole Organization (${recipientCount} Active Employees)`
-                  : `${recipientCount} Specific User(s)`}
+          <DialogTitle>Form published and distributed</DialogTitle>
+          <DialogDescription className="font-medium text-foreground/75">“{formTitle}”</DialogDescription>
+        </DialogHeader>
+        <dl className="grid gap-2 sm:grid-cols-2">
+          {details.map((item) => (
+            <div key={item.label} className="flex items-start gap-2.5 rounded-xl border border-border/65 bg-secondary/40 p-3">
+              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                <item.icon className="size-4" />
               </span>
+              <div>
+                <dt className="text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{item.label}</dt>
+                <dd className="mt-1 text-xs font-medium leading-relaxed">{item.value}</dd>
+              </div>
             </div>
-          </div>
-
-          <div className="fpsm-detail-item">
-            <div className="fpsm-detail-icon">
-              <Calendar size={16} />
-            </div>
-            <div className="fpsm-detail-text">
-              <span className="fpsm-detail-label">Due Date</span>
-              <span className="fpsm-detail-val">{dueDate || 'No deadline'}</span>
-            </div>
-          </div>
-
-          <div className="fpsm-detail-item">
-            <div className="fpsm-detail-icon">
-              <Clock size={16} />
-            </div>
-            <div className="fpsm-detail-text">
-              <span className="fpsm-detail-label">Priority Level</span>
-              <span className="fpsm-detail-val">{priority} Priority</span>
-            </div>
-          </div>
-
-          <div className="fpsm-detail-item">
-            <div className="fpsm-detail-icon">
-              <GitMerge size={16} />
-            </div>
-            <div className="fpsm-detail-text">
-              <span className="fpsm-detail-label">Workflow Status</span>
-              <span className="fpsm-detail-val">
-                {hasWorkflow ? 'Approval Matrix Attached' : 'Direct Distribution'}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Prompt Question */}
-        <div className="fpsm-prompt-box">
-          <Sparkles size={16} className="fpsm-sparkle" />
-          <span>Do you want to send or create more forms?</span>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="fpsm-actions">
-          <button type="button" className="fpsm-btn fpsm-btn--primary" onClick={onCreateAnotherForm}>
-            <PlusCircle size={16} />
-            <span>Create Another Form</span>
-          </button>
-          <button type="button" className="fpsm-btn fpsm-btn--secondary" onClick={onViewResponses}>
-            <FileSpreadsheet size={16} />
-            <span>View Responses</span>
-          </button>
-        </div>
-      </div>
-    </div>
+          ))}
+        </dl>
+        <DialogFooter className="sm:flex-wrap sm:justify-center">
+          <Button variant="ghost" onClick={onViewFormsList}>
+            <ListFilter /> Forms list
+          </Button>
+          <Button variant="secondary" onClick={onViewResponses}>
+            <FileSpreadsheet /> View responses
+          </Button>
+          <Button onClick={onCreateAnotherForm}>
+            <PlusCircle /> Create another
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

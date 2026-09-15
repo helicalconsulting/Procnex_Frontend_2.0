@@ -1,8 +1,9 @@
-import { Link } from 'react-router-dom';
-import { Clock, ArrowRight } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import { useServiceData } from '../../../hooks/useServiceData';
 import { MessageStrip } from '../../../components/shared/MessageStrip';
 import { approvalService } from '../../../services/approvalService';
+import { WidgetHeader, WidgetBody, WidgetLoading, WidgetEmpty } from './WidgetShell';
+import { Badge } from '../../../components/ui/badge';
 
 export default function PendingApprovalsWidget() {
   const { data: approvals, loading, error } = useServiceData(
@@ -13,43 +14,35 @@ export default function PendingApprovalsWidget() {
     []
   );
 
-  const dotMod = (module: string) => {
-    if (module.includes('PO') || module.includes('Purchase')) return 'po';
-    if (module.includes('Quotation')) return 'quotation';
-    return 'rfq';
-  };
-
   return (
     <>
-      <div className="dash-card__header">
-        <span className="dash-card__title">
-          <Clock size={16} />
-          Pending Approvals
-        </span>
-        <Link to="/approvals" className="dash-card__action">
-          View All <ArrowRight size={14} />
-        </Link>
-      </div>
-      {error && <MessageStrip type="error" compact className="sap-message-strip--flush">{error}</MessageStrip>}
-      {loading && <p className="dash-card__loading">Loading…</p>}
-      <div className="dash-approvals">
-        {approvals.map((item) => (
-          <div key={item.id} className="dash-approval-item">
-            <span className={`dash-approval-item__dot dash-approval-item__dot--${dotMod(item.module)}`} />
-            <div className="dash-approval-item__body">
-              <span className="dash-approval-item__module">{item.module}</span>
-              <span className="dash-approval-item__ref">{item.referenceNumber}</span>
-            </div>
-            <div className="dash-approval-item__meta">
-              <span className="dash-approval-item__requester">{item.requestedBy}</span>
-              <span className="dash-approval-item__amount">{item.amount}</span>
-            </div>
+      <WidgetHeader icon={<Clock size={16} />} title="Pending Approvals" href="/approvals" />
+      <WidgetBody>
+        {error && <MessageStrip type="error">{error}</MessageStrip>}
+        {loading && <WidgetLoading>Loading approvals…</WidgetLoading>}
+        {!loading && !error && (
+          <div className="grid gap-2">
+            {approvals.map((item) => (
+              <div key={item.id} className="flex min-h-12 items-center justify-between gap-3 rounded-xl border border-border/70 bg-card/60 p-3 transition-colors hover:bg-muted/50">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="size-2 rounded-full bg-amber-500 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-xs font-semibold text-foreground">{item.referenceNumber}</span>
+                      <Badge tone="neutral" className="text-[10px] px-1.5 py-0">{item.module}</Badge>
+                    </div>
+                    <span className="truncate text-[11px] text-muted-foreground">Requested by {item.requestedBy}</span>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <span className="block text-xs font-semibold tabular-nums text-foreground">{item.amount || '—'}</span>
+                </div>
+              </div>
+            ))}
+            {approvals.length === 0 && <WidgetEmpty>No pending approvals</WidgetEmpty>}
           </div>
-        ))}
-        {!loading && approvals.length === 0 && (
-          <p className="dash-card__empty">No pending approvals</p>
         )}
-      </div>
+      </WidgetBody>
     </>
   );
 }

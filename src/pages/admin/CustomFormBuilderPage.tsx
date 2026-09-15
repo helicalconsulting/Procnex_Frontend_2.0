@@ -1,16 +1,20 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trash2, X } from 'lucide-react';
+import './CustomFormBuilderPage.css';
 import FormBuilderSidebar from '../../components/form-builder/FormBuilderSidebar';
 import FormBuilderCanvas from '../../components/form-builder/FormBuilderCanvas';
 import FormBuilderPropertiesPanel from '../../components/form-builder/FormBuilderPropertiesPanel';
 import FormSaveWorkflowModal from '../../components/form-builder/FormSaveWorkflowModal';
 import FormPublishSuccessModal from '../../components/form-builder/FormPublishSuccessModal';
-import { formWorkflowService, type AudienceType } from '../../services/formWorkflowService';
+import {
+  formWorkflowService,
+  type AudienceType,
+  type FormPublishPayload,
+} from '../../services/formWorkflowService';
 import type { FormDefinition, FormField, FieldType } from '../../types/formBuilder';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
 import { useAuth } from '../../context/AuthContext';
-import './CustomFormBuilderPage.css';
 
 const STORAGE_KEY = 'heliflow_custom_forms';
 
@@ -115,6 +119,7 @@ export default function CustomFormBuilderPage() {
 
   // Sidebar Form Operations
   const handleCreateNewForm = () => {
+    if (!canCreateForm) return;
     const newForm: FormDefinition = {
       id: `form-${Date.now()}`,
       title: 'Untitled Custom Form',
@@ -220,21 +225,6 @@ export default function CustomFormBuilderPage() {
     setSelectedFieldId(newField.id);
   };
 
-  const handleReorderFields = (fromIndex: number, toIndex: number) => {
-    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= activeForm.fields.length) return;
-    const newFields = [...activeForm.fields];
-    const [moved] = newFields.splice(fromIndex, 1);
-    newFields.splice(toIndex, 0, moved);
-
-    const updated = {
-      ...activeForm,
-      fields: newFields,
-      updatedAt: new Date().toISOString(),
-    };
-
-    pushHistory(updated);
-  };
-
   const handleMoveField = (index: number, direction: 'up' | 'down') => {
     const targetIdx = direction === 'up' ? index - 1 : index + 1;
     if (targetIdx < 0 || targetIdx >= activeForm.fields.length) return;
@@ -250,6 +240,26 @@ export default function CustomFormBuilderPage() {
     };
 
     pushHistory(updated);
+  };
+
+  const handleReorderField = (fieldId: string, targetIndex: number) => {
+    const sourceIndex = activeForm.fields.findIndex((field) => field.id === fieldId);
+    if (sourceIndex === -1) return;
+
+    const boundedTarget = Math.max(0, Math.min(targetIndex, activeForm.fields.length));
+    const adjustedTarget = sourceIndex < boundedTarget ? boundedTarget - 1 : boundedTarget;
+    if (adjustedTarget === sourceIndex) return;
+
+    const newFields = [...activeForm.fields];
+    const [movedField] = newFields.splice(sourceIndex, 1);
+    newFields.splice(adjustedTarget, 0, movedField);
+
+    pushHistory({
+      ...activeForm,
+      fields: newFields,
+      updatedAt: new Date().toISOString(),
+    });
+    setSelectedFieldId(fieldId);
   };
 
   const handleDuplicateField = (fieldId: string) => {
@@ -332,7 +342,7 @@ export default function CustomFormBuilderPage() {
     setToastMsg(`Form "${activeForm.title}" saved as draft!`);
   };
 
-  const handleConfigureWorkflow = (audience: AudienceType, _selectedUserIds: string[]) => {
+  const handleConfigureWorkflow = () => {
     const updated = {
       ...activeForm,
       approvalConfigured: true,
@@ -345,7 +355,7 @@ export default function CustomFormBuilderPage() {
     audienceType: AudienceType;
     selectedUserIds: string[];
     attachWorkflow: boolean;
-    matrixLevels?: any[];
+    matrixLevels?: FormPublishPayload['matrixLevels'];
     dueDate: string;
     priority: 'High' | 'Medium' | 'Low';
   }) => {
@@ -383,13 +393,16 @@ export default function CustomFormBuilderPage() {
   const selectedField = activeForm.fields.find((f) => f.id === selectedFieldId) || null;
 
   return (
-    <div className="cfb-builder-layout">
+    <div
+      data-form-builder-workspace
+      className="relative flex h-[calc(100vh-64px)] w-full flex-col overflow-hidden bg-card xl:flex-row"
+    >
       {toastMsg && (
         <MessageStrip
           type={inferMessageType(toastMsg)}
           onClose={() => setToastMsg(null)}
           autoHideMs={5000}
-          className="sap-message-strip--toast"
+          className="fixed right-4 top-20 z-[70] max-w-md shadow-xl"
         >
           {toastMsg}
         </MessageStrip>
@@ -404,7 +417,6 @@ export default function CustomFormBuilderPage() {
         onAddField={handleAddField}
         sidebarTab={sidebarTab}
         setSidebarTab={setSidebarTab}
-        canCreateForm={canCreateForm}
       />
 
       {/* Center Builder Canvas & Toolbar */}
@@ -414,8 +426,8 @@ export default function CustomFormBuilderPage() {
         onSelectField={setSelectedFieldId}
         onUpdateFormHeader={handleUpdateFormHeader}
         onDropField={handleDropField}
+        onReorderField={handleReorderField}
         onMoveField={handleMoveField}
-        onReorderFields={handleReorderFields}
         onDuplicateField={handleDuplicateField}
         onDeleteField={handleDeleteField}
         onClearCanvas={handleClearCanvas}
@@ -424,7 +436,6 @@ export default function CustomFormBuilderPage() {
         canRedo={redoStack.length > 0}
         onUndo={handleUndo}
         onRedo={handleRedo}
-        canCreateForm={canCreateForm}
       />
 
       {/* Right Properties Panel */}
@@ -432,7 +443,6 @@ export default function CustomFormBuilderPage() {
         selectedField={selectedField}
         onUpdateField={handleUpdateField}
         onClose={() => setSelectedFieldId(null)}
-        canCreateForm={canCreateForm}
       />
 
       {/* Save Workflow Modal */}
@@ -471,25 +481,25 @@ export default function CustomFormBuilderPage() {
 
       {/* Clear Canvas Confirmation Modal */}
       {showClearCanvasModal && (
-        <div className="fbs-modal-backdrop" onClick={() => setShowClearCanvasModal(false)}>
-          <div className="fbs-modal-card" onClick={(e) => e.stopPropagation()}>
-            <div className="fbs-modal-header">
-              <div className="fbs-modal-icon-wrap">
-                <Trash2 size={22} style={{ color: 'var(--danger-500)' }} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm" onClick={() => setShowClearCanvasModal(false)}>
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-card shadow-2xl" role="alertdialog" aria-modal="true" aria-labelledby="clear-canvas-title" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
+              <div className="flex size-11 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
+                <Trash2 size={22} />
               </div>
-              <button type="button" className="fbs-modal-close" onClick={() => setShowClearCanvasModal(false)}>
+              <button type="button" className="flex size-10 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground" aria-label="Close clear canvas dialog" onClick={() => setShowClearCanvasModal(false)}>
                 <X size={18} />
               </button>
             </div>
-            <div className="fbs-modal-body">
-              <h3>Clear All Fields?</h3>
-              <p>Are you sure you want to clear all fields from the canvas? This action will empty your form layout.</p>
+            <div className="px-5 py-5">
+              <h3 id="clear-canvas-title" className="text-base font-semibold text-foreground">Clear All Fields?</h3>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">Are you sure you want to clear all fields from the canvas? This action will empty your form layout.</p>
             </div>
-            <div className="fbs-modal-footer">
-              <button type="button" className="fbs-modal-btn fbs-modal-btn--secondary" onClick={() => setShowClearCanvasModal(false)}>
+            <div className="flex flex-col-reverse gap-2 border-t border-border/70 bg-muted/20 px-5 py-4 sm:flex-row sm:justify-end">
+              <button type="button" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-border bg-card px-4 text-sm font-semibold text-foreground transition hover:bg-muted" onClick={() => setShowClearCanvasModal(false)}>
                 Cancel
               </button>
-              <button type="button" className="fbs-modal-btn fbs-modal-btn--danger" onClick={confirmClearCanvas}>
+              <button type="button" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-destructive px-4 text-sm font-semibold text-destructive-foreground transition hover:bg-destructive/90" onClick={confirmClearCanvas}>
                 <Trash2 size={15} /> Clear Canvas
               </button>
             </div>
