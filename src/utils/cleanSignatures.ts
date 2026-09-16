@@ -3,6 +3,20 @@ export function cleanDuplicateSignatures(html: string, buyerNameOverride?: strin
 
   let result = html;
 
+  // Scope or replace global body/html/font CSS selectors inside <style> tags so they apply strictly to the document preview container and do not leak to the main application UI body font
+  result = result.replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, (_match, cssContent) => {
+    const scopedCss = cssContent
+      .replace(/(^|\}|\s)body\s*\{/gi, '$1.ctr-detail__doc-preview, .vcd-doc-content, .ctr-doc-preview-content {')
+      .replace(/(^|\}|\s)html\s*\{/gi, '$1.ctr-detail__doc-preview, .vcd-doc-content, .ctr-doc-preview-content {')
+      .replace(/(^|\}|\s)\*\s*\{/gi, '$1.ctr-detail__doc-preview *, .vcd-doc-content *, .ctr-doc-preview-content * {');
+    return `<style>${scopedCss}</style>`;
+  });
+
+  // Safety fallback for naked body/html selector rules
+  result = result
+    .replace(/(^|\}|\s)body\s*\{/gi, '$1.ctr-detail__doc-preview, .vcd-doc-content, .ctr-doc-preview-content {')
+    .replace(/(^|\}|\s)html\s*\{/gi, '$1.ctr-detail__doc-preview, .vcd-doc-content, .ctr-doc-preview-content {');
+
   // Remove any CSS border-top rules on signature lines
   result = result.replace(/border-top:\s*1px\s+solid\s+#[0-9a-fA-F]{3,6}/gi, 'border-top: none');
 

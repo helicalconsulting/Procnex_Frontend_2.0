@@ -84,7 +84,7 @@ export default function FormBuilderPropertiesPanel({
           <Settings size={18} className="text-primary" />
           <div>
             <h3 className="text-sm font-semibold text-foreground">Field Properties</h3>
-            <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{selectedField.type.replace('_', ' ')}</span>
+            <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{selectedField.type.replace('_', ' ')}</span>
           </div>
         </div>
         <button type="button" className="flex size-10 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground" onClick={onClose} title="Close properties" aria-label="Close properties">
@@ -230,7 +230,7 @@ export default function FormBuilderPropertiesPanel({
         {/* Behavior Toggles (Required / Read Only) */}
         {!isContentField && !isDivider && (
           <div className="rounded-xl border border-border bg-muted/25 p-3.5">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Field Behavior & Rules</span>
+            <span className="text-[12px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Field Behavior & Rules</span>
 
             <label className="mt-3 flex min-h-11 cursor-pointer items-start gap-3 rounded-lg p-2 transition hover:bg-muted">
               <input
@@ -275,12 +275,12 @@ export default function FormBuilderPropertiesPanel({
         {/* Advanced Validation Rules */}
         {(selectedField.type === 'number' || selectedField.type === 'text' || selectedField.type === 'currency') && (
           <div className="rounded-xl border border-border bg-muted/25 p-3.5">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Validation Rules</span>
+            <span className="text-[12px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Validation Rules</span>
 
             {selectedField.type === 'number' || selectedField.type === 'currency' ? (
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1.5 block text-[11px] font-semibold text-muted-foreground">Min Value</label>
+                  <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">Min Value</label>
                   <input
                     type="number"
                     className={inputClass}
@@ -289,7 +289,7 @@ export default function FormBuilderPropertiesPanel({
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-[11px] font-semibold text-muted-foreground">Max Value</label>
+                  <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">Max Value</label>
                   <input
                     type="number"
                     className={inputClass}
@@ -301,7 +301,7 @@ export default function FormBuilderPropertiesPanel({
             ) : (
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1.5 block text-[11px] font-semibold text-muted-foreground">Min Length</label>
+                  <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">Min Length</label>
                   <input
                     type="number"
                     className={inputClass}
@@ -310,7 +310,7 @@ export default function FormBuilderPropertiesPanel({
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-[11px] font-semibold text-muted-foreground">Max Length</label>
+                  <label className="mb-1.5 block text-[12px] font-semibold text-muted-foreground">Max Length</label>
                   <input
                     type="number"
                     className={inputClass}
@@ -322,7 +322,7 @@ export default function FormBuilderPropertiesPanel({
             )}
 
             <div className="mt-3 flex flex-col gap-1.5">
-              <label className="text-[11px] font-semibold text-muted-foreground">Custom Error Message</label>
+              <label className="text-[12px] font-semibold text-muted-foreground">Custom Error Message</label>
               <input
                 type="text"
                 className={inputClass}

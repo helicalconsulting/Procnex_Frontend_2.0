@@ -87,19 +87,19 @@ export function buildSystemEmailHtml(params: {
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; color: #1d2d3e; }
     .email-card { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; border: 1px solid #d9e2ec; overflow: hidden; box-shadow: 0 4px 12px rgba(10, 110, 209, 0.08); }
     .email-header { background: linear-gradient(135deg, #0a6ed1 0%, #0854a0 100%); padding: 24px; color: #ffffff; text-align: left; }
-    .email-brand { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; opacity: 0.9; }
-    .email-title { font-size: 20px; font-weight: 700; margin: 6px 0 0 0; line-height: 1.2; }
+    .email-brand { font-size: 12px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; opacity: 0.9; }
+    .email-title { font-size: 21px; font-weight: 700; margin: 6px 0 0 0; line-height: 1.2; }
     .email-body { padding: 28px 24px; }
-    .greeting { font-size: 15px; font-weight: 600; color: #1d2d3e; margin-bottom: 12px; }
-    .message { font-size: 14px; line-height: 1.6; color: #475569; margin-bottom: 20px; }
+    .greeting { font-size: 16px; font-weight: 600; color: #1d2d3e; margin-bottom: 12px; }
+    .message { font-size: 15px; line-height: 1.6; color: #475569; margin-bottom: 20px; }
     .meta-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 16px; margin-bottom: 20px; }
-    .meta-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #e2e8f0; font-size: 13px; }
+    .meta-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #e2e8f0; font-size: 14px; }
     .meta-row:last-child { border-bottom: none; }
     .meta-label { color: #64748b; font-weight: 600; }
     .meta-value { color: #0f172a; font-weight: 700; }
-    .callout-box { background: rgba(220, 38, 38, 0.06); border-left: 4px solid #dc2626; padding: 12px 16px; margin-bottom: 20px; border-radius: 0 4px 4px 0; font-size: 13px; color: #991b1b; }
-    .cta-btn { display: inline-block; background: #0a6ed1; color: #ffffff !important; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-size: 14px; font-weight: 600; box-shadow: 0 2px 6px rgba(10, 110, 209, 0.25); margin-top: 10px; }
-    .email-footer { background: #f1f5f9; padding: 16px 24px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 12px; color: #64748b; }
+    .callout-box { background: rgba(220, 38, 38, 0.06); border-left: 4px solid #dc2626; padding: 12px 16px; margin-bottom: 20px; border-radius: 0 4px 4px 0; font-size: 14px; color: #991b1b; }
+    .cta-btn { display: inline-block; background: #0a6ed1; color: #ffffff !important; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-size: 15px; font-weight: 600; box-shadow: 0 2px 6px rgba(10, 110, 209, 0.25); margin-top: 10px; }
+    .email-footer { background: #f1f5f9; padding: 16px 24px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 13px; color: #64748b; }
   </style>
 </head>
 <body>

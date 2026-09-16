@@ -437,8 +437,8 @@ export default function VendorCreateInvoicePage() {
       {/* Header */}
       <div className="cpo-header">
         <div className="cpo-header__left">
-          <button className="cpo-back-btn" onClick={() => navigate(-1)}>
-            <ArrowLeft size={16} /> Back
+          <button className="cpo-back-btn" onClick={() => navigate(-1)} title="Back" aria-label="Back">
+            <ArrowLeft size={18} />
           </button>
           <div className="cpo-header__title-wrap">
             <h1>Submit Invoice to Buyer 🧾</h1>
@@ -724,18 +724,18 @@ export default function VendorCreateInvoicePage() {
                 <label>ATTACH VENDOR TAX INVOICE PDF</label>
                 <label style={{ padding: '36px 20px', background: 'var(--surface-elevated)', border: '2px dashed rgba(10, 110, 209, 0.4)', borderRadius: 10, textAlign: 'center', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'all 0.2s ease' }}>
                   <Upload size={28} style={{ color: 'var(--primary-500)' }} />
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.4px' }}>CLICK TO UPLOAD PHYSICAL VENDOR BILL PDF</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Drag and drop your signed tax invoice PDF here, or click to browse files</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.4px' }}>CLICK TO UPLOAD PHYSICAL VENDOR BILL PDF</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Drag and drop your signed tax invoice PDF here, or click to browse files</div>
                   <input type="file" multiple accept=".pdf,.png,.jpg" onChange={handleFileUpload} hidden />
                 </label>
                 {attachments.length > 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
                     {attachments.map((att) => (
-                      <div key={att.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13 }}>
+                      <div key={att.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 14 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <Paperclip size={14} style={{ color: 'var(--primary-500)' }} />
                           <span style={{ fontWeight: 600 }}>{att.name}</span>
-                          <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>({att.size})</span>
+                          <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>({att.size})</span>
                         </div>
                         <button type="button" onClick={() => handleRemoveAttachment(att.id)} style={{ background: 'none', border: 'none', color: 'var(--danger-500)', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center' }}>
                           <X size={14} />

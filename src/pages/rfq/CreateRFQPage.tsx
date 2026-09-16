@@ -988,7 +988,7 @@ export default function CreateRFQPage() {
                         borderBottom: '1px solid var(--primary-500)',
                         background: 'transparent',
                         color: 'var(--text-primary)',
-                        fontSize: 13,
+                        fontSize: 14,
                         fontWeight: 600,
                         fontFamily: 'inherit',
                         outline: 'none',
@@ -1053,7 +1053,7 @@ export default function CreateRFQPage() {
                   style={{
                     display: 'inline-flex', alignItems: 'center', gap: 6,
                     padding: '6px 0', border: 'none', background: 'transparent',
-                    color: 'var(--primary-500)', fontSize: 13, fontWeight: 600,
+                    color: 'var(--primary-500)', fontSize: 14, fontWeight: 600,
                     cursor: 'pointer', fontFamily: 'inherit', outline: 'none',
                   }}
                   onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.75')}
@@ -1096,10 +1096,10 @@ export default function CreateRFQPage() {
                           <Plus size={18} style={{ color: 'var(--text-placeholder)' }} />
                         </div>
                         <div>
-                          <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                          <p style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
                             No field is created yet
                           </p>
-                          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
                             Go to <strong>Settings → Form Fields</strong> to create fields for RFQ Information.
                           </p>
                         </div>
@@ -1111,7 +1111,7 @@ export default function CreateRFQPage() {
                       <>
                         <div style={{
                           padding: '10px 14px 8px',
-                          fontSize: 11, fontWeight: 700,
+                          fontSize: 12, fontWeight: 700,
                           color: 'var(--text-placeholder)',
                           textTransform: 'uppercase', letterSpacing: '0.5px',
                           borderBottom: '1px solid var(--border)',
@@ -1129,7 +1129,7 @@ export default function CreateRFQPage() {
                                 width: '100%', padding: '10px 14px',
                                 border: 'none', borderBottom: '1px solid var(--border)',
                                 background: 'transparent',
-                                color: 'var(--text-primary)', fontSize: 13,
+                                color: 'var(--text-primary)', fontSize: 14,
                                 cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
                                 transition: 'background 0.15s',
                               }}
@@ -1145,7 +1145,7 @@ export default function CreateRFQPage() {
                               </span>
                               <span style={{ flex: 1, fontWeight: 500 }}>{f.label}</span>
                               <span style={{
-                                fontSize: 10, fontWeight: 600,
+                                fontSize: 11, fontWeight: 600,
                                 color: 'var(--primary-500)',
                                 background: 'rgba(10,110,209,0.12)',
                                 padding: '2px 7px', borderRadius: 10,
@@ -1154,7 +1154,7 @@ export default function CreateRFQPage() {
                             </button>
                           ))}
                         {preconfiguredRfqFields.filter((f) => !infoExtraFields.some((ef) => ef.fieldKey === f.fieldKey)).length === 0 && (
-                          <div style={{ padding: '14px', fontSize: 12, color: 'var(--text-secondary)', textAlign: 'center' }}>
+                          <div style={{ padding: '14px', fontSize: 13, color: 'var(--text-secondary)', textAlign: 'center' }}>
                             All configured settings fields have been added.
                           </div>
                         )}
@@ -1174,7 +1174,7 @@ export default function CreateRFQPage() {
           <div className="create-rfq__card-header">
             <Settings size={18} />
             Enterprise Evaluation
-            <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
+            <span style={{ marginLeft: 'auto', fontSize: 14, fontWeight: 500, color: 'var(--text-secondary)' }}>
               {evalCategories.length} categories
             </span>
           </div>
@@ -1196,7 +1196,7 @@ export default function CreateRFQPage() {
                   borderRadius: 'var(--radius-md)',
                   background: 'transparent',
                   color: 'var(--primary-500)',
-                  fontSize: 13,
+                  fontSize: 14,
                   fontWeight: 600,
                   cursor: 'pointer',
                   fontFamily: 'inherit',
@@ -1216,7 +1216,7 @@ export default function CreateRFQPage() {
           <div className="create-rfq__card-header">
             <FileText size={18} />
             RFQ
-            <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
+            <span style={{ marginLeft: 'auto', fontSize: 14, fontWeight: 500, color: 'var(--text-secondary)' }}>
               {customFields.length} custom field{customFields.length !== 1 ? 's' : ''}
             </span>
           </div>
@@ -1241,7 +1241,7 @@ export default function CreateRFQPage() {
                   {simpleWeightageError}
                 </MessageStrip>
               )}
-              <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 12px' }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 12px' }}>
                 Scoring Weightages
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1272,7 +1272,7 @@ export default function CreateRFQPage() {
                               borderRadius: 'var(--radius-sm)',
                               background: 'var(--surface)',
                               color: 'var(--text-primary)',
-                              fontSize: 12,
+                              fontSize: 13,
                               fontWeight: 500,
                               fontFamily: 'inherit',
                               outline: 'none',
@@ -1308,7 +1308,7 @@ export default function CreateRFQPage() {
                         </div>
                       ) : (
                         <span style={{
-                          width: 120, minWidth: 120, fontSize: 13, fontWeight: 500,
+                          width: 120, minWidth: 120, fontSize: 14, fontWeight: 500,
                           color: 'var(--text-primary)', flexShrink: 0,
                         }}>
                           {param.label}
@@ -1343,14 +1343,14 @@ export default function CreateRFQPage() {
                           borderRadius: 'var(--radius-sm)',
                           background: 'var(--surface)',
                           color: 'var(--text-primary)',
-                          fontSize: 13,
+                          fontSize: 14,
                           fontWeight: 700,
                           fontFamily: 'inherit',
                           textAlign: 'center',
                           outline: 'none',
                         }}
                       />
-                      <span style={{ fontSize: 12, color: 'var(--text-secondary)', width: 20 }}>%</span>
+                      <span style={{ fontSize: 13, color: 'var(--text-secondary)', width: 20 }}>%</span>
                       {/* Edit button */}
                       <button
                         onClick={() => startEditWeightage(key, param.label)}
@@ -1384,7 +1384,7 @@ export default function CreateRFQPage() {
                 })}
 
                 {Object.keys(simpleWeightages).length === 0 && (
-                  <div style={{ textAlign: 'center', padding: '16px 0', color: 'var(--text-secondary)', fontSize: 13 }}>
+                  <div style={{ textAlign: 'center', padding: '16px 0', color: 'var(--text-secondary)', fontSize: 14 }}>
                     All weightage parameters have been removed. Reset to restore defaults.
                   </div>
                 )}
@@ -1428,12 +1428,12 @@ export default function CreateRFQPage() {
 
             {/* ── Custom Fields Section ── */}
             <div style={{ marginBottom: 12 }}>
-              <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 12px' }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 12px' }}>
                 Additional Scoring Weightages
               </p>
 
               {customFields.length === 0 && (
-                <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
+                <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 12 }}>
                   No custom fields added yet. Add fields to request specific information from vendors (e.g. warranty period, delivery terms).
                 </p>
               )}
@@ -1464,7 +1464,7 @@ export default function CreateRFQPage() {
                       borderRadius: 'var(--radius-sm)',
                       background: 'var(--surface)',
                       color: 'var(--text-primary)',
-                      fontSize: 13,
+                      fontSize: 14,
                       fontFamily: 'inherit',
                       outline: 'none',
                     }}
@@ -1485,7 +1485,7 @@ export default function CreateRFQPage() {
                         borderRadius: 'var(--radius-sm)',
                         background: 'var(--surface)',
                         color: 'var(--text-primary)',
-                        fontSize: 12,
+                        fontSize: 13,
                         fontWeight: 700,
                         fontFamily: 'inherit',
                         textAlign: 'center',
@@ -1493,14 +1493,14 @@ export default function CreateRFQPage() {
                       }}
                       title="Scoring weightage (%)"
                     />
-                    <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600, marginRight: 2 }}>%</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, marginRight: 2 }}>%</span>
                   </div>
                   <label
                     style={{
                       display: 'flex',
                       alignItems: 'center',
                       gap: 5,
-                      fontSize: 12,
+                      fontSize: 13,
                       fontWeight: 600,
                       color: 'var(--text-secondary)',
                       cursor: 'pointer',
@@ -1548,7 +1548,7 @@ export default function CreateRFQPage() {
                     border: 'none',
                     background: 'transparent',
                     color: 'var(--primary-500)',
-                    fontSize: 13,
+                    fontSize: 14,
                     fontWeight: 600,
                     cursor: 'pointer',
                     fontFamily: 'inherit',
@@ -1572,7 +1572,7 @@ export default function CreateRFQPage() {
           <div className="create-rfq__card-header">
             <Package size={18} />
             Line Items
-            <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
+            <span style={{ marginLeft: 'auto', fontSize: 14, fontWeight: 500, color: 'var(--text-secondary)' }}>
               {items.length} item{items.length !== 1 ? 's' : ''}
             </span>
           </div>
@@ -1587,10 +1587,7 @@ export default function CreateRFQPage() {
                     <th style={{ width: 180 }}>Description</th>
                     <th style={{ width: 130 }}>Qty *</th>
                     <th style={{ width: 140 }}>Unit</th>
-                    <th style={{ width: 150 }}>
-                      <CalendarDays size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />
-                      Expected Date
-                    </th>
+                    <th style={{ width: 150 }}>Expected Date</th>
                     <th style={{ width: 44 }} />
                   </tr>
                 </thead>
@@ -1696,7 +1693,7 @@ export default function CreateRFQPage() {
 
           {bidSecurityExpanded && (
             <div className="create-rfq__card-body">
-              <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
+              <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16 }}>
                 Select what is required. Vendors will provide the actual details when submitting their quotation.
               </p>
               <div className="create-rfq__form-grid" style={{ gridTemplateColumns: '1fr 1fr', maxWidth: 600 }}>
@@ -1720,8 +1717,8 @@ export default function CreateRFQPage() {
                     style={{ accentColor: 'var(--primary-500)', width: 18, height: 18 }}
                   />
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Bid Security Required?</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>Amount, type, validity & document</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Bid Security Required?</div>
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>Amount, type, validity & document</div>
                   </div>
                 </label>
 
@@ -1745,28 +1742,29 @@ export default function CreateRFQPage() {
                     style={{ accentColor: 'var(--primary-500)', width: 18, height: 18 }}
                   />
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Bid Bond Required?</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>Bond number, issuer, amount & document</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Bid Bond Required?</div>
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>Bond number, issuer, amount & document</div>
                   </div>
                 </label>
               </div>
 
               {!bidSecurityEnabled && !bidBondEnabled && (
-                <p style={{ fontSize: 13, color: 'var(--text-placeholder)', margin: '12px 0 0' }}>
+                <p style={{ fontSize: 14, color: 'var(--text-placeholder)', margin: '12px 0 0' }}>
                   No security requirements selected. Vendors will submit quotations without bid security or bond.
                 </p>
               )}
               {/* ── Min Value & Validity Inputs ── */}
               {bidSecurityEnabled && (
                 <div style={{
-                  marginTop: 12,
+                  marginTop: 16,
                   display: 'grid',
-                  gridTemplateColumns: '2fr 1fr',
-                  gap: 12,
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: 18,
                 }}>
                   <div className="create-rfq__field">
                     <label className="create-rfq__label">Min Bid Security Value</label>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <span className="create-rfq__hint" style={{ marginTop: -4 }}>Minimum amount vendor must provide</span>
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                       <input
                         className="create-rfq__input"
                         type="number"
@@ -1774,19 +1772,21 @@ export default function CreateRFQPage() {
                         placeholder="e.g. 100000"
                         value={bidSecurityMinValue}
                         onChange={(e) => setBidSecurityMinValue(e.target.value)}
-                        style={{ flex: 1, minWidth: 0 }}
+                        style={{ paddingRight: 160 }}
                       />
-                      <CurrencySelector
-                        value={bidSecurityMinCurrency}
-                        onChange={setBidSecurityMinCurrency}
-                        size="sm"
-                      />
+                      <div style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center' }}>
+                        <CurrencySelector
+                          value={bidSecurityMinCurrency}
+                          onChange={setBidSecurityMinCurrency}
+                          size="sm"
+                        />
+                      </div>
                     </div>
-                    <span className="create-rfq__hint">Minimum amount vendor must provide</span>
                   </div>
                   <div className="create-rfq__field">
                     <label className="create-rfq__label">Min Bid Security Validity</label>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <span className="create-rfq__hint" style={{ marginTop: -4 }}>Minimum validity period required</span>
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                       <input
                         className="create-rfq__input"
                         type="number"
@@ -1794,25 +1794,27 @@ export default function CreateRFQPage() {
                         placeholder="e.g. 90"
                         value={bidSecurityMinValidity}
                         onChange={(e) => setBidSecurityMinValidity(e.target.value)}
-                        style={{ flex: 1, minWidth: 0 }}
+                        style={{ paddingRight: 56 }}
                       />
-                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', flexShrink: 0 }}>Days</span>
+                      <span style={{ position: 'absolute', right: 14, fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', pointerEvents: 'none' }}>
+                        Days
+                      </span>
                     </div>
-                    <span className="create-rfq__hint">Minimum validity period required</span>
                   </div>
                 </div>
               )}
 
               {bidBondEnabled && (
                 <div style={{
-                  marginTop: 12,
+                  marginTop: 16,
                   display: 'grid',
-                  gridTemplateColumns: '2fr 1fr',
-                  gap: 12,
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: 18,
                 }}>
                   <div className="create-rfq__field">
                     <label className="create-rfq__label">Min Bid Bond Value</label>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <span className="create-rfq__hint" style={{ marginTop: -4 }}>Minimum bond amount vendor must provide</span>
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                       <input
                         className="create-rfq__input"
                         type="number"
@@ -1820,19 +1822,21 @@ export default function CreateRFQPage() {
                         placeholder="e.g. 500000"
                         value={bidBondMinValue}
                         onChange={(e) => setBidBondMinValue(e.target.value)}
-                        style={{ flex: 1, minWidth: 0 }}
+                        style={{ paddingRight: 160 }}
                       />
-                      <CurrencySelector
-                        value={bidBondMinCurrency}
-                        onChange={setBidBondMinCurrency}
-                        size="sm"
-                      />
+                      <div style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center' }}>
+                        <CurrencySelector
+                          value={bidBondMinCurrency}
+                          onChange={setBidBondMinCurrency}
+                          size="sm"
+                        />
+                      </div>
                     </div>
-                    <span className="create-rfq__hint">Minimum bond amount vendor must provide</span>
                   </div>
                   <div className="create-rfq__field">
                     <label className="create-rfq__label">Min Bid Bond Validity</label>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <span className="create-rfq__hint" style={{ marginTop: -4 }}>Minimum validity period required</span>
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                       <input
                         className="create-rfq__input"
                         type="number"
@@ -1840,11 +1844,12 @@ export default function CreateRFQPage() {
                         placeholder="e.g. 120"
                         value={bidBondMinValidity}
                         onChange={(e) => setBidBondMinValidity(e.target.value)}
-                        style={{ flex: 1, minWidth: 0 }}
+                        style={{ paddingRight: 56 }}
                       />
-                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', flexShrink: 0 }}>Days</span>
+                      <span style={{ position: 'absolute', right: 14, fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', pointerEvents: 'none' }}>
+                        Days
+                      </span>
                     </div>
-                    <span className="create-rfq__hint">Minimum validity period required</span>
                   </div>
                 </div>
               )}
@@ -1856,7 +1861,7 @@ export default function CreateRFQPage() {
                   background: 'var(--surface-elevated)',
                   border: '1px solid var(--border)',
                   borderRadius: 'var(--radius-md)',
-                  fontSize: 13,
+                  fontSize: 14,
                   color: 'var(--text-secondary)',
                 }}>
                   <strong style={{ color: 'var(--text-primary)' }}>✓ Requirements set:</strong>{' '}
@@ -1879,27 +1884,27 @@ export default function CreateRFQPage() {
           <div className="create-rfq__card-header">
             <Users size={18} />
             Select Vendors
-            <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
+            <span style={{ marginLeft: 'auto', fontSize: 14, fontWeight: 500, color: 'var(--text-secondary)' }}>
               {selectedVendors.length} selected
             </span>
           </div>
           <div className="create-rfq__card-body">
-            <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 20 }}>
+            <p style={{ fontSize: 15, color: 'var(--text-secondary)', marginBottom: 20 }}>
               Select the vendors you want to invite for this RFQ. They will receive a notification to submit their quotation.
             </p>
             {vendorsLoading && <CardSkeleton count={2} />}
             {!vendorsLoading && !department && (
-              <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
+              <p style={{ fontSize: 15, color: 'var(--text-secondary)' }}>
                 Select a department in RFQ Details to see matching vendors.
               </p>
             )}
             {!vendorsLoading && department && availableVendors.length === 0 && (
-              <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
+              <p style={{ fontSize: 15, color: 'var(--text-secondary)' }}>
                 No vendors in the system. Add vendors first, then create an RFQ.
               </p>
             )}
             {!vendorsLoading && department && availableVendors.length > 0 && departmentVendors.length === 0 && (
-              <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
+              <p style={{ fontSize: 15, color: 'var(--text-secondary)' }}>
                 No vendors found for {department}. Update vendor categories on the Vendors page or choose another department.
               </p>
             )}
@@ -2011,10 +2016,10 @@ export default function CreateRFQPage() {
             }}>
               {approvalSubmittedRfq.isApprovalChain ? <CheckCircle2 size={32} /> : <Send size={30} />}
             </div>
-            <h2 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 10px', color: 'var(--text-primary)' }}>
+            <h2 style={{ fontSize: 21, fontWeight: 700, margin: '0 0 10px', color: 'var(--text-primary)' }}>
               {approvalSubmittedRfq.isApprovalChain ? 'RFQ Sent for Internal Approval!' : 'RFQ Sent to Vendors!'}
             </h2>
-            <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 24px' }}>
+            <p style={{ fontSize: 15, color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 24px' }}>
               {approvalSubmittedRfq.isApprovalChain ? (
                 <>
                   RFQ <strong style={{ color: 'var(--text-primary)' }}>#{approvalSubmittedRfq.number}</strong> has been successfully created and sent to <strong>Approver Level {approvalSubmittedRfq.levelNumber || 1} (Approver 1)</strong> for internal approval.

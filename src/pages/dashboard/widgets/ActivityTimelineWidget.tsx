@@ -43,8 +43,8 @@ export default function ActivityTimelineWidget() {
                   <Icon size={14} />
                 </div>
                 <div className="min-w-0 pt-0.5">
-                  <div className="text-[13px] leading-5 text-foreground" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(item.text) }} />
-                  <div className="mt-0.5 text-[11px] text-muted-foreground">{item.time}</div>
+                  <div className="text-[14px] leading-5 text-foreground" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(item.text) }} />
+                  <div className="mt-0.5 text-[12px] text-muted-foreground">{item.time}</div>
                 </div>
               </div>
             );

@@ -165,7 +165,7 @@ const ALL_COLUMNS: UserColumnDef[] = [
   {
     key: 'branch', label: 'Branch', defaultVisible: true, width: '160px',
     render: (u) => (
-      <span className="users-table__dept" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 6, background: 'var(--surface-hover)', fontWeight: 600, fontSize: 12 }}>
+      <span className="users-table__dept" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 6, background: 'var(--surface-hover)', fontWeight: 600, fontSize: 13 }}>
         <MapPin size={12} style={{ color: 'var(--primary-500)' }} />
         {u.branchName || 'All Branches (HQ)'}
       </span>
@@ -206,7 +206,7 @@ const ALL_COLUMNS: UserColumnDef[] = [
           <div className={`users-status-toggle__track ${u.isMobileAccessEnabled ? 'users-status-toggle__track--active' : ''}`}>
             <div className="users-status-toggle__knob" />
           </div>
-          <span className={`users-status-toggle__label users-status-toggle__label--${u.isMobileAccessEnabled ? 'active' : 'inactive'}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600 }}>
+          <span className={`users-status-toggle__label users-status-toggle__label--${u.isMobileAccessEnabled ? 'active' : 'inactive'}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600 }}>
             <Smartphone size={16} strokeWidth={2.2} style={{ flexShrink: 0 }} />
             {u.isMobileAccessEnabled ? 'Enabled' : 'Disabled'}
           </span>
@@ -920,7 +920,7 @@ export default function UsersPage() {
           padding: '12px 18px', borderRadius: 'var(--radius-md)', marginBottom: '16px',
           boxShadow: '0 4px 14px rgba(0,0,0,0.12)', transition: 'all 0.2s ease'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
             <CheckSquare size={18} style={{ color: 'var(--primary-500)' }} />
             <span><strong>{selectedUserIds.length}</strong> User(s) selected</span>
           </div>
@@ -928,7 +928,7 @@ export default function UsersPage() {
             <button
               type="button"
               className="users-modal__btn users-modal__btn--secondary"
-              style={{ padding: '7px 16px', fontSize: 13, fontWeight: 600 }}
+              style={{ padding: '7px 16px', fontSize: 14, fontWeight: 600 }}
               onClick={() => setSelectedUserIds([])}
             >
               Cancel Selection
@@ -939,7 +939,7 @@ export default function UsersPage() {
               style={{
                 background: hasPermission('User Management', 'canCreate') ? '#dc2626' : '#64748b',
                 color: '#ffffff', border: 'none',
-                padding: '7px 16px', fontSize: 13, fontWeight: 700,
+                padding: '7px 16px', fontSize: 14, fontWeight: 700,
                 borderRadius: 'var(--radius-sm)',
                 cursor: hasPermission('User Management', 'canCreate') ? 'pointer' : 'not-allowed',
                 opacity: hasPermission('User Management', 'canCreate') ? 1 : 0.5,
@@ -1346,7 +1346,7 @@ export default function UsersPage() {
                         style={{ width: 18, height: 18, cursor: 'pointer' }}
                       />
                     </label>
-                    <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
+                    <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>
                       Allow this user to log in to the Mobile App.
                     </p>
                   </div>
@@ -1508,11 +1508,11 @@ export default function UsersPage() {
                     style={{ width: 18, height: 18, cursor: 'pointer' }}
                   />
                 </label>
-                <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
+                <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>
                   When enabled, this user can log in to the Mobile App.
                 </p>
               </div>
-              <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--text-placeholder)' }}>
+              <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--text-placeholder)' }}>
                 Username: @{editingUser.username} (cannot be changed here)
               </p>
             </div>
@@ -1570,24 +1570,24 @@ export default function UsersPage() {
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 20 }}>✨</span>
+              <span style={{ fontSize: 21 }}>✨</span>
               <div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>Configure Dashboard</div>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>Configure Dashboard</div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                   Select widgets for <strong>{sapToast.userName}</strong>
                 </div>
               </div>
             </div>
             <button onClick={() => setSapToast(null)} style={{
               width: 28, height: 28, border: 'none', background: 'transparent',
-              cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 18,
+              cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 19,
               display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6,
             }}>×</button>
           </div>
 
           {/* Widget Grid */}
           <div style={{ padding: '12px 14px', maxHeight: 300, overflowY: 'auto' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-placeholder)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-placeholder)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
               Select widgets to enable
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -1606,14 +1606,14 @@ export default function UsersPage() {
                       display: 'flex', alignItems: 'flex-start', gap: 8,
                     }}
                   >
-                    <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>{widget.icon}</span>
+                    <span style={{ fontSize: 17, flexShrink: 0, marginTop: 1 }}>{widget.icon}</span>
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{
-                        fontSize: 12, fontWeight: 700,
+                        fontSize: 13, fontWeight: 700,
                         color: active ? 'var(--primary-500)' : 'var(--text-primary)',
                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                       }}>{widget.name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.3, marginTop: 2 }}>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.3, marginTop: 2 }}>
                         {widget.description}
                       </div>
                     </div>
@@ -1622,7 +1622,7 @@ export default function UsersPage() {
                         marginLeft: 'auto', flexShrink: 0, width: 16, height: 16,
                         borderRadius: '50%', background: 'var(--primary-500)', color: '#fff',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 10, fontWeight: 700,
+                        fontSize: 11, fontWeight: 700,
                       }}>✓</span>
                     )}
                   </button>
@@ -1637,19 +1637,19 @@ export default function UsersPage() {
             background: 'var(--surface-elevated)',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
           }}>
-            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
               {sapToast.selectedWidgets.length} widget{sapToast.selectedWidgets.length !== 1 ? 's' : ''} selected
             </span>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setSapToast(null)} style={{
                 padding: '8px 16px', border: '1px solid var(--border)', borderRadius: 6,
                 background: 'var(--surface-card)', color: 'var(--text-primary)',
-                fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                fontSize: 14, fontWeight: 600, cursor: 'pointer',
               }}>Skip</button>
               <button onClick={handleSaveWidgets} disabled={widgetSaving} style={{
                 padding: '8px 20px', border: 'none', borderRadius: 6,
                 background: 'linear-gradient(135deg, #8b5cf6, #0a6ed1)',
-                color: '#fff', fontSize: 13, fontWeight: 700,
+                color: '#fff', fontSize: 14, fontWeight: 700,
                 cursor: widgetSaving ? 'not-allowed' : 'pointer',
                 opacity: widgetSaving ? 0.7 : 1,
               }}>
@@ -1747,7 +1747,7 @@ export default function UsersPage() {
             <h3
               style={{
                 margin: '0 0 8px',
-                fontSize: 19,
+                fontSize: 20,
                 fontWeight: 700,
                 color: 'var(--text-primary)',
                 letterSpacing: '-0.01em',
@@ -1760,7 +1760,7 @@ export default function UsersPage() {
             <p
               style={{
                 margin: '0 0 24px',
-                fontSize: 14,
+                fontSize: 15,
                 color: 'var(--text-secondary)',
                 lineHeight: 1.55,
               }}
@@ -1781,7 +1781,7 @@ export default function UsersPage() {
                   ? 'linear-gradient(135deg, #16a34a, #15803d)'
                   : 'linear-gradient(135deg, #dc2626, #b91c1c)',
                 color: '#ffffff',
-                fontSize: 14,
+                fontSize: 15,
                 fontWeight: 600,
                 cursor: 'pointer',
                 boxShadow: mobileSuccessModal.isEnabled

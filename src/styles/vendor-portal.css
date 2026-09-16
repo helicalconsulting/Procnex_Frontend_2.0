@@ -143,7 +143,7 @@
 }
 
 .vendor-header__content p {
-  font-size: 15px;
+  font-size: 16px;
   color: var(--text-secondary);
   margin: 0;
   line-height: 1.6;
@@ -235,11 +235,11 @@
   align-items: center;
   justify-content: center;
   color: var(--vendor-primary);
-  font-size: 20px;
+  font-size: 21px;
 }
 
 .vendor-kpi-label {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -247,14 +247,14 @@
 }
 
 .vendor-kpi-value {
-  font-size: 24px;
+  font-size: 25px;
   font-weight: 700;
   color: var(--text-primary);
   line-height: 1;
 }
 
 .vendor-kpi-subtext {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-secondary);
   margin-top: auto;
 }
@@ -270,7 +270,7 @@
 }
 
 .vendor-section__title {
-  font-size: 20px;
+  font-size: 21px;
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
@@ -305,7 +305,7 @@
 .vendor-table th {
   padding: var(--vendor-space-4) var(--vendor-space-6);
   text-align: left;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -328,7 +328,7 @@
 
 .vendor-table td {
   padding: var(--vendor-space-4) var(--vendor-space-6);
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text-primary);
 }
 
@@ -344,7 +344,7 @@
   gap: var(--vendor-space-2);
   padding: var(--vendor-space-2) var(--vendor-space-3);
   border-radius: var(--vendor-radius-sm);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
   transition: all var(--vendor-transition-fast);
@@ -434,7 +434,7 @@
 }
 
 .vendor-card__title {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
@@ -442,7 +442,7 @@
 }
 
 .vendor-card__subtitle {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-secondary);
   margin: var(--vendor-space-2) 0 0 0;
 }
@@ -462,7 +462,7 @@
   padding: var(--vendor-space-3);
   background: var(--surface-elevated);
   border-radius: var(--vendor-radius-sm);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .vendor-card__row-label {
@@ -494,7 +494,7 @@
   padding: var(--vendor-space-3) var(--vendor-space-6);
   border: none;
   border-radius: var(--vendor-radius-md);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition: all var(--vendor-transition-base);
@@ -574,20 +574,20 @@
 }
 
 .vendor-empty-state__icon {
-  font-size: 48px;
+  font-size: 49px;
   margin-bottom: var(--vendor-space-4);
   opacity: 0.5;
 }
 
 .vendor-empty-state__title {
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 700;
   color: var(--text-primary);
   margin: 0 0 var(--vendor-space-2) 0;
 }
 
 .vendor-empty-state__text {
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text-secondary);
   margin: 0 0 var(--vendor-space-6) 0;
   max-width: 400px;
@@ -648,11 +648,11 @@
   justify-content: center;
   font-weight: 700;
   color: #fff;
-  font-size: 18px;
+  font-size: 19px;
 }
 
 .vendor-sidebar__logo-text {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 700;
   color: var(--shell-text);
   line-height: 1.2;
@@ -676,7 +676,7 @@
   cursor: pointer;
   transition: all var(--vendor-transition-fast);
   text-decoration: none;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 500;
 }
 
@@ -728,7 +728,7 @@
   justify-content: center;
   color: #fff;
   font-weight: 700;
-  font-size: 16px;
+  font-size: 17px;
 }
 
 .vendor-topbar__user-info {
@@ -738,13 +738,13 @@
 }
 
 .vendor-topbar__user-name {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .vendor-topbar__user-role {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
 }
 
@@ -782,7 +782,7 @@
   }
 
   .vendor-header__content h1 {
-    font-size: 24px;
+    font-size: 25px;
   }
 
   .vendor-topbar {
@@ -791,7 +791,7 @@
   }
 
   .vendor-table {
-    font-size: 12px;
+    font-size: 13px;
   }
 
   .vendor-table th,
@@ -806,7 +806,7 @@
   }
 
   .vendor-header__content h1 {
-    font-size: 20px;
+    font-size: 21px;
   }
 
   .vendor-topbar__user-info {
@@ -814,7 +814,7 @@
   }
 
   .vendor-table {
-    font-size: 11px;
+    font-size: 12px;
   }
 }
 
@@ -847,7 +847,7 @@
 }
 
 .vd-title {
-  font-size: 22px;
+  font-size: 23px;
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
@@ -855,7 +855,7 @@
 }
 
 .vd-subtitle {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-secondary);
   margin: 4px 0 0;
   font-weight: 400;
@@ -907,7 +907,7 @@
 }
 
 .vd-tile__label {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -922,7 +922,7 @@
 .vd-tile__icon--red { color: #bb0000; }
 
 .vd-tile__value {
-  font-size: 28px;
+  font-size: 29px;
   font-weight: 800;
   color: var(--text-primary);
   line-height: 1;
@@ -930,7 +930,7 @@
 }
 
 .vd-tile__foot {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
   font-weight: 500;
 }
@@ -971,7 +971,7 @@
 }
 
 .vd-card__title {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -980,7 +980,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--vendor-primary);
   background: none;
@@ -1027,14 +1027,14 @@
 
 .vd-deadline-rfq {
   display: block;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .vd-deadline-title {
   display: block;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
   margin-top: 1px;
   overflow: hidden;
@@ -1043,7 +1043,7 @@
 }
 
 .vd-deadline-time {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-secondary);
   display: flex;
@@ -1089,7 +1089,7 @@
 
 .vd-activity-text {
   display: block;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--text-primary);
   line-height: 1.45;
@@ -1097,7 +1097,7 @@
 
 .vd-activity-time {
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
   margin-top: 3px;
 }
@@ -1113,8 +1113,8 @@
   margin-bottom: 6px;
 }
 
-.vd-metric__label { font-size: 13px; color: var(--text-secondary); font-weight: 500; }
-.vd-metric__value { font-size: 13px; color: var(--text-primary); font-weight: 700; }
+.vd-metric__label { font-size: 14px; color: var(--text-secondary); font-weight: 500; }
+.vd-metric__value { font-size: 14px; color: var(--text-primary); font-weight: 700; }
 
 .vd-metric__bar {
   height: 4px;
@@ -1167,14 +1167,14 @@
 
 .vd-nav-label {
   display: block;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .vd-nav-desc {
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
   margin-top: 1px;
 }
@@ -1206,14 +1206,14 @@
 
 .vd-alert-title {
   display: block;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: #bb0000;
 }
 
 .vd-alert-text {
   display: block;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
   margin-top: 3px;
   line-height: 1.5;
@@ -1252,7 +1252,7 @@
   background: var(--surface-card);
   color: var(--text-primary);
   font-family: inherit;
-  font-size: 14px;
+  font-size: 15px;
   outline: none;
   box-shadow: var(--vendor-card-shadow-sm);
   transition: border-color var(--vendor-transition-fast), box-shadow var(--vendor-transition-fast), background var(--vendor-transition-fast);
@@ -1289,7 +1289,7 @@
   background: var(--surface-elevated);
   border-bottom: 1px solid var(--border);
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.4px;
@@ -1299,7 +1299,7 @@
   padding: 12px;
   border-bottom: 1px solid var(--border);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 14px;
   vertical-align: middle;
 }
 
@@ -1360,7 +1360,7 @@
 }
 
 .vrfq-card__rfq-id {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text-primary);
   min-width: 0;
@@ -1370,7 +1370,7 @@
 }
 
 .vrfq-card__title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--text-secondary);
   overflow: hidden;
@@ -1386,7 +1386,7 @@
 }
 
 .vrfq-card__deadline {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -1430,7 +1430,7 @@
 }
 
 .vrfq-card__desc {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-primary);
   line-height: 1.5;
   padding: 10px 14px;
@@ -1440,7 +1440,7 @@
 }
 
 .vrfq-card__items-title {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -1473,7 +1473,7 @@
   }
 
   .vendor-header__content h1 {
-    font-size: 26px;
+    font-size: 27px;
   }
 
   .vendor-kpis {
@@ -1487,7 +1487,7 @@
   }
 
   .vendor-kpi-value {
-    font-size: 26px;
+    font-size: 27px;
   }
 
   .vrfq-card__header {
@@ -1646,7 +1646,7 @@
 .vquot-modal--minimized .vquot-modal__header-icon { color: rgba(255,255,255,0.85); }
 
 .vquot-modal__header-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
   white-space: nowrap;
@@ -1656,7 +1656,7 @@
 .vquot-modal--minimized .vquot-modal__header-title { color: #fff; }
 
 .vquot-modal__header-rfq {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--vendor-primary);
   white-space: nowrap;
@@ -1668,7 +1668,7 @@
 .vquot-modal--minimized .vquot-modal__header-rfq { display: none; }
 
 .vquot-modal__minimized-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   color: rgba(255,255,255,0.88);
   overflow: hidden;
@@ -1764,17 +1764,17 @@
   border: 1px solid var(--border);
 }
 
-.vquot-modal__item-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
-.vquot-modal__item-qty { font-size: 12px; color: var(--text-secondary); text-align: center; }
+.vquot-modal__item-name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.vquot-modal__item-qty { font-size: 13px; color: var(--text-secondary); text-align: center; }
 
 .vquot-modal__field { display: flex; flex-direction: column; gap: 6px; }
-.vquot-modal__label { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.vquot-modal__label { font-size: 14px; font-weight: 600; color: var(--text-secondary); }
 
 .vquot-modal__input {
   padding: 9px 12px;
   border: 1px solid var(--border);
   border-radius: var(--vendor-radius-md);
-  font-size: 14px;
+  font-size: 15px;
   font-family: inherit;
   color: var(--text-primary);
   background: var(--surface-card);
@@ -1788,7 +1788,7 @@
 
 .vquot-modal__input--sm {
   padding: 7px 10px;
-  font-size: 13px;
+  font-size: 14px;
   height: 34px;
 }
 
@@ -1811,7 +1811,7 @@
 }
 
 .vquot-bidbond-grid .vquot-modal__label {
-  font-size: 12px;
+  font-size: 13px;
 }
 
 /* ── Currency row (amount input + selector) ─────────── */
@@ -1830,7 +1830,7 @@
 input[type="date"].vquot-modal__input {
   min-height: 38px;
   padding: 7px 10px;
-  font-size: 13px;
+  font-size: 14px;
   appearance: none;
   -webkit-appearance: none;
   font-family: inherit;
@@ -1865,7 +1865,7 @@ input[type="date"].vquot-modal__input {
   border-radius: var(--vendor-radius-md);
   background: var(--surface-elevated);
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   font-family: inherit;
@@ -1907,7 +1907,7 @@ input[type="date"].vquot-modal__input {
   border: 1px solid rgba(187,0,0,0.25);
   border-radius: var(--vendor-radius-sm);
   color: #bb0000;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1.4;
 }
@@ -1953,13 +1953,13 @@ input[type="date"].vquot-modal__input {
 }
 
 .vquot-section-header__title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .vquot-section-header__sub {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
   margin-top: 1px;
 }
@@ -1974,7 +1974,7 @@ input[type="date"].vquot-modal__input {
 }
 
 .vquot-bond-sub__title {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--text-primary);
   margin-bottom: 10px;
@@ -2013,7 +2013,7 @@ input[type="date"].vquot-modal__input {
   padding: 10px 14px;
   border: 1px solid var(--border);
   border-radius: var(--vendor-radius-md);
-  font-size: 14px;
+  font-size: 15px;
   font-family: inherit;
   color: var(--text-primary);
   background: var(--surface-card);
@@ -2035,8 +2035,8 @@ input[type="date"].vquot-modal__input {
   border: 1px solid color-mix(in srgb, var(--vendor-primary) 15%, transparent);
 }
 
-.vquot-modal__total-label { font-size: 14px; font-weight: 600; color: var(--text-secondary); }
-.vquot-modal__total-value { font-size: 20px; font-weight: 800; color: var(--vendor-primary); }
+.vquot-modal__total-label { font-size: 15px; font-weight: 600; color: var(--text-secondary); }
+.vquot-modal__total-value { font-size: 21px; font-weight: 800; color: var(--vendor-primary); }
 
 .vquot-modal__footer {
   padding: 14px 24px;
@@ -2098,8 +2098,8 @@ input[type="date"].vquot-modal__input {
 }
 
 .vinv-upload-zone__icon { color: var(--vendor-primary); opacity: 0.6; }
-.vinv-upload-zone__text { font-size: 14px; font-weight: 600; color: var(--text-primary); }
-.vinv-upload-zone__hint { font-size: 12px; color: var(--text-secondary); }
+.vinv-upload-zone__text { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.vinv-upload-zone__hint { font-size: 13px; color: var(--text-secondary); }
 
 /* ─── Vendor Profile Page ────────────────────────────────────────────────── */
 
@@ -2128,7 +2128,7 @@ input[type="date"].vquot-modal__input {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -2144,8 +2144,8 @@ input[type="date"].vquot-modal__input {
 
 .vprof-field:last-child { border-bottom: none; }
 
-.vprof-field__label { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
-.vprof-field__value { font-size: 14px; font-weight: 600; color: var(--text-primary); text-align: right; max-width: 60%; }
+.vprof-field__label { font-size: 14px; font-weight: 500; color: var(--text-secondary); }
+.vprof-field__value { font-size: 15px; font-weight: 600; color: var(--text-primary); text-align: right; max-width: 60%; }
 
 .vprof-doc {
   display: flex;
@@ -2164,8 +2164,8 @@ input[type="date"].vquot-modal__input {
 
 .vprof-doc__left { display: flex; align-items: center; gap: 12px; }
 .vprof-doc__icon { color: var(--vendor-primary); }
-.vprof-doc__name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
-.vprof-doc__date { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+.vprof-doc__name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.vprof-doc__date { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
 
 .vprof-doc__status {
   display: inline-flex;
@@ -2173,7 +2173,7 @@ input[type="date"].vquot-modal__input {
   gap: 5px;
   padding: 4px 12px;
   border-radius: 20px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.3px;
@@ -2202,7 +2202,7 @@ input[type="date"].vquot-modal__input {
   align-items: center;
 }
 
-.vsection__title { font-size: 15px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 10px; }
+.vsection__title { font-size: 16px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 10px; }
 
 /* ─── Vendor Badge Additions ─────────────────────────────────────────────── */
 
@@ -2226,7 +2226,7 @@ input[type="date"].vquot-modal__input {
 .vprof-edit-btn {
   display: inline-flex; align-items: center; gap: 5px;
   margin-left: auto; padding: 5px 12px; border-radius: 6px;
-  font-size: 12px; font-weight: 600; font-family: inherit; cursor: pointer;
+  font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer;
   background: color-mix(in srgb, var(--vendor-primary) 8%, transparent); color: var(--vendor-primary);
   border: 1px solid color-mix(in srgb, var(--vendor-primary) 20%, transparent);
   transition: background var(--vendor-transition-fast), transform var(--vendor-transition-fast);
@@ -2266,19 +2266,19 @@ input[type="date"].vquot-modal__input {
 }
 
 .vprof-metric__value {
-  font-size: 22px;
+  font-size: 23px;
   font-weight: 800;
   color: var(--text-primary);
   line-height: 1.1;
 }
 
 .vprof-metric--highlight .vprof-metric__value {
-  font-size: 26px;
+  font-size: 27px;
   color: var(--vendor-primary);
 }
 
 .vprof-metric__label {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -2286,7 +2286,7 @@ input[type="date"].vquot-modal__input {
 }
 
 .vprof-metric__desc {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-placeholder);
   line-height: 1.3;
 }
@@ -2294,7 +2294,7 @@ input[type="date"].vquot-modal__input {
 /* ─── Messages ───────────────────────────────────────────────────────────── */
 .vprof-msg {
   display: flex; align-items: center; gap: 8px; padding: 10px 14px;
-  border-radius: 8px; font-size: 13px; font-weight: 600;
+  border-radius: 8px; font-size: 14px; font-weight: 600;
   animation: slideInUp 0.3s ease;
 }
 .vprof-msg--ok { background: rgba(16,126,62,0.08); color: #059669; border: 1px solid rgba(16,126,62,0.2); }
@@ -2306,13 +2306,13 @@ input[type="date"].vquot-modal__input {
 .vprof-bank-form { display: flex; flex-direction: column; gap: 14px; }
 .vprof-bank-form__field { display: flex; flex-direction: column; gap: 4px; }
 .vprof-bank-form__field label {
-  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.4px; color: var(--text-secondary);
 }
 .vprof-bank-form__field input {
   padding: 10px 14px; border-radius: 8px;
   border: 1px solid var(--border); background: var(--surface);
-  color: var(--text-primary); font-size: 14px; font-family: inherit;
+  color: var(--text-primary); font-size: 15px; font-family: inherit;
   transition: border-color 0.2s, box-shadow 0.2s; outline: none;
 }
 .vprof-bank-form__field input:focus {
@@ -2324,7 +2324,7 @@ input[type="date"].vquot-modal__input {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 10px 20px; border-radius: 8px; border: none;
   background: linear-gradient(135deg, #059669, #10b981); color: #fff;
-  font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit;
+  font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit;
   box-shadow: 0 4px 14px rgba(5,150,105,0.3);
   transition: transform 0.15s, box-shadow 0.2s;
 }
@@ -2334,7 +2334,7 @@ input[type="date"].vquot-modal__input {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 10px 20px; border-radius: 8px;
   background: transparent; color: var(--text-secondary);
-  border: 1px solid var(--border); font-size: 13px; font-weight: 600;
+  border: 1px solid var(--border); font-size: 14px; font-weight: 600;
   cursor: pointer; font-family: inherit; transition: background 0.15s;
 }
 .vprof-bank-form__cancel:hover { background: var(--surface-hover); color: var(--text-primary); }
@@ -2348,14 +2348,14 @@ input[type="date"].vquot-modal__input {
 .vprof-upload__select {
   padding: 9px 14px; border-radius: 8px; border: 1px solid var(--border);
   background: var(--surface); color: var(--text-primary);
-  font-size: 13px; font-family: inherit; flex: 1; min-width: 180px;
+  font-size: 14px; font-family: inherit; flex: 1; min-width: 180px;
 }
 .vprof-upload__file-btn {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 9px 16px; border-radius: 8px; cursor: pointer;
   background: color-mix(in srgb, var(--vendor-primary) 6%, transparent); color: var(--vendor-primary);
   border: 1px solid color-mix(in srgb, var(--vendor-primary) 20%, transparent);
-  font-size: 13px; font-weight: 600; font-family: inherit;
+  font-size: 14px; font-weight: 600; font-family: inherit;
   transition: background 0.15s;
 }
 .vprof-upload__file-btn:hover {  background: color-mix(in srgb, var(--vendor-primary) 12%, transparent); }
@@ -2364,7 +2364,7 @@ input[type="date"].vquot-modal__input {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 9px 18px; border-radius: 8px; border: none;
   background: linear-gradient(135deg, var(--vendor-primary), #6366f1); color: #fff;
-  font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit;
+  font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit;
   box-shadow: 0 3px 10px color-mix(in srgb, var(--vendor-primary) 30%, transparent);
   transition: transform 0.15s, box-shadow 0.2s;
 }
@@ -2454,14 +2454,14 @@ input[type="date"].vquot-modal__input {
 }
 
 .vquot-eval-category__name {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: 0.01em;
 }
 
 .vquot-eval-category__weight {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--primary-600, #0a6ed1);
   background: rgba(10, 110, 209, 0.08);
@@ -2471,7 +2471,7 @@ input[type="date"].vquot-modal__input {
 }
 
 .vquot-eval-category__count {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);
   background: var(--surface-card);
@@ -2546,19 +2546,19 @@ input[type="date"].vquot-modal__input {
 }
 
 .vquot-eval-param-name {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .vquot-eval-param-required {
   color: var(--danger-500, #dc2626);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
 }
 
 .vquot-eval-param-hint {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
   cursor: help;
   margin-left: 2px;
@@ -2571,7 +2571,7 @@ input[type="date"].vquot-modal__input {
   border-radius: var(--radius-sm, 6px);
   background: var(--surface);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 14px;
   font-family: inherit;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -2594,7 +2594,7 @@ input[type="date"].vquot-modal__input {
 }
 
 .vquot-eval-input-divider {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--eval-purple-500);
   font-weight: 600;
 }
@@ -2616,7 +2616,7 @@ input[type="date"].vquot-modal__input {
   border-radius: var(--vendor-radius-md);
   background: var(--surface-elevated);
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   font-family: inherit;
@@ -2650,7 +2650,7 @@ input[type="date"].vquot-modal__input {
 }
 
 .vquot-file-upload__hint {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-placeholder);
   font-weight: 400;
 }
@@ -2673,7 +2673,7 @@ input[type="date"].vquot-modal__input {
 
 .vquot-file-upload__preview-name {
   flex: 1;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
   overflow: hidden;
@@ -2683,7 +2683,7 @@ input[type="date"].vquot-modal__input {
 }
 
 .vquot-file-upload__preview-size {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--text-secondary);
   white-space: nowrap;
@@ -2722,7 +2722,7 @@ input[type="date"].vquot-modal__input {
   background: rgba(187, 0, 0, 0.08);
   border: 1px solid rgba(187, 0, 0, 0.2);
   color: var(--danger-500, #bb0000);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 /* ── File preview chip ────────────────────────────────── */
@@ -2751,7 +2751,7 @@ input[type="date"].vquot-modal__input {
 }
 
 .vprof-upload__file-preview-name {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
   white-space: nowrap;
@@ -2761,7 +2761,7 @@ input[type="date"].vquot-modal__input {
 }
 
 .vprof-upload__file-preview-size {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--text-secondary);
   white-space: nowrap;
@@ -2809,7 +2809,7 @@ input[type="date"].vquot-modal__input {
   border: 1px solid var(--border);
   background: var(--surface-card);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   font-family: inherit;
@@ -2862,7 +2862,7 @@ input[type="date"].vquot-modal__input {
   height: 22px;
   padding: 0 6px;
   border-radius: 11px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1;
   background: var(--surface-elevated);
@@ -2903,7 +2903,7 @@ input[type="date"].vquot-modal__input {
 }
 
 .vprof-doc-popup__badge {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.4px;
@@ -2956,14 +2956,14 @@ input[type="date"].vquot-modal__input {
   gap: 8px;
   padding: 24px;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .vprof-doc-popup__empty {
   padding: 24px;
   text-align: center;
   color: var(--text-placeholder);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .vprof-doc-popup__item {
@@ -2976,7 +2976,7 @@ input[type="date"].vquot-modal__input {
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   font-family: inherit;
@@ -3021,7 +3021,7 @@ input[type="date"].vquot-modal__input {
   background: color-mix(in srgb, var(--vendor-primary) 8%, transparent);
   border: 1px solid color-mix(in srgb, var(--vendor-primary) 20%, transparent);
   color: var(--vendor-primary);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   white-space: nowrap;
   min-width: 0;
@@ -3121,7 +3121,7 @@ input[type="date"].vquot-modal__input {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: #d97706;
   letter-spacing: 0.3px;
@@ -3130,7 +3130,7 @@ input[type="date"].vquot-modal__input {
 }
 
 .vquot-modal__previous-banner-comment {
-  font-size: 13px;
+  font-size: 14px;
   color: #1e293b;
   background: rgba(255, 255, 255, 0.85);
   padding: 10px 14px;
@@ -3145,7 +3145,7 @@ input[type="date"].vquot-modal__input {
 }
 
 .vquot-modal__previous-banner-hint {
-  font-size: 12px;
+  font-size: 13px;
   color: #475569;
   line-height: 1.4;
 }
@@ -3159,7 +3159,7 @@ input[type="date"].vquot-modal__input {
   color: #ffffff;
   border: 1px solid #f59e0b;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -3178,7 +3178,7 @@ input[type="date"].vquot-modal__input {
 }
 
 .vquot-modal__previous-snapshot-title {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: #d97706;
   margin-bottom: 10px;
@@ -3193,7 +3193,7 @@ input[type="date"].vquot-modal__input {
 
 .vquot-modal__previous-table {
   width: 100%;
-  font-size: 12px;
+  font-size: 13px;
   border-collapse: collapse;
 }
 
@@ -3202,7 +3202,7 @@ input[type="date"].vquot-modal__input {
   background: rgba(254, 243, 199, 0.7);
   border-bottom: 1px solid rgba(245, 158, 11, 0.25);
   text-transform: uppercase;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: #78350f;
 }
@@ -3509,7 +3509,7 @@ input[type="date"].vquot-modal__input {
 .vquot-snapshot-modal-table {
   width: 100%;
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   border-collapse: collapse;
 }
 
@@ -3518,7 +3518,7 @@ input[type="date"].vquot-modal__input {
   color: #334155;
   border-bottom: 1px solid #e2e8f0;
   padding: 10px 12px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.3px;
@@ -3560,7 +3560,7 @@ input[type="date"].vquot-modal__input {
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   color: #334155;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   display: inline-flex;
@@ -3711,7 +3711,7 @@ input[type="date"].vquot-modal__input {
   align-items: center;
   gap: 8px;
   padding: 11px 16px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -3754,7 +3754,7 @@ input[type="date"].vquot-modal__input {
   background: var(--surface-card, #ffffff);
   border: 1px solid var(--border, #f1f5f9);
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 14px;
   transition: all 0.15s ease;
 }
 
@@ -3775,7 +3775,7 @@ input[type="date"].vquot-modal__input {
 }
 
 .vquot-snapshot-kv-cat-tag {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.4px;
@@ -3795,7 +3795,7 @@ input[type="date"].vquot-modal__input {
   align-items: center;
   padding: 4px 10px;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   background: rgba(10, 110, 209, 0.08);
   color: #0a6ed1;
@@ -3829,7 +3829,7 @@ input[type="date"].vquot-modal__input {
 }
 
 .vquot-snapshot-summary-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.4px;
@@ -3837,7 +3837,7 @@ input[type="date"].vquot-modal__input {
 }
 
 .vquot-snapshot-summary-val {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text-primary, #0f172a);
 }

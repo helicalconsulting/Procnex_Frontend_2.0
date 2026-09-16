@@ -106,7 +106,7 @@ export default function PostAwardModal({
         </div>
 
         <div className="ctr-award-modal__body">
-          <p style={{ margin: 0, fontSize: 14, color: 'var(--text-secondary)' }}>
+          <p style={{ margin: 0, fontSize: 15, color: 'var(--text-secondary)' }}>
             Do you want to create a <strong>Purchase Order</strong> or a <strong>Contract</strong> for this vendor?
           </p>
 

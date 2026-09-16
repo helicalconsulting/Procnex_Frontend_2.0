@@ -1,5 +1,7 @@
 .vnotif {
   position: relative;
+  display: inline-flex;
+  align-items: center;
 }
 
 .vnotif__panel {
@@ -28,7 +30,7 @@
 }
 
 .vnotif__title {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -37,7 +39,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--primary-500);
   background: none;
@@ -54,7 +56,7 @@
 .vnotif__empty {
   padding: 24px 16px;
   text-align: center;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-secondary);
   margin: 0;
 }
@@ -101,13 +103,13 @@
 }
 
 .vnotif__item-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .vnotif__item-msg {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
   line-height: 1.4;
   display: -webkit-box;
@@ -123,7 +125,7 @@
   border: none;
   border-top: 1px solid var(--border);
   background: var(--surface-elevated);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--primary-500);
   cursor: pointer;

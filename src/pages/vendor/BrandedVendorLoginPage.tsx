@@ -149,14 +149,14 @@ export const BrandedVendorLoginPage: React.FC = () => {
       onThemeToggle={toggleTheme}
     >
       {passwordSetSuccess && !error && (
-        <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3.5 py-3 text-[13px] leading-5 text-emerald-700 dark:text-emerald-300" role="status">
+        <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3.5 py-3 text-[14px] leading-5 text-emerald-700 dark:text-emerald-300" role="status">
           <CheckCircle2 size={17} className="mt-0.5 shrink-0" />
           <span>Password set successfully. Please sign in with your new password.</span>
         </div>
       )}
 
       {error && (
-        <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-destructive/20 bg-destructive/10 px-3.5 py-3 text-[13px] leading-5 text-destructive" role="alert">
+        <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-destructive/20 bg-destructive/10 px-3.5 py-3 text-[14px] leading-5 text-destructive" role="alert">
           <AlertCircle size={17} className="mt-0.5 shrink-0" />
           <span>{error}</span>
         </div>
@@ -164,7 +164,7 @@ export const BrandedVendorLoginPage: React.FC = () => {
 
       <form className="grid gap-5" onSubmit={handleSubmit}>
         <div className="grid gap-2">
-          <label className="text-[13px] font-semibold text-foreground" htmlFor="vlogin-email">
+          <label className="text-[14px] font-semibold text-foreground" htmlFor="vlogin-email">
             Email <span className="text-destructive">*</span>
           </label>
           <Input
@@ -181,7 +181,7 @@ export const BrandedVendorLoginPage: React.FC = () => {
         </div>
 
         <div className="grid gap-2">
-          <label className="text-[13px] font-semibold text-foreground" htmlFor="vlogin-password">
+          <label className="text-[14px] font-semibold text-foreground" htmlFor="vlogin-password">
             Password <span className="text-destructive">*</span>
           </label>
           <div className="relative">

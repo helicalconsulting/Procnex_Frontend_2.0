@@ -296,7 +296,7 @@ export default function TopBar({ mobileOpen, onMenuClick, isSidebarExpanded }: T
           title={language === 'fr' ? 'Switch to English 🇺🇸' : 'Changer en Français 🇫🇷'}
           aria-label="Toggle language"
         >
-          <span className="flex items-center gap-1 text-[11px] font-bold">
+          <span className="flex items-center gap-1 text-[12px] font-bold">
             <Globe size={15} />
             <span>{language === 'fr' ? 'FR' : 'EN'}</span>
           </span>
@@ -340,8 +340,8 @@ export default function TopBar({ mobileOpen, onMenuClick, isSidebarExpanded }: T
           >
             <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-xs font-semibold text-primary ring-1 ring-primary/15 dark:bg-primary dark:text-primary-foreground">{initials}</span>
             <span className="hidden min-w-0 flex-col lg:flex">
-              <span className="max-w-40 truncate text-[13px] font-semibold leading-4 text-foreground">{user?.fullName || 'Account'}</span>
-              <span className="max-w-40 truncate text-[11px] leading-4 text-muted-foreground">{roles.join(', ')}</span>
+              <span className="max-w-40 truncate text-[14px] font-semibold leading-4 text-foreground">{user?.fullName || 'Account'}</span>
+              <span className="max-w-40 truncate text-[12px] leading-4 text-muted-foreground">{roles.join(', ')}</span>
             </span>
             <ChevronDown size={14} className={cn('hidden text-muted-foreground transition-transform lg:block', dropdownOpen && 'rotate-180')} />
           </button>

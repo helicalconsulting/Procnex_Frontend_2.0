@@ -66,7 +66,7 @@ export default function VendorAgreementsPage() {
       <PageLead title="Signed Agreements" description="Preview and download the NDA and MNDA agreements associated with your account." />
       {error && <Card className="mb-4 border-destructive/25 bg-destructive/8 p-4 text-sm text-destructive">{error}</Card>}
       <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <MetricCard label="Total agreements" value={summary.total} detail="All signed documents" icon={FileSignature} />
+        <MetricCard label="Total agreements" value={summary.total} detail="All signed documents" icon={FileSignature} aria-pressed={true} />
         <MetricCard label="NDA" value={summary.nda} detail="Non-disclosure" icon={FileText} tone="success" />
         <MetricCard label="MNDA" value={summary.mnda} detail="Mutual NDA" icon={FileText} tone="violet" />
       </div>
@@ -96,7 +96,7 @@ export default function VendorAgreementsPage() {
                     <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                       {[
                         ['Type', type.long], ['Company', agreement.companyName], ['Signed on', formatDate(agreement.signedAt, true)], ['Status', 'Signed'],
-                      ].map(([label, value]) => <div key={label} className="rounded-xl border border-border/60 bg-card p-3"><dt className="text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{label}</dt><dd className="mt-1 text-sm font-medium">{value}</dd></div>)}
+                      ].map(([label, value]) => <div key={label} className="rounded-xl border border-border/60 bg-card p-3"><dt className="text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{label}</dt><dd className="mt-1 text-sm font-medium">{value}</dd></div>)}
                     </dl>
                     <div className="mt-4 flex flex-wrap gap-2"><Button variant="secondary" size="sm" onClick={() => setPreviewDoc(agreement)}><Eye />Preview</Button><Button size="sm" onClick={() => handleDownload(agreement)}><Download />Download</Button></div>
                 </CollapsibleContent>

@@ -122,7 +122,7 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     accentColor: '#8b5cf6',
     roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER],
     requiredPermission: { module: 'Vendors', action: 'canView' },
-    fullWidth: true,
+    fullWidth: false,
     component: TopVendorsWidget,
   },
   {

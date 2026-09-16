@@ -222,7 +222,7 @@ export default function ContractsPage() {
       render: (r) => (
         <div>
           <div className="font-semibold text-foreground font-mono text-xs">{r.contractNumber}</div>
-          <div className="text-[11px] text-muted-foreground truncate max-w-[200px]">{r.title}</div>
+          <div className="text-[12px] text-muted-foreground truncate max-w-[200px]">{r.title}</div>
         </div>
       ),
     },
@@ -237,7 +237,7 @@ export default function ContractsPage() {
     {
       key: 'status', label: 'Status', defaultVisible: true, width: '160px',
       render: (r) => (
-        <Badge variant="outline" className={cn('gap-1 text-[10px] font-semibold', STATUS_TONES[r.status])}>
+        <Badge variant="outline" className={cn('gap-1 text-[11px] font-semibold', STATUS_TONES[r.status])}>
           {STATUS_LABELS[r.status]}
         </Badge>
       ),
@@ -498,7 +498,7 @@ export default function ContractsPage() {
                   <CheckCircle2 className="size-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                   <div>
                     <div className="text-xs font-bold text-foreground">{event.vendorName} · <span className="font-mono">{event.contractNumber}</span></div>
-                    <div className="text-[11px] text-muted-foreground">Signed by {event.signedBy} · {getTimeAgo(event.signedAt)}</div>
+                    <div className="text-[12px] text-muted-foreground">Signed by {event.signedBy} · {getTimeAgo(event.signedAt)}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -531,6 +531,9 @@ export default function ContractsPage() {
           label="Total Contracts"
           value={summary.total}
           tone="primary"
+          role="button"
+          tabIndex={0}
+          aria-pressed={statusFilter === 'ALL'}
           className="cursor-pointer"
           onClick={() => { setStatusFilter('ALL'); setCurrentPage(1); }}
         />
@@ -539,6 +542,9 @@ export default function ContractsPage() {
           label="Vendor Signed"
           value={summary.vendorSigned}
           tone="success"
+          role="button"
+          tabIndex={0}
+          aria-pressed={statusFilter === 'VENDOR_SIGNED_GROUP'}
           className="cursor-pointer"
           onClick={() => { setStatusFilter('VENDOR_SIGNED_GROUP'); setCurrentPage(1); }}
         />
@@ -547,6 +553,9 @@ export default function ContractsPage() {
           label="Pending Signature"
           value={summary.pendingSignature}
           tone="warning"
+          role="button"
+          tabIndex={0}
+          aria-pressed={statusFilter === 'PENDING_SIGNATURE_GROUP'}
           className="cursor-pointer"
           onClick={() => { setStatusFilter('PENDING_SIGNATURE_GROUP'); setCurrentPage(1); }}
         />
@@ -625,9 +634,9 @@ export default function ContractsPage() {
         view === 'table' ? (
           <Card className="overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full text-left text-sm">
                 <thead>
-                  <tr className="border-b border-border/70 bg-muted/40 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <tr className="border-b border-border/70 bg-muted/40 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">
                     <th className="px-4 py-3.5 w-10 text-center">
                       <input
                         type="checkbox"
@@ -711,7 +720,7 @@ export default function ContractsPage() {
             )}
           </Card>
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {paginated.map(r => (
               <Card
                 key={r.id}
@@ -719,16 +728,16 @@ export default function ContractsPage() {
                 onClick={() => handleView(r.id)}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <Badge variant="outline" className={cn('text-[10px]', STATUS_TONES[r.status])}>
+                  <span className="font-mono text-xs text-muted-foreground">{r.contractNumber}</span>
+                  <Badge variant="outline" className={cn('text-[11px]', STATUS_TONES[r.status])}>
                     {STATUS_LABELS[r.status]}
                   </Badge>
-                  <span className="font-mono text-xs text-muted-foreground">{r.contractNumber}</span>
                 </div>
-                <h3 className="mt-3 text-sm font-semibold text-foreground group-hover:text-primary truncate">{r.title}</h3>
-                <div className="mt-1 text-xs text-muted-foreground">{r.vendorName}</div>
+                <div className="mt-3 text-base font-bold text-foreground group-hover:text-primary truncate">{r.vendorName}</div>
+                <h3 className="mt-1 text-xs text-muted-foreground truncate">{r.title}</h3>
                 <div className="mt-4 flex items-center justify-between border-t border-border/50 pt-3 text-xs">
-                  <span className="font-semibold text-foreground font-mono">{formatAmount(r.contractValue, r.currency)}</span>
                   <span className="text-muted-foreground">{formatDate(r.startDate)}</span>
+                  <span className="font-bold text-foreground font-mono text-sm sm:text-base">{formatAmount(r.contractValue, r.currency)}</span>
                 </div>
               </Card>
             ))}

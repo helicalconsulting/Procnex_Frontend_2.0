@@ -1002,7 +1002,7 @@ export default function NewOnboardingPage() {
               </div>
             </div>
           </div>
-          <div style={{ padding: '8px 16px', fontSize: 12, color: '#9ea4a9' }}>Deleting…</div>
+          <div style={{ padding: '8px 16px', fontSize: 13, color: '#9ea4a9' }}>Deleting…</div>
         </div>
       ))}
     </div>
@@ -1124,7 +1124,7 @@ export default function NewOnboardingPage() {
                   />
                 </div>
                 {isEmailInvalid && (
-                  <span style={{ fontSize: '12px', color: '#ef4444', marginTop: '4px', display: 'block', fontWeight: 500 }}>
+                  <span style={{ fontSize: '13px', color: '#ef4444', marginTop: '4px', display: 'block', fontWeight: 500 }}>
                     Please enter a valid email address with domain extension (e.g. name@domain.com)
                   </span>
                 )}
@@ -1158,7 +1158,7 @@ export default function NewOnboardingPage() {
                   placeholder="Type your mobile number"
                 />
                 {isPhoneInvalid && (
-                  <span style={{ fontSize: '12px', color: '#ef4444', marginTop: '4px', display: 'block' }}>
+                  <span style={{ fontSize: '13px', color: '#ef4444', marginTop: '4px', display: 'block' }}>
                     Please enter a valid phone number (7 to 15 digits)
                   </span>
                 )}
@@ -1227,12 +1227,12 @@ export default function NewOnboardingPage() {
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary, #fff)' }}>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary, #fff)' }}>
                         {field.label}
                       </span>
                       <span
                         style={{
-                          fontSize: 10,
+                          fontSize: 11,
                           fontWeight: 600,
                           color: 'var(--primary-500, #0a6ed1)',
                           background: 'rgba(10,110,209,0.12)',
@@ -1271,7 +1271,7 @@ export default function NewOnboardingPage() {
                         border: 'none',
                         background: 'transparent',
                         color: 'var(--primary-500, #0a6ed1)',
-                        fontSize: 13,
+                        fontSize: 14,
                         fontWeight: 600,
                         cursor: 'pointer',
                         fontFamily: 'inherit',
@@ -1327,10 +1327,10 @@ export default function NewOnboardingPage() {
                               <Plus size={18} style={{ color: 'var(--text-placeholder, #64748b)' }} />
                             </div>
                             <div>
-                              <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: 'var(--text-primary, #fff)' }}>
+                              <p style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 700, color: 'var(--text-primary, #fff)' }}>
                                 No field is created yet
                               </p>
-                              <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary, #94a3b8)', lineHeight: 1.4 }}>
+                              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary, #94a3b8)', lineHeight: 1.4 }}>
                                 Go to <strong>Settings → Form Fields</strong> to create fields for Vendor Onboarding.
                               </p>
                             </div>
@@ -1340,7 +1340,7 @@ export default function NewOnboardingPage() {
                             <div
                               style={{
                                 padding: '10px 14px 8px',
-                                fontSize: 11,
+                                fontSize: 12,
                                 fontWeight: 700,
                                 color: 'var(--text-placeholder, #64748b)',
                                 textTransform: 'uppercase',
@@ -1370,7 +1370,7 @@ export default function NewOnboardingPage() {
                                     borderBottom: '1px solid var(--border, #2d3748)',
                                     background: 'transparent',
                                     color: 'var(--text-primary, #fff)',
-                                    fontSize: 13,
+                                    fontSize: 14,
                                     cursor: 'pointer',
                                     textAlign: 'left',
                                     fontFamily: 'inherit',
@@ -1396,7 +1396,7 @@ export default function NewOnboardingPage() {
                                   <span style={{ flex: 1, fontWeight: 500 }}>{f.label}</span>
                                   <span
                                     style={{
-                                      fontSize: 10,
+                                      fontSize: 11,
                                       fontWeight: 600,
                                       color: 'var(--primary-500, #0a6ed1)',
                                       background: 'rgba(10,110,209,0.12)',
@@ -1410,7 +1410,7 @@ export default function NewOnboardingPage() {
                                 </button>
                               ))}
                             {preconfiguredOnboardingFields.filter((f) => !onboardingFlexiFields.some((ef) => ef.fieldKey === f.fieldKey || ef.label === f.label)).length === 0 && (
-                              <div style={{ padding: '14px', fontSize: 12, color: 'var(--text-secondary, #94a3b8)', textAlign: 'center' }}>
+                              <div style={{ padding: '14px', fontSize: 13, color: 'var(--text-secondary, #94a3b8)', textAlign: 'center' }}>
                                 All configured settings fields have been added.
                               </div>
                             )}
@@ -2004,7 +2004,7 @@ export default function NewOnboardingPage() {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div className="onb-doc-select__name">{template.name}</div>
                         {template.fileUrl && (
-                          <div style={{ fontSize: 11, color: '#9ea4a9', marginTop: 2 }}>
+                          <div style={{ fontSize: 12, color: '#9ea4a9', marginTop: 2 }}>
                             Uploaded document available
                           </div>
                         )}
@@ -2075,7 +2075,7 @@ export default function NewOnboardingPage() {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div className="onb-doc-select__name">{template.name}</div>
                         {template.fileUrl && (
-                          <div style={{ fontSize: 11, color: '#9ea4a9', marginTop: 2 }}>
+                          <div style={{ fontSize: 12, color: '#9ea4a9', marginTop: 2 }}>
                             Uploaded document available
                           </div>
                         )}
@@ -2146,7 +2146,7 @@ export default function NewOnboardingPage() {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div className="onb-doc-select__name">{template.name}</div>
                         {template.fileUrl && (
-                          <div style={{ fontSize: 11, color: '#9ea4a9', marginTop: 2 }}>
+                          <div style={{ fontSize: 12, color: '#9ea4a9', marginTop: 2 }}>
                             Uploaded document available
                           </div>
                         )}
@@ -2244,7 +2244,7 @@ export default function NewOnboardingPage() {
                   <FileText size={22} />
                 </div>
                 <div>
-                  <div className="onb-template-preview-header__title" style={{ fontSize: 16 }}>{previewDoc.name}</div>
+                  <div className="onb-template-preview-header__title" style={{ fontSize: 17 }}>{previewDoc.name}</div>
                   <div className="onb-template-preview-header__sub">
                     {previewDoc.documentCategory === 'mandatory' ? '🔴 Mandatory Compliance Document' : previewDoc.documentCategory === 'optional' ? '🟡 Optional Compliance Document' : '🔵 Additional Document'}
                   </div>
@@ -2293,38 +2293,38 @@ export default function NewOnboardingPage() {
                         }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px dashed #818cf8', paddingBottom: 10, marginBottom: 14 }}>
                             <div>
-                              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '1px', color: '#4338ca', textTransform: 'uppercase' }}>INCOME TAX DEPARTMENT</div>
-                              <div style={{ fontSize: 13, fontWeight: 800, color: '#1e1b4b' }}>GOVT. OF INDIA · PERMANENT ACCOUNT NUMBER</div>
+                              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '1px', color: '#4338ca', textTransform: 'uppercase' }}>INCOME TAX DEPARTMENT</div>
+                              <div style={{ fontSize: 14, fontWeight: 800, color: '#1e1b4b' }}>GOVT. OF INDIA · PERMANENT ACCOUNT NUMBER</div>
                             </div>
-                            <div style={{ fontSize: 10, fontWeight: 700, background: '#4338ca', color: '#fff', padding: '3px 8px', borderRadius: 4 }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, background: '#4338ca', color: '#fff', padding: '3px 8px', borderRadius: 4 }}>
                               SAMPLE CARD PREVIEW
                             </div>
                           </div>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: 14, alignItems: 'center' }}>
                             <div>
-                              <div style={{ fontSize: 10, color: '#475569', fontWeight: 700 }}>CARD HOLDER NAME / VENDOR</div>
-                              <div style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', marginBottom: 8 }}>SAMPLE SUPPLIER COMPANY PVT LTD</div>
+                              <div style={{ fontSize: 11, color: '#475569', fontWeight: 700 }}>CARD HOLDER NAME / VENDOR</div>
+                              <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', marginBottom: 8 }}>SAMPLE SUPPLIER COMPANY PVT LTD</div>
 
-                              <div style={{ fontSize: 10, color: '#475569', fontWeight: 700 }}>PERMANENT ACCOUNT NUMBER (PAN)</div>
-                              <div style={{ fontSize: 18, fontWeight: 900, fontFamily: 'monospace', letterSpacing: '2px', color: '#4338ca', marginBottom: 8 }}>ABCDE1234F</div>
+                              <div style={{ fontSize: 11, color: '#475569', fontWeight: 700 }}>PERMANENT ACCOUNT NUMBER (PAN)</div>
+                              <div style={{ fontSize: 19, fontWeight: 900, fontFamily: 'monospace', letterSpacing: '2px', color: '#4338ca', marginBottom: 8 }}>ABCDE1234F</div>
 
                               <div style={{ display: 'flex', gap: 16 }}>
                                 <div>
-                                  <div style={{ fontSize: 9, color: '#475569', fontWeight: 700 }}>DATE OF ISSUE</div>
-                                  <div style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>15 / 01 / 2022</div>
+                                  <div style={{ fontSize: 10, color: '#475569', fontWeight: 700 }}>DATE OF ISSUE</div>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>15 / 01 / 2022</div>
                                 </div>
                                 <div>
-                                  <div style={{ fontSize: 9, color: '#475569', fontWeight: 700 }}>ISSUING AUTHORITY</div>
-                                  <div style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>INCOME TAX DEPT</div>
+                                  <div style={{ fontSize: 10, color: '#475569', fontWeight: 700 }}>ISSUING AUTHORITY</div>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>INCOME TAX DEPT</div>
                                 </div>
                               </div>
                             </div>
                             <div style={{ textAlign: 'center' }}>
                               <div style={{ width: 80, height: 90, background: '#cbd5e1', border: '1px solid #94a3b8', borderRadius: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px' }}>
                                 <FileText size={24} style={{ color: '#64748b' }} />
-                                <span style={{ fontSize: 9, color: '#64748b', fontWeight: 700 }}>PHOTO / SEAL</span>
+                                <span style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>PHOTO / SEAL</span>
                               </div>
-                              <div style={{ fontSize: 8, fontWeight: 800, color: '#4338ca' }}>GOVT VERIFIED</div>
+                              <div style={{ fontSize: 9, fontWeight: 800, color: '#4338ca' }}>GOVT VERIFIED</div>
                             </div>
                           </div>
                         </div>
@@ -2345,35 +2345,35 @@ export default function NewOnboardingPage() {
                         }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px dashed #34d399', paddingBottom: 10, marginBottom: 14 }}>
                             <div>
-                              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '1px', color: '#047857', textTransform: 'uppercase' }}>DEPARTMENT OF ECONOMIC DEVELOPMENT</div>
-                              <div style={{ fontSize: 14, fontWeight: 800, color: '#064e3b' }}>COMMERCIAL TRADE LICENSE CERTIFICATE</div>
+                              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '1px', color: '#047857', textTransform: 'uppercase' }}>DEPARTMENT OF ECONOMIC DEVELOPMENT</div>
+                              <div style={{ fontSize: 15, fontWeight: 800, color: '#064e3b' }}>COMMERCIAL TRADE LICENSE CERTIFICATE</div>
                             </div>
-                            <div style={{ fontSize: 10, fontWeight: 700, background: '#047857', color: '#fff', padding: '3px 8px', borderRadius: 4 }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, background: '#047857', color: '#fff', padding: '3px 8px', borderRadius: 4 }}>
                               LICENSE PREVIEW
                             </div>
                           </div>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 10 }}>
                             <div>
-                              <div style={{ fontSize: 9, color: '#047857', fontWeight: 700 }}>TRADE NAME</div>
-                              <div style={{ fontSize: 13, fontWeight: 800, color: '#064e3b' }}>PROCNEX GLOBAL VENDORS LLC</div>
+                              <div style={{ fontSize: 10, color: '#047857', fontWeight: 700 }}>TRADE NAME</div>
+                              <div style={{ fontSize: 14, fontWeight: 800, color: '#064e3b' }}>PROCNEX GLOBAL VENDORS LLC</div>
                             </div>
                             <div>
-                              <div style={{ fontSize: 9, color: '#047857', fontWeight: 700 }}>LICENSE NUMBER</div>
-                              <div style={{ fontSize: 13, fontWeight: 800, fontFamily: 'monospace', color: '#047857' }}>CN-1029384-UAE</div>
+                              <div style={{ fontSize: 10, color: '#047857', fontWeight: 700 }}>LICENSE NUMBER</div>
+                              <div style={{ fontSize: 14, fontWeight: 800, fontFamily: 'monospace', color: '#047857' }}>CN-1029384-UAE</div>
                             </div>
                           </div>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, background: 'rgba(255,255,255,0.7)', padding: 10, borderRadius: 8, border: '1px solid #a7f3d0' }}>
                             <div>
-                              <div style={{ fontSize: 9, color: '#047857', fontWeight: 700 }}>ISSUE DATE</div>
-                              <div style={{ fontSize: 11, fontWeight: 700, color: '#064e3b' }}>01 / 01 / 2024</div>
+                              <div style={{ fontSize: 10, color: '#047857', fontWeight: 700 }}>ISSUE DATE</div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: '#064e3b' }}>01 / 01 / 2024</div>
                             </div>
                             <div>
-                              <div style={{ fontSize: 9, color: '#047857', fontWeight: 700 }}>EXPIRATION DATE</div>
-                              <div style={{ fontSize: 11, fontWeight: 800, color: '#d97706' }}>31 / 12 / 2026</div>
+                              <div style={{ fontSize: 10, color: '#047857', fontWeight: 700 }}>EXPIRATION DATE</div>
+                              <div style={{ fontSize: 12, fontWeight: 800, color: '#d97706' }}>31 / 12 / 2026</div>
                             </div>
                             <div>
-                              <div style={{ fontSize: 9, color: '#047857', fontWeight: 700 }}>AUTHORITY</div>
-                              <div style={{ fontSize: 11, fontWeight: 700, color: '#064e3b' }}>DED / GOVT</div>
+                              <div style={{ fontSize: 10, color: '#047857', fontWeight: 700 }}>AUTHORITY</div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: '#064e3b' }}>DED / GOVT</div>
                             </div>
                           </div>
                         </div>
@@ -2393,25 +2393,25 @@ export default function NewOnboardingPage() {
                         }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px dashed #fb923c', paddingBottom: 10, marginBottom: 14 }}>
                             <div>
-                              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '1px', color: '#c2410c', textTransform: 'uppercase' }}>FEDERAL TAX AUTHORITY / TAX REGISTRATION</div>
-                              <div style={{ fontSize: 14, fontWeight: 800, color: '#7c2d12' }}>VALUE ADDED TAX (VAT) CERTIFICATE</div>
+                              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '1px', color: '#c2410c', textTransform: 'uppercase' }}>FEDERAL TAX AUTHORITY / TAX REGISTRATION</div>
+                              <div style={{ fontSize: 15, fontWeight: 800, color: '#7c2d12' }}>VALUE ADDED TAX (VAT) CERTIFICATE</div>
                             </div>
-                            <div style={{ fontSize: 10, fontWeight: 700, background: '#c2410c', color: '#fff', padding: '3px 8px', borderRadius: 4 }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, background: '#c2410c', color: '#fff', padding: '3px 8px', borderRadius: 4 }}>
                               VAT PREVIEW
                             </div>
                           </div>
                           <div style={{ marginBottom: 10 }}>
-                            <div style={{ fontSize: 9, color: '#c2410c', fontWeight: 700 }}>REGISTERED LEGAL ENTITY</div>
-                            <div style={{ fontSize: 13, fontWeight: 800, color: '#7c2d12' }}>PROCNEX GLOBAL VENDOR ENTERPRISES</div>
+                            <div style={{ fontSize: 10, color: '#c2410c', fontWeight: 700 }}>REGISTERED LEGAL ENTITY</div>
+                            <div style={{ fontSize: 14, fontWeight: 800, color: '#7c2d12' }}>PROCNEX GLOBAL VENDOR ENTERPRISES</div>
                           </div>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, background: 'rgba(255,255,255,0.7)', padding: 10, borderRadius: 8, border: '1px solid #fed7aa' }}>
                             <div>
-                              <div style={{ fontSize: 9, color: '#c2410c', fontWeight: 700 }}>TAX REGISTRATION NO. (TRN)</div>
-                              <div style={{ fontSize: 13, fontWeight: 900, fontFamily: 'monospace', color: '#ea580c' }}>100293847500003</div>
+                              <div style={{ fontSize: 10, color: '#c2410c', fontWeight: 700 }}>TAX REGISTRATION NO. (TRN)</div>
+                              <div style={{ fontSize: 14, fontWeight: 900, fontFamily: 'monospace', color: '#ea580c' }}>100293847500003</div>
                             </div>
                             <div>
-                              <div style={{ fontSize: 9, color: '#c2410c', fontWeight: 700 }}>EFFECTIVE DATE</div>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: '#7c2d12' }}>01 / 04 / 2023</div>
+                              <div style={{ fontSize: 10, color: '#c2410c', fontWeight: 700 }}>EFFECTIVE DATE</div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: '#7c2d12' }}>01 / 04 / 2023</div>
                             </div>
                           </div>
                         </div>
@@ -2431,29 +2431,29 @@ export default function NewOnboardingPage() {
                         }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px dashed #38bdf8', paddingBottom: 10, marginBottom: 14 }}>
                             <div>
-                              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '1px', color: '#0369a1', textTransform: 'uppercase' }}>UNITED ARAB EMIRATES · FEDERAL AUTHORITY</div>
-                              <div style={{ fontSize: 14, fontWeight: 800, color: '#0c4a6e' }}>EMIRATES IDENTIFICATION CARD</div>
+                              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '1px', color: '#0369a1', textTransform: 'uppercase' }}>UNITED ARAB EMIRATES · FEDERAL AUTHORITY</div>
+                              <div style={{ fontSize: 15, fontWeight: 800, color: '#0c4a6e' }}>EMIRATES IDENTIFICATION CARD</div>
                             </div>
-                            <div style={{ fontSize: 10, fontWeight: 700, background: '#0369a1', color: '#fff', padding: '3px 8px', borderRadius: 4 }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, background: '#0369a1', color: '#fff', padding: '3px 8px', borderRadius: 4 }}>
                               EIDA PREVIEW
                             </div>
                           </div>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px', gap: 12, alignItems: 'center' }}>
                             <div>
-                              <div style={{ fontSize: 9, color: '#0369a1', fontWeight: 700 }}>ID NUMBER</div>
-                              <div style={{ fontSize: 15, fontWeight: 900, fontFamily: 'monospace', color: '#0284c7', marginBottom: 6 }}>784 - 1990 - 1234567 - 1</div>
+                              <div style={{ fontSize: 10, color: '#0369a1', fontWeight: 700 }}>ID NUMBER</div>
+                              <div style={{ fontSize: 16, fontWeight: 900, fontFamily: 'monospace', color: '#0284c7', marginBottom: 6 }}>784 - 1990 - 1234567 - 1</div>
 
-                              <div style={{ fontSize: 9, color: '#0369a1', fontWeight: 700 }}>CARD HOLDER NAME</div>
-                              <div style={{ fontSize: 12, fontWeight: 800, color: '#0c4a6e', marginBottom: 6 }}>AUTHORIZED VENDOR REPRESENTATIVE</div>
+                              <div style={{ fontSize: 10, color: '#0369a1', fontWeight: 700 }}>CARD HOLDER NAME</div>
+                              <div style={{ fontSize: 13, fontWeight: 800, color: '#0c4a6e', marginBottom: 6 }}>AUTHORIZED VENDOR REPRESENTATIVE</div>
 
                               <div style={{ display: 'flex', gap: 16 }}>
                                 <div>
-                                  <div style={{ fontSize: 8, color: '#0369a1', fontWeight: 700 }}>ISSUE DATE</div>
-                                  <div style={{ fontSize: 10, fontWeight: 700 }}>10 / 02 / 2023</div>
+                                  <div style={{ fontSize: 9, color: '#0369a1', fontWeight: 700 }}>ISSUE DATE</div>
+                                  <div style={{ fontSize: 11, fontWeight: 700 }}>10 / 02 / 2023</div>
                                 </div>
                                 <div>
-                                  <div style={{ fontSize: 8, color: '#0369a1', fontWeight: 700 }}>EXPIRATION DATE</div>
-                                  <div style={{ fontSize: 10, fontWeight: 800, color: '#d97706' }}>09 / 02 / 2026</div>
+                                  <div style={{ fontSize: 9, color: '#0369a1', fontWeight: 700 }}>EXPIRATION DATE</div>
+                                  <div style={{ fontSize: 11, fontWeight: 800, color: '#d97706' }}>09 / 02 / 2026</div>
                                 </div>
                               </div>
                             </div>
@@ -2476,14 +2476,14 @@ export default function NewOnboardingPage() {
                       }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: 10, marginBottom: 12 }}>
                           <div>
-                            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-placeholder)', textTransform: 'uppercase' }}>FORMAL COMPLIANCE DOCUMENT</div>
-                            <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)' }}>{previewDoc.name}</div>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-placeholder)', textTransform: 'uppercase' }}>FORMAL COMPLIANCE DOCUMENT</div>
+                            <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)' }}>{previewDoc.name}</div>
                           </div>
-                          <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(10,110,209,0.1)', color: 'var(--primary-500)', padding: '4px 10px', borderRadius: 12 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, background: 'rgba(10,110,209,0.1)', color: 'var(--primary-500)', padding: '4px 10px', borderRadius: 12 }}>
                             {previewDoc.documentCategory.toUpperCase()}
                           </span>
                         </div>
-                        <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
+                        <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
                           {previewDoc.description || 'Standard vendor onboarding compliance document. Supplier must attach a clean, legible PDF or image copy upon invitation acceptance.'}
                         </p>
                       </div>
@@ -2494,31 +2494,31 @@ export default function NewOnboardingPage() {
 
               {/* Requirements & Tracking Rules Box */}
               <div style={{ background: 'var(--surface-hover, rgba(0,0,0,0.02))', padding: 14, borderRadius: 10, border: '1px solid var(--border)', marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-placeholder)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-placeholder)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
                   Required Fields & Tracking Configuration
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
                   <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-placeholder)' }}>Issue Date</div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: previewDoc.trackIssueDate !== false ? '#10b981' : 'var(--text-secondary)' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-placeholder)' }}>Issue Date</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: previewDoc.trackIssueDate !== false ? '#10b981' : 'var(--text-secondary)' }}>
                       {previewDoc.trackIssueDate !== false ? '✓ Required from Vendor' : 'Optional'}
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-placeholder)' }}>Expiration Date</div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: previewDoc.trackExpirationDate !== false ? '#10b981' : 'var(--text-secondary)' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-placeholder)' }}>Expiration Date</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: previewDoc.trackExpirationDate !== false ? '#10b981' : 'var(--text-secondary)' }}>
                       {previewDoc.trackExpirationDate !== false ? '✓ Required & Tracked' : 'Not Tracked'}
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-placeholder)' }}>Issuing Authority</div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: previewDoc.trackIssuingAuthority !== false ? '#10b981' : 'var(--text-secondary)' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-placeholder)' }}>Issuing Authority</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: previewDoc.trackIssuingAuthority !== false ? '#10b981' : 'var(--text-secondary)' }}>
                       {previewDoc.trackIssuingAuthority !== false ? '✓ Required from Vendor' : 'Optional'}
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-placeholder)' }}>Expiry Alert Window</div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: '#f59e0b' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-placeholder)' }}>Expiry Alert Window</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#f59e0b' }}>
                       {previewDoc.expirationAlertDays || 30} Days Notice
                     </div>
                   </div>
@@ -2547,10 +2547,10 @@ export default function NewOnboardingPage() {
                   style={{ width: 18, height: 18, accentColor: 'var(--primary-500)', cursor: 'pointer' }}
                 />
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
                     {selectedDocIds.includes(previewDoc.id) ? '✓ Included in Onboarding Invitation' : 'Include this document in Invitation'}
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                     {selectedDocIds.includes(previewDoc.id)
                       ? 'Vendor will be required to upload this document when accepting the invitation.'
                       : 'Click to select this document for vendor onboarding.'}
@@ -2561,7 +2561,7 @@ export default function NewOnboardingPage() {
 
             {/* Footer */}
             <div className="onb-template-preview-footer" style={{ justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 12, color: 'var(--text-placeholder)' }}>
+              <span style={{ fontSize: 13, color: 'var(--text-placeholder)' }}>
                 Category: <strong style={{ color: 'var(--text-secondary)' }}>
                   {previewDoc.documentCategory === 'mandatory' ? 'Mandatory' : previewDoc.documentCategory === 'optional' ? 'Optional' : 'Any Other'}
                 </strong>
@@ -2618,10 +2618,10 @@ export default function NewOnboardingPage() {
                 <span className={`onb-invite-badge onb-invite-badge--${statusConfig[detailInvitation.status].cls}`}>
                   {statusConfig[detailInvitation.status].icon} {statusConfig[detailInvitation.status].label}
                 </span>
-                <span style={{ fontSize: 12, color: 'var(--text-placeholder)' }}>
+                <span style={{ fontSize: 13, color: 'var(--text-placeholder)' }}>
                   Sent: {detailInvitation.sentAt}
                 </span>
-                <span style={{ fontSize: 12, color: 'var(--text-placeholder)' }}>
+                <span style={{ fontSize: 13, color: 'var(--text-placeholder)' }}>
                   Expires: {detailInvitation.expiresAt}
                 </span>
               </div>
@@ -2966,14 +2966,14 @@ export default function NewOnboardingPage() {
                   <List size={20} />
                 )}
                 <div>
-                  <div style={{ fontSize: 15, fontWeight: 700 }}>
+                  <div style={{ fontSize: 16, fontWeight: 700 }}>
                     {eyeViewModal.type === 'items'
                       ? 'Attached Required Items'
                       : eyeViewModal.type === 'documents'
                       ? 'Configured Required Documents'
                       : 'Assigned Custom Flexi Fields'}
                   </div>
-                  <div style={{ fontSize: 11, fontWeight: 500, opacity: 0.85 }}>
+                  <div style={{ fontSize: 12, fontWeight: 500, opacity: 0.85 }}>
                     {eyeViewModal.companyName}
                   </div>
                 </div>
@@ -3025,7 +3025,7 @@ export default function NewOnboardingPage() {
                       }}
                     >
                       <FileText size={16} style={{ color: 'var(--primary-500)', flexShrink: 0 }} />
-                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{name}</span>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{name}</span>
                     </div>
                   ))}
                 </div>
@@ -3052,11 +3052,11 @@ export default function NewOnboardingPage() {
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <List size={16} style={{ color: 'var(--primary-500)', flexShrink: 0 }} />
-                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{f.label}</span>
+                            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{f.label}</span>
                           </div>
                           <span
                             style={{
-                              fontSize: 11,
+                              fontSize: 12,
                               fontWeight: 600,
                               color: 'var(--primary-500)',
                               background: 'rgba(10,110,209,0.12)',
@@ -3069,7 +3069,7 @@ export default function NewOnboardingPage() {
                           </span>
                         </div>
                         {value !== undefined && (
-                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', paddingTop: 6, marginTop: 2, borderTop: '1px dashed var(--border)' }}>
+                          <div style={{ fontSize: 13, color: 'var(--text-secondary)', paddingTop: 6, marginTop: 2, borderTop: '1px dashed var(--border)' }}>
                             <strong>Filled Value:</strong> <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{value || 'Not filled'}</span>
                           </div>
                         )}
@@ -3104,8 +3104,8 @@ export default function NewOnboardingPage() {
               <div className="onb-modal__title">
                 <ShieldCheck size={20} />
                 <div>
-                  <div style={{ fontSize: 16, fontWeight: 700 }}>Predictive Match Confidence Audit</div>
-                  <div style={{ fontSize: 11, fontWeight: 500, opacity: 0.85 }}>Live Database Vendor Duplication Scan</div>
+                  <div style={{ fontSize: 17, fontWeight: 700 }}>Predictive Match Confidence Audit</div>
+                  <div style={{ fontSize: 12, fontWeight: 500, opacity: 0.85 }}>Live Database Vendor Duplication Scan</div>
                 </div>
               </div>
               <button
@@ -3123,8 +3123,8 @@ export default function NewOnboardingPage() {
               {auditLoading ? (
                 <div style={{ padding: '32px 16px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
                   <div className="onb-search-spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />
-                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Scanning database for vendor duplication...</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Comparing company name, email, and contact credentials</div>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>Scanning database for vendor duplication...</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Comparing company name, email, and contact credentials</div>
                 </div>
               ) : (
                 <>
@@ -3147,11 +3147,11 @@ export default function NewOnboardingPage() {
                       : '1px solid rgba(10, 110, 209, 0.25)',
                   }}>
                     <div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                         {auditResult?.matchedVendor ? 'Vendor Duplication Match' : 'Duplication Risk Rating'}
                       </div>
                       <div style={{
-                        fontSize: 26,
+                        fontSize: 27,
                         fontWeight: 800,
                         color: auditResult?.matchedVendor
                           ? auditResult.duplicationRisk === 'HIGH'
@@ -3162,7 +3162,7 @@ export default function NewOnboardingPage() {
                       }}>
                         {auditResult?.score}%
                       </div>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>
                         {auditResult?.matchedVendor
                           ? `Duplicate Vendor Record: ${auditResult.matchedVendor.name}`
                           : '0% Duplication Risk · Unique Vendor Entry'}
@@ -3193,7 +3193,7 @@ export default function NewOnboardingPage() {
                       border: '1px solid rgba(239, 68, 68, 0.2)',
                     }}>
                       <AlertTriangle size={18} style={{ color: '#ef4444', flexShrink: 0, marginTop: 1 }} />
-                      <div style={{ fontSize: 12, color: 'var(--text-primary)' }}>
+                      <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>
                         <strong>Database Duplication Warning:</strong> Vendor <strong>{auditResult.matchedVendor.name}</strong> ({auditResult.matchedVendor.email}) matches your input with a <strong>{auditResult.matchedVendor.score}% similarity score</strong>.
                       </div>
                     </div>
@@ -3216,25 +3216,25 @@ export default function NewOnboardingPage() {
                     {/* Equal Weightage 25% Breakdown Grid */}
                     {auditResult?.breakdown && (
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 14px', padding: '4px 0 8px', borderBottom: '1px dashed var(--border)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
                           <span style={{ color: 'var(--text-secondary)' }}>Company Name (25%):</span>
                           <span style={{ fontWeight: 700, color: auditResult.breakdown.nameScore > 0 ? '#f59e0b' : '#10b981' }}>
                             {auditResult.breakdown.nameScore}%
                           </span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
                           <span style={{ color: 'var(--text-secondary)' }}>Vendor Email (25%):</span>
                           <span style={{ fontWeight: 700, color: auditResult.breakdown.emailScore > 0 ? '#f59e0b' : '#10b981' }}>
                             {auditResult.breakdown.emailScore}%
                           </span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
                           <span style={{ color: 'var(--text-secondary)' }}>Contact Person (25%):</span>
                           <span style={{ fontWeight: 700, color: auditResult.breakdown.personScore > 0 ? '#f59e0b' : '#10b981' }}>
                             {auditResult.breakdown.personScore}%
                           </span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
                           <span style={{ color: 'var(--text-secondary)' }}>Phone Number (25%):</span>
                           <span style={{ fontWeight: 700, color: auditResult.breakdown.phoneScore > 0 ? '#f59e0b' : '#10b981' }}>
                             {auditResult.breakdown.phoneScore}%
@@ -3270,18 +3270,18 @@ export default function NewOnboardingPage() {
                     background: 'var(--surface-elevated)',
                     border: '1px solid var(--border)',
                   }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-placeholder)', textTransform: 'uppercase', marginBottom: 4 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-placeholder)', textTransform: 'uppercase', marginBottom: 4 }}>
                       Target Vendor
                     </div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
                       {companyName}
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
                       {contactEmail} {contactPerson ? `· ${contactPerson}` : ''} {contactPhone ? `· ${contactCountryCode}${contactPhone}` : ''}
                     </div>
                   </div>
 
-                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0, textAlign: 'center' }}>
+                  <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: 0, textAlign: 'center' }}>
                     Send the onboarding invitation email to <strong>{contactEmail}</strong>?
                   </p>
                 </>

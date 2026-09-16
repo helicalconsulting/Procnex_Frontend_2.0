@@ -20,6 +20,7 @@ import type { DashboardPipelineItem, DashboardRecentRfq, KpiItem } from '../../.
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../../components/ui/dialog';
 import { Badge } from '../../../components/ui/badge';
 import { WidgetLoading } from './WidgetShell';
+import { cn } from '../../../lib/utils';
 
 interface DashboardOverview {
   rfqs: { total: number; draft: number; sent: number; pendingApproval: number };
@@ -309,14 +310,20 @@ export default function KpiStatsWidget() {
   return (
     <>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        {kpis.map((kpi) => {
+        {kpis.map((kpi, idx) => {
           const Icon = KPI_ICONS[kpi.modifier] || KPI_ICONS[kpi.id] || FileText;
           const tone = KPI_TONES[getKpiKey(kpi)] || KPI_TONES.rfq;
+          const isFirst = idx === 0;
           return (
             <button
               key={kpi.id}
               type="button"
-              className={`group flex min-h-[112px] items-start gap-3 rounded-2xl border border-border/80 bg-card p-4 text-left shadow-sm outline-none transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring ${tone.glow}`}
+              className={cn(
+                'group flex min-h-[78px] items-center gap-3 rounded-2xl border border-border/80 bg-card px-3.5 py-3 text-left shadow-sm outline-none transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring',
+                tone.glow,
+                isFirst &&
+                  'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
+              )}
               onClick={() => openKpi(kpi)}
               aria-label={`Open ${kpi.label} details`}
             >
@@ -324,13 +331,13 @@ export default function KpiStatsWidget() {
                 <Icon size={17} />
               </div>
               <div className="min-w-0 flex-1">
-                <span className="block truncate text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{kpi.label}</span>
-                <span className="mt-1.5 block text-2xl font-semibold leading-none tracking-[-0.035em] tabular-nums text-foreground">{kpi.value}</span>
-                {kpi.trend && (
-                  <span className={`mt-2 flex items-center gap-1 text-[10px] font-medium ${kpi.direction === 'down' ? 'text-rose-600 dark:text-rose-300' : kpi.direction === 'up' ? 'text-emerald-600 dark:text-emerald-300' : 'text-muted-foreground'}`}>
+                <span className="block text-2xl font-semibold leading-none tracking-[-0.035em] tabular-nums text-foreground">{kpi.value}</span>
+                <span className="mt-1 block truncate text-[11.5px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{kpi.label}</span>
+                {kpi.trend ? (
+                  <span className={`mt-1 flex items-center gap-1 text-[11px] font-medium ${kpi.direction === 'down' ? 'text-rose-600 dark:text-rose-300' : kpi.direction === 'up' ? 'text-emerald-600 dark:text-emerald-300' : 'text-muted-foreground'}`}>
                     <TrendIcon direction={kpi.direction} /> {kpi.trend}
                   </span>
-                )}
+                ) : null}
               </div>
             </button>
           );
@@ -346,7 +353,7 @@ export default function KpiStatsWidget() {
                   {(() => { const Icon = selectedIcon; return <Icon size={21} />; })()}
                 </div>
                 <DialogHeader className="min-w-0">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-primary">KPI details</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-primary">KPI details</span>
                   <DialogTitle className="text-xl">{selectedKpi.label}</DialogTitle>
                   <DialogDescription>{getKpiDescription(selectedKpi)}</DialogDescription>
                   <div className="flex flex-wrap gap-2 pt-1">
@@ -360,13 +367,13 @@ export default function KpiStatsWidget() {
             <div className="grid gap-7 overflow-y-auto p-5 sm:p-7">
               {summaryRows.length > 0 && (
                 <section>
-                  <h3 className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"><BarChart3 size={14} /> Overview</h3>
+                  <h3 className="mb-3 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"><BarChart3 size={14} /> Overview</h3>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {summaryRows.map((row) => (
                       <div key={row.label} className="rounded-xl border border-border/80 bg-card p-4">
-                        <span className="block text-[11px] font-medium text-muted-foreground">{row.label}</span>
+                        <span className="block text-[12px] font-medium text-muted-foreground">{row.label}</span>
                         <span className="mt-1 block text-lg font-semibold tabular-nums text-foreground">{row.value}</span>
-                        {row.helper && <span className="mt-1 block text-[11px] leading-4 text-muted-foreground">{row.helper}</span>}
+                        {row.helper && <span className="mt-1 block text-[12px] leading-4 text-muted-foreground">{row.helper}</span>}
                       </div>
                     ))}
                   </div>
@@ -375,11 +382,11 @@ export default function KpiStatsWidget() {
 
               {breakdownRows.length > 0 && (
                 <section>
-                  <h3 className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"><BarChart3 size={14} /> Breakdown</h3>
+                  <h3 className="mb-3 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"><BarChart3 size={14} /> Breakdown</h3>
                   <div className="overflow-hidden rounded-xl border border-border/80">
                     {breakdownRows.slice(0, 6).map((row) => (
                       <button key={`${row.label}-${row.value}`} type="button" disabled={!row.link} onClick={() => row.link && handleTaskClick(row.link)} className="flex min-h-14 w-full items-center justify-between gap-4 border-b border-border/70 px-4 py-2.5 text-left last:border-b-0 enabled:outline-none enabled:transition-colors enabled:hover:bg-muted/50 enabled:focus-visible:ring-2 enabled:focus-visible:ring-inset enabled:focus-visible:ring-ring disabled:cursor-default">
-                        <span className="min-w-0"><span className="block truncate text-[13px] font-semibold text-foreground">{row.label}</span>{row.helper && <span className="block truncate text-[11px] text-muted-foreground">{row.helper}</span>}</span>
+                        <span className="min-w-0"><span className="block truncate text-[14px] font-semibold text-foreground">{row.label}</span>{row.helper && <span className="block truncate text-[12px] text-muted-foreground">{row.helper}</span>}</span>
                         <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">{row.value}</span>
                       </button>
                     ))}
@@ -389,12 +396,12 @@ export default function KpiStatsWidget() {
 
               {relatedRfqs.length > 0 && (
                 <section>
-                  <h3 className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"><CalendarDays size={14} /> Recent related activity</h3>
+                  <h3 className="mb-3 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"><CalendarDays size={14} /> Recent related activity</h3>
                   <div className="overflow-hidden rounded-xl border border-border/80">
                     {relatedRfqs.slice(0, 5).map((rfq) => (
                       <div key={rfq.id} className="flex min-h-16 items-center justify-between gap-4 border-b border-border/70 px-4 py-3 last:border-b-0">
-                        <div className="min-w-0"><span className="block truncate text-[13px] font-semibold text-foreground">{rfq.rfqNumber} · {rfq.title}</span><span className="block truncate text-[11px] text-muted-foreground">{rfq.creator} · {new Date(rfq.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span></div>
-                        <div className="shrink-0 text-right"><Badge tone="neutral">{rfq.status}</Badge><span className="mt-1 block text-[10px] text-muted-foreground">{rfq.quotations} quotes</span></div>
+                        <div className="min-w-0"><span className="block truncate text-[14px] font-semibold text-foreground">{rfq.rfqNumber} · {rfq.title}</span><span className="block truncate text-[12px] text-muted-foreground">{rfq.creator} · {new Date(rfq.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span></div>
+                        <div className="shrink-0 text-right"><Badge tone="neutral">{rfq.status}</Badge><span className="mt-1 block text-[11px] text-muted-foreground">{rfq.quotations} quotes</span></div>
                       </div>
                     ))}
                   </div>

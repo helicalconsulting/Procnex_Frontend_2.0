@@ -260,7 +260,7 @@ export default function GRNListPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[800px] border-collapse text-left text-sm">
-                <thead className="border-b border-border/70 bg-secondary/55 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                <thead className="border-b border-border/70 bg-secondary/55 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                   <tr>
                     <th className="px-4 py-3">PO Number</th>
                     <th className="px-4 py-3">Supplier / Vendor</th>
@@ -334,7 +334,7 @@ export default function GRNListPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[850px] border-collapse text-left text-sm">
-                <thead className="border-b border-border/70 bg-secondary/55 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                <thead className="border-b border-border/70 bg-secondary/55 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                   <tr>
                     <th className="px-4 py-3">Dispatch Note Number</th>
                     <th className="px-4 py-3">Linked PO Number</th>

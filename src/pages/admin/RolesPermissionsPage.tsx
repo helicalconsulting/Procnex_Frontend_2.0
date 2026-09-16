@@ -129,10 +129,10 @@ function PermissionDisplayChip({
   granted: boolean;
 }) {
   if (!moduleSupports(module, field)) {
-    return <span className="inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold bg-muted text-muted-foreground">—</span>;
+    return <span className="inline-flex items-center justify-center rounded-full px-2 py-1 text-[11px] font-semibold bg-muted text-muted-foreground">—</span>;
   }
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ${granted ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-rose-500/10 text-rose-700 dark:text-rose-300'}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold ${granted ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-rose-500/10 text-rose-700 dark:text-rose-300'}`}>
       {granted ? <Unlock size={12} /> : <Lock size={12} />}
       {granted ? 'Yes' : 'No'}
     </span>
@@ -151,7 +151,7 @@ function PermissionToggleCell({
   onToggle: () => void;
 }) {
   if (!moduleSupports(module, field)) {
-    return <span className="inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold bg-muted text-muted-foreground" title="Not applicable">—</span>;
+    return <span className="inline-flex items-center justify-center rounded-full px-2 py-1 text-[11px] font-semibold bg-muted text-muted-foreground" title="Not applicable">—</span>;
   }
   return (
     <button
@@ -184,7 +184,7 @@ function PermissionMatrixRow({
     <div className={`grid min-w-[680px] grid-cols-[minmax(220px,1fr)_110px_110px_110px] items-center border-b border-border/60 px-4 py-3 ${striped ? 'bg-muted/25' : ''}`}>
       <div className="min-w-0 pr-3">
         <span className="block text-xs font-semibold text-foreground">{perm.module}</span>
-        {hint && <span className="mt-0.5 block text-[11px] text-muted-foreground">{hint}</span>}
+        {hint && <span className="mt-0.5 block text-[12px] text-muted-foreground">{hint}</span>}
       </div>
       {(['canView', 'canCreate', 'canApprove'] as PermissionField[]).map((field) => (
         <div key={field} className="flex justify-center">
@@ -495,13 +495,13 @@ export default function RolesPermissionsPage() {
               >
                 <div className="min-w-0 pr-3">
                   <span className="block text-xs font-semibold text-foreground">{mod.module}</span>
-                  <span className="mt-0.5 block text-[11px] text-muted-foreground">{mod.hint}</span>
+                  <span className="mt-0.5 block text-[12px] text-muted-foreground">{mod.hint}</span>
                 </div>
                 {(['canView', 'canCreate', 'canApprove'] as PermissionField[]).map((field) => {
                   const supported = mod.supports.includes(field);
                   return (
                     <div key={field} className="flex justify-center">
-                      <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${supported ? 'bg-emerald-500/10 text-emerald-600' : 'bg-muted text-muted-foreground'}`}>
+                      <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${supported ? 'bg-emerald-500/10 text-emerald-600' : 'bg-muted text-muted-foreground'}`}>
                         {supported ? field.replace('can', '') : '—'}
                       </span>
                     </div>
@@ -555,7 +555,7 @@ export default function RolesPermissionsPage() {
                       <div className="flex items-center gap-2">
                         <span className="truncate text-base font-semibold text-foreground">{role.roleName}</span>
                         {role.isSystem && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-500/10 px-2.5 py-0.5 text-[12px] font-semibold text-slate-700 dark:text-slate-300">
                             <Lock size={10} />
                             System
                           </span>

@@ -55,7 +55,7 @@ export default function VendorInvoicesPage() {
       <PageLead title="My Invoices" description="Track invoice review, due dates, and payment status." actions={<CurrencySelector value={displayCurrency} onChange={setDisplayCurrency} size="sm" />} />
       {error && <Card className="mb-4 border-destructive/25 bg-destructive/8 p-4 text-sm text-destructive">{error}</Card>}
       <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Total invoiced" value={amount(summary.totalAmount)} detail={`${invoices.length} invoices`} icon={Receipt} />
+        <MetricCard label="Total invoiced" value={amount(summary.totalAmount)} detail={`${invoices.length} invoices`} icon={Receipt} aria-pressed={true} />
         <MetricCard label="Paid" value={amount(summary.paid)} detail="Received" icon={CheckCircle2} tone="success" />
         <MetricCard label="Pending" value={amount(summary.pending)} detail="Awaiting payment" icon={Clock} tone="warning" />
         <MetricCard label="Overdue" value={amount(summary.overdue)} detail="Past due date" icon={AlertTriangle} tone="danger" />
@@ -77,13 +77,13 @@ export default function VendorInvoicesPage() {
           <Card className="hidden overflow-hidden lg:block">
             <DataTableViewport label="Vendor invoices" showHint={false}>
               <table className="w-full min-w-[980px] text-left text-sm">
-                <thead className="border-b border-border/70 bg-secondary/55 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                <thead className="border-b border-border/70 bg-secondary/55 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                   <tr>{['Invoice', 'PO reference', 'Description', 'Amount', 'GST', 'Total', 'Submitted', 'Due date', 'Status'].map((heading) => <th key={heading} className="px-4 py-3">{heading}</th>)}</tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
                   {filtered.map((invoice) => (
                     <tr key={invoice.id} className="transition-colors hover:bg-accent/35">
-                      <td className="px-4 py-3.5"><div className="flex items-center gap-2.5"><span className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary"><FileText className="size-4" /></span><div><div className="font-semibold text-primary">{invoice.invoiceNumber}</div><div className="mt-0.5 text-[11px] text-muted-foreground">{invoice.rfqNumber}</div></div></div></td>
+                      <td className="px-4 py-3.5"><div className="flex items-center gap-2.5"><span className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary"><FileText className="size-4" /></span><div><div className="font-semibold text-primary">{invoice.invoiceNumber}</div><div className="mt-0.5 text-[12px] text-muted-foreground">{invoice.rfqNumber}</div></div></div></td>
                       <td className="px-4 py-3.5 font-medium">{invoice.poNumber}</td>
                       <td className="max-w-48 truncate px-4 py-3.5 text-xs text-muted-foreground" title={invoice.description}>{invoice.description}</td>
                       <td className="px-4 py-3.5 font-medium tabular-nums">{amount(invoice.amount)}</td>

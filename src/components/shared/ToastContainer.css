@@ -105,14 +105,14 @@
 }
 
 .toast__title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-primary, #1a2332);
   line-height: 1.4;
 }
 
 .toast__message {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary, #6a6d70);
   line-height: 1.45;
   display: -webkit-box;
@@ -125,7 +125,7 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--vendor-primary, #0a6ed1);
   margin-top: 4px;
@@ -246,7 +246,7 @@
 .toast--contract-signed__badge {
   display: inline-flex;
   align-items: center;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 1px;
   color: #059669;
@@ -255,7 +255,7 @@
 }
 
 .toast--contract-signed__vendor {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--text-primary, #1a2332);
   line-height: 1.3;
@@ -265,7 +265,7 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary, #6a6d70);
   flex-wrap: wrap;
 }
@@ -304,7 +304,7 @@
   padding: 6px 12px;
   border-radius: 8px;
   border: 1px solid transparent;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
   font-family: inherit;
@@ -360,11 +360,11 @@
   }
 
   .toast__title {
-    font-size: 12px;
+    font-size: 13px;
   }
 
   .toast__message {
-    font-size: 11px;
+    font-size: 12px;
   }
 }
 

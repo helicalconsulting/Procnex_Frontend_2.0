@@ -65,7 +65,7 @@
   justify-content: center;
   padding: 4px 10px;
   border-radius: var(--vendor-radius-sm);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.5px;
   min-width: 48px;
@@ -92,7 +92,7 @@
 }
 
 .va-card__company {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text-primary);
   display: flex;
@@ -104,7 +104,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
   flex-wrap: wrap;
 }
@@ -128,7 +128,7 @@
 }
 
 .va-card__type-label {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
   font-weight: 500;
   display: none;
@@ -158,7 +158,7 @@
 }
 
 .va-card__info-title {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -173,7 +173,7 @@
   padding: 8px 12px;
   background: var(--surface-elevated);
   border-radius: var(--vendor-radius-sm);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .va-card__row-label {
@@ -245,7 +245,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text-primary);
   min-width: 0;
@@ -299,7 +299,7 @@
   max-width: 960px;
   margin: 0 auto;
   font-family: Arial, sans-serif;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.7;
   color: #333;
 }
@@ -329,7 +329,7 @@
   padding: 12px 20px;
   border-top: 1px solid var(--border);
   background: var(--surface-elevated);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
   flex-shrink: 0;
 }

@@ -28,7 +28,8 @@ export interface ColumnCustomizerProps {
 export default function ColumnCustomizer({
   columnOrder, visibleKeys, allColumns, onToggle, onReorder, onReset, onClose,
 }: ColumnCustomizerProps) {
-  const listRef  = useRef<HTMLUListElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // ── Pointer-based drag state ──────────────────────────────
   const dragState = useRef<{
@@ -39,7 +40,7 @@ export default function ColumnCustomizer({
     pointerOffsetY: number;
   } | null>(null);
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
-  const [insertBefore, setInsertBefore]  = useState<number | null>(null);
+  const [insertBefore, setInsertBefore] = useState<number | null>(null);
 
   useBodyScrollLock(true);
 
@@ -58,6 +59,16 @@ export default function ColumnCustomizer({
     return m;
   }, [allColumns]);
 
+  // Filtered keys if user searches
+  const filteredOrder = useMemo(() => {
+    if (!searchQuery.trim()) return columnOrder;
+    const q = searchQuery.toLowerCase().trim();
+    return columnOrder.filter((key) => {
+      const col = colMap[key];
+      return col && col.label.toLowerCase().includes(q);
+    });
+  }, [columnOrder, colMap, searchQuery]);
+
   // ── Start drag on grip mousedown ──────────────────────────
   const handleGripMouseDown = useCallback((e: React.MouseEvent, fromIdx: number) => {
     e.preventDefault();
@@ -66,7 +77,7 @@ export default function ColumnCustomizer({
     const listEl = listRef.current;
     if (!listEl) return;
 
-    const rowEls = listEl.querySelectorAll<HTMLLIElement>('.col-panel__item');
+    const rowEls = listEl.querySelectorAll<HTMLLIElement>('.col-modal__item');
     const sourceEl = rowEls[fromIdx];
     if (!sourceEl) return;
 
@@ -80,8 +91,8 @@ export default function ColumnCustomizer({
       height: ${rect.height}px;
       background: var(--surface-card);
       border: 1.5px solid var(--primary-500);
-      border-radius: 8px;
-      box-shadow: 0 8px 24px rgba(10,110,209,0.18);
+      border-radius: 10px;
+      box-shadow: 0 12px 32px rgba(10,110,209,0.22);
       opacity: 0.95;
       z-index: 9999;
       pointer-events: none;
@@ -143,6 +154,24 @@ export default function ColumnCustomizer({
   }, [columnOrder, onReorder]);
 
   const visibleCount = columnOrder.filter((k) => visibleKeys.has(k)).length;
+  const totalCount = columnOrder.length;
+
+  const handleSelectAll = () => {
+    columnOrder.forEach((key) => {
+      if (!visibleKeys.has(key)) {
+        onToggle(key);
+      }
+    });
+  };
+
+  const handleDeselectOptional = () => {
+    columnOrder.forEach((key) => {
+      const col = colMap[key];
+      if (col && !col.required && visibleKeys.has(key)) {
+        onToggle(key);
+      }
+    });
+  };
 
   return createPortal(
     <div className="col-modal-backdrop" onClick={onClose}>
@@ -151,27 +180,60 @@ export default function ColumnCustomizer({
         {/* ── Header ── */}
         <div className="col-modal__header">
           <div className="col-modal__header-left">
-            <Columns3 size={15} />
-            <span>Columns</span>
-            <span className="col-modal__count">{visibleCount} shown</span>
+            <div className="col-modal__icon-wrap">
+              <Columns3 size={18} />
+            </div>
+            <div>
+              <h3 className="col-modal__title">Customize Columns</h3>
+              <p className="col-modal__subtitle">Configure table view preferences</p>
+            </div>
           </div>
           <div className="col-modal__header-right">
+            <span className="col-modal__count">{visibleCount} of {totalCount} shown</span>
+            <button className="col-modal__close" onClick={onClose} title="Close">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* ── Toolbar: Search & Quick Actions ── */}
+        <div className="col-modal__toolbar">
+          <div className="col-modal__search-wrap">
+            <input
+              type="text"
+              className="col-modal__search-input"
+              placeholder="Search columns..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button className="col-modal__search-clear" onClick={() => setSearchQuery('')}>
+                <X size={12} />
+              </button>
+            )}
+          </div>
+          <div className="col-modal__actions">
+            <button className="col-modal__action-btn" onClick={handleSelectAll}>
+              Show All
+            </button>
+            <button className="col-modal__action-btn" onClick={handleDeselectOptional}>
+              Hide Optional
+            </button>
             <button className="col-modal__reset" onClick={onReset} title="Reset to default">
               <RotateCcw size={13} /> Reset
             </button>
-            <button className="col-modal__close" onClick={onClose}><X size={14} /></button>
           </div>
         </div>
 
         {/* ── Hint ── */}
-        <p className="col-modal__hint">
-          <GripVertical size={11} style={{ verticalAlign: 'middle', marginRight: 3 }} />
-          Drag grip to reorder &nbsp;·&nbsp; Click checkbox to show/hide
-        </p>
+        <div className="col-modal__hint">
+          <GripVertical size={13} className="col-modal__hint-icon" />
+          <span>Drag grip to reorder columns &nbsp;•&nbsp; Click checkbox to toggle visibility</span>
+        </div>
 
         {/* ── Column list ── */}
         <ul className="col-modal__list" ref={listRef}>
-          {columnOrder.map((key, idx) => {
+          {filteredOrder.map((key, idx) => {
             const col = colMap[key];
             if (!col) return null;
             const visible = visibleKeys.has(key);
@@ -184,8 +246,9 @@ export default function ColumnCustomizer({
                 key={key}
                 className={[
                   'col-modal__item',
+                  visible ? 'col-modal__item--active' : '',
                   isDragging ? 'col-modal__item--dragging' : '',
-                  isTarget   ? 'col-modal__item--target'   : '',
+                  isTarget ? 'col-modal__item--target' : '',
                 ].filter(Boolean).join(' ')}
               >
                 {isTarget && <div className="col-modal__drop-line" />}
@@ -196,13 +259,13 @@ export default function ColumnCustomizer({
                   onMouseDown={(e) => handleGripMouseDown(e, idx)}
                   title="Drag to reorder"
                 >
-                  <GripVertical size={14} />
+                  <GripVertical size={16} />
                 </span>
 
                 <button
                   className={[
                     'col-modal__toggle',
-                    visible  ? 'col-modal__toggle--on'       : '',
+                    visible ? 'col-modal__toggle--on' : '',
                     required ? 'col-modal__toggle--required' : '',
                   ].filter(Boolean).join(' ')}
                   onClick={() => { if (!required) onToggle(key); }}
@@ -211,8 +274,8 @@ export default function ColumnCustomizer({
                   tabIndex={required ? -1 : 0}
                 >
                   {visible && (
-                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none" aria-hidden>
-                      <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                    <svg width="12" height="10" viewBox="0 0 10 8" fill="none" aria-hidden>
+                      <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
                   )}
                 </button>
@@ -221,17 +284,39 @@ export default function ColumnCustomizer({
                   {col.label}
                 </span>
 
-                {required && <span className="col-modal__required-badge">required</span>}
+                {required ? (
+                  <span className="col-modal__required-badge">Required</span>
+                ) : (
+                  <span className={`col-modal__status-badge ${visible ? 'col-modal__status-badge--visible' : ''}`}>
+                    {visible ? 'Visible' : 'Hidden'}
+                  </span>
+                )}
               </li>
             );
           })}
 
-          {insertBefore === columnOrder.length && (
+          {filteredOrder.length === 0 && (
+            <div className="col-modal__empty">
+              No columns match &quot;{searchQuery}&quot;
+            </div>
+          )}
+
+          {insertBefore === filteredOrder.length && (
             <li className="col-modal__drop-line-wrap">
               <div className="col-modal__drop-line" />
             </li>
           )}
         </ul>
+
+        {/* ── Footer ── */}
+        <div className="col-modal__footer">
+          <span className="col-modal__footer-info">
+            {totalCount - visibleCount} columns hidden
+          </span>
+          <button className="col-modal__done-btn" onClick={onClose}>
+            Done
+          </button>
+        </div>
       </div>
     </div>,
     document.body,

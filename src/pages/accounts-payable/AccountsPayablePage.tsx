@@ -572,7 +572,7 @@ export default function AccountsPayablePage() {
           <Card className="hidden overflow-hidden lg:block">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[980px] text-left text-sm">
-                <thead className="border-b border-border/70 bg-secondary/55 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                <thead className="border-b border-border/70 bg-secondary/55 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                   <tr>
                     {visibleColumns.map((col) => (
                       <th
@@ -600,12 +600,12 @@ export default function AccountsPayablePage() {
                           return (
                             <td key="vendorName" className="px-4 py-3.5">
                               <div className="flex items-center gap-2.5">
-                                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-[11px] font-semibold text-primary">
+                                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-[12px] font-semibold text-primary">
                                   {invoice.vendorInitials}
                                 </span>
                                 <div>
                                   <div className="font-medium">{invoice.vendorName}</div>
-                                  <div className="text-[11px] text-muted-foreground">{invoice.department}</div>
+                                  <div className="text-[12px] text-muted-foreground">{invoice.department}</div>
                                 </div>
                               </div>
                             </td>
@@ -699,7 +699,7 @@ export default function AccountsPayablePage() {
                               </Button>
                             </>
                           ) : invoice.status === 'PENDING' ? (
-                            <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                            <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
                               L{invoice.currentLevel} ({invoice.requiredRole})
                             </span>
                           ) : null}
@@ -799,7 +799,7 @@ export default function AccountsPayablePage() {
                 ['Due date', formatDate(actionModal.invoice.dueDate)],
               ].map(([label, value]) => (
                 <div key={label}>
-                  <dt className="text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{label}</dt>
+                  <dt className="text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{label}</dt>
                   <dd className="mt-1 text-sm font-medium">{value}</dd>
                 </div>
               ))}
@@ -861,7 +861,7 @@ export default function AccountsPayablePage() {
                 ['Due date', formatDate(detailInvoice.dueDate)],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-xl border border-border/65 bg-secondary/40 p-3">
-                  <dt className="text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{label}</dt>
+                  <dt className="text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{label}</dt>
                   <dd className="mt-1 text-sm font-medium">{value}</dd>
                 </div>
               ))}

@@ -205,7 +205,7 @@ export default function DocumentsPage() {
 
       {/* Metric Cards */}
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard icon={Files} label="Total Files" value={summary.total} tone="primary" />
+        <MetricCard icon={Files} label="Total Files" value={summary.total} tone="primary" aria-pressed={true} />
         <MetricCard icon={FolderOpen} label="Categories" value={summary.categories} tone="violet" />
         <MetricCard icon={Clock} label="This Week" value={summary.recent} tone="cyan" />
         <MetricCard icon={HardDrive} label="Total Size" value={summary.totalSize} tone="success" />
@@ -223,7 +223,7 @@ export default function DocumentsPage() {
           )}
         >
           All
-          <span className={cn('rounded-md px-1.5 py-0.5 text-[10px]', catFilter === 'ALL' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-background/80 text-muted-foreground')}>
+          <span className={cn('rounded-md px-1.5 py-0.5 text-[11px]', catFilter === 'ALL' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-background/80 text-muted-foreground')}>
             {catCounts['ALL']}
           </span>
         </button>
@@ -239,7 +239,7 @@ export default function DocumentsPage() {
             )}
           >
             {c}
-            <span className={cn('rounded-md px-1.5 py-0.5 text-[10px]', catFilter === c ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-background/80 text-muted-foreground')}>
+            <span className={cn('rounded-md px-1.5 py-0.5 text-[11px]', catFilter === c ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-background/80 text-muted-foreground')}>
               {catCounts[c]}
             </span>
           </button>
@@ -292,7 +292,7 @@ export default function DocumentsPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
-                  <tr className="border-b border-border/70 bg-muted/40 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <tr className="border-b border-border/70 bg-muted/40 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">
                     <th className="px-5 py-3.5">File</th>
                     <th className="px-5 py-3.5">Category</th>
                     <th className="px-5 py-3.5">Reference</th>
@@ -312,20 +312,20 @@ export default function DocumentsPage() {
                           </div>
                           <div className="min-w-0">
                             <div className="font-semibold text-foreground truncate max-w-[240px]">{doc.fileName}</div>
-                            <div className="text-[11px] text-muted-foreground truncate max-w-[240px]">{doc.description}</div>
+                            <div className="text-[12px] text-muted-foreground truncate max-w-[240px]">{doc.description}</div>
                           </div>
                         </div>
                       </td>
                       <td className="px-5 py-3.5">
                         <Badge variant="outline" className="font-medium">{doc.category}</Badge>
                       </td>
-                      <td className="px-5 py-3.5 font-mono text-[11px]">
+                      <td className="px-5 py-3.5 font-mono text-[12px]">
                         {doc.linkedRef !== '-' ? doc.linkedRef : '—'}
                       </td>
                       <td className="px-5 py-3.5 text-muted-foreground font-mono">{doc.fileSize}</td>
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-2">
-                          <div className="grid size-6 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                          <div className="grid size-6 place-items-center rounded-full bg-primary/10 text-[11px] font-bold text-primary">
                             {doc.uploadedByInitials}
                           </div>
                           <span className="text-foreground">{doc.uploadedBy}</span>
@@ -394,17 +394,17 @@ export default function DocumentsPage() {
                   <div className={cn('grid size-10 place-items-center rounded-xl ring-1', FILE_TONES[doc.fileType])}>
                     {FILE_ICONS[doc.fileType]}
                   </div>
-                  <Badge variant="secondary" className="text-[10px] font-semibold">{doc.fileType}</Badge>
+                  <Badge variant="secondary" className="text-[11px] font-semibold">{doc.fileType}</Badge>
                 </div>
                 <h3 className="mt-3 truncate text-sm font-semibold text-foreground group-hover:text-primary">{doc.fileName}</h3>
                 <p className="mt-1 line-clamp-2 text-xs text-muted-foreground min-h-[32px]">{doc.description}</p>
                 <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-3 text-xs">
-                  <Badge variant="outline" className="text-[10px]">{doc.category}</Badge>
-                  <span className="font-mono text-[11px] text-muted-foreground">{doc.fileSize}</span>
+                  <Badge variant="outline" className="text-[11px]">{doc.category}</Badge>
+                  <span className="font-mono text-[12px] text-muted-foreground">{doc.fileSize}</span>
                 </div>
-                <div className="mt-3 flex items-center justify-between text-[11px] text-muted-foreground">
+                <div className="mt-3 flex items-center justify-between text-[12px] text-muted-foreground">
                   <div className="flex items-center gap-1.5">
-                    <div className="grid size-5 place-items-center rounded-full bg-primary/10 text-[9px] font-bold text-primary">
+                    <div className="grid size-5 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
                       {doc.uploadedByInitials}
                     </div>
                     <span className="truncate max-w-[90px]">{doc.uploadedBy}</span>

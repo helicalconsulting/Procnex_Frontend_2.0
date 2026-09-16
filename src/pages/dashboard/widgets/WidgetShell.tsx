@@ -18,7 +18,7 @@ export function WidgetHeader({ icon, title, subtitle, href }: WidgetHeaderProps)
           <span className="text-primary">{icon}</span>
           <span className="truncate">{title}</span>
         </div>
-        {subtitle && <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{subtitle}</p>}
+        {subtitle && <p className="mt-0.5 truncate text-[12px] text-muted-foreground">{subtitle}</p>}
       </div>
       {href && (
         <Link className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-primary outline-none transition-colors hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-ring" to={href}>

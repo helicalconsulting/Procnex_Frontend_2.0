@@ -62,13 +62,13 @@ export default function VendorLoginPage() {
       onThemeToggle={toggleTheme}
     >
       {passwordSetSuccess && !error && (
-        <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3.5 py-3 text-[13px] leading-5 text-emerald-700 dark:text-emerald-300" role="status">
+        <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3.5 py-3 text-[14px] leading-5 text-emerald-700 dark:text-emerald-300" role="status">
           <CheckCircle2 size={17} className="mt-0.5 shrink-0" />
           <span>Password set successfully. Sign in with your new password.</span>
         </div>
       )}
       {error && (
-        <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-destructive/20 bg-destructive/10 px-3.5 py-3 text-[13px] leading-5 text-destructive" role="alert">
+        <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-destructive/20 bg-destructive/10 px-3.5 py-3 text-[14px] leading-5 text-destructive" role="alert">
           <AlertCircle size={17} className="mt-0.5 shrink-0" />
           <span>{error}</span>
         </div>
@@ -76,12 +76,12 @@ export default function VendorLoginPage() {
 
       <form className="grid gap-5" onSubmit={handleSubmit}>
         <div className="grid gap-2">
-          <label className="text-[13px] font-semibold text-foreground" htmlFor="vlogin-email">Email</label>
+          <label className="text-[14px] font-semibold text-foreground" htmlFor="vlogin-email">Email</label>
           <Input id="vlogin-email" type="email" placeholder="vendor@company.com" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoFocus disabled={isSubmitting} required />
         </div>
 
         <div className="grid gap-2">
-          <label className="text-[13px] font-semibold text-foreground" htmlFor="vlogin-password">Password</label>
+          <label className="text-[14px] font-semibold text-foreground" htmlFor="vlogin-password">Password</label>
           <div className="relative">
             <Input id="vlogin-password" className="pr-12" type={showPassword ? 'text' : 'password'} placeholder="Enter password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" disabled={isSubmitting} required />
             <button type="button" className="absolute right-0 top-0 inline-flex size-12 items-center justify-center rounded-xl text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? 'Hide password' : 'Show password'}>

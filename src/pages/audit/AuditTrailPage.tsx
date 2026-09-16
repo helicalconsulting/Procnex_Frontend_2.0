@@ -547,7 +547,7 @@ export default function AuditTrailPage() {
               onClick={() => { setActionFilter(act); setCurrentPage(1); }}
             >
               {act === 'ALL' ? 'All Actions' : act}
-              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold text-foreground">
+              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-bold text-foreground">
                 {filterCounts[act] || 0}
               </span>
             </button>
@@ -588,8 +588,8 @@ export default function AuditTrailPage() {
                   <div className="flex min-w-0 flex-1 flex-col">
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-center gap-2">
-                        <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${cfg.classes}`}>{entry.action}</span>
-                        <span className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-semibold text-foreground">{entry.module}</span>
+                        <span className={`rounded-full px-2.5 py-0.5 text-[12px] font-semibold ${cfg.classes}`}>{entry.action}</span>
+                        <span className="rounded-full bg-muted px-2.5 py-0.5 text-[12px] font-semibold text-foreground">{entry.module}</span>
                       </div>
                       <span className="text-xs text-muted-foreground flex items-center gap-1">
                         <Clock size={12} /> {timeAgo(entry.timestamp)}
@@ -598,7 +598,7 @@ export default function AuditTrailPage() {
                     <p className="mt-2 text-sm font-medium text-foreground">{entry.description}</p>
                     <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1.5 font-semibold text-foreground">
-                        <span className="flex size-6 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">{entry.performedByInitials}</span>
+                        <span className="flex size-6 items-center justify-center rounded-full bg-primary/10 text-[11px] font-bold text-primary">{entry.performedByInitials}</span>
                         {entry.performedBy}
                       </span>
                       {entry.referenceId !== '—' && <span className="font-semibold text-primary">{entry.referenceId}</span>}
@@ -684,19 +684,19 @@ export default function AuditTrailPage() {
               <p className="text-sm font-medium text-foreground">{detail.description}</p>
               <div className="grid grid-cols-2 gap-3 pt-2">
                 <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
-                  <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Performed By</span>
+                  <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Performed By</span>
                   <span className="mt-0.5 block text-xs font-semibold text-foreground">{detail.performedBy}</span>
                 </div>
                 <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
-                  <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Reference</span>
+                  <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Reference</span>
                   <span className="mt-0.5 block text-xs font-semibold text-foreground">{detail.referenceId}</span>
                 </div>
                 <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
-                  <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">IP Address</span>
+                  <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">IP Address</span>
                   <span className="mt-0.5 block text-xs font-semibold text-foreground">{detail.ipAddress}</span>
                 </div>
                 <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
-                  <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Timestamp</span>
+                  <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Timestamp</span>
                   <span className="mt-0.5 block text-xs font-semibold text-foreground">{formatDateTime(detail.timestamp)}</span>
                 </div>
               </div>

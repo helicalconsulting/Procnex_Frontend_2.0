@@ -51,10 +51,10 @@ export function AuthLayout({
         </div>
 
         <div className="relative z-10 my-auto max-w-lg py-16">
-          <h2 className="max-w-md text-4xl font-semibold leading-[1.08] tracking-[-0.045em] text-white xl:text-[42px]">
+          <h2 className="max-w-md text-4xl font-semibold leading-[1.08] tracking-[-0.045em] text-white xl:text-[43px]">
             Make every procurement decision clearer.
           </h2>
-          <p className="mt-5 max-w-md text-[15px] leading-7 text-white/58">{tagline}</p>
+          <p className="mt-5 max-w-md text-[16px] leading-7 text-white/58">{tagline}</p>
 
           <ul className="mt-10 grid gap-4" aria-label="Platform capabilities">
             {features.map((feature) => (
@@ -68,7 +68,7 @@ export function AuthLayout({
           </ul>
         </div>
 
-        <p className="relative z-10 text-[11px] text-white/30">
+        <p className="relative z-10 text-[12px] text-white/30">
           © {new Date().getFullYear()} {supportEmail ? `${companyName} · ${supportEmail}` : companyName}
         </p>
       </section>
@@ -108,7 +108,7 @@ export function AuthLayout({
             transition={motionTransition.softSpring}
             className="rounded-3xl border border-border/80 bg-card/95 p-5 shadow-2xl shadow-slate-950/[0.08] supports-[backdrop-filter:blur(1px)]:bg-card/82 supports-[backdrop-filter:blur(1px)]:backdrop-blur-xl sm:p-8"
           >
-            <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-primary">{portalLabel}</span>
+            <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-primary">{portalLabel}</span>
             <h1 className="mt-3 text-2xl font-semibold leading-[1.15] tracking-[-0.035em] text-foreground">{title}</h1>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
 
@@ -124,7 +124,7 @@ export function AuthLayout({
             ) : null}
           </motion.div>
 
-          <p className="mt-6 text-center text-[11px] text-muted-foreground/70 lg:hidden">
+          <p className="mt-6 text-center text-[12px] text-muted-foreground/70 lg:hidden">
             © {new Date().getFullYear()} {companyName}
           </p>
         </div>

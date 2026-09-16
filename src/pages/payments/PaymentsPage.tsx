@@ -395,7 +395,7 @@ export default function PaymentsPage() {
           <Card className="hidden overflow-hidden lg:block">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[960px] text-left text-sm">
-                <thead className="border-b border-border/70 bg-secondary/55 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                <thead className="border-b border-border/70 bg-secondary/55 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                   <tr>
                     {visibleColumns.map((col) => (
                       <th
@@ -427,7 +427,7 @@ export default function PaymentsPage() {
                           return (
                             <td key="vendorName" className="px-4 py-3.5">
                               <div className="flex items-center gap-2.5">
-                                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-[11px] font-semibold text-primary">
+                                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-[12px] font-semibold text-primary">
                                   {payment.vendorInitials}
                                 </span>
                                 <span className="font-medium">{payment.vendorName}</span>
@@ -608,7 +608,7 @@ export default function PaymentsPage() {
                 ['Invoice', actionModal.payment.invoiceRef],
               ].map(([label, value]) => (
                 <div key={label}>
-                  <dt className="text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{label}</dt>
+                  <dt className="text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{label}</dt>
                   <dd className="mt-1 text-sm font-medium">{value}</dd>
                 </div>
               ))}
@@ -657,7 +657,7 @@ export default function PaymentsPage() {
                 ['Remarks', detailPayment.remarks || '—'],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-xl border border-border/65 bg-secondary/40 p-3">
-                  <dt className="text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{label}</dt>
+                  <dt className="text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{label}</dt>
                   <dd className="mt-1 text-sm font-medium">{value}</dd>
                 </div>
               ))}

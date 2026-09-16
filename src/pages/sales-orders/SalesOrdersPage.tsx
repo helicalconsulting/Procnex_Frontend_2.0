@@ -205,7 +205,7 @@ export default function SalesOrdersPage() {
 
       {/* Metric Cards */}
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard icon={TrendingUp} label="Total Revenue" value={fmt(summary.totalRevenue)} tone="primary" />
+        <MetricCard icon={TrendingUp} label="Total Revenue" value={fmt(summary.totalRevenue)} tone="primary" aria-pressed={true} />
         <MetricCard icon={ShoppingBag} label="Active Orders" value={summary.active} tone="warning" />
         <MetricCard icon={CheckCircle2} label="Delivered" value={summary.delivered} tone="success" />
         <MetricCard icon={XCircle} label="Cancelled / Discarded" value={summary.cancelled} tone="danger" />
@@ -230,7 +230,7 @@ export default function SalesOrdersPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
-                <tr className="border-b border-border/70 bg-muted/40 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <tr className="border-b border-border/70 bg-muted/40 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">
                   <th className="px-5 py-3.5">SO #</th>
                   <th className="px-5 py-3.5">Customer</th>
                   <th className="px-5 py-3.5 text-center">Items</th>
@@ -252,7 +252,7 @@ export default function SalesOrdersPage() {
                       <td className="px-5 py-3.5 font-mono font-semibold text-foreground">{so.soNumber}</td>
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-2.5">
-                          <div className="grid size-7 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                          <div className="grid size-7 place-items-center rounded-full bg-primary/10 text-[11px] font-bold text-primary">
                             {so.customerInitials}
                           </div>
                           <span className="font-semibold text-foreground">{so.customerName}</span>
@@ -263,11 +263,11 @@ export default function SalesOrdersPage() {
                       <td className="px-5 py-3.5 text-muted-foreground">{fmtDate(so.orderDate)}</td>
                       <td className="px-5 py-3.5 text-muted-foreground">{fmtDate(so.deliveryDate)}</td>
                       <td className="px-5 py-3.5">
-                        <Badge variant="outline" className="text-[10px]">{so.region}</Badge>
+                        <Badge variant="outline" className="text-[11px]">{so.region}</Badge>
                       </td>
                       <td className="px-5 py-3.5 text-muted-foreground">{so.salesRep}</td>
                       <td className="px-5 py-3.5">
-                        <Badge variant="outline" className={cn('text-[10px]', cfg.tone)}>
+                        <Badge variant="outline" className={cn('text-[11px]', cfg.tone)}>
                           {cfg.label}
                         </Badge>
                       </td>
@@ -380,7 +380,7 @@ export default function SalesOrdersPage() {
                 <div className="rounded-lg border border-border/50 bg-card p-3">
                   <div className="text-muted-foreground">Status</div>
                   <div className="mt-1">
-                    <Badge variant="outline" className={cn('text-[10px]', STATUS_MAP[detailOrder.status].tone)}>
+                    <Badge variant="outline" className={cn('text-[11px]', STATUS_MAP[detailOrder.status].tone)}>
                       {STATUS_MAP[detailOrder.status].label}
                     </Badge>
                   </div>

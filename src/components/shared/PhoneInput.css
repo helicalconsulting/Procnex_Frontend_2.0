@@ -30,7 +30,7 @@
   border-radius: var(--radius-md) 0 0 var(--radius-md);
   background: var(--surface-elevated);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
@@ -132,7 +132,7 @@
   border-radius: var(--radius-md);
   background: var(--surface);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 14px;
   font-family: inherit;
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
@@ -179,7 +179,7 @@
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 14px;
   font-family: inherit;
   cursor: pointer;
   text-align: left;
@@ -198,7 +198,7 @@
 }
 
 .phone-country-option-flag {
-  font-size: 16px;
+  font-size: 17px;
   flex-shrink: 0;
   width: 22px;
   text-align: center;
@@ -229,7 +229,7 @@
 .phone-input-no-results {
   padding: 20px 10px;
   text-align: center;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-placeholder);
 }
 
@@ -243,7 +243,7 @@
   border-radius: 0 var(--radius-md) var(--radius-md) 0;
   background: var(--surface);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 15px;
   font-family: inherit;
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;

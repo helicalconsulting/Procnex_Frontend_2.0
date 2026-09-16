@@ -601,12 +601,12 @@ export default function OnboardingQueuePage() {
               </button>
             </div>
             <div className="oq-modal__body">
-              <p style={{ margin: '0 0 12px', fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              <p style={{ margin: '0 0 12px', fontSize: '15px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                 Vendor will be approved and a password setup email will be sent. You can include a
                 custom message that will be included in the email.
               </p>
               <label className="oq-modal__label" htmlFor="approve-message">
-                Custom Message <span style={{ fontWeight: 400, fontSize: 11 }}>(optional)</span>
+                Custom Message <span style={{ fontWeight: 400, fontSize: 12 }}>(optional)</span>
               </label>
               <textarea
                 id="approve-message"
@@ -716,8 +716,8 @@ export default function OnboardingQueuePage() {
                 return (<>
                   {regularDocs.length > 0 && (<>
                     <div className="oq-doc-section-header">
-                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: 0.5 }}>UPLOADED DOCUMENTS</span>
-                      {regularDocs.length < 10 && <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{regularDocs.length}</span>}
+                      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: 0.5 }}>UPLOADED DOCUMENTS</span>
+                      {regularDocs.length < 10 && <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{regularDocs.length}</span>}
                     </div>
                     {regularDocs.map((doc) => (
                       <div className="oq-doc-card" key={doc.id}>
@@ -743,8 +743,8 @@ export default function OnboardingQueuePage() {
                   {signedDocs.length > 0 && (<>
                     <div className="oq-doc-section-header" style={{ marginTop: regularDocs.length > 0 ? 20 : 0 }}>
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#107e3e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: '#107e3e', letterSpacing: 0.5 }}>SIGNED AGREEMENTS</span>
-                      <span style={{ fontSize: 11, color: '#107e3e', opacity: 0.7 }}>{signedDocs.length}</span>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: '#107e3e', letterSpacing: 0.5 }}>SIGNED AGREEMENTS</span>
+                      <span style={{ fontSize: 12, color: '#107e3e', opacity: 0.7 }}>{signedDocs.length}</span>
                     </div>
                     {signedDocs.map((doc) => (
                       <div className="oq-doc-card" key={doc.id}>
@@ -753,7 +753,7 @@ export default function OnboardingQueuePage() {
                           <div>
                             <strong>{doc.documentType}</strong>
                             <span style={{ color: '#107e3e' }}>✓ Signed</span>
-                            {doc.signedBy && <span style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block' }}>by {doc.signedBy}</span>}
+                            {doc.signedBy && <span style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block' }}>by {doc.signedBy}</span>}
                           </div>
                         </div>
                         <div className="oq-doc-card__actions">
@@ -1009,7 +1009,7 @@ export default function OnboardingQueuePage() {
                                   window.open(documentUrl(viewUrl), '_blank', 'noopener,noreferrer');
                                 }
                               }}
-                              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 20px', background: 'linear-gradient(180deg,#0a6ed1,#095cb0)', color: '#fff', border: 0, borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 20px', background: 'linear-gradient(180deg,#0a6ed1,#095cb0)', color: '#fff', border: 0, borderRadius: 6, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
                             >
                               <Eye size={15} />
                               View Signed Agreement

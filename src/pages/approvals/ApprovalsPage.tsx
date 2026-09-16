@@ -99,13 +99,13 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
     key: 'request', label: 'Request', defaultVisible: true, required: true, width: '260px',
     render: (req) => (
       <div className="flex items-center gap-3">
-        <div className="grid size-8 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+        <div className="grid size-8 shrink-0 place-items-center rounded-full bg-primary/10 text-[11px] font-bold text-primary">
           {req.requestedByInitials}
         </div>
         <div className="min-w-0">
           <div className="font-semibold text-foreground font-mono text-xs">{req.referenceNumber}</div>
-          <div className="text-[11px] font-medium text-foreground truncate max-w-[200px]">{req.title}</div>
-          <div className="text-[10px] text-muted-foreground">by {req.requestedBy} · {req.department}</div>
+          <div className="text-[12px] font-medium text-foreground truncate max-w-[200px]">{req.title}</div>
+          <div className="text-[11px] text-muted-foreground">by {req.requestedBy} · {req.department}</div>
         </div>
       </div>
     ),
@@ -113,7 +113,7 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
   {
     key: 'module', label: 'Module', defaultVisible: true, width: '140px',
     render: (req) => (
-      <Badge variant="outline" className="gap-1 text-[10px] font-semibold">
+      <Badge variant="outline" className="gap-1 text-[11px] font-semibold">
         {MODULE_ICONS[req.module]}{req.module}
       </Badge>
     ),
@@ -128,7 +128,7 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
       <Badge
         variant="outline"
         className={cn(
-          'text-[10px] font-semibold uppercase',
+          'text-[11px] font-semibold uppercase',
           req.priority === 'HIGH' && 'bg-rose-500/10 text-rose-600 border-rose-500/20',
           req.priority === 'MEDIUM' && 'bg-amber-500/10 text-amber-600 border-amber-500/20',
           req.priority === 'LOW' && 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
@@ -146,7 +146,7 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
       const current = isApproved ? total + 1 : (req.currentLevel || 1);
       return (
         <div className="flex items-center gap-1.5 text-xs font-mono">
-          <Badge variant="secondary" className="text-[10px]">
+          <Badge variant="secondary" className="text-[11px]">
             L{isApproved ? total : Math.min(current, total)}/{total}
           </Badge>
         </div>
@@ -165,7 +165,7 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
         }
       }
       return (
-        <Badge variant="outline" className={cn('text-[10px] font-semibold', STATUS_TONES[effectiveStatus] || 'bg-muted/50 text-muted-foreground')}>
+        <Badge variant="outline" className={cn('text-[11px] font-semibold', STATUS_TONES[effectiveStatus] || 'bg-muted/50 text-muted-foreground')}>
           {STATUS_LABELS[effectiveStatus] || effectiveStatus.replace(/_/g, ' ')}
         </Badge>
       );
@@ -561,7 +561,7 @@ export default function ApprovalsPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
-                <tr className="border-b border-border/70 bg-muted/40 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <tr className="border-b border-border/70 bg-muted/40 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">
                   {visibleColumns.map(col => <th key={col.key} className="px-5 py-3.5">{col.label}</th>)}
                   <th className="px-5 py-3.5 text-right">Actions</th>
                 </tr>

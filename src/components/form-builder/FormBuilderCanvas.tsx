@@ -300,7 +300,7 @@ export default function FormBuilderCanvas({
                           >
                             <GripVertical size={14} />
                           </span>
-                          <span className="rounded-full bg-muted px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{field.type.replace('_', ' ')}</span>
+                          <span className="rounded-full bg-muted px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{field.type.replace('_', ' ')}</span>
                         </div>
 
                         <div className="flex items-center gap-0.5">
@@ -552,7 +552,7 @@ function renderFieldComponent(field: FormField) {
         <div className="flex min-h-28 flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 p-4 text-center text-muted-foreground">
           <UploadCloud size={24} className="text-primary" />
           <span className="mt-2 text-xs font-semibold text-foreground">Click or drag files to upload</span>
-          <small className="mt-1 text-[11px]">Max file size: 10MB</small>
+          <small className="mt-1 text-[12px]">Max file size: 10MB</small>
         </div>
       )}
 
@@ -587,7 +587,7 @@ function renderFieldComponent(field: FormField) {
         </div>
       )}
 
-      {helpText && <span className="text-[11px] leading-4 text-muted-foreground">{helpText}</span>}
+      {helpText && <span className="text-[12px] leading-4 text-muted-foreground">{helpText}</span>}
     </div>
   );
 }

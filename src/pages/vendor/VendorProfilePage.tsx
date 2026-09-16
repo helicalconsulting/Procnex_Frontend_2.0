@@ -182,20 +182,20 @@ export default function VendorProfilePage() {
               ))}
               <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {company.address && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'var(--text-secondary)' }}>
                     <MapPin size={14} style={{ color: 'var(--vendor-primary)', flexShrink: 0 }} /> {company.address}
                   </div>
                 )}
                 {company.phone && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'var(--text-secondary)' }}>
                     <Phone size={14} style={{ color: 'var(--vendor-primary)', flexShrink: 0 }} /> {company.phone}
                   </div>
                 )}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'var(--text-secondary)' }}>
                   <Mail size={14} style={{ color: 'var(--vendor-primary)', flexShrink: 0 }} /> {company.email}
                 </div>
                 {company.website && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'var(--text-secondary)' }}>
                     <Globe size={14} style={{ color: 'var(--vendor-primary)', flexShrink: 0 }} /> {company.website}
                   </div>
                 )}
@@ -273,7 +273,7 @@ export default function VendorProfilePage() {
             <div className="vprof-card__header">
               <FileCheck size={18} style={{ color: 'var(--vendor-primary)' }} />
               Compliance Documents
-              <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>
+              <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
                 <FileText size={13} style={{ verticalAlign: -2, marginRight: 4 }} />
                 {documents.length} Document{documents.length !== 1 ? 's' : ''} Uploaded
               </span>
@@ -298,7 +298,7 @@ export default function VendorProfilePage() {
                 return (
                   <div style={{ marginBottom: 16, padding: '12px 16px', borderRadius: 8, background: expiredCount > 0 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(245, 158, 11, 0.1)', border: `1px solid ${expiredCount > 0 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`, display: 'flex', alignItems: 'center', gap: 12 }}>
                     <AlertTriangle size={20} style={{ color: expiredCount > 0 ? '#ef4444' : '#f59e0b', flexShrink: 0 }} />
-                    <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>
+                    <div style={{ fontSize: 14, color: 'var(--text-primary)' }}>
                       <strong>Action Required: </strong>
                       {expiredCount > 0 && <span>{expiredCount} document{expiredCount > 1 ? 's have' : ' has'} <strong>expired</strong>. </span>}
                       {expiringSoonCount > 0 && <span>{expiringSoonCount} document{expiringSoonCount > 1 ? 's are' : ' is'} <strong>expiring within 30 days</strong>. </span>}
@@ -363,35 +363,35 @@ export default function VendorProfilePage() {
                       <div className="vprof-upload__metadata-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 12, padding: 12, background: 'var(--surface-hover, rgba(255, 255, 255, 0.03))', borderRadius: 8, border: '1px solid var(--border)' }}>
                         {showIssueDate && (
                           <div>
-                            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Date of Issue</label>
+                            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Date of Issue</label>
                             <input
                               type="date"
                               value={issueDate}
                               onChange={e => setIssueDate(e.target.value)}
-                              style={{ width: '100%', padding: '6px 10px', fontSize: 12, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)' }}
+                              style={{ width: '100%', padding: '6px 10px', fontSize: 13, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)' }}
                             />
                           </div>
                         )}
                         {showExpDate && (
                           <div>
-                            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Date of Expiration</label>
+                            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Date of Expiration</label>
                             <input
                               type="date"
                               value={expirationDate}
                               onChange={e => setExpirationDate(e.target.value)}
-                              style={{ width: '100%', padding: '6px 10px', fontSize: 12, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)' }}
+                              style={{ width: '100%', padding: '6px 10px', fontSize: 13, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)' }}
                             />
                           </div>
                         )}
                         {showAuthority && (
                           <div>
-                            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Issuing Authority</label>
+                            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Issuing Authority</label>
                             <input
                               type="text"
                               placeholder="e.g. Govt of UAE / Income Tax Dept"
                               value={issuingAuthority}
                               onChange={e => setIssuingAuthority(e.target.value)}
-                              style={{ width: '100%', padding: '6px 10px', fontSize: 12, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)' }}
+                              style={{ width: '100%', padding: '6px 10px', fontSize: 13, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)' }}
                             />
                           </div>
                         )}
@@ -439,7 +439,7 @@ export default function VendorProfilePage() {
                       <FileText size={18} className="vprof-doc__icon" style={{ color: isExpired ? '#ef4444' : isExpiringSoon ? '#f59e0b' : 'var(--vendor-primary)' }} />
                       <div>
                         <div className="vprof-doc__name" style={{ fontWeight: 600 }}>{doc.name}</div>
-                        <div className="vprof-doc__date" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                        <div className="vprof-doc__date" style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                           {doc.type} · Uploaded: {new Date(doc.uploadedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                           {docAny.issueDate && ` · Issued: ${new Date(docAny.issueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`}
                           {docAny.expirationDate && ` · Expires: ${new Date(docAny.expirationDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`}
@@ -451,19 +451,19 @@ export default function VendorProfilePage() {
                     {/* Expiration Alert Badge */}
                     <div>
                       {isExpired ? (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600, background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444' }}>
                           <AlertTriangle size={12} /> Expired ({Math.abs(expDays!)}d ago)
                         </span>
                       ) : isExpiringSoon ? (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600, background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
                           <AlertTriangle size={12} /> Alert: Expires in {expDays}d
                         </span>
                       ) : docAny.expirationDate ? (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600, background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
                           <CheckCircle2 size={12} /> Valid ({expDays}d left)
                         </span>
                       ) : (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600, background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
                           <CheckCircle2 size={12} /> Valid
                         </span>
                       )}
@@ -471,7 +471,7 @@ export default function VendorProfilePage() {
                   </div>
                 );
               }) : (
-                <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-placeholder)', fontSize: 13 }}>
+                <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-placeholder)', fontSize: 14 }}>
                   No documents uploaded yet. Upload your first document above.
                 </div>
               )}
@@ -489,25 +489,25 @@ export default function VendorProfilePage() {
               Portal Password
             </div>
             <div className="vprof-card__body">
-              <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--text-secondary)' }}>
+              <p style={{ margin: '0 0 16px', fontSize: 14, color: 'var(--text-secondary)' }}>
                 Signed in as <strong>{user?.email}</strong>. Change your portal password below.
               </p>
               <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 400 }}>
-                <label style={{ fontSize: 12, fontWeight: 600 }}>Current password</label>
+                <label style={{ fontSize: 13, fontWeight: 600 }}>Current password</label>
                 <input type={showPw ? 'text' : 'password'} value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)' }} />
-                <label style={{ fontSize: 12, fontWeight: 600 }}>New password (min 8 characters)</label>
+                <label style={{ fontSize: 13, fontWeight: 600 }}>New password (min 8 characters)</label>
                 <input type={showPw ? 'text' : 'password'} value={newPassword} onChange={e => setNewPassword(e.target.value)} required minLength={8} style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)' }} />
-                <label style={{ fontSize: 12, fontWeight: 600 }}>Confirm new password</label>
+                <label style={{ fontSize: 13, fontWeight: 600 }}>Confirm new password</label>
                 <input type={showPw ? 'text' : 'password'} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required minLength={8} style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)' }} />
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <button type="button" onClick={() => setShowPw(s => !s)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                  <button type="button" onClick={() => setShowPw(s => !s)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>
                     {showPw ? <EyeOff size={16} /> : <Eye size={16} />} {showPw ? 'Hide' : 'Show'}
                   </button>
                   <button type="submit" disabled={pwLoading} style={{ padding: '10px 20px', background: 'var(--vendor-primary)', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, cursor: pwLoading ? 'wait' : 'pointer' }}>
                     {pwLoading ? 'Updating…' : 'Update password'}
                   </button>
                 </div>
-                {pwMsg && <p style={{ margin: 0, fontSize: 13, color: pwMsg.includes('success') ? '#059669' : '#dc2626' }}>{pwMsg}</p>}
+                {pwMsg && <p style={{ margin: 0, fontSize: 14, color: pwMsg.includes('success') ? '#059669' : '#dc2626' }}>{pwMsg}</p>}
               </form>
             </div>
           </div>

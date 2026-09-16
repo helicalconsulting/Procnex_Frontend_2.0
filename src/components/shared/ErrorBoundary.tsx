@@ -54,8 +54,8 @@ export default class ErrorBoundary extends React.Component<
 
       return (
         <div className="cs-error-boundary" style={{ padding: 24, textAlign: 'center' }}>
-          <div className="cs-error-boundary__icon" style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
-          <h3 className="cs-error-boundary__title" style={{ fontSize: 18, fontWeight: 700, margin: '0 0 8px' }}>Something went wrong</h3>
+          <div className="cs-error-boundary__icon" style={{ fontSize: 33, marginBottom: 12 }}>⚠️</div>
+          <h3 className="cs-error-boundary__title" style={{ fontSize: 19, fontWeight: 700, margin: '0 0 8px' }}>Something went wrong</h3>
           <p className="cs-error-boundary__message" style={{ color: 'var(--text-secondary, #64748b)', margin: '0 0 16px' }}>
             {errText}
           </p>

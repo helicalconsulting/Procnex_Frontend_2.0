@@ -715,7 +715,7 @@ export default function RFQDetailModal({
                   <div className="rfq-modal__info-grid">
                     {[
                       { icon: <CalendarDays size={13} />, label: 'Closing Date', value: formatDate(rfq.closingDate) },
-                      { icon: <Banknote size={13} />, label: 'Currency', value: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>{rfq.currency}{activeViewDisplayCurrency !== rfq.currency && <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginLeft: 4 }}>Viewing: {activeViewDisplayCurrency}</span>}</span> },
+                      { icon: <Banknote size={13} />, label: 'Currency', value: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>{rfq.currency}{activeViewDisplayCurrency !== rfq.currency && <span style={{ fontSize: 12, color: 'var(--text-secondary)', marginLeft: 4 }}>Viewing: {activeViewDisplayCurrency}</span>}</span> },
                       { icon: <CalendarDays size={13} />, label: 'Created On', value: formatDate(rfq.createdAt) },
                       { icon: <Users size={13} />, label: 'Created By', value: rfq.creator },
                       { icon: <Package size={13} />, label: 'Total Items', value: String(rfq.itemCount) },
@@ -734,7 +734,7 @@ export default function RFQDetailModal({
                     <div className="rfq-modal__info-panel" style={{ marginTop: 12, border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 16 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                         <Shield size={16} style={{ color: 'var(--primary-500)' }} />
-                        <strong style={{ fontSize: 14, color: 'var(--text-primary)' }}>Bid Security Required</strong>
+                        <strong style={{ fontSize: 15, color: 'var(--text-primary)' }}>Bid Security Required</strong>
                       </div>
                       <div className="rfq-modal__info-grid" style={{ gap: 8 }}>
                         {rfq.bidSecurityType && (
@@ -920,7 +920,7 @@ export default function RFQDetailModal({
                             <span style={{
                               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                               width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
-                              fontSize: 11, fontWeight: 800,
+                              fontSize: 12, fontWeight: 800,
                               color: rankIdx === 0 ? '#92400e' : rankIdx === 1 ? '#4b5563' : rankIdx === 2 ? '#92400e' : '#6a6d70',
                               background: rankIdx === 0 ? 'rgba(245,158,11,0.15)' : rankIdx === 1 ? 'rgba(156,163,175,0.15)' : rankIdx === 2 ? 'rgba(217,119,6,0.12)' : 'transparent',
                               border: rankIdx <= 2 ? 'none' : '1px solid var(--border)',
@@ -988,7 +988,7 @@ export default function RFQDetailModal({
                                     title={`Score: ${rounded}% — ${label}`}
                                     style={{
                                       display: 'inline-flex', alignItems: 'center', gap: 3,
-                                      fontSize: 11, fontWeight: 700, cursor: 'help',
+                                      fontSize: 12, fontWeight: 700, cursor: 'help',
                                       color,
                                       background: rounded >= 80 ? 'rgba(16,126,62,0.08)' : rounded >= 60 ? 'rgba(180,83,9,0.08)' : 'rgba(220,38,38,0.08)',
                                       padding: '2px 8px', borderRadius: 4, marginBottom: 4,
@@ -1005,7 +1005,7 @@ export default function RFQDetailModal({
                               <span className="rfq-modal__quotation-price">
                                 {formatAmount(convert(q.totalPrice, q.currency || rfq.currency, activeViewDisplayCurrency), activeViewDisplayCurrency)}
                                 {activeViewDisplayCurrency !== (q.currency || rfq.currency) && (
-                                  <span style={{ fontSize: 10, color: 'var(--text-secondary)', display: 'block' }}>
+                                  <span style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block' }}>
                                     Original: {formatAmount(q.totalPrice, q.currency || rfq.currency)}
                                   </span>
                                 )}
@@ -1040,19 +1040,19 @@ export default function RFQDetailModal({
               {activeTab === 'approvals' && (
                 <div className="rfq-modal__approvals-panel" style={{ padding: '4px 0' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                    <h4 style={{ margin: 0, fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-primary)' }}>
+                    <h4 style={{ margin: 0, fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-primary)' }}>
                       <ShieldCheck size={18} style={{ color: 'var(--primary-500)' }} />
                       Approval History & Audit Trail
                     </h4>
                     {approvalChain?.totalLevels != null && (
-                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--surface-hover)', padding: '4px 10px', borderRadius: 12 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--surface-hover)', padding: '4px 10px', borderRadius: 12 }}>
                         Level {approvalChain.currentLevel || 1} of {approvalChain.totalLevels}
                       </span>
                     )}
                   </div>
 
                   {approvalChainLoading ? (
-                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', padding: '24px 0', textAlign: 'center' }}>Loading approval history...</div>
+                    <div style={{ fontSize: 14, color: 'var(--text-secondary)', padding: '24px 0', textAlign: 'center' }}>Loading approval history...</div>
                   ) : (() => {
                     const displayList = (approvalChain?.history && approvalChain.history.length > 0)
                       ? approvalChain.history
@@ -1090,28 +1090,28 @@ export default function RFQDetailModal({
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                   <span style={{
-                                    fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 4,
+                                    fontSize: 12, fontWeight: 700, padding: '3px 9px', borderRadius: 4,
                                     background: statusBg, color: statusColor, textTransform: 'uppercase', letterSpacing: '0.3px',
                                   }}>
                                     Level {item.levelNumber} — {statusLabel}
                                   </span>
-                                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
                                     {item.requiredRole}
                                   </span>
                                 </div>
-                                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                                   {item.actionAt ? formatDate(item.actionAt) : item.createdAt ? formatDate(item.createdAt) : '—'}
                                 </span>
                               </div>
 
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)' }}>
                                 <Users size={13} />
                                 <span>Action By: <strong style={{ color: 'var(--text-primary)' }}>{actionByText}</strong></span>
                               </div>
 
                               {item.comments && (
                                 <div style={{
-                                  fontSize: 12, color: 'var(--text-primary)', background: 'var(--surface-hover)',
+                                  fontSize: 13, color: 'var(--text-primary)', background: 'var(--surface-hover)',
                                   padding: '8px 12px', borderRadius: 4, marginTop: 2, fontStyle: 'italic',
                                 }}>
                                   "{item.comments}"
@@ -1123,7 +1123,7 @@ export default function RFQDetailModal({
                       </div>
                     ) : (
                       <div style={{
-                        fontSize: 13, color: 'var(--text-secondary)', padding: '24px', textAlign: 'center',
+                        fontSize: 14, color: 'var(--text-secondary)', padding: '24px', textAlign: 'center',
                         background: 'var(--surface-card)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)'
                       }}>
                         No approval history recorded yet.

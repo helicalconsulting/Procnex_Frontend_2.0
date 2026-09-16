@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import {
-  Plus, Search, FileText, Eye, Trash2, Users, Package,
+  Plus, Search, FileText, Eye, Trash2, Users, Building2,
   ArrowUpDown, ChevronLeft, ChevronRight, CalendarDays,
   ClipboardList, ChevronDown, AlertTriangle, Clock, CheckCircle2,
   XCircle, ThumbsUp, ThumbsDown, RotateCcw, MessageSquare, CheckSquare,
@@ -128,7 +128,7 @@ const ALL_COLUMNS: ColumnDef[] = [
     defaultVisible: true,
     render: (rfq) => (
       <div className="flex min-w-0 items-center gap-2">
-        <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary ring-1 ring-primary/15">{rfq.creatorInitials}</span>
+        <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary ring-1 ring-primary/15">{rfq.creatorInitials}</span>
         <span className="truncate text-sm text-foreground">{rfq.creator}</span>
       </div>
     ),
@@ -145,14 +145,12 @@ const ALL_COLUMNS: ColumnDef[] = [
     key: 'itemCount',
     label: 'Items',
     defaultVisible: true,
-    headerRender: () => <span className="inline-flex items-center gap-1"><Package size={12} />Items</span>,
     render: (rfq) => <span className="tabular-nums text-foreground">{rfq.itemCount}</span>,
   },
   {
     key: 'vendorCount',
     label: 'Vendors',
     defaultVisible: true,
-    headerRender: () => <span className="inline-flex items-center gap-1"><Users size={12} />Vendors</span>,
     render: (rfq) => (
       <span className="inline-flex items-center justify-center gap-1.5 tabular-nums text-muted-foreground">
         <Users size={13} />{rfq.vendorCount}
@@ -163,7 +161,6 @@ const ALL_COLUMNS: ColumnDef[] = [
     key: 'quotationCount',
     label: 'Quotes',
     defaultVisible: true,
-    headerRender: () => <span className="inline-flex items-center gap-1"><FileText size={12} />Quotes</span>,
     render: (rfq) => (
       <span className={cn('inline-flex min-w-7 justify-center rounded-lg px-2 py-1 text-xs font-semibold tabular-nums', rfq.quotationCount > 0 ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground')}>
         {rfq.quotationCount}
@@ -248,6 +245,7 @@ export default function RFQPage() {
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+  const [departmentFilter, setDepartmentFilter] = useState<string>('ALL');
   const [currentPage, setCurrentPage] = useState(1);
 
   const { data: rfqList, loading, error, reload } = useServiceData(
@@ -532,6 +530,17 @@ export default function RFQPage() {
 
   const perPage = 8;
 
+  const departmentOptions = useMemo(() => {
+    const set = new Set<string>();
+    rfqList.forEach((r) => {
+      if (r.department && r.department.trim()) {
+        set.add(r.department.trim());
+      }
+    });
+    ['Procurement', 'IT & Operations', 'Logistics', 'Finance', 'Engineering', 'Facilities'].forEach((d) => set.add(d));
+    return Array.from(set).sort();
+  }, [rfqList]);
+
   const filtered = useMemo(() => {
     let list = rfqList.filter((r) => r.title !== 'Direct PO Master' && !r.rfqNumber?.startsWith('RFQ-DIRECT'));
     if (statusFilter !== 'ALL') {
@@ -543,16 +552,20 @@ export default function RFQPage() {
         list = list.filter((r) => r.status === statusFilter);
       }
     }
+    if (departmentFilter !== 'ALL') {
+      list = list.filter((r) => (r.department || '').toLowerCase() === departmentFilter.toLowerCase());
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter((r) =>
         r.rfqNumber.toLowerCase().includes(q) ||
         r.title.toLowerCase().includes(q) ||
-        r.creator.toLowerCase().includes(q)
+        r.creator.toLowerCase().includes(q) ||
+        (r.department || '').toLowerCase().includes(q)
       );
     }
     return list;
-  }, [rfqList, statusFilter, search]);
+  }, [rfqList, statusFilter, departmentFilter, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
   const safePage = Math.min(currentPage, totalPages);
@@ -687,7 +700,11 @@ export default function RFQPage() {
               value={c.value}
               label={c.label}
               detail={c.detail}
-              className={cn('cursor-pointer select-none', isActive && 'border-primary/45 ring-2 ring-primary/10')}
+              className={cn(
+                'cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-all duration-200',
+                isActive &&
+                  'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
+              )}
               onClick={() => handleKpiClick(c.filter)}
               role="button"
               tabIndex={0}
@@ -698,16 +715,42 @@ export default function RFQPage() {
         })}
       </div>
 
-      <div className="relative mb-4 max-w-xl">
-        <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          className="h-11 rounded-xl pl-10"
-          type="text"
-          placeholder="Search by RFQ, title, or creator"
-          aria-label="Search requests for quotation"
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
-        />
+      {/* Search & Department Filter Toolbar */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full max-w-xl">
+          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="h-11 rounded-xl pl-10"
+            type="text"
+            placeholder="Search by RFQ, title, or creator"
+            aria-label="Search requests for quotation"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+          />
+        </div>
+
+        <div className="flex items-center gap-2.5 justify-end shrink-0 sm:ml-auto">
+          <div className="relative min-w-[210px]">
+            <Building2 size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <select
+              className="h-11 w-full appearance-none rounded-xl border border-input bg-card pl-10 pr-9 text-sm font-medium text-foreground shadow-xs transition-colors hover:bg-accent/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+              value={departmentFilter}
+              onChange={(e) => {
+                setDepartmentFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              aria-label="Filter by department"
+            >
+              <option value="ALL">All Departments</option>
+              {departmentOptions.map((dept) => (
+                <option key={dept} value={dept}>
+                  {dept}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          </div>
+        </div>
       </div>
 
       {/* Floating Bulk Action Banner */}
@@ -755,7 +798,7 @@ export default function RFQPage() {
                   <col className="w-[160px]" />
                 </colgroup>
                 <thead>
-                  <tr className="border-b border-border/75 bg-muted/45 text-left text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                  <tr className="border-b border-border/75 bg-muted/45 text-left text-[12px] font-bold uppercase tracking-wide text-muted-foreground">
                     <th className="px-3 py-3 text-center">
                       <input
                         type="checkbox"
@@ -778,8 +821,8 @@ export default function RFQPage() {
                         </th>
                       );
                     })}
-                    <th className="px-3 py-3 text-right">
-                      <div className="flex items-center justify-between gap-2">
+                    <th className="px-3 py-3 text-center">
+                      <div className="flex items-center justify-center gap-2">
                         <span>Actions</span>
                         <div className="relative">
                           <Button
@@ -845,8 +888,8 @@ export default function RFQPage() {
                           );
                         })}
 
-                        <td className="px-3 py-3.5" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-1">
+                        <td className="px-3 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-center gap-1">
                             {isPending && canApproveRFQ && (
                               <>
                                 <Button
@@ -1019,12 +1062,12 @@ export default function RFQPage() {
           </DialogHeader>
 
           {deleteForceRequired ? (
-            <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+            <div className="mt-4 flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
               <AlertTriangle className="mt-0.5 size-4 shrink-0" />
               <span>This RFQ has associated quotations or documents. Do you want to force delete it along with all related records?</span>
             </div>
           ) : (
-            <div className="flex items-start gap-3 rounded-xl border border-destructive/20 bg-destructive/[0.055] p-3.5 text-sm text-destructive">
+            <div className="mt-4 flex items-start gap-3 rounded-xl border border-destructive/20 bg-destructive/[0.055] p-3.5 text-sm text-destructive">
               <AlertTriangle className="mt-0.5 size-4 shrink-0" />
               <span>This action is permanent and cannot be undone.</span>
             </div>

@@ -33,7 +33,7 @@
   justify-content: center;
   gap: 6px;
   padding: 8px 12px;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--cfb-text-sub);
   background: transparent;
@@ -63,7 +63,7 @@
   border: 1px solid rgba(37, 99, 235, 0.3);
   color: #2563eb;
   border-radius: 4px;
-  font-size: 14.5px;
+  font-size: 15.5px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -105,7 +105,7 @@
   border: 1px solid var(--cfb-border-strong);
   border-radius: 4px;
   padding: 8px 12px 8px 38px;
-  font-size: 14.5px;
+  font-size: 15.5px;
   color: var(--cfb-text-main);
   outline: none;
   transition: border-color 0.15s ease;
@@ -132,7 +132,7 @@
 }
 
 .fbs-category-title {
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -191,7 +191,7 @@
 }
 
 .fbs-item-label {
-  font-size: 14.5px;
+  font-size: 15.5px;
   font-weight: 700;
   color: var(--cfb-text-main);
   white-space: nowrap;
@@ -200,7 +200,7 @@
 }
 
 .fbs-item-desc {
-  font-size: 12.5px;
+  font-size: 13.5px;
   color: var(--cfb-text-sub);
   white-space: nowrap;
   overflow: hidden;
@@ -261,7 +261,7 @@
 }
 
 .fbs-form-card__title {
-  font-size: 14.5px;
+  font-size: 15.5px;
   font-weight: 700;
   color: var(--cfb-text-main);
   white-space: nowrap;
@@ -270,7 +270,7 @@
 }
 
 .fbs-form-card__meta {
-  font-size: 12.5px;
+  font-size: 13.5px;
   color: var(--cfb-text-sub);
   text-transform: capitalize;
 }
@@ -316,7 +316,7 @@
   border: none;
   padding: 8px 14px;
   border-radius: 4px;
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
 }
@@ -384,14 +384,14 @@
 }
 
 .fbs-modal-body h3 {
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 700;
   color: var(--cfb-text-main, #f8fafc);
   margin: 0 0 8px 0;
 }
 
 .fbs-modal-body p {
-  font-size: 13.5px;
+  font-size: 14.5px;
   line-height: 1.5;
   color: var(--cfb-text-sub, #94a3b8);
   margin: 0;
@@ -413,7 +413,7 @@
   justify-content: center;
   gap: 6px;
   padding: 8px 16px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   border-radius: 6px;
   cursor: pointer;

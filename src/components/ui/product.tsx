@@ -17,10 +17,10 @@ export function PageLead({ title, description, actions, className, ...props }: P
   return (
     <div className={cn('mb-6 flex flex-col gap-4 sm:mb-7 lg:flex-row lg:items-start lg:justify-between', className)} {...props}>
       <div className="min-w-0">
-        <h1 className="text-[24px] font-semibold leading-[1.15] tracking-[-0.035em] text-foreground sm:text-[26px]">
+        <h1 className="text-[25px] font-semibold leading-[1.15] tracking-[-0.035em] text-foreground sm:text-[27px]">
           {title}
         </h1>
-        {description && <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-[15px]">{description}</p>}
+        {description && <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-[16px]">{description}</p>}
       </div>
       {actions && <div className="flex shrink-0 flex-wrap items-center gap-2.5">{actions}</div>}
     </div>
@@ -45,16 +45,25 @@ const toneClasses = {
 };
 
 export function MetricCard({ label, value, detail, icon: Icon, tone = 'primary', className, ...props }: MetricCardProps) {
+  const isPressed = props['aria-pressed'] === true || props['aria-pressed'] === 'true';
   return (
-    <Card className={cn('group min-w-0 p-4 transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-md sm:p-5', className)} {...props}>
+    <Card
+      className={cn(
+        'group min-w-0 p-4 transition-[border-color,box-shadow,transform,background-color] duration-200 hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-md sm:p-5',
+        isPressed &&
+          'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]',
+        className
+      )}
+      {...props}
+    >
       <div className="flex items-start gap-3.5">
         <div className={cn('grid size-10 shrink-0 place-items-center rounded-xl ring-1', toneClasses[tone])}>
           <Icon className="size-[18px]" strokeWidth={1.8} />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{label}</div>
-          <div className="mt-1 text-2xl font-semibold leading-none tracking-[-0.04em] text-foreground">{value}</div>
-          {detail && <div className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{detail}</div>}
+          <div className="text-2xl font-semibold leading-none tracking-[-0.04em] text-foreground">{value}</div>
+          <div className="mt-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{label}</div>
+          {detail && <div className="mt-1 text-xs leading-relaxed text-muted-foreground">{detail}</div>}
         </div>
       </div>
     </Card>
@@ -66,17 +75,38 @@ interface EmptyStateProps extends React.HTMLAttributes<HTMLDivElement> {
   title: string;
   description: string;
   action?: React.ReactNode;
+  size?: 'default' | 'lg';
 }
 
-export function EmptyState({ icon: Icon, title, description, action, className, ...props }: EmptyStateProps) {
+export function EmptyState({ icon: Icon, title, description, action, size = 'default', className, ...props }: EmptyStateProps) {
+  const isLg = size === 'lg';
   return (
-    <Card variant="soft" className={cn('flex min-h-72 flex-col items-center justify-center px-6 py-12 text-center', className)} {...props}>
-      <div className="grid size-12 place-items-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/15">
-        <Icon className="size-6" strokeWidth={1.7} />
+    <Card
+      variant="soft"
+      className={cn(
+        'flex flex-col items-center justify-center text-center',
+        isLg ? 'min-h-[380px] sm:min-h-[440px] px-8 py-16 sm:py-20' : 'min-h-72 px-6 py-12',
+        className
+      )}
+      {...props}
+    >
+      <div className="flex flex-col items-center justify-center text-center my-auto w-full max-w-lg">
+        <div
+          className={cn(
+            'grid place-items-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/15 shadow-sm',
+            isLg ? 'size-14 sm:size-16' : 'size-12'
+          )}
+        >
+          <Icon className={cn(isLg ? 'size-7 sm:size-8' : 'size-6')} strokeWidth={1.7} />
+        </div>
+        <h2 className={cn('font-semibold tracking-[-0.025em] text-foreground', isLg ? 'mt-5 sm:mt-6 text-xl sm:text-2xl' : 'mt-4 text-lg')}>
+          {title}
+        </h2>
+        <p className={cn('leading-relaxed text-muted-foreground', isLg ? 'mt-3 max-w-md text-sm sm:text-base' : 'mt-2 max-w-md text-sm')}>
+          {description}
+        </p>
+        {action && <div className={cn(isLg ? 'mt-7 sm:mt-8' : 'mt-5')}>{action}</div>}
       </div>
-      <h2 className="mt-4 text-lg font-semibold tracking-[-0.025em]">{title}</h2>
-      <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">{description}</p>
-      {action && <div className="mt-5">{action}</div>}
     </Card>
   );
 }
@@ -85,7 +115,7 @@ export function SectionHeader({ title, description, action, className }: { title
   return (
     <div className={cn('flex items-start justify-between gap-4 border-b border-border/70 px-5 py-4 sm:px-6', className)}>
       <div className="min-w-0">
-        <h2 className="text-[15px] font-semibold tracking-[-0.02em] text-foreground">{title}</h2>
+        <h2 className="text-[16px] font-semibold tracking-[-0.02em] text-foreground">{title}</h2>
         {description && <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{description}</p>}
       </div>
       {action}

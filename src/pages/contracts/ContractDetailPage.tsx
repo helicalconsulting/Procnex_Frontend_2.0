@@ -182,7 +182,7 @@ function SignModal({
           <button className="ctr-modal__close" onClick={onClose} disabled={signing}><X size={18} /></button>
         </div>
         <div className="ctr-sign-modal__body">
-          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>
+          <p style={{ margin: 0, fontSize: 14, color: 'var(--text-secondary)' }}>
             Signing as <strong>{signerLabel}</strong> for contract {contractNumber}
           </p>
 
@@ -204,7 +204,7 @@ function SignModal({
 
             {mode === 'draw' && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Ink Color:</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Ink Color:</span>
                 {[
                   { id: 'black', color: '#000000', label: 'Black Ink' },
                   { id: 'navy', color: '#0a2342', label: 'Navy Blue' },
@@ -902,13 +902,13 @@ export default function ContractDetailPage() {
                     </tbody>
                   </table>
                 ) : (
-                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>No SLA entries defined.</p>
+                  <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: 0 }}>No SLA entries defined.</p>
                 )}
               </div>
 
               <div className="ctr-detail__terms-card ctr-detail__terms-card--full">
                 <h4 className="ctr-detail__terms-card-title"><CheckCircle2 size={14} /> Compliance & Legal</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, fontSize: 13 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, fontSize: 14 }}>
                   {[
                     { label: 'Confidentiality', val: contract.confidentiality },
                     { label: 'Data Protection', val: contract.dataProtection },
@@ -925,7 +925,7 @@ export default function ContractDetailPage() {
                     </div>
                   ))}
                 </div>
-                <div style={{ marginTop: 12, fontSize: 13, display: 'flex', gap: 24 }}>
+                <div style={{ marginTop: 12, fontSize: 14, display: 'flex', gap: 24 }}>
                   <div><span style={{ color: 'var(--text-secondary)' }}>Governing Law: </span><strong>{contract.governingLaw || '—'}</strong></div>
                   <div><span style={{ color: 'var(--text-secondary)' }}>Jurisdiction: </span><strong>{contract.jurisdiction || '—'}</strong></div>
                   {contract.arbitrationLocation && <div><span style={{ color: 'var(--text-secondary)' }}>Arbitration Location: </span><strong>{contract.arbitrationLocation}</strong></div>}
@@ -942,7 +942,7 @@ export default function ContractDetailPage() {
                     <div className="ctr-detail__clause-header" onClick={() => setClauseOpen(clauseOpen === clause.title ? null : clause.title)}>
                       <div>
                         <span className="ctr-detail__clause-category">{clause.category}</span>
-                        <div style={{ fontSize: 14 }}>{clause.title}</div>
+                        <div style={{ fontSize: 15 }}>{clause.title}</div>
                       </div>
                       {clauseOpen === clause.title ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                     </div>
@@ -1013,11 +1013,11 @@ export default function ContractDetailPage() {
           <div>
             <div className="ctr-detail__doc-preview">
               <div style={{ textAlign: 'center', marginBottom: 24 }}>
-                <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>{contract.title}</h2>
-                <p style={{ color: 'var(--text-secondary)', margin: '4px 0 0', fontSize: 13 }}>{contract.contractNumber}</p>
+                <h2 style={{ fontSize: 21, fontWeight: 700, margin: 0 }}>{contract.title}</h2>
+                <p style={{ color: 'var(--text-secondary)', margin: '4px 0 0', fontSize: 14 }}>{contract.contractNumber}</p>
               </div>
               {contract.contentSnapshot ? (
-                <div dangerouslySetInnerHTML={{ __html: cleanDuplicateSignatures(contract.contentSnapshot) }} />
+                <div className="ctr-doc-preview-content" dangerouslySetInnerHTML={{ __html: cleanDuplicateSignatures(contract.contentSnapshot) }} />
               ) : (
                 <p style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 48 }}>
                   No generated document content available. The contract document will appear here after generation.
@@ -1095,7 +1095,7 @@ export default function ContractDetailPage() {
               <div className="ctr-detail__po-empty">
                 <div className="ctr-detail__po-empty-icon"><Package size={36} /></div>
                 <p style={{ fontWeight: 600 }}>No Purchase Orders Yet</p>
-                <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20 }}>
+                <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 20 }}>
                   {isAccepted 
                     ? 'Create a purchase order from this contract to get started.'
                     : 'Purchase orders linked to this contract will appear here once the contract is accepted.'}
@@ -1132,7 +1132,7 @@ export default function ContractDetailPage() {
               <div className="ctr-detail__po-empty">
                 <div className="ctr-detail__po-empty-icon"><Activity size={36} /></div>
                 <p style={{ fontWeight: 600 }}>No activity recorded</p>
-                <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Activities and changes to this contract will be logged here.</p>
+                <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Activities and changes to this contract will be logged here.</p>
               </div>
             )}
           </div>
@@ -1159,7 +1159,7 @@ export default function ContractDetailPage() {
               <button className="ctr-modal__close" onClick={() => setShowTerminateConfirm(false)} disabled={terminating}><X size={18} /></button>
             </div>
             <div className="ctr-modal__body">
-              <p style={{ margin: 0, fontSize: 14 }}>
+              <p style={{ margin: 0, fontSize: 15 }}>
                 Are you sure you want to terminate <strong>{contract.contractNumber}</strong>?
               </p>
               <div className="ctr-sign-modal__signer-field">
@@ -1192,7 +1192,7 @@ export default function ContractDetailPage() {
               <button className="ctr-modal__close" onClick={() => setShowDeleteConfirm(false)} disabled={deleting}><X size={18} /></button>
             </div>
             <div className="ctr-modal__body">
-              <p style={{ margin: 0, fontSize: 14 }}>
+              <p style={{ margin: 0, fontSize: 15 }}>
                 Are you sure you want to delete <strong>{contract.contractNumber}</strong> — {contract.title}?
                 This action cannot be undone and will permanently remove this contract.
               </p>

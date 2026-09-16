@@ -424,39 +424,6 @@ export default function PurchaseRequisitionsListPage() {
               <p className="shrink-0 text-xs text-muted-foreground" aria-live="polite">
                 {filteredRequisitions.length} of {requisitions.length} documents
               </p>
-              <div className="relative">
-                <Button
-                  ref={colBtnRef}
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowColPanel((v) => !v)}
-                  title="Customize columns"
-                >
-                  <SlidersHorizontal className="size-3.5" /> Columns
-                </Button>
-                {showColPanel && (
-                  <ColumnCustomizer
-                    columnOrder={columnOrder}
-                    visibleKeys={visibleKeys}
-                    allColumns={ALL_COLUMNS}
-                    onToggle={(key) => {
-                      setVisibleKeys((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(key)) next.delete(key);
-                        else next.add(key);
-                        return next;
-                      });
-                    }}
-                    onReorder={setColumnOrder}
-                    onReset={() => {
-                      setColumnOrder(defaultOrder);
-                      setVisibleKeys(new Set(defaultVisible));
-                    }}
-                    onClose={() => setShowColPanel(false)}
-                    anchorRef={colBtnRef}
-                  />
-                )}
-              </div>
             </div>
           </div>
 
@@ -477,7 +444,7 @@ export default function PurchaseRequisitionsListPage() {
               <div className="hidden overflow-x-auto lg:block">
                 <table className="w-full min-w-[860px] border-collapse text-sm">
                   <thead>
-                    <tr className="border-b border-border/70 bg-muted/35 text-left text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
+                    <tr className="border-b border-border/70 bg-muted/35 text-left text-[12px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
                       <th className="w-11 px-4 py-3 text-center">
                         <input
                           type="checkbox"
@@ -495,7 +462,47 @@ export default function PurchaseRequisitionsListPage() {
                           {col.label}
                         </th>
                       ))}
-                      <th className="px-5 py-3 text-right">Actions</th>
+                      <th className="px-5 py-3 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <span>Actions</span>
+                          <div className="relative">
+                            <Button
+                              ref={colBtnRef}
+                              variant={showColPanel ? 'secondary' : 'ghost'}
+                              size="icon-sm"
+                              onClick={() => setShowColPanel((v) => !v)}
+                              title="Customize columns"
+                              aria-label="Customize columns"
+                              aria-expanded={showColPanel}
+                            >
+                              <span className="flex gap-0.5"><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /></span>
+                            </Button>
+
+                            {showColPanel && (
+                              <ColumnCustomizer
+                                columnOrder={columnOrder}
+                                visibleKeys={visibleKeys}
+                                allColumns={ALL_COLUMNS}
+                                onToggle={(key) => {
+                                  setVisibleKeys((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(key)) next.delete(key);
+                                    else next.add(key);
+                                    return next;
+                                  });
+                                }}
+                                onReorder={setColumnOrder}
+                                onReset={() => {
+                                  setColumnOrder(defaultOrder);
+                                  setVisibleKeys(new Set(defaultVisible));
+                                }}
+                                onClose={() => setShowColPanel(false)}
+                                anchorRef={colBtnRef}
+                              />
+                            )}
+                          </div>
+                        </div>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -562,8 +569,8 @@ export default function PurchaseRequisitionsListPage() {
                             return <td key={col.key} className="px-4 py-4">-</td>;
                           })}
 
-                          <td className="px-5 py-4" onClick={(event) => event.stopPropagation()}>
-                            <div className="flex justify-end gap-1">
+                          <td className="px-5 py-4 text-center" onClick={(event) => event.stopPropagation()}>
+                            <div className="flex items-center justify-center gap-1">
                               <Button
                                 variant="ghost"
                                 size="icon-sm"

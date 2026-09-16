@@ -574,10 +574,10 @@ export default function FormsPage() {
                     borderLeft: '4px solid #e9730c',
                     borderRadius: '4px',
                   }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#e9730c', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#e9730c', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>
                       ⚠️ Returned for Revision — by {retActor}
                     </div>
-                    <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>{retReason}</div>
+                    <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.5 }}>{retReason}</div>
                   </div>
                 );
               })()}

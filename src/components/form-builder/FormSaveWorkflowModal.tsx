@@ -468,7 +468,7 @@ export default function FormSaveWorkflowModal({
                             </div>
                             <div className="flex min-w-0 flex-1 flex-col">
                               <span className="truncate text-xs font-semibold text-foreground">{u.fullName}</span>
-                              <span className="truncate text-[11px] text-muted-foreground">{u.email}</span>
+                              <span className="truncate text-[12px] text-muted-foreground">{u.email}</span>
                             </div>
                             <div className={`flex size-5 shrink-0 items-center justify-center rounded-md border ${isSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card'}`}>
                               {isSelected && <Check size={12} />}

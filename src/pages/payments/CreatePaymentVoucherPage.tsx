@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
 import { vendorService } from '../../services/vendorService';
@@ -8,22 +8,15 @@ import { companySettingsService } from '../../services/companySettingsService';
 import {
   ArrowLeft,
   CreditCard,
-  Building2,
-  Calendar,
   Save,
   Send,
   Upload,
   Paperclip,
   X,
-  Receipt,
   Landmark,
-  FileCheck2,
   PackageCheck,
-  ShieldCheck,
   AlertTriangle,
   CheckCircle2,
-  Layers,
-  HelpCircle,
   Plus,
   Search,
   Eye,
@@ -37,8 +30,6 @@ import { MessageStrip } from '../../components/shared/MessageStrip';
 import BankPaymentVoucherModal, { type PaymentVoucherDocData } from '../../components/payments/BankPaymentVoucherModal';
 import { useAuth } from '../../context/AuthContext';
 import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyMaster';
-import '../purchase-orders/CreatePurchaseOrderPage.css';
-import '../purchase-requisitions/PurchaseRequisitionPage.css';
 import './CreatePaymentVoucherPage.css';
 
 interface VendorOption {
@@ -384,7 +375,7 @@ export default function CreatePaymentVoucherPage() {
     };
 
     return (
-      <div className="pr-page">
+      <div className="cpv-page">
         {/* Notifications */}
         {errorMsg && (
           <MessageStrip type="error" onClose={() => setErrorMsg(null)}>
@@ -397,179 +388,146 @@ export default function CreatePaymentVoucherPage() {
           </MessageStrip>
         )}
 
-        {/* Management Header matching Create Purchase Invoice layout */}
-        <div className="pr-page__header" style={{ marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
-          <div>
-            <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
-              Payment Voucher Entry & Management
-            </h1>
-            <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--text-secondary, #64748b)' }}>
+        {/* Header - Clean transparent header matching Purchase Invoice page */}
+        <div className="cpv-header">
+          <div className="cpv-header-main">
+            <div className="cpv-header-top-row">
+              <h1 className="cpv-header__title">Payment Voucher Entry & Management</h1>
+              <div className="cpv-header__actions">
+                <button
+                  className="cpv-btn cpv-btn--primary"
+                  onClick={() => setIsCreating(true)}
+                  disabled={!canCreateVoucher}
+                  title={!canCreateVoucher ? "You do not have permission to create payment vouchers." : undefined}
+                >
+                  <Plus size={16} /> New Voucher
+                </button>
+              </div>
+            </div>
+            <p className="cpv-header__subtitle">
               Manage payment vouchers, bank disbursement entries and approval statuses
             </p>
           </div>
-          <button
-            className="pr-btn pr-btn--primary"
-            onClick={() => setIsCreating(true)}
-            disabled={!canCreateVoucher}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '10px 20px',
-              borderRadius: 8,
-              fontSize: 15,
-              fontWeight: 700,
-              background: canCreateVoucher ? 'linear-gradient(135deg, #0a6ed1, #0856a4)' : 'var(--bg-disabled, #cbd5e1)',
-              color: canCreateVoucher ? '#fff' : 'var(--text-disabled, #64748b)',
-              border: 'none',
-              cursor: canCreateVoucher ? 'pointer' : 'not-allowed',
-              opacity: canCreateVoucher ? 1 : 0.6,
-              boxShadow: canCreateVoucher ? '0 4px 12px rgba(10, 110, 209, 0.25)' : 'none',
-            }}
-          >
-            <Plus size={16} /> New Voucher
-          </button>
         </div>
 
-        {/* 5 KPI Summary Cards */}
-        <div className="pr-kpi-summary" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+        {/* 5 KPI Summary Cards Grid */}
+        <div className="cpv-kpi-grid">
           <div
-            className={`pr-kpi-card ${statusFilter === null ? 'pr-kpi-card--active' : ''}`}
+            className={`cpv-kpi-card cpv-kpi-card--clickable ${statusFilter === null ? 'cpv-kpi-card--active' : ''}`}
             onClick={() => setStatusFilter(null)}
-            style={{ cursor: 'pointer' }}
           >
-            <div className="pr-kpi-icon" style={{ background: 'rgba(10,110,209,0.08)', color: '#0a6ed1' }}>
-              <FileText size={20} />
+            <div className="cpv-kpi-icon" style={{ background: 'rgba(10,110,209,0.1)', color: '#0a6ed1' }}>
+              <FileText size={22} />
             </div>
-            <div className="pr-kpi-info">
-              <span className="pr-kpi-label">TOTAL DOCUMENTS</span>
-              <span className="pr-kpi-value">{vouchersList.length}</span>
+            <div className="cpv-kpi-info">
+              <span className="cpv-kpi-value">{vouchersList.length}</span>
+              <span className="cpv-kpi-label">Total Documents</span>
             </div>
           </div>
 
           <div
-            className={`pr-kpi-card ${statusFilter === 'DRAFT_PENDING' ? 'pr-kpi-card--active' : ''}`}
+            className={`cpv-kpi-card cpv-kpi-card--clickable ${statusFilter === 'DRAFT_PENDING' ? 'cpv-kpi-card--active' : ''}`}
             onClick={() => setStatusFilter((prev) => (prev === 'DRAFT_PENDING' ? null : 'DRAFT_PENDING'))}
-            style={{ cursor: 'pointer' }}
           >
-            <div className="pr-kpi-icon" style={{ background: 'rgba(233,115,12,0.1)', color: '#e9730c' }}>
-              <Clock size={20} />
+            <div className="cpv-kpi-icon" style={{ background: 'rgba(234,179,8,0.12)', color: '#eab308' }}>
+              <Clock size={22} />
             </div>
-            <div className="pr-kpi-info">
-              <span className="pr-kpi-label">DRAFT & PENDING</span>
-              <span className="pr-kpi-value">{draftAndPendingCount}</span>
+            <div className="cpv-kpi-info">
+              <span className="cpv-kpi-value">{draftAndPendingCount}</span>
+              <span className="cpv-kpi-label">Draft & Pending</span>
             </div>
           </div>
 
           <div
-            className={`pr-kpi-card ${statusFilter === 'APPROVED' ? 'pr-kpi-card--active' : ''}`}
+            className={`cpv-kpi-card cpv-kpi-card--clickable ${statusFilter === 'APPROVED' ? 'cpv-kpi-card--active' : ''}`}
             onClick={() => setStatusFilter((prev) => (prev === 'APPROVED' ? null : 'APPROVED'))}
-            style={{ cursor: 'pointer' }}
           >
-            <div className="pr-kpi-icon" style={{ background: 'rgba(16,126,62,0.1)', color: '#107e3e' }}>
-              <CheckCircle2 size={20} />
+            <div className="cpv-kpi-icon" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>
+              <CheckCircle2 size={22} />
             </div>
-            <div className="pr-kpi-info">
-              <span className="pr-kpi-label">APPROVED & RELEASED</span>
-              <span className="pr-kpi-value">{activeCount}</span>
+            <div className="cpv-kpi-info">
+              <span className="cpv-kpi-value">{activeCount}</span>
+              <span className="cpv-kpi-label">Approved & Released</span>
             </div>
           </div>
 
           <div
-            className={`pr-kpi-card ${statusFilter === 'REJECTED' ? 'pr-kpi-card--active' : ''}`}
+            className={`cpv-kpi-card cpv-kpi-card--clickable ${statusFilter === 'REJECTED' ? 'cpv-kpi-card--active' : ''}`}
             onClick={() => setStatusFilter((prev) => (prev === 'REJECTED' ? null : 'REJECTED'))}
-            style={{ cursor: 'pointer' }}
           >
-            <div className="pr-kpi-icon" style={{ background: 'rgba(220,38,38,0.1)', color: '#dc2626' }}>
-              <X size={20} />
+            <div className="cpv-kpi-icon" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444' }}>
+              <X size={22} />
             </div>
-            <div className="pr-kpi-info">
-              <span className="pr-kpi-label">REJECTED</span>
-              <span className="pr-kpi-value" style={{ color: rejectedCount > 0 ? '#dc2626' : undefined }}>{rejectedCount}</span>
+            <div className="cpv-kpi-info">
+              <span className="cpv-kpi-value" style={{ color: rejectedCount > 0 ? '#ef4444' : undefined }}>{rejectedCount}</span>
+              <span className="cpv-kpi-label">Rejected</span>
             </div>
           </div>
 
-          <div className="pr-kpi-card">
-            <div className="pr-kpi-icon pr-kpi-icon--grand">
-              <CreditCard size={20} />
+          <div className="cpv-kpi-card">
+            <div className="cpv-kpi-icon" style={{ background: 'rgba(10,110,209,0.12)', color: '#0a6ed1' }}>
+              <CreditCard size={22} />
             </div>
-            <div className="pr-kpi-info">
-              <span className="pr-kpi-label">TOTAL VOLUME</span>
-              <span className="pr-kpi-value pr-kpi-value--grand">
+            <div className="cpv-kpi-info">
+              <span className="cpv-kpi-value cpv-kpi-value--mono">
                 {formatAmount(totalValue, companyDefaultCurrency)}
               </span>
+              <span className="cpv-kpi-label">Total Volume</span>
             </div>
           </div>
         </div>
 
-        {/* Search Bar */}
-        {vouchersList.length > 0 && (
-          <div className="pr-search-bar-wrap">
-            <div style={{ position: 'relative', width: '100%' }}>
-              <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-placeholder)', pointerEvents: 'none' }} />
-              <input
-                type="text"
-                className="pr-search-input"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search voucher, vendor, status..."
-              />
-              {searchTerm && (
-                <button
-                  type="button"
-                  onClick={() => setSearchTerm('')}
-                  style={{
-                    position: 'absolute',
-                    right: 12,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--text-placeholder)',
-                    cursor: 'pointer',
-                    padding: 2,
-                  }}
-                >
-                  <X size={15} />
-                </button>
-              )}
-            </div>
+        {/* Toolbar & Search */}
+        <div className="cpv-toolbar">
+          <div className="cpv-search-box">
+            <Search size={16} className="cpv-search-icon" />
+            <input
+              type="text"
+              className="cpv-search-input"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search voucher, vendor, status..."
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                className="cpv-search-clear"
+                onClick={() => setSearchTerm('')}
+                title="Clear search"
+              >
+                <X size={15} />
+              </button>
+            )}
           </div>
-        )}
+          {(statusFilter !== null || searchTerm) && (
+            <button
+              className="cpv-btn cpv-btn--outline cpv-btn--sm"
+              onClick={() => { setSearchTerm(''); setStatusFilter(null); }}
+            >
+              <X size={14} /> Clear Filters
+            </button>
+          )}
+        </div>
 
         {/* Floating Bulk Action Banner */}
         {selectedVoucherIds.length > 0 && !showBulkDeleteModal && (
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            background: 'var(--surface-card)', border: '1px solid var(--primary-500)',
-            padding: '12px 18px', borderRadius: 'var(--radius-md)', marginBottom: '16px',
-            boxShadow: '0 4px 14px rgba(0,0,0,0.12)', transition: 'all 0.2s ease'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+          <div className="cpv-bulk-banner">
+            <div className="cpv-bulk-info">
               <CheckSquare size={18} style={{ color: 'var(--primary-500)' }} />
               <span><strong>{selectedVoucherIds.length}</strong> Voucher(s) selected</span>
             </div>
-            <div style={{ display: 'flex', gap: 10 }}>
+            <div className="cpv-bulk-actions">
               <button
                 type="button"
-                className="pr-btn pr-btn--outline"
-                style={{ padding: '7px 16px', fontSize: 13, fontWeight: 600 }}
+                className="cpv-btn cpv-btn--outline cpv-btn--sm"
                 onClick={() => setSelectedVoucherIds([])}
               >
                 Cancel Selection
               </button>
               <button
                 type="button"
+                className="cpv-btn cpv-btn--danger cpv-btn--sm"
                 disabled={!canCreateVoucher}
-                style={{
-                  background: canCreateVoucher ? '#dc2626' : '#64748b',
-                  color: '#ffffff', border: 'none',
-                  padding: '7px 16px', fontSize: 13, fontWeight: 700,
-                  borderRadius: 'var(--radius-sm)',
-                  cursor: canCreateVoucher ? 'pointer' : 'not-allowed',
-                  opacity: canCreateVoucher ? 1 : 0.5,
-                  display: 'inline-flex', alignItems: 'center', gap: 6
-                }}
                 onClick={() => setShowBulkDeleteModal(true)}
               >
                 <Trash2 size={14} /> Delete Selected ({selectedVoucherIds.length})
@@ -578,46 +536,45 @@ export default function CreatePaymentVoucherPage() {
           </div>
         )}
 
-        {/* Table View */}
+        {/* Management Table */}
         {vouchersList.length === 0 ? (
-          <div className="pr-empty">
-            <div className="pr-empty__icon-wrapper">
-              <Landmark size={26} />
+          <div className="cpv-empty">
+            <div className="cpv-empty-icon">
+              <Landmark size={28} />
             </div>
             <h3>No Payment Vouchers Yet</h3>
             <p>Click "+ New Voucher" on the top right to create your first vendor payment disbursement voucher.</p>
           </div>
         ) : filteredVouchers.length === 0 ? (
-          <div className="pr-empty">
-            <div className="pr-empty__icon-wrapper">
-              <Search size={26} />
+          <div className="cpv-empty">
+            <div className="cpv-empty-icon">
+              <Search size={28} />
             </div>
             <h3>No matching vouchers found</h3>
             <p>We couldn't find any vouchers matching your search or filter criteria.</p>
             <button
-              className="pr-btn pr-btn--outline"
+              className="cpv-btn cpv-btn--outline"
               onClick={() => { setSearchTerm(''); setStatusFilter(null); }}
-              style={{ borderRadius: 20, padding: '8px 20px' }}
             >
               <X size={14} /> Clear Filters
             </button>
           </div>
         ) : (
-          <div className="pr-list-table-wrap">
-            <table className="pr-list-table">
+          <div className="cpv-card-table">
+            <table className="cpv-table">
               <colgroup>
                 <col style={{ width: '44px' }} />
                 <col style={{ width: '170px' }} />
-                <col style={{ width: '200px' }} />
-                <col style={{ width: '130px' }} />
-                <col style={{ width: '90px' }} />
+                <col style={{ width: '220px' }} />
+                <col style={{ width: '140px' }} />
+                <col style={{ width: '100px' }} />
+                <col style={{ width: '170px' }} />
                 <col style={{ width: '160px' }} />
-                <col style={{ width: '150px' }} />
-                <col style={{ width: '135px' }} />
+                <col style={{ width: '120px' }} />
               </colgroup>
               <thead>
                 <tr>
-                  <th style={{ width: 44, textAlign: 'center' }}>
+                  <th style={{ textAlign: 'center' }}>
                     <input
                       type="checkbox"
                       checked={isAllSelected}
@@ -626,13 +583,13 @@ export default function CreatePaymentVoucherPage() {
                       style={{ cursor: canCreateVoucher ? 'pointer' : 'not-allowed', width: 16, height: 16 }}
                     />
                   </th>
-                  <th>VOUCHER NUMBER</th>
-                  <th>VENDOR</th>
-                  <th>VOUCHER DATE</th>
-                  <th>CURRENCY</th>
-                  <th style={{ textAlign: 'right' }}>NET DISBURSEMENT</th>
-                  <th>STATUS</th>
-                  <th style={{ textAlign: 'center' }}>ACTIONS</th>
+                  <th>Voucher Number</th>
+                  <th>Vendor</th>
+                  <th>Voucher Date</th>
+                  <th>Currency</th>
+                  <th style={{ textAlign: 'right' }}>Net Disbursement</th>
+                  <th>Status</th>
+                  <th style={{ textAlign: 'center' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -640,22 +597,13 @@ export default function CreatePaymentVoucherPage() {
                   const statusKey = (v.status || '').toUpperCase();
                   const isApproved = statusKey === 'APPROVED' || statusKey === 'PAID' || statusKey === 'COMPLETED';
                   const isRejected = statusKey === 'REJECTED' || statusKey === 'CANCELLED';
-                  const badgeClass = isApproved
-                    ? 'APPROVED'
-                    : isRejected
-                    ? 'REJECTED'
-                    : 'PENDING_APPROVAL';
-
-                  const badgeLabel = isApproved
-                    ? 'APPROVED'
-                    : isRejected
-                    ? 'REJECTED'
-                    : 'PENDING APPROVAL';
+                  const badgeClass = isApproved ? 'approved' : isRejected ? 'rejected' : 'pending';
+                  const badgeLabel = isApproved ? 'APPROVED' : isRejected ? 'REJECTED' : 'PENDING APPROVAL';
 
                   return (
                     <tr
                       key={v.id || v.paymentId}
-                      className={`pr-list-row pr-list-row--${badgeClass.toLowerCase()}`}
+                      className="cpv-table-row"
                       onClick={() => handleViewVoucherDoc(v)}
                     >
                       <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
@@ -667,31 +615,28 @@ export default function CreatePaymentVoucherPage() {
                           style={{ cursor: canCreateVoucher ? 'pointer' : 'not-allowed', width: 16, height: 16 }}
                         />
                       </td>
-                      <td className="pr-list__po-num">
-                        <span className="pr-po-link">{v.paymentId}</span>
-                      </td>
-                      <td className="pr-list__vendor">{v.vendor || '—'}</td>
+                      <td className="cpv-voucher-num">{v.paymentId}</td>
+                      <td className="cpv-vendor-name">{v.vendor || '—'}</td>
                       <td>{v.paidAt || '—'}</td>
                       <td>{companyDefaultCurrency}</td>
-                      <td className="pr-list__total" style={{ textAlign: 'right' }}>
+                      <td className="cpv-amount" style={{ textAlign: 'right' }}>
                         {formatAmount(v.amount || 0, companyDefaultCurrency)}
                       </td>
                       <td>
-                        <span className={`pr-badge pr-badge--${badgeClass}`}>{badgeLabel}</span>
+                        <span className={`cpv-badge cpv-badge--${badgeClass}`}>{badgeLabel}</span>
                       </td>
                       <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
                           <button
-                            className="pr-list__view-btn"
+                            className="cpv-action-btn"
                             onClick={() => handleViewVoucherDoc(v)}
                             title="View Bank Payment Voucher Document"
                           >
                             <Eye size={15} />
                           </button>
                           <button
-                            className="pr-list__view-btn"
+                            className="cpv-action-btn"
                             disabled={!canCreateVoucher}
-                            style={!canCreateVoucher ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
                             title="Edit Payment Voucher"
                             onClick={() => {
                               if (!canCreateVoucher) return;
@@ -705,9 +650,8 @@ export default function CreatePaymentVoucherPage() {
                             <Pencil size={15} />
                           </button>
                           <button
-                            className="pr-list__view-btn pr-list__delete-btn"
+                            className="cpv-action-btn cpv-action-btn--delete"
                             disabled={!canCreateVoucher}
-                            style={!canCreateVoucher ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
                             title="Delete Payment Voucher"
                             onClick={() => {
                               if (!canCreateVoucher) return;
@@ -728,37 +672,36 @@ export default function CreatePaymentVoucherPage() {
 
         {/* Single Voucher Delete Confirmation Modal */}
         {deleteTarget && (
-          <div className="pr-modal-backdrop" onClick={() => !deleting && setDeleteTarget(null)}>
-            <div className="pr-modal-box" onClick={(e) => e.stopPropagation()}>
-              <div className="pr-modal-header pr-modal-header--danger">
+          <div className="cpv-modal-backdrop" onClick={() => !deleting && setDeleteTarget(null)}>
+            <div className="cpv-modal-box" onClick={(e) => e.stopPropagation()}>
+              <div className="cpv-modal-header cpv-modal-header--danger">
                 <h3>
                   <AlertTriangle size={20} />
                   <span>Delete Payment Voucher?</span>
                 </h3>
-                <button className="pr-modal-close" onClick={() => setDeleteTarget(null)} disabled={deleting} title="Close">
+                <button className="cpv-modal-close" onClick={() => setDeleteTarget(null)} disabled={deleting} title="Close">
                   <X size={16} />
                 </button>
               </div>
-              <div className="pr-modal-body">
+              <div className="cpv-modal-body">
                 <p>
                   Are you sure you want to delete Payment Voucher <strong>{deleteTarget.paymentId}</strong> for <strong>{deleteTarget.vendor}</strong>?
                 </p>
-                <div className="pr-modal-warning">
+                <div className="cpv-modal-warning">
                   <AlertTriangle size={16} style={{ flexShrink: 0 }} />
                   <span>This action is permanent and cannot be undone.</span>
                 </div>
               </div>
-              <div className="pr-modal-footer">
+              <div className="cpv-modal-footer">
                 <button
-                  ref={(el) => el?.focus()}
-                  className="pr-btn pr-btn--outline"
+                  className="cpv-btn cpv-btn--outline"
                   onClick={() => setDeleteTarget(null)}
                   disabled={deleting}
                 >
                   Cancel
                 </button>
                 <button
-                  className="pr-btn pr-btn--danger"
+                  className="cpv-btn cpv-btn--danger"
                   onClick={handleDeleteConfirm}
                   disabled={deleting}
                 >
@@ -771,37 +714,36 @@ export default function CreatePaymentVoucherPage() {
 
         {/* Bulk Voucher Delete Confirmation Modal */}
         {showBulkDeleteModal && (
-          <div className="pr-modal-backdrop" onClick={() => !deleting && setShowBulkDeleteModal(false)}>
-            <div className="pr-modal-box" onClick={(e) => e.stopPropagation()}>
-              <div className="pr-modal-header pr-modal-header--danger">
+          <div className="cpv-modal-backdrop" onClick={() => !deleting && setShowBulkDeleteModal(false)}>
+            <div className="cpv-modal-box" onClick={(e) => e.stopPropagation()}>
+              <div className="cpv-modal-header cpv-modal-header--danger">
                 <h3>
                   <AlertTriangle size={20} />
                   <span>Delete {selectedVoucherIds.length} Selected Voucher(s)?</span>
                 </h3>
-                <button className="pr-modal-close" onClick={() => setShowBulkDeleteModal(false)} disabled={deleting} title="Close">
+                <button className="cpv-modal-close" onClick={() => setShowBulkDeleteModal(false)} disabled={deleting} title="Close">
                   <X size={16} />
                 </button>
               </div>
-              <div className="pr-modal-body">
+              <div className="cpv-modal-body">
                 <p>
                   Are you sure you want to delete the <strong>{selectedVoucherIds.length} selected payment voucher(s)</strong>?
                 </p>
-                <div className="pr-modal-warning">
+                <div className="cpv-modal-warning">
                   <AlertTriangle size={16} style={{ flexShrink: 0 }} />
                   <span>This action is permanent and cannot be undone.</span>
                 </div>
               </div>
-              <div className="pr-modal-footer">
+              <div className="cpv-modal-footer">
                 <button
-                  ref={(el) => el?.focus()}
-                  className="pr-btn pr-btn--outline"
+                  className="cpv-btn cpv-btn--outline"
                   onClick={() => setShowBulkDeleteModal(false)}
                   disabled={deleting}
                 >
                   Cancel
                 </button>
                 <button
-                  className="pr-btn pr-btn--danger"
+                  className="cpv-btn cpv-btn--danger"
                   onClick={handleBulkDeleteConfirm}
                   disabled={deleting}
                 >
@@ -825,7 +767,7 @@ export default function CreatePaymentVoucherPage() {
 
   // ── Render Voucher Entry Form View (`isCreating === true`) ──
   return (
-    <div className="cpo-page">
+    <div className="cpv-page">
       {/* Notifications */}
       {errorMsg && (
         <MessageStrip type="error" onClose={() => setErrorMsg(null)}>
@@ -838,24 +780,25 @@ export default function CreatePaymentVoucherPage() {
         </MessageStrip>
       )}
 
-      {/* Header */}
-      <div className="cpo-header">
-        <div className="cpo-header__left">
-          <button className="cpo-back-btn" onClick={() => setIsCreating(false)}>
-            <ArrowLeft size={16} /> Back to Vouchers
+      {/* Form Header */}
+      <div className="cpv-header">
+        <div className="cpv-header__left">
+          <button className="cpv-back-btn" onClick={() => setIsCreating(false)} title="Back" aria-label="Back">
+            <ArrowLeft size={18} />
           </button>
-          <div className="cpo-header__title-wrap">
-            <h1>Create Payment Voucher</h1>
-            <p>Generate vendor payment disbursement voucher with Bank Details & Payment Workflow</p>
+          <div className="cpv-header__titles">
+            <h1 className="cpv-header__title">Create Payment Voucher</h1>
+            <p className="cpv-header__subtitle">
+              Generate vendor payment disbursement voucher with Bank Details & Payment Workflow
+            </p>
           </div>
         </div>
-        <div className="cpo-header__actions">
+        <div className="cpv-header__actions">
           <button
-            className="cpo-btn cpo-btn--primary"
+            className="cpv-btn cpv-btn--primary"
             onClick={submitVoucher}
             disabled={savingDraft || submitting || !canCreateVoucher}
-            style={!canCreateVoucher ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-            title={!canCreateVoucher ? "Admin has not allowed this action. You do not have permission to submit payment vouchers." : undefined}
+            title={!canCreateVoucher ? "You do not have permission to submit payment vouchers." : undefined}
           >
             <Send size={15} /> {submitting ? 'Submitting…' : 'Submit Voucher for Approval'}
           </button>
@@ -863,21 +806,21 @@ export default function CreatePaymentVoucherPage() {
       </div>
 
       {/* Form Body */}
-      <div className="cpo-body">
+      <div className="cpv-form-body">
         {/* Section 01: Identification & Timing */}
-        <div className="cpo-section">
-          <div className="cpo-section__header">
-            <span className="cpo-section__num">01</span>
-            <span className="cpo-section__title">Voucher Identification & Schedule</span>
+        <div className="cpv-section">
+          <div className="cpv-section__header">
+            <span className="cpv-section__num">01</span>
+            <span className="cpv-section__title">Voucher Identification & Schedule</span>
           </div>
-          <div className="cpo-grid cpo-grid--4">
-            <div className="cpo-field">
-              <label>VOUCHER NUMBER (AUTO)</label>
-              <input type="text" value={voucherNumber} readOnly className="cpo-input--readonly" />
-              <span className="cpo-field__sub">Unique payment voucher ID</span>
+          <div className="cpv-grid cpv-grid--4">
+            <div className="cpv-field">
+              <label>Voucher Number (Auto)</label>
+              <input type="text" value={voucherNumber} readOnly className="cpv-input--readonly" />
+              <span className="cpv-field__sub">Unique payment voucher ID</span>
             </div>
-            <div className="cpo-field">
-              <label>PAYMENT METHOD *</label>
+            <div className="cpv-field">
+              <label>Payment Method <span>*</span></label>
               <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
                 <option value="NEFT">NEFT (National Electronic Funds Transfer)</option>
                 <option value="RTGS">RTGS (Real Time Gross Settlement)</option>
@@ -886,16 +829,16 @@ export default function CreatePaymentVoucherPage() {
                 <option value="Wire Transfer">Wire Transfer / SWIFT</option>
               </select>
             </div>
-            <div className="cpo-field">
-              <label>VOUCHER DATE *</label>
+            <div className="cpv-field">
+              <label>Voucher Date <span>*</span></label>
               <input
                 type="date"
                 value={voucherDate}
                 onChange={(e) => setVoucherDate(e.target.value)}
               />
             </div>
-            <div className="cpo-field">
-              <label>SCHEDULED PAYMENT DATE *</label>
+            <div className="cpv-field">
+              <label>Scheduled Payment Date <span>*</span></label>
               <input
                 type="date"
                 value={scheduledDate}
@@ -906,15 +849,15 @@ export default function CreatePaymentVoucherPage() {
         </div>
 
         {/* Section 02: Vendor & Bank Account Details */}
-        <div className="cpo-section" style={{ borderLeft: '4px solid #10b981' }}>
-          <div className="cpo-section__header">
-            <span className="cpo-section__num">02</span>
-            <span className="cpo-section__title">Supplier & Bank Details (for Bank Transfer)</span>
-            <span className="cpo-section__hint">Auto-populates supplier banking details</span>
+        <div className="cpv-section">
+          <div className="cpv-section__header">
+            <span className="cpv-section__num">02</span>
+            <span className="cpv-section__title">Supplier & Bank Details (for Bank Transfer)</span>
+            <span className="cpv-section__hint">Auto-populates supplier banking details</span>
           </div>
-          <div className="cpo-grid cpo-grid--4">
-            <div className="cpo-field cpo-field--span-2">
-              <label>SUPPLIER NAME / BENEFICIARY *</label>
+          <div className="cpv-grid cpv-grid--4">
+            <div className="cpv-field cpv-field--span-2">
+              <label>Supplier Name / Beneficiary <span>*</span></label>
               <select
                 value={selectedVendorId}
                 onChange={(e) => handleVendorSelect(e.target.value)}
@@ -927,18 +870,17 @@ export default function CreatePaymentVoucherPage() {
                 ))}
               </select>
             </div>
-            <div className="cpo-field cpo-field--span-2">
-              <label>REFERENCE (PO & INVOICE NUMBERS)</label>
+            <div className="cpv-field cpv-field--span-2">
+              <label>Reference (PO & Invoice Numbers)</label>
               <input
                 type="text"
                 value={invoiceRef}
                 onChange={(e) => setInvoiceRef(e.target.value)}
                 placeholder="e.g. PO-001, PO-002, INV-2026-0042"
               />
-              <span className="cpo-field__sub">Linked PO & Purchase Invoice numbers</span>
             </div>
-            <div className="cpo-field">
-              <label>BENEFICIARY ACCOUNT NAME</label>
+            <div className="cpv-field">
+              <label>Beneficiary Account Name</label>
               <input
                 type="text"
                 value={beneficiaryName}
@@ -946,8 +888,8 @@ export default function CreatePaymentVoucherPage() {
                 placeholder="Account Holder Name"
               />
             </div>
-            <div className="cpo-field">
-              <label>BANK NAME</label>
+            <div className="cpv-field">
+              <label>Bank Name</label>
               <input
                 type="text"
                 value={bankName}
@@ -955,8 +897,8 @@ export default function CreatePaymentVoucherPage() {
                 placeholder="e.g. HDFC Bank Ltd"
               />
             </div>
-            <div className="cpo-field">
-              <label>ACCOUNT NUMBER / IBAN</label>
+            <div className="cpv-field">
+              <label>Account Number / IBAN</label>
               <input
                 type="text"
                 value={accountNumber}
@@ -964,8 +906,8 @@ export default function CreatePaymentVoucherPage() {
                 placeholder="e.g. 918029301923"
               />
             </div>
-            <div className="cpo-field">
-              <label>IFSC / SWIFT CODE</label>
+            <div className="cpv-field">
+              <label>IFSC / SWIFT Code</label>
               <input
                 type="text"
                 value={ifscCode}
@@ -977,85 +919,77 @@ export default function CreatePaymentVoucherPage() {
         </div>
 
         {/* Section 03: Automated 3-Way Match Engine */}
-        <div className="cpo-section" style={{ borderLeft: matchStatus === 'MATCHED' ? '4px solid #10b981' : '4px solid #e11d48' }}>
-          <div className="cpo-section__header" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span className="cpo-section__num">03</span>
-              <span className="cpo-section__title">3-Way Match Verification Engine</span>
+        <div className={`cpv-section cpv-match-card ${matchStatus === 'DISCREPANCY' ? 'cpv-match-card--discrepancy' : ''}`}>
+          <div className="cpv-section__header" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span className="cpv-section__num">03</span>
+              <span className="cpv-section__title">3-Way Match Verification Engine</span>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 type="button"
+                className={`cpv-btn cpv-btn--sm ${matchStatus === 'MATCHED' ? 'cpv-btn--success' : 'cpv-btn--outline'}`}
                 onClick={() => { setMatchStatus('MATCHED'); setPoQty(100); setGrnQty(100); setInvoicedQty(100); setDiscrepancyReason(''); }}
-                style={{
-                  padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                  background: matchStatus === 'MATCHED' ? '#10b981' : 'var(--surface-elevated, #1e293b)',
-                  color: matchStatus === 'MATCHED' ? '#ffffff' : 'var(--text-secondary, #94a3b8)', border: '1px solid var(--border)'
-                }}
               >
                 Simulate 3-Way Match
               </button>
               <button
                 type="button"
+                className={`cpv-btn cpv-btn--sm ${matchStatus === 'DISCREPANCY' ? 'cpv-btn--danger' : 'cpv-btn--outline'}`}
                 onClick={() => { setMatchStatus('DISCREPANCY'); setPoQty(100); setGrnQty(80); setInvoicedQty(100); setDiscrepancyReason('Billed Qty (100) exceeds GRN Received Qty (80)'); }}
-                style={{
-                  padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                  background: matchStatus === 'DISCREPANCY' ? '#e11d48' : 'var(--surface-elevated, #1e293b)',
-                  color: matchStatus === 'DISCREPANCY' ? '#ffffff' : 'var(--text-secondary, #94a3b8)', border: '1px solid var(--border)'
-                }}
               >
-                Simulate Discrepancy (Lafda!)
+                Simulate Discrepancy
               </button>
             </div>
           </div>
 
-          <div style={{ padding: '12px 16px', background: matchStatus === 'MATCHED' ? 'rgba(16, 185, 129, 0.08)' : 'rgba(225, 29, 72, 0.08)', borderRadius: 10, border: `1px solid ${matchStatus === 'MATCHED' ? 'rgba(16, 185, 129, 0.25)' : 'rgba(225, 29, 72, 0.25)'}`, marginBottom: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-              {matchStatus === 'MATCHED' ? <CheckCircle2 size={20} color="#10b981" /> : <AlertTriangle size={20} color="#f43f5e" />}
-              <strong style={{ fontSize: 14, color: matchStatus === 'MATCHED' ? '#10b981' : '#f43f5e' }}>
-                {matchStatus === 'MATCHED' ? '3-WAY MATCH VERIFIED (PO = GRN = Invoice)' : 'DISCREPANCY DETECTED ("Lafda!")'}
-              </strong>
+          <div className={`cpv-match-banner ${matchStatus === 'MATCHED' ? 'cpv-match-banner--matched' : 'cpv-match-banner--discrepancy'}`}>
+            <div className={`cpv-match-banner-title ${matchStatus === 'MATCHED' ? 'cpv-match-banner-title--matched' : 'cpv-match-banner-title--discrepancy'}`}>
+              {matchStatus === 'MATCHED' ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
+              <span>
+                {matchStatus === 'MATCHED' ? '3-Way Match Verified (PO = GRN = Invoice)' : 'Discrepancy Detected'}
+              </span>
             </div>
-            <p style={{ margin: 0, fontSize: 12.5, color: 'var(--text-secondary, #94a3b8)', lineHeight: 1.4 }}>
+            <p style={{ margin: 0, fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
               {matchStatus === 'MATCHED'
                 ? 'Quantities & unit rates across Purchase Order, GRN Dispatch, and Supplier Invoice align perfectly. Sent for formal bank payment approval.'
                 : 'Discrepancy detected: Invoiced quantity / value does not match GRN received quantities or PO agreed rates. Flagged for mandatory Manager & Finance approval!'}
             </p>
           </div>
 
-          <div className="cpo-grid cpo-grid--3" style={{ gap: 12 }}>
-            <div style={{ background: 'var(--surface-elevated, #1e293b)', padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}>
-              <span style={{ fontSize: 11, color: 'var(--text-muted, #64748b)', textTransform: 'uppercase', fontWeight: 700 }}>a. Purchase Order (PO)</span>
-              <div style={{ fontSize: 13, fontWeight: 700, marginTop: 4 }}>Qty: {poQty} Units @ Ksh 5,000</div>
-              <span style={{ fontSize: 11, color: '#10b981' }}>PO Total: Ksh 500,000</span>
+          <div className="cpv-grid cpv-grid--3">
+            <div className="cpv-match-box">
+              <span className="cpv-match-box-label">a. Purchase Order (PO)</span>
+              <div className="cpv-match-box-value">Qty: {poQty} Units @ Ksh 5,000</div>
+              <span className="cpv-match-box-sub cpv-match-box-sub--ok">PO Total: Ksh 500,000</span>
             </div>
-            <div style={{ background: 'var(--surface-elevated, #1e293b)', padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}>
-              <span style={{ fontSize: 11, color: 'var(--text-muted, #64748b)', textTransform: 'uppercase', fontWeight: 700 }}>b. GRN / Dispatch Note</span>
-              <div style={{ fontSize: 13, fontWeight: 700, marginTop: 4 }}>Received Qty: {grnQty} Units</div>
-              <span style={{ fontSize: 11, color: grnQty === poQty ? '#10b981' : '#f43f5e' }}>
+            <div className="cpv-match-box">
+              <span className="cpv-match-box-label">b. GRN / Dispatch Note</span>
+              <div className="cpv-match-box-value">Received Qty: {grnQty} Units</div>
+              <span className={`cpv-match-box-sub ${grnQty === poQty ? 'cpv-match-box-sub--ok' : 'cpv-match-box-sub--warn'}`}>
                 {grnQty === poQty ? '100% Delivery Received' : `Shortfall: ${poQty - grnQty} units missing`}
               </span>
             </div>
-            <div style={{ background: 'var(--surface-elevated, #1e293b)', padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}>
-              <span style={{ fontSize: 11, color: 'var(--text-muted, #64748b)', textTransform: 'uppercase', fontWeight: 700 }}>c. Supplier Invoice</span>
-              <div style={{ fontSize: 13, fontWeight: 700, marginTop: 4 }}>Billed Qty: {invoicedQty} Units</div>
-              <span style={{ fontSize: 11, color: invoicedQty === grnQty ? '#10b981' : '#f43f5e' }}>
+            <div className="cpv-match-box">
+              <span className="cpv-match-box-label">c. Supplier Invoice</span>
+              <div className="cpv-match-box-value">Billed Qty: {invoicedQty} Units</div>
+              <span className={`cpv-match-box-sub ${invoicedQty === grnQty ? 'cpv-match-box-sub--ok' : 'cpv-match-box-sub--warn'}`}>
                 {invoicedQty === grnQty ? 'Billed Qty Matches GRN' : 'Discrepancy in Billed Qty'}
               </span>
             </div>
           </div>
         </div>
 
-        {/* Section 04: Summary & Workflow Notice */}
-        <div className="cpo-grid cpo-grid--split">
-          <div className="cpo-section">
-            <div className="cpo-section__header">
-              <span className="cpo-section__num">04</span>
-              <span className="cpo-section__title">Purpose & Remarks</span>
+        {/* Section 04: Purpose & Attachments & Section 05: Disbursement Summary Card */}
+        <div className="cpv-grid cpv-grid--split">
+          <div className="cpv-section">
+            <div className="cpv-section__header">
+              <span className="cpv-section__num">04</span>
+              <span className="cpv-section__title">Purpose & Remarks</span>
             </div>
-            <div className="cpo-grid cpo-grid--1" style={{ gap: 16 }}>
-              <div className="cpo-field">
-                <label>PAYMENT PURPOSE / DESCRIPTION</label>
+            <div className="cpv-grid cpv-grid--1">
+              <div className="cpv-field">
+                <label>Payment Purpose / Description</label>
                 <input
                   type="text"
                   value={purpose}
@@ -1063,8 +997,8 @@ export default function CreatePaymentVoucherPage() {
                   placeholder="e.g. PO settlement disbursement to vendor"
                 />
               </div>
-              <div className="cpo-field">
-                <label>REMARKS</label>
+              <div className="cpv-field">
+                <label>Remarks</label>
                 <textarea
                   rows={3}
                   value={remarks}
@@ -1072,23 +1006,67 @@ export default function CreatePaymentVoucherPage() {
                   placeholder="Add notes for finance approvers..."
                 />
               </div>
+
+              {/* Attachments Upload Dropzone */}
+              <div className="cpv-field" style={{ marginTop: 8 }}>
+                <label>Attachments & Bank Advice Documents</label>
+                <label className="cpv-dropzone">
+                  <Upload size={22} className="cpv-dropzone-icon" />
+                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
+                    Click to upload or drag & drop files
+                  </span>
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                    PDF, PNG, JPG, or DOCX (Max 10MB)
+                  </span>
+                  <input
+                    type="file"
+                    multiple
+                    onChange={handleFileUpload}
+                    style={{ display: 'none' }}
+                  />
+                </label>
+
+                {attachments.length > 0 && (
+                  <div className="cpv-attachments-list">
+                    {attachments.map((att) => (
+                      <div key={att.id} className="cpv-attachment-item">
+                        <div className="cpv-attachment-info">
+                          <Paperclip size={16} style={{ color: 'var(--primary-500)' }} />
+                          <div>
+                            <div className="cpv-attachment-name">{att.name}</div>
+                            <div className="cpv-attachment-size">{att.size}</div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="cpv-action-btn cpv-action-btn--delete"
+                          onClick={() => handleRemoveAttachment(att.id)}
+                          title="Remove attachment"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="cpo-section cpo-totals-card">
-            <div className="cpo-section__header">
-              <span className="cpo-section__num">05</span>
-              <span className="cpo-section__title">Disbursement Amount & Workflow</span>
+          <div className="cpv-summary-card">
+            <div className="cpv-section__header" style={{ borderBottom: 'none', paddingBottom: 0, marginBottom: 0 }}>
+              <span className="cpv-section__num">05</span>
+              <span className="cpv-section__title">Disbursement Summary</span>
             </div>
 
-            <div className="cpo-totals">
-              <div className="cpo-field" style={{ marginBottom: 12 }}>
-                <label>CURRENCY</label>
+            <div className="cpv-summary-box">
+              <div className="cpv-field">
+                <label>Currency</label>
                 <CurrencySelector value={currency} onChange={setCurrency} />
               </div>
 
-              <div className="cpo-field" style={{ marginBottom: 14 }}>
-                <label>GROSS AMOUNT *</label>
+              <div className="cpv-field">
+                <label>Gross Amount <span>*</span></label>
                 <input
                   type="number"
                   min="0"
@@ -1101,39 +1079,36 @@ export default function CreatePaymentVoucherPage() {
                 />
               </div>
 
-              <div className="cpo-totals__row">
+              <div className="cpv-summary-row">
                 <span>Gross Amount</span>
                 <span>{formatAmount(gross, currency)}</span>
               </div>
-              <div className="cpo-totals__row">
+              <div className="cpv-summary-row">
                 <span>TDS Deduction ({tdsPercent}%)</span>
-                <span style={{ color: 'var(--danger-500)' }}>- {formatAmount(tdsAmount, currency)}</span>
+                <span style={{ color: '#ef4444' }}>- {formatAmount(tdsAmount, currency)}</span>
               </div>
 
-              <div className="cpo-totals__divider" />
+              <div className="cpv-summary-divider" />
 
-              <div className="cpo-totals__grand">
-                <span>Net Disbursement</span>
-                <span style={{ color: '#10b981' }}>{formatAmount(netPayable, currency)}</span>
+              <div className="cpv-summary-grand">
+                <span className="cpv-summary-grand-label">Net Disbursement</span>
+                <span className="cpv-summary-grand-val">{formatAmount(netPayable, currency)}</span>
               </div>
 
-              <div style={{ marginTop: 12, padding: '10px 12px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.25)', borderRadius: 8, color: '#10b981', fontSize: 12.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <PackageCheck size={16} />
+              <div className="cpv-workflow-notice">
+                <PackageCheck size={18} />
                 <span>Triggers Payments Approval Chain</span>
               </div>
             </div>
 
-            <div className="cpo-action-panel">
-              <button
-                className="cpo-btn cpo-btn--primary cpo-btn--full"
-                onClick={submitVoucher}
-                disabled={savingDraft || submitting || !canCreateVoucher}
-                style={!canCreateVoucher ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-                title={!canCreateVoucher ? "Admin has not allowed this action. You do not have permission to submit payment vouchers." : undefined}
-              >
-                <Send size={16} /> {submitting ? 'Submitting…' : 'Submit Payment Voucher'}
-              </button>
-            </div>
+            <button
+              className="cpv-btn cpv-btn--primary cpv-btn--full"
+              onClick={submitVoucher}
+              disabled={savingDraft || submitting || !canCreateVoucher}
+              title={!canCreateVoucher ? "You do not have permission to submit payment vouchers." : undefined}
+            >
+              <Send size={16} /> {submitting ? 'Submitting…' : 'Submit Payment Voucher'}
+            </button>
           </div>
         </div>
       </div>

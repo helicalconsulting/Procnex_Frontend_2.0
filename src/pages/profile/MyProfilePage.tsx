@@ -145,11 +145,11 @@ export default function MyProfilePage() {
               <p className="text-xs text-muted-foreground mt-0.5">@{user.username} · {user.email}</p>
               <div className="mt-2.5 flex flex-wrap items-center gap-2">
                 {displayRoles.map((role) => (
-                  <Badge key={role} variant="secondary" className="gap-1 text-[10px]">
+                  <Badge key={role} variant="secondary" className="gap-1 text-[11px]">
                     <Shield className="size-3" /> {role}
                   </Badge>
                 ))}
-                <Badge variant={user.isActive ? 'default' : 'destructive'} className="gap-1 text-[10px]">
+                <Badge variant={user.isActive ? 'default' : 'destructive'} className="gap-1 text-[11px]">
                   <BadgeCheck className="size-3" /> {user.isActive ? 'Active' : 'Inactive'}
                 </Badge>
               </div>
@@ -265,7 +265,7 @@ export default function MyProfilePage() {
             </div>
             <div className="flex items-center justify-between py-1.5 border-b border-border/40">
               <span className="text-muted-foreground font-medium">Account Status</span>
-              <Badge variant={user.isActive ? 'default' : 'destructive'} className="text-[10px]">
+              <Badge variant={user.isActive ? 'default' : 'destructive'} className="text-[11px]">
                 {user.isActive ? 'Active' : 'Inactive'}
               </Badge>
             </div>
@@ -307,7 +307,7 @@ export default function MyProfilePage() {
                     </div>
                     <div>
                       <div className="text-xs font-semibold text-foreground">{doc.documentType}</div>
-                      <div className="text-[11px] text-muted-foreground">{doc.originalName} · {formatFileSize(doc.fileSize)}</div>
+                      <div className="text-[12px] text-muted-foreground">{doc.originalName} · {formatFileSize(doc.fileSize)}</div>
                     </div>
                   </div>
 

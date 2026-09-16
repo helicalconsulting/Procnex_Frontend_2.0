@@ -60,7 +60,7 @@
 .rte-editor__content {
   min-height: 180px;
   outline: none;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.7;
   color: #1d2d3e;
   font-family: 'Segoe UI', Roboto, Arial, sans-serif;
@@ -139,7 +139,7 @@
   border-radius: 20px;
   background: var(--surface);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s;
@@ -178,7 +178,7 @@
 }
 
 .cs-email-templates__editor-title {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 700;
   color: #1a2332;
   margin: 0;
@@ -199,7 +199,7 @@
   color: #fff;
   border: none;
   border-radius: 4px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s;
@@ -223,7 +223,7 @@
   color: #bb0000;
   border: 1px solid #ffcdd2;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s;
@@ -249,13 +249,13 @@
 }
 
 .cs-email-templates__placeholder-title {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--text-secondary);
 }
 
 .cs-email-templates__placeholder-text {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-placeholder);
   max-width: 360px;
   line-height: 1.5;
@@ -272,7 +272,7 @@
 }
 
 .cs-email-placeholders__title {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: #0064d9;
   text-transform: uppercase;
@@ -287,13 +287,13 @@
 }
 
 .cs-email-placeholders__item {
-  font-size: 12px;
+  font-size: 13px;
   color: #556b82;
 }
 
 .cs-email-placeholders__code {
   font-family: Consolas, 'Courier New', monospace;
-  font-size: 11px;
+  font-size: 12px;
   background: #e5edf7;
   padding: 2px 6px;
   border-radius: 3px;
@@ -308,7 +308,7 @@
   gap: 4px;
   padding: 3px 8px;
   border-radius: 3px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 

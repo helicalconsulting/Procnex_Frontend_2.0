@@ -282,7 +282,7 @@ export default function FormResponsesPage() {
       return (
         <div className="flex flex-col gap-1 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3 text-sm text-foreground">
           <span>✍️ {String(val)}</span>
-          <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">✓ Digital Signature</span>
+          <span className="text-[12px] font-semibold text-emerald-700 dark:text-emerald-300">✓ Digital Signature</span>
         </div>
       );
     }
@@ -398,7 +398,7 @@ export default function FormResponsesPage() {
             return (
               <div key={i} className="flex items-center">
                 <div
-                  className={`flex size-6 items-center justify-center rounded-full border text-[10px] font-bold ${isDone ? 'border-emerald-500 bg-emerald-500 text-white' : isRejected && isCurrent ? 'border-destructive bg-destructive/10 text-destructive' : isCurrent ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-muted text-muted-foreground'}`}
+                  className={`flex size-6 items-center justify-center rounded-full border text-[11px] font-bold ${isDone ? 'border-emerald-500 bg-emerald-500 text-white' : isRejected && isCurrent ? 'border-destructive bg-destructive/10 text-destructive' : isCurrent ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-muted text-muted-foreground'}`}
                 >
                   {isDone ? '✓' : stepNum}
                 </div>
@@ -409,7 +409,7 @@ export default function FormResponsesPage() {
             );
           })}
         </div>
-        <span className="text-[11px] font-semibold text-muted-foreground">
+        <span className="text-[12px] font-semibold text-muted-foreground">
           L{isAllCompleted ? total : Math.min(current, total)}/{total}
         </span>
       </div>
@@ -574,7 +574,7 @@ export default function FormResponsesPage() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1000px] border-collapse text-left text-sm">
               <thead>
-                <tr className="border-b border-border/70 bg-muted/35 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <tr className="border-b border-border/70 bg-muted/35 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">
                   <th className="w-12 px-4 py-3 text-center">
                     <input
                       type="checkbox"
@@ -614,17 +614,17 @@ export default function FormResponsesPage() {
                           <FileText size={16} className="shrink-0 text-primary" />
                           <div className="flex min-w-0 flex-col">
                             <strong className="truncate text-sm font-semibold text-foreground">{sub.formTitle}</strong>
-                            <span className="text-[11px] text-muted-foreground">{sub.fields.length} fields configured</span>
+                            <span className="text-[12px] text-muted-foreground">{sub.fields.length} fields configured</span>
                           </div>
                         </div>
                       </td>
                       <td className="px-4 py-3">
                         {sub.audienceType === 'whole_org' ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 px-2.5 py-1 text-[11px] font-semibold text-violet-700 dark:text-violet-300">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 px-2.5 py-1 text-[12px] font-semibold text-violet-700 dark:text-violet-300">
                             <Building size={12} /> Whole Organization
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2.5 py-1 text-[11px] font-semibold text-blue-700 dark:text-blue-300">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2.5 py-1 text-[12px] font-semibold text-blue-700 dark:text-blue-300">
                             <UserCheck size={12} /> Specific Users
                           </span>
                         )}
@@ -634,20 +634,20 @@ export default function FormResponsesPage() {
                           {sub.workflowAttached ? (
                             <>
                               <span className="text-xs font-semibold text-foreground">Approval Workflow</span>
-                              <span className="text-[11px] text-muted-foreground">
+                              <span className="text-[12px] text-muted-foreground">
                                 {sub.totalLevels}-Level Sequential Approval
                               </span>
                             </>
                           ) : (
                             <>
                               <span className="text-xs font-semibold text-foreground">{sub.assignedUserName}</span>
-                              <span className="truncate text-[11px] text-muted-foreground">{sub.assignedUserEmail}</span>
+                              <span className="truncate text-[12px] text-muted-foreground">{sub.assignedUserEmail}</span>
                             </>
                           )}
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ${sub.status === 'completed' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : sub.status === 'returned' || sub.status === 'rejected' ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300' : sub.status === 'submitted' ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300' : sub.status === 'pending' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'bg-muted text-muted-foreground'}`}>
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold ${sub.status === 'completed' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : sub.status === 'returned' || sub.status === 'rejected' ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300' : sub.status === 'submitted' ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300' : sub.status === 'pending' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'bg-muted text-muted-foreground'}`}>
                           {sub.status === 'completed' && <CheckCircle2 size={12} />}
                           {sub.status === 'returned' && <RotateCcw size={12} />}
                           {sub.status === 'submitted' && <Send size={12} />}

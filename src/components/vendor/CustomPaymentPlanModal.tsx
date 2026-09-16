@@ -178,14 +178,14 @@ export default function CustomPaymentPlanModal({ onClose, onSaved, editPlan }: C
           </div>
 
           {/* Milestone Table Header */}
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
             Payment Milestones
           </div>
 
           {/* Column Headers */}
           <div style={{
             display: 'grid', gridTemplateColumns: '1fr 80px 32px', gap: 8,
-            padding: '4px 0', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)',
+            padding: '4px 0', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)',
             textTransform: 'uppercase', letterSpacing: '0.04em',
           }}>
             <span>Payment Term / Milestone</span>
@@ -206,7 +206,7 @@ export default function CustomPaymentPlanModal({ onClose, onSaved, editPlan }: C
                   placeholder={`Milestone ${idx + 1}`}
                   value={m.title}
                   onChange={(e) => updateMilestone(m.id, 'title', e.target.value)}
-                  style={{ padding: '8px 10px', fontSize: 13 }}
+                  style={{ padding: '8px 10px', fontSize: 14 }}
                 />
                 <div style={{ position: 'relative' }}>
                   <input
@@ -217,11 +217,11 @@ export default function CustomPaymentPlanModal({ onClose, onSaved, editPlan }: C
                     max={100}
                     value={m.percentage}
                     onChange={(e) => updateMilestone(m.id, 'percentage', e.target.value)}
-                    style={{ padding: '8px 10px', fontSize: 13, textAlign: 'right', paddingRight: 28 }}
+                    style={{ padding: '8px 10px', fontSize: 14, textAlign: 'right', paddingRight: 28 }}
                   />
                   <span style={{
                     position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
-                    fontSize: 12, color: 'var(--text-secondary)', pointerEvents: 'none',
+                    fontSize: 13, color: 'var(--text-secondary)', pointerEvents: 'none',
                   }}>%</span>
                 </div>
                 <button
@@ -250,7 +250,7 @@ export default function CustomPaymentPlanModal({ onClose, onSaved, editPlan }: C
               padding: '8px 14px', marginTop: 8, marginBottom: 16,
               background: 'var(--surface-hover, #f0f4f8)', border: '1px dashed var(--border, #d0d5dd)',
               borderRadius: 6, color: 'var(--text-secondary, #6a6d70)',
-              fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
+              fontSize: 14, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
             }}
           >
             <Plus size={14} /> Add Payment Milestone
@@ -266,7 +266,7 @@ export default function CustomPaymentPlanModal({ onClose, onSaved, editPlan }: C
             }`,
             marginBottom: 16,
           }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Total Allocation</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Total Allocation</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {isTotalValid ? (
                 <span style={{ color: '#107e3e' }}><Check size={16} /></span>
@@ -276,13 +276,13 @@ export default function CustomPaymentPlanModal({ onClose, onSaved, editPlan }: C
                 </span>
               ) : null}
               <span style={{
-                fontSize: 15, fontWeight: 800,
+                fontSize: 16, fontWeight: 800,
                 color: isTotalValid ? '#107e3e' : totalAllocation > 100 ? '#bb0000' : '#e9730c',
               }}>
                 {totalAllocation.toFixed(1)}%
               </span>
               {!isTotalValid && (
-                <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                   {totalAllocation > 100 ? `(exceeded by ${(totalAllocation - 100).toFixed(1)}%)` : `(remaining ${remaining.toFixed(1)}%)`}
                 </span>
               )}
@@ -294,7 +294,7 @@ export default function CustomPaymentPlanModal({ onClose, onSaved, editPlan }: C
             <div style={{
               padding: '10px 14px', borderRadius: 6, marginBottom: 12,
               background: 'rgba(187,0,0,0.08)', border: '1px solid rgba(187,0,0,0.2)',
-              color: '#bb0000', fontSize: 13,
+              color: '#bb0000', fontSize: 14,
             }}>
               {error}
             </div>

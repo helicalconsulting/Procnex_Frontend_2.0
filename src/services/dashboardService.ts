@@ -20,7 +20,7 @@ interface DashboardOverview {
 }
 
 async function mockKpis(): Promise<KpiItem[]> {
-  return DASHBOARD_KPI_MOCK;
+  return DASHBOARD_KPI_MOCK.map((k) => ({ ...k, trend: '' }));
 }
 
 async function apiKpis(): Promise<KpiItem[]> {
@@ -29,10 +29,10 @@ async function apiKpis(): Promise<KpiItem[]> {
     apiRequest<{ tasks: Array<{ type: string; count: number; label: string; link: string }>; taskCount: number }>('/dashboard/my-tasks'),
   ]);
   return [
-    { id: 'rfq', label: 'Open RFQs', value: String(o.rfqs.total), trend: `${o.rfqs.draft} draft`, direction: 'neutral', modifier: 'rfq' },
+    { id: 'rfq', label: 'Open RFQs', value: String(o.rfqs.total), trend: '', direction: 'neutral', modifier: 'rfq' },
     { id: 'approvals', label: 'Pending Eval', value: String(o.rfqs.pendingApproval), trend: '', direction: 'neutral', modifier: 'approvals' },
     { id: 'pos', label: 'Purchase Orders', value: String(o.purchaseOrders.total), trend: '', direction: 'neutral', modifier: 'pos' },
-    { id: 'vendors', label: 'Active Vendors', value: String(o.vendors.total), trend: `${o.vendors.pendingApproval} pending`, direction: 'neutral', modifier: 'vendors' },
+    { id: 'vendors', label: 'Active Vendors', value: String(o.vendors.total), trend: '', direction: 'neutral', modifier: 'vendors' },
     { id: 'quotes', label: 'Active Quotations', value: String(o.quotations.active), trend: '', direction: 'neutral', modifier: 'spend' },
     { id: 'tasks', label: 'My Tasks', value: String(tasksRes.taskCount), trend: '', direction: 'neutral', modifier: 'lead' },
   ];

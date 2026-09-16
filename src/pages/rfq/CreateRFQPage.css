@@ -40,13 +40,13 @@
 }
 
 .create-rfq__header-text h1 {
-  font-size: 26px;
+  font-size: 27px;
   font-weight: 700;
   margin: 0 0 3px;
 }
 
 .create-rfq__header-text p {
-  font-size: 15px;
+  font-size: 16px;
   color: var(--text-secondary);
   margin: 0;
 }
@@ -93,7 +93,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   flex-shrink: 0;
   border: 2px solid var(--border);
@@ -115,7 +115,7 @@
 }
 
 .create-rfq__step-label {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-secondary);
   white-space: nowrap;
@@ -146,7 +146,7 @@
   gap: 12px;
   padding: 16px 20px;
   border-bottom: 1px solid var(--border);
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -177,7 +177,7 @@
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
@@ -229,7 +229,7 @@
   border: 1px solid #d1e9ff;
   border-left: 3px solid var(--primary-500);
   border-radius: 6px;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-secondary);
   line-height: 1.5;
 }
@@ -273,7 +273,7 @@
 }
 
 .create-rfq__label {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
@@ -294,7 +294,7 @@
   border-radius: var(--radius-md);
   background: var(--surface);
   color: var(--text-primary);
-  font-size: 15px;
+  font-size: 16px;
   font-family: inherit;
   transition: border-color 0.2s, box-shadow 0.2s;
   outline: none;
@@ -327,7 +327,7 @@
 }
 
 .create-rfq__hint {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-secondary);
 }
 
@@ -340,7 +340,7 @@
 
 .create-rfq__items-table th {
   text-align: left;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -368,7 +368,7 @@
   border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 15px;
   font-family: inherit;
   transition: border-color 0.2s;
   outline: none;
@@ -391,7 +391,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-secondary);
 }
@@ -425,7 +425,7 @@
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--primary-500);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   cursor: pointer;
   font-family: inherit;
@@ -492,7 +492,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   flex-shrink: 0;
   border: 1px solid transparent;
@@ -520,13 +520,13 @@
 }
 
 .create-rfq__vendor-name {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .create-rfq__vendor-email {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -535,7 +535,7 @@
 
 .create-rfq__vendor-category {
   margin-top: 2px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--primary-500);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -543,7 +543,7 @@
 }
 
 .create-rfq__vendor-score {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   padding: 3px 10px;
   border-radius: 10px;
@@ -553,7 +553,7 @@
 .create-rfq__vendor-score--coming-soon {
   background: var(--surface-elevated);
   color: var(--text-placeholder);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -611,13 +611,13 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text-secondary);
 }
 
 .create-rfq__weightage-total-status {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -639,7 +639,7 @@
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-placeholder);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
@@ -676,7 +676,7 @@
   border-radius: var(--radius-sm);
   background: linear-gradient(135deg, var(--primary-50) 0%, rgba(10, 110, 209, 0.06) 100%);
   color: var(--primary-500);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
@@ -758,7 +758,7 @@
   gap: 8px;
   padding: 12px 26px;
   border-radius: var(--radius-md);
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   cursor: pointer;
   font-family: inherit;
@@ -812,7 +812,7 @@
 
 @media (max-width: 768px) {
   .create-rfq__header-text h1 {
-    font-size: 20px;
+    font-size: 21px;
   }
 
   .create-rfq__steps {

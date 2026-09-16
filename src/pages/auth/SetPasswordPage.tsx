@@ -122,7 +122,7 @@ export default function SetPasswordPage() {
       )}
 
       {validateError && !validating && (
-        <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-destructive/20 bg-destructive/10 px-3.5 py-3 text-[13px] leading-5 text-destructive" role="alert">
+        <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-destructive/20 bg-destructive/10 px-3.5 py-3 text-[14px] leading-5 text-destructive" role="alert">
           <AlertCircle size={17} className="mt-0.5 shrink-0" />
           <span>{validateError}</span>
         </div>
@@ -130,7 +130,7 @@ export default function SetPasswordPage() {
 
       {validation && !validating && (
         <>
-          <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3.5 py-3 text-[13px] leading-5 text-emerald-700 dark:text-emerald-300" role="status">
+          <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3.5 py-3 text-[14px] leading-5 text-emerald-700 dark:text-emerald-300" role="status">
             <CheckCircle2 size={17} className="mt-0.5 shrink-0" />
             <div>
               <span>{validation.hasExistingPassword ? 'Resetting password for ' : 'Welcome, '}</span>
@@ -141,7 +141,7 @@ export default function SetPasswordPage() {
 
           <form className="grid gap-5" onSubmit={handleSubmit}>
             <div className="grid gap-2">
-              <label className="text-[13px] font-semibold text-foreground" htmlFor="password">
+              <label className="text-[14px] font-semibold text-foreground" htmlFor="password">
                 New Password <span className="text-destructive">*</span>
               </label>
               <div className="relative">
@@ -169,7 +169,7 @@ export default function SetPasswordPage() {
             </div>
 
             <div className="grid gap-2">
-              <label className="text-[13px] font-semibold text-foreground" htmlFor="confirm">
+              <label className="text-[14px] font-semibold text-foreground" htmlFor="confirm">
                 Confirm Password <span className="text-destructive">*</span>
               </label>
               <Input
@@ -186,7 +186,7 @@ export default function SetPasswordPage() {
             </div>
 
             {error && (
-              <div className="flex items-start gap-2.5 rounded-xl border border-destructive/20 bg-destructive/10 px-3.5 py-3 text-[13px] leading-5 text-destructive" role="alert">
+              <div className="flex items-start gap-2.5 rounded-xl border border-destructive/20 bg-destructive/10 px-3.5 py-3 text-[14px] leading-5 text-destructive" role="alert">
                 <AlertCircle size={17} className="mt-0.5 shrink-0" />
                 <span>{error}</span>
               </div>

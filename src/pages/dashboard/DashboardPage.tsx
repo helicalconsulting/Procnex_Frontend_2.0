@@ -18,6 +18,7 @@ import {
   Zap,
   Check,
   ChevronDown,
+  X,
 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
@@ -211,7 +212,7 @@ export default function DashboardPage() {
     <div className="w-full">
       <header className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-primary">Command center</span>
+          <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-primary">Command center</span>
           <h1 className="mt-2 text-2xl font-semibold leading-[1.15] tracking-[-0.035em] text-foreground">Procurement overview</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
             {user?.fullName ? `${user.fullName} · ` : ''}Purchasing metrics, requisition progress, and priority workflows in one view.
@@ -239,12 +240,12 @@ export default function DashboardPage() {
             <span><strong className="font-semibold tabular-nums text-foreground">{activeWidgets.length}</strong> active widgets</span>
             <span><strong className="font-semibold tabular-nums text-foreground">{availableWidgets.length}</strong> available for your role</span>
           </div>
-          <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><GripVertical size={14} /> Use each widget handle or arrow keys to reorder</span>
+          <span className="flex items-center gap-1.5 text-[12px] text-muted-foreground"><GripVertical size={14} /> Use each widget handle or arrow keys to reorder</span>
         </Card>
       )}
 
       {!hasWidgets && (
-        <EmptyState className="mt-6" icon={LayoutGrid} title="Build your dashboard" description="Add the widgets that match your role and the work you need to follow." action={<Button onClick={openGallery} id="empty-open-gallery-btn"><Sparkles size={17} /> Open widget gallery</Button>} />
+        <EmptyState size="lg" className="mt-6" icon={LayoutGrid} title="Build your dashboard" description="Add the widgets that match your role and the work you need to follow." action={<Button onClick={openGallery} id="empty-open-gallery-btn"><Sparkles size={17} /> Open widget gallery</Button>} />
       )}
 
       {hasWidgets && (
@@ -276,10 +277,10 @@ export default function DashboardPage() {
                   isDropTarget && 'border-primary/60 ring-4 ring-primary/10',
                 )}
               >
-                <div className="flex h-11 items-center justify-between border-b border-border/70 bg-muted/30 px-2">
+                <div className="flex h-10 items-center justify-between border-b border-border/70 bg-muted/30 px-3 py-1.5">
                   <button
                     type="button"
-                    className="inline-flex size-10 cursor-grab touch-none items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
+                    className="inline-flex size-8 cursor-grab touch-none items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
                     onPointerDown={(event) => startWidgetDrag(event, widget.id, widget.name)}
                     title={`Reorder ${widget.name}`}
                     aria-label={`Reorder ${widget.name}. Use arrow keys to move.`}
@@ -289,11 +290,16 @@ export default function DashboardPage() {
                       if (event.key === 'Escape') cancelWidgetDrag();
                     }}
                   >
-                    <GripVertical size={17} />
+                    <GripVertical size={16} />
                   </button>
-                  <span className="min-w-0 truncate px-2 text-[11px] font-medium text-muted-foreground">{widget.name}</span>
-                  <button type="button" className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:ring-2 focus-visible:ring-destructive" onClick={() => removeWidget(widget.id)} title={`Remove ${widget.name}`} aria-label={`Remove ${widget.name}`}>
-                    <span aria-hidden="true" className="text-xl font-light leading-none">×</span>
+                  <button
+                    type="button"
+                    className="inline-flex size-7 shrink-0 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-destructive/15 hover:text-destructive focus-visible:ring-2 focus-visible:ring-destructive"
+                    onClick={() => removeWidget(widget.id)}
+                    title={`Remove ${widget.name}`}
+                    aria-label={`Remove ${widget.name}`}
+                  >
+                    <X size={16} strokeWidth={2.2} />
                   </button>
                 </div>
                 <div className={cn('min-w-0', widget.id === 'kpi-stats' && 'p-3 sm:p-4')}><WidgetComponent /></div>
@@ -306,19 +312,19 @@ export default function DashboardPage() {
       )}
 
       <Dialog open={isGalleryOpen} onOpenChange={(open) => open ? openGallery() : closeGallery()}>
-        <DialogContent id="widget-gallery" className="max-h-[min(90vh,900px)] max-w-4xl grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0">
-          <div className="border-b border-border bg-muted/35 px-5 py-5 pr-14 sm:px-7">
+        <DialogContent id="widget-gallery" className="h-[min(85vh,800px)] max-h-[min(85vh,800px)] max-w-4xl flex flex-col gap-0 overflow-hidden p-0 bg-card border-border shadow-2xl">
+          <div className="shrink-0 border-b border-border bg-card px-5 py-5 pr-14 sm:px-7">
             <DialogHeader>
-              <span className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-primary"><Sparkles size={14} /> Personalize</span>
+              <span className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-primary"><Sparkles size={14} /> Personalize</span>
               <DialogTitle className="text-xl">Widget gallery</DialogTitle>
               <DialogDescription>Choose the information and shortcuts that belong on your dashboard.</DialogDescription>
             </DialogHeader>
           </div>
 
-          <div className="grid min-h-0 gap-7 overflow-y-auto p-5 sm:p-7">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 sm:p-7 flex flex-col gap-7">
             {groupedWidgets.map((group) => (
               <section key={group.category}>
-                <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{group.label}</h3>
+                <h3 className="mb-3 text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{group.label}</h3>
                 <div className="grid gap-3 sm:grid-cols-2">
                   {group.widgets.map((widget) => {
                     const isActive = isWidgetActive(widget.id);
@@ -329,8 +335,8 @@ export default function DashboardPage() {
                           <span className="flex size-10 items-center justify-center rounded-xl" style={{ backgroundColor: `${widget.accentColor}15`, color: widget.accentColor }}><IconComponent size={19} /></span>
                           <span className={cn('flex h-6 w-11 items-center rounded-full p-0.5 transition-colors', isActive ? 'justify-end bg-primary' : 'justify-start bg-muted ring-1 ring-border')}><span className={cn('flex size-5 items-center justify-center rounded-full bg-white shadow-sm', isActive && 'text-primary')}>{isActive && <Check size={11} strokeWidth={3} />}</span></span>
                         </div>
-                        <span className="mt-3 text-[13px] font-semibold text-foreground">{widget.name}</span>
-                        <span className="mt-1 line-clamp-2 text-[11px] leading-4 text-muted-foreground">{widget.description}</span>
+                        <span className="mt-3 text-[14px] font-semibold text-foreground">{widget.name}</span>
+                        <span className="mt-1 line-clamp-2 text-[12px] leading-4 text-muted-foreground">{widget.description}</span>
                         {widget.fullWidth && <Badge className="mt-2 w-fit" tone="neutral">Full width</Badge>}
                       </button>
                     );
@@ -340,7 +346,7 @@ export default function DashboardPage() {
             ))}
           </div>
 
-          <div className="flex items-center justify-between gap-4 border-t border-border bg-muted/35 px-5 py-4 sm:px-7">
+          <div className="shrink-0 flex items-center justify-between gap-4 border-t border-border bg-card px-5 py-4 sm:px-7">
             <span className="text-xs text-muted-foreground"><strong className="font-semibold tabular-nums text-foreground">{activeWidgets.length}</strong> of {availableWidgets.length} active</span>
             <Button onClick={closeGallery}>Done</Button>
           </div>

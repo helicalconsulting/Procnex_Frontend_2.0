@@ -864,7 +864,7 @@ export function CurrencyAmountInput({
     <div className="cur-amount-input">
       <div ref={triggerRef} className="cur-amount-input__currency" onClick={() => !disabled && setOpen(!open)}>
         {selected?.countryCode ? (
-          <span style={{ fontSize: 16, lineHeight: 1 }}>{getFlagEmoji(selected.countryCode)}</span>
+          <span style={{ fontSize: 17, lineHeight: 1 }}>{getFlagEmoji(selected.countryCode)}</span>
         ) : (
           <Globe size={13} />
         )}

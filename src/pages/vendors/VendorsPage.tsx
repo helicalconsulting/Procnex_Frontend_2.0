@@ -256,7 +256,7 @@ const ALL_COLUMNS: VendorColumnDef[] = [
           alignItems: 'center',
           gap: 4,
           fontWeight: 700,
-          fontSize: 14,
+          fontSize: 15,
           color,
         }}>
           <Star size={13} fill={color} style={{ opacity: score > 0 && score >= 60 ? 1 : 0.3 }} />
@@ -297,7 +297,7 @@ const ALL_COLUMNS: VendorColumnDef[] = [
         </div>
         <span
           className={`vendors-status-toggle__label vendors-status-toggle__label--${v.isMobileAccessEnabled ? 'active' : 'inactive'}`}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600 }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600 }}
         >
           <Smartphone size={16} strokeWidth={2.2} style={{ flexShrink: 0 }} />
           {v.isMobileAccessEnabled ? 'Enabled' : 'Disabled'}
@@ -1026,7 +1026,7 @@ export default function VendorsPage() {
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: 3,
-                      fontSize: 12,
+                      fontSize: 13,
                       fontWeight: 700,
                       color: v.overallScore >= 90 ? 'var(--success-500)' : v.overallScore >= 60 ? '#d97706' : v.overallScore > 0 ? 'var(--danger-500)' : 'var(--text-placeholder)',
                       background: v.overallScore >= 90 ? 'rgba(16,126,62,0.1)' : v.overallScore >= 60 ? 'rgba(245,158,11,0.1)' : v.overallScore > 0 ? 'rgba(220,38,38,0.08)' : 'transparent',
@@ -1037,7 +1037,7 @@ export default function VendorsPage() {
                       {v.overallScore > 0 ? (
                         <><Star size={11} fill="currentColor" style={{ opacity: v.overallScore >= 60 ? 1 : 0.4 }} />{v.overallScore}%</>
                       ) : (
-                        <span style={{ fontSize: 11, opacity: 0.5 }}>—</span>
+                        <span style={{ fontSize: 12, opacity: 0.5 }}>—</span>
                       )}
                     </span>
                     <span className={`vendors-card__status-dot ${v.isActive ? 'vendors-card__status-dot--active' : ''}`} />
@@ -1184,13 +1184,13 @@ export default function VendorsPage() {
                       style={{ width: 18, height: 18, cursor: 'pointer' }}
                     />
                   </label>
-                  <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
+                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>
                     Allow this vendor to log in to the Mobile App.
                   </p>
                 </div>
               </div>
               {editingVendor && (
-                <p style={{ margin: '0 20px 12px', fontSize: '0.85rem', color: 'var(--text-secondary, #64748b)' }}>
+                <p style={{ margin: '0 20px 12px', fontSize: '0.9125rem', color: 'var(--text-secondary, #64748b)' }}>
                   Vendor profile fields are saved to the system. Use the Active toggle in the table for portal access.
                 </p>
               )}
@@ -1220,10 +1220,10 @@ export default function VendorsPage() {
               </button>
             </div>
             <div className="vendors-modal__body">
-              <p style={{ margin: 0, fontSize: '0.95rem' }}>
+              <p style={{ margin: 0, fontSize: '1.0125rem' }}>
                 Remove <strong>{deleteTarget.name}</strong> ({deleteTarget.email}) from the directory?
               </p>
-              <p style={{ margin: '12px 0 0', fontSize: '0.85rem', color: 'var(--text-secondary, #64748b)' }}>
+              <p style={{ margin: '12px 0 0', fontSize: '0.9125rem', color: 'var(--text-secondary, #64748b)' }}>
                 Their quotations and RFQ invites will be removed. Vendors with purchase orders or invoices must be deactivated instead.
               </p>
               {deleteError && (
@@ -2078,8 +2078,8 @@ export default function VendorsPage() {
                   <>
                     <div className={`doc-preview-expiry-box doc-preview-expiry-box--${info.isExpired ? 'expired' : info.isExpiringSoon ? 'warn' : 'valid'}`}>
                       <div>
-                        <strong style={{ fontSize: 13, color: info.color }}>Compliance Status:</strong>
-                        <div style={{ fontSize: 12, marginTop: 2, color: 'var(--text-primary)' }}>{info.label}</div>
+                        <strong style={{ fontSize: 14, color: info.color }}>Compliance Status:</strong>
+                        <div style={{ fontSize: 13, marginTop: 2, color: 'var(--text-primary)' }}>{info.label}</div>
                       </div>
                       <span className={`v360-doc-badge ${info.badgeClass}`}>
                         {info.daysLeft !== null ? (info.isExpired ? `Expired ${Math.abs(info.daysLeft)} days ago` : `${info.daysLeft} Days Left`) : 'Permanent / Valid'}
@@ -2107,7 +2107,7 @@ export default function VendorsPage() {
                           <tbody>
                             <tr>
                               <td className="gst-lbl">1. Registration Number (GSTIN)</td>
-                              <td className="gst-val" style={{ fontFamily: 'monospace', fontSize: 13, color: '#1e3a8a' }}>{previewDoc.documentNumber || detailVendor?.gstNumber || '27AABCU9603R1ZX'}</td>
+                              <td className="gst-val" style={{ fontFamily: 'monospace', fontSize: 14, color: '#1e3a8a' }}>{previewDoc.documentNumber || detailVendor?.gstNumber || '27AABCU9603R1ZX'}</td>
                             </tr>
                             <tr>
                               <td className="gst-lbl">2. Legal Name of Business</td>
@@ -2189,7 +2189,7 @@ export default function VendorsPage() {
                         <div className="iso-cert-to">This is to certify that the Quality Management System of</div>
                         <div className="iso-vendor-name">{detailVendor?.name}</div>
                         <div className="iso-standard">ISO 9001:2015 QUALITY MANAGEMENT SYSTEM</div>
-                        <div style={{ fontSize: 12, marginBottom: 14 }}>
+                        <div style={{ fontSize: 13, marginBottom: 14 }}>
                           Certificate No: <strong>{previewDoc.documentNumber || 'ISO-88219-QMS'}</strong> | Valid Until: <strong style={{ color: info.color }}>{formatDateShort(previewDoc.expiryDate)}</strong>
                         </div>
                       </div>
@@ -2198,15 +2198,15 @@ export default function VendorsPage() {
                         <div className="cheque-cancel-mark">CANCELLED — FOR VERIFICATION ONLY</div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
                           <div>
-                            <strong style={{ fontSize: 16, color: '#14532d' }}>{detailVendor?.bankName || 'HDFC BANK'}</strong>
-                            <div style={{ fontSize: 11 }}>Branch: {detailVendor?.bankBranch || 'Main Branch'}</div>
+                            <strong style={{ fontSize: 17, color: '#14532d' }}>{detailVendor?.bankName || 'HDFC BANK'}</strong>
+                            <div style={{ fontSize: 12 }}>Branch: {detailVendor?.bankBranch || 'Main Branch'}</div>
                           </div>
-                          <div style={{ textAlign: 'right', fontSize: 12 }}>
+                          <div style={{ textAlign: 'right', fontSize: 13 }}>
                             <div>Account No: <strong style={{ fontFamily: 'monospace' }}>{detailVendor?.bankAccountNumber || previewDoc.documentNumber || '50100234567890'}</strong></div>
                             <div>IFSC Code: <strong style={{ fontFamily: 'monospace' }}>{detailVendor?.bankIfscCode || 'HDFC0001234'}</strong></div>
                           </div>
                         </div>
-                        <div style={{ fontSize: 13, fontWeight: 700 }}>PAY TO: {detailVendor?.name}</div>
+                        <div style={{ fontSize: 14, fontWeight: 700 }}>PAY TO: {detailVendor?.name}</div>
                       </div>
                     ) : (
                       <div className="doc-preview-sheet">
@@ -2402,7 +2402,7 @@ export default function VendorsPage() {
               <button className="vendors-modal__close" onClick={closeCredentialsModal}><X size={18} /></button>
             </div>
             <div className="vendors-modal__body">
-              <p style={{ margin: '0 0 12px', fontSize: '0.9rem', color: 'var(--text-secondary, #64748b)' }}>
+              <p style={{ margin: '0 0 12px', fontSize: '0.9625rem', color: 'var(--text-secondary, #64748b)' }}>
                 <strong>{credVendor.name}</strong> — send a secure link so the vendor can create their own password.
                 Admins never see or store the vendor&apos;s password.
               </p>
@@ -2410,7 +2410,7 @@ export default function VendorsPage() {
                 <label className="vendors-modal__label">Login email</label>
                 <input className="vendors-modal__input" value={credVendor.email} readOnly />
               </div>
-              <p style={{ margin: '12px 0 0', fontSize: '0.85rem', color: 'var(--text-secondary, #64748b)' }}>
+              <p style={{ margin: '12px 0 0', fontSize: '0.9125rem', color: 'var(--text-secondary, #64748b)' }}>
                 {credVendor.hasPortalCredentials
                   ? 'This vendor already has a portal password. Resending sends a new setup link (e.g. if they forgot it).'
                   : credVendor.passwordSetupPending
@@ -2452,8 +2452,8 @@ export default function VendorsPage() {
                   <Send size={18} />
                 </div>
                 <div>
-                  <span className="vendors-modal__title" style={{ fontSize: 16 }}>Renewal Request Sent!</span>
-                  <div style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>Email notification dispatched</div>
+                  <span className="vendors-modal__title" style={{ fontSize: 17 }}>Renewal Request Sent!</span>
+                  <div style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>Email notification dispatched</div>
                 </div>
               </div>
               <button type="button" className="vendors-modal__close" onClick={() => setRenewalSuccessModal(null)}>
@@ -2463,29 +2463,29 @@ export default function VendorsPage() {
 
             <div className="vendors-modal__body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                   <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>RECIPIENT VENDOR:</span>
                   <strong style={{ color: 'var(--text-primary)' }}>{renewalSuccessModal.vendorName}</strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                   <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>VENDOR EMAIL:</span>
                   <strong style={{ color: 'var(--primary-500)' }}>{renewalSuccessModal.vendorEmail}</strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                   <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>TARGET DOCUMENT:</span>
                   <strong style={{ color: 'var(--text-primary)' }}>{renewalSuccessModal.docName}</strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                   <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>EXPIRY STATUS:</span>
                   <span style={{ color: '#f59e0b', fontWeight: 700 }}>{renewalSuccessModal.expiryLabel}</span>
                 </div>
               </div>
 
-              <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>
+              <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.5 }}>
                 An official document renewal notification email with a <strong>secure 1-click document re-upload link</strong> has been dispatched to <strong>{renewalSuccessModal.vendorEmail}</strong>.
               </div>
 
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', background: 'rgba(10,110,209,0.08)', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(10,110,209,0.2)' }}>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', background: 'rgba(10,110,209,0.08)', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(10,110,209,0.2)' }}>
                 ℹ️ Document status in Vendor 360 has been marked as <strong>Renewal Requested</strong>. As soon as the vendor uploads the new certificate, compliance and risk scores will automatically update.
               </div>
             </div>
@@ -2566,7 +2566,7 @@ export default function VendorsPage() {
             <h3
               style={{
                 margin: '0 0 8px',
-                fontSize: 19,
+                fontSize: 20,
                 fontWeight: 700,
                 color: 'var(--text-primary)',
                 letterSpacing: '-0.01em',
@@ -2579,7 +2579,7 @@ export default function VendorsPage() {
             <p
               style={{
                 margin: '0 0 24px',
-                fontSize: 14,
+                fontSize: 15,
                 color: 'var(--text-secondary)',
                 lineHeight: 1.55,
               }}
@@ -2600,7 +2600,7 @@ export default function VendorsPage() {
                   ? 'linear-gradient(135deg, #16a34a, #15803d)'
                   : 'linear-gradient(135deg, #dc2626, #b91c1c)',
                 color: '#ffffff',
-                fontSize: 14,
+                fontSize: 15,
                 fontWeight: 600,
                 cursor: 'pointer',
                 boxShadow: mobileSuccessModal.isEnabled

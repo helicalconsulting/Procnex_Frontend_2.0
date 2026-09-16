@@ -89,7 +89,7 @@ export default function PrintPurchaseInvoiceModal({ data, onClose }: PrintPurcha
               ) : (
                 <h2>{displayCompanyName}</h2>
               )}
-              {logoUrl && <h2 style={{ fontSize: 18, margin: '4px 0 2px 0' }}>{displayCompanyName}</h2>}
+              {logoUrl && <h2 style={{ fontSize: 19, margin: '4px 0 2px 0' }}>{displayCompanyName}</h2>}
               <p>{companyAddress}</p>
               <p>Phone: {profile?.companyPhone || '+91 8272811866'} | Email: {profile?.companyEmail || 'finance@helical.com'}</p>
               {profile?.taxRegistrationNumber && (
@@ -179,7 +179,7 @@ export default function PrintPurchaseInvoiceModal({ data, onClose }: PrintPurcha
                 <td>
                   <strong>Purchase Goods & Services — Invoice {data.invoiceNumber}</strong>
                   <br />
-                  <span style={{ fontSize: 11, color: '#64748b' }}>
+                  <span style={{ fontSize: 12, color: '#64748b' }}>
                     Supplied by {data.vendorName} per Purchase Order agreement
                   </span>
                 </td>
@@ -210,10 +210,10 @@ export default function PrintPurchaseInvoiceModal({ data, onClose }: PrintPurcha
 
           {data.comments && (
             <div style={{ marginTop: 24, padding: 14, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>
                 Approval / Audit Comments
               </div>
-              <div style={{ fontSize: 12, color: '#334155', fontStyle: 'italic' }}>
+              <div style={{ fontSize: 13, color: '#334155', fontStyle: 'italic' }}>
                 "{data.comments}"
               </div>
             </div>
@@ -223,13 +223,13 @@ export default function PrintPurchaseInvoiceModal({ data, onClose }: PrintPurcha
           <div className="ppi-sheet__footer">
             <div>
               <div style={{ fontWeight: 700, color: '#0f172a' }}>{displayCompanyName} — Accounts Payable System</div>
-              <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>
+              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
                 Computer Generated Purchase Invoice Document • Verified & Synced
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{ borderBottom: '1px solid #cbd5e1', width: 160, marginBottom: 4 }}></div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: '#475569' }}>Authorized Signatory</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>Authorized Signatory</div>
             </div>
           </div>
         </div>

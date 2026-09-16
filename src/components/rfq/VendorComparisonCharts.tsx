@@ -260,7 +260,7 @@ export default function VendorComparisonCharts({
             {/* X-AXIS: Real Vendors v1, v2, v3... sorted ascending */}
             <XAxis
               dataKey="vendorCode"
-              tick={{ fontSize: 13, fill: 'var(--text-primary)', fontWeight: 700 }}
+              tick={{ fontSize: 14, fill: 'var(--text-primary)', fontWeight: 700 }}
               axisLine={{ stroke: 'var(--text-primary)', strokeWidth: 1.5 }}
               tickLine={true}
               height={40}
@@ -268,7 +268,7 @@ export default function VendorComparisonCharts({
                 value: 'Vendors',
                 position: 'insideBottomRight',
                 offset: -10,
-                style: { fontSize: 12, fill: 'var(--text-secondary)', fontWeight: 600 },
+                style: { fontSize: 13, fill: 'var(--text-secondary)', fontWeight: 600 },
               }}
             />
             
@@ -277,7 +277,7 @@ export default function VendorComparisonCharts({
               yAxisId="left"
               domain={[0, 100]}
               ticks={ticksForCats}
-              tick={{ fontSize: 12, fill: 'var(--text-primary)', fontWeight: 700 }}
+              tick={{ fontSize: 13, fill: 'var(--text-primary)', fontWeight: 700 }}
               axisLine={{ stroke: 'var(--text-primary)', strokeWidth: 1.5 }}
               tickLine={true}
               tickFormatter={(val: number) => {
@@ -290,7 +290,7 @@ export default function VendorComparisonCharts({
                 angle: -90,
                 position: 'insideLeft',
                 offset: 12,
-                style: { fontSize: 11, fill: 'var(--primary-500)', fontWeight: 700 },
+                style: { fontSize: 12, fill: 'var(--primary-500)', fontWeight: 700 },
               }}
             />
             
@@ -300,7 +300,7 @@ export default function VendorComparisonCharts({
               orientation="right"
               domain={[0, 100]}
               ticks={[0, 20, 40, 60, 80, 100]}
-              tick={{ fontSize: 12, fill: 'var(--text-secondary)', fontWeight: 700 }}
+              tick={{ fontSize: 13, fill: 'var(--text-secondary)', fontWeight: 700 }}
               axisLine={{ stroke: 'var(--text-primary)', strokeWidth: 1.5 }}
               tickLine={true}
               tickFormatter={(v: number) => `${v}%`}
@@ -310,7 +310,7 @@ export default function VendorComparisonCharts({
                 angle: 90,
                 position: 'insideRight',
                 offset: 12,
-                style: { fontSize: 11, fill: 'var(--text-secondary)', fontWeight: 700 },
+                style: { fontSize: 12, fill: 'var(--text-secondary)', fontWeight: 700 },
               }}
             />
 
@@ -357,7 +357,7 @@ export default function VendorComparisonCharts({
           {/* Vendors Mapping Row */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <span style={{
-              fontSize: 11, fontWeight: 700,
+              fontSize: 12, fontWeight: 700,
               color: 'var(--text-placeholder)',
               textTransform: 'uppercase', letterSpacing: '0.6px',
               minWidth: 110, flexShrink: 0,
@@ -374,13 +374,13 @@ export default function VendorComparisonCharts({
                     borderRadius: 20,
                     background: 'rgba(10, 110, 209, 0.08)',
                     border: '1px solid rgba(10, 110, 209, 0.2)',
-                    fontSize: 12, color: 'var(--text-primary)', fontWeight: 500,
+                    fontSize: 13, color: 'var(--text-primary)', fontWeight: 500,
                   }}
                 >
                   <span style={{ fontWeight: 700, color: 'var(--primary-500)' }}>{v.code}:</span>
                   <span>{v.name}</span>
                   <span style={{
-                    fontSize: 11, fontWeight: 700,
+                    fontSize: 12, fontWeight: 700,
                     color: v.overallScore >= 75 ? '#107e3e' : 'var(--primary-500)',
                     background: v.overallScore >= 75 ? 'rgba(16, 126, 62, 0.12)' : 'rgba(10, 110, 209, 0.12)',
                     padding: '1px 6px', borderRadius: 10,
@@ -397,7 +397,7 @@ export default function VendorComparisonCharts({
           {/* Evaluation Parameters Mapping Row */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <span style={{
-              fontSize: 11, fontWeight: 700,
+              fontSize: 12, fontWeight: 700,
               color: 'var(--text-placeholder)',
               textTransform: 'uppercase', letterSpacing: '0.6px',
               minWidth: 110, flexShrink: 0,
@@ -416,7 +416,7 @@ export default function VendorComparisonCharts({
                       borderRadius: 'var(--radius-sm, 4px)',
                       background: 'var(--surface-card, #1e2530)',
                       border: '1px solid var(--border)',
-                      fontSize: 12, color: 'var(--text-primary)',
+                      fontSize: 13, color: 'var(--text-primary)',
                     }}
                   >
                     <span style={{
@@ -426,7 +426,7 @@ export default function VendorComparisonCharts({
                     <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>P{idx + 1}:</span>
                     <span>{cat.name}</span>
                     <span style={{
-                      fontSize: 10, fontWeight: 700,
+                      fontSize: 11, fontWeight: 700,
                       color: 'var(--text-secondary)',
                       background: 'var(--surface-elevated)',
                       padding: '1px 5px', borderRadius: 4,

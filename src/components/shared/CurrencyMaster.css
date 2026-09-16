@@ -12,7 +12,7 @@
 }
 
 .cur-selector__label {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -39,7 +39,7 @@
   border-radius: var(--radius-md);
   background: var(--surface);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
@@ -83,19 +83,19 @@
 }
 
 .cur-selector__flag {
-  font-size: 17px;
+  font-size: 18px;
   line-height: 1;
   flex-shrink: 0;
 }
 
 .cur-selector__selected-code {
   font-weight: 700;
-  font-size: 14px;
+  font-size: 15px;
   white-space: nowrap;
 }
 
 .cur-selector__selected-name {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-placeholder);
   white-space: nowrap;
   overflow: hidden;
@@ -151,16 +151,16 @@
 
 .cur-selector--sm .cur-selector__trigger {
   padding: 6px 10px;
-  font-size: 13.5px;
+  font-size: 14.5px;
   font-weight: 600;
 }
 
 .cur-selector--sm .cur-selector__flag {
-  font-size: 16px;
+  font-size: 17px;
 }
 
 .cur-selector--sm .cur-selector__selected-code {
-  font-size: 13.5px;
+  font-size: 14.5px;
   font-weight: 700;
 }
 
@@ -208,7 +208,7 @@
   border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 15px;
   font-family: inherit;
   outline: none;
   transition: border-color 0.2s;
@@ -227,7 +227,7 @@
   align-items: center;
   gap: 6px;
   padding: 8px 14px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-placeholder);
   border-bottom: 1px solid var(--border);
 }
@@ -247,7 +247,7 @@
 .cur-selector__no-results {
   padding: 20px 14px;
   text-align: center;
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text-placeholder);
 }
 
@@ -263,7 +263,7 @@
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 15px;
   font-family: inherit;
   cursor: pointer;
   text-align: left;
@@ -284,7 +284,7 @@
 }
 
 .cur-selector__option-flag {
-  font-size: 20px;
+  font-size: 21px;
   line-height: 1;
   flex-shrink: 0;
   width: 24px;
@@ -311,18 +311,18 @@
 
 .cur-selector__option-code {
   font-weight: 700;
-  font-size: 14.5px;
+  font-size: 15.5px;
   flex-shrink: 0;
 }
 
 .cur-selector__option-symbol {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-placeholder);
   flex-shrink: 0;
 }
 
 .cur-selector__option-name {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -340,7 +340,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-placeholder);
 }
@@ -410,7 +410,7 @@
 
 .cur-amount-input__cur-text {
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   font-family: inherit;
   min-width: 28px;
@@ -446,7 +446,7 @@
 .cur-amount-input__symbol {
   position: absolute;
   left: 8px;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text-placeholder);
   pointer-events: none;
@@ -458,7 +458,7 @@
   border: none;
   background: transparent;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 15px;
   font-family: inherit;
   outline: none;
 }
@@ -486,25 +486,25 @@
 }
 
 .cur-badge__flag {
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1;
 }
 
 .cur-badge--sm {
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .cur-badge--sm .cur-badge__flag {
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .cur-badge--md {
-  font-size: 12px;
+  font-size: 13px;
   padding: 4px 10px;
 }
 
 .cur-badge--md .cur-badge__flag {
-  font-size: 16px;
+  font-size: 17px;
 }
 
 [data-theme=\"dark\"] .cur-badge {

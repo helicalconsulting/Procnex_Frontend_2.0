@@ -591,7 +591,7 @@ export default function HelicalConsultingPage() {
               borderRadius: '4px',
               background: 'rgba(239, 68, 68, 0.12)',
               color: '#ef4444',
-              fontSize: '11px',
+              fontSize: '12px',
               fontWeight: '700',
               textTransform: 'uppercase',
               letterSpacing: '0.5px',
@@ -600,10 +600,10 @@ export default function HelicalConsultingPage() {
               <ShieldCheck size={14} /> Restricted Internal Tool
             </div>
 
-            <h2 style={{ fontSize: '22px', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 6px' }}>
+            <h2 style={{ fontSize: '23px', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 6px' }}>
               Helical Security Lock
             </h2>
-            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 20px', lineHeight: 1.5 }}>
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 20px', lineHeight: 1.5 }}>
               This portal is restricted to authorized Helical Administrators. Please enter your Security Access Key to unlock.
             </p>
 
@@ -746,7 +746,7 @@ export default function HelicalConsultingPage() {
               color: 'var(--primary-500)',
               border: '1.5px solid var(--primary-500)',
               fontWeight: '700',
-              fontSize: '15px',
+              fontSize: '16px',
               cursor: 'pointer',
               transition: 'all 0.2s ease',
               boxShadow: 'var(--shadow-sm)',
@@ -761,7 +761,7 @@ export default function HelicalConsultingPage() {
               display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
-              fontSize: '13px',
+              fontSize: '14px',
               fontWeight: '600',
               opacity: 0.9,
               background: 'rgba(10, 110, 209, 0.15)',
@@ -818,7 +818,7 @@ export default function HelicalConsultingPage() {
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{
-                    fontSize: '13px',
+                    fontSize: '14px',
                     fontWeight: '700',
                     color: (codeMatchAnalysis?.type === 'EXACT_CODE' || nameMatchAnalysis?.isExact) ? '#ef4444' : '#f59e0b',
                     display: 'flex',
@@ -834,7 +834,7 @@ export default function HelicalConsultingPage() {
                     </span>
                     {nameMatchAnalysis && (
                       <span style={{
-                        fontSize: '11px',
+                        fontSize: '12px',
                         padding: '2px 8px',
                         borderRadius: '4px',
                         background: nameMatchAnalysis.isExact ? 'rgba(239, 68, 68, 0.2)' : 'rgba(245, 158, 11, 0.2)',
@@ -844,14 +844,14 @@ export default function HelicalConsultingPage() {
                       </span>
                     )}
                   </div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-primary)', lineHeight: '1.4' }}>
+                  <div style={{ fontSize: '13px', color: 'var(--text-primary)', lineHeight: '1.4' }}>
                     {codeMatchAnalysis && <div>• {codeMatchAnalysis.message}</div>}
                     {nameMatchAnalysis && <div>• {nameMatchAnalysis.message}</div>}
                   </div>
                   {((codeMatchAnalysis?.matchedCompany) || (nameMatchAnalysis?.matchedCompany)) && (
                     <div style={{
                       marginTop: '8px',
-                      fontSize: '11px',
+                      fontSize: '12px',
                       color: 'var(--text-secondary)',
                       background: 'var(--surface)',
                       padding: '6px 10px',
@@ -877,7 +877,7 @@ export default function HelicalConsultingPage() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                fontSize: '14px',
+                fontSize: '15px',
                 fontWeight: '700',
                 color: 'var(--text-primary)',
                 borderBottom: '1px solid var(--border)',
@@ -904,9 +904,9 @@ export default function HelicalConsultingPage() {
                     disabled={loading}
                     required
                   />
-                  <span style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '3px', display: 'block' }}>Unique ID (Auto uppercase)</span>
+                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '3px', display: 'block' }}>Unique ID (Auto uppercase)</span>
                   {codeMatchAnalysis?.type === 'EXACT_CODE' && (
-                    <span style={{ fontSize: '11px', color: '#ef4444', marginTop: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                    <span style={{ fontSize: '12px', color: '#ef4444', marginTop: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
                       <XCircle size={12} /> Code ALREADY REGISTERED for '{codeMatchAnalysis.matchedCompany.companyName}'
                     </span>
                   )}
@@ -926,10 +926,10 @@ export default function HelicalConsultingPage() {
                     disabled={loading}
                     required
                   />
-                  <span style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '3px', display: 'block' }}>Display Brand Name</span>
+                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '3px', display: 'block' }}>Display Brand Name</span>
                   {nameMatchAnalysis && (
                     <span style={{
-                      fontSize: '11px',
+                      fontSize: '12px',
                       color: nameMatchAnalysis.isExact ? '#ef4444' : '#f59e0b',
                       marginTop: '4px',
                       display: 'inline-flex',
@@ -961,7 +961,7 @@ export default function HelicalConsultingPage() {
                     disabled={loading}
                     required
                   />
-                  <span style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '3px', display: 'block' }}>Max allowed active staff</span>
+                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '3px', display: 'block' }}>Max allowed active staff</span>
                 </div>
               </div>
             </div>
@@ -978,7 +978,7 @@ export default function HelicalConsultingPage() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                fontSize: '14px',
+                fontSize: '15px',
                 fontWeight: '700',
                 color: 'var(--text-primary)',
                 borderBottom: '1px solid var(--border)',
@@ -1037,12 +1037,12 @@ export default function HelicalConsultingPage() {
                     required
                   />
                   {isEmailValid === true && (
-                    <span style={{ fontSize: '11px', color: '#10b981', marginTop: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                    <span style={{ fontSize: '12px', color: '#10b981', marginTop: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
                       <CheckCircle2 size={12} /> Valid email address
                     </span>
                   )}
                   {isEmailValid === false && (
-                    <span style={{ fontSize: '11px', color: '#ef4444', marginTop: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                    <span style={{ fontSize: '12px', color: '#ef4444', marginTop: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
                       <XCircle size={12} /> Please enter a valid email address (e.g. name@company.com)
                     </span>
                   )}
@@ -1126,12 +1126,12 @@ export default function HelicalConsultingPage() {
                   hasError={isPhoneValid === false}
                 />
                 {isPhoneValid === true && (
-                  <span style={{ fontSize: '11px', color: '#10b981', marginTop: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                  <span style={{ fontSize: '12px', color: '#10b981', marginTop: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
                     <CheckCircle2 size={12} /> Valid phone number
                   </span>
                 )}
                 {isPhoneValid === false && (
-                  <span style={{ fontSize: '11px', color: '#ef4444', marginTop: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
+                  <span style={{ fontSize: '12px', color: '#ef4444', marginTop: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
                     <XCircle size={12} /> Phone number must contain digits only
                   </span>
                 )}
@@ -1204,10 +1204,10 @@ export default function HelicalConsultingPage() {
               }}>
                 <CheckCircle2 size={32} />
               </div>
-              <h3 style={{ fontSize: '22px', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 6px' }}>
+              <h3 style={{ fontSize: '23px', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 6px' }}>
                 Company Admin Created! 🎉
               </h3>
-              <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: 0 }}>
+              <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0 }}>
                 Super Admin account provisioned for <strong>{createdData.companyName}</strong>.
               </p>
             </div>
@@ -1222,7 +1222,7 @@ export default function HelicalConsultingPage() {
               display: 'flex',
               flexDirection: 'column',
               gap: '10px',
-              fontSize: '14px'
+              fontSize: '15px'
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--text-secondary)' }}>Company Code:</span>
@@ -1259,7 +1259,7 @@ export default function HelicalConsultingPage() {
                   background: 'var(--surface-card)',
                   color: 'var(--text-primary)',
                   fontWeight: '600',
-                  fontSize: '14px',
+                  fontSize: '15px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -1282,7 +1282,7 @@ export default function HelicalConsultingPage() {
                     background: 'transparent',
                     color: 'var(--text-secondary)',
                     fontWeight: '600',
-                    fontSize: '14px',
+                    fontSize: '15px',
                     cursor: 'pointer'
                   }}
                 >
@@ -1298,7 +1298,7 @@ export default function HelicalConsultingPage() {
                     background: 'var(--primary-500)',
                     color: '#fff',
                     fontWeight: '600',
-                    fontSize: '14px',
+                    fontSize: '15px',
                     cursor: 'pointer'
                   }}
                 >
@@ -1363,10 +1363,10 @@ export default function HelicalConsultingPage() {
                   <Building2 size={22} />
                 </div>
                 <div>
-                  <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>
+                  <h3 style={{ fontSize: '19px', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>
                     Registered Organizations Directory
                   </h3>
-                  <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0 }}>
+                  <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>
                     Live breakdown of all client companies, assigned employees, and onboarded vendors.
                   </p>
                 </div>
@@ -1386,7 +1386,7 @@ export default function HelicalConsultingPage() {
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px',
-                    fontSize: '12px',
+                    fontSize: '13px',
                     fontWeight: '600',
                     transition: 'all 0.2s ease'
                   }}
@@ -1443,10 +1443,10 @@ export default function HelicalConsultingPage() {
                     <Building2 size={22} />
                   </div>
                   <div>
-                    <div style={{ fontSize: '24px', fontWeight: '800', color: 'var(--text-primary)', lineHeight: 1 }}>
+                    <div style={{ fontSize: '25px', fontWeight: '800', color: 'var(--text-primary)', lineHeight: 1 }}>
                       {companiesList.length}
                     </div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', fontWeight: '600' }}>
+                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px', fontWeight: '600' }}>
                       Registered Companies
                     </div>
                   </div>
@@ -1474,10 +1474,10 @@ export default function HelicalConsultingPage() {
                     <Users size={22} />
                   </div>
                   <div>
-                    <div style={{ fontSize: '24px', fontWeight: '800', color: 'var(--text-primary)', lineHeight: 1 }}>
+                    <div style={{ fontSize: '25px', fontWeight: '800', color: 'var(--text-primary)', lineHeight: 1 }}>
                       {totalUsersAcrossAll}
                     </div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', fontWeight: '600' }}>
+                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px', fontWeight: '600' }}>
                       Total Active Users
                     </div>
                   </div>
@@ -1505,10 +1505,10 @@ export default function HelicalConsultingPage() {
                     <Truck size={22} />
                   </div>
                   <div>
-                    <div style={{ fontSize: '24px', fontWeight: '800', color: 'var(--text-primary)', lineHeight: 1 }}>
+                    <div style={{ fontSize: '25px', fontWeight: '800', color: 'var(--text-primary)', lineHeight: 1 }}>
                       {totalVendorsAcrossAll}
                     </div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', fontWeight: '600' }}>
+                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px', fontWeight: '600' }}>
                       Total Vendors Onboarded
                     </div>
                   </div>
@@ -1536,7 +1536,7 @@ export default function HelicalConsultingPage() {
                     border: 'none',
                     outline: 'none',
                     color: 'var(--text-primary)',
-                    fontSize: '13px',
+                    fontSize: '14px',
                     width: '100%'
                   }}
                 />
@@ -1562,7 +1562,7 @@ export default function HelicalConsultingPage() {
                   border: '1px dashed var(--border)'
                 }}>
                   <Building2 size={36} style={{ opacity: 0.4, marginBottom: '8px' }} />
-                  <p style={{ margin: 0, fontSize: '14px', fontWeight: '600' }}>
+                  <p style={{ margin: 0, fontSize: '15px', fontWeight: '600' }}>
                     {companiesList.length === 0 ? 'No registered companies found.' : 'No matching companies found for your search.'}
                   </p>
                 </div>
@@ -1595,7 +1595,7 @@ export default function HelicalConsultingPage() {
                               background: 'var(--primary-50, rgba(10, 110, 209, 0.15))',
                               color: 'var(--primary-500)',
                               fontWeight: '800',
-                              fontSize: '14px',
+                              fontSize: '15px',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
@@ -1604,10 +1604,10 @@ export default function HelicalConsultingPage() {
                               {c.companyCode.slice(0, 3)}
                             </div>
                             <div>
-                              <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)' }}>
+                              <h4 style={{ margin: 0, fontSize: '17px', fontWeight: '700', color: 'var(--text-primary)' }}>
                                 {c.companyName}
                               </h4>
-                              <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                                 Code: <strong style={{ color: 'var(--primary-500)', fontFamily: 'var(--font-mono)' }}>{c.companyCode}</strong>
                               </span>
                             </div>
@@ -1615,7 +1615,7 @@ export default function HelicalConsultingPage() {
 
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <span style={{
-                              fontSize: '11px',
+                              fontSize: '12px',
                               padding: '3px 8px',
                               borderRadius: '4px',
                               background: c.isActive !== false ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
@@ -1629,7 +1629,7 @@ export default function HelicalConsultingPage() {
                               {c.isActive !== false ? 'Active' : 'Disabled'}
                             </span>
                             <span style={{
-                              fontSize: '11px',
+                              fontSize: '12px',
                               padding: '3px 8px',
                               borderRadius: '4px',
                               background: 'var(--surface-hover)',
@@ -1657,10 +1657,10 @@ export default function HelicalConsultingPage() {
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                               <Users size={16} style={{ color: '#10b981' }} />
                               <div>
-                                <div style={{ fontSize: '16px', fontWeight: '800', color: '#10b981', lineHeight: 1 }}>
-                                  {c.usersCount} <span style={{ fontSize: '12px', opacity: 0.8, fontWeight: '600' }}>/ {c.maxUsers || 50}</span>
+                                <div style={{ fontSize: '17px', fontWeight: '800', color: '#10b981', lineHeight: 1 }}>
+                                  {c.usersCount} <span style={{ fontSize: '13px', opacity: 0.8, fontWeight: '600' }}>/ {c.maxUsers || 50}</span>
                                 </div>
-                                <div style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '600', marginTop: '2px' }}>
+                                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600', marginTop: '2px' }}>
                                   Active Users Limit
                                 </div>
                               </div>
@@ -1683,7 +1683,7 @@ export default function HelicalConsultingPage() {
                                 border: '1px solid rgba(16, 185, 129, 0.4)',
                                 background: 'rgba(16, 185, 129, 0.15)',
                                 color: '#10b981',
-                                fontSize: '11px',
+                                fontSize: '12px',
                                 fontWeight: '700',
                                 cursor: 'pointer',
                                 transition: 'all 0.2s ease',
@@ -1706,10 +1706,10 @@ export default function HelicalConsultingPage() {
                           }}>
                             <Truck size={16} style={{ color: '#f59e0b' }} />
                             <div>
-                              <div style={{ fontSize: '16px', fontWeight: '800', color: '#f59e0b', lineHeight: 1 }}>
+                              <div style={{ fontSize: '17px', fontWeight: '800', color: '#f59e0b', lineHeight: 1 }}>
                                 {c.vendorsCount}
                               </div>
-                              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '600', marginTop: '2px' }}>
+                              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600', marginTop: '2px' }}>
                                 Total Vendors
                               </div>
                             </div>
@@ -1722,7 +1722,7 @@ export default function HelicalConsultingPage() {
                             marginTop: '14px',
                             paddingTop: '12px',
                             borderTop: '1px dashed var(--border)',
-                            fontSize: '12px',
+                            fontSize: '13px',
                             color: 'var(--text-secondary)',
                             display: 'flex',
                             flexDirection: 'column',
@@ -1759,7 +1759,7 @@ export default function HelicalConsultingPage() {
                             background: c.isActive !== false ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)',
                             color: c.isActive !== false ? '#ef4444' : '#10b981',
                             fontWeight: '700',
-                            fontSize: '12px',
+                            fontSize: '13px',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -1794,7 +1794,7 @@ export default function HelicalConsultingPage() {
                             background: 'rgba(239, 68, 68, 0.1)',
                             color: '#ef4444',
                             fontWeight: '600',
-                            fontSize: '12px',
+                            fontSize: '13px',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -1855,10 +1855,10 @@ export default function HelicalConsultingPage() {
               <AlertTriangle size={32} />
             </div>
 
-            <h3 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 8px' }}>
+            <h3 style={{ fontSize: '21px', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 8px' }}>
               Delete Organization?
             </h3>
-            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 16px', lineHeight: 1.5 }}>
+            <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: '0 0 16px', lineHeight: 1.5 }}>
               Are you sure you want to permanently delete company <strong>{deleteConfirmCompany.name}</strong> (<strong style={{ color: 'var(--primary-500)' }}>{deleteConfirmCompany.code}</strong>)?
             </p>
 
@@ -1868,7 +1868,7 @@ export default function HelicalConsultingPage() {
               borderRadius: '8px',
               padding: '12px 14px',
               marginBottom: '20px',
-              fontSize: '12px',
+              fontSize: '13px',
               color: '#ef4444',
               textAlign: 'left',
               display: 'flex',
@@ -1891,7 +1891,7 @@ export default function HelicalConsultingPage() {
                   background: 'transparent',
                   color: 'var(--text-secondary)',
                   fontWeight: '600',
-                  fontSize: '14px',
+                  fontSize: '15px',
                   cursor: 'pointer'
                 }}
               >
@@ -1908,7 +1908,7 @@ export default function HelicalConsultingPage() {
                   background: '#ef4444',
                   color: '#fff',
                   fontWeight: '700',
-                  fontSize: '14px',
+                  fontSize: '15px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -1969,10 +1969,10 @@ export default function HelicalConsultingPage() {
               <CheckCircle2 size={36} />
             </div>
 
-            <h3 style={{ fontSize: '22px', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 8px' }}>
+            <h3 style={{ fontSize: '23px', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 8px' }}>
               Company Deleted! 🗑️
             </h3>
-            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 20px', lineHeight: 1.5 }}>
+            <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: '0 0 20px', lineHeight: 1.5 }}>
               Company <strong>{deleteSuccessCompany.name}</strong> (<strong style={{ color: 'var(--primary-500)' }}>{deleteSuccessCompany.code}</strong>) and all its associated users & vendors have been deleted from database.
             </p>
 
@@ -1986,7 +1986,7 @@ export default function HelicalConsultingPage() {
                 border: 'none',
                 background: 'var(--primary-500)',
                 color: '#fff',
-                fontSize: '14px',
+                fontSize: '15px',
                 cursor: 'pointer'
               }}
             >
@@ -2034,10 +2034,10 @@ export default function HelicalConsultingPage() {
                   <Users size={22} />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)' }}>
+                  <h3 style={{ margin: 0, fontSize: '19px', fontWeight: '700', color: 'var(--text-primary)' }}>
                     Update User Limit
                   </h3>
-                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
                     {editLimitCompany.name} (<strong style={{ color: 'var(--primary-500)' }}>{editLimitCompany.code}</strong>)
                   </span>
                 </div>
@@ -2065,7 +2065,7 @@ export default function HelicalConsultingPage() {
                 background: 'rgba(16, 185, 129, 0.12)',
                 border: '1px solid #10b981',
                 color: '#10b981',
-                fontSize: '13px',
+                fontSize: '14px',
                 fontWeight: '600',
                 marginBottom: '14px',
                 display: 'flex',
@@ -2094,7 +2094,7 @@ export default function HelicalConsultingPage() {
                   required
                   autoFocus
                 />
-                <span style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px', display: 'block' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', display: 'block' }}>
                   Current setting: <strong>{editLimitCompany.currentMax} users</strong>. Set a higher limit to allow adding more staff users.
                 </span>
               </div>
@@ -2110,7 +2110,7 @@ export default function HelicalConsultingPage() {
                     background: 'transparent',
                     color: 'var(--text-secondary)',
                     fontWeight: '600',
-                    fontSize: '14px',
+                    fontSize: '15px',
                     cursor: 'pointer'
                   }}
                   disabled={isUpdatingLimit}
@@ -2127,7 +2127,7 @@ export default function HelicalConsultingPage() {
                     background: '#10b981',
                     color: '#fff',
                     fontWeight: '700',
-                    fontSize: '14px',
+                    fontSize: '15px',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',

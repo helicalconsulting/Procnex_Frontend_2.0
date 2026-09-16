@@ -34,7 +34,7 @@
   align-items: center;
   gap: 10px;
   padding: 18px 16px;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-secondary);
 }
 
@@ -59,7 +59,7 @@
   align-items: center;
   gap: 6px;
   padding: 24px 16px;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-secondary);
 }
 
@@ -68,7 +68,7 @@
 }
 
 .vss-empty__hint {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-placeholder);
 }
 
@@ -78,7 +78,7 @@
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--warning-500);
   text-transform: uppercase;
@@ -107,7 +107,7 @@
   border: none;
   background: transparent;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 14px;
   font-family: inherit;
   text-align: left;
   cursor: pointer;
@@ -158,7 +158,7 @@
 }
 
 .vss-item__name {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -169,7 +169,7 @@
   display: inline-flex;
   padding: 1px 7px;
   border-radius: 10px;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   flex-shrink: 0;
   white-space: nowrap;
@@ -225,7 +225,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-placeholder);
 }
 
@@ -249,7 +249,7 @@
 /* Footer */
 .vss-footer {
   padding: 8px 16px;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-placeholder);
   border-top: 1px solid var(--border);
   text-align: center;
@@ -349,14 +349,14 @@
 
 .vsd-header__title {
   margin: 0;
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .vsd-header__sub {
   margin: 2px 0 0;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
   line-height: 1.4;
 }
@@ -408,7 +408,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--text-placeholder);
   text-transform: uppercase;
@@ -428,7 +428,7 @@
 }
 
 .vsd-field__label {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--text-placeholder);
   text-transform: uppercase;
@@ -437,7 +437,7 @@
 }
 
 .vsd-field__value {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
   word-break: break-word;
@@ -459,7 +459,7 @@
   border-radius: var(--radius-md);
   background: rgba(10, 110, 209, 0.06);
   border: 1px solid rgba(10, 110, 209, 0.12);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
 }
 
@@ -490,7 +490,7 @@
   gap: 6px;
   padding: 9px 18px;
   border-radius: var(--radius-md);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   font-family: inherit;
@@ -562,7 +562,7 @@
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--warning-500);
   text-transform: uppercase;
@@ -582,7 +582,7 @@
 }
 
 .vsd-match-card__name {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -591,7 +591,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-secondary);
 }
 
@@ -601,7 +601,7 @@
 }
 
 .vsd-match-card__contact {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-placeholder);
 }
 
@@ -609,7 +609,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .vsd-input-display__label {
@@ -623,12 +623,12 @@
   padding: 4px 10px;
   background: var(--surface-elevated);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .vsd-warning-text {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-secondary);
   line-height: 1.6;
 }
@@ -644,7 +644,7 @@
 }
 
 .vsd-match-inline__item {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-primary);
 }
 

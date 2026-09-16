@@ -37,7 +37,7 @@
 }
 
 .frp-title {
-  font-size: 26px;
+  font-size: 27px;
   font-weight: 700;
   margin: 0;
   color: var(--text-primary);
@@ -45,7 +45,7 @@
 }
 
 .fp-subtitle {
-  font-size: 14.5px;
+  font-size: 15.5px;
   color: var(--text-secondary);
   margin: 4px 0 0 0;
   line-height: 1.4;
@@ -64,7 +64,7 @@
   gap: 8px;
   padding: 10px 18px;
   border-radius: var(--radius-md, 8px);
-  font-size: 14.5px;
+  font-size: 15.5px;
   font-weight: 700;
   cursor: pointer;
   border: 1px solid transparent;
@@ -200,14 +200,14 @@
 }
 
 .frp-card__value {
-  font-size: 28px;
+  font-size: 29px;
   font-weight: 700;
   color: var(--text-primary);
   line-height: 1.1;
 }
 
 .frp-card__label {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-secondary);
   margin-top: 4px;
@@ -249,7 +249,7 @@
   border-radius: var(--radius-md, 8px);
   padding: 9px 12px 9px 36px;
   color: var(--text-primary);
-  font-size: 14.5px;
+  font-size: 15.5px;
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
@@ -269,7 +269,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
   font-weight: 600;
 }
@@ -280,7 +280,7 @@
   border-radius: var(--radius-md, 8px);
   padding: 7px 12px;
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: 13px;
   outline: none;
   cursor: pointer;
 }
@@ -322,14 +322,14 @@
 }
 
 .frp-empty-container h3 {
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 700;
   color: var(--text-primary);
   margin: 0 0 6px 0;
 }
 
 .frp-empty-container p {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-secondary);
   max-width: 420px;
   margin: 0 0 20px 0;
@@ -340,14 +340,14 @@
   padding: 50px;
   text-align: center;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 15px;
 }
 
 /* Submissions Table */
 .frp-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14.5px;
+  font-size: 15.5px;
 }
 
 .frp-table th {
@@ -356,7 +356,7 @@
   text-align: left;
   font-weight: 700;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 14px;
   text-transform: uppercase;
   letter-spacing: 0.6px;
   border-bottom: 2px solid var(--border);
@@ -419,7 +419,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 700;
   padding: 4px 10px;
   border-radius: 20px;
@@ -496,13 +496,13 @@
 
 .frp-form-name {
   display: block;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .frp-form-sub {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
@@ -512,7 +512,7 @@
   gap: 6px;
   padding: 4px 8px;
   border-radius: var(--radius-sm, 4px);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -537,13 +537,13 @@
 }
 
 .frp-user-name {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .frp-user-email {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
@@ -552,7 +552,7 @@
 }
 
 .frp-level-text {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
   display: block;
   margin-bottom: 4px;
@@ -588,7 +588,7 @@
   border: 1px solid var(--border);
   background: var(--surface-card);
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -647,14 +647,14 @@
 
 .frp-modal-header h2 {
   margin: 0 0 4px 0;
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .frp-modal-sub {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
 }
 
@@ -701,7 +701,7 @@
 }
 
 .frp-res-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -710,7 +710,7 @@
 }
 
 .frp-res-val {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -767,14 +767,14 @@
 
 .frp-drawer-title-wrap h3 {
   margin: 0 0 4px 0;
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .frp-drawer-title-wrap p {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
 }
 
@@ -809,7 +809,7 @@
   background: var(--surface-elevated);
   border: 1px solid var(--border);
   color: var(--text-primary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -845,13 +845,13 @@
 }
 
 .frp-tl-step-name {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .frp-tl-action-badge {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   padding: 2px 6px;
   border-radius: 4px;
@@ -864,7 +864,7 @@
 .frp-tl-action-badge--returned { background: rgba(187, 0, 0, 0.1); color: var(--danger-500); }
 
 .frp-tl-actor-info {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-primary);
   margin-bottom: 4px;
 }
@@ -873,7 +873,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
@@ -883,7 +883,7 @@
   background: var(--surface-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: 13px;
   font-style: italic;
   color: var(--text-secondary);
 }
@@ -893,7 +893,7 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 11px;
+  font-size: 12px;
   color: #dc2626;
   background: rgba(220, 38, 38, 0.08);
   border: 1px solid rgba(220, 38, 38, 0.2);
@@ -922,12 +922,12 @@
 
 .frp-return-banner strong {
   display: block;
-  font-size: 13px;
+  font-size: 14px;
   margin-bottom: 2px;
 }
 
 .frp-return-banner p {
-  font-size: 13px;
+  font-size: 14px;
   margin: 0;
   color: var(--text-primary);
   line-height: 1.4;
@@ -986,7 +986,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 13px;
+  font-size: 14px;
   color: #ef4444;
 }
 
@@ -1044,14 +1044,14 @@
 
 .frp-confirm-body h3 {
   margin: 0 0 8px 0;
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .frp-confirm-body p {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-secondary);
   line-height: 1.5;
 }
@@ -1083,7 +1083,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -1125,7 +1125,7 @@
   align-items: center;
   justify-content: center;
   color: #ffffff;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   gap: 8px;
   opacity: 0;
@@ -1150,7 +1150,7 @@
   gap: 6px;
   padding: 7px 14px;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   border: 1px solid var(--border, #cbd5e1);
   background: var(--surface-elevated, #f8fafc);
@@ -1186,7 +1186,7 @@
   background: rgba(16, 126, 62, 0.08);
   border: 1px solid rgba(16, 126, 62, 0.25);
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   color: #107e3e;
 }
@@ -1269,7 +1269,7 @@
 
 .frp-lightbox-header h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 700;
   color: #ffffff;
   line-height: 1.2;
@@ -1355,7 +1355,7 @@
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  font-size: 10px !important;
+  font-size: 11px !important;
   font-weight: 800 !important;
   color: var(--text-secondary, #94a3b8) !important;
   flex-shrink: 0 !important;
@@ -1396,14 +1396,14 @@
 }
 
 .approvals-level__text {
-  font-size: 12px !important;
+  font-size: 13px !important;
   font-weight: 700 !important;
   color: var(--text-secondary, #94a3b8) !important;
   white-space: nowrap !important;
 }
 
 .frp-level-no-wf {
-  font-size: 12px !important;
+  font-size: 13px !important;
   color: var(--text-placeholder) !important;
   font-style: italic !important;
 }

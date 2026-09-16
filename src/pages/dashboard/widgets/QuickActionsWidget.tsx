@@ -1,4 +1,4 @@
-import { useNavigate } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { checkRoutePermission } from '../../../utils/permissions';
 import {
@@ -104,7 +104,7 @@ export default function QuickActionsWidget() {
                   <span className="block truncate text-xs font-semibold text-foreground group-hover:text-primary">
                     {action.label}
                   </span>
-                  <span className="block truncate text-[11px] text-muted-foreground">
+                  <span className="block truncate text-[12px] text-muted-foreground">
                     {action.description}
                   </span>
                 </div>

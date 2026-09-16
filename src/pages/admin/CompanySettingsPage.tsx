@@ -3098,10 +3098,10 @@ export default function CompanySettingsPage() {
                     {isPasscodeProtected ? <ShieldCheck size={22} /> : <Lock size={22} />}
                   </div>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
                       Status: {isPasscodeProtected ? 'Passcode Protection Active 🔒' : 'Passcode Not Set (Open Access)'}
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
                       {isPasscodeProtected
                         ? 'Company Settings is secured. Unlocked for your current session.'
                         : 'Set a security passcode to lock Company Settings tab from unauthorized access.'}
@@ -3129,7 +3129,7 @@ export default function CompanySettingsPage() {
                           background: 'rgba(10, 110, 209, 0.1)',
                           color: 'var(--primary-500, #0a6ed1)',
                           fontWeight: 700,
-                          fontSize: 13,
+                          fontSize: 14,
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
@@ -3154,7 +3154,7 @@ export default function CompanySettingsPage() {
                           background: 'rgba(239, 68, 68, 0.1)',
                           color: '#ef4444',
                           fontWeight: 700,
-                          fontSize: 13,
+                          fontSize: 14,
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
@@ -3183,7 +3183,7 @@ export default function CompanySettingsPage() {
                         background: 'var(--primary-500, #0a6ed1)',
                         color: '#fff',
                         fontWeight: 700,
-                        fontSize: 13,
+                        fontSize: 14,
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
@@ -3245,15 +3245,15 @@ export default function CompanySettingsPage() {
                     background: language === 'en' ? 'rgba(10, 110, 209, 0.08)' : 'var(--surface-card)',
                     cursor: 'pointer',
                     fontWeight: 700,
-                    fontSize: 14,
+                    fontSize: 15,
                     color: 'var(--text-primary)',
                     transition: 'all 0.2s',
                   }}
                 >
-                  <span style={{ fontSize: 24 }}>🇺🇸</span>
+                  <span style={{ fontSize: 25 }}>🇺🇸</span>
                   <div style={{ textAlign: 'left' }}>
                     <div>English</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 500 }}>Default System Language</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>Default System Language</div>
                   </div>
                 </button>
 
@@ -3274,15 +3274,15 @@ export default function CompanySettingsPage() {
                     background: language === 'fr' ? 'rgba(10, 110, 209, 0.08)' : 'var(--surface-card)',
                     cursor: 'pointer',
                     fontWeight: 700,
-                    fontSize: 14,
+                    fontSize: 15,
                     color: 'var(--text-primary)',
                     transition: 'all 0.2s',
                   }}
                 >
-                  <span style={{ fontSize: 24 }}>🇫🇷</span>
+                  <span style={{ fontSize: 25 }}>🇫🇷</span>
                   <div style={{ textAlign: 'left' }}>
                     <div>Français</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 500 }}>Langue Française</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>Langue Française</div>
                   </div>
                 </button>
               </div>
@@ -3342,15 +3342,15 @@ export default function CompanySettingsPage() {
                 gap: 16
               }}>
                 <div>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
-                    Current User Seat Limit: <span style={{ color: 'var(--primary-500)', fontSize: 18, fontWeight: 800 }}>{profile?.maxUsers ?? 50} Active Users</span>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    Current User Seat Limit: <span style={{ color: 'var(--primary-500)', fontSize: 19, fontWeight: 800 }}>{profile?.maxUsers ?? 50} Active Users</span>
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
                     Managed by Platform Provider (Procnex). User creation is blocked when this limit is reached.
                   </div>
                 </div>
                 <div style={{
-                  fontSize: 12,
+                  fontSize: 13,
                   fontWeight: 600,
                   color: 'var(--text-secondary)',
                   background: 'var(--surface-card)',
@@ -4031,7 +4031,7 @@ export default function CompanySettingsPage() {
                               ) : br.managerName ? (
                                 <span className="cs-wh-contact-name">{br.managerName}</span>
                               ) : (
-                                <span style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>Unassigned</span>
+                                <span style={{ color: 'var(--text-tertiary)', fontSize: 13 }}>Unassigned</span>
                               )}
                             </div>
                           </td>
@@ -4272,10 +4272,10 @@ export default function CompanySettingsPage() {
               ) : (
                 <div className="cs-flexi-fields-section" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                   <div style={{ padding: 16, border: '1px solid var(--border, #e2e8f0)', borderRadius: 8, background: 'var(--surface-elevated, #f8fafc)' }}>
-                    <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary, #1e293b)' }}>
+                    <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary, #1e293b)' }}>
                       Add New Custom Flexi Field for {AVAILABLE_FORMS.find(f => f.key === selectedFormKey)?.label}
                     </h3>
-                    <p style={{ fontSize: 13, color: 'var(--text-secondary, #64748b)', marginBottom: 14 }}>
+                    <p style={{ fontSize: 14, color: 'var(--text-secondary, #64748b)', marginBottom: 14 }}>
                       Pre-define new custom fields here so users on transaction screens can select and add them on demand.
                     </p>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
@@ -4317,7 +4317,7 @@ export default function CompanySettingsPage() {
 
                   {/* ── Flexi Fields List ── */}
                   <div style={{ border: '1px solid var(--border, #e2e8f0)', borderRadius: 8, overflow: 'hidden', background: 'var(--surface-card, #fff)' }}>
-                    <div style={{ padding: '12px 16px', background: 'var(--surface-elevated, #f1f5f9)', borderBottom: '1px solid var(--border, #e2e8f0)', fontWeight: 600, fontSize: 13, color: 'var(--text-primary, #1e293b)', display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 12, alignItems: 'center' }}>
+                    <div style={{ padding: '12px 16px', background: 'var(--surface-elevated, #f1f5f9)', borderBottom: '1px solid var(--border, #e2e8f0)', fontWeight: 600, fontSize: 14, color: 'var(--text-primary, #1e293b)', display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 12, alignItems: 'center' }}>
                       <div>Field Name</div>
                       <div>Type</div>
                       <div>Status</div>
@@ -4327,7 +4327,7 @@ export default function CompanySettingsPage() {
                     {formFieldsLoading ? (
                       <TableSkeleton rows={3} />
                     ) : formCustomFields.length === 0 ? (
-                      <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-secondary, #64748b)', fontSize: 14 }}>
+                      <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-secondary, #64748b)', fontSize: 15 }}>
                         No flexi fields configured for this form yet. Add one above.
                       </div>
                     ) : (
@@ -4342,14 +4342,14 @@ export default function CompanySettingsPage() {
                               gridTemplateColumns: '2fr 1fr 1fr auto',
                               gap: 12,
                               alignItems: 'center',
-                              fontSize: 14,
+                              fontSize: 15,
                               background: 'var(--surface-card, #fff)',
                               color: 'var(--text-primary, #1e293b)'
                             }}
                           >
                             <div style={{ fontWeight: 500, color: 'var(--text-primary, #1e293b)' }}>
                               {field.label}
-                              <span style={{ display: 'block', fontSize: 11, color: 'var(--text-secondary, #64748b)' }}>Key: {field.fieldKey}</span>
+                              <span style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary, #64748b)' }}>Key: {field.fieldKey}</span>
                             </div>
                             <div>
                               <span style={{
@@ -4358,7 +4358,7 @@ export default function CompanySettingsPage() {
                                 borderRadius: 12,
                                 background: 'rgba(10, 110, 209, 0.15)',
                                 color: 'var(--primary-500, #0a6ed1)',
-                                fontSize: 12,
+                                fontSize: 13,
                                 fontWeight: 600,
                                 display: 'inline-block'
                               }}>
@@ -4373,7 +4373,7 @@ export default function CompanySettingsPage() {
                                   borderRadius: 12,
                                   border: 'none',
                                   cursor: 'pointer',
-                                  fontSize: 12,
+                                  fontSize: 13,
                                   fontWeight: 600,
                                   background: field.isVisible ? 'rgba(34, 197, 94, 0.15)' : 'var(--surface-elevated, #f1f5f9)',
                                   color: field.isVisible ? '#22c55e' : 'var(--text-secondary, #64748b)',
@@ -4451,7 +4451,7 @@ export default function CompanySettingsPage() {
                   <div className="cs-mandatory-custom-list" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {editableDocs.map((doc, idx) => (
                       <div key={doc.id} className="cs-mandatory-custom-item--doc-row">
-                        <div className="cs-mandatory-item-label" style={{ fontWeight: 700, fontSize: 13.5 }}>
+                        <div className="cs-mandatory-item-label" style={{ fontWeight: 700, fontSize: 14.5 }}>
                           Document {idx + 1}
                         </div>
                         <div className="company-settings__field">
@@ -4459,7 +4459,7 @@ export default function CompanySettingsPage() {
                             value={doc.name}
                             onChange={(e) => updateDocInline(doc.id, e.target.value)}
                             placeholder="e.g. Emirates ID / Trade License"
-                            style={{ fontSize: 15.5, fontWeight: 700 }}
+                            style={{ fontSize: 16.5, fontWeight: 700 }}
                           />
                         </div>
                         <div>
@@ -4517,7 +4517,7 @@ export default function CompanySettingsPage() {
                             className="cs-doc-field-type"
                             value={doc.expirationAlertFrequency || 'DAILY'}
                             onChange={(e) => updateDocExpirationAlertFrequency(doc.id, e.target.value as 'DAILY' | 'WEEKLY' | 'MONTHLY')}
-                            style={{ width: '100%', fontSize: 14.5, fontWeight: 600 }}
+                            style={{ width: '100%', fontSize: 15.5, fontWeight: 600 }}
                           >
                             <option value="DAILY">Daily</option>
                             <option value="WEEKLY">Weekly</option>
@@ -4532,7 +4532,7 @@ export default function CompanySettingsPage() {
                               setEditableDocs(prev => prev.map(d => d.id === doc.id ? { ...d, documentCategory: e.target.value as 'mandatory' | 'optional' } : d));
                               setDocsDirty(true);
                             }}
-                            style={{ width: '100%', fontSize: 14.5, fontWeight: 600 }}
+                            style={{ width: '100%', fontSize: 15.5, fontWeight: 600 }}
                           >
                             <option value="mandatory">Mandatory</option>
                             <option value="optional">Optional</option>
@@ -4889,7 +4889,7 @@ export default function CompanySettingsPage() {
                               className="company-settings__btn company-settings__btn--primary"
                               onClick={handleCreateNewContractType}
                               disabled={!newContractTypeName.trim() || savingContractTemplate}
-                              style={{ padding: '5px 10px', fontSize: 12 }}
+                              style={{ padding: '5px 10px', fontSize: 13 }}
                             >
                               {savingContractTemplate ? 'Adding…' : 'Add'}
                             </button>
@@ -4897,7 +4897,7 @@ export default function CompanySettingsPage() {
                               type="button"
                               className="company-settings__btn company-settings__btn--secondary"
                               onClick={() => { setEditingNewContractType(false); setNewContractTypeName(''); }}
-                              style={{ padding: '5px 8px', fontSize: 12 }}
+                              style={{ padding: '5px 8px', fontSize: 13 }}
                             >
                               <X size={13} />
                             </button>
@@ -4983,7 +4983,7 @@ export default function CompanySettingsPage() {
                                         type="button"
                                         className="company-settings__btn company-settings__btn--primary"
                                         onClick={() => handleRenameContractType(t.type, renamingContractTypeName)}
-                                        style={{ padding: '3px 8px', fontSize: 11 }}
+                                        style={{ padding: '3px 8px', fontSize: 12 }}
                                       >
                                         Save
                                       </button>
@@ -4991,7 +4991,7 @@ export default function CompanySettingsPage() {
                                         type="button"
                                         className="company-settings__btn company-settings__btn--secondary"
                                         onClick={() => setRenamingContractType(null)}
-                                        style={{ padding: '3px 6px', fontSize: 11 }}
+                                        style={{ padding: '3px 6px', fontSize: 12 }}
                                       >
                                         <X size={11} />
                                       </button>
@@ -5535,7 +5535,7 @@ export default function CompanySettingsPage() {
                               className="company-settings__btn company-settings__btn--primary"
                               onClick={() => handleCreateNewDocTemplate(editingNewDoc)}
                               disabled={!newDocName.trim() || savingDocTemplate}
-                              style={{ padding: '6px 12px', fontSize: 12 }}
+                              style={{ padding: '6px 12px', fontSize: 13 }}
                             >
                               <Plus size={13} /> {savingDocTemplate ? 'Creating…' : 'Create'}
                             </button>
@@ -5543,7 +5543,7 @@ export default function CompanySettingsPage() {
                               type="button"
                               className="company-settings__btn company-settings__btn--secondary"
                               onClick={() => { setEditingNewDoc(null); setNewDocName(''); }}
-                              style={{ padding: '6px 10px', fontSize: 12 }}
+                              style={{ padding: '6px 10px', fontSize: 13 }}
                             >
                               Cancel
                             </button>
@@ -5629,7 +5629,7 @@ export default function CompanySettingsPage() {
                                         type="button"
                                         className="company-settings__btn company-settings__btn--primary"
                                         onClick={() => handleRenameDocTemplate(tmpl.id, renamingDocName)}
-                                        style={{ padding: '3px 8px', fontSize: 11 }}
+                                        style={{ padding: '3px 8px', fontSize: 12 }}
                                       >
                                         Save
                                       </button>
@@ -5637,7 +5637,7 @@ export default function CompanySettingsPage() {
                                         type="button"
                                         className="company-settings__btn company-settings__btn--secondary"
                                         onClick={() => setRenamingDocId(null)}
-                                        style={{ padding: '3px 6px', fontSize: 11 }}
+                                        style={{ padding: '3px 6px', fontSize: 12 }}
                                       >
                                         <X size={11} />
                                       </button>
@@ -5763,10 +5763,10 @@ export default function CompanySettingsPage() {
               <button className="company-settings__icon-btn" onClick={cancelDeleteContractType}><X size={18} /></button>
             </div>
             <div className="company-settings__modal-body">
-              <p style={{ margin: 0, fontSize: '0.95rem' }}>
+              <p style={{ margin: 0, fontSize: '1.0125rem' }}>
                 Permanently delete <strong>{contractTemplates.find(t => t.type === deleteContractTypeTarget)?.name || deleteContractTypeTarget}</strong>?
               </p>
-              <p style={{ margin: '12px 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+              <p style={{ margin: '12px 0 0', fontSize: '0.9125rem', color: 'var(--text-secondary)' }}>
                 This contract type and its template will be permanently removed from the system. Existing contracts using this type will not be affected. This action cannot be undone.
               </p>
             </div>
@@ -5792,10 +5792,10 @@ export default function CompanySettingsPage() {
               <button className="company-settings__icon-btn" onClick={cancelDeleteDocTemplate}><X size={18} /></button>
             </div>
             <div className="company-settings__modal-body">
-              <p style={{ margin: 0, fontSize: '0.95rem' }}>
+              <p style={{ margin: 0, fontSize: '1.0125rem' }}>
                 Permanently delete <strong>{documentTemplates.find(t => t.id === deleteDocIdTarget)?.name || 'this template'}</strong>?
               </p>
-              <p style={{ margin: '12px 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+              <p style={{ margin: '12px 0 0', fontSize: '0.9125rem', color: 'var(--text-secondary)' }}>
                 This template will be permanently removed. Existing onboarding documents using this template will not be affected. This action cannot be undone.
               </p>
             </div>
@@ -5821,10 +5821,10 @@ export default function CompanySettingsPage() {
               <button className="company-settings__icon-btn" onClick={cancelDelete}><X size={18} /></button>
             </div>
             <div className="company-settings__modal-body">
-              <p style={{ margin: 0, fontSize: '0.95rem' }}>
+              <p style={{ margin: 0, fontSize: '1.0125rem' }}>
                 Permanently delete <strong>{deleteTarget.name}</strong>{deleteTarget.type === 'department' ? ' and all its categories' : ''}?
               </p>
-              <p style={{ margin: '12px 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+              <p style={{ margin: '12px 0 0', fontSize: '0.9125rem', color: 'var(--text-secondary)' }}>
                 {deleteTarget.type === 'department'
                   ? 'All categories under this department will also be deleted. Vendors assigned to these categories will keep their profile but lose the category link. This action cannot be undone.'
                   : deleteTarget.type === 'category'
@@ -5872,7 +5872,7 @@ export default function CompanySettingsPage() {
               </button>
             </div>
             <div className="company-settings__modal-body">
-              <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
+              <p style={{ margin: 0, fontSize: '1.0125rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
                 {typeof confirmModalConfig.message === 'string' ? confirmModalConfig.message : (typeof confirmModalConfig.message === 'object' && confirmModalConfig.message !== null) ? JSON.stringify(confirmModalConfig.message) : String(confirmModalConfig.message)}
               </p>
             </div>
@@ -5927,10 +5927,10 @@ export default function CompanySettingsPage() {
                 <CheckCircle2 size={36} color="#2e7d32" />
               </div>
 
-              <h3 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>
+              <h3 style={{ margin: '0 0 8px', fontSize: 21, fontWeight: 700, color: 'var(--text-primary)' }}>
                 {backfillResult.updated > 0 ? 'Codes Assigned!' : 'Already Up to Date'}
               </h3>
-              <p style={{ margin: '0 0 24px', fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+              <p style={{ margin: '0 0 24px', fontSize: 15, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
                 {backfillResult.updated > 0
                   ? `Sequential supplier codes have been successfully assigned to ${backfillResult.updated} existing vendor(s).`
                   : 'All existing vendors already have a supplier code assigned. No changes were made.'}
@@ -5945,10 +5945,10 @@ export default function CompanySettingsPage() {
                   border: '1px solid var(--border, #e2e8f0)',
                   borderRadius: 10, padding: '14px 12px',
                 }}>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: '#0a6ed1', lineHeight: 1 }}>
+                  <div style={{ fontSize: 29, fontWeight: 800, color: '#0a6ed1', lineHeight: 1 }}>
                     {backfillResult.updated}
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
                     Vendors Updated
                   </div>
                 </div>
@@ -5957,10 +5957,10 @@ export default function CompanySettingsPage() {
                   border: '1px solid var(--border, #e2e8f0)',
                   borderRadius: 10, padding: '14px 12px',
                 }}>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: '#107e3e', lineHeight: 1 }}>
+                  <div style={{ fontSize: 29, fontWeight: 800, color: '#107e3e', lineHeight: 1 }}>
                     {backfillResult.nextCounter}
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
                     Next Counter
                   </div>
                 </div>
@@ -6176,7 +6176,7 @@ export default function CompanySettingsPage() {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4, padding: '12px 14px', background: 'var(--surface-ground)', borderRadius: 8, border: '1px solid var(--border)' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>
                   <input
                     type="checkbox"
                     checked={bIsActive}
@@ -6301,7 +6301,7 @@ export default function CompanySettingsPage() {
               </div>
 
               <div style={{ display: 'flex', gap: 24, marginTop: 4 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>
                   <input
                     type="checkbox"
                     checked={whIsDefault}
@@ -6309,7 +6309,7 @@ export default function CompanySettingsPage() {
                   />
                   Set as Default Ship-To Location
                 </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>
                   <input
                     type="checkbox"
                     checked={whIsActive}
@@ -6767,7 +6767,7 @@ export default function CompanySettingsPage() {
               )}
 
               {passcodeModalMode === 'remove' ? (
-                <p style={{ margin: 0, fontSize: 13.5, color: 'var(--text-secondary, #94a3b8)', lineHeight: 1.6 }}>
+                <p style={{ margin: 0, fontSize: 14.5, color: 'var(--text-secondary, #94a3b8)', lineHeight: 1.6 }}>
                   Are you sure you want to disable passcode protection? Anyone with Admin permissions will be able to access Company Settings directly without entering a passcode.
                 </p>
               ) : null}

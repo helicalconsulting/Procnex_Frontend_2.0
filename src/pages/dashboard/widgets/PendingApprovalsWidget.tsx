@@ -29,9 +29,9 @@ export default function PendingApprovalsWidget() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="truncate text-xs font-semibold text-foreground">{item.referenceNumber}</span>
-                      <Badge tone="neutral" className="text-[10px] px-1.5 py-0">{item.module}</Badge>
+                      <Badge tone="neutral" className="text-[11px] px-1.5 py-0">{item.module}</Badge>
                     </div>
-                    <span className="truncate text-[11px] text-muted-foreground">Requested by {item.requestedBy}</span>
+                    <span className="truncate text-[12px] text-muted-foreground">Requested by {item.requestedBy}</span>
                   </div>
                 </div>
                 <div className="text-right shrink-0">

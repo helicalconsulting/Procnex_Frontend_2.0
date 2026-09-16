@@ -61,7 +61,7 @@ export default function FormPublishSuccessModal({
                 <item.icon className="size-4" />
               </span>
               <div>
-                <dt className="text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{item.label}</dt>
+                <dt className="text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{item.label}</dt>
                 <dd className="mt-1 text-xs font-medium leading-relaxed">{item.value}</dd>
               </div>
             </div>

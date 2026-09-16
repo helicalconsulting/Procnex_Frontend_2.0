@@ -34,6 +34,7 @@ interface POItem {
   itemCode: string;
   itemName: string;
   description: string;
+  showDescription?: boolean;
   quantity: number;
   unit: string;
   unitPrice: number;
@@ -295,11 +296,13 @@ export default function CreatePurchaseOrderPage() {
           if (existing.items && existing.items.length > 0) {
             setItems(existing.items.map((item: any, idx: number) => {
               const parts = (item.description || '').split(' - ');
+              const desc = parts.length > 1 ? parts.slice(1).join(' - ') : '';
               return {
                 id: String(idx + 1),
                 itemCode: `ITEM-00${idx + 1}`,
                 itemName: parts[0] || item.description || '',
-                description: parts.length > 1 ? parts.slice(1).join(' - ') : '',
+                description: desc,
+                showDescription: !!desc,
                 quantity: item.quantity || 1,
                 unit: item.unit || 'pcs',
                 unitPrice: item.unitPrice || 0,
@@ -634,19 +637,19 @@ export default function CreatePurchaseOrderPage() {
       {/* Top Header */}
       <div className="cpo-header">
         <div className="cpo-header__left">
-          <button className="cpo-back-btn" onClick={() => navigate(-1)}>
-            <ArrowLeft size={16} /> Back
+          <button className="cpo-back-btn" onClick={() => navigate(-1)} title="Back" aria-label="Back">
+            <ArrowLeft size={18} />
           </button>
           <div className="cpo-header__title-wrap">
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <h1>{editId ? `Purchase Order #${poNumber}` : 'Create Direct Purchase Order'}</h1>
               {status === 'Approved' && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', background: 'rgba(16, 126, 62, 0.15)', color: '#107e3e', border: '1px solid rgba(16, 126, 62, 0.3)', borderRadius: 16, fontSize: 12, fontWeight: 700, marginLeft: 10 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', background: 'rgba(16, 126, 62, 0.15)', color: '#107e3e', border: '1px solid rgba(16, 126, 62, 0.3)', borderRadius: 16, fontSize: 13, fontWeight: 700, marginLeft: 10 }}>
                   <CheckCircle2 size={13} /> Approved
                 </span>
               )}
               {status === 'Pending Approval' && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', background: 'rgba(217, 119, 6, 0.15)', color: '#d97706', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 16, fontSize: 12, fontWeight: 700, marginLeft: 10 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', background: 'rgba(217, 119, 6, 0.15)', color: '#d97706', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 16, fontSize: 13, fontWeight: 700, marginLeft: 10 }}>
                   Pending Approval
                 </span>
               )}
@@ -691,6 +694,7 @@ export default function CreatePurchaseOrderPage() {
           <div className="cpo-grid cpo-grid--3">
             <div className="cpo-field">
               <label>PURCHASE ORDER NO.</label>
+              <span className="cpo-field__sub">Auto-generated from sequence settings</span>
               <input
                 type="text"
                 value={poNumberLoading ? '' : poNumber}
@@ -699,22 +703,21 @@ export default function CreatePurchaseOrderPage() {
                 disabled={poNumberLoading}
                 style={poNumberLoading ? { opacity: 0.5 } : undefined}
               />
-              <span className="cpo-field__sub">Auto-generated from sequence settings</span>
             </div>
             <div className="cpo-field">
               <label>REVISION NO.</label>
+              <span className="cpo-field__sub">PO revision / version</span>
               <input
                 type="text"
                 value={revisionNo}
                 onChange={(e) => setRevisionNo(e.target.value)}
                 placeholder="0"
               />
-              <span className="cpo-field__sub">PO revision / version</span>
             </div>
             <div className="cpo-field">
               <label>PO DATE</label>
-              <input type="date" value={poDate} onChange={(e) => setPoDate(e.target.value)} />
               <span className="cpo-field__sub">Date of issue</span>
+              <input type="date" value={poDate} onChange={(e) => setPoDate(e.target.value)} />
             </div>
           </div>
         </div>
@@ -732,46 +735,46 @@ export default function CreatePurchaseOrderPage() {
           <div className="cpo-grid cpo-grid--4">
             <div className="cpo-field">
               <label>PURCHASE REQUISITION NO.</label>
-              <input type="text" value={prNo} onChange={(e) => setPrNo(e.target.value)} placeholder="PR-00000" />
               <span className="cpo-field__sub">Source PR</span>
+              <input type="text" value={prNo} onChange={(e) => setPrNo(e.target.value)} placeholder="PR-00000" />
             </div>
             <div className="cpo-field">
               <label>CONTRACT NO.</label>
-              <input type="text" value={contractNo} onChange={(e) => setContractNo(e.target.value)} placeholder="CT-00000" />
               <span className="cpo-field__sub">Linked contract</span>
+              <input type="text" value={contractNo} onChange={(e) => setContractNo(e.target.value)} placeholder="CT-00000" />
             </div>
             <div className="cpo-field">
               <label>RFQ NO.</label>
-              <input type="text" value={rfqNo} onChange={(e) => setRfqNo(e.target.value)} placeholder="RFQ-00000" />
               <span className="cpo-field__sub">Reference RFQ</span>
+              <input type="text" value={rfqNo} onChange={(e) => setRfqNo(e.target.value)} placeholder="RFQ-00000" />
             </div>
             <div className="cpo-field">
               <label>TENDER NO.</label>
-              <input type="text" value={tenderNo} onChange={(e) => setTenderNo(e.target.value)} placeholder="TND-00000" />
               <span className="cpo-field__sub">Tender reference</span>
+              <input type="text" value={tenderNo} onChange={(e) => setTenderNo(e.target.value)} placeholder="TND-00000" />
             </div>
           </div>
 
           <div className="cpo-grid cpo-grid--4" style={{ marginTop: 12 }}>
             <div className="cpo-field">
               <label>SUPPLIER QUOTATION NO.</label>
-              <input type="text" value={supplierQuotationNo} onChange={(e) => setSupplierQuotationNo(e.target.value)} placeholder="SQ-00000" />
               <span className="cpo-field__sub">Vendor quotation ref</span>
+              <input type="text" value={supplierQuotationNo} onChange={(e) => setSupplierQuotationNo(e.target.value)} placeholder="SQ-00000" />
             </div>
             <div className="cpo-field">
               <label>QUOTATION DATE</label>
-              <input type="date" value={quotationDate} onChange={(e) => setQuotationDate(e.target.value)} />
               <span className="cpo-field__sub">Date of quotation</span>
+              <input type="date" value={quotationDate} onChange={(e) => setQuotationDate(e.target.value)} />
             </div>
             <div className="cpo-field">
               <label>BLANKET ORDER NO.</label>
-              <input type="text" value={blanketOrderNo} onChange={(e) => setBlanketOrderNo(e.target.value)} placeholder="BO-00000" />
               <span className="cpo-field__sub">Blanket order ref</span>
+              <input type="text" value={blanketOrderNo} onChange={(e) => setBlanketOrderNo(e.target.value)} placeholder="BO-00000" />
             </div>
             <div className="cpo-field">
               <label>FRAMEWORK AGREEMENT</label>
-              <input type="text" value={frameworkAgreement} onChange={(e) => setFrameworkAgreement(e.target.value)} placeholder="FA-00000" />
               <span className="cpo-field__sub">Agreement reference</span>
+              <input type="text" value={frameworkAgreement} onChange={(e) => setFrameworkAgreement(e.target.value)} placeholder="FA-00000" />
             </div>
           </div>
         </div>
@@ -798,7 +801,7 @@ export default function CreatePurchaseOrderPage() {
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              fontSize: '12.5px',
+              fontSize: '13.5px',
               fontWeight: 800,
               letterSpacing: '0.6px',
               textTransform: 'uppercase',
@@ -827,7 +830,7 @@ export default function CreatePurchaseOrderPage() {
                     background: 'var(--surface-card, #ffffff)',
                     border: '2px solid var(--primary-500, #0a6ed1)',
                     color: 'var(--text-primary)',
-                    fontSize: '15px',
+                    fontSize: '16px',
                     fontWeight: 600,
                     outline: 'none',
                     boxShadow: '0 4px 12px rgba(10, 110, 209, 0.15)'
@@ -883,11 +886,11 @@ export default function CreatePurchaseOrderPage() {
                   padding: '6px 0'
                 }}>
                   {loadingVendors ? (
-                    <div style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontSize: '13.5px' }}>
+                    <div style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontSize: '14.5px' }}>
                       Loading vendors from master database...
                     </div>
                   ) : searchedVendors.length === 0 ? (
-                    <div style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontSize: '13.5px' }}>
+                    <div style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontSize: '14.5px' }}>
                       No matching vendors found for "{vendorSearchQuery}"
                     </div>
                   ) : (
@@ -918,7 +921,7 @@ export default function CreatePurchaseOrderPage() {
                         >
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span style={{ fontWeight: 700, fontSize: '14.5px', color: 'var(--text-primary)' }}>
+                              <span style={{ fontWeight: 700, fontSize: '15.5px', color: 'var(--text-primary)' }}>
                                 {v.name}
                               </span>
                               <span style={{
@@ -926,14 +929,14 @@ export default function CreatePurchaseOrderPage() {
                                 borderRadius: '4px',
                                 background: 'rgba(10, 110, 209, 0.18)',
                                 color: 'var(--primary-500, #0a6ed1)',
-                                fontSize: '11.5px',
+                                fontSize: '12.5px',
                                 fontWeight: 800,
                                 letterSpacing: '0.5px'
                               }}>
                                 {code}
                               </span>
                             </div>
-                            <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
                               {v.email || 'No email registered'} {v.phone ? `• ${v.phone}` : ''} {(v as any).category || (v as any).categoryName ? `• ${(v as any).category || (v as any).categoryName}` : ''}
                             </span>
                           </div>
@@ -953,12 +956,10 @@ export default function CreatePurchaseOrderPage() {
             <div className="cpo-field">
               <label>SUPPLIER CODE</label>
               <input type="text" value={supplierCode} onChange={(e) => setSupplierCode(e.target.value)} placeholder="SUP-00000" />
-              <span className="cpo-field__sub">Unique vendor master ID</span>
             </div>
             <div className="cpo-field cpo-field--span-2">
               <label>SUPPLIER NAME *</label>
               <input type="text" value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder="e.g. Acme Industrial Supplies Ltd." />
-              <span className="cpo-field__sub">Registered vendor name</span>
             </div>
             <div className="cpo-field">
               <label>SUPPLIER RATING</label>
@@ -1020,7 +1021,6 @@ export default function CreatePurchaseOrderPage() {
                   </option>
                 ))}
               </select>
-              <span className="cpo-field__sub">Configured in Company Settings &gt; Warehouses</span>
             </div>
             <div className="cpo-field">
               <label>RECEIVING CONTACT PERSON</label>
@@ -1097,21 +1097,36 @@ export default function CreatePurchaseOrderPage() {
                         />
                       </td>
                       <td>
-                        <input
-                          type="text"
-                          className="cpo-table__input"
-                          placeholder="Item Name *"
-                          value={item.itemName}
-                          onChange={(e) => handleItemChange(item.id, 'itemName', e.target.value)}
-                          style={{ fontWeight: 600, marginBottom: 4 }}
-                        />
-                        <input
-                          type="text"
-                          className="cpo-table__input cpo-table__input--sub"
-                          placeholder="Description / Specs"
-                          value={item.description}
-                          onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
-                        />
+                        <div className="cpo-table__item-name-wrap">
+                          <input
+                            type="text"
+                            className="cpo-table__input"
+                            placeholder="Item Name *"
+                            value={item.itemName}
+                            onChange={(e) => handleItemChange(item.id, 'itemName', e.target.value)}
+                            style={{ fontWeight: 600, paddingRight: !item.showDescription ? '120px' : '12px' }}
+                          />
+                          {!item.showDescription && (
+                            <button
+                              type="button"
+                              className="cpo-table__add-desc-btn"
+                              onClick={() => handleItemChange(item.id, 'showDescription', true)}
+                            >
+                              + Add Description
+                            </button>
+                          )}
+                        </div>
+                        {item.showDescription && (
+                          <input
+                            type="text"
+                            className="cpo-table__input cpo-table__input--sub"
+                            placeholder="Description / Specs"
+                            value={item.description}
+                            onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
+                            style={{ marginTop: 4 }}
+                            autoFocus
+                          />
+                        )}
                       </td>
                       <td>
                         <input

@@ -40,7 +40,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 1.1rem;
+  font-size: 1.1625rem;
   font-weight: 700;
   color: #f8fafc;
 }
@@ -52,7 +52,7 @@
 .bpv-badge {
   padding: 3px 10px;
   border-radius: 20px;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 700;
   text-transform: uppercase;
 }
@@ -81,7 +81,7 @@
   gap: 8px;
   padding: 8px 16px;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -126,7 +126,7 @@
 
 .bpv-sheet__company h2 {
   margin: 0 0 4px 0;
-  font-size: 1.4rem;
+  font-size: 1.4625rem;
   font-weight: 800;
   color: #0f172a;
   letter-spacing: -0.02em;
@@ -134,13 +134,13 @@
 
 .bpv-sheet__company p {
   margin: 0;
-  font-size: 12.5px;
+  font-size: 13.5px;
   color: #475569;
 }
 
 .bpv-sheet__sub {
   color: #64748b !important;
-  font-size: 11.5px !important;
+  font-size: 12.5px !important;
   margin-top: 2px !important;
 }
 
@@ -150,14 +150,14 @@
 
 .bpv-sheet__doc-type h3 {
   margin: 0 0 6px 0;
-  font-size: 1.15rem;
+  font-size: 1.2125rem;
   font-weight: 800;
   color: #1e3a8a;
   letter-spacing: 0.05em;
 }
 
 .bpv-sheet__voucher-no {
-  font-size: 1.2rem;
+  font-size: 1.2625rem;
   font-weight: 800;
   color: #0f172a;
   font-family: monospace;
@@ -169,7 +169,7 @@
 
 .bpv-sheet__doc-type p {
   margin: 6px 0 0 0;
-  font-size: 12px;
+  font-size: 13px;
   color: #475569;
 }
 
@@ -188,7 +188,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: #1e293b;
   letter-spacing: 0.05em;
@@ -214,7 +214,7 @@
 }
 
 .bpv-box__title {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   color: #475569;
   letter-spacing: 0.05em;
@@ -226,7 +226,7 @@
 .bpv-box__row {
   display: flex;
   justify-content: space-between;
-  font-size: 12.5px;
+  font-size: 13.5px;
   margin-bottom: 6px;
 }
 
@@ -250,7 +250,7 @@
   padding: 10px 14px;
   border-radius: 8px;
   margin-bottom: 14px;
-  font-size: 12.5px;
+  font-size: 13.5px;
 }
 
 .bpv-match-strip--success {
@@ -267,7 +267,7 @@
 
 .bpv-match-strip p {
   margin: 2px 0 0 0;
-  font-size: 11.5px;
+  font-size: 12.5px;
 }
 
 /* ── Tables ── */
@@ -275,7 +275,7 @@
   width: 100%;
   border-collapse: collapse;
   margin-bottom: 16px;
-  font-size: 12.5px;
+  font-size: 13.5px;
 }
 
 .bpv-table th {
@@ -306,13 +306,13 @@
 
 .bpv-totals-box__words span {
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   color: #64748b;
   font-weight: 600;
 }
 
 .bpv-totals-box__words strong {
-  font-size: 13px;
+  font-size: 14px;
   color: #0f172a;
   font-style: italic;
 }
@@ -322,7 +322,7 @@
 }
 
 .bpv-totals-box__grand span {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   color: #475569;
   letter-spacing: 0.05em;
@@ -330,7 +330,7 @@
 
 .bpv-totals-box__grand h2 {
   margin: 2px 0 0 0;
-  font-size: 1.5rem;
+  font-size: 1.5625rem;
   font-weight: 800;
   color: #059669;
 }
@@ -352,7 +352,7 @@
 }
 
 .bpv-stamp-card__level {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   color: #64748b;
   letter-spacing: 0.05em;
@@ -362,24 +362,24 @@
 }
 
 .bpv-stamp-card__name {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
   color: #0f172a;
 }
 
 .bpv-stamp-card__role {
-  font-size: 11.5px;
+  font-size: 12.5px;
   color: #475569;
 }
 
 .bpv-stamp-card__date {
-  font-size: 11px;
+  font-size: 12px;
   color: #64748b;
   margin-top: 4px;
 }
 
 .bpv-stamp-card__comment {
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-style: italic;
   color: #0284c7;
   margin-top: 4px;
@@ -395,7 +395,7 @@
   border: 1px solid #a7f3d0;
   padding: 4px 10px;
   border-radius: 4px;
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 800;
   letter-spacing: 0.03em;
 }
@@ -412,13 +412,13 @@
   padding-top: 16px;
   border-top: 1px solid #e2e8f0;
   text-align: center;
-  font-size: 11px;
+  font-size: 12px;
   color: #64748b;
 }
 
 .bpv-sheet__system-id {
   font-family: monospace;
-  font-size: 10px !important;
+  font-size: 11px !important;
   color: #94a3b8 !important;
   margin-top: 4px !important;
 }

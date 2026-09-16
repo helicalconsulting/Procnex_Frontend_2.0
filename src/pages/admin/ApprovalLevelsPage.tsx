@@ -356,7 +356,7 @@ export default function ApprovalLevelsPage() {
           onClick={() => setSelectedModule('ALL')}
         >
           All Modules
-          <span className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-bold ${selectedModule === 'ALL' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted text-foreground'}`}>
+          <span className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-bold ${selectedModule === 'ALL' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted text-foreground'}`}>
             {levels.length}
           </span>
         </button>
@@ -372,7 +372,7 @@ export default function ApprovalLevelsPage() {
           >
             {MODULE_BY_KEY[m].icon}
             {MODULE_BY_KEY[m].label}
-            <span className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-bold ${selectedModule === m ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted text-foreground'}`}>
+            <span className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-bold ${selectedModule === m ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted text-foreground'}`}>
               {grouped[m]?.length || 0}
             </span>
           </button>
@@ -461,7 +461,7 @@ export default function ApprovalLevelsPage() {
                                 {level.levelNumber}
                               </span>
                               <div className="min-w-0">
-                                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Level {level.levelNumber}</span>
+                                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Level {level.levelNumber}</span>
                                 <h4 className="truncate text-sm font-semibold text-foreground">{level.requiredRole}</h4>
                               </div>
                             </div>

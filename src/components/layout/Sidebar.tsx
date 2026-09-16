@@ -339,7 +339,7 @@ export default function Sidebar({
           />
           <span
             className={cn(
-              'min-w-0 truncate text-[17px] font-semibold tracking-[-0.03em] text-white transition-opacity',
+              'min-w-0 truncate text-[18px] font-semibold tracking-[-0.03em] text-white transition-opacity',
               collapsed && 'lg:pointer-events-none lg:opacity-0',
             )}
           >
@@ -352,7 +352,7 @@ export default function Sidebar({
             <div key={section.title} className="mb-2">
               <span
                 className={cn(
-                  'block px-3 pb-1.5 pt-4 text-[10px] font-semibold uppercase tracking-[0.1em] text-white/40 transition-opacity',
+                  'block px-3 pb-1.5 pt-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-white/40 transition-opacity',
                   collapsed && 'lg:h-2 lg:overflow-hidden lg:px-0 lg:py-0 lg:opacity-0',
                 )}
               >
@@ -373,7 +373,7 @@ export default function Sidebar({
                     aria-current={isActive ? 'page' : undefined}
                     title={collapsed ? displayLabel : undefined}
                     className={cn(
-                      'group relative my-1 flex min-h-11 items-center gap-3 overflow-hidden rounded-xl px-3 text-[13px] font-medium text-white/65 outline-none transition-colors hover:bg-white/[0.08] hover:text-white focus-visible:ring-2 focus-visible:ring-[var(--shell-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900',
+                      'group relative my-1 flex min-h-11 items-center gap-3 overflow-hidden rounded-xl px-3 text-[14px] font-medium text-white/65 outline-none transition-colors hover:bg-white/[0.08] hover:text-white focus-visible:ring-2 focus-visible:ring-[var(--shell-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900',
                       collapsed && 'lg:justify-center lg:px-0',
                       isActive && 'bg-white/[0.12] font-semibold text-white shadow-sm shadow-black/10',
                     )}

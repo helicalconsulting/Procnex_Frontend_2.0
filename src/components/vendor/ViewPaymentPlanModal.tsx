@@ -64,7 +64,7 @@ const headerLeftStyle: React.CSSProperties = {
 };
 
 const headerTitleStyle: React.CSSProperties = {
-  fontSize: 14,
+  fontSize: 15,
   fontWeight: 700,
   color: 'var(--text-primary)',
 };
@@ -92,7 +92,7 @@ const bodyStyle: React.CSSProperties = {
 };
 
 const planNameStyle: React.CSSProperties = {
-  fontSize: 16,
+  fontSize: 17,
   fontWeight: 700,
   color: 'var(--text-primary)',
   marginBottom: 16,
@@ -103,7 +103,7 @@ const tableHeaderStyle: React.CSSProperties = {
   gridTemplateColumns: '1fr 80px',
   gap: 8,
   padding: '6px 0',
-  fontSize: 11,
+  fontSize: 12,
   fontWeight: 600,
   color: 'var(--text-secondary)',
   textTransform: 'uppercase',
@@ -120,7 +120,7 @@ const rowStyle: React.CSSProperties = {
 };
 
 const rowLabelStyle: React.CSSProperties = {
-  fontSize: 13,
+  fontSize: 14,
   color: 'var(--text-primary)',
   lineHeight: 1.4,
   overflowWrap: 'break-word',
@@ -129,7 +129,7 @@ const rowLabelStyle: React.CSSProperties = {
 };
 
 const rowValueStyle: React.CSSProperties = {
-  fontSize: 13,
+  fontSize: 14,
   fontWeight: 700,
   color: 'var(--text-primary)',
   textAlign: 'right',
@@ -161,7 +161,7 @@ const footerBtnStyle: React.CSSProperties = {
   padding: '8px 20px',
   border: '1px solid var(--border)',
   borderRadius: 8,
-  fontSize: 13,
+  fontSize: 14,
   fontWeight: 600,
   cursor: 'pointer',
   fontFamily: 'inherit',
@@ -244,13 +244,13 @@ function ViewPaymentPlanModalInner({ plan, onClose }: ViewPaymentPlanModalProps)
           {/* Total */}
           <div style={totalRowStyle}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Total</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Total</span>
               {isTotalValid && (
                 <Check size={14} style={{ color: '#107e3e', flexShrink: 0 }} />
               )}
             </div>
             <span style={{
-              fontSize: 15,
+              fontSize: 16,
               fontWeight: 800,
               color: isTotalValid ? '#107e3e' : '#bb0000',
             }}>

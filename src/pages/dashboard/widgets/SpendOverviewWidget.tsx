@@ -3,6 +3,7 @@ import { useServiceData } from '../../../hooks/useServiceData';
 import { dashboardService } from '../../../services/dashboardService';
 import { useCurrency } from '../../../components/shared/CurrencyMaster';
 import { WidgetHeader, WidgetBody, WidgetLoading } from './WidgetShell';
+import { cn } from '../../../lib/utils';
 
 export default function SpendOverviewWidget() {
   const { formatAmount, companyDefaultCurrency } = useCurrency();
@@ -23,19 +24,58 @@ export default function SpendOverviewWidget() {
         ) : (
           <>
             {/* Bar chart */}
-            <div className="flex h-36 items-end gap-2 border-b border-border/70 pb-2 pt-4">
-              {data.monthlyTrend.map((item) => (
-                <div key={item.month} className="flex h-full flex-1 flex-col items-center justify-end gap-1.5">
-                  <div className="flex w-full flex-1 items-end justify-center rounded-lg bg-muted/40 p-0.5">
+            <div className="flex h-40 items-end justify-between gap-3 sm:gap-4 border-b border-border/60 pb-3 pt-6 px-1 sm:px-2">
+              {data.monthlyTrend.map((item) => {
+                const isHighlighted = item.value === maxValue && item.value > 0;
+                const heightPct = (item.value / maxValue) * 100;
+                const formattedVal = formatAmount(item.value, companyDefaultCurrency);
+
+                return (
+                  <div
+                    key={item.month}
+                    className="group relative flex h-full flex-1 flex-col items-center justify-end gap-2 text-center"
+                  >
+                    {/* Hover tooltip */}
+                    <div className="pointer-events-none absolute -top-8 left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-md bg-popover px-2 py-1 text-[11px] font-semibold text-popover-foreground shadow-md ring-1 ring-border/50 opacity-0 transition-all duration-150 group-hover:-translate-y-0.5 group-hover:opacity-100">
+                      {item.month}: {formattedVal}
+                    </div>
+
+                    {/* Column Pillar Track */}
                     <div
-                      className="w-full rounded-md bg-primary transition-all duration-300 hover:bg-primary/80"
-                      style={{ height: `${(item.value / maxValue) * 100}%` }}
-                      title={`${item.month}: ${formatAmount(item.value, companyDefaultCurrency)}`}
-                    />
+                      className={cn(
+                        'flex h-full w-7 sm:w-8 items-end justify-center rounded-t-lg rounded-b-md p-0.5 transition-colors duration-200',
+                        isHighlighted
+                          ? 'bg-primary/[0.08] ring-1 ring-primary/20 dark:bg-primary/10'
+                          : 'bg-muted/30 dark:bg-muted/20 group-hover:bg-muted/50'
+                      )}
+                    >
+                      {item.value > 0 ? (
+                        <div
+                          className={cn(
+                            'w-full rounded-t-md rounded-b-sm bg-primary transition-all duration-300 ease-out group-hover:brightness-110',
+                            isHighlighted && 'shadow-[0_2px_8px_-2px_rgba(10,110,209,0.35)] dark:shadow-[0_2px_10px_-2px_rgba(59,130,246,0.4)]'
+                          )}
+                          style={{ height: `${Math.max(heightPct, 6)}%` }}
+                        />
+                      ) : (
+                        <div className="h-1 w-full rounded-full bg-muted-foreground/20 group-hover:bg-muted-foreground/35 transition-colors" />
+                      )}
+                    </div>
+
+                    {/* Month Label */}
+                    <span
+                      className={cn(
+                        'text-[12px] transition-colors',
+                        isHighlighted
+                          ? 'font-semibold text-foreground'
+                          : 'font-medium text-muted-foreground group-hover:text-foreground'
+                      )}
+                    >
+                      {item.month}
+                    </span>
                   </div>
-                  <span className="text-[11px] font-medium text-muted-foreground">{item.month}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Category breakdown */}

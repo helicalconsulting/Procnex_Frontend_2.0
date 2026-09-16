@@ -203,7 +203,7 @@ const ALL_LISTING_COLUMNS: ListingColumnDef[] = [
           <div className="quot-score__bar" style={{ flex: 1, height: 6, borderRadius: 3, background: 'var(--surface-elevated)', overflow: 'hidden' }}>
             <div className={`quot-score__fill quot-score__fill--${scoreClass}`} style={{ width: `${displayScore}%`, height: '100%', borderRadius: 3 }} />
           </div>
-          <span className="quot-score__value" style={{ fontWeight: 600, fontSize: 13, minWidth: 32, textAlign: 'right' }}>{displayScore}%</span>
+          <span className="quot-score__value" style={{ fontWeight: 600, fontSize: 14, minWidth: 32, textAlign: 'right' }}>{displayScore}%</span>
         </div>
       );
     },
@@ -1119,7 +1119,7 @@ function ViewQuotationModal({
                   className={`rfq-modal__tab ${activeTab === t.key ? 'rfq-modal__tab--active' : ''}`}
                   onClick={() => setActiveTab(t.key)}
                 >
-                  <span style={{ fontSize: 15, marginRight: 4 }}>{t.icon}</span>
+                  <span style={{ fontSize: 16, marginRight: 4 }}>{t.icon}</span>
                   <span>{t.label}</span>
                 </button>
               ))}
@@ -1189,7 +1189,7 @@ function ViewQuotationModal({
                         <div className="quot-view-modal__custom-section">
                           <div className="quot-view-modal__custom-section-header">
                             <span className="quot-view-modal__custom-badge--custom">
-                              <span style={{ fontSize: 10, fontWeight: 700 }}>T</span>
+                              <span style={{ fontSize: 11, fontWeight: 700 }}>T</span>
                             </span>
                             <span>Tender Evaluation Parameters</span>
                           </div>
@@ -1228,7 +1228,7 @@ function ViewQuotationModal({
               {/* ── Tab 2: Payment Terms ── */}
               {activeTab === 'paymentTerms' && (
                 <div className="rfq-modal__info-panel">
-                  <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 14 }}>
+                  <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 15 }}>
                     <span>📄</span>
                     <span>Payment Terms</span>
                   </div>
@@ -1236,11 +1236,11 @@ function ViewQuotationModal({
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '12px 14px', background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-primary)' }}>
                         <FileText size={16} style={{ color: 'var(--primary-500)' }} />
-                        <span style={{ fontSize: 14, fontWeight: 700 }}>{q.paymentTerms}</span>
+                        <span style={{ fontSize: 15, fontWeight: 700 }}>{q.paymentTerms}</span>
                       </div>
                       {q.paymentPlanSnapshot && q.paymentPlanSnapshot.length > 0 && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                             Milestone Breakdown
                           </div>
                           {q.paymentPlanSnapshot.map((milestone, mi) => (
@@ -1257,13 +1257,13 @@ function ViewQuotationModal({
                               <div style={{
                                 width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontSize: 13, fontWeight: 700, color: '#fff',
+                                fontSize: 14, fontWeight: 700, color: '#fff',
                                 background: '#107e3e',
                               }}>
                                 {mi + 1}
                               </div>
                               <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
                                   {milestone.title}
                                 </div>
                               </div>
@@ -1272,7 +1272,7 @@ function ViewQuotationModal({
                                 background: 'rgba(16,126,62,0.08)',
                                 border: '1px solid rgba(16,126,62,0.15)',
                                 borderRadius: 999,
-                                fontSize: 12,
+                                fontSize: 13,
                                 fontWeight: 600,
                                 color: '#107e3e',
                                 whiteSpace: 'nowrap',
@@ -1295,7 +1295,7 @@ function ViewQuotationModal({
               {/* ── Tab 3: Authorization Documents ── */}
               {activeTab === 'authorization' && (
                 <div className="rfq-modal__info-panel">
-                  <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 14 }}>
+                  <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 15 }}>
                     <span>🔒</span>
                     <span>Authorization Documents</span>
                   </div>
@@ -1305,8 +1305,8 @@ function ViewQuotationModal({
                     <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
                       <Shield size={16} style={{ color: 'var(--primary-500)', flexShrink: 0 }} />
                       <div style={{ flex: 1 }}>
-                        <strong style={{ fontSize: 13, color: 'var(--text-primary)' }}>Bid Security Required</strong>
-                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                        <strong style={{ fontSize: 14, color: 'var(--text-primary)' }}>Bid Security Required</strong>
+                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                           <span>Type: Bid Bond</span>
                           {(rfq as any).bidSecurityValueType === 'FIXED_AMOUNT' && (rfq as any).bidSecurityValue != null && (
                             <span>Value: {(rfq as any).bidSecurityCurrency || 'KES'} {Number((rfq as any).bidSecurityValue).toLocaleString('en-IN')}</span>
@@ -1335,12 +1335,12 @@ function ViewQuotationModal({
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
-                            <strong style={{ fontSize: 13, color: 'var(--text-primary)' }}>Bid Security</strong>
-                            <span className={`rfq-badge rfq-badge--${bidSecurityDoc.status === 'VERIFIED' ? 'CLOSED' : bidSecurityDoc.status === 'REJECTED' ? 'CANCELLED' : 'SENT'}`} style={{ fontSize: 10, padding: '2px 8px' }}>
+                            <strong style={{ fontSize: 14, color: 'var(--text-primary)' }}>Bid Security</strong>
+                            <span className={`rfq-badge rfq-badge--${bidSecurityDoc.status === 'VERIFIED' ? 'CLOSED' : bidSecurityDoc.status === 'REJECTED' ? 'CANCELLED' : 'SENT'}`} style={{ fontSize: 11, padding: '2px 8px' }}>
                               {bidSecurityDoc.status}
                             </span>
                           </div>
-                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                          <div style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                             {bidSecurityDoc.bidSecurityValueType && (
                               <span><strong>Type:</strong> {bidSecurityDoc.bidSecurityValueType === 'FIXED_AMOUNT' ? 'Fixed Amount' : 'Percentage'}</span>
                             )}
@@ -1364,7 +1364,7 @@ function ViewQuotationModal({
                                 href={bidSecurityDoc.publicUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary-500)', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
+                                style={{ fontSize: 13, fontWeight: 600, color: 'var(--primary-500)', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
                               >
                                 <FileText size={13} />
                                 {bidSecurityDoc.originalName || 'Document'} ↗
@@ -1397,9 +1397,9 @@ function ViewQuotationModal({
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                              <strong style={{ fontSize: 13, color: 'var(--text-primary)' }}>Bid Bond</strong>
+                              <strong style={{ fontSize: 14, color: 'var(--text-primary)' }}>Bid Bond</strong>
                             </div>
-                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                            <div style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                               {bidSecurityDoc.bondNumber && <span><strong>Bond #:</strong> {bidSecurityDoc.bondNumber}</span>}
                               {bidSecurityDoc.issuer && <span><strong>Issuer:</strong> {bidSecurityDoc.issuer}</span>}
                               {bidSecurityDoc.bondAmount != null && (
@@ -1421,7 +1421,7 @@ function ViewQuotationModal({
                                   href={bidSecurityDoc.publicUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary-500)', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
+                                  style={{ fontSize: 13, fontWeight: 600, color: 'var(--primary-500)', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
                                 >
                                   <FileText size={13} />
                                   {bidSecurityDoc.originalName || 'Bid Bond Document'} ↗
@@ -1445,7 +1445,7 @@ function ViewQuotationModal({
 
                       {/* Rejection reason */}
                       {bidSecurityDoc.status === 'REJECTED' && bidSecurityDoc.rejectionReason && (
-                        <div style={{ padding: '8px 12px', background: 'rgba(187,0,0,0.06)', border: '1px solid rgba(187,0,0,0.15)', borderRadius: 'var(--radius-sm)', fontSize: 12, color: '#bb0000' }}>
+                        <div style={{ padding: '8px 12px', background: 'rgba(187,0,0,0.06)', border: '1px solid rgba(187,0,0,0.15)', borderRadius: 'var(--radius-sm)', fontSize: 13, color: '#bb0000' }}>
                           <strong>Rejection Reason:</strong> {bidSecurityDoc.rejectionReason}
                         </div>
                       )}
@@ -1459,11 +1459,11 @@ function ViewQuotationModal({
               {/* ── Tab 4: Items with Selection ── */}
               {activeTab === 'items' && (
                 <div className="rfq-modal__info-panel">
-                  <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 14 }}>
+                  <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 15 }}>
                     <span>📋</span>
                     <span>Quotation Items</span>
                     <CurrencyBadge currency={defCur} size="sm" />
-                    <span style={{ marginLeft: 4, fontSize: 12, color: 'var(--text-secondary)' }}>
+                    <span style={{ marginLeft: 4, fontSize: 13, color: 'var(--text-secondary)' }}>
                       — Select items to include for the winning vendor
                     </span>
                   </div>
@@ -1564,11 +1564,11 @@ function ViewQuotationModal({
               {/* ── Tab 3: Documents / Attachments ── */}
               {activeTab === 'documents' && (
                 <div className="rfq-modal__info-panel">
-                  <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 14 }}>
+                  <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 15 }}>
                     <span>📎</span>
                     <span>Attachments ({combinedDocs.length})</span>
                     {(rfq as any).bidSecurityRequired && (
-                      <span style={{ fontSize: 11, color: 'var(--text-placeholder)', fontWeight: 400, marginLeft: 4 }}>
+                      <span style={{ fontSize: 12, color: 'var(--text-placeholder)', fontWeight: 400, marginLeft: 4 }}>
                         — authorization documents shown in Authorization tab
                       </span>
                     )}
@@ -1830,7 +1830,7 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
   if (historyLoading) {
     return (
       <div className="rfq-modal__info-panel">
-        <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 14 }}>
+        <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 15 }}>
           <span>📜</span>
           <span>Vendor History — {vendorName}</span>
         </div>
@@ -1842,7 +1842,7 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
   if (historyError) {
     return (
       <div className="rfq-modal__info-panel">
-        <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 14 }}>
+        <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 15 }}>
           <span>📜</span>
           <span>Vendor History — {vendorName}</span>
         </div>
@@ -1854,7 +1854,7 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
   if (!historyData || (historyData.levels.length === 0 && (!historyData.history || historyData.history.length === 0))) {
     return (
       <div className="rfq-modal__info-panel">
-        <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 14 }}>
+        <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 15 }}>
           <span>📜</span>
           <span>Vendor History — {vendorName}</span>
         </div>
@@ -1915,17 +1915,17 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
 
   return (
     <div className="rfq-modal__info-panel">
-      <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 14 }}>
+      <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 15 }}>
         <span>📜</span>
         <span>Vendor History — {vendorName}</span>
         {historyData.isComplete && (
-          <span className="quot-badge quot-badge--ACCEPTED" style={{ marginLeft: 'auto', fontSize: 11 }}>Chain Complete</span>
+          <span className="quot-badge quot-badge--ACCEPTED" style={{ marginLeft: 'auto', fontSize: 12 }}>Chain Complete</span>
         )}
         {historyData.isRejected && (
-          <span className="quot-badge quot-badge--REJECTED" style={{ marginLeft: 'auto', fontSize: 11 }}>Rejected</span>
+          <span className="quot-badge quot-badge--REJECTED" style={{ marginLeft: 'auto', fontSize: 12 }}>Rejected</span>
         )}
         {historyData.isReturned && (
-          <span className="quot-badge quot-badge--RETURNED" style={{ marginLeft: 'auto', fontSize: 11, background: 'rgba(233,115,12,0.1)', color: '#e9730c' }}>Returned</span>
+          <span className="quot-badge quot-badge--RETURNED" style={{ marginLeft: 'auto', fontSize: 12, background: 'rgba(233,115,12,0.1)', color: '#e9730c' }}>Returned</span>
         )}
       </div>
 
@@ -1969,7 +1969,7 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
                 ) : isRejected ? (
                   <XCircle size={10} style={{ color: '#fff' }} />
                 ) : (
-                  <span style={{ fontSize: 9, fontWeight: 700, color: isActive ? '#fff' : 'var(--text-secondary)' }}>{level.levelNumber}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: isActive ? '#fff' : 'var(--text-secondary)' }}>{level.levelNumber}</span>
                 )}
               </div>
               {/* Content card */}
@@ -1982,11 +1982,11 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
                 borderRadius: 8,
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
                     Level {level.levelNumber} — {level.requiredRole.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                   </span>
                   <span style={{
-                    fontSize: 11, fontWeight: 600, color: statusColor(status),
+                    fontSize: 12, fontWeight: 600, color: statusColor(status),
                     display: 'inline-flex', alignItems: 'center', gap: 3,
                   }}>
                     {statusIcon(status)}
@@ -1994,13 +1994,13 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
                   </span>
                 </div>
                 {level.approverName && (
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>
                     By: <strong>{level.approverName}</strong>
                   </div>
                 )}
                 {level.comments && (
                   <div style={{
-                    fontSize: 12, color: 'var(--text-primary)',
+                    fontSize: 13, color: 'var(--text-primary)',
                     padding: '6px 10px', marginTop: 4,
                     background: 'var(--surface-card)', borderRadius: 4,
                     border: '1px solid var(--border)',
@@ -2008,7 +2008,7 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
                     "{level.comments}"
                   </div>
                 )}
-                <div style={{ fontSize: 11, color: 'var(--text-placeholder)', marginTop: 6 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-placeholder)', marginTop: 6 }}>
                   {level.actionAt ? `Acted: ${formatDt(level.actionAt)}` : `Created: ${formatDt(level.createdAt)}`}
                 </div>
               </div>
@@ -2381,7 +2381,7 @@ function ActionModalInner({
             <div className="quot-action-modal__attachments">
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
                 <FileText size={14} style={{ color: '#0a6ed1' }} />
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#32363a' }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: '#32363a' }}>
                   Attachments ({q.attachments.length})
                 </span>
               </div>
@@ -2396,7 +2396,7 @@ function ActionModalInner({
                       display: 'flex', alignItems: 'center', gap: 8,
                       padding: '8px 12px', background: '#f7f9fa',
                       border: '1px solid #e5e5e5', borderRadius: 4,
-                      textDecoration: 'none', fontSize: 13,
+                      textDecoration: 'none', fontSize: 14,
                       transition: 'background 0.2s',
                     }}
                     onMouseOver={e => (e.currentTarget.style.background = '#eef2f6')}
@@ -2406,7 +2406,7 @@ function ActionModalInner({
                     <span style={{ color: '#0070c0', fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {a.originalName}
                     </span>
-                    <span style={{ color: '#6a6d70', fontSize: 11, flexShrink: 0 }}>
+                    <span style={{ color: '#6a6d70', fontSize: 12, flexShrink: 0 }}>
                       {a.fileSize > 1024 * 1024
                         ? (a.fileSize / (1024 * 1024)).toFixed(1) + ' MB'
                         : (a.fileSize / 1024).toFixed(0) + ' KB'}
@@ -2432,11 +2432,11 @@ function ActionModalInner({
           {/* Return Target Selection — only show if not Originator mode */}
           {type === 'return' && !isOriginatorStart && (
             <div style={{ margin: '14px 0', padding: 12, background: '#f7f9fa', border: '1px solid #d9d9d9', borderRadius: 6 }}>
-              <label style={{ fontSize: 12, fontWeight: 700, color: '#32363a', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <label style={{ fontSize: 13, fontWeight: 700, color: '#32363a', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 Return Destination
               </label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 13, color: '#32363a' }}>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 14, color: '#32363a' }}>
                   <input
                     type="radio"
                     name="returnTarget"
@@ -2447,10 +2447,10 @@ function ActionModalInner({
                   />
                   <div>
                     <div style={{ fontWeight: 600, color: '#0070c0' }}>Return to Level 1</div>
-                    <div style={{ fontSize: 11, color: '#6a6d70', marginTop: 2 }}>Restart approval chain starting at Level 1 (Clerk review first)</div>
+                    <div style={{ fontSize: 12, color: '#6a6d70', marginTop: 2 }}>Restart approval chain starting at Level 1 (Clerk review first)</div>
                   </div>
                 </label>
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 13, color: '#32363a' }}>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 14, color: '#32363a' }}>
                   <input
                     type="radio"
                     name="returnTarget"
@@ -2461,7 +2461,7 @@ function ActionModalInner({
                   />
                   <div>
                     <div style={{ fontWeight: 600, color: '#bb0000' }}>Return to Vendor for Resubmission</div>
-                    <div style={{ fontSize: 11, color: '#6a6d70', marginTop: 2 }}>Send feedback email & notification to Vendor so they can revise and resubmit</div>
+                    <div style={{ fontSize: 12, color: '#6a6d70', marginTop: 2 }}>Send feedback email & notification to Vendor so they can revise and resubmit</div>
                   </div>
                 </label>
               </div>
@@ -4032,7 +4032,7 @@ export default function QuotationsPage() {
                 <span className="quot-compare__selected-rfq">
                   <span>{selectedRFQ}</span>
                   {selectedRFQTitle && (
-                    <span className="quot-compare__selected-title-inline" style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)' }}>
+                    <span className="quot-compare__selected-title-inline" style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)' }}>
                       — {selectedRFQTitle}
                     </span>
                   )}

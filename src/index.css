@@ -29,13 +29,13 @@
 }
 
 @keyframes dialog-content-in {
-  from { opacity: 0; transform: translate(-50%, -48%) scale(0.975); }
-  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  from { opacity: 0; transform: scale(0.96) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 @keyframes dialog-content-out {
-  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  to { opacity: 0; transform: translate(-50%, -49%) scale(0.985); }
+  from { opacity: 1; transform: scale(1) translateY(0); }
+  to { opacity: 0; transform: scale(0.96) translateY(8px); }
 }
 
 @keyframes skeleton-shimmer {
@@ -62,19 +62,23 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .motion-dialog-overlay[data-state="open"] {
-    animation: dialog-overlay-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
+    animation: dialog-overlay-in 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    will-change: opacity;
   }
 
   .motion-dialog-overlay[data-state="closed"] {
-    animation: dialog-overlay-out 140ms ease-in;
+    animation: dialog-overlay-out 160ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    will-change: opacity;
   }
 
   .motion-dialog-content[data-state="open"] {
-    animation: dialog-content-in 210ms cubic-bezier(0.16, 1, 0.3, 1);
+    animation: dialog-content-in 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    will-change: transform, opacity;
   }
 
   .motion-dialog-content[data-state="closed"] {
-    animation: dialog-content-out 140ms ease-in;
+    animation: dialog-content-out 160ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    will-change: transform, opacity;
   }
 }
 
@@ -96,6 +100,19 @@
 @theme inline {
   --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  --text-xs: 13px;
+  --text-sm: 15px;
+  --text-base: 17px;
+  --text-lg: 19px;
+  --text-xl: 21px;
+  --text-2xl: 25px;
+  --text-3xl: 31px;
+  --text-4xl: 37px;
+  --text-5xl: 49px;
+  --text-6xl: 61px;
+  --text-7xl: 73px;
+  --text-8xl: 97px;
+  --text-9xl: 129px;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -319,7 +336,7 @@ html {
 
 body {
   font-family: var(--font-sans);
-  font-size: 0.9375rem;
+  font-size: 1rem;
   line-height: 1.5;
   color: var(--text-primary);
   background: var(--surface);
@@ -527,7 +544,7 @@ img {
 }
 
 .sap-dialog__title {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
@@ -535,7 +552,7 @@ img {
 }
 
 .sap-dialog__subtitle {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -597,7 +614,7 @@ img {
 }
 
 .sap-dialog__message {
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text-primary);
   margin: 0;
   line-height: 1.5;
@@ -609,7 +626,7 @@ img {
 }
 
 .sap-dialog__submessage {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
   margin: 0;
   line-height: 1.4;
@@ -687,7 +704,9 @@ img {
 [class*="-modal-backdrop"],
 [class*="__modal-backdrop"],
 [class*="-backdrop"],
-[class*="__backdrop"] {
+[class*="__backdrop"],
+[class*="-overlay"],
+[class*="__overlay"] {
   z-index: 10000 !important;
   background: rgba(15, 23, 42, 0.65) !important;
   backdrop-filter: blur(4px) !important;
@@ -718,12 +737,12 @@ img {
 .vcd-modal,
 .gallery,
 .vnd-gallery,
-[class*="-gallery"]:not([class*="-backdrop"]):not([class*="__backdrop"]),
-[class*="__gallery"]:not([class*="-backdrop"]):not([class*="__backdrop"]),
-[class*="-modal"]:not([class*="-backdrop"]):not([class*="__backdrop"]),
-[class*="__modal"]:not([class*="-backdrop"]):not([class*="__backdrop"]),
-[class*="-dialog"]:not([class*="-backdrop"]):not([class*="__backdrop"]),
-[class*="__dialog"]:not([class*="-backdrop"]):not([class*="__backdrop"]) {
+[class*="-gallery"]:not([class*="-backdrop"]):not([class*="__backdrop"]):not([class*="-overlay"]):not([class*="__overlay"]),
+[class*="__gallery"]:not([class*="-backdrop"]):not([class*="__backdrop"]):not([class*="-overlay"]):not([class*="__overlay"]),
+[class*="-modal"]:not([class*="-backdrop"]):not([class*="__backdrop"]):not([class*="-overlay"]):not([class*="__overlay"]),
+[class*="__modal"]:not([class*="-backdrop"]):not([class*="__backdrop"]):not([class*="-overlay"]):not([class*="__overlay"]),
+[class*="-dialog"]:not([class*="-backdrop"]):not([class*="__backdrop"]):not([class*="-overlay"]):not([class*="__overlay"]),
+[class*="__dialog"]:not([class*="-backdrop"]):not([class*="__backdrop"]):not([class*="-overlay"]):not([class*="__overlay"]) {
   z-index: 10005 !important;
   isolation: isolate;
   filter: none !important;
@@ -819,18 +838,19 @@ img {
    ═══════════════════════════════════════════════════════════ */
 
 :root {
-  --card-glow-border: #1a80e0;
-  --card-glow-shadow: 0 0 0 3px rgba(26, 128, 224, 0.12), 0 14px 34px -24px rgba(26, 128, 224, 0.5);
-  --card-glow-bg: rgba(26, 128, 224, 0.045);
+  --card-glow-border: rgba(10, 110, 209, 0.45);
+  --card-glow-shadow: 0 0 0 2px rgba(10, 110, 209, 0.1), 0 4px 20px rgba(10, 110, 209, 0.12);
+  --card-glow-bg: rgba(10, 110, 209, 0.08);
 }
 
 [data-theme="dark"] {
   --card-glow-border: #388bfd;
-  --card-glow-shadow: 0 0 0 3px rgba(94, 162, 255, 0.14), 0 16px 38px -24px rgba(56, 139, 253, 0.58);
-  --card-glow-bg: rgba(56, 139, 253, 0.075);
+  --card-glow-shadow: 0 0 0 1.5px #388bfd, 0 0 25px rgba(56, 139, 253, 0.75), 0 0 10px rgba(56, 139, 253, 0.9), inset 0 0 15px rgba(56, 139, 253, 0.2);
+  --card-glow-bg: rgba(56, 139, 253, 0.2);
 }
 
 /* Master Active / Selected Card Glow Selector */
+[aria-pressed="true"],
 .card-glow,
 .card-selected,
 .card-active,
@@ -998,3 +1018,23 @@ img {
   box-shadow: 0 12px 30px -24px rgba(56, 139, 253, 0.55) !important;
   transform: translateY(-1px) !important;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Global Table Column Vertical Dividers
+   ═══════════════════════════════════════════════════════════ */
+table {
+  border-collapse: collapse;
+}
+
+table th:not(:last-child),
+table td:not(:last-child) {
+  border-right: 1px solid var(--border, #d6e0eb) !important;
+}
+
+[data-theme="dark"] table th:not(:last-child),
+[data-theme="dark"] table td:not(:last-child),
+.dark table th:not(:last-child),
+.dark table td:not(:last-child) {
+  border-right: 1px solid var(--border, #283548) !important;
+}
+

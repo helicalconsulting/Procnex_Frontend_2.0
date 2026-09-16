@@ -39,7 +39,7 @@ export function DataTableViewport({
   return (
     <div className="relative min-w-0">
       {showHint && hasOverflow && (
-        <div className="mb-2 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground lg:hidden">
+        <div className="mb-2 flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground lg:hidden">
           <MoveHorizontal size={14} aria-hidden="true" />
           Scroll horizontally to view all columns
         </div>

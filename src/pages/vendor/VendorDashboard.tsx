@@ -273,8 +273,8 @@ export default function VendorDashboard() {
                 <button key={`${item.type}-${item.label}`} onClick={() => setSelectedKpiType(item.type)} className="flex min-h-28 items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-accent/45 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40 xl:flex-col xl:items-start">
                   <span className={cn('grid size-9 place-items-center rounded-xl ring-1 ring-current/10', item.tone)}><Icon size={17} /></span>
                   <span className="min-w-0">
-                    <span className="block text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{item.label}</span>
-                    <span className="mt-1 block truncate text-xl font-semibold tracking-[-0.035em] text-foreground">{typeof item.value === 'number' ? <AnimatedNumber value={item.value} /> : item.value}</span>
+                    <span className="block truncate text-xl font-semibold tracking-[-0.035em] text-foreground">{typeof item.value === 'number' ? <AnimatedNumber value={item.value} /> : item.value}</span>
+                    <span className="mt-1 block text-[12px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{item.label}</span>
                   </span>
                 </button>
               );
@@ -466,7 +466,7 @@ export default function VendorDashboard() {
             </DialogHeader>
             <div className="grid gap-3 sm:grid-cols-3">
               {kpiRows.map((row) => (
-                <Card key={row.label} variant="soft" className="p-4"><div className="text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{row.label}</div><div className="mt-2 break-words text-2xl font-semibold tracking-[-0.04em] text-foreground">{row.value}</div><div className="mt-1 text-xs text-muted-foreground">{row.helper}</div></Card>
+                <Card key={row.label} variant="soft" className="p-4"><div className="text-[12px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{row.label}</div><div className="mt-2 break-words text-2xl font-semibold tracking-[-0.04em] text-foreground">{row.value}</div><div className="mt-1 text-xs text-muted-foreground">{row.helper}</div></Card>
               ))}
             </div>
             <div className="rounded-xl border border-border/70 bg-secondary/40 p-4">

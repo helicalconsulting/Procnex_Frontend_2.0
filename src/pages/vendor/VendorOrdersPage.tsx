@@ -64,7 +64,7 @@ export default function VendorOrdersPage() {
       <PageLead title="My Orders" description="Track fulfilment milestones and purchase-order details." actions={<CurrencySelector value={displayCurrency} onChange={setDisplayCurrency} size="sm" />} />
       {error && <Card className="mb-4 border-destructive/25 bg-destructive/8 p-4 text-sm text-destructive">{error}</Card>}
       <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <MetricCard label="Total orders" value={summary.total} detail="All time" icon={Package} />
+        <MetricCard label="Total orders" value={summary.total} detail="All time" icon={Package} aria-pressed={true} />
         <MetricCard label="Active orders" value={summary.active} detail="In progress" icon={Truck} tone="warning" />
         <MetricCard label="Delivered" value={summary.delivered} detail="Completed" icon={CheckCircle2} tone="success" />
         <MetricCard label="Cancelled" value={summary.cancelled} detail="All time" icon={XCircle} tone="danger" />
@@ -99,7 +99,7 @@ export default function VendorOrdersPage() {
                       <ol className="mb-6 grid grid-cols-4 gap-1" aria-label="Order progress">
                         {STEPS.map((step, index) => {
                           const done = index <= currentStep;
-                          return <li key={step} className="relative flex min-w-0 flex-col items-center text-center before:absolute before:left-[calc(50%+16px)] before:right-[calc(-50%+16px)] before:top-3 before:h-px before:bg-border last:before:hidden"><span className={cn('relative z-10 grid size-6 place-items-center rounded-full border bg-card', done ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground')}>{done ? <CheckCircle2 className="size-3.5" /> : <span className="size-1.5 rounded-full bg-current" />}</span><span className={cn('mt-2 truncate text-[10px] font-medium sm:text-xs', done ? 'text-foreground' : 'text-muted-foreground')}>{step}</span></li>;
+                          return <li key={step} className="relative flex min-w-0 flex-col items-center text-center before:absolute before:left-[calc(50%+16px)] before:right-[calc(-50%+16px)] before:top-3 before:h-px before:bg-border last:before:hidden"><span className={cn('relative z-10 grid size-6 place-items-center rounded-full border bg-card', done ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground')}>{done ? <CheckCircle2 className="size-3.5" /> : <span className="size-1.5 rounded-full bg-current" />}</span><span className={cn('mt-2 truncate text-[11px] font-medium sm:text-xs', done ? 'text-foreground' : 'text-muted-foreground')}>{step}</span></li>;
                         })}
                       </ol>
                     )}
@@ -109,7 +109,7 @@ export default function VendorOrdersPage() {
                         <div className="border-b border-border/60 px-4 py-3 text-sm font-semibold">Order items</div>
                         <DataTableViewport label={`Items in ${order.poNumber}`}>
                           <table className="w-full min-w-[560px] text-left text-xs">
-                            <thead className="bg-secondary/45 text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground"><tr><th className="px-4 py-2.5">Item</th><th className="px-4 py-2.5 text-right">Quantity</th><th className="px-4 py-2.5 text-right">Unit price</th><th className="px-4 py-2.5 text-right">Total</th></tr></thead>
+                            <thead className="bg-secondary/45 text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground"><tr><th className="px-4 py-2.5">Item</th><th className="px-4 py-2.5 text-right">Quantity</th><th className="px-4 py-2.5 text-right">Unit price</th><th className="px-4 py-2.5 text-right">Total</th></tr></thead>
                             <tbody className="divide-y divide-border/55">{order.items.map((item, index) => <tr key={`${item.name}-${index}`}><td className="px-4 py-3 font-medium">{item.name}</td><td className="px-4 py-3 text-right">{item.quantity} {item.unit}</td><td className="px-4 py-3 text-right tabular-nums">{amount(item.unitPrice)}</td><td className="px-4 py-3 text-right font-semibold tabular-nums">{amount(item.quantity * item.unitPrice)}</td></tr>)}</tbody>
                             <tfoot className="border-t border-border bg-secondary/45"><tr><td colSpan={3} className="px-4 py-3 text-right font-semibold">Grand total</td><td className="px-4 py-3 text-right font-semibold tabular-nums">{amount(order.totalAmount)} <CurrencyBadge currency={displayCurrency} size="sm" /></td></tr></tfoot>
                           </table>
@@ -125,7 +125,7 @@ export default function VendorOrdersPage() {
                             ...(order.deliveredDate ? [{ icon: CheckCircle2, label: 'Delivered on', value: formatDate(order.deliveredDate) }] : []),
                             { icon: IndianRupee, label: 'Payment terms', value: order.paymentTerms },
                             ...(order.trackingId ? [{ icon: Truck, label: 'Tracking ID', value: order.trackingId }] : []),
-                          ].map((item) => <div key={item.label} className="flex items-start gap-2.5"><item.icon className="mt-0.5 size-4 shrink-0 text-primary" /><div><dt className="text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{item.label}</dt><dd className="mt-1 text-xs font-medium leading-relaxed">{item.value}</dd></div></div>)}
+                          ].map((item) => <div key={item.label} className="flex items-start gap-2.5"><item.icon className="mt-0.5 size-4 shrink-0 text-primary" /><div><dt className="text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{item.label}</dt><dd className="mt-1 text-xs font-medium leading-relaxed">{item.value}</dd></div></div>)}
                         </dl>
                       </Card>
                     </div>

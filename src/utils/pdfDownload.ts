@@ -70,18 +70,18 @@ export async function downloadContractAsPdf(
               background: #ffffff !important;
               color: #1a1a2e !important;
               font-family: '72', '72full', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-              font-size: 13px;
+              font-size: 14px;
               line-height: 1.6;
               width: 794px;
               box-sizing: border-box;
             }
             h1, h2, h3, h4 { color: #0a2342; margin-top: 20px; margin-bottom: 8px; font-weight: 700; }
-            h1 { font-size: 20px; border-bottom: 2px solid #0a6ed1; padding-bottom: 6px; }
-            h2 { font-size: 16px; }
-            h3 { font-size: 14px; }
+            h1 { font-size: 21px; border-bottom: 2px solid #0a6ed1; padding-bottom: 6px; }
+            h2 { font-size: 17px; }
+            h3 { font-size: 15px; }
             p { margin: 0 0 8px 0; }
             table { width: 100%; border-collapse: collapse; margin: 12px 0; }
-            th, td { border: 1px solid #d0d5dd; padding: 8px 12px; text-align: left; font-size: 12px; }
+            th, td { border: 1px solid #d0d5dd; padding: 8px 12px; text-align: left; font-size: 13px; }
             th { background: #f0f4ff; font-weight: 700; color: #0a2342; }
             tr:nth-child(even) td { background: #fafbfc; }
             strong, b { color: #0a2342; }
@@ -92,7 +92,7 @@ export async function downloadContractAsPdf(
           </style>
         </head>
         <body>
-          ${docTitle ? `<div style="text-align:center;margin-bottom:24px;padding-bottom:12px;border-bottom:2px solid #0a6ed1;"><h1 style="margin:0;font-size:18px;border:none;">${docTitle}</h1></div>` : ''}
+          ${docTitle ? `<div style="text-align:center;margin-bottom:24px;padding-bottom:12px;border-bottom:2px solid #0a6ed1;"><h1 style="margin:0;font-size:19px;border:none;">${docTitle}</h1></div>` : ''}
           ${contentHtml}
         </body>
       </html>
@@ -209,11 +209,11 @@ export async function downloadPurchaseOrderAsPdf(
       const nameStr = item.name || item.itemName || '';
       const descStr = item.description || '';
       const fullDesc = nameStr && descStr && nameStr !== descStr
-        ? `<div style="font-weight: 700; color: #0a2342;">${nameStr}</div><div style="font-size: 10px; color: #64748b; margin-top: 2px;">${descStr}</div>`
+        ? `<div style="font-weight: 700; color: #0a2342;">${nameStr}</div><div style="font-size: 11px; color: #64748b; margin-top: 2px;">${descStr}</div>`
         : `<div style="font-weight: 600; color: #0a2342;">${nameStr || descStr || 'Item'}</div>`;
       
       const codeBadge = item.itemCode
-        ? `<span style="display: inline-block; padding: 2px 6px; background: #e2e8f0; border-radius: 4px; font-size: 9px; font-weight: 700; color: #475569; margin-bottom: 4px;">${item.itemCode}</span><br/>`
+        ? `<span style="display: inline-block; padding: 2px 6px; background: #e2e8f0; border-radius: 4px; font-size: 10px; font-weight: 700; color: #475569; margin-bottom: 4px;">${item.itemCode}</span><br/>`
         : '';
 
       const qty = item.quantity || 1;
@@ -248,27 +248,27 @@ export async function downloadPurchaseOrderAsPdf(
   const grandTotal = order.grandTotal || order.totalAmount || 0;
 
   const poHtml = `
-    <div style="background: #ffffff; color: #1a1a2e; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 12px; line-height: 1.6; padding: 20px; max-width: 794px; margin: 0 auto;">
+    <div style="background: #ffffff; color: #1a1a2e; font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 13px; line-height: 1.6; padding: 20px; max-width: 794px; margin: 0 auto;">
       <!-- Header -->
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
         <div style="display: flex; gap: 16px; align-items: flex-start;">
           <img src="${companyLogoUrl}" alt="${companyName}" style="width: 56px; height: 56px; object-fit: contain; border-radius: 6px; flex-shrink: 0;" />
           <div>
-            <h1 style="font-size: 18px; font-weight: 700; color: #0a2342; margin: 0 0 4px 0; border: none; padding: 0;">${companyName}</h1>
-            <p style="font-size: 11px; color: #475569; margin: 1px 0;">${companyAddress}</p>
-            <p style="font-size: 11px; color: #475569; margin: 1px 0;">Phone: ${companyPhone} &nbsp;|&nbsp; Email: ${companyEmail}</p>
-            <p style="font-size: 11px; color: #475569; margin: 1px 0;">${companyWebsite}</p>
+            <h1 style="font-size: 19px; font-weight: 700; color: #0a2342; margin: 0 0 4px 0; border: none; padding: 0;">${companyName}</h1>
+            <p style="font-size: 12px; color: #475569; margin: 1px 0;">${companyAddress}</p>
+            <p style="font-size: 12px; color: #475569; margin: 1px 0;">Phone: ${companyPhone} &nbsp;|&nbsp; Email: ${companyEmail}</p>
+            <p style="font-size: 12px; color: #475569; margin: 1px 0;">${companyWebsite}</p>
           </div>
         </div>
         <div style="text-align: right; flex-shrink: 0;">
           <div style="margin-bottom: 10px;">
-            <span style="display: block; font-size: 20px; font-weight: 800; color: #0a2342; letter-spacing: 2px; margin-bottom: 2px;">PURCHASE ORDER</span>
-            <span style="display: block; font-size: 13px; font-weight: 600; color: #059669; letter-spacing: 0.5px;">${order.poNumber}</span>
+            <span style="display: block; font-size: 21px; font-weight: 800; color: #0a2342; letter-spacing: 2px; margin-bottom: 2px;">PURCHASE ORDER</span>
+            <span style="display: block; font-size: 14px; font-weight: 600; color: #059669; letter-spacing: 0.5px;">${order.poNumber}</span>
           </div>
           <table style="border-collapse: collapse; margin-left: auto;">
             <tbody>
-              <tr><td style="padding: 2px 0 2px 16px; font-size: 11px; font-weight: 600; color: #64748b; text-align: right;">PO Date</td><td style="padding: 2px 0 2px 8px; font-size: 11px; font-weight: 600; color: #1a1a2e; text-align: left;">${formatDate(order.orderDate)}</td></tr>
-              <tr><td style="padding: 2px 0 2px 16px; font-size: 11px; font-weight: 600; color: #64748b; text-align: right;">PO Number</td><td style="padding: 2px 0 2px 8px; font-size: 11px; font-weight: 600; color: #1a1a2e; text-align: left;">${order.poNumber}</td></tr>
+              <tr><td style="padding: 2px 0 2px 16px; font-size: 12px; font-weight: 600; color: #64748b; text-align: right;">PO Date</td><td style="padding: 2px 0 2px 8px; font-size: 12px; font-weight: 600; color: #1a1a2e; text-align: left;">${formatDate(order.orderDate)}</td></tr>
+              <tr><td style="padding: 2px 0 2px 16px; font-size: 12px; font-weight: 600; color: #64748b; text-align: right;">PO Number</td><td style="padding: 2px 0 2px 8px; font-size: 12px; font-weight: 600; color: #1a1a2e; text-align: left;">${order.poNumber}</td></tr>
             </tbody>
           </table>
         </div>
@@ -280,66 +280,66 @@ export async function downloadPurchaseOrderAsPdf(
       <!-- Vendor & Ship To -->
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 18px;">
         <div style="padding: 14px 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
-          <h3 style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #059669; margin: 0 0 8px 0; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0;">VENDOR</h3>
-          <p style="font-size: 14px; font-weight: 700; color: #0a2342; margin: 0 0 4px 0;">${vendorName} ${order.supplierCode ? `<span style="font-size:11px; color:#64748b; font-weight:normal;">(${order.supplierCode})</span>` : ''}</p>
-          ${order.supplierType ? `<p style="font-size: 11px; color: #475569; margin: 1px 0;">Type: ${order.supplierType}</p>` : ''}
-          <p style="font-size: 11px; color: #475569; margin: 1px 0;">Contact: ${vendorContact}</p>
-          <p style="font-size: 11px; color: #475569; margin: 1px 0;">Address: ${vendorAddress}</p>
-          <p style="font-size: 11px; color: #475569; margin: 1px 0;">Phone: ${vendorPhone}</p>
-          <p style="font-size: 11px; color: #475569; margin: 1px 0;">Email: ${vendorEmail}</p>
-          <p style="font-size: 11px; color: #475569; margin: 1px 0;">GST/VAT: ${vendorGstVat}</p>
+          <h3 style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #059669; margin: 0 0 8px 0; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0;">VENDOR</h3>
+          <p style="font-size: 15px; font-weight: 700; color: #0a2342; margin: 0 0 4px 0;">${vendorName} ${order.supplierCode ? `<span style="font-size:12px; color:#64748b; font-weight:normal;">(${order.supplierCode})</span>` : ''}</p>
+          ${order.supplierType ? `<p style="font-size: 12px; color: #475569; margin: 1px 0;">Type: ${order.supplierType}</p>` : ''}
+          <p style="font-size: 12px; color: #475569; margin: 1px 0;">Contact: ${vendorContact}</p>
+          <p style="font-size: 12px; color: #475569; margin: 1px 0;">Address: ${vendorAddress}</p>
+          <p style="font-size: 12px; color: #475569; margin: 1px 0;">Phone: ${vendorPhone}</p>
+          <p style="font-size: 12px; color: #475569; margin: 1px 0;">Email: ${vendorEmail}</p>
+          <p style="font-size: 12px; color: #475569; margin: 1px 0;">GST/VAT: ${vendorGstVat}</p>
         </div>
         <div style="padding: 14px 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
-          <h3 style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #059669; margin: 0 0 8px 0; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0;">SHIP TO</h3>
-          <p style="font-size: 14px; font-weight: 700; color: #0a2342; margin: 0 0 4px 0;">${shipToCompany}</p>
-          <p style="font-size: 11px; color: #475569; margin: 1px 0;">Warehouse: ${shipToWarehouse}</p>
-          <p style="font-size: 11px; color: #475569; margin: 1px 0;">Address: ${shipToAddress}</p>
-          <p style="font-size: 11px; color: #475569; margin: 1px 0;">Contact: ${shipToContact}</p>
-          <p style="font-size: 11px; color: #475569; margin: 1px 0;">Phone: ${shipToPhone}</p>
+          <h3 style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #059669; margin: 0 0 8px 0; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0;">SHIP TO</h3>
+          <p style="font-size: 15px; font-weight: 700; color: #0a2342; margin: 0 0 4px 0;">${shipToCompany}</p>
+          <p style="font-size: 12px; color: #475569; margin: 1px 0;">Warehouse: ${shipToWarehouse}</p>
+          <p style="font-size: 12px; color: #475569; margin: 1px 0;">Address: ${shipToAddress}</p>
+          <p style="font-size: 12px; color: #475569; margin: 1px 0;">Contact: ${shipToContact}</p>
+          <p style="font-size: 12px; color: #475569; margin: 1px 0;">Phone: ${shipToPhone}</p>
         </div>
       </div>
 
       <!-- PO Info Grid -->
       <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 18px; padding: 12px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
         <div>
-          <span style="font-size: 9px; font-weight: 700; text-transform: uppercase; color: #64748b; display: block;">Requisitioner</span>
-          <span style="font-size: 12px; font-weight: 600; color: #1a1a2e;">${requisitioner}</span>
+          <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748b; display: block;">Requisitioner</span>
+          <span style="font-size: 13px; font-weight: 600; color: #1a1a2e;">${requisitioner}</span>
         </div>
         <div>
-          <span style="font-size: 9px; font-weight: 700; text-transform: uppercase; color: #64748b; display: block;">Ship Via</span>
-          <span style="font-size: 12px; font-weight: 600; color: #1a1a2e;">${shipVia}</span>
+          <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748b; display: block;">Ship Via</span>
+          <span style="font-size: 13px; font-weight: 600; color: #1a1a2e;">${shipVia}</span>
         </div>
         <div>
-          <span style="font-size: 9px; font-weight: 700; text-transform: uppercase; color: #64748b; display: block;">FOB</span>
-          <span style="font-size: 12px; font-weight: 600; color: #1a1a2e;">${fob}</span>
+          <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748b; display: block;">FOB</span>
+          <span style="font-size: 13px; font-weight: 600; color: #1a1a2e;">${fob}</span>
         </div>
         <div>
-          <span style="font-size: 9px; font-weight: 700; text-transform: uppercase; color: #64748b; display: block;">Payment Terms</span>
-          <span style="font-size: 12px; font-weight: 600; color: #1a1a2e;">${paymentTerms}</span>
+          <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748b; display: block;">Payment Terms</span>
+          <span style="font-size: 13px; font-weight: 600; color: #1a1a2e;">${paymentTerms}</span>
         </div>
         <div>
-          <span style="font-size: 9px; font-weight: 700; text-transform: uppercase; color: #64748b; display: block;">Delivery Date</span>
-          <span style="font-size: 12px; font-weight: 600; color: #1a1a2e;">${deliveryDate}</span>
+          <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748b; display: block;">Delivery Date</span>
+          <span style="font-size: 13px; font-weight: 600; color: #1a1a2e;">${deliveryDate}</span>
         </div>
         <div>
-          <span style="font-size: 9px; font-weight: 700; text-transform: uppercase; color: #64748b; display: block;">Shipping Terms</span>
-          <span style="font-size: 12px; font-weight: 600; color: #1a1a2e;">${shippingTerms}</span>
+          <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748b; display: block;">Shipping Terms</span>
+          <span style="font-size: 13px; font-weight: 600; color: #1a1a2e;">${shippingTerms}</span>
         </div>
       </div>
 
       <!-- Items Table -->
       <div style="margin-bottom: 20px; border: 1px solid #d1d5db;">
-        <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
           <thead>
             <tr style="background: #0a2342; color: #ffffff;">
-              <th style="padding: 11px 14px; text-align: center; font-size: 9px; font-weight: 700; text-transform: uppercase; width: 5%;">#</th>
-              <th style="padding: 11px 14px; text-align: left; font-size: 9px; font-weight: 700; text-transform: uppercase; width: 35%;">Description</th>
-              <th style="padding: 11px 14px; text-align: center; font-size: 9px; font-weight: 700; text-transform: uppercase; width: 10%;">Quantity</th>
-              <th style="padding: 11px 14px; text-align: center; font-size: 9px; font-weight: 700; text-transform: uppercase; width: 10%;">Unit</th>
-              <th style="padding: 11px 14px; text-align: right; font-size: 9px; font-weight: 700; text-transform: uppercase; width: 15%;">Unit Price</th>
-              <th style="padding: 11px 14px; text-align: center; font-size: 9px; font-weight: 700; text-transform: uppercase; width: 8%;">Tax %</th>
-              <th style="padding: 11px 14px; text-align: center; font-size: 9px; font-weight: 700; text-transform: uppercase; width: 7%;">Disc %</th>
-              <th style="padding: 11px 14px; text-align: right; font-size: 9px; font-weight: 700; text-transform: uppercase; width: 10%;">Total</th>
+              <th style="padding: 11px 14px; text-align: center; font-size: 10px; font-weight: 700; text-transform: uppercase; width: 5%;">#</th>
+              <th style="padding: 11px 14px; text-align: left; font-size: 10px; font-weight: 700; text-transform: uppercase; width: 35%;">Description</th>
+              <th style="padding: 11px 14px; text-align: center; font-size: 10px; font-weight: 700; text-transform: uppercase; width: 10%;">Quantity</th>
+              <th style="padding: 11px 14px; text-align: center; font-size: 10px; font-weight: 700; text-transform: uppercase; width: 10%;">Unit</th>
+              <th style="padding: 11px 14px; text-align: right; font-size: 10px; font-weight: 700; text-transform: uppercase; width: 15%;">Unit Price</th>
+              <th style="padding: 11px 14px; text-align: center; font-size: 10px; font-weight: 700; text-transform: uppercase; width: 8%;">Tax %</th>
+              <th style="padding: 11px 14px; text-align: center; font-size: 10px; font-weight: 700; text-transform: uppercase; width: 7%;">Disc %</th>
+              <th style="padding: 11px 14px; text-align: right; font-size: 10px; font-weight: 700; text-transform: uppercase; width: 10%;">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -351,30 +351,30 @@ export async function downloadPurchaseOrderAsPdf(
       <!-- Totals -->
       <div style="display: flex; justify-content: flex-end; margin-bottom: 18px;">
         <div style="width: 340px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden;">
-          <div style="display: flex; justify-content: space-between; padding: 8px 16px; font-size: 11px;">
+          <div style="display: flex; justify-content: space-between; padding: 8px 16px; font-size: 12px;">
             <span style="font-weight: 600; color: #475569;">Subtotal</span>
             <span style="font-weight: 700; color: #1a1a2e;">${formatAmount(subtotal, displayCurrency)}</span>
           </div>
-          <div style="display: flex; justify-content: space-between; padding: 8px 16px; font-size: 11px; background: #f8fafc;">
+          <div style="display: flex; justify-content: space-between; padding: 8px 16px; font-size: 12px; background: #f8fafc;">
             <span style="font-weight: 600; color: #475569;">Discount</span>
             <span style="font-weight: 700; color: ${discountTotal > 0 ? '#dc2626' : '#1a1a2e'};">${discountTotal > 0 ? `-${formatAmount(discountTotal, displayCurrency)}` : formatAmount(0, displayCurrency)}</span>
           </div>
-          <div style="display: flex; justify-content: space-between; padding: 8px 16px; font-size: 11px;">
+          <div style="display: flex; justify-content: space-between; padding: 8px 16px; font-size: 12px;">
             <span style="font-weight: 600; color: #475569;">Tax</span>
             <span style="font-weight: 700; color: #1a1a2e;">${formatAmount(taxTotal, displayCurrency)}</span>
           </div>
-          <div style="display: flex; justify-content: space-between; padding: 8px 16px; font-size: 11px; background: #f8fafc;">
+          <div style="display: flex; justify-content: space-between; padding: 8px 16px; font-size: 12px; background: #f8fafc;">
             <span style="font-weight: 600; color: #475569;">Shipping Charges</span>
             <span style="font-weight: 700; color: #1a1a2e;">${formatAmount(shippingCharges, displayCurrency)}</span>
           </div>
-          <div style="display: flex; justify-content: space-between; padding: 8px 16px; font-size: 11px;">
+          <div style="display: flex; justify-content: space-between; padding: 8px 16px; font-size: 12px;">
             <span style="font-weight: 600; color: #475569;">Other Charges</span>
             <span style="font-weight: 700; color: #1a1a2e;">${formatAmount(otherCharges, displayCurrency)}</span>
           </div>
           <div style="height: 1px; background: #e2e8f0; margin: 0 16px;"></div>
           <div style="display: flex; justify-content: space-between; padding: 12px 16px; background: #0a2342; color: #ffffff;">
-            <span style="font-size: 13px; font-weight: 700;">Grand Total</span>
-            <span style="font-size: 16px; font-weight: 800;">${formatAmount(grandTotal, displayCurrency)}</span>
+            <span style="font-size: 14px; font-weight: 700;">Grand Total</span>
+            <span style="font-size: 17px; font-weight: 800;">${formatAmount(grandTotal, displayCurrency)}</span>
           </div>
         </div>
       </div>
@@ -383,18 +383,18 @@ export async function downloadPurchaseOrderAsPdf(
       <div style="height: 1px; background: #e2e8f0; margin: 16px 0;"></div>
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 18px;">
         <div style="padding: 12px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
-          <h4 style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: #059669; margin: 0 0 6px 0;">Internal Notes</h4>
-          <p style="font-size: 11px; color: #475569; margin: 0;">${val(order.internalNotes, 'No internal notes')}</p>
+          <h4 style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #059669; margin: 0 0 6px 0;">Internal Notes</h4>
+          <p style="font-size: 12px; color: #475569; margin: 0;">${val(order.internalNotes, 'No internal notes')}</p>
         </div>
         <div style="padding: 12px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
-          <h4 style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: #059669; margin: 0 0 6px 0;">Special Instructions</h4>
-          <p style="font-size: 11px; color: #475569; margin: 0;">${val(order.specialInstructions, 'No special instructions')}</p>
+          <h4 style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #059669; margin: 0 0 6px 0;">Special Instructions</h4>
+          <p style="font-size: 12px; color: #475569; margin: 0;">${val(order.specialInstructions, 'No special instructions')}</p>
         </div>
       </div>
 
       <!-- Footer -->
       <div style="margin-top: 24px; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 10px;">
-        <p style="font-size: 10px; color: #64748b; margin: 0;">${companyName} &nbsp;|&nbsp; Phone: ${companyPhone} &nbsp;|&nbsp; Email: ${companyEmail}</p>
+        <p style="font-size: 11px; color: #64748b; margin: 0;">${companyName} &nbsp;|&nbsp; Phone: ${companyPhone} &nbsp;|&nbsp; Email: ${companyEmail}</p>
       </div>
     </div>
   `;

@@ -872,7 +872,7 @@ export default function VendorRFQsPage() {
                           background: rfq.rfqType === 'TENDER' ? 'rgba(124, 58, 237, 0.12)' : 'rgba(10, 110, 209, 0.1)',
                           color: rfq.rfqType === 'TENDER' ? '#7c3aed' : '#0a6ed1',
                           fontWeight: 700,
-                          fontSize: 11,
+                          fontSize: 12,
                           padding: '2px 8px',
                           borderRadius: 4,
                           marginLeft: 6,
@@ -887,7 +887,7 @@ export default function VendorRFQsPage() {
                         <button
                           type="button"
                           className="vendor-btn vendor-btn--primary"
-                          style={{ padding: '6px 12px', fontSize: 12 }}
+                          style={{ padding: '6px 12px', fontSize: 13 }}
                           onClick={() => openQuotModal(rfq)}
                         >
                           <Send size={13} /> Submit Quote
@@ -897,7 +897,7 @@ export default function VendorRFQsPage() {
                         <button
                           type="button"
                           className="vendor-btn vendor-btn--outline"
-                          style={{ padding: '6px 12px', fontSize: 12 }}
+                          style={{ padding: '6px 12px', fontSize: 13 }}
                           onClick={() => openQuotModal(rfq)}
                         >
                           <Eye size={13} /> View Quote
@@ -907,7 +907,7 @@ export default function VendorRFQsPage() {
                         <button
                           type="button"
                           className="vendor-btn vendor-btn--primary"
-                          style={{ padding: '6px 12px', fontSize: 12 }}
+                          style={{ padding: '6px 12px', fontSize: 13 }}
                           onClick={() => openQuotModal(rfq)}
                         >
                           <RotateCcw size={13} /> Resubmit Quote
@@ -918,7 +918,7 @@ export default function VendorRFQsPage() {
                           <Clock size={13} /> {dl.text}
                         </span>
                       )}
-                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{rfq.items.length} items</span>
+                      <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{rfq.items.length} items</span>
                       <ChevronDown size={18} className={`vrfq-card__chevron ${isExpanded ? 'vrfq-card__chevron--open' : ''}`} onClick={() => setExpandedRFQ(isExpanded ? null : rfq.id)} />
                     </div>
                   </div>
@@ -938,7 +938,7 @@ export default function VendorRFQsPage() {
                             {rfq.items.map((item, idx) => (
                               <tr key={idx}>
                                 <td className="vo-items-table__name">{item.name}</td>
-                                <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{item.description}</td>
+                                <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{item.description}</td>
                                 <td>{item.quantity} {item.unit}</td>
                                 <td>{item.expectedDate ? new Date(item.expectedDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—'}</td>
                               </tr>
@@ -947,7 +947,7 @@ export default function VendorRFQsPage() {
                         </table>
                       </div>
 
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: 'var(--text-secondary)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, color: 'var(--text-secondary)' }}>
                         <span><Calendar size={13} style={{ verticalAlign: -2, marginRight: 4 }} />Created: {new Date(rfq.createdAt).toLocaleDateString('en-IN')}</span>
                         <span>Deadline: {new Date(rfq.deadline).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
                       </div>
@@ -962,10 +962,10 @@ export default function VendorRFQsPage() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <Shield size={16} style={{ color: 'var(--primary-500)', flexShrink: 0 }} />
                             <div>
-                              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
                                 Bid Security Required
                               </div>
-                              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 1 }}>
+                              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 1 }}>
                                 Vendor must provide: amount, type, validity & document when submitting quotation
                               </div>
                             </div>
@@ -982,10 +982,10 @@ export default function VendorRFQsPage() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <Shield size={16} style={{ color: 'var(--primary-500)', flexShrink: 0 }} />
                             <div>
-                              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
                                 Bid Bond Required
                               </div>
-                              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 1 }}>
+                              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 1 }}>
                                 Vendor must provide: bond number, issuer, amount, dates & document when submitting quotation
                               </div>
                             </div>
@@ -1115,17 +1115,17 @@ export default function VendorRFQsPage() {
                   </div>
                 </div>
                 <div style={{ padding: '20px 24px' }}>
-                  <p style={{ fontSize: 14, color: 'var(--text-primary)', margin: 0 }}>
+                  <p style={{ fontSize: 15, color: 'var(--text-primary)', margin: 0 }}>
                     Are you sure you want to delete <strong>{planToDelete.name}</strong>?
                   </p>
-                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '8px 0 0' }}>
+                  <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '8px 0 0' }}>
                     This action cannot be undone. The payment plan will be removed from your account.
                   </p>
                   {deleteError && (
                     <div style={{
                       marginTop: 12, padding: '8px 12px', borderRadius: 6,
                       background: 'rgba(187,0,0,0.08)', border: '1px solid rgba(187,0,0,0.2)',
-                      color: '#bb0000', fontSize: 13,
+                      color: '#bb0000', fontSize: 14,
                     }}>
                       {deleteError}
                     </div>
@@ -1244,7 +1244,7 @@ export default function VendorRFQsPage() {
                 <div className="vquot-modal__body">
                   {/* RFQ Title in Bold at Top */}
                   <div style={{
-                    fontSize: 16,
+                    fontSize: 17,
                     fontWeight: 700,
                     color: 'var(--text-primary)',
                     padding: '0 0 12px',
@@ -1309,7 +1309,7 @@ export default function VendorRFQsPage() {
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0 }}>
                           {previousQuotationsList.length > 0 && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <label style={{ fontSize: 11, fontWeight: 700, color: '#e9730c', whiteSpace: 'nowrap' }}>
+                              <label style={{ fontSize: 12, fontWeight: 700, color: '#e9730c', whiteSpace: 'nowrap' }}>
                                 Version:
                               </label>
                               <select
@@ -1317,7 +1317,7 @@ export default function VendorRFQsPage() {
                                 onChange={(e) => setSelectedPrevVersionId(e.target.value)}
                                 style={{
                                   padding: '4px 10px',
-                                  fontSize: 12,
+                                  fontSize: 13,
                                   fontWeight: 700,
                                   borderRadius: 6,
                                   border: '1px solid rgba(233, 115, 12, 0.4)',
@@ -1370,20 +1370,20 @@ export default function VendorRFQsPage() {
                                   width: 38, height: 38, borderRadius: 8,
                                   background: 'rgba(234, 179, 8, 0.18)', color: '#f59e0b',
                                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  fontWeight: 800, fontSize: 14, border: '1px solid rgba(234, 179, 8, 0.3)',
+                                  fontWeight: 800, fontSize: 15, border: '1px solid rgba(234, 179, 8, 0.3)',
                                 }}>
                                   {activePrevQuote.qNo || `Q${activePrevQuote.versionNumber || 1}`}
                                 </div>
                                 <div>
-                                  <div style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <div style={{ fontSize: 17, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
                                     Quotation Snapshot — {activePrevQuote.qNo || `Q${activePrevQuote.versionNumber || 1}`}
                                     {activePrevQuote.vendorQuotationNumber && (
-                                      <span style={{ fontSize: 12, fontWeight: 500, opacity: 0.75 }}>
+                                      <span style={{ fontSize: 13, fontWeight: 500, opacity: 0.75 }}>
                                         (Ref: {activePrevQuote.vendorQuotationNumber})
                                       </span>
                                     )}
                                   </div>
-                                  <div style={{ fontSize: 12, opacity: 0.7, marginTop: 2 }}>
+                                  <div style={{ fontSize: 13, opacity: 0.7, marginTop: 2 }}>
                                     Submitted: {new Date(activePrevQuote.submittedAt || Date.now()).toLocaleDateString('en-IN')}
                                     {activePrevQuote.status && ` · Status: ${activePrevQuote.status}`}
                                   </div>
@@ -1396,7 +1396,7 @@ export default function VendorRFQsPage() {
                                   style={{
                                     background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)', color: '#f59e0b',
                                     cursor: 'pointer', padding: '5px 12px', borderRadius: 6,
-                                    display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600,
+                                    display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600,
                                     transition: 'all 0.15s ease'
                                   }}
                                   title={allSectionsExpanded ? "Collapse All Sections" : "Expand All Sections"}
@@ -1409,7 +1409,7 @@ export default function VendorRFQsPage() {
                                   style={{
                                     background: 'rgba(10, 110, 209, 0.15)', border: '1px solid rgba(10, 110, 209, 0.3)', color: '#0a6ed1',
                                     cursor: 'pointer', padding: '5px 12px', borderRadius: 6,
-                                    display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600,
+                                    display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600,
                                     transition: 'all 0.15s ease'
                                   }}
                                   title={isSnapshotFullScreen ? "Exit Fullscreen" : "Maximize Fullscreen"}
@@ -1439,10 +1439,10 @@ export default function VendorRFQsPage() {
                                 <div style={{
                                   padding: '12px 16px', borderRadius: 10,
                                   background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(245, 158, 11, 0.04) 100%)',
-                                  border: '1px solid rgba(245, 158, 11, 0.35)', color: '#d97706', fontSize: 13,
+                                  border: '1px solid rgba(245, 158, 11, 0.35)', color: '#d97706', fontSize: 14,
                                   display: 'flex', gap: 10, alignItems: 'flex-start'
                                 }}>
-                                  <span style={{ fontSize: 16, marginTop: 1 }}>💬</span>
+                                  <span style={{ fontSize: 17, marginTop: 1 }}>💬</span>
                                   <div>
                                     <strong style={{ display: 'block', marginBottom: 2 }}>Buyer Revision Request Feedback:</strong>
                                     "{activePrevQuote.returnReason || activePrevQuote.returnComment}"
@@ -1476,7 +1476,7 @@ export default function VendorRFQsPage() {
                                       style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
                                     >
                                       <span>📦 Item Pricing Matrix</span>
-                                      <span style={{ fontSize: 11, opacity: 0.8, fontWeight: 'normal' }}>
+                                      <span style={{ fontSize: 12, opacity: 0.8, fontWeight: 'normal' }}>
                                         {isCollapsed ? '▼ Show Details' : '▲ Hide Details'}
                                       </span>
                                     </div>
@@ -1514,7 +1514,7 @@ export default function VendorRFQsPage() {
                                         <div className="vquot-snapshot-summary-bar">
                                           <div className="vquot-snapshot-summary-item">
                                             <span className="vquot-snapshot-summary-label">Total Quotation Value</span>
-                                            <span className="vquot-snapshot-summary-val" style={{ color: '#0a6ed1', fontFamily: 'monospace', fontSize: 16 }}>
+                                            <span className="vquot-snapshot-summary-val" style={{ color: '#0a6ed1', fontFamily: 'monospace', fontSize: 17 }}>
                                               {activePrevQuote?.currency || 'KES'} {Number(displayTotalPrice).toLocaleString()}
                                             </span>
                                           </div>
@@ -1528,7 +1528,7 @@ export default function VendorRFQsPage() {
                                             {displayPaymentPlan && Array.isArray(displayPaymentPlan) && displayPaymentPlan.length > 0 && (
                                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
                                                 {displayPaymentPlan.map((m: any, i: number) => (
-                                                  <span key={i} className="vquot-snapshot-badge-val" style={{ fontSize: 11, padding: '2px 8px' }}>
+                                                  <span key={i} className="vquot-snapshot-badge-val" style={{ fontSize: 12, padding: '2px 8px' }}>
                                                     {m.title || m.name || `Milestone ${i+1}`}: {m.percentage}%
                                                   </span>
                                                 ))}
@@ -1576,7 +1576,7 @@ export default function VendorRFQsPage() {
                                       style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
                                     >
                                       <span>🛡️ Bid Security & Guarantees ({activePrevQuote?.qNo || 'Previous Version'})</span>
-                                      <span style={{ fontSize: 11, opacity: 0.8, fontWeight: 'normal' }}>
+                                      <span style={{ fontSize: 12, opacity: 0.8, fontWeight: 'normal' }}>
                                         {isCollapsed ? '▼ Show Details' : '▲ Hide Details'}
                                       </span>
                                     </div>
@@ -1665,7 +1665,7 @@ export default function VendorRFQsPage() {
                                       style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
                                     >
                                       <span>📋 Custom Parameters Snapshot</span>
-                                      <span style={{ fontSize: 11, opacity: 0.8, fontWeight: 'normal' }}>
+                                      <span style={{ fontSize: 12, opacity: 0.8, fontWeight: 'normal' }}>
                                         {isCollapsed ? '▼ Show Details' : '▲ Hide Details'}
                                       </span>
                                     </div>
@@ -1744,7 +1744,7 @@ export default function VendorRFQsPage() {
                                             style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
                                           >
                                             <span>{icon} {cat.name} ({subParams.length} Parameters)</span>
-                                            <span style={{ fontSize: 11, opacity: 0.8, fontWeight: 'normal' }}>
+                                            <span style={{ fontSize: 12, opacity: 0.8, fontWeight: 'normal' }}>
                                               {isCatCollapsed ? '▼ Show Category' : '▲ Hide Category'}
                                             </span>
                                           </div>
@@ -1809,7 +1809,7 @@ export default function VendorRFQsPage() {
                       <div key={idx} className="vquot-modal__item">
                         <div>
                           <div className="vquot-modal__item-name">{item.name}</div>
-                          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>{item.description}</div>
+                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{item.description}</div>
                         </div>
                         <div className="vquot-modal__item-qty">{item.quantity} {item.unit}</div>
                         <CurrencyAmountInput
@@ -1852,7 +1852,7 @@ export default function VendorRFQsPage() {
                             style={{
                               display: 'inline-flex', alignItems: 'center', gap: 4,
                               background: 'none', border: 'none',
-                              color: 'var(--vendor-primary, #0a6ed1)', fontSize: 12, fontWeight: 600,
+                              color: 'var(--vendor-primary, #0a6ed1)', fontSize: 13, fontWeight: 600,
                               cursor: 'pointer', padding: '2px 6px', borderRadius: 4,
                             }}
                           >
@@ -2009,7 +2009,7 @@ export default function VendorRFQsPage() {
                       {/* ── Custom Fields (Simple RFQ) ──────── */}
                   {quotModal.customFields && quotModal.customFields.filter(cf => (cf.weightage && cf.weightage > 0) || cf.required).length > 0 && (
                     <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>
                         Additional Information
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -2029,7 +2029,7 @@ export default function VendorRFQsPage() {
                                 disabled={isQuotReadOnly}
                               />
                             ) : cf.fieldType === 'attachment' ? (
-                              <div style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '8px 0' }}>
+                              <div style={{ fontSize: 13, color: 'var(--text-secondary)', padding: '8px 0' }}>
                                 Please attach the required document using the attachments section below.
                               </div>
                             ) : (
@@ -2051,18 +2051,18 @@ export default function VendorRFQsPage() {
                   {/* ── Evaluation Parameters Input (Tender / Custom RFQ) ──────── */}
                   {(quotModal.rfqType === 'TENDER' || quotModal.rfqType === 'CUSTOM') && quotModal.evaluationCategories && quotModal.evaluationCategories.length > 0 && (
                     <div className="vquot-eval-section">
-                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
                         <span style={{
                           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                           width: 22, height: 22, borderRadius: 5,
                           background: 'rgba(10, 110, 209, 0.1)',
                           color: 'var(--primary-600, #0a6ed1)',
-                          fontSize: 12, fontWeight: 700,
+                          fontSize: 13, fontWeight: 700,
                         }}>
                           <Sliders size={13} />
                         </span>
                         Evaluation Parameters
-                        <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 400 }}>— fill required parameter information</span>
+                        <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 400 }}>— fill required parameter information</span>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {quotModal.evaluationCategories.filter(c => c.enabled !== false).map((cat) => {
@@ -2148,7 +2148,7 @@ export default function VendorRFQsPage() {
                             padding: '8px 12px', background: 'rgba(10,110,209,0.06)',
                             border: '1px solid rgba(10,110,209,0.15)', borderRadius: 'var(--radius-sm)',
                             marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: '6px 16px',
-                            fontSize: 12, color: 'var(--primary-600, #0a6ed1)',
+                            fontSize: 13, color: 'var(--primary-600, #0a6ed1)',
                           }}>
                             <span style={{ fontWeight: 600, marginRight: 4 }}>ℹ Buyer Requirement:</span>
                             {(quotModal.bidSecurityValue != null || quotModal.bidSecurityMinValue != null) && (
@@ -2213,7 +2213,7 @@ export default function VendorRFQsPage() {
                                 disabled={isQuotReadOnly}
                                 style={{ flex: 1 }}
                               />
-                              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', flexShrink: 0 }}>%</span>
+                              <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-secondary)', flexShrink: 0 }}>%</span>
                             </div>
                           )}
                           {/* ⚠ Warning: Bid Security value below minimum */}
@@ -2356,7 +2356,7 @@ export default function VendorRFQsPage() {
                             padding: '8px 12px', background: 'rgba(10,110,209,0.06)',
                             border: '1px solid rgba(10,110,209,0.15)', borderRadius: 'var(--radius-sm)',
                             marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: '6px 16px',
-                            fontSize: 12, color: 'var(--primary-600, #0a6ed1)',
+                            fontSize: 13, color: 'var(--primary-600, #0a6ed1)',
                           }}>
                             <span style={{ fontWeight: 600, marginRight: 4 }}>ℹ Buyer Requirement:</span>
                             {quotModal.bidBondMinValue != null && (

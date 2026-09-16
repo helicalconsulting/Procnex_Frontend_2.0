@@ -75,7 +75,7 @@ export default function VendorContractsPage() {
       <PageLead title="My Contracts" description="Review, download, and sign contracts awarded to your company." />
       {error && <Card className="mb-4 border-destructive/25 bg-destructive/8 p-4 text-sm text-destructive">{error}</Card>}
       <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <MetricCard label="Total contracts" value={summary.total} detail="All awarded contracts" icon={FileText} />
+        <MetricCard label="Total contracts" value={summary.total} detail="All awarded contracts" icon={FileText} aria-pressed={true} />
         <MetricCard label="Need signature" value={summary.pendingSignature} detail="Action required" icon={FileSignature} tone="warning" />
         <MetricCard label="Active" value={summary.active} detail="Signed or completed" icon={CheckCircle2} tone="success" />
         <MetricCard label="Total value" value={formatAmount(summary.totalValue, companyDefaultCurrency)} detail="Across all contracts" icon={Building2} tone="violet" />
@@ -107,7 +107,7 @@ export default function VendorContractsPage() {
                         ['Source RFQ', contract.rfq?.rfqNumber || '—'],
                         ['RFQ title', contract.rfq?.title || '—'],
                         ['Payment terms', contract.paymentTerms || '—'],
-                      ].map(([label, value]) => <div key={label} className="rounded-xl border border-border/60 bg-card p-3"><dt className="text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{label}</dt><dd className="mt-1 break-words text-sm font-medium">{value}</dd></div>)}
+                      ].map(([label, value]) => <div key={label} className="rounded-xl border border-border/60 bg-card p-3"><dt className="text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{label}</dt><dd className="mt-1 break-words text-sm font-medium">{value}</dd></div>)}
                     </dl>
                     <div className="mt-4 flex flex-wrap gap-2 border-t border-border/60 pt-4">
                       <Button size="sm" onClick={() => navigate(`/vendor/contracts/${contract.id}`)}><Eye />View details</Button>

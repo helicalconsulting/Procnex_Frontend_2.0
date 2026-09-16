@@ -157,7 +157,7 @@ export default function FormBuilderSidebar({
           <div className="flex max-h-80 flex-col gap-4 overflow-y-auto overscroll-contain p-4 xl:max-h-none xl:min-h-0 xl:flex-1">
             {filteredPalette.map((category) => (
               <div key={category.category} className="flex flex-col gap-2">
-                <span className="px-0.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{category.category}</span>
+                <span className="px-0.5 text-[12px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{category.category}</span>
                 <div className="flex flex-col gap-2">
                   {category.items.map((item) => (
                     <button
@@ -173,7 +173,7 @@ export default function FormBuilderSidebar({
                       </div>
                       <div className="flex min-w-0 flex-1 flex-col">
                         <span className="truncate text-xs font-semibold text-foreground">{item.label}</span>
-                        <span className="truncate text-[11px] text-muted-foreground">{item.description}</span>
+                        <span className="truncate text-[12px] text-muted-foreground">{item.description}</span>
                       </div>
                       <div className="text-muted-foreground/60 transition group-hover:text-muted-foreground" title="Drag onto canvas or click to add">
                         <GripVertical size={14} />
@@ -227,7 +227,7 @@ export default function FormBuilderSidebar({
                     </div>
                     <div className="flex min-w-0 flex-1 flex-col">
                       <span className="truncate text-xs font-semibold text-foreground">{form.title || 'Untitled Form'}</span>
-                      <span className="text-[11px] capitalize text-muted-foreground">
+                      <span className="text-[12px] capitalize text-muted-foreground">
                         {form.fields.length} field{form.fields.length !== 1 ? 's' : ''} • {form.status}
                       </span>
                     </div>

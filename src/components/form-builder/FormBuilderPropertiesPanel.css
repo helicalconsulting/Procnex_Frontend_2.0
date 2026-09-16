@@ -29,14 +29,14 @@
 }
 
 .fbp-empty-state h3 {
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 700;
   color: var(--cfb-text-main);
   margin: 0;
 }
 
 .fbp-empty-state p {
-  font-size: 14px;
+  font-size: 15px;
   color: var(--cfb-text-sub);
   line-height: 1.5;
   margin: 0;
@@ -61,7 +61,7 @@
 }
 
 .fbp-header-title h3 {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 700;
   color: var(--cfb-text-main);
   margin: 0 0 2px 0;
@@ -69,7 +69,7 @@
 
 .fbp-type-tag {
   display: inline-block;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -117,13 +117,13 @@
 }
 
 .fbp-label {
-  font-size: 13.5px;
+  font-size: 14.5px;
   font-weight: 700;
   color: var(--cfb-text-main);
 }
 
 .fbp-sublabel {
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--cfb-text-sub);
 }
@@ -135,7 +135,7 @@
   border: 1px solid var(--cfb-border-strong);
   border-radius: 4px;
   padding: 8px 12px;
-  font-size: 14.5px;
+  font-size: 15.5px;
   color: var(--cfb-text-main);
   outline: none;
   transition: border-color 0.15s ease;
@@ -160,7 +160,7 @@
   background: transparent;
   border: none;
   color: #2563eb;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   display: inline-flex;
@@ -192,7 +192,7 @@
 
 .fbp-input--opt {
   padding: 6px 10px;
-  font-size: 12.5px;
+  font-size: 13.5px;
 }
 
 .fbp-remove-opt-btn {
@@ -224,7 +224,7 @@
 .fbp-toggle-btn {
   flex: 1;
   padding: 5px;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--cfb-text-sub);
   background: transparent;
@@ -250,7 +250,7 @@
 }
 
 .fbp-section-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -281,13 +281,13 @@
 }
 
 .fbp-chk-text span {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--cfb-text-main);
 }
 
 .fbp-chk-text small {
-  font-size: 12.5px;
+  font-size: 13.5px;
   color: var(--cfb-text-sub);
 }
 

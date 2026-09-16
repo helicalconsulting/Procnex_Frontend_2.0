@@ -19,7 +19,7 @@ function ScoreBar({ value, label }: { value: number; label: string }) {
 
   return (
     <div className="grid gap-1">
-      <div className="flex items-center justify-between text-[11px]">
+      <div className="flex items-center justify-between text-[12px]">
         <span className="text-muted-foreground">{label}</span>
         <span className={`font-bold tabular-nums ${textColorClass}`}>{value}%</span>
       </div>
@@ -55,17 +55,17 @@ export default function TopVendorsWidget() {
                     </div>
                     <div className="min-w-0">
                       <span className="block truncate text-xs font-semibold text-foreground">{v.name}</span>
-                      <span className="block truncate text-[11px] text-muted-foreground">{v.pos} Purchase Orders</span>
+                      <span className="block truncate text-[12px] text-muted-foreground">{v.pos} Purchase Orders</span>
                     </div>
                   </div>
                   <div className="text-right shrink-0">
                     <span className={`block text-sm font-bold tabular-nums ${v.score >= 80 ? 'text-emerald-600 dark:text-emerald-400' : v.score >= 60 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'}`}>
                       {v.score}%
                     </span>
-                    <span className="block text-[10px] text-muted-foreground">Overall</span>
+                    <span className="block text-[11px] text-muted-foreground">Overall</span>
                   </div>
                 </div>
-                <div className="grid gap-2 border-t border-border/60 pt-2.5 sm:grid-cols-2">
+                <div className="grid gap-2 border-t border-border/60 pt-2.5">
                   <ScoreBar value={v.quality} label="Quality" />
                   <ScoreBar value={v.delivery} label="Delivery" />
                 </div>

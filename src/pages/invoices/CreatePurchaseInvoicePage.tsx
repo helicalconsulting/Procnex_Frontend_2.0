@@ -36,8 +36,6 @@ import { MessageStrip } from '../../components/shared/MessageStrip';
 import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyMaster';
 import { useBranding } from '../../context/BrandingContext';
 import defaultHeliflowLogo from '../../assets/heliflow.png';
-import '../purchase-orders/CreatePurchaseOrderPage.css';
-import '../purchase-requisitions/PurchaseRequisitionPage.css';
 import '../../components/purchase-orders/PurchaseOrderDocument.css';
 import './CreatePurchaseInvoicePage.css';
 
@@ -62,13 +60,17 @@ interface VendorOption {
 
 export default function CreatePurchaseInvoicePage() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const poIdParam = searchParams.get('poId');
   const grnIdParam = searchParams.get('grnId');
   const modeParam = searchParams.get('mode');
 
   const { roles, hasPermission } = useAuth();
-  const canCreateInvoice = hasPermission('Create Purchase Invoice', 'canCreate') || hasPermission('Purchase Invoice', 'canCreate') || hasPermission('Invoices', 'canCreate') || hasPermission('Accounts Payable', 'canCreate');
+  const canCreateInvoice =
+    hasPermission('Create Purchase Invoice', 'canCreate') ||
+    hasPermission('Purchase Invoice', 'canCreate') ||
+    hasPermission('Invoices', 'canCreate') ||
+    hasPermission('Accounts Payable', 'canCreate');
   const { companyDefaultCurrency, formatAmount } = useCurrency();
   const { companyName, companyPhone, companyEmail, logoUrl } = useBranding();
 
@@ -145,11 +147,15 @@ export default function CreatePurchaseInvoicePage() {
 
   useEffect(() => {
     if (isCreating && !invoiceNumber) {
-      companySettingsService.generateNextSequence('INVOICE')
-        .then((res) => { if (res?.formattedCode) setInvoiceNumber(res.formattedCode); })
+      companySettingsService
+        .generateNextSequence('INVOICE')
+        .then((res) => {
+          if (res?.formattedCode) setInvoiceNumber(res.formattedCode);
+        })
         .catch(() => {});
     }
-  }, [isCreating]);
+  }, [isCreating, invoiceNumber]);
+
   const [vendorName, setVendorName] = useState<string>('');
   const [invoiceDate, setInvoiceDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState<string>(() => {
@@ -207,8 +213,9 @@ export default function CreatePurchaseInvoicePage() {
     if (!selectedVendorId) return poList;
 
     const targetSupplier = allSuppliers.find(
-      (s) => String(s.id).toLowerCase() === String(selectedVendorId).toLowerCase() ||
-             s.name.toLowerCase() === String(selectedVendorId).toLowerCase()
+      (s) =>
+        String(s.id).toLowerCase() === String(selectedVendorId).toLowerCase() ||
+        s.name.toLowerCase() === String(selectedVendorId).toLowerCase()
     );
     const targetName = (targetSupplier?.name || selectedVendorId).toLowerCase();
     const targetId = String(selectedVendorId).toLowerCase();
@@ -233,7 +240,7 @@ export default function CreatePurchaseInvoicePage() {
 
   const finalLogoUrl = logoUrl || selectedPO?.companyLogoUrl || defaultHeliflowLogo;
 
-  // Human-readable PO Number formatter (never display raw 24-hex Mongo ID)
+  // Human-readable PO Number formatter
   const displayPoNumber = useMemo(() => {
     if (selectedPO?.poNumber) return selectedPO.poNumber;
     const matchInList = poList.find(
@@ -275,8 +282,10 @@ export default function CreatePurchaseInvoicePage() {
     );
     if (matchInInv?.invoiceNumber) return `Invoice: ${matchInInv.invoiceNumber}`;
 
-    if (grnIdParam && (grnIdParam.startsWith('GRN-') || grnIdParam.startsWith('DN-') || grnIdParam.startsWith('INV-'))) return grnIdParam.replace(/^GRN-/, 'DN-');
-    if (cleanGrnId && (cleanGrnId.startsWith('GRN-') || cleanGrnId.startsWith('DN-') || cleanGrnId.startsWith('INV-'))) return cleanGrnId.replace(/^GRN-/, 'DN-');
+    if (grnIdParam && (grnIdParam.startsWith('GRN-') || grnIdParam.startsWith('DN-') || grnIdParam.startsWith('INV-')))
+      return grnIdParam.replace(/^GRN-/, 'DN-');
+    if (cleanGrnId && (cleanGrnId.startsWith('GRN-') || cleanGrnId.startsWith('DN-') || cleanGrnId.startsWith('INV-')))
+      return cleanGrnId.replace(/^GRN-/, 'DN-');
 
     if (cleanGrnId && /^[0-9a-fA-F]{24}$/.test(cleanGrnId)) {
       return `Ref: ${cleanGrnId.slice(-6).toUpperCase()}`;
@@ -336,57 +345,65 @@ export default function CreatePurchaseInvoicePage() {
     const targetId = foundPO ? String(foundPO.id) : selectedPoId;
     const targetPoNum = foundPO?.poNumber || selectedPoId;
 
-    // Load GRNs strictly for this PO
     grnService
       .getByPO(targetId)
       .then((grns) => {
         if (grns && grns.length > 0) {
           setGrnOptions(grns);
         } else if (targetPoNum && targetPoNum !== targetId) {
-          grnService.getByPO(targetPoNum).then((grns2) => {
-            setGrnOptions(grns2 || []);
-          }).catch(() => setGrnOptions([]));
+          grnService
+            .getByPO(targetPoNum)
+            .then((grns2) => {
+              setGrnOptions(grns2 || []);
+            })
+            .catch(() => setGrnOptions([]));
         } else {
-          // Check from global list but STRICTLY filter by this PO ID / Number (no fallback to all)
-          grnService.list({ limit: 100 }).then((res) => {
-            const list = res.grns || [];
-            const matched = list.filter(
-              (g) =>
-                String(g.poId) === String(targetId) ||
-                String(g.poId) === String(targetPoNum) ||
-                String(g.purchaseOrder?.id) === String(targetId) ||
-                String(g.purchaseOrder?.poNumber) === String(targetPoNum)
-            );
-            setGrnOptions(matched);
-          }).catch(() => setGrnOptions([]));
+          grnService
+            .list({ limit: 100 })
+            .then((res) => {
+              const list = res.grns || [];
+              const matched = list.filter(
+                (g) =>
+                  String(g.poId) === String(targetId) ||
+                  String(g.poId) === String(targetPoNum) ||
+                  String(g.purchaseOrder?.id) === String(targetId) ||
+                  String(g.purchaseOrder?.poNumber) === String(targetPoNum)
+              );
+              setGrnOptions(matched);
+            })
+            .catch(() => setGrnOptions([]));
         }
       })
       .catch(() => {
         setGrnOptions([]);
       });
 
-    // Load Vendor Invoices strictly for this PO
     invoiceService
       .list({ poId: targetId })
       .then((invs) => {
         if (invs && invs.length > 0) {
           setInvoiceOptions(invs);
         } else if (targetPoNum && targetPoNum !== targetId) {
-          invoiceService.list({ poId: targetPoNum }).then((invs2) => {
-            setInvoiceOptions(invs2 || []);
-          }).catch(() => setInvoiceOptions([]));
+          invoiceService
+            .list({ poId: targetPoNum })
+            .then((invs2) => {
+              setInvoiceOptions(invs2 || []);
+            })
+            .catch(() => setInvoiceOptions([]));
         } else {
-          // Check from global list but filter by targetId / targetPoNum
-          invoiceService.list().then((allInvs) => {
-            const matched = (allInvs || []).filter(
-              (inv) =>
-                String(inv.poId) === String(targetId) ||
-                String(inv.poId) === String(targetPoNum) ||
-                String(inv.poNumber) === String(targetId) ||
-                String(inv.poNumber) === String(targetPoNum)
-            );
-            setInvoiceOptions(matched);
-          }).catch(() => setInvoiceOptions([]));
+          invoiceService
+            .list()
+            .then((allInvs) => {
+              const matched = (allInvs || []).filter(
+                (inv) =>
+                  String(inv.poId) === String(targetId) ||
+                  String(inv.poId) === String(targetPoNum) ||
+                  String(inv.poNumber) === String(targetId) ||
+                  String(inv.poNumber) === String(targetPoNum)
+              );
+              setInvoiceOptions(matched);
+            })
+            .catch(() => setInvoiceOptions([]));
         }
       })
       .catch(() => setInvoiceOptions([]));
@@ -395,7 +412,6 @@ export default function CreatePurchaseInvoicePage() {
       if (foundPO.vendorId) setSelectedVendorId(String(foundPO.vendorId));
       if (foundPO.vendor?.name) setVendorName(foundPO.vendor.name);
 
-      // Pre-populate items from PO
       if (foundPO.items && foundPO.items.length > 0) {
         setLineItems(
           foundPO.items.map((item: any, idx: number) => ({
@@ -423,7 +439,6 @@ export default function CreatePurchaseInvoicePage() {
     );
 
     const resolveItemsForSelection = (foundInv: any, foundGRN: any, poObj: any) => {
-      // 1. Try GRN items if available
       const activeGRN = foundGRN || (grnOptions && grnOptions.length > 0 ? grnOptions[0] : null);
       if (activeGRN && activeGRN.items && activeGRN.items.length > 0) {
         return activeGRN.items.map((gi: any, idx: number) => {
@@ -446,7 +461,6 @@ export default function CreatePurchaseInvoicePage() {
         });
       }
 
-      // 2. Try PO items (or RFQ items) if available
       const poItems = poObj?.items || poObj?.rfq?.items || poObj?.rfq?.selectedQuotation?.items;
       if (poItems && poItems.length > 0) {
         return poItems.map((item: any, idx: number) => {
@@ -466,7 +480,6 @@ export default function CreatePurchaseInvoicePage() {
         });
       }
 
-      // 3. Fallback: Use Invoice amount (e.g. 100,000) or PO total amount
       const totalAmount = Number(foundInv?.amount || poObj?.totalAmount || 0);
       if (totalAmount > 0) {
         return [
@@ -487,7 +500,10 @@ export default function CreatePurchaseInvoicePage() {
       return null;
     };
 
-    if (selectedGrnId.startsWith('inv_') || invoiceOptions.some(i => `inv_${i.id}` === selectedGrnId || String(i.invoiceNumber) === String(selectedGrnId))) {
+    if (
+      selectedGrnId.startsWith('inv_') ||
+      invoiceOptions.some((i) => `inv_${i.id}` === selectedGrnId || String(i.invoiceNumber) === String(selectedGrnId))
+    ) {
       const invId = selectedGrnId.replace('inv_', '');
       const foundInv = invoiceOptions.find(
         (i) => String(i.id) === String(invId) || String(i.invoiceNumber) === String(invId) || String(i.invoiceNumber) === String(selectedGrnId)
@@ -505,7 +521,9 @@ export default function CreatePurchaseInvoicePage() {
         if (foundInv.paymentTerms) setPaymentTerms(foundInv.paymentTerms);
         if (foundInv.department) setDepartment(foundInv.department);
 
-        const foundGRN = grnOptions.find((g) => String(g.id) === String(foundInv.grnId) || String(g.grnNumber) === String(foundInv.grnId)) || (grnOptions && grnOptions[0]);
+        const foundGRN =
+          grnOptions.find((g) => String(g.id) === String(foundInv.grnId) || String(g.grnNumber) === String(foundInv.grnId)) ||
+          (grnOptions && grnOptions[0]);
 
         const resolved = resolveItemsForSelection(foundInv, foundGRN, foundPO);
         if (resolved) {
@@ -561,9 +579,7 @@ export default function CreatePurchaseInvoicePage() {
 
   // Update Line Item
   const handleUpdateLineItem = useCallback((id: number | string, field: keyof LineItem, value: any) => {
-    setLineItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
-    );
+    setLineItems((prev) => prev.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
   }, []);
 
   // Calculations
@@ -585,7 +601,7 @@ export default function CreatePurchaseInvoicePage() {
     return { subtotal, totalTax, grandTotal };
   }, [lineItems]);
 
-  // Attach File Mock
+  // File Upload
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const newFiles = Array.from(e.target.files).map((file, idx) => ({
@@ -612,7 +628,7 @@ export default function CreatePurchaseInvoicePage() {
       setErrorMsg('Please select a Supplier.');
       return false;
     }
-    if (!selectedPoId) {
+    if (!selectedPoId && creationMode === 'linked') {
       setErrorMsg('Please select a linked Purchase Order (PO Selection).');
       return false;
     }
@@ -626,7 +642,7 @@ export default function CreatePurchaseInvoicePage() {
     return true;
   };
 
-  // Submission (API call & Approval Workflow Trigger)
+  // Submission
   const submitInvoiceToAPI = async (isDraft: boolean) => {
     if (!validateForm()) return;
 
@@ -636,14 +652,14 @@ export default function CreatePurchaseInvoicePage() {
     setErrorMsg(null);
 
     try {
-      const selectedPO = poList.find((p) => String(p.id) === String(selectedPoId));
+      const selectedPOObj = poList.find((p) => String(p.id) === String(selectedPoId));
 
       await apiRequest('/invoices/manual', {
         method: 'POST',
         body: JSON.stringify({
           invoiceNumber,
-          vendorId: selectedVendorId || selectedPO?.vendorId,
-          poId: selectedPoId,
+          vendorId: selectedVendorId || selectedPOObj?.vendorId,
+          poId: selectedPoId || null,
           grnId: selectedGrnId || null,
           invoiceDate,
           dueDate,
@@ -672,17 +688,13 @@ export default function CreatePurchaseInvoicePage() {
     }
   };
 
-  // Render List / Overview Table View if not currently entering an invoice
+  // Render List View if not creating
   if (!isCreating) {
     const draftAndPendingCount = invoicesList.filter(
       (r) => r.status === 'DRAFT' || r.status === 'PENDING' || r.status === 'PENDING_APPROVAL'
     ).length;
-    const activeCount = invoicesList.filter(
-      (r) => r.status === 'APPROVED' || r.status === 'PAID'
-    ).length;
-    const rejectedCount = invoicesList.filter(
-      (r) => r.status === 'REJECTED' || r.status === 'CANCELLED'
-    ).length;
+    const activeCount = invoicesList.filter((r) => r.status === 'APPROVED' || r.status === 'PAID').length;
+    const rejectedCount = invoicesList.filter((r) => r.status === 'REJECTED' || r.status === 'CANCELLED').length;
     const totalValue = invoicesList.reduce((acc, r) => acc + (r.amount || 0), 0);
 
     const filteredInvoices = invoicesList.filter((inv) => {
@@ -715,13 +727,11 @@ export default function CreatePurchaseInvoicePage() {
     };
 
     const handleToggleSelect = (id: string) => {
-      setSelectedInvoiceIds((prev) =>
-        prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-      );
+      setSelectedInvoiceIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
     };
 
     return (
-      <div className="pr-page">
+      <div className="cpi-page">
         {/* Notifications */}
         {errorMsg && (
           <MessageStrip type="error" onClose={() => setErrorMsg(null)}>
@@ -734,170 +744,111 @@ export default function CreatePurchaseInvoicePage() {
           </MessageStrip>
         )}
 
-        {/* Management Header matching PO Creation layout */}
-        <div className="pr-page__header" style={{ marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
-          <div>
-            <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
-              Purchase Invoice Entry & Management
-            </h1>
-            <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--text-secondary, #64748b)' }}>
-              Manage purchase invoices, vendor bill entries and approval statuses
-            </p>
+        {/* Header - Clean transparent header matching Purchase Orders page */}
+        <div className="cpi-page-header">
+          <div className="cpi-header-main">
+            <div className="cpi-header-top-row">
+              <h1 className="cpi-header-title">Purchase Invoice Entry & Management</h1>
+              <div className="cpi-header-actions">
+                <button className="cpi-btn cpi-btn--primary" onClick={() => setShowModeModal(true)}>
+                  <Plus size={16} /> New Invoice
+                </button>
+              </div>
+            </div>
+            <p className="cpi-header-subtitle">Manage purchase invoices, vendor bill entries, and 3-way matching approvals</p>
           </div>
-          <button
-            className="pr-btn pr-btn--primary"
-            onClick={() => setShowModeModal(true)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '10px 20px',
-              borderRadius: 8,
-              fontSize: 15,
-              fontWeight: 700,
-              background: 'linear-gradient(135deg, #0a6ed1, #0856a4)',
-              color: '#fff',
-              border: 'none',
-              cursor: 'pointer',
-              boxShadow: '0 4px 12px rgba(10, 110, 209, 0.25)',
-            }}
-          >
-            <Plus size={16} /> New Invoice
-          </button>
         </div>
 
-        {/* 5 KPI Summary Cards */}
-        <div className="pr-kpi-summary" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+        {/* 4 KPI Summary Cards Grid matching Purchase Orders page */}
+        <div className="cpi-kpi-grid">
+          {/* Card 1: Total Documents */}
           <div
-            className={`pr-kpi-card ${statusFilter === null ? 'pr-kpi-card--active' : ''}`}
+            className={`cpi-kpi-card cpi-kpi-card--clickable ${statusFilter === null ? 'cpi-kpi-card--active' : ''}`}
             onClick={() => setStatusFilter(null)}
-            style={{ cursor: 'pointer' }}
           >
-            <div className="pr-kpi-icon" style={{ background: 'rgba(10,110,209,0.08)', color: '#0a6ed1' }}>
-              <FileText size={20} />
+            <div className="cpi-kpi-icon" style={{ background: 'rgba(10, 110, 209, 0.1)', color: '#0a6ed1' }}>
+              <FileText size={22} />
             </div>
-            <div className="pr-kpi-info">
-              <span className="pr-kpi-label">TOTAL DOCUMENTS</span>
-              <span className="pr-kpi-value">{invoicesList.length}</span>
+            <div className="cpi-kpi-info">
+              <span className="cpi-kpi-value">{invoicesList.length}</span>
+              <span className="cpi-kpi-label">TOTAL DOCUMENTS</span>
+              <span className="cpi-kpi-subtext">Across every approval state</span>
             </div>
           </div>
 
+          {/* Card 2: Needs Attention / Draft & Pending */}
           <div
-            className={`pr-kpi-card ${statusFilter === 'DRAFT_PENDING' ? 'pr-kpi-card--active' : ''}`}
+            className={`cpi-kpi-card cpi-kpi-card--clickable ${statusFilter === 'DRAFT_PENDING' ? 'cpi-kpi-card--active' : ''}`}
             onClick={() => setStatusFilter((prev) => (prev === 'DRAFT_PENDING' ? null : 'DRAFT_PENDING'))}
-            style={{ cursor: 'pointer' }}
           >
-            <div className="pr-kpi-icon" style={{ background: 'rgba(233,115,12,0.1)', color: '#e9730c' }}>
-              <Clock size={20} />
+            <div className="cpi-kpi-icon" style={{ background: 'rgba(245, 158, 11, 0.12)', color: '#f59e0b' }}>
+              <Clock size={22} />
             </div>
-            <div className="pr-kpi-info">
-              <span className="pr-kpi-label">DRAFT & PENDING</span>
-              <span className="pr-kpi-value">{draftAndPendingCount}</span>
+            <div className="cpi-kpi-info">
+              <span className="cpi-kpi-value">{draftAndPendingCount}</span>
+              <span className="cpi-kpi-label">NEEDS ATTENTION</span>
+              <span className="cpi-kpi-subtext">Draft and pending approval</span>
             </div>
           </div>
 
+          {/* Card 3: Approved & Released */}
           <div
-            className={`pr-kpi-card ${statusFilter === 'APPROVED' ? 'pr-kpi-card--active' : ''}`}
+            className={`cpi-kpi-card cpi-kpi-card--clickable ${statusFilter === 'APPROVED' ? 'cpi-kpi-card--active' : ''}`}
             onClick={() => setStatusFilter((prev) => (prev === 'APPROVED' ? null : 'APPROVED'))}
-            style={{ cursor: 'pointer' }}
           >
-            <div className="pr-kpi-icon" style={{ background: 'rgba(16,126,62,0.1)', color: '#107e3e' }}>
-              <PackageCheck size={20} />
+            <div className="cpi-kpi-icon" style={{ background: 'rgba(16, 185, 129, 0.12)', color: '#10b981' }}>
+              <PackageCheck size={22} />
             </div>
-            <div className="pr-kpi-info">
-              <span className="pr-kpi-label">APPROVED & RELEASED</span>
-              <span className="pr-kpi-value">{activeCount}</span>
+            <div className="cpi-kpi-info">
+              <span className="cpi-kpi-value">{activeCount}</span>
+              <span className="cpi-kpi-label">APPROVED & RELEASED</span>
+              <span className="cpi-kpi-subtext">Ready or sent to a vendor</span>
             </div>
           </div>
 
-          <div
-            className={`pr-kpi-card ${statusFilter === 'REJECTED' ? 'pr-kpi-card--active' : ''}`}
-            onClick={() => setStatusFilter((prev) => (prev === 'REJECTED' ? null : 'REJECTED'))}
-            style={{ cursor: 'pointer' }}
-          >
-            <div className="pr-kpi-icon" style={{ background: 'rgba(220,38,38,0.1)', color: '#dc2626' }}>
-              <Tag size={20} />
+          {/* Card 4: Total Volume */}
+          <div className="cpi-kpi-card">
+            <div className="cpi-kpi-icon" style={{ background: 'rgba(139, 92, 246, 0.12)', color: '#8b5cf6' }}>
+              <CreditCard size={22} />
             </div>
-            <div className="pr-kpi-info">
-              <span className="pr-kpi-label">REJECTED</span>
-              <span className="pr-kpi-value" style={{ color: rejectedCount > 0 ? '#dc2626' : undefined }}>
-                {rejectedCount}
-              </span>
-            </div>
-          </div>
-
-          <div className="pr-kpi-card">
-            <div className="pr-kpi-icon pr-kpi-icon--grand">
-              <CreditCard size={20} />
-            </div>
-            <div className="pr-kpi-info">
-              <span className="pr-kpi-label">TOTAL VOLUME</span>
-              <span className="pr-kpi-value pr-kpi-value--grand">
+            <div className="cpi-kpi-info">
+              <span className="cpi-kpi-value cpi-kpi-value--mono">
                 {formatAmount(totalValue, companyDefaultCurrency)}
               </span>
+              <span className="cpi-kpi-label">TOTAL VOLUME</span>
+              <span className="cpi-kpi-subtext">Value across listed documents</span>
             </div>
           </div>
         </div>
 
-        {/* Search Bar & Batch Delete Action Bar */}
-        <div className="pr-search-bar-wrap" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-          <div style={{ position: 'relative', flex: 1 }}>
-            <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-placeholder)', pointerEvents: 'none' }} />
+        {/* Toolbar: Search Bar & Batch Delete Action Bar */}
+        <div className="cpi-toolbar">
+          <div className="cpi-search-box">
+            <Search size={16} className="cpi-search-icon" />
             <input
               type="text"
-              className="pr-search-input"
+              className="cpi-search-input"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search invoice, vendor, status..."
+              placeholder="Search invoice number, vendor, status..."
             />
             {searchTerm && (
-              <button
-                type="button"
-                onClick={() => setSearchTerm('')}
-                style={{
-                  position: 'absolute',
-                  right: 12,
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--text-placeholder)',
-                  cursor: 'pointer',
-                  padding: 2,
-                }}
-              >
+              <button type="button" className="cpi-search-clear" onClick={() => setSearchTerm('')}>
                 <X size={15} />
               </button>
             )}
           </div>
 
           {selectedInvoiceIds.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'rgba(220, 38, 38, 0.1)', border: '1px solid rgba(220, 38, 38, 0.3)', padding: '6px 14px', borderRadius: 8, flexShrink: 0 }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: '#ef4444' }}>
-                {selectedInvoiceIds.length} invoice(s) selected
-              </span>
-              <button
-                onClick={() => setShowBulkDeleteModal(true)}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  background: '#dc2626',
-                  color: '#ffffff',
-                  border: 'none',
-                  padding: '6px 12px',
-                  fontSize: 13,
-                  fontWeight: 700,
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  boxShadow: '0 2px 8px rgba(220, 38, 38, 0.3)'
-                }}
-              >
+            <div className="cpi-batch-bar">
+              <span className="cpi-batch-count">{selectedInvoiceIds.length} invoice(s) selected</span>
+              <button className="cpi-btn cpi-btn--danger cpi-btn--sm" onClick={() => setShowBulkDeleteModal(true)}>
                 <Trash2 size={14} /> Delete Selected
               </button>
               <button
+                type="button"
                 onClick={() => setSelectedInvoiceIds([])}
-                style={{ background: 'none', border: 'none', color: 'var(--text-secondary, #94a3b8)', cursor: 'pointer', fontSize: 12 }}
+                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 13 }}
               >
                 Clear
               </button>
@@ -905,143 +856,135 @@ export default function CreatePurchaseInvoicePage() {
           )}
         </div>
 
-        {/* Invoice Data Table */}
+        {/* Data Table */}
         {invoicesList.length === 0 ? (
-          <div className="pr-empty">
-            <div className="pr-empty__icon-wrapper">
-              <Receipt size={26} />
+          <div className="cpi-empty-state">
+            <div className="cpi-empty-icon">
+              <Receipt size={28} />
             </div>
             <h3>No Purchase Invoices Found</h3>
             <p>Click the <strong>"+ New Invoice"</strong> button above to record a new vendor purchase invoice entry.</p>
           </div>
         ) : (
-          <div className="pr-list-table-wrap">
-            <table className="pr-list-table">
-              <thead>
-                <tr>
-                  <th style={{ width: 44, textAlign: 'center' }}>
-                    <input
-                      type="checkbox"
-                      checked={isAllSelected}
-                      onChange={handleSelectAll}
-                      style={{ cursor: 'pointer', width: 16, height: 16, accentColor: '#0a6ed1' }}
-                      title="Select all invoices"
-                    />
-                  </th>
-                  <th style={{ width: 150 }}>INVOICE NUMBER</th>
-                  <th style={{ width: 180 }}>VENDOR</th>
-                  <th style={{ width: 130 }}>INVOICE DATE</th>
-                  <th style={{ width: 100 }}>CURRENCY</th>
-                  <th style={{ width: 140, textAlign: 'right' }}>GRAND TOTAL</th>
-                  <th style={{ width: 150 }}>STATUS</th>
-                  <th style={{ width: 120, textAlign: 'center' }}>ACTIONS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredInvoices.map((inv) => {
-                  const invIdStr = String(inv.id);
-                  const isSelected = selectedInvoiceIds.includes(invIdStr);
-                  return (
-                    <tr
-                      key={inv.id}
-                      className={`pr-list-row ${isSelected ? 'pr-list-row--selected' : ''}`}
-                      style={isSelected ? { background: 'rgba(10, 110, 209, 0.08)' } : undefined}
-                    >
-                      <td style={{ textAlign: 'center' }}>
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => handleToggleSelect(invIdStr)}
-                          style={{ cursor: 'pointer', width: 16, height: 16, accentColor: '#0a6ed1' }}
-                        />
-                      </td>
-                      <td className="pr-list__po-num">
-                        <span className="pr-po-link">{inv.invoiceNumber}</span>
-                      </td>
-                      <td className="pr-list__vendor">{inv.vendorName || '—'}</td>
-                      <td>{inv.submittedAt || inv.dueDate || '—'}</td>
-                      <td>{companyDefaultCurrency}</td>
-                      <td className="pr-list__total" style={{ textAlign: 'right' }}>
-                        {formatAmount(inv.amount, companyDefaultCurrency)}
-                      </td>
-                      <td>
-                        <span className={`pr-badge pr-badge--${inv.status || 'PENDING'}`}>
-                          {inv.status || 'Pending'}
-                        </span>
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
-                          <button
-                            className="pr-list__view-btn"
-                            onClick={() => {
-                              if (inv.poNumber) setSelectedPoId(inv.poNumber);
-                              setCreationMode('linked');
-                              setIsCreating(true);
-                            }}
-                            title="View Invoice Entry"
-                          >
-                            <Eye size={15} />
-                          </button>
-                          <button
-                            className="pr-list__view-btn"
-                            onClick={() => {
-                              if (inv.poNumber) setSelectedPoId(inv.poNumber);
-                              setCreationMode('linked');
-                              setIsCreating(true);
-                            }}
-                            title="Edit Invoice Entry"
-                          >
-                            <Pencil size={15} />
-                          </button>
-                          <button
-                            className="pr-list__view-btn pr-list__delete-btn"
-                            onClick={() => setDeleteTarget(inv)}
-                            title="Delete Invoice Entry"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="cpi-table-card">
+            <div className="cpi-table-wrap">
+              <table className="cpi-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 44, textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={isAllSelected}
+                        onChange={handleSelectAll}
+                        style={{ cursor: 'pointer', width: 16, height: 16, accentColor: 'var(--primary-500, #0a6ed1)' }}
+                        title="Select all invoices"
+                      />
+                    </th>
+                    <th style={{ width: 160 }}>INVOICE NUMBER</th>
+                    <th style={{ width: 200 }}>VENDOR</th>
+                    <th style={{ width: 140 }}>INVOICE DATE</th>
+                    <th style={{ width: 110 }}>CURRENCY</th>
+                    <th style={{ width: 150, textAlign: 'right' }}>GRAND TOTAL</th>
+                    <th style={{ width: 160 }}>STATUS</th>
+                    <th style={{ width: 130, textAlign: 'center' }}>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredInvoices.map((inv) => {
+                    const invIdStr = String(inv.id);
+                    const isSelected = selectedInvoiceIds.includes(invIdStr);
+                    return (
+                      <tr key={inv.id} className={isSelected ? 'cpi-table-row--selected' : ''}>
+                        <td style={{ textAlign: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleSelect(invIdStr)}
+                            style={{ cursor: 'pointer', width: 16, height: 16, accentColor: 'var(--primary-500, #0a6ed1)' }}
+                          />
+                        </td>
+                        <td>
+                          <span className="cpi-code-link">{inv.invoiceNumber}</span>
+                        </td>
+                        <td style={{ fontWeight: 600 }}>{inv.vendorName || '—'}</td>
+                        <td>{inv.submittedAt || inv.dueDate || '—'}</td>
+                        <td style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>{companyDefaultCurrency}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 700, fontFamily: 'var(--font-mono, monospace)' }}>
+                          {formatAmount(inv.amount, companyDefaultCurrency)}
+                        </td>
+                        <td>
+                          <span className={`cpi-badge cpi-badge--${inv.status || 'PENDING'}`}>
+                            {inv.status || 'Pending'}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <button
+                              className="cpi-action-icon-btn"
+                              onClick={() => {
+                                if (inv.poNumber) setSelectedPoId(inv.poNumber);
+                                setCreationMode('linked');
+                                setIsCreating(true);
+                              }}
+                              title="View Invoice Entry"
+                            >
+                              <Eye size={15} />
+                            </button>
+                            <button
+                              className="cpi-action-icon-btn"
+                              onClick={() => {
+                                if (inv.poNumber) setSelectedPoId(inv.poNumber);
+                                setCreationMode('linked');
+                                setIsCreating(true);
+                              }}
+                              title="Edit Invoice Entry"
+                            >
+                              <Pencil size={15} />
+                            </button>
+                            <button
+                              className="cpi-action-icon-btn cpi-action-icon-btn--delete"
+                              onClick={() => setDeleteTarget(inv)}
+                              title="Delete Invoice Entry"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
         {/* Single Delete Confirmation Modal */}
         {deleteTarget && (
-          <div className="pr-modal-backdrop" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.75)', zIndex: 99999 }} onClick={() => setDeleteTarget(null)}>
-            <div className="pr-modal-box" style={{ maxWidth: 480, width: '90%', padding: 24, borderRadius: 12, background: 'var(--surface-card, #1e293b)', border: '1px solid var(--border, #334155)', color: 'var(--text-primary, #f8fafc)' }} onClick={(e) => e.stopPropagation()}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, color: '#dc2626' }}>
-                  <Trash2 size={18} />
-                  <span>Delete Purchase Invoice?</span>
+          <div className="cpi-modal-backdrop" onClick={() => setDeleteTarget(null)}>
+            <div className="cpi-modal-box" onClick={(e) => e.stopPropagation()}>
+              <div className="cpi-modal-header">
+                <h3 className="cpi-modal-title" style={{ color: '#dc2626', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Trash2 size={20} /> Delete Purchase Invoice?
                 </h3>
-                <button onClick={() => setDeleteTarget(null)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 4 }}>
-                  <X size={16} />
+                <button className="cpi-modal-close" onClick={() => setDeleteTarget(null)}>
+                  <X size={18} />
                 </button>
               </div>
-              <div style={{ margin: '16px 0' }}>
-                <p style={{ margin: 0, fontSize: 14, color: 'var(--text-primary)' }}>
+              <div style={{ margin: '8px 0' }}>
+                <p style={{ margin: 0, fontSize: 15, color: 'var(--text-primary)' }}>
                   Are you sure you want to delete invoice <strong>{deleteTarget.invoiceNumber}</strong>?
                 </p>
-                <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
-                  This action cannot be undone.
+                <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>
+                  This action cannot be undone and will remove the document permanently.
                 </p>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
-                <button
-                  className="pr-btn pr-btn--outline"
-                  onClick={() => setDeleteTarget(null)}
-                  style={{ padding: '7px 16px', fontSize: 13, borderRadius: 6, cursor: 'pointer' }}
-                  disabled={deleting}
-                >
+              <div className="cpi-modal-actions">
+                <button className="cpi-btn cpi-btn--outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>
                   Cancel
                 </button>
                 <button
-                  style={{ background: '#dc2626', color: '#ffffff', border: 'none', padding: '7px 16px', fontSize: 13, fontWeight: 700, borderRadius: 6, cursor: 'pointer' }}
+                  className="cpi-btn cpi-btn--danger"
                   disabled={deleting}
                   onClick={async () => {
                     if (!deleteTarget) return;
@@ -1067,46 +1010,38 @@ export default function CreatePurchaseInvoicePage() {
           </div>
         )}
 
-        {/* Bulk Delete Confirmation Modal */}
+        {/* Bulk Delete Modal */}
         {showBulkDeleteModal && (
-          <div className="pr-modal-backdrop" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.75)', zIndex: 99999 }} onClick={() => setShowBulkDeleteModal(false)}>
-            <div className="pr-modal-box" style={{ maxWidth: 480, width: '90%', padding: 24, borderRadius: 12, background: 'var(--surface-card, #1e293b)', border: '1px solid var(--border, #334155)', color: 'var(--text-primary, #f8fafc)' }} onClick={(e) => e.stopPropagation()}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, color: '#dc2626' }}>
-                  <Trash2 size={18} />
-                  <span>Delete {selectedInvoiceIds.length} Selected Invoices?</span>
+          <div className="cpi-modal-backdrop" onClick={() => setShowBulkDeleteModal(false)}>
+            <div className="cpi-modal-box" onClick={(e) => e.stopPropagation()}>
+              <div className="cpi-modal-header">
+                <h3 className="cpi-modal-title" style={{ color: '#dc2626', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Trash2 size={20} /> Delete {selectedInvoiceIds.length} Selected Invoices?
                 </h3>
-                <button onClick={() => setShowBulkDeleteModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 4 }}>
-                  <X size={16} />
+                <button className="cpi-modal-close" onClick={() => setShowBulkDeleteModal(false)}>
+                  <X size={18} />
                 </button>
               </div>
-              <div style={{ margin: '16px 0' }}>
-                <p style={{ margin: 0, fontSize: 14, color: 'var(--text-primary)' }}>
+              <div style={{ margin: '8px 0' }}>
+                <p style={{ margin: 0, fontSize: 15, color: 'var(--text-primary)' }}>
                   Are you sure you want to delete <strong>{selectedInvoiceIds.length} purchase invoices</strong>?
                 </p>
-                <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
-                  This action will permanently delete the selected invoice records.
+                <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>
+                  This action will permanently delete all selected invoice records.
                 </p>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
-                <button
-                  className="pr-btn pr-btn--outline"
-                  onClick={() => setShowBulkDeleteModal(false)}
-                  style={{ padding: '7px 16px', fontSize: 13, borderRadius: 6, cursor: 'pointer' }}
-                  disabled={deleting}
-                >
+              <div className="cpi-modal-actions">
+                <button className="cpi-btn cpi-btn--outline" onClick={() => setShowBulkDeleteModal(false)} disabled={deleting}>
                   Cancel
                 </button>
                 <button
-                  style={{ background: '#dc2626', color: '#ffffff', border: 'none', padding: '7px 16px', fontSize: 13, fontWeight: 700, borderRadius: 6, cursor: 'pointer' }}
+                  className="cpi-btn cpi-btn--danger"
                   disabled={deleting}
                   onClick={async () => {
                     setDeleting(true);
                     try {
                       await Promise.all(
-                        selectedInvoiceIds.map((id) =>
-                          apiRequest(`/invoices/${id}`, { method: 'DELETE' }).catch(() => {})
-                        )
+                        selectedInvoiceIds.map((id) => apiRequest(`/invoices/${id}`, { method: 'DELETE' }).catch(() => {}))
                       );
                       refetchInvoices();
                       setSuccessMsg(`${selectedInvoiceIds.length} purchase invoices deleted successfully.`);
@@ -1126,96 +1061,64 @@ export default function CreatePurchaseInvoicePage() {
           </div>
         )}
 
-        {/* Creation Mode Selection Modal */}
+        {/* Creation Mode Modal */}
         {showModeModal && (
-          <div className="pr-modal-backdrop" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.75)', zIndex: 99999 }}>
-            <div className="pr-modal-box" style={{ maxWidth: 580, width: '92%', padding: 24, borderRadius: 12, background: 'var(--surface-card, #1e293b)', border: '1px solid var(--border, #334155)', color: 'var(--text-primary, #f8fafc)', boxShadow: '0 20px 40px rgba(0,0,0,0.4)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div className="cpi-modal-backdrop">
+            <div className="cpi-modal-box" style={{ maxWidth: 580 }}>
+              <div className="cpi-modal-header">
                 <div>
-                  <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-                    Select Purchase Invoice Creation Method
-                  </h3>
-                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary, #94a3b8)' }}>
-                    Choose how you want to create this purchase invoice entry
-                  </p>
+                  <h3 className="cpi-modal-title">Select Purchase Invoice Creation Method</h3>
+                  <p className="cpi-modal-sub">Choose how you want to create this purchase invoice entry</p>
                 </div>
-                <button onClick={() => setShowModeModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 4 }}>
+                <button className="cpi-modal-close" onClick={() => setShowModeModal(false)}>
                   <X size={20} />
                 </button>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14, margin: '20px 0' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14, margin: '8px 0' }}>
                 {/* Option 1: Link with Vendor Dispatch Note / Invoice */}
                 <div
+                  className="cpi-mode-option cpi-mode-option--selected"
                   onClick={() => {
                     setCreationMode('linked');
                     setIsCreating(true);
                     setShowModeModal(false);
                   }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: 14,
-                    padding: '16px 18px',
-                    borderRadius: 10,
-                    border: '2px solid var(--primary-500, #0a6ed1)',
-                    background: 'rgba(10, 110, 209, 0.08)',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                  }}
                 >
-                  <div style={{ padding: 10, borderRadius: 8, background: 'rgba(10, 110, 209, 0.18)', color: '#0a6ed1' }}>
+                  <div className="cpi-mode-icon">
                     <PackageCheck size={26} />
                   </div>
                   <div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
-                      📄 Link with Vendor Dispatch Note / Invoice
-                    </div>
-                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.45 }}>
-                      Select from vendor-submitted Dispatch Notes or Invoices linked to Purchase Orders for automated 3-way quantity matching. (Section 01 Cascade Visible)
+                    <div className="cpi-mode-title">Link with Vendor Dispatch Note / Invoice</div>
+                    <div className="cpi-mode-desc">
+                      Select from vendor-submitted Dispatch Notes or Invoices linked to Purchase Orders for automated 3-way quantity matching.
                     </div>
                   </div>
                 </div>
 
-                {/* Option 2: Create Custom / Direct Manual Invoice */}
+                {/* Option 2: Direct Manual Invoice */}
                 <div
+                  className="cpi-mode-option"
                   onClick={() => {
                     setCreationMode('manual');
                     setIsCreating(true);
                     setShowModeModal(false);
                   }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: 14,
-                    padding: '16px 18px',
-                    borderRadius: 10,
-                    border: '2px solid var(--border, #334155)',
-                    background: 'var(--surface-elevated, #0f172a)',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                  }}
                 >
-                  <div style={{ padding: 10, borderRadius: 8, background: 'rgba(16, 185, 129, 0.18)', color: '#10b981' }}>
+                  <div className="cpi-mode-icon cpi-mode-icon--green">
                     <Receipt size={26} />
                   </div>
                   <div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
-                      ✏️ Create Custom / Direct Manual Invoice
-                    </div>
-                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.45 }}>
-                      Create a custom purchase invoice directly without requiring a vendor dispatch note cascade. (Section 01 Cascade Hidden)
+                    <div className="cpi-mode-title">✏️ Create Custom / Direct Manual Invoice</div>
+                    <div className="cpi-mode-desc">
+                      Create a custom purchase invoice directly without requiring a vendor dispatch note cascade reference.
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <button
-                  className="pr-btn pr-btn--outline"
-                  onClick={() => setShowModeModal(false)}
-                  style={{ padding: '8px 18px', fontSize: 13, borderRadius: 6, cursor: 'pointer' }}
-                >
+              <div className="cpi-modal-actions">
+                <button className="cpi-btn cpi-btn--outline" onClick={() => setShowModeModal(false)}>
                   Cancel
                 </button>
               </div>
@@ -1226,91 +1129,82 @@ export default function CreatePurchaseInvoicePage() {
     );
   }
 
+  // Render Entry Form View
   return (
-    <div className="cpo-page">
+    <div className="cpi-page">
       {/* Notifications */}
       {errorMsg && (
         <MessageStrip type="error" onClose={() => setErrorMsg(null)}>
           {errorMsg}
         </MessageStrip>
       )}
-      {successMsg && (
-        <MessageStrip type="success">
-          {successMsg}
-        </MessageStrip>
-      )}
+      {successMsg && <MessageStrip type="success">{successMsg}</MessageStrip>}
 
       {/* Header */}
-      <div className="cpo-header">
-        <div className="cpo-header__left">
-          <button className="cpo-back-btn" onClick={() => setIsCreating(false)}>
-            <ArrowLeft size={16} /> Back to List
+      <div className="cpi-page-header">
+        <div className="cpi-header-left">
+          <button className="cpi-back-btn" onClick={() => setIsCreating(false)} title="Back" aria-label="Back">
+            <ArrowLeft size={18} />
           </button>
-          <div className="cpo-header__title-wrap">
-            <h1>Create Purchase Invoice Entry</h1>
-            <p>
+          <div className="cpi-header-main">
+            <div className="cpi-header-top-row">
+              <h1 className="cpi-header-title">Create Purchase Invoice Entry</h1>
+              <div className="cpi-header-actions">
+                <button type="button" className="cpi-btn cpi-btn--outline" onClick={() => setShowModeModal(true)}>
+                  <Receipt size={15} /> Switch Mode
+                </button>
+                <button type="button" className="cpi-btn cpi-btn--outline" onClick={() => window.print()}>
+                  <Printer size={15} /> Print Document
+                </button>
+                <button
+                  className="cpi-btn cpi-btn--outline"
+                  onClick={() => submitInvoiceToAPI(true)}
+                  disabled={savingDraft || submitting || !canCreateInvoice}
+                  title={!canCreateInvoice ? 'Admin permission required to save draft purchase invoices.' : undefined}
+                >
+                  <Save size={15} /> {savingDraft ? 'Saving…' : 'Save Draft'}
+                </button>
+                <button
+                  className="cpi-btn cpi-btn--primary"
+                  onClick={() => submitInvoiceToAPI(false)}
+                  disabled={savingDraft || submitting || !canCreateInvoice}
+                  title={!canCreateInvoice ? 'Admin permission required to submit purchase invoices.' : undefined}
+                >
+                  <Send size={15} /> {submitting ? 'Submitting…' : 'Submit Invoice for Approval'}
+                </button>
+              </div>
+            </div>
+            <p className="cpi-header-subtitle">
               {creationMode === 'manual'
-                ? 'Custom manual invoice creation mode (Section 01 Cascade Bypassed)'
-                : 'Enter vendor invoice with 3-way quantity matching (PO Qty, Dispatch Qty, Supplier Qty) & Approval Workflow'}
+                ? 'Custom manual invoice creation mode (Cascade Reference Bypassed)'
+                : 'Enter vendor invoice with 3-way quantity matching & Approval Workflow'}
             </p>
           </div>
-        </div>
-        <div className="cpo-header__actions">
-          <button
-            type="button"
-            className="cpo-btn cpo-btn--outline"
-            onClick={() => setShowModeModal(true)}
-            title="Switch creation mode"
-          >
-            <Receipt size={15} /> Switch Mode
-          </button>
-          <button
-            type="button"
-            className="cpo-btn cpo-btn--outline"
-            onClick={() => window.print()}
-          >
-            <Printer size={15} /> Print Document
-          </button>
-          <button
-            className="cpo-btn cpo-btn--outline"
-            onClick={() => submitInvoiceToAPI(true)}
-            disabled={savingDraft || submitting || !canCreateInvoice}
-            style={!canCreateInvoice ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-            title={!canCreateInvoice ? "Admin has not allowed this action. You do not have permission to save draft purchase invoices." : undefined}
-          >
-            <Save size={15} /> {savingDraft ? 'Saving…' : 'Save Draft'}
-          </button>
-          <button
-            className="cpo-btn cpo-btn--primary"
-            onClick={() => submitInvoiceToAPI(false)}
-            disabled={savingDraft || submitting || !canCreateInvoice}
-            style={!canCreateInvoice ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-            title={!canCreateInvoice ? "Admin has not allowed this action. You do not have permission to submit purchase invoices." : undefined}
-          >
-            <Send size={15} /> {submitting ? 'Submitting…' : 'Submit Invoice for Approval'}
-          </button>
         </div>
       </div>
 
       {/* Form Content */}
-      <div className="cpo-body">
-        {/* ── Section 01: Supplier, PO & Dispatch Note Cascade Selection (Render ONLY IF creationMode === 'linked') ── */}
+      <div className="cpi-form-body">
+        {/* Section 01: Supplier, PO & Dispatch Note Cascade Selection */}
         {creationMode === 'linked' && (
-          <div className="cpo-section" style={{ borderLeft: '4px solid var(--primary-500)' }}>
-            <div className="cpo-section__header">
-              <span className="cpo-section__num">01</span>
-              <span className="cpo-section__title">Supplier, PO & Dispatch Note Selection Cascade</span>
-              <span className="cpo-section__hint">Hierarchical reference selection</span>
+          <div className="cpi-section">
+            <div className="cpi-section-header">
+              <div className="cpi-section-header-left">
+                <span className="cpi-section-badge">01</span>
+                <div>
+                  <h3 className="cpi-section-title">Supplier, PO & Dispatch Note Selection Cascade</h3>
+                  <span className="cpi-section-hint">Hierarchical reference selection</span>
+                </div>
+              </div>
             </div>
 
-            <div className="cpo-grid cpo-grid--3">
+            <div className="cpi-form-grid">
               {/* 1. Supplier Selection */}
-              <div className="cpo-field">
-                <label>1. SUPPLIER SELECTION *</label>
-                <select
-                  value={selectedVendorId}
-                  onChange={(e) => handleVendorSelect(e.target.value)}
-                >
+              <div className="cpi-field">
+                <label>
+                  1. SUPPLIER SELECTION <span className="required">*</span>
+                </label>
+                <select value={selectedVendorId} onChange={(e) => handleVendorSelect(e.target.value)}>
                   <option value="">-- Select Supplier (e.g. Telematics) --</option>
                   {allSuppliers.map((v) => (
                     <option key={v.id} value={v.id}>
@@ -1318,12 +1212,14 @@ export default function CreatePurchaseInvoicePage() {
                     </option>
                   ))}
                 </select>
-                <span className="cpo-field__sub">Filters available Purchase Orders</span>
+                <span className="cpi-field__sub">Filters available Purchase Orders</span>
               </div>
 
               {/* 2. PO Selection */}
-              <div className="cpo-field">
-                <label>2. PO SELECTION *</label>
+              <div className="cpi-field">
+                <label>
+                  2. PO SELECTION <span className="required">*</span>
+                </label>
                 <select
                   value={selectedPoId}
                   onChange={(e) => {
@@ -1344,22 +1240,16 @@ export default function CreatePurchaseInvoicePage() {
                     </option>
                   ))}
                   {selectedPoId && !availablePOs.some((po) => String(po.id) === String(selectedPoId)) && (
-                    <option value={selectedPoId}>
-                      {displayPoNumber}
-                    </option>
+                    <option value={selectedPoId}>{displayPoNumber}</option>
                   )}
                 </select>
-                <span className="cpo-field__sub">Auto-loads PO items & linked Dispatch Notes</span>
+                <span className="cpi-field__sub">Auto-loads PO items & linked Dispatch Notes</span>
               </div>
 
               {/* 3. Dispatch Note / Vendor Invoice Selection */}
-              <div className="cpo-field">
+              <div className="cpi-field">
                 <label>3. DISPATCH NOTE / VENDOR INVOICE SELECTION</label>
-                <select
-                  value={selectedGrnId}
-                  onChange={(e) => setSelectedGrnId(e.target.value)}
-                  disabled={!selectedPoId}
-                >
+                <select value={selectedGrnId} onChange={(e) => setSelectedGrnId(e.target.value)} disabled={!selectedPoId}>
                   {!selectedPoId ? (
                     <option value="">-- Select Purchase Order First --</option>
                   ) : grnOptions.length === 0 && invoiceOptions.length === 0 ? (
@@ -1371,7 +1261,8 @@ export default function CreatePurchaseInvoicePage() {
                     <optgroup label="📄 Dispatch Notes">
                       {grnOptions.map((g) => (
                         <option key={`grn_${g.id}`} value={`grn_${g.id}`}>
-                          Dispatch Note: {g.grnNumber ? g.grnNumber.replace(/^GRN-/, 'DN-') : 'DN'} (Received: {new Date(g.receivedDate).toLocaleDateString()})
+                          Dispatch Note: {g.grnNumber ? g.grnNumber.replace(/^GRN-/, 'DN-') : 'DN'} (Received:{' '}
+                          {new Date(g.receivedDate).toLocaleDateString()})
                         </option>
                       ))}
                     </optgroup>
@@ -1380,7 +1271,8 @@ export default function CreatePurchaseInvoicePage() {
                     <optgroup label="🧾 Vendor Invoices">
                       {invoiceOptions.map((inv) => (
                         <option key={`inv_${inv.id}`} value={`inv_${inv.id}`}>
-                          Invoice: {inv.invoiceNumber} — Ksh {inv.amount ? inv.amount.toLocaleString() : '0'} ({inv.submittedAt || inv.dueDate || 'Recent'})
+                          Invoice: {inv.invoiceNumber} — Ksh {inv.amount ? inv.amount.toLocaleString() : '0'} (
+                          {inv.submittedAt || inv.dueDate || 'Recent'})
                         </option>
                       ))}
                     </optgroup>
@@ -1388,32 +1280,33 @@ export default function CreatePurchaseInvoicePage() {
                   {selectedGrnId &&
                     !grnOptions.some((g) => String(g.id) === String(selectedGrnId) || `grn_${g.id}` === selectedGrnId) &&
                     !invoiceOptions.some((i) => String(i.id) === String(selectedGrnId) || `inv_${i.id}` === selectedGrnId) && (
-                      <option value={selectedGrnId}>
-                        {displayGrnNumber}
-                      </option>
+                      <option value={selectedGrnId}>{displayGrnNumber}</option>
                     )}
                 </select>
-                <span className="cpo-field__sub">Auto-populates items from Dispatch Note or Vendor Invoice</span>
+                <span className="cpi-field__sub">Auto-populates items from Dispatch Note or Vendor Invoice</span>
               </div>
             </div>
           </div>
         )}
 
-        {/* ── Section 02: Invoice Meta ── */}
-        <div className="cpo-section">
-          <div className="cpo-section__header">
-            <span className="cpo-section__num">{creationMode === 'manual' ? '01' : '02'}</span>
-            <span className="cpo-section__title">Invoice Dates & Cost Center</span>
+        {/* Section 02: Invoice Meta & Dates */}
+        <div className="cpi-section">
+          <div className="cpi-section-header">
+            <div className="cpi-section-header-left">
+              <span className="cpi-section-badge">{creationMode === 'manual' ? '01' : '02'}</span>
+              <div>
+                <h3 className="cpi-section-title">Invoice Dates & Details</h3>
+              </div>
+            </div>
           </div>
 
-          <div className={`cpo-grid ${creationMode === 'manual' ? 'cpo-grid--4' : 'cpo-grid--4'}`}>
+          <div className={`cpi-form-grid ${creationMode === 'manual' ? 'cpi-form-grid--4' : 'cpi-form-grid--4'}`}>
             {creationMode === 'manual' && (
-              <div className="cpo-field">
-                <label>SUPPLIER / VENDOR *</label>
-                <select
-                  value={selectedVendorId}
-                  onChange={(e) => handleVendorSelect(e.target.value)}
-                >
+              <div className="cpi-field">
+                <label>
+                  SUPPLIER / VENDOR <span className="required">*</span>
+                </label>
+                <select value={selectedVendorId} onChange={(e) => handleVendorSelect(e.target.value)}>
                   <option value="">-- Select Supplier --</option>
                   {allSuppliers.map((v) => (
                     <option key={v.id} value={v.id}>
@@ -1421,40 +1314,38 @@ export default function CreatePurchaseInvoicePage() {
                     </option>
                   ))}
                 </select>
-                <span className="cpo-field__sub">Select supplier for manual entry</span>
+                <span className="cpi-field__sub">Select supplier for manual entry</span>
               </div>
             )}
 
-            <div className="cpo-field">
-              <label>INVOICE NUMBER *</label>
+            <div className="cpi-field">
+              <label>
+                INVOICE NUMBER <span className="required">*</span>
+              </label>
               <input
                 type="text"
                 value={invoiceNumber}
                 onChange={(e) => setInvoiceNumber(e.target.value)}
                 placeholder="e.g. INV-2026-0042"
               />
-              <span className="cpo-field__sub">Vendor invoice reference</span>
+              <span className="cpi-field__sub">Vendor invoice reference</span>
             </div>
 
-            <div className="cpo-field">
-              <label>INVOICE DATE *</label>
-              <input
-                type="date"
-                value={invoiceDate}
-                onChange={(e) => setInvoiceDate(e.target.value)}
-              />
+            <div className="cpi-field">
+              <label>
+                INVOICE DATE <span className="required">*</span>
+              </label>
+              <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
             </div>
 
-            <div className="cpo-field">
-              <label>DUE DATE *</label>
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-              />
+            <div className="cpi-field">
+              <label>
+                DUE DATE <span className="required">*</span>
+              </label>
+              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
             </div>
 
-            <div className="cpo-field">
+            <div className="cpi-field">
               <label>PAYMENT TERMS</label>
               <select value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)}>
                 <option value="Immediate">Immediate</option>
@@ -1467,26 +1358,34 @@ export default function CreatePurchaseInvoicePage() {
           </div>
         </div>
 
-        {/* ── Section 03: Items Table with 3-Quantity Matching (as per diagram) ── */}
-        <div className="cpo-section">
-          <div className="cpo-section__header cpo-section__header--flex">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span className="cpo-section__num">03</span>
-              <span className="cpo-section__title">Items Listing & 3-Quantity Matching</span>
+        {/* Section 03: Line Items Listing & 3-Quantity Matching */}
+        <div className="cpi-section">
+          <div className="cpi-section-header">
+            <div className="cpi-section-header-left">
+              <span className="cpi-section-badge">{creationMode === 'manual' ? '02' : '03'}</span>
+              <div>
+                <h3 className="cpi-section-title">Items Listing & 3-Quantity Matching</h3>
+              </div>
             </div>
-            <button className="cpo-btn cpo-btn--outline cpo-btn--sm" onClick={handleAddLineItem}>
+            <button type="button" className="cpi-btn cpi-btn--outline cpi-btn--sm" onClick={handleAddLineItem}>
               <Plus size={14} /> Add Line Item
             </button>
           </div>
 
-          <div className="cpo-table-wrap">
-            <table className="cpo-table">
+          <div className="cpi-items-table-wrap">
+            <table className="cpi-items-table">
               <thead>
                 <tr>
                   <th style={{ width: '220px' }}>Item Name / Description *</th>
-                  <th style={{ width: '100px', background: 'rgba(10, 110, 209, 0.08)' }}>PO Quantity</th>
-                  <th style={{ width: '100px', background: 'rgba(16, 185, 129, 0.08)' }}>Dispatch Qty</th>
-                  <th style={{ width: '120px', background: 'rgba(234, 179, 8, 0.12)' }}>Supplier Qty *</th>
+                  <th style={{ width: '100px' }} className="cpi-th--po">
+                    PO Quantity
+                  </th>
+                  <th style={{ width: '100px' }} className="cpi-th--grn">
+                    Dispatch Qty
+                  </th>
+                  <th style={{ width: '120px' }} className="cpi-th--supplier">
+                    Supplier Qty *
+                  </th>
                   <th style={{ width: '130px' }}>Unit Price ({currency})</th>
                   <th style={{ width: '80px' }}>Tax %</th>
                   <th style={{ width: '140px', textAlign: 'right' }}>Total ({currency})</th>
@@ -1504,31 +1403,23 @@ export default function CreatePurchaseInvoicePage() {
                       <td>
                         <input
                           type="text"
-                          className="cpo-table__input"
+                          className="cpi-table-input"
                           placeholder="Item description..."
                           value={item.itemName}
                           onChange={(e) => handleUpdateLineItem(item.id, 'itemName', e.target.value)}
                         />
                       </td>
-                      {/* PO Quantity (Auto-populated from PO) */}
                       <td style={{ background: 'rgba(10, 110, 209, 0.03)' }}>
-                        <span style={{ display: 'inline-block', padding: '6px 12px', background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: 6, fontWeight: 700, color: 'var(--primary-500)' }}>
-                          {item.poQty}
-                        </span>
+                        <span className="cpi-qty-chip cpi-qty-chip--po">{item.poQty}</span>
                       </td>
-                      {/* Dispatch Qty (Auto-populated from Dispatch Note) */}
                       <td style={{ background: 'rgba(16, 185, 129, 0.03)' }}>
-                        <span style={{ display: 'inline-block', padding: '6px 12px', background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: 6, fontWeight: 700, color: '#10b981' }}>
-                          {item.grnQty}
-                        </span>
+                        <span className="cpi-qty-chip cpi-qty-chip--grn">{item.grnQty}</span>
                       </td>
-                      {/* Supplier Quantity (Editable input from vendor invoice) */}
                       <td style={{ background: 'rgba(234, 179, 8, 0.04)' }}>
                         <input
                           type="number"
                           min="1"
-                          className="cpo-table__input"
-                          style={{ fontWeight: 800, borderColor: '#eab308' }}
+                          className="cpi-table-input cpi-table-input--supplier-qty"
                           value={item.supplierQty}
                           onChange={(e) =>
                             handleUpdateLineItem(
@@ -1544,7 +1435,7 @@ export default function CreatePurchaseInvoicePage() {
                           type="number"
                           min="0"
                           step="0.01"
-                          className="cpo-table__input"
+                          className="cpi-table-input"
                           placeholder="0.00"
                           value={item.unitPrice}
                           onChange={(e) =>
@@ -1561,7 +1452,7 @@ export default function CreatePurchaseInvoicePage() {
                           type="number"
                           min="0"
                           max="100"
-                          className="cpo-table__input"
+                          className="cpi-table-input"
                           value={item.taxPercent}
                           onChange={(e) =>
                             handleUpdateLineItem(
@@ -1572,13 +1463,13 @@ export default function CreatePurchaseInvoicePage() {
                           }
                         />
                       </td>
-                      <td style={{ textAlign: 'right', fontWeight: 700, paddingTop: 14 }}>
+                      <td style={{ textAlign: 'right', fontWeight: 700, fontFamily: 'var(--font-mono, monospace)' }}>
                         {formatAmount(lineTotal, currency)}
                       </td>
                       <td style={{ textAlign: 'center' }}>
                         <button
                           type="button"
-                          className="cpo-trash-btn"
+                          className="cpi-action-icon-btn cpi-action-icon-btn--delete"
                           onClick={() => handleRemoveLineItem(item.id)}
                           disabled={lineItems.length <= 1}
                         >
@@ -1593,89 +1484,112 @@ export default function CreatePurchaseInvoicePage() {
           </div>
         </div>
 
-        {/* ── Section 04: Summary & Workflow Notice ── */}
-        <div className="cpo-grid cpo-grid--split">
-          <div className="cpo-section">
-            <div className="cpo-section__header">
-              <span className="cpo-section__num">04</span>
-              <span className="cpo-section__title">Remarks & Attachments</span>
+        {/* Section 04 & 05: Remarks, Attachments & Totals Split Grid */}
+        <div className="cpi-split-grid">
+          <div className="cpi-section">
+            <div className="cpi-section-header">
+              <div className="cpi-section-header-left">
+                <span className="cpi-section-badge">{creationMode === 'manual' ? '03' : '04'}</span>
+                <div>
+                  <h3 className="cpi-section-title">Remarks & Attachments</h3>
+                </div>
+              </div>
             </div>
-            <div className="cpo-grid cpo-grid--1" style={{ gap: 16 }}>
-              <div className="cpo-field">
-                <label>INTERNAL NOTES FOR APPROVERS</label>
-                <textarea
-                  rows={3}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Add notes for finance approvers regarding quantity discrepancies or invoice notes..."
-                />
-              </div>
 
-              <div className="cpo-field">
-                <label>ATTACH VENDOR INVOICE PDF</label>
-                <label className="cpi-upload-dropzone" style={{ padding: '36px 20px', background: 'var(--surface-elevated)', border: '2px dashed rgba(10, 110, 209, 0.4)', borderRadius: 10, textAlign: 'center', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'all 0.2s ease' }}>
-                  <Upload size={28} style={{ color: 'var(--primary-500)' }} />
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.4px' }}>CLICK TO UPLOAD PHYSICAL VENDOR BILL PDF</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Drag and drop your invoice PDF here, or click to browse files</div>
-                  <input type="file" multiple accept=".pdf,.png,.jpg" onChange={handleFileUpload} hidden />
-                </label>
-                {attachments.length > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
-                    {attachments.map((att) => (
-                      <div key={att.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <Paperclip size={14} style={{ color: 'var(--primary-500)' }} />
-                          <span style={{ fontWeight: 600 }}>{att.name}</span>
-                          <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>({att.size})</span>
-                        </div>
-                        <button type="button" onClick={() => handleRemoveAttachment(att.id)} style={{ background: 'none', border: 'none', color: 'var(--danger-500)', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center' }}>
-                          <X size={14} />
-                        </button>
+            <div className="cpi-field">
+              <label>INTERNAL NOTES FOR APPROVERS</label>
+              <textarea
+                rows={3}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Add notes for finance approvers regarding quantity discrepancies or invoice details..."
+              />
+            </div>
+
+            <div className="cpi-field">
+              <label>ATTACH VENDOR INVOICE PDF</label>
+              <label className="cpi-dropzone">
+                <Upload size={28} className="cpi-dropzone-icon" />
+                <div className="cpi-dropzone-title">CLICK TO UPLOAD PHYSICAL VENDOR BILL PDF</div>
+                <div className="cpi-dropzone-sub">Drag and drop your invoice PDF here, or click to browse files</div>
+                <input type="file" multiple accept=".pdf,.png,.jpg" onChange={handleFileUpload} hidden />
+              </label>
+
+              {attachments.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+                  {attachments.map((att) => (
+                    <div
+                      key={att.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '10px 14px',
+                        background: 'var(--surface-elevated)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 10,
+                        fontSize: 14,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Paperclip size={15} style={{ color: 'var(--primary-500, #0a6ed1)' }} />
+                        <span style={{ fontWeight: 600 }}>{att.name}</span>
+                        <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>({att.size})</span>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveAttachment(att.id)}
+                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center' }}
+                      >
+                        <X size={15} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="cpo-section cpo-totals-card">
-            <div className="cpo-section__header">
-              <span className="cpo-section__num">05</span>
-              <span className="cpo-section__title">Final Value & Workflow</span>
-            </div>
-
-            <div className="cpo-totals">
-              <div className="cpo-field" style={{ marginBottom: 12 }}>
-                <label>CURRENCY</label>
-                <CurrencySelector value={currency} onChange={setCurrency} />
-              </div>
-
-              <div className="cpo-totals__row">
-                <span>Subtotal</span>
-                <span>{formatAmount(calculations.subtotal, currency)}</span>
-              </div>
-              <div className="cpo-totals__row">
-                <span>Total Tax</span>
-                <span>{formatAmount(calculations.totalTax, currency)}</span>
-              </div>
-
-              <div className="cpo-totals__divider" />
-
-              <div className="cpo-totals__grand">
-                <span>Final Value</span>
-                <span style={{ color: 'var(--primary-500)' }}>{formatAmount(calculations.grandTotal, currency)}</span>
-              </div>
-
-              <div style={{ marginTop: 12, padding: '10px 12px', background: 'rgba(10, 110, 209, 0.1)', border: '1px solid rgba(10, 110, 209, 0.25)', borderRadius: 8, color: 'var(--primary-500)', fontSize: 12.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <PackageCheck size={16} />
-                <span>Triggers AccountsPayable Approval Workflow</span>
+          <div className="cpi-totals-card">
+            <div className="cpi-section-header" style={{ paddingBottom: 10, marginBottom: 4 }}>
+              <div className="cpi-section-header-left">
+                <span className="cpi-section-badge">{creationMode === 'manual' ? '04' : '05'}</span>
+                <div>
+                  <h3 className="cpi-section-title">Final Value & Workflow</h3>
+                </div>
               </div>
             </div>
 
-            <div className="cpo-action-panel">
+            <div className="cpi-field">
+              <label>CURRENCY</label>
+              <CurrencySelector value={currency} onChange={setCurrency} />
+            </div>
+
+            <div className="cpi-totals-row">
+              <span>Subtotal</span>
+              <span>{formatAmount(calculations.subtotal, currency)}</span>
+            </div>
+            <div className="cpi-totals-row">
+              <span>Total Tax</span>
+              <span>{formatAmount(calculations.totalTax, currency)}</span>
+            </div>
+
+            <div className="cpi-totals-divider" />
+
+            <div className="cpi-totals-grand">
+              <span>Final Value</span>
+              <span className="cpi-totals-grand-val">{formatAmount(calculations.grandTotal, currency)}</span>
+            </div>
+
+            <div className="cpi-workflow-notice">
+              <PackageCheck size={18} />
+              <span>Triggers AccountsPayable Approval Workflow</span>
+            </div>
+
+            <div style={{ marginTop: 8 }}>
               <button
-                className="cpo-btn cpo-btn--primary cpo-btn--full"
+                className="cpi-btn cpi-btn--primary"
+                style={{ width: '100%', padding: '12px 20px', fontSize: 15 }}
                 onClick={() => submitInvoiceToAPI(false)}
                 disabled={savingDraft || submitting}
               >
@@ -1686,9 +1600,8 @@ export default function CreatePurchaseInvoicePage() {
         </div>
       </div>
 
-      {/* Official A4 Digital TAX INVOICE Document (Visible ONLY during window.print()) */}
+      {/* Official Printable Document Container */}
       <div className="grn-print-document po-document">
-        {/* ── Header ── */}
         <div className="po-doc__header">
           <div className="po-doc__header-left">
             <img src={finalLogoUrl} alt={companyName || 'Procnex'} className="po-doc__logo" />
@@ -1700,16 +1613,17 @@ export default function CreatePurchaseInvoicePage() {
                 {selectedPO?.companyAddress || selectedPO?.shipToAddress || '232,Sahukara Bareilly 232'}
               </p>
               <p className="po-doc__company-detail">
-                Phone: {companyPhone || selectedPO?.companyPhone || '+918272811866'} &nbsp;|&nbsp; Email: {companyEmail || selectedPO?.companyEmail || 'nischalagarwal674@gmail.com'}
+                Phone: {companyPhone || selectedPO?.companyPhone || '+918272811866'} &nbsp;|&nbsp; Email:{' '}
+                {companyEmail || selectedPO?.companyEmail || 'nischalagarwal674@gmail.com'}
               </p>
-              <p className="po-doc__company-detail">
-                {selectedPO?.companyWebsite || 'www.procnex.com'}
-              </p>
+              <p className="po-doc__company-detail">{selectedPO?.companyWebsite || 'www.procnex.com'}</p>
             </div>
           </div>
           <div className="po-doc__header-right">
             <div className="po-doc__title-block">
-              <span className="po-doc__title-label" style={{ color: '#0a2342' }}>TAX INVOICE</span>
+              <span className="po-doc__title-label" style={{ color: '#0a2342' }}>
+                TAX INVOICE
+              </span>
               <span className="po-doc__title-po-num">{invoiceNumber}</span>
             </div>
             <table className="po-doc__meta-table">
@@ -1731,31 +1645,42 @@ export default function CreatePurchaseInvoicePage() {
           </div>
         </div>
 
-        {/* ── Divider ── */}
         <div className="po-doc__divider" />
 
-        {/* ── Vendor & Ship To ── */}
         <div className="po-doc__parties">
           <div className="po-doc__party-box">
             <h3 className="po-doc__party-heading">VENDOR / SUPPLIER</h3>
             <p className="po-doc__party-name">{vendorName || selectedPO?.vendor?.name || selectedPO?.vendorName || 'Embedded'}</p>
-            <p className="po-doc__party-detail">Contact: {selectedPO?.vendor?.contactPerson || selectedPO?.vendorContactPerson || 'Nischal Agarwal'}</p>
-            <p className="po-doc__party-detail">Address: {selectedPO?.vendor?.address || selectedPO?.vendorAddress || '232,Sahukara Bareilly 232'}</p>
-            <p className="po-doc__party-detail">Phone: {selectedPO?.vendor?.phone || selectedPO?.vendorPhone || '+918272811866'}</p>
-            <p className="po-doc__party-detail">Email: {selectedPO?.vendor?.email || selectedPO?.vendorEmail || 'nischalagarwal674@gmail.com'}</p>
-            <p className="po-doc__party-detail">GST/VAT: {selectedPO?.vendor?.gstVat || selectedPO?.vendorGstVat || 'VAT60707070706'}</p>
+            <p className="po-doc__party-detail">
+              Contact: {selectedPO?.vendor?.contactPerson || selectedPO?.vendorContactPerson || 'Nischal Agarwal'}
+            </p>
+            <p className="po-doc__party-detail">
+              Address: {selectedPO?.vendor?.address || selectedPO?.vendorAddress || '232,Sahukara Bareilly 232'}
+            </p>
+            <p className="po-doc__party-detail">
+              Phone: {selectedPO?.vendor?.phone || selectedPO?.vendorPhone || '+918272811866'}
+            </p>
+            <p className="po-doc__party-detail">
+              Email: {selectedPO?.vendor?.email || selectedPO?.vendorEmail || 'nischalagarwal674@gmail.com'}
+            </p>
+            <p className="po-doc__party-detail">
+              GST/VAT: {selectedPO?.vendor?.gstVat || selectedPO?.vendorGstVat || 'VAT60707070706'}
+            </p>
           </div>
           <div className="po-doc__party-box">
             <h3 className="po-doc__party-heading">BILL TO (BUYER / CLIENT)</h3>
             <p className="po-doc__party-name">{companyName && !companyName.includes('Procnex') ? companyName : 'Procnex'}</p>
             <p className="po-doc__party-detail">Warehouse: {selectedPO?.shipToWarehouse || 'Central Warehouse'}</p>
-            <p className="po-doc__party-detail">Address: {selectedPO?.shipToAddress || '232,Sahukara Bareilly 232'}</p>
+            <p className="po-doc__party-detail">
+              Address: {selectedPO?.shipToAddress || '232,Sahukara Bareilly 232'}
+            </p>
             <p className="po-doc__party-detail">Contact: {selectedPO?.shipToContact || 'Nischal Agarwal'}</p>
-            <p className="po-doc__party-detail">Phone: {companyPhone || selectedPO?.shipToPhone || '+918272811866'}</p>
+            <p className="po-doc__party-detail">
+              Phone: {companyPhone || selectedPO?.shipToPhone || '+918272811866'}
+            </p>
           </div>
         </div>
 
-        {/* ── Info Grid ── */}
         <div className="po-doc__info-grid">
           <div className="po-doc__info-item">
             <span className="po-doc__info-label">PO Reference</span>
@@ -1783,7 +1708,6 @@ export default function CreatePurchaseInvoicePage() {
           </div>
         </div>
 
-        {/* ── Items Table ── */}
         <div className="po-doc__table-wrap">
           <table className="po-doc__items-table">
             <colgroup>
@@ -1831,7 +1755,6 @@ export default function CreatePurchaseInvoicePage() {
           </table>
         </div>
 
-        {/* ── Totals ── */}
         <div className="po-doc__totals">
           <div className="po-doc__totals-table">
             <div className="po-doc__total-row">
@@ -1857,25 +1780,29 @@ export default function CreatePurchaseInvoicePage() {
             <div className="po-doc__total-divider" />
             <div className="po-doc__total-row po-doc__total-row--grand">
               <span className="po-doc__total-label po-doc__total-label--grand">Grand Total</span>
-              <span className="po-doc__total-value po-doc__total-value--grand">{formatAmount(calculations.grandTotal, currency)}</span>
+              <span className="po-doc__total-value po-doc__total-value--grand">
+                {formatAmount(calculations.grandTotal, currency)}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* ── Notes ── */}
         <div className="po-doc__divider" />
         <div className="po-doc__notes">
           <div className="po-doc__notes-col">
             <h4 className="po-doc__notes-heading">Purchase Invoice Notes</h4>
-            <p className="po-doc__notes-text">{notes || '3-way quantity matching verified. Invoice entered for Accounts Payable approval.'}</p>
+            <p className="po-doc__notes-text">
+              {notes || '3-way quantity matching verified. Invoice entered for Accounts Payable approval.'}
+            </p>
           </div>
           <div className="po-doc__notes-col">
             <h4 className="po-doc__notes-heading">Approval & Payment Terms</h4>
-            <p className="po-doc__notes-text">Payment will be scheduled upon L2 Accounts Payable approval under agreed payment terms ({paymentTerms}).</p>
+            <p className="po-doc__notes-text">
+              Payment will be scheduled upon L2 Accounts Payable approval under agreed payment terms ({paymentTerms}).
+            </p>
           </div>
         </div>
 
-        {/* ── Footer ── */}
         <div className="po-doc__footer">
           <div className="po-doc__footer-divider" />
           <p className="po-doc__footer-text">

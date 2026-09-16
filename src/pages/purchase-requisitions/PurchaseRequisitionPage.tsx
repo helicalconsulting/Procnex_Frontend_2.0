@@ -940,7 +940,7 @@ export default function PurchaseRequisitionPage() {
                   background: 'rgba(255, 255, 255, 0.05)',
                   border: '1px solid rgba(255, 255, 255, 0.15)',
                   color: 'var(--text-primary)',
-                  fontSize: '14px',
+                  fontSize: '15px',
                   fontWeight: 600,
                   outline: 'none',
                   cursor: 'pointer',
@@ -1159,7 +1159,7 @@ export default function PurchaseRequisitionPage() {
                 <span>
                   Grand Total
                   {contractBalance && pr.grandTotal > contractBalance.remainingValue && (
-                    <span className="pr-total-row__limit-warning" style={{ display: 'block', fontSize: 11, fontWeight: 400, color: '#dc2626', marginTop: 2 }}>
+                    <span className="pr-total-row__limit-warning" style={{ display: 'block', fontSize: 12, fontWeight: 400, color: '#dc2626', marginTop: 2 }}>
                       Exceeds remaining value by {formatCurrency(pr.grandTotal - contractBalance.remainingValue, contractBalance.currency || pr.currency)}
                     </span>
                   )}
@@ -1167,7 +1167,7 @@ export default function PurchaseRequisitionPage() {
                 <span>
                   {formatCurrency(pr.grandTotal, pr.currency)}
                   {contractBalance && (
-                    <span style={{ display: 'block', fontSize: 11, fontWeight: 400, color: (contractBalance.remainingValue - pr.grandTotal) >= 0 ? '#059669' : '#dc2626', marginTop: 2 }}>
+                    <span style={{ display: 'block', fontSize: 12, fontWeight: 400, color: (contractBalance.remainingValue - pr.grandTotal) >= 0 ? '#059669' : '#dc2626', marginTop: 2 }}>
                       Remaining: {formatCurrency(Math.max(0, contractBalance.remainingValue - (pr.grandTotal > contractBalance.remainingValue ? 0 : pr.grandTotal)), contractBalance.currency || pr.currency)}
                     </span>
                   )}

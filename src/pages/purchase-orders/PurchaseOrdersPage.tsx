@@ -269,8 +269,9 @@ export default function PurchaseOrdersPage() {
       }
     },
     className: cn(
-      'cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-      statusFilter === filter && 'border-primary/40 ring-2 ring-primary/10'
+      'cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-all duration-200',
+      statusFilter === filter &&
+        'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
     ),
   });
 
@@ -359,39 +360,9 @@ export default function PurchaseOrdersPage() {
           </div>
 
           <div className="flex items-center justify-between gap-2.5 sm:justify-end">
-            <div className="relative">
-              <Button
-                ref={colBtnRef}
-                variant="outline"
-                size="sm"
-                onClick={() => setShowColPanel((v) => !v)}
-                title="Customize columns"
-              >
-                <SlidersHorizontal className="size-3.5" /> Columns
-              </Button>
-              {showColPanel && (
-                <ColumnCustomizer
-                  columnOrder={columnOrder}
-                  visibleKeys={visibleKeys}
-                  allColumns={ALL_COLUMNS}
-                  onToggle={(key) => {
-                    setVisibleKeys((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(key)) next.delete(key);
-                      else next.add(key);
-                      return next;
-                    });
-                  }}
-                  onReorder={setColumnOrder}
-                  onReset={() => {
-                    setColumnOrder(defaultOrder);
-                    setVisibleKeys(new Set(defaultVisible));
-                  }}
-                  onClose={() => setShowColPanel(false)}
-                  anchorRef={colBtnRef}
-                />
-              )}
-            </div>
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              {filtered.length} of {poResult.length} documents
+            </span>
 
             <div className="flex items-center rounded-lg border border-border/70 p-0.5 bg-muted/40">
               <Button
@@ -450,7 +421,7 @@ export default function PurchaseOrdersPage() {
           <Card className="hidden overflow-hidden lg:block">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[880px] text-left text-sm">
-                <thead className="border-b border-border/70 bg-secondary/55 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                <thead className="border-b border-border/70 bg-secondary/55 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                   <tr>
                     <th className="w-11 px-4 py-3 text-center">
                       <input
@@ -469,7 +440,47 @@ export default function PurchaseOrdersPage() {
                         {col.label}
                       </th>
                     ))}
-                    <th className="px-4 py-3 text-right">Actions</th>
+                    <th className="px-4 py-3 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <span>Actions</span>
+                        <div className="relative">
+                          <Button
+                            ref={colBtnRef}
+                            variant={showColPanel ? 'secondary' : 'ghost'}
+                            size="icon-sm"
+                            onClick={() => setShowColPanel((v) => !v)}
+                            title="Customize columns"
+                            aria-label="Customize columns"
+                            aria-expanded={showColPanel}
+                          >
+                            <span className="flex gap-0.5"><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /></span>
+                          </Button>
+
+                          {showColPanel && (
+                            <ColumnCustomizer
+                              columnOrder={columnOrder}
+                              visibleKeys={visibleKeys}
+                              allColumns={ALL_COLUMNS}
+                              onToggle={(key) => {
+                                setVisibleKeys((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(key)) next.delete(key);
+                                  else next.add(key);
+                                  return next;
+                                });
+                              }}
+                              onReorder={setColumnOrder}
+                              onReset={() => {
+                                setColumnOrder(defaultOrder);
+                                setVisibleKeys(new Set(defaultVisible));
+                              }}
+                              onClose={() => setShowColPanel(false)}
+                              anchorRef={colBtnRef}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
@@ -498,7 +509,7 @@ export default function PurchaseOrdersPage() {
                             return (
                               <td key="poNumber" className="px-4 py-3.5">
                                 <div className="font-semibold text-primary">{order.poNumber}</div>
-                                <div className="mt-0.5 text-[11px] text-muted-foreground">{order.rfqNumber}</div>
+                                <div className="mt-0.5 text-[12px] text-muted-foreground">{order.rfqNumber}</div>
                               </td>
                             );
                           }
@@ -506,7 +517,7 @@ export default function PurchaseOrdersPage() {
                             return (
                               <td key="vendorName" className="px-4 py-3.5">
                                 <div className="flex items-center gap-2.5">
-                                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-[11px] font-semibold text-primary">
+                                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-[12px] font-semibold text-primary">
                                     {order.vendorInitials}
                                   </span>
                                   <span className="font-medium">{order.vendorName}</span>
@@ -549,8 +560,8 @@ export default function PurchaseOrdersPage() {
                           }
                           return <td key={col.key} className="px-4 py-3.5">-</td>;
                         })}
-                        <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex justify-end gap-1">
+                        <td className="px-4 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-center gap-1">
                             <Button
                               variant="ghost"
                               size="icon-sm"
@@ -739,7 +750,7 @@ export default function PurchaseOrdersPage() {
                 ['Expected delivery', formatDate(detailPO.expectedDelivery)],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-xl border border-border/65 bg-secondary/40 p-3">
-                  <dt className="text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{label}</dt>
+                  <dt className="text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{label}</dt>
                   <dd className="mt-1 text-sm font-medium">{value}</dd>
                 </div>
               ))}
@@ -759,13 +770,13 @@ export default function PurchaseOrdersPage() {
                     >
                       <span
                         className={cn(
-                          'relative z-10 grid size-6 place-items-center rounded-full border bg-card text-[10px]',
+                          'relative z-10 grid size-6 place-items-center rounded-full border bg-card text-[11px]',
                           done ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground'
                         )}
                       >
                         {done ? <CheckCircle2 className="size-3.5" /> : index + 1}
                       </span>
-                      <span className="mt-2 hidden text-[9px] text-muted-foreground sm:block">{STATUS_CONFIG[step].label}</span>
+                      <span className="mt-2 hidden text-[10px] text-muted-foreground sm:block">{STATUS_CONFIG[step].label}</span>
                     </li>
                   );
                 })}

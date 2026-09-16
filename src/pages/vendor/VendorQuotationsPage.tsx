@@ -437,7 +437,7 @@ export default function VendorQuotationsPage() {
                         <ClipboardList size={16} style={{ color: 'var(--vendor-primary)' }} />
                         <span className="vrfq-card__rfq-id">{quot.rfqNumber}</span>
                         {(quot.qNo || quot.versionNumber) && (
-                          <span className="quot-compare__qno-pill quot-compare__qno-pill--latest" style={{ fontSize: 11, padding: '1px 6px' }}>
+                          <span className="quot-compare__qno-pill quot-compare__qno-pill--latest" style={{ fontSize: 12, padding: '1px 6px' }}>
                             {(quot.versionNumber && quot.versionNumber > 1) ? `Q${quot.versionNumber}` : (quot.qNo || `Q${quot.versionNumber}`)}
                           </span>
                         )}
@@ -447,7 +447,7 @@ export default function VendorQuotationsPage() {
                         <span
                           className="vendor-badge"
                           style={{
-                            fontSize: 11,
+                            fontSize: 12,
                             padding: '2px 8px',
                             fontWeight: 600,
                             background: 'rgba(10, 110, 209, 0.08)',
@@ -493,7 +493,7 @@ export default function VendorQuotationsPage() {
                       {quot.bidSecurityRequired && (
                         <span style={{
                           display: 'inline-flex', alignItems: 'center', gap: 3,
-                          fontSize: 10, fontWeight: 700, color: '#107e3e',
+                          fontSize: 11, fontWeight: 700, color: '#107e3e',
                           background: 'rgba(16,126,62,0.08)',
                           padding: '2px 6px', borderRadius: 3,
                           whiteSpace: 'nowrap',
@@ -502,10 +502,10 @@ export default function VendorQuotationsPage() {
                           Bond
                         </span>
                       )}
-                      <span style={{ fontSize: 15, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 16, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                         {formatAmount(convert(selectedTotal, quot.currency || defCur, displayCurrency), displayCurrency)}
                         {!allSelected && selectedCount > 0 && (
-                          <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--vendor-text-muted, #6a6d70)' }}>
+                          <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--vendor-text-muted, #6a6d70)' }}>
                             ({selectedCount}/{quot.items.length} items)
                           </span>
                         )}
@@ -626,11 +626,11 @@ export default function VendorQuotationsPage() {
                         }}>
                           <Shield size={16} style={{ color: 'var(--primary-500)', flexShrink: 0 }} />
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 2 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 2 }}>
                               Bid Bond Document
                             </div>
                             {bidSecurityLoading ? (
-                              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Loading…</span>
+                              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Loading…</span>
                             ) : bidSecurityDocs[String(quot.id)] ? (
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                                 <FileText size={12} style={{ color: '#0070c0', flexShrink: 0 }} />
@@ -639,7 +639,7 @@ export default function VendorQuotationsPage() {
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   style={{
-                                    fontSize: 12, color: 'var(--vendor-primary)',
+                                    fontSize: 13, color: 'var(--vendor-primary)',
                                     fontWeight: 600, textDecoration: 'none',
                                     overflow: 'hidden', textOverflow: 'ellipsis',
                                     whiteSpace: 'nowrap', maxWidth: 250, flex: 1,
@@ -658,7 +658,7 @@ export default function VendorQuotationsPage() {
                                 </button>
                               </div>
                             ) : (
-                              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                                 Not provided
                               </span>
                             )}
@@ -860,7 +860,7 @@ function ViewVendorQuotationModal({
                   className={`rfq-modal__tab ${activeTab === t.key ? 'rfq-modal__tab--active' : ''}`}
                   onClick={() => setActiveTab(t.key)}
                 >
-                  <span style={{ fontSize: 15, marginRight: 4 }}>{t.icon}</span>
+                  <span style={{ fontSize: 16, marginRight: 4 }}>{t.icon}</span>
                   <span>{t.label}</span>
                 </button>
               ))}
@@ -921,7 +921,7 @@ function ViewVendorQuotationModal({
                       <div className="quot-view-modal__custom-section">
                         <div className="quot-view-modal__custom-section-header">
                           <span className="quot-view-modal__custom-badge--simple">
-                            <span style={{ fontSize: 10, fontWeight: 700 }}>A</span>
+                            <span style={{ fontSize: 11, fontWeight: 700 }}>A</span>
                           </span>
                           <span>Additional Information</span>
                         </div>
@@ -947,7 +947,7 @@ function ViewVendorQuotationModal({
               {/* ── Tab 2: Payment Terms ── */}
               {activeTab === 'paymentTerms' && (
                 <div className="rfq-modal__info-panel">
-                  <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 14 }}>
+                  <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 15 }}>
                     <span>📄</span>
                     <span>Payment Terms</span>
                   </div>
@@ -956,7 +956,7 @@ function ViewVendorQuotationModal({
                       {/* Payment Term Name */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
                         <FileText size={16} style={{ color: 'var(--primary-500)' }} />
-                        <span style={{ fontSize: 14, fontWeight: 700 }}>{q.paymentTerms}</span>
+                        <span style={{ fontSize: 15, fontWeight: 700 }}>{q.paymentTerms}</span>
                       </div>
 
                       {/* Milestone Details */}
@@ -967,7 +967,7 @@ function ViewVendorQuotationModal({
                             gridTemplateColumns: '1fr 80px',
                             gap: 8,
                             padding: '6px 0',
-                            fontSize: 11,
+                            fontSize: 12,
                             fontWeight: 600,
                             color: 'var(--text-secondary)',
                             textTransform: 'uppercase',
@@ -991,11 +991,11 @@ function ViewVendorQuotationModal({
                                   : 'none',
                               }}
                             >
-                              <span style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.4 }}>
+                              <span style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.4 }}>
                                 {m.title}
                               </span>
                               <span style={{
-                                fontSize: 13,
+                                fontSize: 14,
                                 fontWeight: 700,
                                 color: 'var(--text-primary)',
                                 textAlign: 'right',
@@ -1013,9 +1013,9 @@ function ViewVendorQuotationModal({
                             borderTop: '2px solid var(--border)',
                             marginTop: 4,
                           }}>
-                            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Total</span>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Total</span>
                             <span style={{
-                              fontSize: 14,
+                              fontSize: 15,
                               fontWeight: 800,
                               color: '#107e3e',
                             }}>
@@ -1036,7 +1036,7 @@ function ViewVendorQuotationModal({
               {/* ── Tab 3: Authorization Documents ── */}
               {activeTab === 'authorization' && (
                 <div className="rfq-modal__info-panel">
-                  <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 14 }}>
+                  <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 15 }}>
                     <span>🔒</span>
                     <span>Authorization Documents</span>
                   </div>
@@ -1045,8 +1045,8 @@ function ViewVendorQuotationModal({
                     <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
                       <Shield size={16} style={{ color: 'var(--primary-500)', flexShrink: 0 }} />
                       <div style={{ flex: 1 }}>
-                        <strong style={{ fontSize: 13, color: 'var(--text-primary)' }}>Bid Security Required</strong>
-                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+                        <strong style={{ fontSize: 14, color: 'var(--text-primary)' }}>Bid Security Required</strong>
+                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
                           <span>Type: Bid Bond</span>
                         </div>
                       </div>
@@ -1065,13 +1065,13 @@ function ViewVendorQuotationModal({
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
-                            <strong style={{ fontSize: 13, color: 'var(--text-primary)' }}>Bid Security</strong>
-                            <span className={`rfq-badge rfq-badge--${bidSecurityDoc.status === 'VERIFIED' ? 'CLOSED' : bidSecurityDoc.status === 'REJECTED' ? 'CANCELLED' : 'SENT'}`} style={{ fontSize: 10, padding: '2px 8px' }}>
+                            <strong style={{ fontSize: 14, color: 'var(--text-primary)' }}>Bid Security</strong>
+                            <span className={`rfq-badge rfq-badge--${bidSecurityDoc.status === 'VERIFIED' ? 'CLOSED' : bidSecurityDoc.status === 'REJECTED' ? 'CANCELLED' : 'SENT'}`} style={{ fontSize: 11, padding: '2px 8px' }}>
                               {bidSecurityDoc.status}
                             </span>
                           </div>
                           {bidSecurityDoc.bidSecurityValueType && (
-                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 4 }}>
+                            <div style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 4 }}>
                               <span><strong>Type:</strong> {bidSecurityDoc.bidSecurityValueType === 'FIXED_AMOUNT' ? 'Fixed Amount' : 'Percentage'}</span>
                               {bidSecurityDoc.bidSecurityValue != null && (
                                 <span><strong>Value:</strong>{' '}
@@ -1094,7 +1094,7 @@ function ViewVendorQuotationModal({
                                 href={bidSecurityDoc.publicUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary-500)', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
+                                style={{ fontSize: 13, fontWeight: 600, color: 'var(--primary-500)', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
                               >
                                 <FileText size={13} />
                                 {bidSecurityDoc.originalName || 'Document'} ↗
@@ -1126,9 +1126,9 @@ function ViewVendorQuotationModal({
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                              <strong style={{ fontSize: 13, color: 'var(--text-primary)' }}>Bid Bond</strong>
+                              <strong style={{ fontSize: 14, color: 'var(--text-primary)' }}>Bid Bond</strong>
                             </div>
-                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                            <div style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                               {bidSecurityDoc.bondNumber && <span><strong>Bond #:</strong> {bidSecurityDoc.bondNumber}</span>}
                               {bidSecurityDoc.issuer && <span><strong>Issuer:</strong> {bidSecurityDoc.issuer}</span>}
                               {bidSecurityDoc.bondAmount != null && (
@@ -1150,7 +1150,7 @@ function ViewVendorQuotationModal({
                                   href={bidSecurityDoc.publicUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary-500)', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
+                                  style={{ fontSize: 13, fontWeight: 600, color: 'var(--primary-500)', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
                                 >
                                   <FileText size={13} />
                                   {bidSecurityDoc.originalName || 'Bid Bond Document'} ↗
@@ -1173,7 +1173,7 @@ function ViewVendorQuotationModal({
                       )}
 
                       {bidSecurityDoc.status === 'REJECTED' && bidSecurityDoc.rejectionReason && (
-                        <div style={{ padding: '8px 12px', background: 'rgba(187,0,0,0.06)', border: '1px solid rgba(187,0,0,0.15)', borderRadius: 'var(--radius-sm)', fontSize: 12, color: '#bb0000' }}>
+                        <div style={{ padding: '8px 12px', background: 'rgba(187,0,0,0.06)', border: '1px solid rgba(187,0,0,0.15)', borderRadius: 'var(--radius-sm)', fontSize: 13, color: '#bb0000' }}>
                           <strong>Rejection Reason:</strong> {bidSecurityDoc.rejectionReason}
                         </div>
                       )}
@@ -1187,7 +1187,7 @@ function ViewVendorQuotationModal({
               {/* ── Tab 4: Items ── */}
               {activeTab === 'items' && (
                 <div className="rfq-modal__info-panel">
-                  <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 14 }}>
+                  <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 15 }}>
                     <span>📋</span>
                     <span>Quotation Items</span>
                     <CurrencyBadge currency={defCur} size="sm" />
@@ -1248,11 +1248,11 @@ function ViewVendorQuotationModal({
               {/* ── Tab 5: Documents (Attachments) ── */}
               {activeTab === 'documents' && (
                 <div className="rfq-modal__info-panel">
-                  <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 14 }}>
+                  <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 15 }}>
                     <span>📎</span>
                     <span>Attachments</span>
                     {attachments && attachments.length > 0 && (
-                      <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 400, marginLeft: 4 }}>
+                      <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 400, marginLeft: 4 }}>
                         — {attachments.length} file(s)
                       </span>
                     )}
@@ -1290,10 +1290,10 @@ function ViewVendorQuotationModal({
                                 color: 'inherit',
                               }}
                             >
-                              <span style={{ fontSize: 22, lineHeight: 1 }}>{fileIcon.icon}</span>
+                              <span style={{ fontSize: 23, lineHeight: 1 }}>{fileIcon.icon}</span>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{
-                                  fontSize: 13,
+                                  fontSize: 14,
                                   fontWeight: 600,
                                   color: 'var(--text-primary)',
                                   overflow: 'hidden',
@@ -1303,13 +1303,13 @@ function ViewVendorQuotationModal({
                                   {att.originalName}
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
-                                  <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                                     {formatFileSize(att.fileSize)}
                                   </span>
                                   {att.uploadedAt && (
                                     <>
-                                      <span style={{ fontSize: 10, color: 'var(--text-placeholder)' }}>•</span>
-                                      <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                                      <span style={{ fontSize: 11, color: 'var(--text-placeholder)' }}>•</span>
+                                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                                         {new Date(att.uploadedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                                       </span>
                                     </>
@@ -1317,7 +1317,7 @@ function ViewVendorQuotationModal({
                                 </div>
                               </div>
                               <span style={{
-                                fontSize: 11,
+                                fontSize: 12,
                                 fontWeight: 600,
                                 color: 'var(--primary-500)',
                                 display: 'inline-flex',

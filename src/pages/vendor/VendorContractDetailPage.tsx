@@ -231,8 +231,8 @@ export default function VendorContractDetailPage() {
       <button className="vcd-back" onClick={() => navigate('/vendor/contracts')}><ChevronLeft size={16} /> Back to Contracts</button>
       <div className="vcd-page__error">
         <div className="vcd-page__error-icon"><AlertTriangle size={48} /></div>
-        <p style={{ fontWeight: 700, fontSize: 18 }}>Failed to load contract</p>
-        <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>{fetchError}</p>
+        <p style={{ fontWeight: 700, fontSize: 19 }}>Failed to load contract</p>
+        <p style={{ fontSize: 15, color: 'var(--text-secondary)' }}>{fetchError}</p>
         <button className="vcd-action-btn vcd-action-btn--primary" onClick={reload} style={{ marginTop: 16 }}>Retry</button>
       </div>
     </div>
@@ -590,7 +590,7 @@ export default function VendorContractDetailPage() {
 
                       {mode === 'draw' && (
                         <div className="vcd-color-picker" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Ink Color:</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Ink Color:</span>
                           {INK_COLORS.map(c => (
                             <button
                               key={c.id}

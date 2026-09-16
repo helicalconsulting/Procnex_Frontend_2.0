@@ -156,7 +156,7 @@ export default function NotificationsPage() {
 
       {/* Metric Cards */}
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <MetricCard icon={Bell} label="Total Notifications" value={summary.total} tone="primary" />
+        <MetricCard icon={Bell} label="Total Notifications" value={summary.total} tone="primary" aria-pressed={true} />
         <MetricCard icon={Mail} label="Unread Notifications" value={summary.unread} tone="warning" />
         <MetricCard icon={MailOpen} label="Read Notifications" value={summary.read} tone="success" />
       </div>
@@ -177,7 +177,7 @@ export default function NotificationsPage() {
                 )}
               >
                 {f === 'ALL' ? 'All' : f === 'UNREAD' ? 'Unread' : 'Read'}
-                <span className={cn('rounded-md px-1.5 py-0.5 text-[10px]', filter === f ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-background/80 text-muted-foreground')}>
+                <span className={cn('rounded-md px-1.5 py-0.5 text-[11px]', filter === f ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-background/80 text-muted-foreground')}>
                   {f === 'ALL' ? summary.total : f === 'UNREAD' ? summary.unread : summary.read}
                 </span>
               </button>
@@ -217,14 +217,14 @@ export default function NotificationsPage() {
                     <h4 className={cn('text-sm font-semibold text-foreground truncate', !n.isRead && 'text-primary')}>
                       {n.title}
                     </h4>
-                    <span className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
+                    <span className="flex shrink-0 items-center gap-1 text-[12px] text-muted-foreground">
                       <Clock className="size-3" /> {timeAgo(n.createdAt)}
                     </span>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground line-clamp-2 leading-relaxed">{n.message}</p>
-                  <div className="mt-2.5 flex items-center gap-2 text-[11px]">
+                  <div className="mt-2.5 flex items-center gap-2 text-[12px]">
                     {n.linkedRef !== '-' && (
-                      <Badge variant="outline" className="font-mono text-[10px]">{n.linkedRef}</Badge>
+                      <Badge variant="outline" className="font-mono text-[11px]">{n.linkedRef}</Badge>
                     )}
                     <span className="text-muted-foreground">from <strong className="text-foreground">{n.from}</strong></span>
                   </div>

@@ -106,16 +106,16 @@ export default function VendorNotificationBell() {
   };
 
   return (
-    <div className="vnotif" ref={ref}>
+    <div className="vnotif relative inline-flex items-center" ref={ref}>
       <button
         ref={triggerRef}
         type="button"
-        className="topbar__icon-btn topbar__icon-btn--notif"
+        className="relative inline-flex size-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card active:scale-[0.97]"
         title="Notifications"
         onClick={handleOpen}
         aria-expanded={open}
       >
-        <Bell size={17} />
+        <Bell size={18} />
         {unreadCount > 0 && (
           <span className="topbar__notif-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
         )}
