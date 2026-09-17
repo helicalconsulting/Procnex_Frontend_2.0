@@ -13,6 +13,7 @@ import {
 import { downloadContractAsPdf } from '../../utils/pdfDownload';
 import { cleanDuplicateSignatures } from '../../utils/cleanSignatures';
 import { sseClient } from '../../services/sseClient';
+import { getVendorPath } from '../../utils/tenantResolver';
 import './VendorContractDetailPage.css';
 
 // ─── Status Badge Mappings ───────────────────────────────────
@@ -228,7 +229,7 @@ export default function VendorContractDetailPage() {
   if (loading) return <div className="vcd-page"><div className="vcd-page__loading">Loading contract…</div></div>;
   if (fetchError) return (
     <div className="vcd-page">
-      <button className="vcd-back" onClick={() => navigate('/vendor/contracts')}><ChevronLeft size={16} /> Back to Contracts</button>
+      <button className="vcd-back" onClick={() => navigate(getVendorPath('/vendor/contracts'))}><ChevronLeft size={16} /> Back to Contracts</button>
       <div className="vcd-page__error">
         <div className="vcd-page__error-icon"><AlertTriangle size={48} /></div>
         <p style={{ fontWeight: 700, fontSize: 19 }}>Failed to load contract</p>
@@ -263,7 +264,7 @@ export default function VendorContractDetailPage() {
       )}
 
       {/* Back Button */}
-      <button className="vcd-back" onClick={() => navigate('/vendor/contracts')}>
+      <button className="vcd-back" onClick={() => navigate(getVendorPath('/vendor/contracts'))}>
         <ChevronLeft size={16} /> Back to Contracts
       </button>
 

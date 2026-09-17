@@ -751,6 +751,35 @@ img {
   opacity: 1 !important;
 }
 
+/* ─── Secondary / Nested Snapshot Popup Modals (Must stack ABOVE primary modal windows) ─── */
+.vquot-snapshot-modal-overlay,
+.vquot-snapshot-modal-overlay--fullscreen,
+.snapshot-modal-overlay,
+.custom-plan-modal-backdrop,
+.view-plan-modal-backdrop,
+[class*="custom-plan-modal-backdrop"],
+[class*="view-plan-modal-backdrop"],
+[class*="vquot-snapshot-modal-overlay"],
+[class*="snapshot-modal-overlay"],
+[class*="-snapshot-modal-overlay"],
+[class*="-snapshot-overlay"] {
+  z-index: 999990 !important;
+}
+
+.vquot-snapshot-modal-content,
+.vquot-snapshot-modal-content--fullscreen,
+.snapshot-modal-content,
+.custom-plan-modal,
+.view-plan-modal,
+[class*="custom-plan-modal"],
+[class*="view-plan-modal"],
+[class*="vquot-snapshot-modal-content"],
+[class*="snapshot-modal-content"],
+[class*="-snapshot-modal-content"],
+[class*="-snapshot-content"] {
+  z-index: 999995 !important;
+}
+
 /* ─── SAP Fiori Global Sharp Edges Enforcement (4px Radius Standard) ─── */
 [class*="-card"],
 [class*="__card"],

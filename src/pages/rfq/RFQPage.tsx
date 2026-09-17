@@ -10,7 +10,7 @@ import {
   Plus, Search, FileText, Eye, Trash2, Users, Building2,
   ArrowUpDown, ChevronLeft, ChevronRight, CalendarDays,
   ClipboardList, ChevronDown, AlertTriangle, Clock, CheckCircle2,
-  XCircle, ThumbsUp, ThumbsDown, RotateCcw, MessageSquare, CheckSquare,
+  X, XCircle, ThumbsUp, ThumbsDown, RotateCcw, MessageSquare, CheckSquare,
 } from 'lucide-react';
 import type { RFQStatus } from '../../types';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';

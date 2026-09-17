@@ -28,6 +28,7 @@ import { useServiceData } from '../../hooks/useServiceData';
 import { vendorPortalService, type VendorQuotationRow, type VendorWidgetPref } from '../../services/vendorPortalService';
 import type { VendorOrderMock, VendorInvoiceMock } from '../../mocks/vendorPortal.mock';
 import type { RFQ } from '../../types';
+import { getVendorPath } from '../../utils/tenantResolver';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -285,7 +286,7 @@ export default function VendorDashboard() {
     }
 
     if (id === 'deadlines') return (
-      <WidgetPanel title="Upcoming deadlines" icon={Clock} action={<Button variant="ghost" size="sm" onClick={() => navigate('/vendor/rfqs')}>View all <ArrowRight /></Button>}>
+      <WidgetPanel title="Upcoming deadlines" icon={Clock} action={<Button variant="ghost" size="sm" onClick={() => navigate(getVendorPath('/vendor/rfqs'))}>View all <ArrowRight /></Button>}>
         <div className="divide-y divide-border/60">
           {deadlines.length ? deadlines.map((deadline) => (
             <div key={deadline.rfqNumber} className="flex items-center gap-3 px-5 py-3.5">
@@ -319,11 +320,11 @@ export default function VendorDashboard() {
 
     if (id === 'quicknav') {
       const actions = [
-        { label: 'Submit quotation', description: 'Respond to open RFQs', icon: FileText, path: '/vendor/rfqs' },
-        { label: 'Track orders', description: 'View fulfillment status', icon: Package, path: '/vendor/orders' },
-        { label: 'Manage invoices', description: 'Upload and track invoices', icon: Receipt, path: '/vendor/invoices' },
-        { label: 'My contracts', description: 'Review active agreements', icon: CheckCircle2, path: '/vendor/contracts' },
-        { label: 'Company profile', description: 'Documents and compliance', icon: Building2, path: '/vendor/profile' },
+        { label: 'Submit quotation', description: 'Respond to open RFQs', icon: FileText, path: getVendorPath('/vendor/rfqs') },
+        { label: 'Track orders', description: 'View fulfillment status', icon: Package, path: getVendorPath('/vendor/orders') },
+        { label: 'Manage invoices', description: 'Upload and track invoices', icon: Receipt, path: getVendorPath('/procurement/grns') },
+        { label: 'My contracts', description: 'Review active agreements', icon: CheckCircle2, path: getVendorPath('/vendor/contracts') },
+        { label: 'Company profile', description: 'Documents and compliance', icon: Building2, path: getVendorPath('/vendor/profile') },
       ];
       return (
         <WidgetPanel title="Quick actions" icon={Zap}>
@@ -344,13 +345,13 @@ export default function VendorDashboard() {
     }
 
     if (id === 'recent-quotations') return (
-      <WidgetPanel title="Recent quotations" icon={CheckCircle2} action={<Button variant="ghost" size="sm" onClick={() => navigate('/vendor/quotations')}>View all <ArrowRight /></Button>}>
+      <WidgetPanel title="Recent quotations" icon={CheckCircle2} action={<Button variant="ghost" size="sm" onClick={() => navigate(getVendorPath('/vendor/quotations'))}>View all <ArrowRight /></Button>}>
         <div className="divide-y divide-border/60">
           {quotations.length ? [...quotations].sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()).slice(0, 5).map((quote) => {
             const accepted = ['ACCEPTED', 'APPROVED'].includes(quote.status);
             const rejected = quote.status === 'REJECTED';
             return (
-              <button key={quote.id} onClick={() => navigate('/vendor/quotations')} className="flex w-full items-center gap-3 px-5 py-3.5 text-left transition hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40">
+              <button key={quote.id} onClick={() => navigate(getVendorPath('/vendor/quotations'))} className="flex w-full items-center gap-3 px-5 py-3.5 text-left transition hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2"><span className="text-sm font-semibold text-primary">{quote.rfq?.rfqNumber || `#${quote.id}`}</span><Badge tone={accepted ? 'success' : rejected ? 'danger' : 'warning'}>{quote.status.replaceAll('_', ' ')}</Badge></div>
                   <p className="mt-1 truncate text-xs text-muted-foreground">{quote.rfq?.title || 'Quotation'} · {relativeTime(quote.submittedAt)}</p>

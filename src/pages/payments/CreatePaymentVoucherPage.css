@@ -203,7 +203,7 @@
 
 .cpv-btn:disabled {
   opacity: 0.5;
-  cursor: not-allowed !allowed;
+  cursor: not-allowed;
   transform: none !important;
   box-shadow: none !important;
 }

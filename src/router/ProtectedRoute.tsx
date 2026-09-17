@@ -1,6 +1,7 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { isVendor } from '../utils/rbac';
+import { getTenantCompanyCode } from '../utils/tenantResolver';
 
 interface ProtectedRouteProps {
   allowedRoles?: string[];
@@ -22,7 +23,9 @@ export function ProtectedRoute({ allowedRoles, requireVendor }: ProtectedRoutePr
   // Not logged in → redirect to appropriate login
   if (!isAuthenticated) {
     if (requireVendor) {
-      return <Navigate to="/vendor/login" replace />;
+      const companyCode = getTenantCompanyCode();
+      const loginTarget = companyCode ? `/v/${companyCode.toLowerCase()}/login` : '/vendor/login';
+      return <Navigate to={loginTarget} replace />;
     }
     return <Navigate to="/login" replace />;
   }

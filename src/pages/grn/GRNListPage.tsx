@@ -34,12 +34,23 @@ import { cn } from '../../lib/utils';
 
 export default function GRNListPage() {
   const navigate = useNavigate();
-  const { hasPermission } = useAuth();
+  const { hasPermission, roles = [], user, permissions = {} } = useAuth();
+  const isVendor =
+    roles.some((r) => String(r).toLowerCase().includes('vendor') || String(r).toLowerCase().includes('supplier')) ||
+    String(user?.roleName || '').toLowerCase().includes('vendor') ||
+    String(user?.roleName || '').toLowerCase().includes('supplier') ||
+    !!(user as any)?.vendorId ||
+    !!(user as any)?.isVendor ||
+    Object.keys(permissions).length === 0;
+
   const canCreateGRN =
+    isVendor ||
     hasPermission('PO Creation', 'canCreate') ||
     hasPermission('Goods Received Note', 'canCreate') ||
     hasPermission('GRN', 'canCreate');
+
   const canCreateInvoice =
+    isVendor ||
     hasPermission('Create Purchase Invoice', 'canCreate') ||
     hasPermission('Purchase Invoice', 'canCreate') ||
     hasPermission('Invoices', 'canCreate') ||

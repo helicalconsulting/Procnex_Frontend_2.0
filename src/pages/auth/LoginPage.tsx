@@ -5,6 +5,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useBranding } from '../../context/BrandingContext';
 import { Eye, EyeOff, AlertCircle, LoaderCircle } from 'lucide-react';
 import { isVendor } from '../../utils/rbac';
+import { getVendorPath } from '../../utils/tenantResolver';
 import { getFirstAllowedPath } from '../../utils/permissions';
 import { PORTAL_NAMES } from '../../config/portalNames';
 import { AuthLayout } from '../../components/auth/AuthLayout';
@@ -23,7 +24,7 @@ export default function LoginPage() {
 
   if (!isLoading && isAuthenticated) {
     const landing = isVendor(roles)
-      ? '/vendor/dashboard'
+      ? getVendorPath('/vendor/dashboard')
       : getFirstAllowedPath(permissions);
     return <Navigate to={landing} replace />;
   }

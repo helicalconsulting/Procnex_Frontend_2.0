@@ -33,6 +33,7 @@ import { useRoutePrefetch } from '../../hooks/useRoutePrefetch';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { isVendor } from '../../utils/rbac';
+import { getTenantCompanyCode } from '../../utils/tenantResolver';
 import { cn } from '../../lib/utils';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 
@@ -153,7 +154,10 @@ export default function Sidebar({
   const isDesktop = useMediaQuery('(min-width: 1024px)');
 
   const collapsed = !isHovered;
-  const dashboardPath = isVendor(roles) ? '/vendor/dashboard' : '/dashboard';
+  const companyCode = getTenantCompanyCode();
+  const dashboardPath = isVendor(roles)
+    ? (companyCode ? `/v/${companyCode.toLowerCase()}/dashboard` : '/vendor/dashboard')
+    : '/dashboard';
 
   useEffect(() => {
     if (!mobileOpen) return;
@@ -360,7 +364,7 @@ export default function Sidebar({
               </span>
               {section.items.map((item) => {
                 const isActive =
-                  item.path === '/dashboard' || item.path === '/vendor/dashboard'
+                  item.path.endsWith('/dashboard')
                     ? location.pathname === item.path
                     : location.pathname.startsWith(item.path);
 

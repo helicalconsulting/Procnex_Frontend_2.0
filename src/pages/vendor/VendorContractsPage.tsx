@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { contractService, type Contract } from '@/services/contractService';
 import { sseClient } from '@/services/sseClient';
 import { downloadContractAsPdf } from '@/utils/pdfDownload';
+import { getVendorPath } from '@/utils/tenantResolver';
 
 type Tone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
 const STATUS: Record<string, { label: string; tone: Tone; icon: typeof FileText }> = {
@@ -110,9 +111,17 @@ export default function VendorContractsPage() {
                       ].map(([label, value]) => <div key={label} className="rounded-xl border border-border/60 bg-card p-3"><dt className="text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{label}</dt><dd className="mt-1 break-words text-sm font-medium">{value}</dd></div>)}
                     </dl>
                     <div className="mt-4 flex flex-wrap gap-2 border-t border-border/60 pt-4">
-                      <Button size="sm" onClick={() => navigate(`/vendor/contracts/${contract.id}`)}><Eye />View details</Button>
-                      <Button variant="secondary" size="sm" onClick={() => downloadContractAsPdf(contract.contentSnapshot, contract.contractNumber, contract.title)}><Download />Download</Button>
-                      {needsVendorSignature(contract) && <Button size="sm" className="border-emerald-600 bg-emerald-600 hover:bg-emerald-700" onClick={() => navigate(`/vendor/contracts/${contract.id}?action=sign`)}><FileSignature />Sign contract</Button>}
+                      <Button size="sm" onClick={() => navigate(getVendorPath(`/vendor/contracts/${contract.id}`))}>
+                        <Eye />View details
+                      </Button>
+                      <Button variant="secondary" size="sm" onClick={() => downloadContractAsPdf(contract.contentSnapshot, contract.contractNumber, contract.title)}>
+                        <Download />Download
+                      </Button>
+                      {needsVendorSignature(contract) && (
+                        <Button size="sm" className="border-emerald-600 bg-emerald-600 hover:bg-emerald-700" onClick={() => navigate(getVendorPath(`/vendor/contracts/${contract.id}?action=sign`))}>
+                          <FileSignature />Sign contract
+                        </Button>
+                      )}
                     </div>
                 </CollapsibleContent>
               </Card>

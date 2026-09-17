@@ -800,7 +800,7 @@ export default function VendorCreateInvoicePage() {
       />
 
       {/* Official A4 Digital TAX INVOICE Document (Visible ONLY during window.print()) */}
-      <div className="grn-print-document po-document">
+      <div className="grn-print-document po-document hidden print:block">
         {/* ── Header ── */}
         <div className="po-doc__header">
           <div className="po-doc__header-left">

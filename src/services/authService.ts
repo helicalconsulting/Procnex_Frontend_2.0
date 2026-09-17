@@ -263,6 +263,7 @@ function clearSession(): void {
   localStorage.removeItem(ROLES_KEY);
   localStorage.removeItem(PERMISSIONS_KEY);
   localStorage.removeItem(VENDOR_TOKEN_KEY);
+  localStorage.removeItem('vendor_company_code');
   localStorage.removeItem('heliflow_branding_cache');
   localStorage.removeItem('heliflow_tab_title');
 }

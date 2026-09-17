@@ -63,3 +63,22 @@ export function setTenantCompanyCode(companyCode: string): void {
 export function clearTenantCompanyCode(): void {
   localStorage.removeItem('vendor_company_code');
 }
+
+/**
+ * Resolves a vendor route path with active company code isolation.
+ * e.g., getVendorPath('/vendor/contracts') -> '/v/hfl/contracts'
+ */
+export function getVendorPath(path: string): string {
+  const companyCode = getTenantCompanyCode();
+  if (!companyCode) return path;
+
+  const code = companyCode.toLowerCase();
+  if (path.startsWith(`/v/${code}`) || path.startsWith(`/v/${companyCode.toUpperCase()}`)) {
+    return path;
+  }
+  if (path.startsWith('/vendor')) {
+    return path.replace('/vendor', `/v/${code}`);
+  }
+  return `/v/${code}${path.startsWith('/') ? '' : '/'}${path}`;
+}
+

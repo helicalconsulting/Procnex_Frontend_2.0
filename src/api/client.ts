@@ -62,9 +62,11 @@ export function getClientInstanceId(): string {
   return id;
 }
 
+import { getTenantCompanyCode } from '../utils/tenantResolver';
+
 export function authHeaders(extra?: Record<string, string>): HeadersInit {
   const token = localStorage.getItem(TOKEN_KEY) || localStorage.getItem('heliflow_vendor_token');
-  const companyCode = localStorage.getItem('vendor_company_code');
+  const companyCode = getTenantCompanyCode() || localStorage.getItem('vendor_company_code');
   return {
     'Content-Type': 'application/json',
     'X-Client-Instance-Id': getClientInstanceId(),
@@ -79,9 +81,9 @@ function methodOf(options: RequestInit): string {
 }
 
 function buildCacheKey(path: string, options: RequestInit): string {
-  // FIX 2: Full token (not just 24 chars) to prevent cross-user cache collisions
   const token = localStorage.getItem(TOKEN_KEY) || '';
-  return [methodOf(options), path, token, getClientInstanceId()].join('|');
+  const companyCode = getTenantCompanyCode() || localStorage.getItem('vendor_company_code') || '';
+  return [methodOf(options), path, token, companyCode, getClientInstanceId()].join('|');
 }
 
 // FIX 3: Surgical bust — only invalidate GET entries for the mutated path.

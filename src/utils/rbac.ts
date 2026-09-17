@@ -4,6 +4,7 @@
  */
 
 import { checkMenuItemPermission, getMenuPermissionRule, type UserPermissionsMap } from './permissions';
+import { getTenantCompanyCode } from './tenantResolver';
 
 // ─── Role Definitions ───────────────────────────────────────
 
@@ -440,9 +441,16 @@ export function getAccessibleMenuItems(
 }
 
 export function getVendorAccessibleMenuItems(roles: string[]): MenuItem[] {
+  const companyCode = getTenantCompanyCode();
+  const prefix = companyCode ? `/v/${companyCode.toLowerCase()}` : '/vendor';
+
   return VENDOR_NAVIGATION_MENU.filter((item) => item.roles.some((r) => roles.includes(r))).map((item) => ({
     ...item,
-    children: item.children?.filter((child) => child.roles.some((r) => roles.includes(r))),
+    path: item.path.replace('/vendor', prefix),
+    children: item.children?.filter((child) => child.roles.some((r) => roles.includes(r))).map((child) => ({
+      ...child,
+      path: child.path.replace('/vendor', prefix),
+    })),
   }));
 }
 

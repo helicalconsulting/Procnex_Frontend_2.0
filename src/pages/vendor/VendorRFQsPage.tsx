@@ -1309,7 +1309,7 @@ export default function VendorRFQsPage() {
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0 }}>
                           {previousQuotationsList.length > 0 && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <label style={{ fontSize: 12, fontWeight: 700, color: '#e9730c', whiteSpace: 'nowrap' }}>
+                              <label style={{ fontSize: 12, fontWeight: 700, color: '#0284c7', whiteSpace: 'nowrap' }}>
                                 Version:
                               </label>
                               <select
@@ -1320,7 +1320,7 @@ export default function VendorRFQsPage() {
                                   fontSize: 13,
                                   fontWeight: 700,
                                   borderRadius: 6,
-                                  border: '1px solid rgba(233, 115, 12, 0.4)',
+                                  border: '1px solid rgba(14, 165, 233, 0.4)',
                                   background: 'var(--surface-card, #1e293b)',
                                   color: 'var(--text-primary, #f8fafc)',
                                   cursor: 'pointer',
@@ -1357,10 +1357,12 @@ export default function VendorRFQsPage() {
                       {showPreviousQuoteDetails && activePrevQuote && createPortal(
                         <div
                           className={`vquot-snapshot-modal-overlay ${isSnapshotFullScreen ? 'vquot-snapshot-modal-overlay--fullscreen' : ''}`}
+                          style={{ zIndex: 999990 }}
                           onClick={() => setShowPreviousQuoteDetails(false)}
                         >
                           <div
                             className={`vquot-snapshot-modal-content ${isSnapshotFullScreen ? 'vquot-snapshot-modal-content--fullscreen' : ''}`}
+                            style={{ zIndex: 999995 }}
                             onClick={e => e.stopPropagation()}
                           >
                             {/* Popup Header */}
@@ -1368,9 +1370,9 @@ export default function VendorRFQsPage() {
                               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                 <div style={{
                                   width: 38, height: 38, borderRadius: 8,
-                                  background: 'rgba(234, 179, 8, 0.18)', color: '#f59e0b',
+                                  background: 'rgba(14, 165, 233, 0.18)', color: '#38bdf8',
                                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  fontWeight: 800, fontSize: 15, border: '1px solid rgba(234, 179, 8, 0.3)',
+                                  fontWeight: 800, fontSize: 15, border: '1px solid rgba(14, 165, 233, 0.3)',
                                 }}>
                                   {activePrevQuote.qNo || `Q${activePrevQuote.versionNumber || 1}`}
                                 </div>
@@ -1394,7 +1396,7 @@ export default function VendorRFQsPage() {
                                   type="button"
                                   onClick={() => toggleAllSnapshotSections(!allSectionsExpanded)}
                                   style={{
-                                    background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)', color: '#f59e0b',
+                                    background: 'rgba(14, 165, 233, 0.15)', border: '1px solid rgba(14, 165, 233, 0.3)', color: '#38bdf8',
                                     cursor: 'pointer', padding: '5px 12px', borderRadius: 6,
                                     display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600,
                                     transition: 'all 0.15s ease'
@@ -1438,8 +1440,8 @@ export default function VendorRFQsPage() {
                               {(activePrevQuote.returnReason || activePrevQuote.returnComment) && (
                                 <div style={{
                                   padding: '12px 16px', borderRadius: 10,
-                                  background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(245, 158, 11, 0.04) 100%)',
-                                  border: '1px solid rgba(245, 158, 11, 0.35)', color: '#d97706', fontSize: 14,
+                                  background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.12) 0%, rgba(14, 165, 233, 0.04) 100%)',
+                                  border: '1px solid rgba(14, 165, 233, 0.35)', color: '#38bdf8', fontSize: 14,
                                   display: 'flex', gap: 10, alignItems: 'flex-start'
                                 }}>
                                   <span style={{ fontSize: 17, marginTop: 1 }}>💬</span>

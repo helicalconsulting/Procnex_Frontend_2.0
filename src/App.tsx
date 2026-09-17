@@ -141,47 +141,35 @@ export default function App() {
                     <Route path="/login" element={page(LoginPage)} />
                     <Route path="/vendor/login" element={page(VendorLoginPage)} />
                     <Route path="/v/:companyCode/login" element={page(BrandedVendorLoginPage)} />
-                    <Route path="/v/:companyCode/dashboard" element={<Navigate to="/vendor/dashboard" replace />} />
                     <Route path="/set-password" element={page(SetPasswordPage)} />
                     <Route path="/auth/magic" element={page(VendorMagicLinkPage)} />
 
-                    {/* Vendor Portal Routes */}
+                    {/* Vendor Portal Routes — Multi-Tenant Isolated */}
                     <Route element={<ProtectedRoute requireVendor />}>
                       <Route element={<AppLayout />}>
-                        <Route
-                          path="/vendor/dashboard"
-                          element={page(VendorDashboard)}
-                        />
+                        {/* Company Code Prefix Routes (/v/:companyCode/*) */}
+                        <Route path="/v/:companyCode/dashboard" element={page(VendorDashboard)} />
+                        <Route path="/v/:companyCode/rfqs" element={page(VendorRFQsPage)} />
+                        <Route path="/v/:companyCode/quotations" element={page(VendorQuotationsPage)} />
+                        <Route path="/v/:companyCode/orders" element={page(VendorOrdersPage)} />
+                        <Route path="/v/:companyCode/invoices" element={<Navigate to="/procurement/grns" replace />} />
+                        <Route path="/v/:companyCode/create-invoice" element={page(VendorCreateInvoicePage)} />
+                        <Route path="/v/:companyCode/profile" element={page(VendorProfilePage)} />
+                        <Route path="/v/:companyCode/contracts" element={page(VendorContractsPage)} />
+                        <Route path="/v/:companyCode/contracts/:id" element={page(VendorContractDetailPage)} />
+                        <Route path="/v/:companyCode/agreements" element={page(VendorAgreementsPage)} />
+
+                        {/* Unscoped Vendor Routes (/vendor/*) */}
+                        <Route path="/vendor/dashboard" element={page(VendorDashboard)} />
                         <Route path="/vendor/rfqs" element={page(VendorRFQsPage)} />
-                        <Route
-                          path="/vendor/quotations"
-                          element={page(VendorQuotationsPage)}
-                        />
+                        <Route path="/vendor/quotations" element={page(VendorQuotationsPage)} />
                         <Route path="/vendor/orders" element={page(VendorOrdersPage)} />
-                        <Route
-                          path="/vendor/invoices"
-                          element={<Navigate to="/procurement/grns" replace />}
-                        />
-                        <Route
-                          path="/vendor/create-invoice"
-                          element={page(VendorCreateInvoicePage)}
-                        />
-                        <Route
-                          path="/vendor/profile"
-                          element={page(VendorProfilePage)}
-                        />
-                        <Route
-                          path="/vendor/contracts"
-                          element={page(VendorContractsPage)}
-                        />
-                        <Route
-                          path="/vendor/contracts/:id"
-                          element={page(VendorContractDetailPage)}
-                        />
-                        <Route
-                          path="/vendor/agreements"
-                          element={page(VendorAgreementsPage)}
-                        />
+                        <Route path="/vendor/invoices" element={<Navigate to="/procurement/grns" replace />} />
+                        <Route path="/vendor/create-invoice" element={page(VendorCreateInvoicePage)} />
+                        <Route path="/vendor/profile" element={page(VendorProfilePage)} />
+                        <Route path="/vendor/contracts" element={page(VendorContractsPage)} />
+                        <Route path="/vendor/contracts/:id" element={page(VendorContractDetailPage)} />
+                        <Route path="/vendor/agreements" element={page(VendorAgreementsPage)} />
                       </Route>
                     </Route>
 

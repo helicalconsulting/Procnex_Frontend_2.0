@@ -3,6 +3,16 @@
    Used for: Print, PDF Download, Email Attachment
    ═══════════════════════════════════════════════════════════ */
 
+.grn-print-document {
+  display: none !important;
+}
+
+@media print {
+  .grn-print-document {
+    display: block !important;
+  }
+}
+
 .po-document {
   background: #ffffff;
   color: #1a1a2e;

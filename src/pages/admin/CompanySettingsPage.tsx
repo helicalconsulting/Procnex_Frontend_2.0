@@ -404,7 +404,7 @@ function resolvePlaceholders(template: string): string {
 
 // ─── Tab Definitions ────────────────────────────────────────
 
-type TabKey = 'general' | 'branding' | 'departments' | 'branches' | 'positions' | 'warehouses' | 'forms' | 'form-documents' | 'email-templates' | 'documents-contracts' | 'doc-serialization';
+type TabKey = 'general' | 'branding' | 'departments' | 'branches' | 'warehouses' | 'forms' | 'form-documents' | 'email-templates' | 'documents-contracts' | 'doc-serialization';
 
 interface TabDef {
   key: TabKey;
@@ -417,7 +417,6 @@ const TABS: TabDef[] = [
   { key: 'branding',            label: 'Branding',               icon: <Palette size={15} /> },
   { key: 'departments',         label: 'Departments',            icon: <Building2 size={15} /> },
   { key: 'branches',            label: 'Branches',               icon: <MapPin size={15} /> },
-  { key: 'positions',           label: 'Positions',              icon: <Users size={15} /> },
   { key: 'warehouses',          label: 'Warehouses',             icon: <Building2 size={15} /> },
   { key: 'forms',               label: 'Forms Settings',         icon: <FileText size={15} /> },
   { key: 'form-documents',      label: 'Required Documents',     icon: <FileCheck size={15} /> },
@@ -3047,7 +3046,7 @@ export default function CompanySettingsPage() {
       {/* ── Page Header ── */}
       <div className="cs-page-header">
         <h1><Settings size={22} /> Company Settings</h1>
-        <p>Configure your organization's departments, categories, units, positions, and payment terms</p>
+        <p>Configure your organization's departments, categories, units, and payment terms</p>
       </div>
 
 
@@ -3882,57 +3881,7 @@ export default function CompanySettingsPage() {
         </div>
       )}
 
-      {/* -------------------------------------------------------
-          TAB: Positions
-          ------------------------------------------------------- */}
-      {activeTab === 'positions' && (
-        <div className="cs-tab-panel" role="tabpanel">
-          <div className="cs-section-card">
-            <div className="cs-section-header">
-              <div className="cs-section-header__left">
-                <h2><Users size={17} /> User Positions</h2>
-                <p>Manage positions for internal users (e.g. Purchase Clerk, Store Keeper, Inventory Manager)</p>
-              </div>
-              <div className="cs-section-header__actions">
-                <button className="company-settings__btn company-settings__btn--primary" onClick={openAddPosition}>
-                  <Plus size={16} /> Add Position
-                </button>
-              </div>
-            </div>
-            <div className="cs-section-body">
-              {positions.length === 0 ? (
-                <div className="cs-empty">
-                  <div className="cs-empty__icon"><Users size={28} /></div>
-                  <p>No positions yet. Add your first position to get started.</p>
-                  <button className="company-settings__btn company-settings__btn--primary" onClick={openAddPosition}>
-                    <Plus size={16} /> Add Position
-                  </button>
-                </div>
-              ) : (
-                <div className="cs-item-list">
-                  {positions.map((position) => (
-                    <div key={position.id} className={`cs-item ${!position.isActive ? 'cs-item--inactive' : ''}`}>
-                      <div className="cs-item__info">
-                        <span className="cs-item__name">{position.name}</span>
-                        {position.description && <span className="cs-item__desc">{position.description}</span>}
-                      </div>
-                      <div className="cs-item__actions">
-                        <span className={`company-settings__badge company-settings__badge--sm ${position.isActive ? 'company-settings__badge--active' : 'company-settings__badge--inactive'}`}>
-                          {position.isActive ? 'Active' : 'Inactive'}
-                        </span>
-                        <button className="company-settings__icon-btn company-settings__icon-btn--danger" onClick={() => requestDeletePosition(position)} title="Delete position">
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}                    </div>
 
-                  )}
-
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* -------------------------------------------------------
           TAB: Warehouses (SRM Logistics & Ship-To Locations)
@@ -6062,48 +6011,7 @@ export default function CompanySettingsPage() {
         </div>
       )}
 
-      {/* ── Position Modal ── */}
-      {showPositionModal && (
-        <div className="company-settings__backdrop" onClick={() => !actionLoading && setShowPositionModal(false)}>
-          <div className="company-settings__modal" onClick={(e) => e.stopPropagation()}>
-            <div className="company-settings__modal-header">
-              <span>Add Position</span>
-              <button className="company-settings__icon-btn" onClick={() => setShowPositionModal(false)}><X size={18} /></button>
-            </div>
-            <div className="company-settings__modal-body">
-              {positionError && (
-                <div className="cs-modal-error" style={{ marginBottom: 12 }}>
-                  <MessageStrip type="error" compact>{positionError}</MessageStrip>
-                </div>
-              )}
-              <div className="company-settings__field">
-                <label>Position Name <span>*</span></label>
-                <input
-                  value={positionName}
-                  onChange={(e) => { setPositionName(e.target.value); setPositionError(null); }}
-                  placeholder="e.g. Purchase Clerk"
-                  className={positionError ? 'cs-input--error' : ''}
-                />
-                <PredictiveMatchCard
-                  query={positionName}
-                  items={positions}
-                  labelName="Position"
-                />
-              </div>
-              <div className="company-settings__field">
-                <label>Description</label>
-                <textarea value={positionDesc} onChange={(e) => setPositionDesc(e.target.value)} placeholder="Optional description" rows={3} />
-              </div>
-            </div>
-            <div className="company-settings__modal-footer">
-              <button className="company-settings__btn company-settings__btn--secondary" onClick={() => setShowPositionModal(false)}>Cancel</button>
-              <button className="company-settings__btn company-settings__btn--primary" disabled={!positionName.trim() || actionLoading} onClick={handleSavePosition}>
-                <Save size={16} /> {actionLoading ? 'Saving…' : 'Create'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {/* ── Branch Modal ── */}
       {showBranchModal && (

@@ -5,6 +5,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useBranding } from '../../context/BrandingContext';
 import { Eye, EyeOff, AlertCircle, CheckCircle2, LoaderCircle } from 'lucide-react';
 import { isVendor } from '../../utils/rbac';
+import { getVendorPath } from '../../utils/tenantResolver';
 import { PORTAL_NAMES } from '../../config/portalNames';
 import { AuthLayout } from '../../components/auth/AuthLayout';
 import { Button } from '../../components/ui/button';
@@ -24,7 +25,7 @@ export default function VendorLoginPage() {
 
   if (!isLoading && isAuthenticated) {
     const landing = isVendor(roles)
-      ? '/vendor/dashboard'
+      ? getVendorPath('/vendor/dashboard')
       : '/dashboard';
     return <Navigate to={landing} replace />;
   }
