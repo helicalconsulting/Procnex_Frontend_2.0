@@ -302,7 +302,7 @@ export default function ApprovalsPage() {
     let list = approvals
       .filter((a) => !deletedIds.has(a.id) && !deletedIds.has(a.referenceId) && !deletedIds.has(a.referenceNumber))
       .map((a) => {
-        const opt = optimisticMap[a.id];
+        const opt = optimisticMap[a.id] || (a.referenceId ? optimisticMap[a.referenceId] : undefined) || (a.referenceNumber ? optimisticMap[a.referenceNumber] : undefined);
         if (opt) {
           const isApproved = opt.status === 'APPROVED';
           return {
@@ -356,7 +356,7 @@ export default function ApprovalsPage() {
     let list = moduleFiltered;
     if (!isAdmin) {
       list = list.filter((a) => {
-        if (a.status === 'PENDING' && !a.canAct && a.createdById !== user?.id) {
+        if (a.status === 'PENDING' && !a.canAct) {
           return false;
         }
         return true;
@@ -395,6 +395,8 @@ export default function ApprovalsPage() {
     setOptimisticMap((prev) => ({
       ...prev,
       [id]: { status: newStatus, currentLevel: targetLevel },
+      ...(req.referenceId ? { [req.referenceId]: { status: newStatus, currentLevel: targetLevel } } : {}),
+      ...(req.referenceNumber ? { [req.referenceNumber]: { status: newStatus, currentLevel: targetLevel } } : {}),
     }));
 
     const defaultMsg = actionType === 'approve'
@@ -429,12 +431,14 @@ export default function ApprovalsPage() {
       if (res?.message) {
         setActionSuccessData((prev) => (prev ? { ...prev, message: res.message } : null));
       }
+      window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
       await forceRefresh();
-      setOptimisticMap({});
     } catch (err) {
       setOptimisticMap((prev) => {
         const next = { ...prev };
         delete next[id];
+        if (req.referenceId) delete next[req.referenceId];
+        if (req.referenceNumber) delete next[req.referenceNumber];
         return next;
       });
       setActionSuccessData(null);

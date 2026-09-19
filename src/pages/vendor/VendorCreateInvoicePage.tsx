@@ -402,6 +402,14 @@ export default function VendorCreateInvoicePage() {
         body: JSON.stringify(payload),
       });
 
+      window.dispatchEvent(new CustomEvent('heliflow:invoice-created'));
+      window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
+      try {
+        const bc = new BroadcastChannel('heliflow_sync');
+        bc.postMessage({ type: 'INVOICE_CREATED', timestamp: Date.now() });
+        bc.close();
+      } catch {}
+
       if (isDraft) {
         setSuccessMsg(`Draft invoice #${invoiceNumber} saved successfully.`);
         setTimeout(() => navigate('/procurement/grns'), 1500);
@@ -490,8 +498,8 @@ export default function VendorCreateInvoicePage() {
             <span className="cpo-section__hint">Auto-loaded from confirmed Purchase Order</span>
           </div>
 
-          <div className="cpo-grid cpo-grid--4">
-            <div className="cpo-field cpo-field--span-2">
+          <div className="cpo-grid cpo-grid--3">
+            <div className="cpo-field">
               <label>SELECT PURCHASE ORDER *</label>
               <select
                 value={selectedPoId}
@@ -516,24 +524,13 @@ export default function VendorCreateInvoicePage() {
             </div>
 
             <div className="cpo-field">
-              <label>DISPATCH NOTE</label>
-              <select
-                value={selectedGrnId}
-                onChange={(e) => setSelectedGrnId(e.target.value)}
-                disabled={!selectedPoId}
-              >
-                <option value="">-- Direct PO Billing / Select GRN --</option>
-                {grnOptions.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.grnNumber} (Received: {new Date(g.receivedDate).toLocaleDateString()})
-                  </option>
-                ))}
-                {selectedGrnId && !grnOptions.some((g) => String(g.id) === String(selectedGrnId)) && (
-                  <option value={selectedGrnId}>
-                    {displayGrnNumber}
-                  </option>
-                )}
-              </select>
+              <label>VENDOR INVOICE NUMBER *</label>
+              <input
+                type="text"
+                value={invoiceNumber}
+                onChange={(e) => setInvoiceNumber(e.target.value)}
+                placeholder="e.g. INV-2026-9005"
+              />
             </div>
 
             <div className="cpo-field">
@@ -543,18 +540,6 @@ export default function VendorCreateInvoicePage() {
                 value={buyerName}
                 onChange={(e) => setBuyerName(e.target.value)}
                 placeholder="Enter Buyer / Client Name"
-              />
-            </div>
-          </div>
-
-          <div className="cpo-grid cpo-grid--4" style={{ marginTop: 16 }}>
-            <div className="cpo-field">
-              <label>VENDOR INVOICE NUMBER *</label>
-              <input
-                type="text"
-                value={invoiceNumber}
-                onChange={(e) => setInvoiceNumber(e.target.value)}
-                placeholder="e.g. INV-2026-9005"
               />
             </div>
 

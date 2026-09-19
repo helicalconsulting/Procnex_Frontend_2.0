@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { rfqService } from '../../services/rfqService';
 import { approvalService } from '../../services/approvalService';
+import { sseClient } from '../../services/sseClient';
 import { useServiceData } from '../../hooks/useServiceData';
 import type { RFQTableRow } from '../../types/viewModels';
 import { useNavigate } from 'react-router-dom';
@@ -101,9 +102,12 @@ const ALL_COLUMNS: ColumnDef[] = [
     render: (rfq) => {
       const isApprovedByMe = (rfq as any)._isApprovedByMe;
       const isReturnedByMe = (rfq as any)._isReturnedByMe;
+      const isRejectedByMe = (rfq as any)._isRejectedByMe;
       const isPending = rfq.status === 'PENDING_APPROVAL';
-      let displayStatus: string = (rfq.status === 'SENT' || rfq.status === 'IN_PROGRESS' || rfq.status === 'ACCEPTED')
+      let displayStatus: string = (rfq.status === 'SENT' || rfq.status === 'IN_PROGRESS' || rfq.status === 'ACCEPTED' || rfq.status === 'APPROVED')
         ? 'APPROVED'
+        : (isPending && isRejectedByMe)
+        ? 'REJECTED'
         : (isPending && isReturnedByMe)
         ? 'RETURNED'
         : (isPending && isApprovedByMe)
@@ -248,7 +252,7 @@ export default function RFQPage() {
   const [departmentFilter, setDepartmentFilter] = useState<string>('ALL');
   const [currentPage, setCurrentPage] = useState(1);
 
-  const { data: rfqList, loading, error, reload } = useServiceData(
+  const { data: rfqList, loading, error, reload, forceRefresh } = useServiceData(
     () => rfqService.list({ limit: 100 }),
     [] as RFQTableRow[],
     [],
@@ -274,6 +278,7 @@ export default function RFQPage() {
   const [pendingApprovalsMap, setPendingApprovalsMap] = useState<Map<string, any>>(new Map());
   const [myApprovedMap, setMyApprovedMap] = useState<Set<string>>(new Set());
   const [myReturnedMap, setMyReturnedMap] = useState<Set<string>>(new Set());
+  const [myRejectedMap, setMyRejectedMap] = useState<Set<string>>(new Set());
   const [approvalActionModal, setApprovalActionModal] = useState<{
     rfq: MockRFQ;
     action: 'approve' | 'reject' | 'return';
@@ -287,10 +292,11 @@ export default function RFQPage() {
 
   const fetchPendingApprovals = useCallback(async () => {
     try {
-      const [pendingRows, approvedRows, returnedRows] = await Promise.all([
+      const [pendingRows, approvedRows, returnedRows, rejectedRows] = await Promise.all([
         approvalService.listTable({ module: 'RFQ', status: 'PENDING' }),
         approvalService.listTable({ module: 'RFQ', status: 'APPROVED' }),
         approvalService.listTable({ module: 'RFQ', status: 'RETURNED' }),
+        approvalService.listTable({ module: 'RFQ', status: 'REJECTED' }),
       ]);
       const map = new Map<string, any>();
       pendingRows.forEach((r) => {
@@ -315,16 +321,43 @@ export default function RFQPage() {
         if (r.id) rSet.add(String(r.id));
       });
       setMyReturnedMap(rSet);
+
+      const rejSet = new Set<string>();
+      rejectedRows.forEach((r) => {
+        if (r.referenceId) rejSet.add(String(r.referenceId));
+        if (r.referenceNumber) rejSet.add(String(r.referenceNumber));
+        if (r.id) rejSet.add(String(r.id));
+      });
+      setMyRejectedMap(rejSet);
     } catch {
       setPendingApprovalsMap(new Map());
       setMyApprovedMap(new Set());
       setMyReturnedMap(new Set());
+      setMyRejectedMap(new Set());
     }
   }, []);
 
   useEffect(() => {
     fetchPendingApprovals();
-  }, [rfqList, fetchPendingApprovals]);
+
+    const handleRefresh = () => {
+      forceRefresh();
+      fetchPendingApprovals();
+    };
+
+    const unsubLevel = sseClient.on('approval_level_complete', handleRefresh);
+    const unsubChain = sseClient.on('approval_chain_complete', handleRefresh);
+    const unsubNotif = sseClient.on('notification', handleRefresh);
+
+    window.addEventListener('heliflow:approval-updated', handleRefresh);
+
+    return () => {
+      unsubLevel();
+      unsubChain();
+      unsubNotif();
+      window.removeEventListener('heliflow:approval-updated', handleRefresh);
+    };
+  }, [rfqList, fetchPendingApprovals, forceRefresh]);
 
   const openApprovalAction = useCallback((rfq: MockRFQ, action: 'approve' | 'reject' | 'return') => {
     const found = pendingApprovalsMap.get(String(rfq.id)) || pendingApprovalsMap.get(rfq.rfqNumber);
@@ -372,6 +405,38 @@ export default function RFQPage() {
     setApprovalComment('');
     setApprovalActionLoading(false);
 
+    // ⚡ INSTANT Optimistic State Updates in local maps (0ms latency!)
+    setPendingApprovalsMap((prev) => {
+      const next = new Map(prev);
+      next.delete(String(rfq.id));
+      if (rfq.rfqNumber) next.delete(rfq.rfqNumber);
+      next.delete(approvalId);
+      return next;
+    });
+
+    if (action === 'approve') {
+      setMyApprovedMap((prev) => {
+        const next = new Set(prev);
+        next.add(String(rfq.id));
+        if (rfq.rfqNumber) next.add(rfq.rfqNumber);
+        return next;
+      });
+    } else if (action === 'return') {
+      setMyReturnedMap((prev) => {
+        const next = new Set(prev);
+        next.add(String(rfq.id));
+        if (rfq.rfqNumber) next.add(rfq.rfqNumber);
+        return next;
+      });
+    } else if (action === 'reject') {
+      setMyRejectedMap((prev) => {
+        const next = new Set(prev);
+        next.add(String(rfq.id));
+        if (rfq.rfqNumber) next.add(rfq.rfqNumber);
+        return next;
+      });
+    }
+
     const apiCall = action === 'approve'
       ? approvalService.approve(approvalId, comment)
       : action === 'reject'
@@ -383,29 +448,46 @@ export default function RFQPage() {
         if (res?.message) {
           setActionSuccessData((prev) => prev ? { ...prev, message: res.message } : null);
         }
+        forceRefresh();
         reload();
         fetchPendingApprovals();
+        window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
       })
       .catch((err) => {
         setActionSuccessData(null);
         setApprovalActionMessage({ type: 'error', text: err instanceof Error ? err.message : 'Action failed' });
       });
-  }, [approvalActionModal, approvalComment, actionReturnTarget, reload, fetchPendingApprovals]);
+  }, [approvalActionModal, approvalComment, actionReturnTarget, reload, forceRefresh, fetchPendingApprovals]);
 
   const anyModalOpen = !!(detailRFQ || deleteTarget || approvalActionModal || actionSuccessData);
   useBodyScrollLock(anyModalOpen);
 
+  const enrichedRfqList = useMemo(() => {
+    return rfqList.map((rfq) => {
+      const idStr = String(rfq.id);
+      const isApproved = myApprovedMap.has(idStr) || (rfq.rfqNumber && myApprovedMap.has(rfq.rfqNumber));
+      const isReturned = myReturnedMap.has(idStr) || (rfq.rfqNumber && myReturnedMap.has(rfq.rfqNumber));
+      const isRejected = myRejectedMap.has(idStr) || (rfq.rfqNumber && myRejectedMap.has(rfq.rfqNumber));
+      return {
+        ...rfq,
+        _isApprovedByMe: Boolean(isApproved),
+        _isReturnedByMe: Boolean(isReturned),
+        _isRejectedByMe: Boolean(isRejected),
+      };
+    });
+  }, [rfqList, myApprovedMap, myReturnedMap, myRejectedMap]);
+
   const stats = useMemo(() => {
-    const cleanList = rfqList.filter((r) => r.title !== 'Direct PO Master' && !r.rfqNumber?.startsWith('RFQ-DIRECT'));
+    const cleanList = enrichedRfqList.filter((r) => r.title !== 'Direct PO Master' && !r.rfqNumber?.startsWith('RFQ-DIRECT'));
     return {
       total: cleanList.length,
       draft: cleanList.filter((r) => r.status === 'DRAFT').length,
-      pendingApproval: cleanList.filter((r) => r.status === 'PENDING_APPROVAL').length,
-      draftOrPending: cleanList.filter((r) => r.status === 'DRAFT' || r.status === 'PENDING_APPROVAL').length,
-      approved: cleanList.filter((r) => r.status === 'APPROVED' || r.status === 'SENT' || r.status === 'IN_PROGRESS' || r.status === 'ACCEPTED').length,
-      rejected: cleanList.filter((r) => r.status === 'REJECTED').length,
+      pendingApproval: cleanList.filter((r) => r.status === 'PENDING_APPROVAL' && !r._isApprovedByMe && !r._isReturnedByMe && !r._isRejectedByMe).length,
+      draftOrPending: cleanList.filter((r) => (r.status === 'DRAFT' || r.status === 'PENDING_APPROVAL') && !r._isApprovedByMe && !r._isReturnedByMe && !r._isRejectedByMe).length,
+      approved: cleanList.filter((r) => r.status === 'APPROVED' || r.status === 'SENT' || r.status === 'IN_PROGRESS' || r.status === 'ACCEPTED' || r._isApprovedByMe).length,
+      rejected: cleanList.filter((r) => r.status === 'REJECTED' || r._isRejectedByMe).length,
     };
-  }, [rfqList]);
+  }, [enrichedRfqList]);
 
   const handleKpiClick = useCallback((filter: StatusFilter | null) => {
     setStatusFilter(prev => prev === filter ? 'ALL' : (filter || 'ALL'));
@@ -542,14 +624,17 @@ export default function RFQPage() {
   }, [rfqList]);
 
   const filtered = useMemo(() => {
-    let list = rfqList.filter((r) => r.title !== 'Direct PO Master' && !r.rfqNumber?.startsWith('RFQ-DIRECT'));
+    let list = enrichedRfqList.filter((r) => r.title !== 'Direct PO Master' && !r.rfqNumber?.startsWith('RFQ-DIRECT'));
     if (statusFilter !== 'ALL') {
       if (statusFilter === 'APPROVED') {
-        list = list.filter((r) => r.status === 'APPROVED' || r.status === 'SENT' || r.status === 'IN_PROGRESS' || r.status === 'ACCEPTED');
+        list = list.filter((r) => r.status === 'APPROVED' || r.status === 'SENT' || r.status === 'IN_PROGRESS' || r.status === 'ACCEPTED' || r._isApprovedByMe);
       } else if (statusFilter === 'DRAFT_OR_PENDING') {
-        list = list.filter((r) => r.status === 'DRAFT' || r.status === 'PENDING_APPROVAL');
+        list = list.filter((r) => (r.status === 'DRAFT' || r.status === 'PENDING_APPROVAL') && !r._isApprovedByMe);
       } else {
-        list = list.filter((r) => r.status === statusFilter);
+        list = list.filter((r) => {
+          const effective = r._isApprovedByMe ? 'APPROVED' : r._isReturnedByMe ? 'RETURNED' : r.status;
+          return effective === statusFilter;
+        });
       }
     }
     if (departmentFilter !== 'ALL') {
@@ -859,6 +944,8 @@ export default function RFQPage() {
                     const rfqIdStr = String(rfq.id);
                     const isSelected = selectedRfqIds.includes(rfqIdStr);
                     const isPending = rfq.status === 'PENDING_APPROVAL';
+                    const pendingApproval = pendingApprovalsMap.get(String(rfq.id)) || pendingApprovalsMap.get(rfq.rfqNumber);
+                    const canUserActOnRFQ = isPending && Boolean(pendingApproval?.canAct);
 
                     return (
                       <tr
@@ -890,7 +977,7 @@ export default function RFQPage() {
 
                         <td className="px-3 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-center gap-1">
-                            {isPending && canApproveRFQ && (
+                            {canUserActOnRFQ && (
                               <>
                                 <Button
                                   variant="ghost"

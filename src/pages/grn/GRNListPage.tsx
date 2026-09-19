@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
 import { grnService, type GoodsReceivedNote } from '../../services/grnService';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
 import { invoiceService } from '../../services/invoiceService';
+import { sseClient } from '../../services/sseClient';
 import {
   PackageCheck,
   Search,
@@ -14,6 +15,7 @@ import {
   X,
   ShoppingCart,
   CheckCircle2,
+  Trash2,
 } from 'lucide-react';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
 import { useAuth } from '../../context/AuthContext';
@@ -83,39 +85,186 @@ export default function GRNListPage() {
   const [kpiFilter, setKpiFilter] = useState<'ALL' | 'PENDING' | 'GRN'>('ALL');
   const [selectedGrn, setSelectedGrn] = useState<GoodsReceivedNote | null>(null);
 
-  // Load GRNs
-  const { data: grnData, loading: grnLoading } = useServiceData(
+  // Load GRNs (0ms cache TTL for instant fresh data)
+  const { data: grnData, loading: grnLoading, forceRefresh: forceRefreshGRNs } = useServiceData(
     () => grnService.list({ search }),
     { grns: [], total: 0 },
-    [search]
+    [search],
+    { cacheTtlMs: 0 }
   );
   const grns = grnData.grns || [];
 
-  // Load Purchase Orders
-  const { data: poData, loading: poLoading } = useServiceData(
+  // Load Purchase Orders (0ms cache TTL)
+  const { data: poData, loading: poLoading, forceRefresh: forceRefreshPOs } = useServiceData(
     () => purchaseOrderService.list({ limit: 100 }),
     { orders: [], total: 0 },
-    []
+    [],
+    { cacheTtlMs: 0 }
   );
   const poList = poData.orders || [];
 
-  // Load Invoices to check if GRN / PO is already invoiced
-  const { data: invoicesList } = useServiceData(
+  // Load Invoices to check if GRN / PO is already invoiced (0ms cache TTL)
+  const { data: invoicesList, forceRefresh: forceRefreshInvoices } = useServiceData(
     () => invoiceService.list(),
     [],
-    []
+    [],
+    { cacheTtlMs: 0 }
   );
+
+  useEffect(() => {
+    const handleRefreshAll = () => {
+      forceRefreshGRNs();
+      forceRefreshPOs();
+      forceRefreshInvoices();
+    };
+
+    window.addEventListener('focus', handleRefreshAll);
+    window.addEventListener('heliflow:invoice-created', handleRefreshAll);
+    window.addEventListener('heliflow:approval-updated', handleRefreshAll);
+    window.addEventListener('heliflow:po-updated', handleRefreshAll);
+    window.addEventListener('heliflow:po-created', handleRefreshAll);
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('heliflow_sync');
+      bc.onmessage = () => { handleRefreshAll(); };
+    } catch {}
+
+    const unsub1 = sseClient.on('approval_chain_complete', handleRefreshAll);
+    const unsub2 = sseClient.on('notification', handleRefreshAll);
+    const unsub3 = sseClient.on('po_status_changed', handleRefreshAll);
+
+    return () => {
+      window.removeEventListener('focus', handleRefreshAll);
+      window.removeEventListener('heliflow:invoice-created', handleRefreshAll);
+      window.removeEventListener('heliflow:approval-updated', handleRefreshAll);
+      window.removeEventListener('heliflow:po-updated', handleRefreshAll);
+      window.removeEventListener('heliflow:po-created', handleRefreshAll);
+      if (bc) bc.close();
+      unsub1(); unsub2(); unsub3();
+    };
+  }, [forceRefreshGRNs, forceRefreshPOs, forceRefreshInvoices]);
+
+  const handleDeleteDispatch = async (grn: any) => {
+    if (!window.confirm(`Are you sure you want to delete Dispatch Note / Invoice ${grn.grnNumber || grn.id}?`)) {
+      return;
+    }
+    try {
+      const targetId = grn.id;
+      const { apiRequest } = await import('../../api/client');
+      await apiRequest(`/invoices/${targetId}`, { method: 'DELETE' }).catch(() =>
+        apiRequest(`/grn/${targetId}`, { method: 'DELETE' })
+      );
+
+      window.dispatchEvent(new CustomEvent('heliflow:invoice-created'));
+      window.dispatchEvent(new CustomEvent('heliflow:po-updated'));
+      forceRefreshGRNs();
+      forceRefreshPOs();
+      forceRefreshInvoices();
+    } catch (err: any) {
+      alert(err?.message || 'Failed to delete dispatch note.');
+    }
+  };
 
   const invoicedPoNumbers = useMemo(() => {
     const set = new Set<string>();
     (invoicesList || []).forEach((inv) => {
       if (inv.poNumber) set.add(String(inv.poNumber).toLowerCase());
       if (inv.id) set.add(String(inv.id).toLowerCase());
+      if (inv.invoiceNumber) set.add(String(inv.invoiceNumber).toLowerCase());
     });
     return set;
   }, [invoicesList]);
 
-  // Filter POs by search & KPI filter — ONLY Approved/Confirmed orders can have GRNs created
+  const modalItems = useMemo(() => {
+    if (!selectedGrn) return [];
+    if (Array.isArray(selectedGrn.items) && selectedGrn.items.length > 0) {
+      return selectedGrn.items.map((it: any, idx: number) => ({
+        id: it.id || `grn_item_${idx}`,
+        itemName: it.itemName || it.description || it.name || 'Line Item',
+        orderedQty: it.orderedQty ?? it.quantity ?? 1,
+        receivedQty: it.receivedQty ?? it.invoicedQty ?? it.quantity ?? 1,
+        remarks: it.remarks || '—',
+      }));
+    }
+
+    if (Array.isArray((selectedGrn as any).lineItems) && (selectedGrn as any).lineItems.length > 0) {
+      return (selectedGrn as any).lineItems.map((it: any, idx: number) => ({
+        id: it.id || `grn_item_${idx}`,
+        itemName: it.itemName || it.description || it.name || 'Line Item',
+        orderedQty: it.orderedQty ?? it.quantity ?? it.poQty ?? 1,
+        receivedQty: it.receivedQty ?? it.invoicedQty ?? it.quantity ?? 1,
+        remarks: it.remarks || '—',
+      }));
+    }
+
+    const targetPoId = String(selectedGrn.poId || selectedGrn.purchaseOrder?.id || '').toLowerCase();
+    const targetPoNum = String(selectedGrn.purchaseOrder?.poNumber || '').toLowerCase();
+    const matchedPo = poList.find(
+      (p) =>
+        (p.id && String(p.id).toLowerCase() === targetPoId) ||
+        (p.poNumber && String(p.poNumber).toLowerCase() === targetPoNum)
+    ) || selectedGrn.purchaseOrder;
+
+    const rawPoItems = matchedPo?.items || (matchedPo as any)?.rfq?.items || [];
+    if (Array.isArray(rawPoItems) && rawPoItems.length > 0) {
+      return rawPoItems.map((it: any, idx: number) => ({
+        id: it.id || `po_item_${idx}`,
+        itemName: it.itemName || it.description || it.name || (matchedPo as any)?.title || 'Order Item',
+        orderedQty: Number(it.quantity || it.orderedQty || 1),
+        receivedQty: Number(it.quantity || it.receivedQty || it.invoicedQty || 1),
+        remarks: 'From Linked Purchase Order',
+      }));
+    }
+
+    return [
+      {
+        id: 'default_item_1',
+        itemName: 'Line Item',
+        orderedQty: 1,
+        receivedQty: 1,
+        remarks: 'Inspected & Verified',
+      },
+    ];
+  }, [selectedGrn, poList]);
+
+  // Combine raw GRNs and Vendor Invoices into Recorded Dispatches list
+  const allRecordedDispatches = useMemo(() => {
+    const combined: any[] = [...(grns || [])];
+    const existingPoIds = new Set(combined.map((g) => String(g.poId || g.purchaseOrder?.id || '').toLowerCase()));
+    const existingPoNums = new Set(combined.map((g) => String(g.purchaseOrder?.poNumber || '').toLowerCase()));
+
+    (invoicesList || []).forEach((inv: any) => {
+      const invPoId = String(inv.poId || inv.purchaseOrder?.id || '').toLowerCase();
+      const invPoNum = String(inv.poNumber || inv.purchaseOrder?.poNumber || '').toLowerCase();
+      const matchesExisting = (invPoId && existingPoIds.has(invPoId)) || (invPoNum && existingPoNums.has(invPoNum));
+
+      if (!matchesExisting && (invPoId || invPoNum)) {
+        combined.push({
+          id: inv.id || `inv_grn_${Date.now()}`,
+          grnNumber: inv.dispatchNoteNumber || inv.grnNumber || (inv.invoiceNumber ? `DN-${inv.invoiceNumber}` : `DN-${inv.id}`),
+          poId: inv.poId || inv.purchaseOrder?.id || '',
+          receivedById: inv.registeredById || 'vendor_user',
+          receivedDate: inv.invoiceDate || inv.createdAt || new Date().toISOString(),
+          notes: inv.comments || `Dispatch Note for Invoice #${inv.invoiceNumber}`,
+          status: inv.status || 'RECORDED',
+          createdAt: inv.createdAt || new Date().toISOString(),
+          items: inv.lineItems || [],
+          purchaseOrder: inv.purchaseOrder || {
+            id: inv.poId || '',
+            poNumber: inv.poNumber || 'PO Ref',
+            totalAmount: inv.amount || 0,
+            status: 'INVOICED',
+            vendor: inv.vendor || { id: inv.vendorId, name: inv.vendorName || 'Supplier', email: '' },
+          },
+        });
+      }
+    });
+
+    return combined;
+  }, [grns, invoicesList]);
+
+  // Filter POs by search & KPI filter — Approved, Invoiced, and active orders
   const filteredPOs = useMemo(() => {
     let list = poList.filter((po) => {
       if (!po) return false;
@@ -127,12 +276,17 @@ export default function GRNListPage() {
         s === 'SENT_TO_VENDOR' ||
         s === 'PROCESSING' ||
         s === 'SHIPPED' ||
-        s === 'GRN_RECEIVED'
+        s === 'GRN_RECEIVED' ||
+        s === 'INVOICED' ||
+        s === 'CLOSED'
       );
     });
 
     if (kpiFilter === 'PENDING') {
-      list = list.filter((po) => String(po?.status || '') !== 'GRN_RECEIVED' && String(po?.status || '') !== 'DELIVERED');
+      list = list.filter(
+        (po) =>
+          !['GRN_RECEIVED', 'INVOICED', 'CLOSED', 'DELIVERED'].includes(String(po?.status || '').toUpperCase())
+      );
     }
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -155,9 +309,9 @@ export default function GRNListPage() {
     return list;
   }, [poList, search, kpiFilter]);
 
-  // Filter GRNs by search
+  // Filter GRNs & Dispatches by search
   const filteredGRNs = useMemo(() => {
-    let list = grns.filter((g) => g && isFrom16SeptOnwards(g.receivedDate || g.createdAt));
+    let list = allRecordedDispatches.filter((g) => g && isFrom16SeptOnwards(g.receivedDate || g.createdAt));
     if (!search.trim()) return list;
     const q = search.toLowerCase();
     return list.filter((g) => {
@@ -173,7 +327,7 @@ export default function GRNListPage() {
         vName.toLowerCase().includes(q)
       );
     });
-  }, [grns, search]);
+  }, [allRecordedDispatches, search]);
 
   // Eligible Approved POs for GRN creation
   const approvedOrders = useMemo(() => {
@@ -187,19 +341,25 @@ export default function GRNListPage() {
         s === 'SENT_TO_VENDOR' ||
         s === 'PROCESSING' ||
         s === 'SHIPPED' ||
-        s === 'GRN_RECEIVED'
+        s === 'GRN_RECEIVED' ||
+        s === 'INVOICED' ||
+        s === 'CLOSED'
       );
     });
   }, [poList]);
 
   // KPIs
   const kpis = useMemo(() => {
+    const pendingOrdersCount = approvedOrders.filter(
+      (po) => !['GRN_RECEIVED', 'INVOICED', 'CLOSED', 'DELIVERED'].includes(String(po?.status || '').toUpperCase())
+    ).length;
+
     return {
       totalOrders: approvedOrders.length,
-      recordedGrns: grns.length,
-      pendingGrns: Math.max(0, approvedOrders.length - grns.length),
+      recordedGrns: allRecordedDispatches.length,
+      pendingGrns: pendingOrdersCount,
     };
-  }, [approvedOrders, grns]);
+  }, [approvedOrders, allRecordedDispatches]);
 
   return (
     <PageFrame>
@@ -325,15 +485,42 @@ export default function GRNListPage() {
                         <td className="px-4 py-3.5 text-xs text-muted-foreground">{new Date(po.createdAt || Date.now()).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                         <td className="px-4 py-3.5 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            <Button
-                              variant="default"
-                              size="sm"
-                              disabled={!canCreateInvoice}
-                              onClick={() => canCreateInvoice && navigate('/vendor/create-invoice')}
-                              title={!canCreateInvoice ? 'You do not have permission to create purchase invoices.' : undefined}
-                            >
-                              <Receipt className="size-3.5" /> Generate Invoice
-                            </Button>
+                            {(() => {
+                              const poNumLower = String(po?.poNumber || '').toLowerCase();
+                              const poIdLower = String(po?.id || '').toLowerCase();
+                              const statusUpper = String(po?.status || '').toUpperCase();
+
+                              const isAlreadyInvoiced =
+                                statusUpper === 'INVOICED' ||
+                                statusUpper === 'CLOSED' ||
+                                (poNumLower && invoicedPoNumbers.has(poNumLower)) ||
+                                (poIdLower && invoicedPoNumbers.has(poIdLower)) ||
+                                allRecordedDispatches.some(
+                                  (g) =>
+                                    (g.poId && String(g.poId).toLowerCase() === poIdLower) ||
+                                    (g.purchaseOrder?.poNumber && String(g.purchaseOrder.poNumber).toLowerCase() === poNumLower)
+                                );
+
+                              if (isAlreadyInvoiced) {
+                                return (
+                                  <Button variant="outline" size="sm" disabled className="gap-1.5 opacity-80">
+                                    <CheckCircle2 className="size-3.5 text-emerald-500" /> Invoice Sent
+                                  </Button>
+                                );
+                              }
+
+                              return (
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  disabled={!canCreateInvoice}
+                                  onClick={() => canCreateInvoice && navigate(`/vendor/create-invoice?poId=${po.id || po.poNumber}`)}
+                                  title={!canCreateInvoice ? 'You do not have permission to create purchase invoices.' : undefined}
+                                >
+                                  <Receipt className="size-3.5" /> Generate Invoice
+                                </Button>
+                              );
+                            })()}
                           </div>
                         </td>
                       </tr>
@@ -388,13 +575,22 @@ export default function GRNListPage() {
                       (grnNum && invoicedPoNumbers.has(grnNum)) ||
                       (grnId && invoicedPoNumbers.has(grnId));
 
+                    const itemsCount =
+                      (grn.items && grn.items.length > 0)
+                        ? grn.items.length
+                        : (poObj?.items && poObj.items.length > 0)
+                        ? poObj.items.length
+                        : (grn.purchaseOrder && (grn.purchaseOrder as any).items && (grn.purchaseOrder as any).items.length > 0)
+                        ? (grn.purchaseOrder as any).items.length
+                        : 1;
+
                     return (
                       <tr key={grn.id} className="transition-colors hover:bg-accent/35">
                         <td className="px-4 py-3.5 font-bold text-primary">{grn.grnNumber}</td>
                         <td className="px-4 py-3.5 font-medium">{grn.purchaseOrder?.poNumber || '—'}</td>
                         <td className="px-4 py-3.5">{grn.purchaseOrder?.vendor?.name || 'Supplier'}</td>
                         <td className="px-4 py-3.5 text-xs text-muted-foreground">{new Date(grn.receivedDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
-                        <td className="px-4 py-3.5">{grn.items?.length || 0} line item(s)</td>
+                        <td className="px-4 py-3.5">{itemsCount} line item(s)</td>
                         <td className="px-4 py-3.5 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <Button
@@ -403,6 +599,15 @@ export default function GRNListPage() {
                               onClick={() => setSelectedGrn(grn)}
                             >
                               <Eye className="size-3.5" /> View Details
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              onClick={() => handleDeleteDispatch(grn)}
+                              title="Delete Dispatch Note"
+                            >
+                              <Trash2 className="size-3.5" /> Delete
                             </Button>
                             {isInvoiced ? (
                               <Button variant="outline" size="sm" disabled>
@@ -458,7 +663,7 @@ export default function GRNListPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/50">
-                    {selectedGrn.items?.map((it) => (
+                    {modalItems.map((it: any) => (
                       <tr key={it.id}>
                         <td className="px-3 py-2.5 font-medium">{it.itemName}</td>
                         <td className="px-3 py-2.5 text-muted-foreground">{it.orderedQty}</td>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Calendar, CheckCircle2, Clock, FileText, Receipt, Search, XCircle } from 'lucide-react';
 import { CurrencyBadge, CurrencySelector, useCurrency } from '../../components/shared/CurrencyMaster';
 import { Badge } from '../../components/ui/badge';
@@ -31,9 +31,34 @@ function StatusBadge({ status }: { status: InvStatus }) {
 export default function VendorInvoicesPage() {
   const { formatAmount, companyDefaultCurrency } = useCurrency();
   const [displayCurrency, setDisplayCurrency] = useState(companyDefaultCurrency);
-  const { data: invoices, loading, error } = useServiceData(
-    () => vendorPortalService.listInvoices(), [] as VendorInvoiceMock[],
+  const { data: invoices, loading, error, forceRefresh } = useServiceData(
+    () => vendorPortalService.listInvoices(),
+    [] as VendorInvoiceMock[],
+    [],
+    { cacheTtlMs: 0 }
   );
+
+  useEffect(() => {
+    const handleRefresh = () => {
+      forceRefresh();
+    };
+    window.addEventListener('focus', handleRefresh);
+    window.addEventListener('heliflow:invoice-created', handleRefresh);
+    window.addEventListener('heliflow:approval-updated', handleRefresh);
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('heliflow_sync');
+      bc.onmessage = () => { handleRefresh(); };
+    } catch {}
+
+    return () => {
+      window.removeEventListener('focus', handleRefresh);
+      window.removeEventListener('heliflow:invoice-created', handleRefresh);
+      window.removeEventListener('heliflow:approval-updated', handleRefresh);
+      if (bc) bc.close();
+    };
+  }, [forceRefresh]);
   const [search, setSearch] = useState('');
   const summary = useMemo(() => ({
     totalAmount: (invoices || []).reduce((sum, invoice) => sum + (invoice.totalAmount || 0), 0),

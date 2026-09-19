@@ -1,18 +1,32 @@
+import { useEffect } from 'react';
 import { Clock } from 'lucide-react';
 import { useServiceData } from '../../../hooks/useServiceData';
 import { MessageStrip } from '../../../components/shared/MessageStrip';
 import { approvalService } from '../../../services/approvalService';
+import { sseClient } from '../../../services/sseClient';
 import { WidgetHeader, WidgetBody, WidgetLoading, WidgetEmpty } from './WidgetShell';
 import { Badge } from '../../../components/ui/badge';
 
 export default function PendingApprovalsWidget() {
-  const { data: approvals, loading, error } = useServiceData(
+  const { data: approvals, loading, error, forceRefresh } = useServiceData(
     async () => {
       const all = await approvalService.listTable();
       return all.filter((a) => a.status === 'PENDING').slice(0, 4);
     },
-    []
+    [],
+    [],
+    { cacheTtlMs: 0 }
   );
+
+  useEffect(() => {
+    const handleRefresh = () => forceRefresh();
+    window.addEventListener('heliflow:approval-updated', handleRefresh);
+    const unsub = sseClient.on('approval_level_complete', handleRefresh);
+    return () => {
+      window.removeEventListener('heliflow:approval-updated', handleRefresh);
+      unsub();
+    };
+  }, [forceRefresh]);
 
   return (
     <>

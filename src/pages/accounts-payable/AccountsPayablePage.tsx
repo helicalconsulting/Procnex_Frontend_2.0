@@ -343,12 +343,25 @@ export default function AccountsPayablePage() {
   const handleAction = useCallback(async () => {
     if (!actionModal || !actionModal.invoice.approvalId) return;
     setActionSaving(true);
-    try {
-      const approvalId = actionModal.invoice.approvalId;
-      const comment = actionComment.trim() || undefined;
-      const targetInvoice = actionModal.invoice;
+    const targetInvoice = actionModal.invoice;
+    const approvalId = targetInvoice.approvalId!;
+    const comment = actionComment.trim() || undefined;
+    const act = actionModal.action;
 
-      if (actionModal.action === 'approve') {
+    // ⚡ INSTANT (0ms) Optimistic local state update
+    const newStatus: APStatus = act === 'approve' ? 'APPROVED' : act === 'reject' ? 'REJECTED' : 'RETURNED';
+    setInvoicesList((prev) =>
+      prev.map((inv) =>
+        inv.id === targetInvoice.id || inv.invoiceNumber === targetInvoice.invoiceNumber || inv.approvalId === approvalId
+          ? { ...inv, status: newStatus, canAct: false }
+          : inv
+      )
+    );
+    setActionModal(null);
+    setActionComment('');
+
+    try {
+      if (act === 'approve') {
         const res = await approvalService.approve(approvalId, comment);
         const isFinal = res?.nextLevel === false || targetInvoice.currentLevel >= targetInvoice.totalLevels;
 
@@ -388,17 +401,17 @@ export default function AccountsPayablePage() {
             amount: targetInvoice.amount,
           });
         }
-      } else if (actionModal.action === 'reject') {
+      } else if (act === 'reject') {
         await approvalService.reject(approvalId, comment);
       } else {
         await approvalService.return(approvalId, comment, 'ORIGINATOR');
       }
 
-      setActionModal(null);
-      setActionComment('');
+      window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
       await fetchInvoicesData();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Action failed');
+      await fetchInvoicesData();
     } finally {
       setActionSaving(false);
     }

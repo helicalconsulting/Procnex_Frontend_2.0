@@ -158,7 +158,7 @@ export default function CreateGRNPage() {
   const [vendorDispatchNoteNumber, setVendorDispatchNoteNumber] = useState<string>('');
   const [selectedVendorInvoiceId, setSelectedVendorInvoiceId] = useState<string>('');
   const [receivedDate, setReceivedDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
-  const [warehouseLocation, setWarehouseLocation] = useState<string>('Main Warehouse - Dock 1');
+  const [warehouseLocation, setWarehouseLocation] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
   const [currency] = useState<string>(companyDefaultCurrency);
   const [attachments, setAttachments] = useState<{ id: string; name: string; size: string }[]>([]);
@@ -278,14 +278,12 @@ export default function CreateGRNPage() {
     }
   }, [selectedPO]);
 
-  // Pre-select PO if poId is in URL query params
+  // Pre-select PO ONLY if poId is in URL query params
   useEffect(() => {
     if (!approvedPOs || approvedPOs.length === 0) return;
     if (poIdParam) {
       const match = approvedPOs.find((p) => String(p.id) === String(poIdParam) || String(p.poNumber) === String(poIdParam));
       if (match) setSelectedPoId(String(match.id || match.poNumber));
-    } else if (!selectedPoId && approvedPOs.length > 0) {
-      setSelectedPoId(String(approvedPOs[0].id || approvedPOs[0].poNumber));
     }
   }, [poIdParam, approvedPOs]);
 

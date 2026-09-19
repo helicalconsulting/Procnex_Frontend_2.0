@@ -24,6 +24,7 @@ import {
   LayoutGrid,
 } from 'lucide-react';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
+import { sseClient } from '../../services/sseClient';
 import { downloadPurchaseOrderAsPdf } from '../../utils/pdfDownload';
 import { toNumber } from '../../api/normalize';
 import type { PurchaseOrder } from '../../types';
@@ -134,10 +135,32 @@ export default function PurchaseOrdersPage() {
     hasPermission('Purchase Orders', 'canCreate') ||
     hasPermission('PO', 'canCreate');
 
-  const { data: poResult, loading, error } = useServiceData(
+  const { data: poResult, loading, error, forceRefresh } = useServiceData(
     () => purchaseOrderService.list().then((r) => r.orders.map(mapPO)),
-    [] as MockPO[]
+    [] as MockPO[],
+    [],
+    { cacheTtlMs: 0 }
   );
+
+  useEffect(() => {
+    const handleRefresh = () => forceRefresh();
+    window.addEventListener('heliflow:approval-updated', handleRefresh);
+    window.addEventListener('heliflow:po-updated', handleRefresh);
+    window.addEventListener('heliflow:po-created', handleRefresh);
+
+    const unsub1 = sseClient.on('approval_level_complete', handleRefresh);
+    const unsub2 = sseClient.on('approval_chain_complete', handleRefresh);
+    const unsub3 = sseClient.on('po_status_changed', handleRefresh);
+
+    return () => {
+      window.removeEventListener('heliflow:approval-updated', handleRefresh);
+      window.removeEventListener('heliflow:po-updated', handleRefresh);
+      window.removeEventListener('heliflow:po-created', handleRefresh);
+      unsub1();
+      unsub2();
+      unsub3();
+    };
+  }, [forceRefresh]);
 
   const { formatAmount, companyDefaultCurrency } = useCurrency();
   const [search, setSearch] = useState('');

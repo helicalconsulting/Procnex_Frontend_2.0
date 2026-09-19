@@ -709,6 +709,16 @@ export default function CreatePurchaseInvoicePage() {
         setSuccessMsg(`Purchase Invoice #${invoiceNumber} submitted for approval successfully! Workflow initiated.`);
       }
 
+      try {
+        window.dispatchEvent(new CustomEvent('heliflow:invoice-created'));
+        window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
+        const bc = new BroadcastChannel('heliflow_sync');
+        bc.postMessage({ type: 'INVOICE_CREATED', timestamp: Date.now() });
+        bc.close();
+      } catch (e) {
+        // ignore
+      }
+
       setTimeout(() => navigate('/accounts-payable'), 1500);
     } catch (err: any) {
       setErrorMsg(err?.message || 'Failed to submit Purchase Invoice.');
