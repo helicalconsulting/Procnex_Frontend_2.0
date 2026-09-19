@@ -62,7 +62,7 @@ export default function VendorCreateInvoicePage() {
   const poList = poData.orders || [];
 
   // Form State - initialize state directly from URL query parameters if present
-  const [selectedPoId, setSelectedPoId] = useState<string>(() => poIdParam || '');
+  const [selectedPoId, setSelectedPoId] = useState<string>('');
   const [selectedGrnId, setSelectedGrnId] = useState<string>(() => grnIdParam || '');
   const [grnOptions, setGrnOptions] = useState<GoodsReceivedNote[]>([]);
 
@@ -88,7 +88,7 @@ export default function VendorCreateInvoicePage() {
 
   // Line items state
   const [lineItems, setLineItems] = useState<LineItem[]>([
-    { id: 1, itemCode: 'ITM-001', itemName: '', description: '', poQty: 0, grnQty: 0, invoicedQty: 1, unitPrice: '', taxPercent: 18 },
+    { id: 1, itemCode: 'ITM-001', itemName: '', description: '', poQty: 0, grnQty: 0, invoicedQty: '', unitPrice: '', taxPercent: 18 },
   ]);
 
   // Attachments state
@@ -153,22 +153,6 @@ export default function VendorCreateInvoicePage() {
     return selectedGrnId || 'Direct PO Billing / Select GRN';
   }, [grnOptions, selectedGrnId, grnIdParam]);
 
-  // Sync PO query parameter when poList loads
-  useEffect(() => {
-    if (poIdParam) {
-      const match = poList.find(
-        (p) => String(p.id) === String(poIdParam) || String(p.poNumber) === String(poIdParam)
-      );
-      if (match) {
-        setSelectedPoId(String(match.id));
-      } else {
-        setSelectedPoId(poIdParam);
-      }
-    } else if (!selectedPoId && poList.length > 0) {
-      setSelectedPoId(String(poList[0].id));
-    }
-  }, [poIdParam, poList]);
-
   // Pre-select GRN when grnOptions finish loading
   useEffect(() => {
     const targetGrn = grnIdParam || selectedGrnId;
@@ -186,10 +170,18 @@ export default function VendorCreateInvoicePage() {
 
   // Fetch GRNs and update line items when PO selection or parameters change
   useEffect(() => {
-    const targetPoId = selectedPO?.id || selectedPoId || poIdParam;
-    const targetPoNum = selectedPO?.poNumber || selectedPoId || poIdParam;
+    if (!selectedPoId) {
+      setLineItems([
+        { id: 1, itemCode: 'ITM-001', itemName: '', description: '', poQty: 0, grnQty: 0, invoicedQty: '', unitPrice: '', taxPercent: 18 },
+      ]);
+      setGrnOptions([]);
+      setSelectedGrnId('');
+      setBuyerName('');
+      return;
+    }
 
-    if (!targetPoId && !targetPoNum) return;
+    const targetPoId = selectedPO?.id || selectedPoId;
+    const targetPoNum = selectedPO?.poNumber || selectedPoId;
 
     if (selectedPO?.items && selectedPO.items.length > 0) {
       setLineItems(
@@ -205,6 +197,10 @@ export default function VendorCreateInvoicePage() {
           taxPercent: 18,
         }))
       );
+    } else {
+      setLineItems([
+        { id: 1, itemCode: 'ITM-001', itemName: '', description: '', poQty: 0, grnQty: 0, invoicedQty: '', unitPrice: '', taxPercent: 18 },
+      ]);
     }
 
     const queryKey = String(targetPoId || targetPoNum);
@@ -230,7 +226,7 @@ export default function VendorCreateInvoicePage() {
       .catch(() => {
         setGrnOptions([]);
       });
-  }, [selectedPO, selectedPoId, poIdParam]);
+  }, [selectedPO, selectedPoId]);
 
   // Update line items when GRN selection changes
   useEffect(() => {
@@ -263,12 +259,26 @@ export default function VendorCreateInvoicePage() {
 
         setLineItems(updatedLineItems);
       }
+    } else if (!selectedGrnId && selectedPO?.items && selectedPO.items.length > 0) {
+      setLineItems(
+        selectedPO.items.map((item: any, idx: number) => ({
+          id: `item_${idx}_${Date.now()}`,
+          itemCode: item.itemCode || `ITM-00${idx + 1}`,
+          itemName: item.itemName || item.name || 'Line Item',
+          description: item.description || '',
+          poQty: Number(item.quantity || 1),
+          grnQty: Number(item.quantity || 1),
+          invoicedQty: Number(item.quantity || 1),
+          unitPrice: Number(item.unitPrice || 0),
+          taxPercent: 18,
+        }))
+      );
     }
   }, [selectedGrnId, grnOptions, selectedPO]);
 
   // Populate Buyer/Client Name ONLY if explicitly set on PO; otherwise keep completely blank (no auto text)
   useEffect(() => {
-    if (selectedPO) {
+    if (selectedPO && selectedPoId) {
       const explicitBuyer =
         (selectedPO as any).buyerName ||
         (selectedPO as any).clientName ||
@@ -282,7 +292,7 @@ export default function VendorCreateInvoicePage() {
       }
     }
     setBuyerName('');
-  }, [selectedPO]);
+  }, [selectedPO, selectedPoId]);
 
   // Update Line Item Values
   const handleUpdateLineItem = useCallback((id: number | string, field: keyof LineItem, value: any) => {
@@ -301,7 +311,7 @@ export default function VendorCreateInvoicePage() {
         description: '',
         poQty: 0,
         grnQty: 0,
-        invoicedQty: 1,
+        invoicedQty: '',
         unitPrice: '',
         taxPercent: 18,
       },
@@ -506,7 +516,7 @@ export default function VendorCreateInvoicePage() {
             </div>
 
             <div className="cpo-field">
-              <label>LINKED GRN / DISPATCH NOTE</label>
+              <label>DISPATCH NOTE</label>
               <select
                 value={selectedGrnId}
                 onChange={(e) => setSelectedGrnId(e.target.value)}
@@ -634,15 +644,16 @@ export default function VendorCreateInvoicePage() {
                       <td style={{ background: 'rgba(234, 179, 8, 0.04)' }}>
                         <input
                           type="number"
-                          min="1"
+                          min="0"
                           className="cpo-table__input"
                           style={{ fontWeight: 800, borderColor: '#eab308' }}
+                          placeholder="0"
                           value={item.invoicedQty}
                           onChange={(e) =>
                             handleUpdateLineItem(
                               item.id,
                               'invoicedQty',
-                              e.target.value === '' ? '' : Math.max(1, parseInt(e.target.value) || 1)
+                              e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0)
                             )
                           }
                         />
@@ -875,7 +886,7 @@ export default function VendorCreateInvoicePage() {
             <span className="po-doc__info-value">{displayPoNumber}</span>
           </div>
           <div className="po-doc__info-item">
-            <span className="po-doc__info-label">Linked GRN</span>
+            <span className="po-doc__info-label">Dispatch Note</span>
             <span className="po-doc__info-value">{displayGrnNumber}</span>
           </div>
           <div className="po-doc__info-item">

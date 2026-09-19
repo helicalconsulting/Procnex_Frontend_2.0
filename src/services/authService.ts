@@ -258,14 +258,17 @@ function getCachedSession(): {
 }
 
 function clearSession(): void {
+  const companyCode = localStorage.getItem('vendor_company_code');
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
   localStorage.removeItem(ROLES_KEY);
   localStorage.removeItem(PERMISSIONS_KEY);
   localStorage.removeItem(VENDOR_TOKEN_KEY);
-  localStorage.removeItem('vendor_company_code');
   localStorage.removeItem('heliflow_branding_cache');
   localStorage.removeItem('heliflow_tab_title');
+  if (companyCode) {
+    localStorage.setItem('vendor_company_code', companyCode);
+  }
 }
 
 function getToken(): string | null {

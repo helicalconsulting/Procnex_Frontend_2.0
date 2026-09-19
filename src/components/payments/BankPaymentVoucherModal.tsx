@@ -9,11 +9,29 @@ export interface PaymentVoucherDocData {
   voucherDate: string;
   paymentMethod: string;
   vendorName: string;
-  beneficiaryName: string;
-  bankName: string;
-  accountNumber: string;
-  ifscCode: string;
+  
+  // Remitter (Payer) Bank Details
+  remitterBankName?: string;
+  remitterAccountNumber?: string;
+  remitterIfscCode?: string;
+
+  // Beneficiary (Payee) Bank Details
+  beneficiaryName?: string;
+  bankName?: string;
+  accountNumber?: string;
+  ifscCode?: string;
+
   invoiceRef: string;
+  invoiceIds?: string[];
+  invoices?: {
+    invoiceId?: string;
+    invoiceNumber: string;
+    amount: number;
+    poNumber?: string;
+    grnNumber?: string;
+    threeWayMatch?: string;
+    invoiceDate?: string;
+  }[];
   poNumbers?: string[];
   grnNumbers?: string[];
   grossAmount: number;
@@ -22,6 +40,7 @@ export interface PaymentVoucherDocData {
   currency?: string;
   matchStatus?: 'MATCHED' | 'DISCREPANCY';
   discrepancyReason?: string;
+  items?: PaymentVoucherItem[];
   approvers?: {
     level: string;
     name: string;
@@ -29,6 +48,7 @@ export interface PaymentVoucherDocData {
     date: string;
     status: 'APPROVED' | 'PENDING';
     comments?: string;
+    signatureUrl?: string;
   }[];
 }
 
@@ -59,6 +79,38 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
     { level: 'Level 1 Review', name: 'Purchase Manager', role: 'Purchase Manager', date: data.voucherDate, status: 'APPROVED' as const, comments: 'Quantities & PO rates approved' },
     { level: 'Level 2 Authorization', name: 'Treasury / Finance VP', role: 'Treasury / Finance VP', date: data.voucherDate, status: 'APPROVED' as const, comments: 'Bank payment release authorized' },
   ];
+
+  const displayItems: PaymentVoucherItem[] = (data.items && data.items.length > 0)
+    ? data.items
+    : (data.invoices && data.invoices.length > 0)
+    ? data.invoices.map((inv, idx) => ({
+        id: idx + 1,
+        description: `Payment Disbursement against Invoice ${inv.invoiceNumber}`,
+        poNumber: inv.poNumber || '—',
+        grnNumber: inv.grnNumber || '—',
+        invoiceRef: inv.invoiceNumber,
+        quantity: 1,
+        unitPrice: inv.amount,
+        grossAmount: inv.amount,
+        tdsAmount: inv.amount * (data.tdsAmount && data.grossAmount ? data.tdsAmount / data.grossAmount : 0.02),
+        netAmount: inv.amount - (inv.amount * (data.tdsAmount && data.grossAmount ? data.tdsAmount / data.grossAmount : 0.02)),
+      }))
+    : [
+        {
+          id: 1,
+          description: data.invoiceRef && data.invoiceRef !== '—'
+            ? `Payment Disbursement against ${data.invoiceRef}`
+            : `Vendor Payment Disbursement to ${data.vendorName || 'Supplier'}`,
+          poNumber: data.poNumbers && data.poNumbers.length > 0 ? data.poNumbers.join(', ') : (data.invoiceRef.includes('PO:') ? data.invoiceRef.split('PO:')[1]?.trim() : '—'),
+          grnNumber: data.grnNumbers && data.grnNumbers.length > 0 ? data.grnNumbers.join(', ') : '—',
+          invoiceRef: data.invoiceRef.includes('|') ? data.invoiceRef.split('|')[0]?.trim() : data.invoiceRef || '—',
+          quantity: 1,
+          unitPrice: data.grossAmount || data.netAmount,
+          grossAmount: data.grossAmount || data.netAmount,
+          tdsAmount: data.tdsAmount || 0,
+          netAmount: data.netAmount,
+        },
+      ];
 
   return (
     <div className="bpv-modal-backdrop" onClick={onClose}>
@@ -119,27 +171,33 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
               <div className="bpv-box">
                 <div className="bpv-box__title">REMITTER (PAYER) BANK ACCOUNT</div>
                 <div className="bpv-box__row"><span>Account Name:</span> <strong>{displayCompanyName}</strong></div>
-                <div className="bpv-box__row"><span>Bank Name:</span> <strong>HDFC Bank Ltd</strong></div>
-                <div className="bpv-box__row"><span>Account Number:</span> <strong>50200084920192</strong></div>
-                <div className="bpv-box__row"><span>IFSC Code:</span> <strong>HDFC0000128</strong></div>
-                <div className="bpv-box__row"><span>Payment Mode:</span> <strong className="bpv-highlight">{data.paymentMethod}</strong></div>
+                <div className="bpv-box__row">
+                  <span>Bank Name:</span> <strong>{data.remitterBankName || profile?.bankName || (displayCompanyName ? `${displayCompanyName} Treasury Bank` : 'Corporate Treasury Account')}</strong>
+                </div>
+                <div className="bpv-box__row">
+                  <span>Account Number:</span> <strong>{data.remitterAccountNumber || profile?.bankAccountNumber || '—'}</strong>
+                </div>
+                <div className="bpv-box__row">
+                  <span>IFSC / SWIFT Code:</span> <strong>{data.remitterIfscCode || profile?.bankIfscCode || '—'}</strong>
+                </div>
+                <div className="bpv-box__row"><span>Payment Mode:</span> <strong className="bpv-highlight">{data.paymentMethod || 'NEFT'}</strong></div>
               </div>
 
               <div className="bpv-box">
                 <div className="bpv-box__title">BENEFICIARY (PAYEE) BANK ACCOUNT</div>
-                <div className="bpv-box__row"><span>Beneficiary Name:</span> <strong>{data.beneficiaryName || data.vendorName}</strong></div>
-                <div className="bpv-box__row"><span>Bank Name:</span> <strong>{data.bankName || 'HDFC Bank Ltd'}</strong></div>
-                <div className="bpv-box__row"><span>Account Number / IBAN:</span> <strong>{data.accountNumber || '918029381029'}</strong></div>
-                <div className="bpv-box__row"><span>IFSC / SWIFT Code:</span> <strong>{data.ifscCode || 'HDFC0000128'}</strong></div>
-                <div className="bpv-box__row"><span>Supplier Master Ref:</span> <strong>{data.vendorName}</strong></div>
+                <div className="bpv-box__row"><span>Beneficiary Name:</span> <strong>{data.beneficiaryName || data.vendorName || '—'}</strong></div>
+                <div className="bpv-box__row"><span>Bank Name:</span> <strong>{data.bankName || '—'}</strong></div>
+                <div className="bpv-box__row"><span>Account Number / IBAN:</span> <strong>{data.accountNumber || '—'}</strong></div>
+                <div className="bpv-box__row"><span>IFSC / SWIFT Code:</span> <strong>{data.ifscCode || '—'}</strong></div>
+                <div className="bpv-box__row"><span>Supplier Master Ref:</span> <strong>{data.vendorName || '—'}</strong></div>
               </div>
             </div>
           </div>
 
-          {/* Section 2: 3-Way Match & Invoice Breakdown Table */}
+          {/* Section 2: Itemized 3-Way Match & Invoice Line Items Breakdown */}
           <div className="bpv-section">
             <div className="bpv-section__title">
-              <ShieldCheck size={15} /> 3-WAY MATCH & INVOICE BREAKDOWN
+              <ShieldCheck size={15} /> ITEMIZED DISBURSEMENT & LINE ITEM BREAKDOWN
             </div>
 
             {/* Match Status Strip */}
@@ -157,37 +215,70 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
               </div>
             </div>
 
-            {/* Breakdown Table */}
-            <table className="bpv-table">
-              <thead>
-                <tr>
-                  <th>Ref Type</th>
-                  <th>PO Reference</th>
-                  <th>GRN / Dispatch Ref</th>
-                  <th>Invoice Ref</th>
-                  <th style={{ textAlign: 'right' }}>Gross Amount</th>
-                  <th style={{ textAlign: 'right' }}>TDS Deducted</th>
-                  <th style={{ textAlign: 'right' }}>Net Payable</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>Consolidated</td>
-                  <td>{data.poNumbers && data.poNumbers.length > 0 ? data.poNumbers.join(', ') : 'PO-2026-0041'}</td>
-                  <td>{data.grnNumbers && data.grnNumbers.length > 0 ? data.grnNumbers.join(', ') : 'DN-2026-0089'}</td>
-                  <td><strong>{data.invoiceRef}</strong></td>
-                  <td style={{ textAlign: 'right' }}>{formatAmount(data.grossAmount, currency)}</td>
-                  <td style={{ textAlign: 'right', color: '#e11d48' }}>- {formatAmount(data.tdsAmount, currency)}</td>
-                  <td style={{ textAlign: 'right', fontWeight: 700, color: '#059669' }}>{formatAmount(data.netAmount, currency)}</td>
-                </tr>
-              </tbody>
-            </table>
+            {/* Itemized Breakdown Table */}
+            <div style={{ overflowX: 'auto' }}>
+              <table className="bpv-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '35px', textAlign: 'center' }}>#</th>
+                    <th>Item / Particulars Description</th>
+                    <th>PO Ref</th>
+                    <th>GRN Ref</th>
+                    <th>Invoice Ref</th>
+                    <th style={{ textAlign: 'center', width: '50px' }}>Qty</th>
+                    <th style={{ textAlign: 'right' }}>Unit Rate</th>
+                    <th style={{ textAlign: 'right' }}>Gross Total</th>
+                    <th style={{ textAlign: 'right' }}>TDS / Tax</th>
+                    <th style={{ textAlign: 'right' }}>Net Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayItems.map((item, index) => {
+                    const qty = item.quantity || 1;
+                    const unitPrice = item.unitPrice || Math.round(item.grossAmount / qty);
+                    const itemTds = item.tdsAmount || 0;
+                    return (
+                      <tr key={index}>
+                        <td style={{ textAlign: 'center', color: '#64748b', fontSize: '12px' }}>{index + 1}</td>
+                        <td><strong>{item.description}</strong></td>
+                        <td style={{ fontSize: '12px' }}>{item.poNumber || (data.poNumbers && data.poNumbers[0]) || '—'}</td>
+                        <td style={{ fontSize: '12px' }}>{item.grnNumber || (data.grnNumbers && data.grnNumbers[0]) || '—'}</td>
+                        <td style={{ fontSize: '12px' }}>{item.invoiceRef || data.invoiceRef || '—'}</td>
+                        <td style={{ textAlign: 'center', fontWeight: 600 }}>{qty}</td>
+                        <td style={{ textAlign: 'right' }}>{formatAmount(unitPrice, currency)}</td>
+                        <td style={{ textAlign: 'right' }}>{formatAmount(item.grossAmount, currency)}</td>
+                        <td style={{ textAlign: 'right', color: itemTds > 0 ? '#e11d48' : '#64748b' }}>
+                          {itemTds > 0 ? `- ${formatAmount(itemTds, currency)}` : formatAmount(0, currency)}
+                        </td>
+                        <td style={{ textAlign: 'right', fontWeight: 700, color: '#059669' }}>
+                          {formatAmount(item.netAmount, currency)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="bpv-table-total-row">
+                    <td colSpan={7} style={{ textAlign: 'right', fontWeight: 800, textTransform: 'uppercase', fontSize: '12px', letterSpacing: '0.04em' }}>
+                      Grand Total Disbursement:
+                    </td>
+                    <td style={{ textAlign: 'right', fontWeight: 800 }}>{formatAmount(data.grossAmount, currency)}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#e11d48' }}>
+                      {data.tdsAmount > 0 ? `- ${formatAmount(data.tdsAmount, currency)}` : formatAmount(0, currency)}
+                    </td>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#059669', fontSize: '14px' }}>
+                      {formatAmount(data.netAmount, currency)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
 
             {/* Totals Summary */}
             <div className="bpv-totals-box">
               <div className="bpv-totals-box__words">
                 <span>Amount in Words:</span>
-                <strong>{numberToWords(data.netAmount)} Only</strong>
+                <strong>{formatAmountInWords(data.netAmount, currency)}</strong>
               </div>
               <div className="bpv-totals-box__grand">
                 <span>NET DISBURSEMENT AMOUNT:</span>
@@ -196,7 +287,7 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
             </div>
           </div>
 
-          {/* Section 3: Approver Hierarchy & Digital Stamps ("Kisne Kisne Approve Kiya Hai") */}
+          {/* Section 3: Approver Hierarchy & Digital Stamps ("Kisne Kisne Approve Kiya") */}
           <div className="bpv-section">
             <div className="bpv-section__title">
               <Building2 size={15} /> APPROVAL HIERARCHY & AUTHORIZATION STAMPS (AUDIT STAMPS)
@@ -206,16 +297,60 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
               {defaultApprovers.map((app, idx) => {
                 const isPending = app.status === 'PENDING';
                 return (
-                  <div key={idx} className="bpv-stamp-card">
-                    <div className="bpv-stamp-card__level">LEVEL {idx + 1}: {app.level.toUpperCase()}</div>
-                    <div className="bpv-stamp-card__body">
-                      <div className="bpv-stamp-card__name">{app.name}</div>
-                      <div className="bpv-stamp-card__role">{app.role}</div>
-                      <div className="bpv-stamp-card__date">Date: {app.date}</div>
-                      {app.comments && <div className="bpv-stamp-card__comment">"{app.comments}"</div>}
+                  <div key={idx} className="bpv-stamp-card bpv-stamp-card--compact">
+                    {/* Level & Approval Status */}
+                    <div className="bpv-stamp-card__header">
+                      <span className="bpv-stamp-level-pill">LEVEL {idx + 1}</span>
+                      <span className={`bpv-stamp-status-tag ${isPending ? 'bpv-stamp-status-tag--pending' : 'bpv-stamp-status-tag--approved'}`}>
+                        {isPending ? <Clock size={11} /> : <CheckCircle2 size={11} />}
+                        {isPending ? 'PENDING' : 'APPROVED & SIGNED'}
+                      </span>
                     </div>
-                    <div className={`bpv-stamp-badge ${isPending ? 'bpv-stamp-badge--pending' : ''}`}>
-                      {isPending ? <Clock size={14} /> : <CheckCircle2 size={14} />} {isPending ? 'PENDING APPROVAL' : 'APPROVED & SIGNED'}
+
+                    {/* Role Name & Date */}
+                    <div className="bpv-stamp-card__details">
+                      <div className="bpv-stamp-role">{app.role}</div>
+                      <div className="bpv-stamp-date">Date: <strong>{app.date}</strong></div>
+                    </div>
+
+                    {/* Digital Signature of Approver */}
+                    <div className="bpv-stamp-card__signature">
+                      {isPending ? (
+                        <div className="bpv-stamp-sig-pending">Pending Digital Signature</div>
+                      ) : (
+                        <div className="bpv-stamp-sig-active">
+                          {app.signatureUrl ? (
+                            <img src={app.signatureUrl} alt={`Signature of ${app.name}`} className="bpv-stamp-sig-img" />
+                          ) : (
+                            <div className="bpv-stamp-sig-svg-wrap">
+                              <svg viewBox="0 0 170 32" className="bpv-stamp-sig-svg">
+                                <path
+                                  d="M 12 20 Q 30 5, 50 22 T 90 12 T 135 24 T 158 10"
+                                  fill="none"
+                                  stroke="#1e3a8a"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                />
+                                <text
+                                  x="15"
+                                  y="24"
+                                  fontFamily="'Dancing Script', 'Brush Script MT', cursive, sans-serif"
+                                  fontSize="13"
+                                  fill="#1e3a8a"
+                                  fontStyle="italic"
+                                  opacity="0.85"
+                                >
+                                  {app.name}
+                                </text>
+                              </svg>
+                            </div>
+                          )}
+                          <div className="bpv-stamp-sig-seal">
+                            <ShieldCheck size={10} className="bpv-seal-icon" />
+                            <span>Digitally Signed</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -223,31 +358,78 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
             </div>
           </div>
 
-          {/* Footer Notice */}
-          <div className="bpv-sheet__footer">
-            <p>This is a computer-generated bank disbursement voucher with encrypted digital approval stamps. Valid for official bank transaction submission.</p>
-            <p className="bpv-sheet__system-id">System Audit ID: HLF-BPV-{data.voucherNumber}-{Date.now().toString().slice(-6)}</p>
-          </div>
+          {/* End of Printable Document Sheet */}
         </div>
       </div>
     </div>
   );
 }
 
-// Simple Helper: Convert Number to Words (INR)
-function numberToWords(num: number): string {
-  if (!num || num <= 0) return 'Zero Rupees';
-  const a = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
-  const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+/**
+ * Universal Currency-Aware Number-to-Words Converter
+ */
+function formatAmountInWords(num: number, currency: string = 'INR'): string {
+  if (!num || isNaN(num) || num <= 0) return 'Zero';
 
-  const inWords = (n: number): string => {
-    if (n < 20) return a[n];
-    if (n < 100) return b[Math.floor(n / 10)] + (n % 10 !== 0 ? ' ' + a[n % 10] : '');
-    if (n < 1000) return a[Math.floor(n / 100)] + ' Hundred' + (n % 100 !== 0 ? ' ' + inWords(n % 100) : '');
-    if (n < 100000) return inWords(Math.floor(n / 1000)) + ' Thousand' + (n % 1000 !== 0 ? ' ' + inWords(n % 1000) : '');
-    if (n < 10000000) return inWords(Math.floor(n / 100000)) + ' Lakh' + (n % 100000 !== 0 ? ' ' + inWords(n % 100000) : '');
-    return inWords(Math.floor(n / 10000000)) + ' Crore' + (n % 10000000 !== 0 ? ' ' + inWords(n % 10000000) : '');
+  const roundedNum = Math.round(num);
+  const isINR = currency.toUpperCase() === 'INR' || currency.toUpperCase() === '₹';
+  
+  const currencyNames: Record<string, string> = {
+    INR: 'Rupees Only',
+    KSH: 'Kenyan Shillings Only',
+    KES: 'Kenyan Shillings Only',
+    USD: 'US Dollars Only',
+    EUR: 'Euros Only',
+    GBP: 'Pounds Sterling Only',
+    AED: 'UAE Dirhams Only',
+    SAR: 'Saudi Riyals Only',
+    SGD: 'Singapore Dollars Only',
   };
 
-  return `${inWords(Math.floor(num))} Rupees`;
+  const currencyUnit = currencyNames[currency.toUpperCase()] || `${currency} Only`;
+
+  const units = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+  const convertLessThanThousand = (n: number): string => {
+    if (n === 0) return '';
+    if (n < 20) return units[n];
+    if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 !== 0 ? ' ' + units[n % 10] : '');
+    return units[Math.floor(n / 100)] + ' Hundred' + (n % 100 !== 0 ? ' ' + convertLessThanThousand(n % 100) : '');
+  };
+
+  if (isINR) {
+    const inrWords = (n: number): string => {
+      if (n < 20) return units[n];
+      if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 !== 0 ? ' ' + units[n % 10] : '');
+      if (n < 1000) return units[Math.floor(n / 100)] + ' Hundred' + (n % 100 !== 0 ? ' ' + inrWords(n % 100) : '');
+      if (n < 100000) return inrWords(Math.floor(n / 1000)) + ' Thousand' + (n % 1000 !== 0 ? ' ' + inrWords(n % 1000) : '');
+      if (n < 10000000) return inrWords(Math.floor(n / 100000)) + ' Lakh' + (n % 100000 !== 0 ? ' ' + inrWords(n % 100000) : '');
+      return inrWords(Math.floor(n / 10000000)) + ' Crore' + (n % 10000000 !== 0 ? ' ' + inrWords(n % 10000000) : '');
+    };
+    return `${inrWords(roundedNum)} Rupees Only`;
+  } else {
+    const intlWords = (n: number): string => {
+      if (n === 0) return 'Zero';
+      let words = '';
+      if (Math.floor(n / 1000000000) > 0) {
+        words += convertLessThanThousand(Math.floor(n / 1000000000)) + ' Billion ';
+        n %= 1000000000;
+      }
+      if (Math.floor(n / 1000000) > 0) {
+        words += convertLessThanThousand(Math.floor(n / 1000000)) + ' Million ';
+        n %= 1000000;
+      }
+      if (Math.floor(n / 1000) > 0) {
+        words += convertLessThanThousand(Math.floor(n / 1000)) + ' Thousand ';
+        n %= 1000;
+      }
+      if (n > 0) {
+        words += convertLessThanThousand(n);
+      }
+      return words.trim();
+    };
+
+    return `${intlWords(roundedNum)} ${currencyUnit}`.trim();
+  }
 }

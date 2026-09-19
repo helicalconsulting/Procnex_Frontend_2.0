@@ -24,7 +24,7 @@ export function ProtectedRoute({ allowedRoles, requireVendor }: ProtectedRoutePr
   if (!isAuthenticated) {
     if (requireVendor) {
       const companyCode = getTenantCompanyCode();
-      const loginTarget = companyCode ? `/v/${companyCode.toLowerCase()}/login` : '/vendor/login';
+      const loginTarget = companyCode ? `/v/${companyCode.toLowerCase()}/login` : '/login';
       return <Navigate to={loginTarget} replace />;
     }
     return <Navigate to="/login" replace />;

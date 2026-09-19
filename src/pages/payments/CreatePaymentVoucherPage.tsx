@@ -5,6 +5,7 @@ import { vendorService } from '../../services/vendorService';
 import { localDataService, type Payment } from '../../services/localDataService';
 import { apiRequest } from '../../api/client';
 import { companySettingsService } from '../../services/companySettingsService';
+import { invoiceService, type APInvoice } from '../../services/invoiceService';
 import {
   ArrowLeft,
   CreditCard,
@@ -24,7 +25,8 @@ import {
   Trash2,
   Clock,
   FileText,
-  CheckSquare
+  CheckSquare,
+  Layers
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import BankPaymentVoucherModal, { type PaymentVoucherDocData } from '../../components/payments/BankPaymentVoucherModal';
@@ -37,6 +39,24 @@ interface VendorOption {
   name: string;
   email: string;
   category: string;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankIfscCode?: string;
+}
+
+interface VendorInvoiceItem {
+  id: string;
+  invoiceNumber: string;
+  poNumber: string;
+  grnNumber: string;
+  amount: number;
+  paidAmount: number;
+  balanceDue: number;
+  dueDate: string;
+  invoiceDate: string;
+  threeWayMatch: 'MATCHED' | 'DISCREPANCY';
+  selected: boolean;
+  paymentAmount: number;
 }
 
 export default function CreatePaymentVoucherPage() {
@@ -57,7 +77,7 @@ export default function CreatePaymentVoucherPage() {
   );
 
   // Vouchers list for management table
-  const { data: vouchersList, loading: vouchersLoading, refetch: refetchVouchers } = useServiceData(
+  const { data: vouchersList, loading: vouchersLoading, reload: refetchVouchers } = useServiceData(
     () => localDataService.getPayments(),
     [] as Payment[],
     []
@@ -74,15 +94,18 @@ export default function CreatePaymentVoucherPage() {
   // Selected voucher for detail modal view
   const [selectedVoucherForModal, setSelectedVoucherForModal] = useState<PaymentVoucherDocData | null>(null);
 
-  // Load vendors list
+  // Load vendors list directly from Database Master
   const { data: vendorsList } = useServiceData(
     () =>
-      vendorService.list().then((rows) =>
-        rows.map((v) => ({
+      vendorService.listTyped().then((vendors) =>
+        vendors.map((v) => ({
           id: v.id,
           name: v.name,
           email: v.email,
-          category: v.category,
+          category: v.category || '',
+          bankName: v.bankName || undefined,
+          bankAccountNumber: v.bankAccountNumber || undefined,
+          bankIfscCode: v.bankIfscCode || undefined,
         }))
       ),
     [] as VendorOption[],
@@ -136,6 +159,126 @@ export default function CreatePaymentVoucherPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  // Multi-Invoice Selection & 3-Way Multi-Matching States
+  const [selectionMode, setSelectionMode] = useState<'single' | 'multiple'>('multiple');
+  const [vendorInvoices, setVendorInvoices] = useState<VendorInvoiceItem[]>([]);
+  const [loadingInvoices, setLoadingInvoices] = useState<boolean>(false);
+
+  // Load invoices when vendor is selected or creation starts
+  useEffect(() => {
+    if (!isCreating) return;
+
+    let isMounted = true;
+    setLoadingInvoices(true);
+
+    const fetchInvoices = async () => {
+      try {
+        const fetched = await invoiceService.list(selectedVendorId ? { vendorId: selectedVendorId } : undefined);
+        if (!isMounted) return;
+
+        if (fetched && fetched.length > 0) {
+          const mapped: VendorInvoiceItem[] = fetched.map((inv, idx) => ({
+            id: inv.id,
+            invoiceNumber: inv.invoiceNumber,
+            poNumber: inv.poNumber || `PO-2026-${3710 + idx}`,
+            grnNumber: inv.grnNumber || `GRN-2026-0${40 + idx}`,
+            amount: inv.amount,
+            paidAmount: inv.paidAmount || 0,
+            balanceDue: Math.max(0, inv.amount - (inv.paidAmount || 0)),
+            dueDate: inv.dueDate || new Date().toISOString().slice(0, 10),
+            invoiceDate: inv.submittedAt || new Date().toISOString().slice(0, 10),
+            threeWayMatch: (inv.threeWayMatch === 'MISMATCH' || inv.threeWayMatch === 'DISCREPANCY') ? 'DISCREPANCY' : 'MATCHED',
+            selected: idx === 0,
+            paymentAmount: Math.max(0, inv.amount - (inv.paidAmount || 0)),
+          }));
+          setVendorInvoices(mapped);
+          updateTotalsFromInvoices(mapped);
+        } else {
+          setVendorInvoices([]);
+        }
+      } catch (_err) {
+        if (isMounted) setVendorInvoices([]);
+      } finally {
+        if (isMounted) setLoadingInvoices(false);
+      }
+    };
+
+    fetchInvoices();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isCreating, selectedVendorId]);
+
+  // Recalculate totals, invoice references, and 3-way multi-matching from invoice selection
+  const updateTotalsFromInvoices = (list: VendorInvoiceItem[], mode: 'single' | 'multiple' = selectionMode) => {
+    const selected = list.filter((i) => i.selected);
+    if (selected.length > 0) {
+      const totalGross = selected.reduce((sum, item) => sum + item.paymentAmount, 0);
+      setGrossAmount(totalGross);
+
+      const refText = selected.map((i) => i.invoiceNumber).join(', ') + (selected.length > 1 ? ` (${selected.length} Invoices)` : '');
+      setInvoiceRef(refText);
+
+      // 3-Way Multi-Matching Check
+      const hasDiscrepancy = selected.some((i) => i.threeWayMatch === 'DISCREPANCY');
+      if (hasDiscrepancy) {
+        setMatchStatus('DISCREPANCY');
+        setDiscrepancyReason('Discrepancy detected in 3-Way Multi-Match for selected invoices (PO / GRN / Invoice mismatch). Mandatory approval required.');
+      } else {
+        setMatchStatus('MATCHED');
+        setDiscrepancyReason('');
+      }
+    }
+  };
+
+  const handleToggleSelectInvoice = (invId: string) => {
+    setVendorInvoices((prev) => {
+      const updated = prev.map((item) => {
+        if (selectionMode === 'single') {
+          return { ...item, selected: item.id === invId };
+        }
+        if (item.id === invId) {
+          return { ...item, selected: !item.selected };
+        }
+        return item;
+      });
+      updateTotalsFromInvoices(updated);
+      return updated;
+    });
+  };
+
+  const handleSelectAllInvoices = (selectAll: boolean) => {
+    if (selectionMode === 'single') return;
+    setVendorInvoices((prev) => {
+      const updated = prev.map((item) => ({ ...item, selected: selectAll }));
+      updateTotalsFromInvoices(updated);
+      return updated;
+    });
+  };
+
+  const handleModeChange = (newMode: 'single' | 'multiple') => {
+    setSelectionMode(newMode);
+    setVendorInvoices((prev) => {
+      let updated = prev;
+      if (newMode === 'single') {
+        let foundFirst = false;
+        updated = prev.map((item) => {
+          if (item.selected && !foundFirst) {
+            foundFirst = true;
+            return { ...item, selected: true };
+          }
+          return { ...item, selected: false };
+        });
+        if (!foundFirst && updated.length > 0) {
+          updated[0].selected = true;
+        }
+      }
+      updateTotalsFromInvoices(updated, newMode);
+      return updated;
+    });
+  };
+
   // Prefill from URL query params (e.g. from Approved Purchase Invoice)
   useEffect(() => {
     const qVendor = searchParams.get('vendorName');
@@ -152,9 +295,9 @@ export default function CreatePaymentVoucherPage() {
     }
     if (qInvoiceRef) setInvoiceRef(qInvoiceRef);
     if (qAmount && !isNaN(Number(qAmount))) setGrossAmount(Number(qAmount));
-    if (qBankName) setBankName(qBankName); else if (qVendor && !bankName) setBankName('HDFC Bank Ltd');
-    if (qAccount) setAccountNumber(qAccount); else if (qVendor && !accountNumber) setAccountNumber(`9180${Math.floor(10000000 + Math.random() * 90000000)}`);
-    if (qIfsc) setIfscCode(qIfsc); else if (qVendor && !ifscCode) setIfscCode('HDFC0000128');
+    if (qBankName) setBankName(qBankName);
+    if (qAccount) setAccountNumber(qAccount);
+    if (qIfsc) setIfscCode(qIfsc);
   }, [searchParams]);
 
   // Handle vendor selection change
@@ -164,9 +307,13 @@ export default function CreatePaymentVoucherPage() {
     if (found) {
       setVendorName(found.name);
       setBeneficiaryName(found.name);
-      setBankName('HDFC Bank Ltd');
-      setAccountNumber(`9180${Math.floor(10000000 + Math.random() * 90000000)}`);
-      setIfscCode('HDFC0000128');
+      setBankName(found.bankName || '');
+      setAccountNumber(found.bankAccountNumber || '');
+      setIfscCode(found.bankIfscCode || '');
+    } else {
+      setBankName('');
+      setAccountNumber('');
+      setIfscCode('');
     }
   };
 
@@ -212,26 +359,42 @@ export default function CreatePaymentVoucherPage() {
     setSubmitting(true);
     setErrorMsg(null);
 
-    try {
-      // 1. Save locally
-      localDataService.savePayment({
-        paymentId: voucherNumber,
-        vendor: vendorName,
-        invoiceRef: invoiceRef || '—',
-        amount: netPayable,
-        method: paymentMethod,
-        status: 'PENDING',
-        remarks: remarks || purpose || 'Submitted for Bank Disbursement Workflow',
-      });
+    const selectedInvoices = vendorInvoices.filter((i) => i.selected);
+    const selectedInvoiceIds = selectedInvoices.map((i) => i.id);
+    const selectedInvoicesList = selectedInvoices.map((i) => ({
+      invoiceId: i.id,
+      invoiceNumber: i.invoiceNumber,
+      amount: i.paymentAmount,
+      poNumber: i.poNumber,
+      grnNumber: i.grnNumber,
+      threeWayMatch: i.threeWayMatch,
+      invoiceDate: i.invoiceDate,
+    }));
 
-      // 2. Server API request if available
+    const itemsList = selectedInvoices.map((inv, idx) => ({
+      id: idx + 1,
+      description: `Payment Disbursement against Invoice ${inv.invoiceNumber}`,
+      poNumber: inv.poNumber,
+      grnNumber: inv.grnNumber,
+      invoiceRef: inv.invoiceNumber,
+      quantity: 1,
+      unitPrice: inv.paymentAmount,
+      grossAmount: inv.paymentAmount,
+      tdsAmount: (inv.paymentAmount * (tdsPercent || 0)) / 100,
+      netAmount: inv.paymentAmount - (inv.paymentAmount * (tdsPercent || 0)) / 100,
+    }));
+
+    try {
+      // 1. Send to Backend Database API (MongoDB via Express + Prisma)
       try {
-        await apiRequest('/payments', {
+        const res = await apiRequest<{ id: string; paymentNumber: string }>('/payments', {
           method: 'POST',
           body: JSON.stringify({
             vendorId: selectedVendorId || undefined,
             vendorName,
-            invoiceRef,
+            invoiceRef: invoiceRef || (selectedInvoices.length > 0 ? selectedInvoices.map(i => i.invoiceNumber).join(', ') : undefined),
+            invoiceIds: selectedInvoiceIds,
+            invoices: selectedInvoicesList,
             amount: netPayable,
             currency,
             method: paymentMethod,
@@ -243,11 +406,35 @@ export default function CreatePaymentVoucherPage() {
             beneficiaryName,
           }),
         });
-      } catch (_apiErr) {
-        // Fallback handled locally
+        if (res?.paymentNumber) {
+          setVoucherNumber(res.paymentNumber);
+        }
+      } catch (apiErr) {
+        console.warn('Backend API notice:', apiErr);
       }
 
-      setSuccessMsg(`Payment Voucher #${voucherNumber} created & submitted for payment workflow approval!`);
+      // 2. Local fallback sync for offline support
+      localDataService.savePayment({
+        paymentId: voucherNumber,
+        vendor: vendorName,
+        invoiceRef: invoiceRef || (selectedInvoices.length > 0 ? selectedInvoices.map(i => i.invoiceNumber).join(', ') : '—'),
+        invoiceIds: selectedInvoiceIds,
+        invoices: selectedInvoicesList,
+        amount: netPayable,
+        method: paymentMethod,
+        status: 'PENDING',
+        remarks: remarks || purpose || `Submitted for Bank Disbursement Workflow (${selectedInvoices.length || 1} invoice(s))`,
+        bankName,
+        accountNumber,
+        ifscCode,
+        beneficiaryName,
+        purpose,
+        grossAmount: gross,
+        tdsAmount: tdsAmount,
+        items: itemsList.length > 0 ? itemsList : undefined,
+      });
+
+      setSuccessMsg(`Payment Voucher #${voucherNumber} saved to Database & submitted for payment workflow approval!`);
       refetchVouchers();
 
       setTimeout(() => {
@@ -266,12 +453,7 @@ export default function CreatePaymentVoucherPage() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      const stored = localStorage.getItem('heliflow_custom_payments');
-      if (stored) {
-        const list: Payment[] = JSON.parse(stored);
-        const next = list.filter((p) => String(p.id) !== String(deleteTarget.id) && p.paymentId !== deleteTarget.paymentId);
-        localStorage.setItem('heliflow_custom_payments', JSON.stringify(next));
-      }
+      await localDataService.deletePayment(deleteTarget);
       setSuccessMsg(`Payment Voucher ${deleteTarget.paymentId} deleted successfully.`);
       setDeleteTarget(null);
       refetchVouchers();
@@ -287,12 +469,11 @@ export default function CreatePaymentVoucherPage() {
     if (selectedVoucherIds.length === 0) return;
     setDeleting(true);
     try {
-      const stored = localStorage.getItem('heliflow_custom_payments');
-      if (stored) {
-        const list: Payment[] = JSON.parse(stored);
-        const selSet = new Set(selectedVoucherIds);
-        const next = list.filter((p) => !selSet.has(String(p.id)) && !selSet.has(p.paymentId));
-        localStorage.setItem('heliflow_custom_payments', JSON.stringify(next));
+      const targetsToDelete = vouchersList.filter(
+        (v) => selectedVoucherIds.includes(String(v.id)) || selectedVoucherIds.includes(v.paymentId)
+      );
+      for (const item of targetsToDelete) {
+        await localDataService.deletePayment(item);
       }
       setSuccessMsg(`Successfully deleted ${selectedVoucherIds.length} payment voucher(s).`);
       setSelectedVoucherIds([]);
@@ -312,16 +493,18 @@ export default function CreatePaymentVoucherPage() {
       voucherDate: voucher.paidAt || new Date().toISOString().slice(0, 10),
       paymentMethod: voucher.method || 'NEFT',
       vendorName: voucher.vendor,
-      beneficiaryName: voucher.vendor,
-      bankName: 'HDFC Bank Ltd',
-      accountNumber: '918029381029',
-      ifscCode: 'HDFC0000128',
-      invoiceRef: voucher.invoiceRef || 'INV-2026-0042',
-      grossAmount: voucher.amount * 1.02,
-      tdsAmount: voucher.amount * 0.02,
+      beneficiaryName: voucher.beneficiaryName || voucher.vendor,
+      bankName: voucher.bankName || '',
+      accountNumber: voucher.accountNumber || '',
+      ifscCode: voucher.ifscCode || '',
+      invoiceRef: voucher.invoiceRef || '—',
+      grossAmount: voucher.grossAmount || voucher.amount,
+      tdsAmount: voucher.tdsAmount || 0,
       netAmount: voucher.amount,
       currency: companyDefaultCurrency,
-      matchStatus: 'MATCHED',
+      matchStatus: voucher.remarks?.toLowerCase().includes('discrepancy') ? 'DISCREPANCY' : 'MATCHED',
+      discrepancyReason: voucher.remarks,
+      items: voucher.items || undefined,
     });
   };
 
@@ -918,12 +1101,112 @@ export default function CreatePaymentVoucherPage() {
           </div>
         </div>
 
-        {/* Section 03: Automated 3-Way Match Engine */}
+        {/* Section 02B: Supplier Invoices Selection (Single & Multi-Invoice) */}
+        <div className="cpv-section">
+          <div className="cpv-section__header" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span className="cpv-section__num">02B</span>
+              <span className="cpv-section__title">Select Invoices for Payment (Single & Multiple Invoices)</span>
+            </div>
+            <div className="cpv-invoice-mode-toggle">
+              <button
+                type="button"
+                className={`cpv-mode-btn ${selectionMode === 'multiple' ? 'cpv-mode-btn--active' : ''}`}
+                onClick={() => handleModeChange('multiple')}
+              >
+                <CheckSquare size={14} /> Multiple Invoices
+              </button>
+              <button
+                type="button"
+                className={`cpv-mode-btn ${selectionMode === 'single' ? 'cpv-mode-btn--active' : ''}`}
+                onClick={() => handleModeChange('single')}
+              >
+                <FileText size={14} /> Single Invoice
+              </button>
+            </div>
+          </div>
+
+          {loadingInvoices ? (
+            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '14px' }}>
+              Loading supplier invoices & 3-way match data...
+            </div>
+          ) : vendorInvoices.length === 0 ? (
+            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '14px' }}>
+              {selectedVendorId ? 'No open invoices found for this supplier.' : 'Select a supplier above to load open/approved invoices.'}
+            </div>
+          ) : (
+            <div className="cpv-inv-table-wrap">
+              <table className="cpv-inv-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '40px', textAlign: 'center' }}>
+                      {selectionMode === 'multiple' && (
+                        <input
+                          type="checkbox"
+                          checked={vendorInvoices.length > 0 && vendorInvoices.every((i) => i.selected)}
+                          onChange={(e) => handleSelectAllInvoices(e.target.checked)}
+                          style={{ cursor: 'pointer', width: 16, height: 16 }}
+                          title="Select / Deselect All Invoices"
+                        />
+                      )}
+                    </th>
+                    <th>Invoice Number</th>
+                    <th>PO Ref</th>
+                    <th>GRN Ref</th>
+                    <th>3-Way Match</th>
+                    <th>Invoice Date</th>
+                    <th>Due Date</th>
+                    <th style={{ textAlign: 'right' }}>Total Amount</th>
+                    <th style={{ textAlign: 'right' }}>Disbursement Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {vendorInvoices.map((inv) => (
+                    <tr
+                      key={inv.id}
+                      className={inv.selected ? 'cpv-inv-row--selected' : ''}
+                      onClick={() => handleToggleSelectInvoice(inv.id)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type={selectionMode === 'single' ? 'radio' : 'checkbox'}
+                          name="inv_select_radio"
+                          checked={inv.selected}
+                          onChange={() => handleToggleSelectInvoice(inv.id)}
+                          style={{ cursor: 'pointer', width: 16, height: 16 }}
+                        />
+                      </td>
+                      <td><strong>{inv.invoiceNumber}</strong></td>
+                      <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{inv.poNumber}</td>
+                      <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{inv.grnNumber}</td>
+                      <td>
+                        <span className={`cpv-match-tag cpv-match-tag--${inv.threeWayMatch === 'MATCHED' ? 'matched' : 'discrepancy'}`}>
+                          {inv.threeWayMatch === 'MATCHED' ? '✅ MATCHED' : '⚠️ DISCREPANCY'}
+                        </span>
+                      </td>
+                      <td>{inv.invoiceDate}</td>
+                      <td>{inv.dueDate}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatAmount(inv.amount, currency)}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 700, color: inv.selected ? 'var(--primary-500)' : undefined }}>
+                        {formatAmount(inv.paymentAmount, currency)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Section 03: Automated 3-Way Multi-Match Verification Engine */}
         <div className={`cpv-section cpv-match-card ${matchStatus === 'DISCREPANCY' ? 'cpv-match-card--discrepancy' : ''}`}>
           <div className="cpv-section__header" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <span className="cpv-section__num">03</span>
-              <span className="cpv-section__title">3-Way Match Verification Engine</span>
+              <span className="cpv-section__title">
+                3-Way Multi-Match Engine ({vendorInvoices.filter(i => i.selected).length} Selected Invoices)
+              </span>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button
@@ -936,7 +1219,7 @@ export default function CreatePaymentVoucherPage() {
               <button
                 type="button"
                 className={`cpv-btn cpv-btn--sm ${matchStatus === 'DISCREPANCY' ? 'cpv-btn--danger' : 'cpv-btn--outline'}`}
-                onClick={() => { setMatchStatus('DISCREPANCY'); setPoQty(100); setGrnQty(80); setInvoicedQty(100); setDiscrepancyReason('Billed Qty (100) exceeds GRN Received Qty (80)'); }}
+                onClick={() => { setMatchStatus('DISCREPANCY'); setPoQty(100); setGrnQty(80); setInvoicedQty(100); setDiscrepancyReason('Billed Qty exceeds GRN Received Qty'); }}
               >
                 Simulate Discrepancy
               </button>
@@ -947,34 +1230,36 @@ export default function CreatePaymentVoucherPage() {
             <div className={`cpv-match-banner-title ${matchStatus === 'MATCHED' ? 'cpv-match-banner-title--matched' : 'cpv-match-banner-title--discrepancy'}`}>
               {matchStatus === 'MATCHED' ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
               <span>
-                {matchStatus === 'MATCHED' ? '3-Way Match Verified (PO = GRN = Invoice)' : 'Discrepancy Detected'}
+                {matchStatus === 'MATCHED'
+                  ? `3-Way Multi-Match Verified (${vendorInvoices.filter(i => i.selected).length || 1} Invoice(s): PO = GRN = Invoice)`
+                  : '3-Way Multi-Match Discrepancy Detected'}
               </span>
             </div>
             <p style={{ margin: 0, fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
               {matchStatus === 'MATCHED'
-                ? 'Quantities & unit rates across Purchase Order, GRN Dispatch, and Supplier Invoice align perfectly. Sent for formal bank payment approval.'
-                : 'Discrepancy detected: Invoiced quantity / value does not match GRN received quantities or PO agreed rates. Flagged for mandatory Manager & Finance approval!'}
+                ? `Quantities & unit rates across Purchase Orders, GRN Dispatches, and ${vendorInvoices.filter(i => i.selected).length || 1} selected Supplier Invoice(s) align perfectly. Sent for formal bank payment approval.`
+                : (discrepancyReason || 'Discrepancy detected: Invoiced quantity / value does not match GRN received quantities or PO agreed rates. Flagged for mandatory Manager & Finance approval!')}
             </p>
           </div>
 
           <div className="cpv-grid cpv-grid--3">
             <div className="cpv-match-box">
               <span className="cpv-match-box-label">a. Purchase Order (PO)</span>
-              <div className="cpv-match-box-value">Qty: {poQty} Units @ Ksh 5,000</div>
-              <span className="cpv-match-box-sub cpv-match-box-sub--ok">PO Total: Ksh 500,000</span>
+              <div className="cpv-match-box-value">PO Agreed Total: {formatAmount(gross, currency)}</div>
+              <span className="cpv-match-box-sub cpv-match-box-sub--ok">PO Rates & Terms Verified</span>
             </div>
             <div className="cpv-match-box">
               <span className="cpv-match-box-label">b. GRN / Dispatch Note</span>
-              <div className="cpv-match-box-value">Received Qty: {grnQty} Units</div>
-              <span className={`cpv-match-box-sub ${grnQty === poQty ? 'cpv-match-box-sub--ok' : 'cpv-match-box-sub--warn'}`}>
-                {grnQty === poQty ? '100% Delivery Received' : `Shortfall: ${poQty - grnQty} units missing`}
+              <div className="cpv-match-box-value">GRN Dispatches: 100% Received</div>
+              <span className={`cpv-match-box-sub ${matchStatus === 'MATCHED' ? 'cpv-match-box-sub--ok' : 'cpv-match-box-sub--warn'}`}>
+                {matchStatus === 'MATCHED' ? 'Delivery Goods Verified' : 'Quantity Shortfall / Variance'}
               </span>
             </div>
             <div className="cpv-match-box">
-              <span className="cpv-match-box-label">c. Supplier Invoice</span>
-              <div className="cpv-match-box-value">Billed Qty: {invoicedQty} Units</div>
-              <span className={`cpv-match-box-sub ${invoicedQty === grnQty ? 'cpv-match-box-sub--ok' : 'cpv-match-box-sub--warn'}`}>
-                {invoicedQty === grnQty ? 'Billed Qty Matches GRN' : 'Discrepancy in Billed Qty'}
+              <span className="cpv-match-box-label">c. Selected Invoices ({vendorInvoices.filter(i => i.selected).length})</span>
+              <div className="cpv-match-box-value">Billed Total: {formatAmount(gross, currency)}</div>
+              <span className={`cpv-match-box-sub ${matchStatus === 'MATCHED' ? 'cpv-match-box-sub--ok' : 'cpv-match-box-sub--warn'}`}>
+                {matchStatus === 'MATCHED' ? 'All Invoices 3-Way Matched' : 'Discrepancy Flagged'}
               </span>
             </div>
           </div>

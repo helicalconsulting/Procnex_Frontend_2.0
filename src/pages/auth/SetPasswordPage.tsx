@@ -1,5 +1,5 @@
 import { useState, useEffect, type FormEvent } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff, AlertCircle, CheckCircle2, LoaderCircle } from 'lucide-react';
 import { API_BASE } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
@@ -9,11 +9,13 @@ import { PORTAL_NAMES } from '../../config/portalNames';
 import { AuthLayout } from '../../components/auth/AuthLayout';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
+import { vendorPortalService, type CompanyBranding } from '../../services/vendorPortalService';
 
 interface SetupValidation {
   valid: boolean;
   email: string;
   vendorName: string;
+  companyCode?: string;
   hasExistingPassword: boolean;
 }
 
@@ -30,7 +32,7 @@ async function submitPasswordSetup(
   token: string,
   password: string,
   confirmPassword: string
-): Promise<{ token: string; vendor: { id: number; name: string; email: string } }> {
+): Promise<{ token: string; vendor: { id: number; name: string; email: string }; companyCode?: string }> {
   const res = await fetch(`${API_BASE}/vendors/password-setup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -38,10 +40,11 @@ async function submitPasswordSetup(
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || json.message || 'Failed to set password');
-  return (json.data ?? json) as { token: string; vendor: { id: number; name: string; email: string } };
+  return (json.data ?? json) as { token: string; vendor: { id: number; name: string; email: string }; companyCode?: string };
 }
 
 export default function SetPasswordPage() {
+  const { companyCode: routeCompanyCode } = useParams<{ companyCode?: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { isAuthenticated, roles } = useAuth();
@@ -50,6 +53,7 @@ export default function SetPasswordPage() {
   const token = searchParams.get('token')?.trim() || '';
 
   const [validation, setValidation] = useState<SetupValidation | null>(null);
+  const [tenantBranding, setTenantBranding] = useState<CompanyBranding | null>(null);
   const [validateError, setValidateError] = useState('');
   const [validating, setValidating] = useState(true);
   const [password, setPassword] = useState('');
@@ -68,7 +72,15 @@ export default function SetPasswordPage() {
     (async () => {
       try {
         const data = await fetchSetupValidation(token);
-        if (!cancelled) setValidation(data);
+        if (!cancelled) {
+          setValidation(data);
+          const targetCode = routeCompanyCode || data.companyCode;
+          if (targetCode) {
+            vendorPortalService.getCompanyBranding(targetCode).then((b) => {
+              if (!cancelled) setTenantBranding(b);
+            }).catch(() => {});
+          }
+        }
       } catch (err) {
         if (!cancelled) setValidateError(err instanceof Error ? err.message : 'Invalid link');
       } finally {
@@ -76,7 +88,7 @@ export default function SetPasswordPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [token]);
+  }, [token, routeCompanyCode]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -85,8 +97,13 @@ export default function SetPasswordPage() {
     if (password !== confirmPassword) { setError('Passwords do not match.'); return; }
     setIsSubmitting(true);
     try {
-      await submitPasswordSetup(token, password, confirmPassword);
-      navigate('/vendor/login?passwordSet=1', { replace: true });
+      const res = await submitPasswordSetup(token, password, confirmPassword);
+      const code = (routeCompanyCode || res.companyCode || validation?.companyCode || '').trim().toLowerCase();
+      if (code) {
+        navigate(`/v/${code}/login?passwordSet=1`, { replace: true });
+      } else {
+        navigate('/login?passwordSet=1', { replace: true });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to set password');
     } finally {
@@ -95,14 +112,15 @@ export default function SetPasswordPage() {
   };
 
   if (isAuthenticated && roles.includes('Vendor')) {
-    navigate('/vendor/dashboard', { replace: true });
+    const code = (routeCompanyCode || validation?.companyCode || '').trim().toLowerCase();
+    navigate(code ? `/v/${code}/dashboard` : '/vendor/dashboard', { replace: true });
     return null;
   }
 
   return (
     <AuthLayout
-      companyName={companyName}
-      logoUrl={logoUrl}
+      companyName={tenantBranding?.companyName || companyName}
+      logoUrl={tenantBranding?.logoUrl || logoUrl}
       tagline="Create your secure portal password"
       features={[
         'End-to-end RFQ lifecycle management',
@@ -110,7 +128,7 @@ export default function SetPasswordPage() {
         'Order tracking and electronic invoicing',
         'Secure multi-factor authentication & portal encryption',
       ]}
-      supportEmail={supportEmail}
+      supportEmail={tenantBranding?.supportEmail || supportEmail}
       portalLabel={PORTAL_NAMES.secondary}
       title={validation?.hasExistingPassword ? 'Reset Your Password' : 'Set Your Password'}
       description="Choose a password only you know. Your procurement team cannot see it."

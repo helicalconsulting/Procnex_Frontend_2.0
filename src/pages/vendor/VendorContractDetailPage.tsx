@@ -14,6 +14,8 @@ import { downloadContractAsPdf } from '../../utils/pdfDownload';
 import { cleanDuplicateSignatures } from '../../utils/cleanSignatures';
 import { sseClient } from '../../services/sseClient';
 import { getVendorPath } from '../../utils/tenantResolver';
+import { signatureService, type SavedSignature } from '../../services/signatureService';
+import { useAuth } from '../../context/AuthContext';
 import './VendorContractDetailPage.css';
 
 // ─── Status Badge Mappings ───────────────────────────────────
@@ -47,13 +49,17 @@ export default function VendorContractDetailPage() {
   const [searchParams] = useSearchParams();
   const { formatAmount } = useCurrency();
 
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<string>('overview');
-  const [signerName, setSignerName] = useState('');
+  const [signerName, setSignerName] = useState(user?.fullName || '');
   const [signerTitle, setSignerTitle] = useState('');
   const [signing, setSigning] = useState(false);
   const [signed, setSigned] = useState(false);
   const [pageMsg, setPageMsg] = useState<string | null>(null);
-  const [mode, setMode] = useState<'draw' | 'upload'>('draw');
+  const [savedSigs, setSavedSigs] = useState<SavedSignature[]>([]);
+  const [selectedSigId, setSelectedSigId] = useState<string | number | null>(null);
+  const [selectedSigUrl, setSelectedSigUrl] = useState<string | null>(null);
+  const [mode, setMode] = useState<'saved' | 'draw' | 'upload'>('draw');
   const [hasDrawn, setHasDrawn] = useState(false);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +68,22 @@ export default function VendorContractDetailPage() {
   const [isDrawing, setIsDrawing] = useState(false);
   const [penColor, setPenColor] = useState('#000000');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load saved signatures for logged in user
+  useEffect(() => {
+    signatureService.list()
+      .then((sigs) => {
+        if (sigs && sigs.length > 0) {
+          setSavedSigs(sigs);
+          const def = sigs.find((s) => s.isDefault) || sigs[0];
+          setSelectedSigId(def.id);
+          setSelectedSigUrl(def.dataUrl);
+          setMode('saved');
+          setHasDrawn(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Fetch contract
   const { data, loading, error: fetchError, reload } = useServiceData(
@@ -185,6 +207,7 @@ export default function VendorContractDetailPage() {
   };
 
   const getSignatureDataUrl = (): string | null => {
+    if (mode === 'saved' && selectedSigUrl) return selectedSigUrl;
     if (mode === 'upload' && uploadedImage) return uploadedImage;
     if (mode === 'draw') return canvasRef.current?.toDataURL('image/png') || null;
     return null;
@@ -193,7 +216,7 @@ export default function VendorContractDetailPage() {
   const handleSign = useCallback(async () => {
     if (!signerName.trim()) { setError('Please enter your name.'); return; }
     const sig = getSignatureDataUrl();
-    if (!sig) { setError('Please draw or upload your signature.'); return; }
+    if (!sig) { setError('Please draw, upload, or select your saved signature.'); return; }
     setError(null);
     setSigning(true);
     try {
@@ -206,7 +229,7 @@ export default function VendorContractDetailPage() {
     } finally {
       setSigning(false);
     }
-  }, [id, signerName, signerTitle, reload]);
+  }, [id, signerName, signerTitle, mode, selectedSigUrl, uploadedImage, reload]);
 
   const handleDownload = () => {
     if (!data) return;
@@ -620,6 +643,16 @@ export default function VendorContractDetailPage() {
                       )}
 
                       <div className="vcd-segmented-control">
+                        {savedSigs.length > 0 && (
+                          <button
+                            type="button"
+                            className={`vcd-segmented-btn ${mode === 'saved' ? 'vcd-segmented-btn--active' : ''}`}
+                            onClick={() => { setMode('saved'); setHasDrawn(true); }}
+                            disabled={signing}
+                          >
+                            ⭐ Saved ({savedSigs.length})
+                          </button>
+                        )}
                         <button
                           type="button"
                           className={`vcd-segmented-btn ${mode === 'draw' ? 'vcd-segmented-btn--active' : ''}`}
@@ -638,6 +671,38 @@ export default function VendorContractDetailPage() {
                         </button>
                       </div>
                     </div>
+
+                    {mode === 'saved' && (
+                      <div style={{ background: 'var(--surface-elevated, rgba(255,255,255,0.04))', border: '1px solid var(--border)', borderRadius: 8, padding: 14, margin: '10px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>Click to select a saved digital signature:</span>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
+                          {savedSigs.map((s) => (
+                            <div
+                              key={s.id}
+                              onClick={() => { setSelectedSigId(s.id); setSelectedSigUrl(s.dataUrl); setHasDrawn(true); }}
+                              style={{
+                                border: selectedSigId === s.id ? '2px solid var(--primary-500, #0a6ed1)' : '1px solid var(--border)',
+                                background: selectedSigId === s.id ? 'rgba(10, 110, 209, 0.08)' : 'var(--surface-card, #ffffff)',
+                                borderRadius: 8,
+                                padding: 10,
+                                cursor: 'pointer',
+                                textAlign: 'center',
+                                position: 'relative',
+                                transition: 'all 0.15s ease',
+                              }}
+                            >
+                              {s.isDefault && (
+                                <span style={{ position: 'absolute', top: 4, right: 4, fontSize: 10, background: 'rgba(234, 179, 8, 0.15)', color: '#d97706', border: '1px solid rgba(234, 179, 8, 0.3)', borderRadius: 4, padding: '1px 4px', fontWeight: 700 }}>
+                                  ⭐ Default
+                                </span>
+                              )}
+                              <img src={s.dataUrl} alt={s.name} style={{ maxHeight: 45, maxWidth: '100%', objectFit: 'contain', margin: '4px auto', display: 'block' }} />
+                              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', display: 'block' }}>{s.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {mode === 'draw' && (
                       <div className="vcd-canvas-container">

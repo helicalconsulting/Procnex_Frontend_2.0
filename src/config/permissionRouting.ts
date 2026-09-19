@@ -35,6 +35,10 @@ export const ROUTE_PERMISSION_RULES: Array<{ prefix: string; rule: RoutePermissi
   { prefix: '/audit', rule: { module: 'Audit Trail', action: 'canView' } },
   { prefix: '/procurement/purchase-requisitions', rule: { module: 'PO Creation', action: 'canView' } },
   { prefix: '/procurement/purchase-requisition', rule: { module: 'PO Creation', action: 'canView' } },
+  { prefix: '/procurement/goods-receipt', rule: { module: 'PO Creation', action: 'canView' } },
+  { prefix: '/procurement/create-company-grn', rule: { module: 'PO Creation', action: 'canView' } },
+  { prefix: '/procurement/grns', rule: { module: 'PO Creation', action: 'canView' } },
+  { prefix: '/procurement/create-grn', rule: { module: 'PO Creation', action: 'canView' } },
   { prefix: '/contracts', rule: { module: 'Contracts', action: 'canView' } },
 ];
 
@@ -45,6 +49,8 @@ export const MENU_ITEM_PERMISSIONS: Record<string, RoutePermissionRule> = {
   'rfq-list': { module: 'RFQ Management', action: 'canView' },
   'rfq-create': { module: 'RFQ Management', action: 'canCreate' },
   'purchase-requisitions': { module: 'PO Creation', action: 'canView' },
+  'company-grn': { module: 'PO Creation', action: 'canView' },
+  'grn-management': { module: 'PO Creation', action: 'canView' },
   contracts: { module: 'Contracts', action: 'canView' },
   'create-purchase-invoice': { module: 'Create Purchase Invoice', action: 'canView' },
   'create-payment-voucher': { module: 'Create Payment Voucher', action: 'canView' },

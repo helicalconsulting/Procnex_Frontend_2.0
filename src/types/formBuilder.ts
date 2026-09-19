@@ -26,6 +26,24 @@ export interface FieldValidation {
   customError?: string;
 }
 
+export interface CurrencyOption {
+  code: string;
+  symbol: string;
+  label: string;
+}
+
+export const CURRENCY_LIST: CurrencyOption[] = [
+  { code: 'USD', symbol: '$', label: 'USD ($)' },
+  { code: 'INR', symbol: '₹', label: 'INR (₹)' },
+  { code: 'KES', symbol: 'KSh', label: 'KES (KSh)' },
+  { code: 'EUR', symbol: '€', label: 'EUR (€)' },
+  { code: 'GBP', symbol: '£', label: 'GBP (£)' },
+  { code: 'AED', symbol: 'AED', label: 'AED (AED)' },
+  { code: 'SAR', symbol: 'SAR', label: 'SAR (SAR)' },
+  { code: 'CAD', symbol: 'C$', label: 'CAD (C$)' },
+  { code: 'AUD', symbol: 'A$', label: 'AUD (A$)' },
+];
+
 export interface FormField {
   id: string;
   type: FieldType;
@@ -34,6 +52,7 @@ export interface FormField {
   required: boolean;
   readOnly: boolean;
   defaultValue?: string;
+  currency?: string;
   validation?: FieldValidation;
   width: 'full' | 'half';
   helpText?: string;

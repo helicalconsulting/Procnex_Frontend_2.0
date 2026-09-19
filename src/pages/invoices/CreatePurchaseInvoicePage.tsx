@@ -413,18 +413,30 @@ export default function CreatePurchaseInvoicePage() {
       if (foundPO.vendor?.name) setVendorName(foundPO.vendor.name);
 
       if (foundPO.items && foundPO.items.length > 0) {
+        const totalVal = Number(foundPO.totalAmount || 0);
         setLineItems(
-          foundPO.items.map((item: any, idx: number) => ({
-            id: `po_item_${idx}_${Date.now()}`,
-            itemCode: item.itemCode || `ITM-00${idx + 1}`,
-            itemName: item.itemName || item.name || 'PO Line Item',
-            description: item.description || '',
-            poQty: Number(item.quantity || 1),
-            grnQty: Number(item.quantity || 1),
-            supplierQty: Number(item.quantity || 1),
-            unitPrice: Number(item.unitPrice || 0),
-            taxPercent: 18,
-          }))
+          foundPO.items.map((item: any, idx: number) => {
+            const qty = Math.max(1, Number(item.quantity || 1));
+            let unitPrice = Number(item.unitPrice || 0);
+            if (!unitPrice && totalVal > 0) {
+              unitPrice = Number((totalVal / (foundPO.items.length || 1) / qty).toFixed(2));
+            }
+            let rawName = item.itemName || item.name || item.description || '';
+            if (!rawName || rawName.startsWith('Items for PO')) {
+              rawName = foundPO.rfq?.title || `Line Item ${idx + 1}`;
+            }
+            return {
+              id: `po_item_${idx}_${Date.now()}`,
+              itemCode: item.itemCode || `ITM-00${idx + 1}`,
+              itemName: rawName,
+              description: item.description || '',
+              poQty: qty,
+              grnQty: qty,
+              supplierQty: qty,
+              unitPrice: unitPrice,
+              taxPercent: 18,
+            };
+          })
         );
       }
     }
@@ -440,17 +452,28 @@ export default function CreatePurchaseInvoicePage() {
 
     const resolveItemsForSelection = (foundInv: any, foundGRN: any, poObj: any) => {
       const activeGRN = foundGRN || (grnOptions && grnOptions.length > 0 ? grnOptions[0] : null);
+      const totalPOValue = Number(poObj?.totalAmount || foundInv?.amount || 0);
+
       if (activeGRN && activeGRN.items && activeGRN.items.length > 0) {
         return activeGRN.items.map((gi: any, idx: number) => {
-          const poMatch = poObj?.items?.[idx] || poObj?.rfq?.items?.[idx];
-          const poQty = Number(gi.orderedQty || poMatch?.quantity || 1);
-          const grnQty = Number(gi.receivedQty ?? gi.acceptedQty ?? 1);
-          const unitPrice = Number(poMatch?.unitPrice || gi.unitPrice || (foundInv?.amount ? foundInv.amount / grnQty : 0));
+          const poMatch = poObj?.items?.[idx] || poObj?.rfq?.items?.[idx] || poObj?.rfq?.selectedQuotation?.items?.[idx];
+          const poQty = Math.max(1, Number(gi.orderedQty || poMatch?.quantity || 1));
+          const grnQty = Math.max(1, Number(gi.receivedQty ?? gi.acceptedQty ?? 1));
+
+          let unitPrice = Number(poMatch?.unitPrice || gi.unitPrice || (foundInv?.amount ? foundInv.amount / grnQty : 0));
+          if (!unitPrice && totalPOValue > 0) {
+            unitPrice = Number((totalPOValue / (activeGRN.items.length || 1) / grnQty).toFixed(2));
+          }
+
+          let rawItemName = gi.itemName || poMatch?.itemName || poMatch?.name || poMatch?.description || '';
+          if (!rawItemName || rawItemName.startsWith('Items for PO') || rawItemName.startsWith('Line Item')) {
+            rawItemName = poObj?.rfq?.title || poMatch?.itemName || `Line Item ${idx + 1}`;
+          }
 
           return {
             id: gi.id || `grn_item_${idx}_${Date.now()}`,
-            itemCode: gi.itemCode || poMatch?.itemCode || `ITM-00${idx + 1}`,
-            itemName: gi.itemName || poMatch?.itemName || poMatch?.name || 'Line Item',
+            itemCode: gi.itemCode || poMatch?.itemCode || `ITM-${String(idx + 1).padStart(3, '0')}`,
+            itemName: rawItemName,
             description: gi.remarks || poMatch?.description || '',
             poQty: poQty,
             grnQty: grnQty,
@@ -464,12 +487,19 @@ export default function CreatePurchaseInvoicePage() {
       const poItems = poObj?.items || poObj?.rfq?.items || poObj?.rfq?.selectedQuotation?.items;
       if (poItems && poItems.length > 0) {
         return poItems.map((item: any, idx: number) => {
-          const qty = Number(item.quantity || item.orderedQty || 1);
-          const price = Number(item.unitPrice || (foundInv?.amount ? foundInv.amount / qty : 0));
+          const qty = Math.max(1, Number(item.quantity || item.orderedQty || 1));
+          let price = Number(item.unitPrice || (foundInv?.amount ? foundInv.amount / qty : 0));
+          if (!price && totalPOValue > 0) {
+            price = Number((totalPOValue / (poItems.length || 1) / qty).toFixed(2));
+          }
+          let rawItemName = item.itemName || item.name || item.description || '';
+          if (!rawItemName || rawItemName.startsWith('Items for PO')) {
+            rawItemName = poObj?.rfq?.title || `Line Item ${idx + 1}`;
+          }
           return {
             id: `po_item_${idx}_${Date.now()}`,
-            itemCode: item.itemCode || `ITM-00${idx + 1}`,
-            itemName: item.itemName || item.name || 'Line Item',
+            itemCode: item.itemCode || `ITM-${String(idx + 1).padStart(3, '0')}`,
+            itemName: rawItemName,
             description: item.description || '',
             poQty: qty,
             grnQty: qty,
@@ -480,18 +510,18 @@ export default function CreatePurchaseInvoicePage() {
         });
       }
 
-      const totalAmount = Number(foundInv?.amount || poObj?.totalAmount || 0);
-      if (totalAmount > 0) {
+      if (totalPOValue > 0) {
+        const titleName = poObj?.rfq?.title || (poObj?.poNumber ? `Order Items (${poObj.poNumber})` : 'Vendor Tax Invoice Item');
         return [
           {
             id: `inv_item_fallback_${Date.now()}`,
             itemCode: 'ITM-001',
-            itemName: poObj?.poNumber ? `Line Items for ${poObj.poNumber}` : 'Vendor Tax Invoice Item',
+            itemName: titleName,
             description: 'Vendor Invoice Line Item',
             poQty: 1,
             grnQty: 1,
             supplierQty: 1,
-            unitPrice: totalAmount,
+            unitPrice: totalPOValue,
             taxPercent: 18,
           },
         ];
@@ -750,7 +780,18 @@ export default function CreatePurchaseInvoicePage() {
             <div className="cpi-header-top-row">
               <h1 className="cpi-header-title">Purchase Invoice Entry & Management</h1>
               <div className="cpi-header-actions">
-                <button className="cpi-btn cpi-btn--primary" onClick={() => setShowModeModal(true)}>
+                <button
+                  className="cpi-btn cpi-btn--primary"
+                  onClick={() => {
+                    if (!poIdParam && !grnIdParam) {
+                      setSelectedVendorId('');
+                      setSelectedPoId('');
+                      setSelectedGrnId('');
+                      setVendorName('');
+                    }
+                    setShowModeModal(true);
+                  }}
+                >
                   <Plus size={16} /> New Invoice
                 </button>
               </div>
@@ -1080,6 +1121,12 @@ export default function CreatePurchaseInvoicePage() {
                 <div
                   className="cpi-mode-option cpi-mode-option--selected"
                   onClick={() => {
+                    if (!poIdParam && !grnIdParam) {
+                      setSelectedVendorId('');
+                      setSelectedPoId('');
+                      setSelectedGrnId('');
+                      setVendorName('');
+                    }
                     setCreationMode('linked');
                     setIsCreating(true);
                     setShowModeModal(false);
@@ -1100,6 +1147,12 @@ export default function CreatePurchaseInvoicePage() {
                 <div
                   className="cpi-mode-option"
                   onClick={() => {
+                    if (!poIdParam && !grnIdParam) {
+                      setSelectedVendorId('');
+                      setSelectedPoId('');
+                      setSelectedGrnId('');
+                      setVendorName('');
+                    }
                     setCreationMode('manual');
                     setIsCreating(true);
                     setShowModeModal(false);
@@ -1812,6 +1865,83 @@ export default function CreatePurchaseInvoicePage() {
           </p>
         </div>
       </div>
+
+      {/* Creation Mode Modal (Rendered in Entry Form View for 'Switch Mode' Button) */}
+      {showModeModal && (
+        <div className="cpi-modal-backdrop" onClick={() => setShowModeModal(false)}>
+          <div className="cpi-modal-box" style={{ maxWidth: 580 }} onClick={(e) => e.stopPropagation()}>
+            <div className="cpi-modal-header">
+              <div>
+                <h3 className="cpi-modal-title">Select Purchase Invoice Creation Method</h3>
+                <p className="cpi-modal-sub">Choose how you want to create this purchase invoice entry</p>
+              </div>
+              <button className="cpi-modal-close" onClick={() => setShowModeModal(false)}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, margin: '8px 0' }}>
+              {/* Option 1: Link with Vendor Dispatch Note / Invoice */}
+              <div
+                className={`cpi-mode-option ${creationMode === 'linked' ? 'cpi-mode-option--selected' : ''}`}
+                onClick={() => {
+                  if (!poIdParam && !grnIdParam) {
+                    setSelectedVendorId('');
+                    setSelectedPoId('');
+                    setSelectedGrnId('');
+                    setVendorName('');
+                  }
+                  setCreationMode('linked');
+                  setIsCreating(true);
+                  setShowModeModal(false);
+                }}
+              >
+                <div className="cpi-mode-icon">
+                  <PackageCheck size={26} />
+                </div>
+                <div>
+                  <div className="cpi-mode-title">Link with Vendor Dispatch Note / Invoice</div>
+                  <div className="cpi-mode-desc">
+                    Select from vendor-submitted Dispatch Notes or Invoices linked to Purchase Orders for automated 3-way quantity matching.
+                  </div>
+                </div>
+              </div>
+
+              {/* Option 2: Direct Manual Invoice */}
+              <div
+                className={`cpi-mode-option ${creationMode === 'manual' ? 'cpi-mode-option--selected' : ''}`}
+                onClick={() => {
+                  if (!poIdParam && !grnIdParam) {
+                    setSelectedVendorId('');
+                    setSelectedPoId('');
+                    setSelectedGrnId('');
+                    setVendorName('');
+                  }
+                  setCreationMode('manual');
+                  setIsCreating(true);
+                  setShowModeModal(false);
+                }}
+              >
+                <div className="cpi-mode-icon cpi-mode-icon--green">
+                  <Receipt size={26} />
+                </div>
+                <div>
+                  <div className="cpi-mode-title">✏️ Create Custom / Direct Manual Invoice</div>
+                  <div className="cpi-mode-desc">
+                    Create a custom purchase invoice directly without requiring a vendor dispatch note cascade reference.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="cpi-modal-actions">
+              <button className="cpi-btn cpi-btn--outline" onClick={() => setShowModeModal(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

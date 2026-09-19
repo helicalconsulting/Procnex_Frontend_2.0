@@ -64,9 +64,21 @@ export interface CreateRfqPayload {
   bidBondMinValidity?: number;
 }
 
+/** Returns the company-scoped localStorage key for deleted RFQ IDs */
+function deletedRfqKey(): string {
+  try {
+    const userStr = localStorage.getItem('heliflow_user');
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      if (user?.companyCode) return `heliflow_deleted_rfq_ids_${user.companyCode}`;
+    }
+  } catch {}
+  return 'heliflow_deleted_rfq_ids'; // fallback (unauthenticated / edge case)
+}
+
 export function getDeletedRfqIds(): Set<string> {
   try {
-    const raw = localStorage.getItem('heliflow_deleted_rfq_ids');
+    const raw = localStorage.getItem(deletedRfqKey());
     if (raw) return new Set(JSON.parse(raw));
   } catch {}
   return new Set();
@@ -77,7 +89,7 @@ export function addDeletedRfqId(id: string | number, rfqNumber?: string) {
     const ids = getDeletedRfqIds();
     if (id != null) ids.add(String(id));
     if (rfqNumber) ids.add(rfqNumber);
-    localStorage.setItem('heliflow_deleted_rfq_ids', JSON.stringify(Array.from(ids)));
+    localStorage.setItem(deletedRfqKey(), JSON.stringify(Array.from(ids)));
   } catch {}
 }
 

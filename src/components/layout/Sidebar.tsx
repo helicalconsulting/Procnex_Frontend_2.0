@@ -25,6 +25,7 @@ import {
   FileSignature,
   FormInput,
   Truck,
+  PackageCheck,
 } from 'lucide-react';
 import { useBranding } from '../../context/BrandingContext';
 import heliflowLogo from '../../assets/heliflow.png';
@@ -56,6 +57,8 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   Quotations: <ClipboardList size={19} />,
   'Quotation Approval': <ClipboardList size={19} />,
   'PO Creation': <ShoppingCart size={19} />,
+  'GRN Entry & Management': <PackageCheck size={19} />,
+  'Goods Receipt Note (GRN)': <PackageCheck size={19} />,
   'Purchase Orders': <ShoppingCart size={19} />,
   'PO Approval': <ShoppingCart size={19} />,
   'Accounts Payable': <Wallet size={19} />,
@@ -199,7 +202,7 @@ export default function Sidebar({
       title: 'Procurement',
       items: [
         ...menuItems
-          .filter((item) => ['rfq', 'contracts', 'create-purchase-invoice', 'create-payment-voucher', 'vendor-rfqs', 'vendor-quotations', 'purchase-requisitions', 'forms'].includes(item.id))
+          .filter((item) => ['rfq', 'purchase-requisitions', 'company-grn', 'contracts', 'create-purchase-invoice', 'create-payment-voucher', 'vendor-rfqs', 'vendor-quotations', 'forms'].includes(item.id))
           .map((item) => ({
             label: item.label,
             icon: ICON_MAP[item.label] || <FileText size={19} />,

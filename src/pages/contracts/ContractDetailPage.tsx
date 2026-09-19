@@ -16,6 +16,8 @@ import { downloadContractAsPdf } from '../../utils/pdfDownload';
 import { cleanDuplicateSignatures } from '../../utils/cleanSignatures';
 import { sseClient } from '../../services/sseClient';
 import { DetailSkeleton } from '../../components/shared/Skeleton';
+import { signatureService, type SavedSignature } from '../../services/signatureService';
+import { useAuth } from '../../context/AuthContext';
 import './ContractDetailPage.css';
 
 // ─── Status helpers ──────────────────────────────────────────
@@ -80,20 +82,41 @@ function SignModal({
   onClose: () => void;
   signing: boolean;
 }) {
+  const { user } = useAuth();
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [signerName, setSignerName] = useState('');
+  const [signerName, setSignerName] = useState(user?.fullName || '');
   const [signerTitle, setSignerTitle] = useState('');
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasDrawn, setHasDrawn] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<'draw' | 'upload'>('draw');
+  const [savedSigs, setSavedSigs] = useState<SavedSignature[]>([]);
+  const [selectedSigId, setSelectedSigId] = useState<string | number | null>(null);
+  const [selectedSigUrl, setSelectedSigUrl] = useState<string | null>(null);
+  const [mode, setMode] = useState<'saved' | 'draw' | 'upload'>('draw');
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [penColor, setPenColor] = useState('#000000');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useBodyScrollLock(true);
 
+  // Load saved signatures for logged in user
   useEffect(() => {
+    signatureService.list()
+      .then((sigs) => {
+        if (sigs && sigs.length > 0) {
+          setSavedSigs(sigs);
+          const def = sigs.find((s) => s.isDefault) || sigs[0];
+          setSelectedSigId(def.id);
+          setSelectedSigUrl(def.dataUrl);
+          setMode('saved');
+          setHasDrawn(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (mode !== 'draw') return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -102,7 +125,7 @@ function SignModal({
     ctx.lineWidth = 2;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-  }, [penColor]);
+  }, [penColor, mode]);
 
   const getCanvasPos = (e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current!;
@@ -138,9 +161,10 @@ function SignModal({
 
   const clearCanvas = () => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (ctx) { ctx.clearRect(0, 0, canvas.width, canvas.height); }
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) { ctx.clearRect(0, 0, canvas.width, canvas.height); }
+    }
     setHasDrawn(false);
     setUploadedImage(null);
   };
@@ -157,6 +181,7 @@ function SignModal({
   };
 
   const getSignatureDataUrl = (): string | null => {
+    if (mode === 'saved' && selectedSigUrl) return selectedSigUrl;
     if (mode === 'upload' && uploadedImage) return uploadedImage;
     if (mode === 'draw') return canvasRef.current?.toDataURL('image/png') || null;
     return null;
@@ -165,7 +190,7 @@ function SignModal({
   const handleSign = async () => {
     if (!signerName.trim()) { setError('Please enter your name.'); return; }
     const sig = getSignatureDataUrl();
-    if (!sig) { setError('Please draw or upload your signature.'); return; }
+    if (!sig) { setError('Please draw, upload, or select your saved signature.'); return; }
     setError(null);
     try {
       await onSign(signerName.trim(), signerTitle.trim(), sig);
@@ -197,7 +222,16 @@ function SignModal({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {savedSigs.length > 0 && (
+                <button
+                  className={`ctr-sign-modal__canvas-btn ${mode === 'saved' ? 'ctr-sign-modal__canvas-btn--primary' : ''}`}
+                  onClick={() => { setMode('saved'); setHasDrawn(true); }}
+                  disabled={signing}
+                >
+                  ⭐ My Saved Signature ({savedSigs.length})
+                </button>
+              )}
               <button className={`ctr-sign-modal__canvas-btn ${mode === 'draw' ? 'ctr-sign-modal__canvas-btn--primary' : ''}`} onClick={() => { setMode('draw'); clearCanvas(); }} disabled={signing}>Draw Signature</button>
               <button className={`ctr-sign-modal__canvas-btn ${mode === 'upload' ? 'ctr-sign-modal__canvas-btn--primary' : ''}`} onClick={() => { setMode('upload'); clearCanvas(); fileInputRef.current?.click(); }} disabled={signing}>Upload Image</button>
             </div>
@@ -238,6 +272,38 @@ function SignModal({
             )}
           </div>
 
+          {mode === 'saved' && (
+            <div style={{ background: 'var(--surface-elevated, rgba(255,255,255,0.04))', border: '1px solid var(--border)', borderRadius: 8, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>Click to select a saved dynamic signature:</span>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
+                {savedSigs.map((s) => (
+                  <div
+                    key={s.id}
+                    onClick={() => { setSelectedSigId(s.id); setSelectedSigUrl(s.dataUrl); setHasDrawn(true); }}
+                    style={{
+                      border: selectedSigId === s.id ? '2px solid var(--primary-500, #0a6ed1)' : '1px solid var(--border)',
+                      background: selectedSigId === s.id ? 'rgba(10, 110, 209, 0.08)' : 'var(--surface-card, #ffffff)',
+                      borderRadius: 8,
+                      padding: 10,
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                      position: 'relative',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    {s.isDefault && (
+                      <span style={{ position: 'absolute', top: 4, right: 4, fontSize: 10, background: 'rgba(234, 179, 8, 0.15)', color: '#d97706', border: '1px solid rgba(234, 179, 8, 0.3)', borderRadius: 4, padding: '1px 4px', fontWeight: 700 }}>
+                        ⭐ Default
+                      </span>
+                    )}
+                    <img src={s.dataUrl} alt={s.name} style={{ maxHeight: 50, maxWidth: '100%', objectFit: 'contain', margin: '4px auto', display: 'block' }} />
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', display: 'block' }}>{s.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {mode === 'draw' && (
             <div className="ctr-sign-modal__canvas-wrap">
               <canvas
@@ -259,7 +325,7 @@ function SignModal({
           <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFileUpload} />
 
           <div className="ctr-sign-modal__canvas-actions">
-            {hasDrawn && (
+            {mode === 'draw' && hasDrawn && (
               <button className="ctr-sign-modal__canvas-btn ctr-sign-modal__canvas-btn--danger" onClick={clearCanvas} disabled={signing}>
                 <Trash2 size={12} /> Clear
               </button>

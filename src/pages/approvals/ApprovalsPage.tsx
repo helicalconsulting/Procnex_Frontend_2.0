@@ -113,7 +113,7 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
   {
     key: 'module', label: 'Module', defaultVisible: true, width: '140px',
     render: (req) => (
-      <Badge variant="outline" className="gap-1 text-[11px] font-semibold">
+      <Badge variant="outline" className="gap-1 font-semibold">
         {MODULE_ICONS[req.module]}{req.module}
       </Badge>
     ),
@@ -128,7 +128,7 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
       <Badge
         variant="outline"
         className={cn(
-          'text-[11px] font-semibold uppercase',
+          'font-semibold uppercase',
           req.priority === 'HIGH' && 'bg-rose-500/10 text-rose-600 border-rose-500/20',
           req.priority === 'MEDIUM' && 'bg-amber-500/10 text-amber-600 border-amber-500/20',
           req.priority === 'LOW' && 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
@@ -146,7 +146,7 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
       const current = isApproved ? total + 1 : (req.currentLevel || 1);
       return (
         <div className="flex items-center gap-1.5 text-xs font-mono">
-          <Badge variant="secondary" className="text-[11px]">
+          <Badge variant="secondary" className="font-semibold">
             L{isApproved ? total : Math.min(current, total)}/{total}
           </Badge>
         </div>
@@ -165,7 +165,7 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
         }
       }
       return (
-        <Badge variant="outline" className={cn('text-[11px] font-semibold', STATUS_TONES[effectiveStatus] || 'bg-muted/50 text-muted-foreground')}>
+        <Badge variant="outline" className={cn('font-semibold', STATUS_TONES[effectiveStatus] || 'bg-muted/50 text-muted-foreground')}>
           {STATUS_LABELS[effectiveStatus] || effectiveStatus.replace(/_/g, ' ')}
         </Badge>
       );

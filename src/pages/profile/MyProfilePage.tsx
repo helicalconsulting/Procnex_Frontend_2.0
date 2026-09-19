@@ -21,7 +21,12 @@ import {
   ExternalLink,
   BadgeCheck,
   Download,
+  PenTool,
+  FileSignature,
+  Star,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { signatureService, type SavedSignature } from '../../services/signatureService';
 import { downloadDocument } from '../../utils/download';
 import { PageFrame, PageLead } from '../../components/ui/product';
 import { Card } from '../../components/ui/card';
@@ -51,10 +56,15 @@ function formatFileSize(bytes: number): string {
 }
 
 export default function MyProfilePage() {
+  const navigate = useNavigate();
   const { user, roles } = useAuth();
   const { data: documents, loading: docsLoading } = useServiceData(
     () => profileService.getDocuments(),
     [] as UserProfileDocument[]
+  );
+  const { data: savedSignatures, loading: sigsLoading } = useServiceData(
+    () => signatureService.list(),
+    [] as SavedSignature[]
   );
 
   const [editing, setEditing] = useState(false);
@@ -334,6 +344,74 @@ export default function MyProfilePage() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </Card>
+
+        {/* Digital E-Signatures */}
+        <Card className="p-6 lg:col-span-2">
+          <div className="flex items-center justify-between border-b border-border/60 pb-4 mb-4">
+            <div className="flex items-center gap-2">
+              <FileSignature className="size-4 text-primary" />
+              <h2 className="text-sm font-semibold text-foreground">Digital E-Signatures</h2>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/signature')}
+              className="h-8 gap-1.5 text-xs border-primary/40 text-primary hover:bg-primary/10"
+            >
+              <PenTool className="size-3.5" /> Manage &amp; Draw Signatures
+            </Button>
+          </div>
+
+          {sigsLoading ? (
+            <div className="flex items-center justify-center py-6 text-xs text-muted-foreground gap-2">
+              <Loader2 className="size-4 animate-spin text-primary" /> Loading saved signatures…
+            </div>
+          ) : savedSignatures.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-6 text-center">
+              <PenTool className="size-8 text-muted-foreground/50 mb-2" />
+              <p className="text-xs font-semibold text-foreground">No digital signatures saved</p>
+              <p className="text-[12px] text-muted-foreground max-w-sm mt-0.5">
+                Draw or upload your signature once so it can be dynamically applied with 1-click on contracts and official procurement documents.
+              </p>
+              <Button
+                size="sm"
+                onClick={() => navigate('/signature')}
+                className="mt-3 h-8 gap-1.5 text-xs"
+              >
+                <FileSignature className="size-3.5" /> Capture Your Signature
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="text-xs text-muted-foreground mb-2">
+                Your account has <strong>{savedSignatures.length}</strong> saved digital signature{savedSignatures.length > 1 ? 's' : ''}. Signatures are dynamically linked to your user profile for contract execution.
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {savedSignatures.map((sig) => (
+                  <div
+                    key={sig.id}
+                    className="relative flex flex-col items-center justify-center p-3 rounded-xl border border-border/70 bg-surface-elevated/40 hover:border-primary/40 transition"
+                  >
+                    {sig.isDefault && (
+                      <Badge variant="secondary" className="absolute top-2 right-2 text-[10px] gap-1 bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30">
+                        <Star className="size-2.5 fill-amber-500" /> Default
+                      </Badge>
+                    )}
+                    <img
+                      src={sig.dataUrl}
+                      alt={sig.name}
+                      className="max-h-14 max-w-full object-contain my-2"
+                    />
+                    <div className="text-xs font-semibold text-foreground">{sig.name}</div>
+                    <div className="text-[11px] text-muted-foreground capitalize">
+                      {sig.type} signature · {formatDate(sig.createdAt)}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </Card>

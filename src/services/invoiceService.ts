@@ -6,10 +6,14 @@ export interface APInvoice {
   invoiceNumber: string;
   vendorName: string;
   poNumber: string;
+  poId?: string;
+  grnNumber?: string;
   amount: number;
+  paidAmount?: number;
   status: string;
   dueDate: string;
   submittedAt: string;
+  threeWayMatch?: string;
   matchStatus?: string;
   department?: string;
   paymentTerms?: string;
@@ -38,10 +42,13 @@ async function apiList(params?: { poId?: string; vendorId?: string; search?: str
       vendorName: (inv.vendor as { name?: string })?.name || String(inv.vendorName || '—'),
       poNumber: String(inv.poNumber || (inv.purchaseOrder as { poNumber?: string })?.poNumber || '—'),
       poId: String(inv.poId || (inv.purchaseOrder as { id?: string })?.id || ''),
+      grnNumber: (inv.grn as { grnNumber?: string })?.grnNumber || undefined,
       amount: Number(inv.amount ?? inv.totalAmount ?? 0),
+      paidAmount: Number(inv.paidAmount ?? 0),
       status: String(inv.status),
       dueDate: String(inv.dueDate || '').slice(0, 10),
       submittedAt: String(inv.createdAt || inv.submittedAt || '').slice(0, 10),
+      threeWayMatch: inv.threeWayMatch ? String(inv.threeWayMatch) : inv.matchStatus ? String(inv.matchStatus) : 'MATCHED',
       matchStatus: inv.matchStatus ? String(inv.matchStatus) : undefined,
       department: inv.department ? String(inv.department) : undefined,
       paymentTerms: inv.paymentTerms ? String(inv.paymentTerms) : undefined,

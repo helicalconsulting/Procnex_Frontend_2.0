@@ -179,13 +179,53 @@ export const formWorkflowService = {
     let targetUsers = allUsers.filter((u) => u.isActive !== false);
 
     if (audienceType === 'whole_org') {
-      targetUsers = targetUsers.filter((u) => {
-        const uEmail = u.email ? u.email.toLowerCase() : '';
-        const uId = String(u.id || (u as any)._id || '');
+      targetUsers = targetUsers.filter((u: any) => {
+        const uEmail = u.email ? u.email.toLowerCase().trim() : '';
+        const uId = String(u.id || u._id || '');
+        const fullName = (u.fullName || '').toLowerCase().trim();
+        const username = (u.username || '').toLowerCase().trim();
+
         const isPublisher =
           (publisherEmail && uEmail === publisherEmail) ||
           (publisherId && (uId === publisherId || uId === '1'));
-        return !isPublisher;
+        if (isPublisher) return false;
+
+        if (
+          uEmail.endsWith('@procnex.com') ||
+          uEmail === 'finance@procnex.com' ||
+          uEmail === 'procurement@procnex.com' ||
+          uEmail === 'admin@procnex.com' ||
+          fullName === 'finance approver' ||
+          fullName === 'procurement manager' ||
+          fullName === 'system administrator' ||
+          username === 'finance' ||
+          username === 'procurement'
+        ) {
+          return false;
+        }
+
+        const rawRoles: string[] = [];
+        if (Array.isArray(u.roles)) {
+          u.roles.forEach((r: any) => {
+            if (typeof r === 'string') rawRoles.push(r);
+            else if (r && typeof r === 'object') rawRoles.push(r.roleName || r.name || r.role?.roleName || '');
+          });
+        }
+        if (typeof u.role === 'string') rawRoles.push(u.role);
+        else if (u.role && typeof u.role === 'object') rawRoles.push(u.role.roleName || u.role.name || '');
+        if (u.apiRoleName && typeof u.apiRoleName === 'string') rawRoles.push(u.apiRoleName);
+
+        const userRoles = rawRoles.map((r) => String(r).toLowerCase().trim());
+        const isAdminOrSuperAdmin = userRoles.some(
+          (r) =>
+            r === 'super admin' ||
+            r === 'administrator' ||
+            r === 'admin' ||
+            r === 'super-admin' ||
+            r === 'super_admin' ||
+            r.includes('admin')
+        );
+        return !isAdminOrSuperAdmin;
       });
     } else if (audienceType === 'specific_users' && selectedUserIds.length > 0) {
       targetUsers = targetUsers.filter((u) => {
@@ -244,94 +284,6 @@ export const formWorkflowService = {
     } catch (err) {
       console.error('Backend publish failed:', err);
       throw err;
-    }
-
-    // ── In-App Notifications ─────────────────────────────────
-    if (attachWorkflow && levelSteps.length > 0) {
-      // Workflow mode: notify Level 1 approvers only (ONE submission flows through the chain)
-      const level1Role = levelSteps[0].requiredRole;
-      const level1Approvers = allUsers.filter(
-        (u) =>
-          u.isActive !== false &&
-          (isRoleMatching(level1Role, u.role, String(u.id)) ||
-            ((u as any).roles && (u as any).roles.some((r: string) => isRoleMatching(level1Role, r, String(u.id)))))
-      );
-      for (const app of level1Approvers) {
-        sendNotification(
-          String(app.id),
-          `🔔 Level 1 Approval Required (${level1Role})`,
-          `New form "${form.title}" requires your Level 1 (${level1Role}) review and approval.`,
-          '/forms'
-        );
-      }
-
-      // Rich email dispatch to Level 1 approvers
-      const session = authService.getCachedSession();
-      const emailInstances: FormSubmissionInstance[] = [{
-        id: 'temp',
-        formId: form.id,
-        formTitle: form.title,
-        formDescription: form.description,
-        fields: form.fields,
-        audienceType,
-        assignedUserId: String(session?.user?.id || 'admin'),
-        assignedUserName: session?.user?.fullName || 'Admin',
-        assignedUserEmail: session?.user?.email || '',
-        currentLevelNumber: 1,
-        totalLevels: levelSteps.length,
-        workflowAttached: true,
-        approvalLevels: levelSteps,
-        status: 'submitted',
-        priority: priority || 'Medium',
-        dueDate: dueDate || new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        responseData: {},
-        timeline: [],
-      }];
-      try {
-        await notificationService.dispatchFormAssignmentEmails(emailInstances);
-      } catch (err) {
-        console.error('Error dispatching workflow assignment email:', err);
-      }
-
-    } else {
-      // No-workflow mode: notify each assigned user
-      for (const u of targetUsers) {
-        sendNotification(
-          String(u.id || (u as any)._id || u.email),
-          '🔔 New Form Assigned',
-          `You have received a new form: "${form.title}".`
-        );
-      }
-
-      const emailInstances: FormSubmissionInstance[] = targetUsers.map((u) => ({
-        id: 'temp',
-        formId: form.id,
-        formTitle: form.title,
-        formDescription: form.description,
-        fields: form.fields,
-        audienceType,
-        assignedUserId: String(u.id || (u as any)._id || u.email),
-        assignedUserName: u.fullName,
-        assignedUserEmail: u.email,
-        currentLevelNumber: 0,
-        totalLevels: 0,
-        workflowAttached: false,
-        approvalLevels: [],
-        status: 'pending',
-        priority: priority || 'Medium',
-        dueDate: dueDate || new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        responseData: {},
-        timeline: [],
-      }));
-      try {
-        await notificationService.dispatchFormAssignmentEmails(emailInstances);
-      } catch (err) {
-        console.error('Error dispatching assignment emails:', err);
-      }
     }
 
     return { success: true, createdCount };
@@ -433,32 +385,6 @@ export const formWorkflowService = {
     const submission = normalizeSubmissionFromApi(res.submission || res);
     const isFinalCompletion = Boolean(res.isFinalCompletion || submission.status === 'completed');
 
-    // In-app notifications
-    if (!submission.workflowAttached || isFinalCompletion) {
-      sendNotification('1', '🔔 Form Submission Completed', `Form "${submission.formTitle}" submitted by ${submission.assignedUserName}.`, '/admin/form-responses');
-    } else {
-      const level1Role = submission.approvalLevels?.[0]?.requiredRole || 'Purchase Manager';
-      try {
-        const allUsers = await adminService.listUsers();
-        const approvers = allUsers.filter(
-          (u) =>
-            u.isActive !== false &&
-            (isRoleMatching(level1Role, u.role, String(u.id)) ||
-              ((u as any).roles && (u as any).roles.some((r: string) => isRoleMatching(level1Role, r, String(u.id)))))
-        );
-        for (const app of approvers) {
-          sendNotification(String(app.id), '🔔 Form Approval Required (Level 1)', `Form "${submission.formTitle}" submitted by ${submission.assignedUserName} requires Level 1 approval (${level1Role}).`, '/forms');
-        }
-      } catch (e) {}
-      sendNotification(submission.assignedUserId, '🔔 Form Submitted for Approval', `Your submission for "${submission.formTitle}" was received and sent for Level 1 approval.`);
-    }
-
-    try {
-      await notificationService.dispatchFormSubmissionEmail(submission, actorName);
-    } catch (err) {
-      console.error('Error dispatching submit email:', err);
-    }
-
     return { submission, isFinalCompletion };
   },
 
@@ -468,9 +394,9 @@ export const formWorkflowService = {
   async approveFormLevel(
     submissionId: string,
     comments = '',
-    actorName = 'Approver',
-    actorRole = 'Reviewer',
-    actorEmail = '',
+    _actorName = 'Approver',
+    _actorRole = 'Reviewer',
+    _actorEmail = '',
     updatedResponseData?: Record<string, any>
   ): Promise<{ submission: FormSubmissionInstance; isFinalCompletion: boolean }> {
     const res = await apiRequest<any>(`/custom-forms/submissions/${submissionId}/approve`, {
@@ -480,35 +406,6 @@ export const formWorkflowService = {
 
     const submission = normalizeSubmissionFromApi(res.submission || res);
     const isFinalCompletion = Boolean(res.isFinalCompletion || submission.status === 'completed');
-    const approvedLevel = isFinalCompletion ? submission.totalLevels : submission.currentLevelNumber - 1;
-    const stepRole = actorRole;
-
-    if (isFinalCompletion) {
-      sendNotification(submission.assignedUserId, '🎉 Form Fully Approved', `Your submission for "${submission.formTitle}" has been fully approved by all levels!`);
-      sendNotification('1', '🎉 Form Workflow Completed', `Form "${submission.formTitle}" for ${submission.assignedUserName} passed all approval levels.`, '/admin/form-responses');
-    } else {
-      const nextLevelNum = submission.currentLevelNumber;
-      const nextRole = submission.approvalLevels?.find((l) => l.levelNumber === nextLevelNum)?.requiredRole || 'Approver';
-      try {
-        const allUsers = await adminService.listUsers();
-        const nextApprovers = allUsers.filter(
-          (u) =>
-            u.isActive !== false &&
-            (isRoleMatching(nextRole, u.role, String(u.id)) ||
-              ((u as any).roles && (u as any).roles.some((r: string) => isRoleMatching(nextRole, r, String(u.id)))))
-        );
-        for (const app of nextApprovers) {
-          sendNotification(String(app.id), `🔔 Form Approval Required (Level ${nextLevelNum})`, `Form "${submission.formTitle}" approved at Level ${approvedLevel}, now requires Level ${nextLevelNum} (${nextRole}) approval.`, '/forms');
-        }
-      } catch (e) {}
-      sendNotification(submission.assignedUserId, '🔔 Form Progress Update', `Your submission for "${submission.formTitle}" passed Level ${approvedLevel} and advanced to Level ${nextLevelNum}.`);
-    }
-
-    try {
-      await notificationService.dispatchLevelApprovalEmail(submission, approvedLevel, actorName, stepRole, comments, isFinalCompletion);
-    } catch (e) {
-      console.error('Error sending approval email:', e);
-    }
 
     return { submission, isFinalCompletion };
   },
@@ -519,8 +416,8 @@ export const formWorkflowService = {
   async returnFormResponse(
     submissionId: string,
     comments: string,
-    actorName = 'Approver',
-    actorRole = 'Reviewer'
+    _actorName = 'Approver',
+    _actorRole = 'Reviewer'
   ): Promise<FormSubmissionInstance> {
     const res = await apiRequest<any>(`/custom-forms/submissions/${submissionId}/return`, {
       method: 'PUT',
@@ -528,12 +425,6 @@ export const formWorkflowService = {
     });
 
     const submission = normalizeSubmissionFromApi(res.submission || res);
-
-    sendNotification(submission.assignedUserId, '⚠️ Form Returned For Edits', `Form "${submission.formTitle}" was returned by ${actorName} (${actorRole}). Reason: ${comments || 'Please revise and resubmit.'}`);
-
-    // NOTE: Rich SAP Fiori return email (submitter + approver role) is sent
-    // by the backend sendFormReturnEmail() — no duplicate dispatch here.
-
     return submission;
   },
 

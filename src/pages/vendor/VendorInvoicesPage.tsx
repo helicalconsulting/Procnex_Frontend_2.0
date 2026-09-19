@@ -1,15 +1,15 @@
 import { useMemo, useState } from 'react';
 import { AlertTriangle, Calendar, CheckCircle2, Clock, FileText, Receipt, Search, XCircle } from 'lucide-react';
-import { CurrencyBadge, CurrencySelector, useCurrency } from '@/components/shared/CurrencyMaster';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { DataTableViewport } from '@/components/ui/data-table-viewport';
-import { EmptyState, MetricCard, PageFrame, PageLead } from '@/components/ui/product';
-import { useServiceData } from '@/hooks/useServiceData';
-import type { VendorInvoiceMock } from '@/mocks/vendorPortal.mock';
-import { vendorPortalService } from '@/services/vendorPortalService';
+import { CurrencyBadge, CurrencySelector, useCurrency } from '../../components/shared/CurrencyMaster';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Card } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
+import { DataTableViewport } from '../../components/ui/data-table-viewport';
+import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
+import { useServiceData } from '../../hooks/useServiceData';
+import type { VendorInvoiceMock } from '../../mocks/vendorPortal.mock';
+import { vendorPortalService } from '../../services/vendorPortalService';
 
 type InvStatus = 'PENDING' | 'APPROVED' | 'PAID' | 'REJECTED' | 'OVERDUE';
 type Tone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
@@ -23,7 +23,7 @@ const STATUS_CONFIG: Record<InvStatus, { label: string; tone: Tone; icon: typeof
 };
 
 function StatusBadge({ status }: { status: InvStatus }) {
-  const config = STATUS_CONFIG[status];
+  const config = STATUS_CONFIG[status] || STATUS_CONFIG.PENDING;
   const Icon = config.icon;
   return <Badge tone={config.tone}><Icon className="size-3" />{config.label}</Badge>;
 }
@@ -36,15 +36,15 @@ export default function VendorInvoicesPage() {
   );
   const [search, setSearch] = useState('');
   const summary = useMemo(() => ({
-    totalAmount: invoices.reduce((sum, invoice) => sum + invoice.totalAmount, 0),
-    paid: invoices.filter((invoice) => invoice.status === 'PAID').reduce((sum, invoice) => sum + invoice.totalAmount, 0),
-    pending: invoices.filter((invoice) => ['PENDING', 'APPROVED'].includes(invoice.status)).reduce((sum, invoice) => sum + invoice.totalAmount, 0),
-    overdue: invoices.filter((invoice) => invoice.status === 'OVERDUE').reduce((sum, invoice) => sum + invoice.totalAmount, 0),
+    totalAmount: (invoices || []).reduce((sum, invoice) => sum + (invoice.totalAmount || 0), 0),
+    paid: (invoices || []).filter((invoice) => invoice.status === 'PAID').reduce((sum, invoice) => sum + (invoice.totalAmount || 0), 0),
+    pending: (invoices || []).filter((invoice) => ['PENDING', 'APPROVED'].includes(invoice.status)).reduce((sum, invoice) => sum + (invoice.totalAmount || 0), 0),
+    overdue: (invoices || []).filter((invoice) => invoice.status === 'OVERDUE').reduce((sum, invoice) => sum + (invoice.totalAmount || 0), 0),
   }), [invoices]);
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return invoices;
-    return invoices.filter((invoice) => [invoice.invoiceNumber, invoice.poNumber, invoice.description].some((field) => field.toLowerCase().includes(query)));
+    if (!query) return invoices || [];
+    return (invoices || []).filter((invoice) => [invoice.invoiceNumber, invoice.poNumber, invoice.description].some((field) => (field || '').toLowerCase().includes(query)));
   }, [invoices, search]);
 
   const amount = (value: number) => formatAmount(value, displayCurrency);
@@ -55,7 +55,7 @@ export default function VendorInvoicesPage() {
       <PageLead title="My Invoices" description="Track invoice review, due dates, and payment status." actions={<CurrencySelector value={displayCurrency} onChange={setDisplayCurrency} size="sm" />} />
       {error && <Card className="mb-4 border-destructive/25 bg-destructive/8 p-4 text-sm text-destructive">{error}</Card>}
       <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Total invoiced" value={amount(summary.totalAmount)} detail={`${invoices.length} invoices`} icon={Receipt} aria-pressed={true} />
+        <MetricCard label="Total invoiced" value={amount(summary.totalAmount)} detail={`${(invoices || []).length} invoices`} icon={Receipt} aria-pressed={true} />
         <MetricCard label="Paid" value={amount(summary.paid)} detail="Received" icon={CheckCircle2} tone="success" />
         <MetricCard label="Pending" value={amount(summary.pending)} detail="Awaiting payment" icon={Clock} tone="warning" />
         <MetricCard label="Overdue" value={amount(summary.overdue)} detail="Past due date" icon={AlertTriangle} tone="danger" />

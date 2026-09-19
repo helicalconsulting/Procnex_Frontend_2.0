@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Trash2,
   Copy,
@@ -23,6 +23,11 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import type { FormDefinition, FormField, FieldType } from '../../types/formBuilder';
+import { CurrencyAmountInput } from '../shared/CurrencyMaster';
+import { adminService } from '../../services/adminService';
+import { vendorService } from '../../services/vendorService';
+import type { User as UserType } from '../../types';
+import type { VendorTableRow } from '../../types/viewModels';
 
 const canvasControlClass = 'min-h-11 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/50 focus:ring-2 focus:ring-primary/15 disabled:cursor-not-allowed disabled:opacity-60';
 
@@ -68,6 +73,34 @@ export default function FormBuilderCanvas({
     fieldId: string;
     position: 'before' | 'after';
   } | null>(null);
+
+  const [userList, setUserList] = useState<UserType[]>([]);
+  const [vendorList, setVendorList] = useState<VendorTableRow[]>([]);
+
+  useEffect(() => {
+    adminService
+      .listUsers()
+      .then((users) => {
+        const activeUsers = (users || []).filter((u: any) => {
+          if (u.isActive === false) return false;
+          const email = (u.email || '').toLowerCase().trim();
+          const fullName = (u.fullName || '').toLowerCase().trim();
+          if (
+            email.endsWith('@procnex.com') ||
+            fullName === 'finance approver' ||
+            fullName === 'procurement manager' ||
+            fullName === 'system administrator'
+          ) {
+            return false;
+          }
+          return true;
+        });
+        setUserList(activeUsers);
+      })
+      .catch(() => {});
+
+    vendorService.list().then((v) => setVendorList(v)).catch(() => {});
+  }, []);
 
   const handleDragOver = (e: React.DragEvent, index?: number) => {
     e.preventDefault();
@@ -359,7 +392,7 @@ export default function FormBuilderCanvas({
 
                     {/* Field Render View */}
                     <div>
-                      {renderFieldComponent(field)}
+                      {renderFieldComponent(field, userList, vendorList)}
                     </div>
                   </div>
                 );
@@ -386,7 +419,11 @@ export default function FormBuilderCanvas({
   );
 }
 
-function renderFieldComponent(field: FormField) {
+function renderFieldComponent(
+  field: FormField,
+  userList: UserType[] = [],
+  vendorList: VendorTableRow[] = []
+) {
   const { type, label, placeholder, required, readOnly, helpText, options, content, defaultValue } = field;
 
   if (type === 'heading') {
@@ -440,7 +477,7 @@ function renderFieldComponent(field: FormField) {
         <input
           type="number"
           className={canvasControlClass}
-          placeholder={placeholder || '0'}
+          placeholder={placeholder ?? ''}
           defaultValue={defaultValue}
           disabled={readOnly}
         />
@@ -450,7 +487,7 @@ function renderFieldComponent(field: FormField) {
         <input
           type="email"
           className={canvasControlClass}
-          placeholder={placeholder || 'example@domain.com'}
+          placeholder={placeholder ?? ''}
           defaultValue={defaultValue}
           disabled={readOnly}
         />
@@ -460,24 +497,23 @@ function renderFieldComponent(field: FormField) {
         <input
           type="tel"
           className={canvasControlClass}
-          placeholder={placeholder || '+1 (555) 000-0000'}
+          placeholder={placeholder ?? ''}
           defaultValue={defaultValue}
           disabled={readOnly}
         />
       )}
 
       {type === 'currency' && (
-        <div className="relative">
-          <DollarSign size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="number"
-            step="0.01"
-            className={`${canvasControlClass} pl-9`}
-            placeholder={placeholder || '0.00'}
-            defaultValue={defaultValue}
-            disabled={readOnly}
-          />
-        </div>
+        <CurrencyAmountInput
+          amount={defaultValue ? Number(defaultValue) : ''}
+          currency={field.currency || 'KES'}
+          onAmountChange={() => {}}
+          onCurrencyChange={(code) => {
+            field.currency = code;
+          }}
+          placeholder={placeholder ?? ''}
+          disabled={readOnly}
+        />
       )}
 
       {type === 'date' && (
@@ -505,7 +541,7 @@ function renderFieldComponent(field: FormField) {
       {type === 'dropdown' && (
         <div className="relative">
           <select className={`${canvasControlClass} appearance-none pr-11`} disabled={readOnly}>
-            <option value="">{placeholder || 'Select an option'}</option>
+            <option value="">{placeholder ?? 'Select an option'}</option>
             {(options || ['Option 1', 'Option 2']).map((opt, i) => (
               <option key={i} value={opt}>
                 {opt}
@@ -566,24 +602,30 @@ function renderFieldComponent(field: FormField) {
       {type === 'user_picker' && (
         <div className="relative">
           <UserCheck size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            className={`${canvasControlClass} pl-9`}
-            placeholder={placeholder || 'Select employee or manager...'}
-            disabled={readOnly}
-          />
+          <select className={`${canvasControlClass} appearance-none pl-9 pr-11`} disabled={readOnly}>
+            <option value="">{placeholder || 'Select Employee / User...'}</option>
+            {userList.map((u) => (
+              <option key={u.id} value={u.fullName}>
+                {u.fullName} ({u.email})
+              </option>
+            ))}
+          </select>
+          <ChevronDown size={16} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
         </div>
       )}
 
       {type === 'vendor_picker' && (
         <div className="relative">
           <Building size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            className={`${canvasControlClass} pl-9`}
-            placeholder={placeholder || 'Select vendor from directory...'}
-            disabled={readOnly}
-          />
+          <select className={`${canvasControlClass} appearance-none pl-9 pr-11`} disabled={readOnly}>
+            <option value="">{placeholder || 'Select Vendor...'}</option>
+            {vendorList.map((v) => (
+              <option key={v.id} value={v.name}>
+                {v.name} {v.category ? `(${v.category})` : ''}
+              </option>
+            ))}
+          </select>
+          <ChevronDown size={16} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
         </div>
       )}
 

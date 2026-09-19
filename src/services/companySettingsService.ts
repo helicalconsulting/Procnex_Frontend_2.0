@@ -253,6 +253,7 @@ export interface CompanyProfile {
   companyCode: string;
   defaultCurrency: string;
   maxUsers?: number;
+  maxVendors?: number;
   invitationExpiryHours: number;
   resubmissionDeadlineHours: number;
   createdAt: string;
@@ -281,6 +282,7 @@ export interface UpdateBrandingPayload {
   supportEmail?: string;
   primaryPortalName?: string;
   maxUsers?: number;
+  maxVendors?: number;
 }
 
 async function mockGetCompanyProfile(): Promise<CompanyProfile> {
@@ -371,6 +373,7 @@ async function mockUpdateCompanyProfile(payload: UpdateCompanyProfilePayload): P
     primaryColor: payload.primaryColor || '#0a6ed1',
     loginText: payload.loginText || null,
     supportEmail: payload.supportEmail || null,
+    primaryPortalName: payload.primaryPortalName || 'Employee',
   };
 }
 

@@ -28,12 +28,31 @@ export interface SignDocumentPayload {
   comments?: string;
 }
 
-const SIG_STORAGE_KEY = 'heliflow_signatures';
-const DOC_SIG_STORAGE_KEY = 'heliflow_doc_signatures';
+function getSigStorageKey(): string {
+  try {
+    const userStr = localStorage.getItem('heliflow_user');
+    const user = userStr ? JSON.parse(userStr) : null;
+    const code = user?.companyCode || 'DEFAULT';
+    return `heliflow_signatures_${code}`;
+  } catch {
+    return 'heliflow_signatures';
+  }
+}
+
+function getDocSigStorageKey(): string {
+  try {
+    const userStr = localStorage.getItem('heliflow_user');
+    const user = userStr ? JSON.parse(userStr) : null;
+    const code = user?.companyCode || 'DEFAULT';
+    return `heliflow_doc_signatures_${code}`;
+  } catch {
+    return 'heliflow_doc_signatures';
+  }
+}
 
 function readSigs(): SavedSignature[] {
   try {
-    const raw = localStorage.getItem(SIG_STORAGE_KEY);
+    const raw = localStorage.getItem(getSigStorageKey());
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -41,12 +60,12 @@ function readSigs(): SavedSignature[] {
 }
 
 function writeSigs(sigs: SavedSignature[]) {
-  localStorage.setItem(SIG_STORAGE_KEY, JSON.stringify(sigs));
+  localStorage.setItem(getSigStorageKey(), JSON.stringify(sigs));
 }
 
 function readDocSigs(): DocumentSignatureRecord[] {
   try {
-    const raw = localStorage.getItem(DOC_SIG_STORAGE_KEY);
+    const raw = localStorage.getItem(getDocSigStorageKey());
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -54,7 +73,7 @@ function readDocSigs(): DocumentSignatureRecord[] {
 }
 
 function writeDocSigs(records: DocumentSignatureRecord[]) {
-  localStorage.setItem(DOC_SIG_STORAGE_KEY, JSON.stringify(records));
+  localStorage.setItem(getDocSigStorageKey(), JSON.stringify(records));
 }
 
 async function mockList(): Promise<SavedSignature[]> {

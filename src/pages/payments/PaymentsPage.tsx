@@ -38,6 +38,8 @@ import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { cn } from '../../lib/utils';
 import { localDataService, type Payment as ServicePayment } from '../../services/localDataService';
 import { approvalService } from '../../services/approvalService';
+import { procurementService } from '../../services/procurementService';
+import { vendorService } from '../../services/vendorService';
 import { useAuth } from '../../context/AuthContext';
 import '../../components/shared/ColumnCustomizer.css';
 
@@ -140,6 +142,7 @@ export default function PaymentsPage() {
   const [detailPayment, setDetailPayment] = useState<Payment | null>(null);
   const [selectedPrintVoucher, setSelectedPrintVoucher] = useState<Payment | null>(null);
   const [voucherApprovers, setVoucherApprovers] = useState<any[] | null>(null);
+  const [vendorBankDetails, setVendorBankDetails] = useState<{ bankName?: string; accountNumber?: string; ifscCode?: string } | null>(null);
   const [chainModal, setChainModal] = useState<{ module: string; referenceId: string } | null>(null);
 
   const { formatAmount, companyDefaultCurrency } = useCurrency();
@@ -149,9 +152,25 @@ export default function PaymentsPage() {
   useEffect(() => {
     if (!selectedPrintVoucher) {
       setVoucherApprovers(null);
+      setVendorBankDetails(null);
       return;
     }
     let isMounted = true;
+    vendorService.listTyped().then((vendors) => {
+      if (!isMounted) return;
+      const matched = vendors.find((v) => v.name.toLowerCase() === selectedPrintVoucher.vendorName.toLowerCase());
+      if (matched && (matched.bankName || matched.bankAccountNumber)) {
+        setVendorBankDetails({
+          bankName: matched.bankName || undefined,
+          accountNumber: matched.bankAccountNumber || undefined,
+          ifscCode: matched.bankIfscCode || undefined,
+        });
+      } else {
+        setVendorBankDetails(null);
+      }
+    }).catch(() => {
+      if (isMounted) setVendorBankDetails(null);
+    });
     const fetchApprovalChain = async () => {
       try {
         const targetRef = selectedPrintVoucher.invoiceRef || selectedPrintVoucher.paymentNumber;
@@ -702,13 +721,14 @@ export default function PaymentsPage() {
             paymentMethod: selectedPrintVoucher.method,
             vendorName: selectedPrintVoucher.vendorName,
             beneficiaryName: selectedPrintVoucher.vendorName,
-            bankName: 'HDFC Bank Ltd',
-            accountNumber: `9180${Math.floor(10000000 + Math.random() * 90000000)}`,
-            ifscCode: 'HDFC0000128',
+            bankName: vendorBankDetails?.bankName,
+            accountNumber: vendorBankDetails?.accountNumber,
+            ifscCode: vendorBankDetails?.ifscCode,
             invoiceRef: selectedPrintVoucher.invoiceRef,
-            grossAmount: selectedPrintVoucher.amount / 0.98,
-            tdsAmount: (selectedPrintVoucher.amount / 0.98) * 0.02,
+            grossAmount: selectedPrintVoucher.amount,
+            tdsAmount: 0,
             netAmount: selectedPrintVoucher.amount,
+            currency: companyDefaultCurrency,
             matchStatus: selectedPrintVoucher.remarks.toLowerCase().includes('discrepancy') ? 'DISCREPANCY' : 'MATCHED',
             discrepancyReason: selectedPrintVoucher.remarks,
             approvers: voucherApprovers || undefined,

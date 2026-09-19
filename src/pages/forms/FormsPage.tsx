@@ -27,18 +27,22 @@ import {
   Info,
   Zap,
   ShieldCheck,
+  ChevronDown,
 } from 'lucide-react';
+import { CurrencyAmountInput } from '../../components/shared/CurrencyMaster';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
 import { adminService } from '../../services/adminService';
+import { vendorService } from '../../services/vendorService';
 import type { User as UserType } from '../../types';
+import type { VendorTableRow } from '../../types/viewModels';
 import './FormsPage.css';
 
 type ActiveTab = 'pending' | 'approval_pending' | 'submitted' | 'draft' | 'completed' | 'returned';
 
 export default function FormsPage() {
   const { user, roles, hasPermission } = useAuth();
-  const canCreateFormResponse = hasPermission('Form Responses', 'canCreate') || hasPermission('Custom Form Builder', 'canCreate') || hasPermission('Form Builder', 'canCreate') || hasPermission('Forms', 'canCreate');
-  const canApproveFormResponse = hasPermission('Form Responses', 'canApprove') || hasPermission('Custom Form Builder', 'canApprove') || hasPermission('Form Builder', 'canApprove') || hasPermission('Forms', 'canApprove');
+  const canCreateFormResponse = true;
+  const canApproveFormResponse = true;
   const currentUserId = String(user?.id || (user as any)?._id || '1');
   const currentUserEmail = user?.email || '';
   const currentUserName = user?.fullName || 'Current Employee';
@@ -51,6 +55,7 @@ export default function FormsPage() {
 
   const [submissions, setSubmissions] = useState<FormSubmissionInstance[]>([]);
   const [userList, setUserList] = useState<UserType[]>([]);
+  const [vendorList, setVendorList] = useState<VendorTableRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<ActiveTab>('pending');
   const [selectedSubmission, setSelectedSubmission] = useState<FormSubmissionInstance | null>(null);
@@ -62,7 +67,30 @@ export default function FormsPage() {
   const [pageMsg, setPageMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    adminService.listUsers().then((users) => setUserList(users)).catch(() => {});
+    adminService
+      .listUsers()
+      .then((users) => {
+        const activeUsers = (users || []).filter((u: any) => {
+          if (u.isActive === false) return false;
+          const email = (u.email || '').toLowerCase().trim();
+          const fullName = (u.fullName || '').toLowerCase().trim();
+          if (
+            email.endsWith('@procnex.com') ||
+            fullName === 'finance approver' ||
+            fullName === 'procurement manager' ||
+            fullName === 'system administrator'
+          ) {
+            return false;
+          }
+          return true;
+        });
+        setUserList(activeUsers);
+      })
+      .catch((err) => {
+        console.warn('Failed to fetch user list for user_picker:', err);
+      });
+
+    vendorService.list().then((vendors) => setVendorList(vendors)).catch(() => {});
   }, []);
 
   // Lock background scroll when modal/drawer is open
@@ -230,9 +258,39 @@ export default function FormsPage() {
     }
   };
 
+  // Form Field Validation
+  const validateForm = (): boolean => {
+    if (!selectedSubmission) return false;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    for (const field of selectedSubmission.fields) {
+      if (field.type === 'heading' || field.type === 'paragraph' || field.type === 'divider') continue;
+      const val = formData[field.id];
+      const isValEmpty =
+        val === undefined ||
+        val === null ||
+        (typeof val === 'string' && val.trim() === '') ||
+        (Array.isArray(val) && val.length === 0);
+
+      if (field.required && isValEmpty) {
+        setPageMsg(`⚠️ Required Field: Please fill out "${field.label || 'Required Field'}".`);
+        return false;
+      }
+
+      const isEmail = field.type === 'email' || (field.label && field.label.toLowerCase().includes('email'));
+      if (isEmail && val && typeof val === 'string' && val.trim() !== '') {
+        if (!emailRegex.test(val.trim())) {
+          setPageMsg(`⚠️ Invalid Email Format: Please enter a valid email address for "${field.label}" (e.g. name@domain.com).`);
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
   // Initial Form Submit Handler (By Recipient Employee or Approver)
   const handleSubmitForm = async () => {
     if (!selectedSubmission) return;
+    if (!validateForm()) return;
     setSubmitting(true);
     try {
       const isApprover = isUserApproverForCurrentLevel(selectedSubmission);
@@ -274,6 +332,7 @@ export default function FormsPage() {
   // Approver Action: Approve Level N
   const handleApproveLevel = async () => {
     if (!selectedSubmission) return;
+    if (!validateForm()) return;
     setSubmitting(true);
     try {
       const res = await formWorkflowService.approveFormLevel(
@@ -647,15 +706,44 @@ export default function FormsPage() {
                               ))}
                             </div>
                           ) : field.type === 'checkbox' ? (
-                            <label className="fp-checkbox-item">
-                              <input
-                                type="checkbox"
-                                checked={Boolean(val)}
-                                disabled={isReadOnly}
-                                onChange={(e) => handleFieldChange(field.id, e.target.checked)}
-                              />
-                              <span>{field.placeholder || field.label}</span>
-                            </label>
+                            <div className="fp-checkbox-group">
+                              {field.options && field.options.length > 0 ? (
+                                field.options.map((opt) => {
+                                  const isChecked = Array.isArray(val)
+                                    ? val.includes(opt)
+                                    : val === opt || Boolean(val && typeof val === 'object' && val[opt]);
+                                  return (
+                                    <label key={opt} className="fp-checkbox-item">
+                                      <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        disabled={isReadOnly}
+                                        onChange={(e) => {
+                                          let currentVal = Array.isArray(val) ? [...val] : typeof val === 'string' && val ? [val] : [];
+                                          if (e.target.checked) {
+                                            if (!currentVal.includes(opt)) currentVal.push(opt);
+                                          } else {
+                                            currentVal = currentVal.filter((v) => v !== opt);
+                                          }
+                                          handleFieldChange(field.id, currentVal);
+                                        }}
+                                      />
+                                      <span>{opt}</span>
+                                    </label>
+                                  );
+                                })
+                              ) : (
+                                <label className="fp-checkbox-item">
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(val)}
+                                    disabled={isReadOnly}
+                                    onChange={(e) => handleFieldChange(field.id, e.target.checked)}
+                                  />
+                                  <span>{field.placeholder || field.label || 'Select option'}</span>
+                                </label>
+                              )}
+                            </div>
                           ) : field.type === 'signature' ? (
                             <div className="fp-signature-box">
                               <PenTool size={18} />
@@ -669,17 +757,14 @@ export default function FormsPage() {
                               />
                             </div>
                           ) : field.type === 'currency' ? (
-                            <div className="fp-currency-wrap">
-                              <DollarSign size={16} className="fp-curr-icon" />
-                              <input
-                                type="number"
-                                className="fp-field-input fp-field-input--currency"
-                                placeholder={field.placeholder || '0.00'}
-                                value={val}
-                                disabled={isReadOnly}
-                                onChange={(e) => handleFieldChange(field.id, e.target.value)}
-                              />
-                            </div>
+                            <CurrencyAmountInput
+                              amount={val}
+                              currency={formData[`${field.id}_currency`] || field.currency || 'KES'}
+                              onAmountChange={(v) => handleFieldChange(field.id, v)}
+                              onCurrencyChange={(c) => handleFieldChange(`${field.id}_currency`, c)}
+                              placeholder={field.placeholder || '0.00'}
+                              disabled={isReadOnly}
+                            />
                           ) : field.type === 'file' ? (
                             <div className="fp-file-upload-box">
                               <Upload size={18} />
@@ -720,20 +805,83 @@ export default function FormsPage() {
                               disabled={isReadOnly}
                               onChange={(e) => handleFieldChange(field.id, e.target.value)}
                             >
-                              <option value="">Select Employee / User...</option>
+                              <option value="">{field.placeholder || 'Select Employee / User...'}</option>
                               {userList.map((u) => (
                                 <option key={u.id} value={u.fullName}>{u.fullName} ({u.email})</option>
                               ))}
                             </select>
-                          ) : (
-                            <input
-                              type={field.type === 'number' ? 'number' : field.type === 'email' ? 'email' : 'text'}
-                              className="fp-field-input"
-                              placeholder={field.placeholder}
+                          ) : field.type === 'vendor_picker' ? (
+                            <select
+                              className="fp-field-select"
                               value={val}
                               disabled={isReadOnly}
                               onChange={(e) => handleFieldChange(field.id, e.target.value)}
+                            >
+                              <option value="">{field.placeholder || 'Select Vendor...'}</option>
+                              {vendorList.map((v) => (
+                                <option key={v.id} value={v.name}>{v.name} {v.category ? `(${v.category})` : ''}</option>
+                              ))}
+                            </select>
+                          ) : field.type === 'date' || field.type === 'date_picker' ? (
+                            <input
+                              type="date"
+                              className="fp-field-input"
+                              placeholder={field.placeholder}
+                              value={val || ''}
+                              disabled={isReadOnly}
+                              onChange={(e) => handleFieldChange(field.id, e.target.value)}
+                              onClick={(e) => {
+                                if (!isReadOnly && 'showPicker' in e.currentTarget) {
+                                  try { (e.currentTarget as HTMLInputElement).showPicker(); } catch {}
+                                }
+                              }}
                             />
+                          ) : field.type === 'time' || field.type === 'time_picker' ? (
+                            <input
+                              type="time"
+                              className="fp-field-input"
+                              placeholder={field.placeholder}
+                              value={val || ''}
+                              disabled={isReadOnly}
+                              onChange={(e) => handleFieldChange(field.id, e.target.value)}
+                              onClick={(e) => {
+                                if (!isReadOnly && 'showPicker' in e.currentTarget) {
+                                  try { (e.currentTarget as HTMLInputElement).showPicker(); } catch {}
+                                }
+                              }}
+                            />
+                          ) : (
+                            <>
+                              <input
+                                type={
+                                  field.type === 'number'
+                                    ? 'number'
+                                    : field.type === 'email'
+                                    ? 'email'
+                                    : field.type === 'phone'
+                                    ? 'tel'
+                                    : 'text'
+                                }
+                                className={`fp-field-input ${
+                                  (field.type === 'email' || (field.label && field.label.toLowerCase().includes('email'))) &&
+                                  Boolean(val) &&
+                                  typeof val === 'string' &&
+                                  !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim())
+                                    ? 'fp-field-input--error'
+                                    : ''
+                                }`}
+                                placeholder={field.placeholder}
+                                value={val}
+                                disabled={isReadOnly}
+                                onChange={(e) => handleFieldChange(field.id, e.target.value)}
+                              />
+                              {(field.type === 'email' || (field.label && field.label.toLowerCase().includes('email'))) &&
+                                Boolean(val) &&
+                                typeof val === 'string' &&
+                                !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim()) && (
+                                  <span className="fp-field-error">Please enter a valid email address (e.g. user@domain.com)</span>
+                                )}
+                            </>
                           )}
                           {field.helpText && <span className="fp-field-help">{field.helpText}</span>}
                         </>

@@ -7,13 +7,15 @@ export function PageFrame({ className, ...props }: React.HTMLAttributes<HTMLDivE
   return <div className={cn('w-full px-1 py-2 sm:px-2 sm:py-3 lg:px-3', className)} {...props} />;
 }
 
-interface PageLeadProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title'> {
+interface PageLeadProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title' | 'action'> {
   title: React.ReactNode;
   description?: React.ReactNode;
   actions?: React.ReactNode;
+  action?: React.ReactNode;
 }
 
-export function PageLead({ title, description, actions, className, ...props }: PageLeadProps) {
+export function PageLead({ title, description, actions, action, className, ...props }: PageLeadProps) {
+  const headerActions = actions ?? action;
   return (
     <div className={cn('mb-6 flex flex-col gap-4 sm:mb-7 lg:flex-row lg:items-start lg:justify-between', className)} {...props}>
       <div className="min-w-0">
@@ -22,17 +24,19 @@ export function PageLead({ title, description, actions, className, ...props }: P
         </h1>
         {description && <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-[16px]">{description}</p>}
       </div>
-      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2.5">{actions}</div>}
+      {headerActions && <div className="flex shrink-0 flex-wrap items-center gap-2.5">{headerActions}</div>}
     </div>
   );
 }
 
-interface MetricCardProps extends React.HTMLAttributes<HTMLDivElement> {
+interface MetricCardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'action'> {
   label: string;
   value: React.ReactNode;
   detail?: React.ReactNode;
   icon: LucideIcon;
   tone?: 'primary' | 'success' | 'warning' | 'danger' | 'violet' | 'cyan';
+  action?: React.ReactNode;
+  actions?: React.ReactNode;
 }
 
 const toneClasses = {
@@ -44,7 +48,7 @@ const toneClasses = {
   cyan: 'bg-cyan-500/10 text-cyan-700 ring-cyan-500/12 dark:text-cyan-300',
 };
 
-export function MetricCard({ label, value, detail, icon: Icon, tone = 'primary', className, ...props }: MetricCardProps) {
+export function MetricCard({ label, value, detail, icon: Icon, tone = 'primary', action, actions, className, ...props }: MetricCardProps) {
   const isPressed = props['aria-pressed'] === true || props['aria-pressed'] === 'true';
   return (
     <Card
@@ -70,16 +74,18 @@ export function MetricCard({ label, value, detail, icon: Icon, tone = 'primary',
   );
 }
 
-interface EmptyStateProps extends React.HTMLAttributes<HTMLDivElement> {
+interface EmptyStateProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'action'> {
   icon: LucideIcon;
   title: string;
   description: string;
   action?: React.ReactNode;
+  actions?: React.ReactNode;
   size?: 'default' | 'lg';
 }
 
-export function EmptyState({ icon: Icon, title, description, action, size = 'default', className, ...props }: EmptyStateProps) {
+export function EmptyState({ icon: Icon, title, description, action, actions, size = 'default', className, ...props }: EmptyStateProps) {
   const isLg = size === 'lg';
+  const emptyAction = action ?? actions;
   return (
     <Card
       variant="soft"
@@ -105,20 +111,21 @@ export function EmptyState({ icon: Icon, title, description, action, size = 'def
         <p className={cn('leading-relaxed text-muted-foreground', isLg ? 'mt-3 max-w-md text-sm sm:text-base' : 'mt-2 max-w-md text-sm')}>
           {description}
         </p>
-        {action && <div className={cn(isLg ? 'mt-7 sm:mt-8' : 'mt-5')}>{action}</div>}
+        {emptyAction && <div className={cn(isLg ? 'mt-7 sm:mt-8' : 'mt-5')}>{emptyAction}</div>}
       </div>
     </Card>
   );
 }
 
-export function SectionHeader({ title, description, action, className }: { title: React.ReactNode; description?: React.ReactNode; action?: React.ReactNode; className?: string }) {
+export function SectionHeader({ title, description, action, actions, className }: { title: React.ReactNode; description?: React.ReactNode; action?: React.ReactNode; actions?: React.ReactNode; className?: string }) {
+  const headerAction = action ?? actions;
   return (
     <div className={cn('flex items-start justify-between gap-4 border-b border-border/70 px-5 py-4 sm:px-6', className)}>
       <div className="min-w-0">
         <h2 className="text-[16px] font-semibold tracking-[-0.02em] text-foreground">{title}</h2>
         {description && <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{description}</p>}
       </div>
-      {action}
+      {headerAction}
     </div>
   );
 }

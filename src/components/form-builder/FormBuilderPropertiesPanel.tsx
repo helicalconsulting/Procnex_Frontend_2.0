@@ -6,6 +6,7 @@ import {
   Sliders,
 } from 'lucide-react';
 import type { FieldValidation, FormField } from '../../types/formBuilder';
+import { CurrencySelector } from '../shared/CurrencyMaster';
 
 const fieldGroupClass = 'flex flex-col gap-1.5';
 const labelClass = 'text-xs font-semibold text-foreground';
@@ -140,6 +141,18 @@ export default function FormBuilderPropertiesPanel({
               value={selectedField.placeholder || ''}
               onChange={(e) => handleChange('placeholder', e.target.value)}
               placeholder="e.g. Enter text here..."
+            />
+          </div>
+        )}
+
+        {/* Currency Selector (For Currency Field) */}
+        {selectedField.type === 'currency' && (
+          <div className={fieldGroupClass}>
+            <label className={labelClass}>Default Currency</label>
+            <CurrencySelector
+              value={selectedField.currency || 'KES'}
+              onChange={(code) => handleChange('currency', code)}
+              size="sm"
             />
           </div>
         )}

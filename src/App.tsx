@@ -67,6 +67,7 @@ const CreatePaymentVoucherPage = lazy(
 );
 const CreateGRNPage = lazy(() => import("./pages/grn/CreateGRNPage"));
 const GRNListPage = lazy(() => import("./pages/grn/GRNListPage"));
+const CompanyGRNListPage = lazy(() => import("./pages/grn/CompanyGRNListPage"));
 const PaymentsPage = lazy(() => import("./pages/payments/PaymentsPage"));
 const NewOnboardingPage = lazy(
   () => import("./pages/onboarding/NewOnboardingPage"),
@@ -139,9 +140,10 @@ export default function App() {
                     {/* Public */}
                     <Route path="/helicalconsulting" element={page(HelicalConsultingPage)} />
                     <Route path="/login" element={page(LoginPage)} />
-                    <Route path="/vendor/login" element={page(VendorLoginPage)} />
+                    <Route path="/vendor/login" element={<Navigate to="/login" replace />} />
                     <Route path="/v/:companyCode/login" element={page(BrandedVendorLoginPage)} />
                     <Route path="/set-password" element={page(SetPasswordPage)} />
+                    <Route path="/v/:companyCode/set-password" element={page(SetPasswordPage)} />
                     <Route path="/auth/magic" element={page(VendorMagicLinkPage)} />
 
                     {/* Vendor Portal Routes — Multi-Tenant Isolated */}
@@ -212,6 +214,14 @@ export default function App() {
                           <Route
                             path="/procurement/grns"
                             element={page(GRNListPage)}
+                          />
+                          <Route
+                            path="/procurement/goods-receipt"
+                            element={page(CompanyGRNListPage)}
+                          />
+                          <Route
+                            path="/procurement/create-company-grn"
+                            element={page(CreateGRNPage)}
                           />
                           <Route
                             path="/procurement/create-grn"

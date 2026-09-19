@@ -278,6 +278,15 @@ export default function FormResponsesPage() {
       );
     }
 
+    if (field.type === 'currency') {
+      const selectedCurr = (sub.responseData && sub.responseData[`${field.id}_currency`]) || field.currency || 'USD';
+      return (
+        <span className="font-semibold text-foreground">
+          {selectedCurr} {val ? Number(val).toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}
+        </span>
+      );
+    }
+
     if (field.type === 'signature') {
       return (
         <div className="flex flex-col gap-1 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3 text-sm text-foreground">
@@ -668,14 +677,6 @@ export default function FormResponsesPage() {
                             onClick={() => setSelectedResponse(sub)}
                           >
                             <Eye size={14} /> Response
-                          </button>
-
-                          <button
-                            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold text-muted-foreground transition hover:bg-violet-500/10 hover:text-violet-600"
-                            title="View Approval Timeline (Admin Only)"
-                            onClick={() => setSelectedTimeline(sub)}
-                          >
-                            <History size={14} /> Timeline
                           </button>
                         </div>
                       </td>

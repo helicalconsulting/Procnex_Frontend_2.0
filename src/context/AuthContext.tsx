@@ -16,6 +16,8 @@ import {
   permissionsListToMap,
   type UserPermissionsMap,
 } from '../utils/permissions';
+import { isVendor } from '../utils/rbac';
+import { getTenantCompanyCode } from '../utils/tenantResolver';
 
 interface AuthContextType {
   user: User | null;
@@ -108,14 +110,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
 
   const logout = useCallback(async () => {
+    const isVendorSession =
+      isVendor(roles) ||
+      !!(user as any)?.vendorId ||
+      !!(user as any)?.isVendor ||
+      window.location.pathname.startsWith('/v/') ||
+      window.location.pathname.startsWith('/vendor');
+
+    const companyCode =
+      (user as any)?.companyCode ||
+      getTenantCompanyCode() ||
+      localStorage.getItem('vendor_company_code');
+
     await authService.logout();
-    // Clear ALL React Query cache to prevent stale vendor data from
-    // showing when a different vendor logs in from the same browser session.
     queryClient.clear();
     setUser(null);
     setRoles([]);
     setPermissions({});
-  }, [queryClient]);
+
+    if (isVendorSession) {
+      const code = companyCode && companyCode.toUpperCase() !== 'VENDOR' ? companyCode.toLowerCase() : null;
+      if (code) {
+        localStorage.setItem('vendor_company_code', code.toUpperCase());
+        window.location.href = `/v/${code}/login`;
+      } else {
+        window.location.href = '/login';
+      }
+    } else {
+      window.location.href = '/login';
+    }
+  }, [roles, user, queryClient]);
 
   const hasPermission = useCallback(
     (module: string, action: PermissionField = 'canView') =>

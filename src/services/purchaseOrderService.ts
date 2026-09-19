@@ -4,8 +4,36 @@ import { toNumber } from '../api/normalize';
 import { MOCK_PURCHASE_ORDERS } from '../api/mappers';
 import type { PurchaseOrder } from '../types';
 
-function normalizePO(po: PurchaseOrder): PurchaseOrder {
-  return { ...po, totalAmount: toNumber(po.totalAmount) };
+function normalizePO(po: any): any {
+  const totalAmount = toNumber(po.totalAmount);
+  const rfqItems = po.rfq?.items || [];
+  const quoteItems = po.rfq?.selectedQuotation?.items || [];
+  const rawItems = (po.items && po.items.length > 0) ? po.items : rfqItems;
+
+  const items = rawItems.map((item: any, idx: number) => {
+    const quoteItem = quoteItems.find((q: any) => q.rfqItemId === item.id) || quoteItems[idx];
+    const qty = Math.max(1, Number(item.quantity || item.orderedQty || 1));
+    let price = Number(item.unitPrice || quoteItem?.unitPrice || 0);
+    if (!price && totalAmount > 0) {
+      price = Number((totalAmount / (rawItems.length || 1) / qty).toFixed(2));
+    }
+    const name = item.itemName || item.name || item.description || po.rfq?.title || `PO Line Item ${idx + 1}`;
+    return {
+      id: item.id || `po_item_${idx}`,
+      itemCode: item.itemCode || `ITM-${String(idx + 1).padStart(3, '0')}`,
+      itemName: name,
+      description: item.description || '',
+      quantity: qty,
+      unitPrice: price,
+      totalPrice: Number(quoteItem?.totalPrice || (price * qty).toFixed(2)),
+    };
+  });
+
+  return {
+    ...po,
+    totalAmount,
+    items: items.length > 0 ? items : po.items || [],
+  };
 }
 
 interface ListResult {

@@ -37,7 +37,7 @@ export const FIELD_PALETTE: PaletteCategory[] = [
         description: 'Numeric value input with min/max',
         defaultConfig: {
           label: 'Number',
-          placeholder: '0',
+          placeholder: '',
           required: false,
           readOnly: false,
           width: 'half',
@@ -50,7 +50,7 @@ export const FIELD_PALETTE: PaletteCategory[] = [
         description: 'Email address with validation',
         defaultConfig: {
           label: 'Email Address',
-          placeholder: 'example@domain.com',
+          placeholder: '',
           required: false,
           readOnly: false,
           width: 'half',
@@ -63,7 +63,7 @@ export const FIELD_PALETTE: PaletteCategory[] = [
         description: 'Phone number input',
         defaultConfig: {
           label: 'Phone Number',
-          placeholder: '+1 (555) 000-0000',
+          placeholder: '',
           required: false,
           readOnly: false,
           width: 'half',
@@ -73,10 +73,11 @@ export const FIELD_PALETTE: PaletteCategory[] = [
         type: 'currency',
         label: 'Currency',
         icon: 'DollarSign',
-        description: 'Amount with currency symbol',
+        description: 'Amount with currency symbol & dropdown selector',
         defaultConfig: {
           label: 'Amount',
-          placeholder: '0.00',
+          placeholder: '',
+          currency: 'KES',
           required: false,
           readOnly: false,
           width: 'half',

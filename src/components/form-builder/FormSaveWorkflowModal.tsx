@@ -179,18 +179,59 @@ export default function FormSaveWorkflowModal({
       });
   }, []);
 
-  // Filter out current admin creator and Super Admins from form target assignment list
+  // Filter out current admin creator, Super Admins / Admins, and seed demo accounts (finance@procnex.com, procurement@procnex.com) from form target assignment list
   const eligibleUsers = useMemo(() => {
-    return userList.filter((u) => {
-      if (!u.isActive) return false;
+    return userList.filter((u: any) => {
+      if (u.isActive === false) return false;
+
+      const email = (u.email || '').toLowerCase().trim();
+      const username = (u.username || '').toLowerCase().trim();
+      const fullName = (u.fullName || '').toLowerCase().trim();
+
+      // Filter out system seed / demo accounts (e.g. finance@procnex.com, procurement@procnex.com, admin@procnex.com)
       if (
-        currentUser &&
-        (u.id === currentUser.id ||
-          u.email.toLowerCase() === currentUser.email?.toLowerCase() ||
-          u.role === 'Super Admin' ||
-          u.role === 'Administrator' ||
-          u.role === 'admin')
+        email.endsWith('@procnex.com') ||
+        email === 'finance@procnex.com' ||
+        email === 'procurement@procnex.com' ||
+        email === 'admin@procnex.com' ||
+        fullName === 'finance approver' ||
+        fullName === 'procurement manager' ||
+        fullName === 'system administrator' ||
+        username === 'finance' ||
+        username === 'procurement'
       ) {
+        return false;
+      }
+
+      const rawRoles: string[] = [];
+      if (Array.isArray(u.roles)) {
+        u.roles.forEach((r: any) => {
+          if (typeof r === 'string') rawRoles.push(r);
+          else if (r && typeof r === 'object') rawRoles.push(r.roleName || r.name || r.role?.roleName || '');
+        });
+      }
+      if (typeof u.role === 'string') rawRoles.push(u.role);
+      else if (u.role && typeof u.role === 'object') rawRoles.push(u.role.roleName || u.role.name || '');
+      if (u.apiRoleName && typeof u.apiRoleName === 'string') rawRoles.push(u.apiRoleName);
+
+      const userRoles = rawRoles.map((r) => String(r).toLowerCase().trim());
+
+      const isAdminOrSuperAdmin = userRoles.some(
+        (r) =>
+          r === 'super admin' ||
+          r === 'administrator' ||
+          r === 'admin' ||
+          r === 'super-admin' ||
+          r === 'super_admin' ||
+          r.includes('admin')
+      );
+
+      const isCurrentUser =
+        currentUser &&
+        (String(u.id) === String(currentUser.id) ||
+          (u.email && currentUser.email && u.email.toLowerCase() === currentUser.email.toLowerCase()));
+
+      if (isAdminOrSuperAdmin || isCurrentUser) {
         return false;
       }
       return true;
@@ -328,7 +369,7 @@ export default function FormSaveWorkflowModal({
 
     onPublishForm({
       audienceType,
-      selectedUserIds: audienceType === 'whole_org' ? userList.map((u) => String(u.id)) : selectedUserIds,
+      selectedUserIds: audienceType === 'whole_org' ? eligibleUsers.map((u) => String(u.id)) : selectedUserIds,
       attachWorkflow,
       matrixLevels,
       dueDate,

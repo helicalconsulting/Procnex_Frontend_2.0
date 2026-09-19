@@ -91,7 +91,7 @@ export default function VendorMagicLinkPage() {
           )}
           {error && (
             <p style={{ marginTop: 16, textAlign: 'center' }}>
-              <a href="/vendor/login" style={{ color: 'var(--primary-500)' }}>Go to vendor login</a>
+              <a href="/login" style={{ color: 'var(--primary-500)' }}>Go to login</a>
             </p>
           )}
         </div>

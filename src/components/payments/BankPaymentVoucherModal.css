@@ -294,6 +294,14 @@
   color: #1e293b;
 }
 
+.bpv-table-total-row td {
+  background: #f8fafc;
+  border-top: 2px solid #cbd5e1 !important;
+  border-bottom: 2px solid #cbd5e1 !important;
+  padding: 12px;
+  color: #0f172a;
+}
+
 .bpv-totals-box {
   display: flex;
   justify-content: space-between;
@@ -339,71 +347,142 @@
 .bpv-stamps-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
+  gap: 12px;
 }
 
 .bpv-stamp-card {
-  background: #ffffff;
-  border: 2px dashed #94a3b8;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
   border-radius: 8px;
-  padding: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
   position: relative;
+  transition: all 0.2s ease;
+}
+
+.bpv-stamp-card:hover {
+  border-color: #94a3b8;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.bpv-stamp-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 6px;
+}
+
+.bpv-stamp-level-pill {
+  font-size: 10px;
+  font-weight: 800;
+  color: #1e293b;
+  background: #e2e8f0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+}
+
+.bpv-stamp-status-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #059669;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.02em;
+}
+
+.bpv-stamp-status-tag--pending {
+  color: #d97706;
+  background: #fffbe3;
+  border-color: #fde68a;
+}
+
+.bpv-stamp-card__details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bpv-stamp-role {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.25;
+}
+
+.bpv-stamp-name {
+  font-size: 11px;
+  color: #475569;
+  font-weight: 500;
+}
+
+.bpv-stamp-date {
+  font-size: 10.5px;
+  color: #64748b;
+  margin-top: 1px;
+}
+
+.bpv-stamp-card__signature {
+  background: #ffffff;
+  border: 1px dashed #cbd5e1;
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-top: 2px;
   text-align: center;
 }
 
-.bpv-stamp-card__level {
-  font-size: 11px;
-  font-weight: 800;
-  color: #64748b;
-  letter-spacing: 0.05em;
-  border-bottom: 1px solid #e2e8f0;
-  padding-bottom: 4px;
-  margin-bottom: 8px;
-}
-
-.bpv-stamp-card__name {
-  font-size: 14px;
-  font-weight: 800;
-  color: #0f172a;
-}
-
-.bpv-stamp-card__role {
-  font-size: 12.5px;
-  color: #475569;
-}
-
-.bpv-stamp-card__date {
-  font-size: 12px;
-  color: #64748b;
-  margin-top: 4px;
-}
-
-.bpv-stamp-card__comment {
-  font-size: 11.5px;
+.bpv-stamp-sig-pending {
+  font-size: 10.5px;
   font-style: italic;
-  color: #0284c7;
-  margin-top: 4px;
+  color: #94a3b8;
 }
 
-.bpv-stamp-badge {
+.bpv-stamp-sig-active {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.bpv-stamp-sig-img {
+  max-height: 28px;
+  max-width: 130px;
+  object-fit: contain;
+}
+
+.bpv-stamp-sig-svg-wrap {
+  width: 100%;
+  max-width: 140px;
+  height: 26px;
+}
+
+.bpv-stamp-sig-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.bpv-stamp-sig-seal {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  margin-top: 10px;
-  background: #ecfdf5;
-  color: #059669;
-  border: 1px solid #a7f3d0;
-  padding: 4px 10px;
-  border-radius: 4px;
-  font-size: 11.5px;
-  font-weight: 800;
-  letter-spacing: 0.03em;
+  gap: 3px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #0284c7;
+  letter-spacing: 0.02em;
 }
 
-.bpv-stamp-badge--pending {
-  background: #fff7ed;
-  color: #ea580c;
-  border: 1px solid #ffedd5;
+.bpv-seal-icon {
+  color: #0284c7;
 }
 
 /* ── Footer ── */

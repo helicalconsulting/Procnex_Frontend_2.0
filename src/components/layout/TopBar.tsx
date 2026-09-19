@@ -33,6 +33,8 @@ const PAGE_TITLES: Record<string, string> = {
   '/procurement/purchase-requisitions': 'PO Creation & Orders',
   '/procurement/purchase-requisition': 'PO Creation & Orders',
   '/procurement/grns': 'My Invoices & Dispatches',
+  '/procurement/goods-receipt': 'Goods Receipt Note (GRN)',
+  '/procurement/create-company-grn': 'Create Goods Receipt Note (GRN)',
   '/procurement/create-grn': 'Create Dispatch Note',
   '/procurement': 'PO Creation & Orders',
   '/contracts': 'Contracts',

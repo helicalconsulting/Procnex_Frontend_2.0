@@ -1173,6 +1173,9 @@ export default function CompanySettingsPage() {
   const hasTimeLimitChanges = (pendingInvitationExpiry !== null && pendingInvitationExpiry !== invitationExpiryHours) ||
     (pendingResubmissionDeadline !== null && pendingResubmissionDeadline !== resubmissionDeadlineHours);
 
+  // ── White Label / Branding ──
+  const { refresh: refreshBranding } = useBranding();
+
   const handleSaveGeneralSettings = useCallback(async () => {
     if (!canCreateSettings) return;
     const currencyToSave = pendingCurrency || savedCurrency;
@@ -1210,9 +1213,12 @@ export default function CompanySettingsPage() {
       setPendingPortalName(null);
       setPendingMaxUsers(null);
 
+      // Invalidate frontend API cache for company profile so GET endpoints return fresh data
+      invalidateApiCache('/company-settings/profile');
+
       // Refresh branding context so login pages reflect the change immediately
       if (hasPortalNameChange) {
-        refreshBranding();
+        await refreshBranding();
       }
 
       const changes: string[] = [];
@@ -1225,17 +1231,15 @@ export default function CompanySettingsPage() {
     } finally {
       setSavingCurrency(false);
     }
-  }, [pendingCurrency, savedCurrency, pendingInvitationExpiry, invitationExpiryHours, pendingResubmissionDeadline, resubmissionDeadlineHours, hasPendingChange, hasTimeLimitChanges, hasPortalNameChange, pendingPortalName, portalName, setCompanyDefaultCurrency]);
+  }, [pendingCurrency, savedCurrency, pendingInvitationExpiry, invitationExpiryHours, pendingResubmissionDeadline, resubmissionDeadlineHours, hasPendingChange, hasTimeLimitChanges, hasPortalNameChange, pendingPortalName, portalName, setCompanyDefaultCurrency, refreshBranding, canCreateSettings, pendingMaxUsers, hasMaxUsersChange]);
 
   const handleCurrencyCancel = useCallback(() => {
     setPendingCurrency(null);
     setPendingInvitationExpiry(null);
     setPendingResubmissionDeadline(null);
     setPendingPortalName(null);
+    setPendingMaxUsers(null);
   }, []);
-
-  // ── White Label / Branding ──
-  const { refresh: refreshBranding } = useBranding();
   const [brandingName, setBrandingName] = useState('');
   const [brandingLogoUrl, setBrandingLogoUrl] = useState('');
   const [brandingFaviconUrl, setBrandingFaviconUrl] = useState('');
@@ -3318,6 +3322,24 @@ export default function CompanySettingsPage() {
                   The vendor portal name is fixed as "Vendor".
                 </span>
               </div>
+
+              {(hasPendingChange || hasTimeLimitChanges || hasPortalNameChange) && (
+                <div className="cs-time-limit-actions" style={{ marginTop: 16 }}>
+                  <button
+                    className="company-settings__btn company-settings__btn--primary"
+                    onClick={handleSaveGeneralSettings}
+                    disabled={savingCurrency}
+                  >
+                    <Save size={16} /> {savingCurrency ? 'Saving…' : 'Save Portal Name'}
+                  </button>
+                  <button
+                    className="company-settings__btn company-settings__btn--secondary"
+                    onClick={handleCurrencyCancel}
+                  >
+                    <X size={16} /> Discard Changes
+                  </button>
+                </div>
+              )}
             </div>
           </div>
           {/* ── User Limit Configuration ── */}
@@ -3348,17 +3370,7 @@ export default function CompanySettingsPage() {
                     Managed by Platform Provider (Procnex). User creation is blocked when this limit is reached.
                   </div>
                 </div>
-                <div style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: 'var(--text-secondary)',
-                  background: 'var(--surface-card)',
-                  padding: '8px 14px',
-                  borderRadius: 6,
-                  border: '1px dashed var(--border)'
-                }}>
-                  📞 Need more user seats? Contact Procnex Support to upgrade.
-                </div>
+
               </div>
             </div>
           </div>

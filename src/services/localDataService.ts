@@ -12,12 +12,41 @@ export interface Payment {
   paymentId: string;
   vendor: string;
   invoiceRef: string;
+  invoiceIds?: string[];
+  invoices?: {
+    invoiceId?: string;
+    invoiceNumber: string;
+    amount: number;
+    poNumber?: string;
+    grnNumber?: string;
+    threeWayMatch?: string;
+    invoiceDate?: string;
+  }[];
   amount: number;
   method: string;
   status: string;
   paidAt: string;
   approvedBy?: string;
   remarks?: string;
+  bankName?: string;
+  accountNumber?: string;
+  ifscCode?: string;
+  beneficiaryName?: string;
+  purpose?: string;
+  grossAmount?: number;
+  tdsAmount?: number;
+  items?: {
+    id?: string | number;
+    description: string;
+    poNumber?: string;
+    grnNumber?: string;
+    invoiceRef?: string;
+    quantity?: number;
+    unitPrice?: number;
+    grossAmount: number;
+    tdsAmount?: number;
+    netAmount: number;
+  }[];
 }
 
 export interface SalesOrder {
@@ -227,80 +256,77 @@ const DOCUMENTS_MOCK: DocumentItem[] = [
   { id: 2, name: 'RFQ-2024-019-specs.docx', module: 'RFQ', uploadedBy: 'Priya Patel', uploadedAt: '2024-04-18', size: '1.2 MB' },
 ];
 
+function getCustomPaymentsKey(): string {
+  try {
+    const userStr = localStorage.getItem('heliflow_user');
+    const user = userStr ? JSON.parse(userStr) : null;
+    const code = user?.companyCode || 'DEFAULT';
+    return `heliflow_custom_payments_${code}`;
+  } catch {
+    return 'heliflow_custom_payments';
+  }
+}
+
 export const localDataService = {
-  getPayments: async () => {
-    let customPayments: Payment[] = [];
+  getPayments: async (): Promise<Payment[]> => {
     try {
-      const stored = localStorage.getItem('heliflow_custom_payments');
-      if (stored) {
-        customPayments = JSON.parse(stored);
+      const data = await apiRequest<{ payments: Array<Record<string, any>> }>('/payments');
+      if (data.payments && Array.isArray(data.payments)) {
+        return data.payments.map((p, idx) => ({
+          id: p.id || idx + 1,
+          paymentId: p.paymentNumber || p.paymentId || `PAY-${p.id}`,
+          vendor: p.vendorName || p.vendor || '—',
+          invoiceRef: p.invoiceRef || '—',
+          invoiceIds: p.invoiceIds || undefined,
+          invoices: p.invoices || undefined,
+          amount: Number(p.amount || 0),
+          method: p.method || 'NEFT',
+          status: p.status || 'PENDING',
+          paidAt: String(p.paidAt || p.scheduledAt || p.createdAt || '').slice(0, 10),
+          approvedBy: p.approvedBy || 'Pending Approval (Payments Workflow)',
+          remarks: p.remarks || p.comments || '',
+          bankName: p.bankName,
+          accountNumber: p.accountNumber,
+          ifscCode: p.ifscCode,
+          beneficiaryName: p.beneficiaryName,
+          purpose: p.purpose,
+          grossAmount: p.grossAmount ? Number(p.grossAmount) : undefined,
+          tdsAmount: p.tdsAmount ? Number(p.tdsAmount) : undefined,
+          items: p.items || undefined,
+        })) as Payment[];
       }
-    } catch (_e) {
-      customPayments = [];
+    } catch (_err) {
+      console.warn('Failed to fetch payments from backend API:', _err);
     }
-
-    if (!USE_MOCK) {
-      try {
-        const data = await apiRequest<{ payments: Array<Record<string, any>> }>('/payments');
-        if (data.payments && data.payments.length > 0) {
-          const apiPayments = data.payments.map((p, idx) => ({
-            id: typeof p.id === 'number' ? p.id : idx + 1000,
-            paymentId: p.paymentNumber || p.paymentId || `PAY-${p.id}`,
-            vendor: p.vendorName || p.vendor || '—',
-            invoiceRef: p.invoiceRef || '—',
-            amount: Number(p.amount || 0),
-            method: p.method || 'NEFT',
-            status: p.status || 'PENDING',
-            paidAt: String(p.paidAt || p.scheduledAt || p.createdAt || '').slice(0, 10),
-            approvedBy: p.approvedBy || 'Pending Approval (Payments Workflow)',
-            remarks: p.remarks || p.comments || '',
-          })) as Payment[];
-
-          // Combine without duplicates
-          const existingIds = new Set(customPayments.map(cp => cp.paymentId));
-          const filteredApi = apiPayments.filter(ap => !existingIds.has(ap.paymentId));
-          return [...customPayments, ...filteredApi];
-        }
-      } catch (_err) {
-        // Fall back to custom payments if API call fails
-      }
-    }
-    await delay();
-    return customPayments;
+    return [];
   },
   savePayment: (newPayment: Partial<Payment>): Payment => {
-    try {
-      const stored = localStorage.getItem('heliflow_custom_payments');
-      const list: Payment[] = stored ? JSON.parse(stored) : [];
-      const created: Payment = {
-        id: Date.now(),
-        paymentId: newPayment.paymentId || `VOU-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-        vendor: newPayment.vendor || 'Supplier',
-        invoiceRef: newPayment.invoiceRef || '—',
-        amount: newPayment.amount || 0,
-        method: newPayment.method || 'NEFT',
-        status: newPayment.status || 'PENDING',
-        paidAt: newPayment.paidAt || new Date().toISOString().slice(0, 10),
-        approvedBy: newPayment.approvedBy || 'Pending Approval (Payments Workflow)',
-        remarks: newPayment.remarks || 'Auto-generated from Approved Purchase Invoice',
-      };
-      list.unshift(created);
-      localStorage.setItem('heliflow_custom_payments', JSON.stringify(list));
-      return created;
-    } catch (e) {
-      console.error('Failed to save payment locally', e);
-      return {
-        id: Date.now(),
-        paymentId: `VOU-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-        vendor: newPayment.vendor || 'Supplier',
-        invoiceRef: newPayment.invoiceRef || '—',
-        amount: newPayment.amount || 0,
-        method: 'NEFT',
-        status: 'PENDING',
-        paidAt: new Date().toISOString().slice(0, 10),
-        approvedBy: 'Pending Approval (Payments Workflow)',
-      };
-    }
+    return {
+      id: Date.now(),
+      paymentId: newPayment.paymentId || `PV-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+      vendor: newPayment.vendor || 'Supplier',
+      invoiceRef: newPayment.invoiceRef || '—',
+      invoiceIds: newPayment.invoiceIds,
+      invoices: newPayment.invoices,
+      amount: newPayment.amount || 0,
+      method: newPayment.method || 'NEFT',
+      status: newPayment.status || 'PENDING',
+      paidAt: newPayment.paidAt || new Date().toISOString().slice(0, 10),
+      approvedBy: newPayment.approvedBy || 'Pending Approval (Payments Workflow)',
+      remarks: newPayment.remarks || 'Disbursement submitted to database',
+      bankName: newPayment.bankName,
+      accountNumber: newPayment.accountNumber,
+      ifscCode: newPayment.ifscCode,
+      beneficiaryName: newPayment.beneficiaryName,
+      purpose: newPayment.purpose,
+      grossAmount: newPayment.grossAmount,
+      tdsAmount: newPayment.tdsAmount,
+      items: newPayment.items,
+    };
+  },
+  deletePayment: async (payment: Payment): Promise<void> => {
+    const targetId = payment.paymentId || String(payment.id);
+    await apiRequest(`/payments/${targetId}`, { method: 'DELETE' });
   },
   getSalesOrders: async () => {
     if (!USE_MOCK) {

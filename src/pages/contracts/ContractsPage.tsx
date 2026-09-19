@@ -237,7 +237,7 @@ export default function ContractsPage() {
     {
       key: 'status', label: 'Status', defaultVisible: true, width: '160px',
       render: (r) => (
-        <Badge variant="outline" className={cn('gap-1 text-[11px] font-semibold', STATUS_TONES[r.status])}>
+        <Badge variant="outline" className={cn('gap-1 font-semibold', STATUS_TONES[r.status])}>
           {STATUS_LABELS[r.status]}
         </Badge>
       ),
@@ -729,7 +729,7 @@ export default function ContractsPage() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-mono text-xs text-muted-foreground">{r.contractNumber}</span>
-                  <Badge variant="outline" className={cn('text-[11px]', STATUS_TONES[r.status])}>
+                  <Badge variant="outline" className={cn(STATUS_TONES[r.status])}>
                     {STATUS_LABELS[r.status]}
                   </Badge>
                 </div>

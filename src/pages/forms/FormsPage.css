@@ -382,7 +382,7 @@
 .fp-field-input,
 .fp-field-select {
   width: 100%;
-  background: var(--surface-elevated);
+  background-color: var(--surface-elevated);
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 9px 12px;
@@ -392,13 +392,71 @@
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
+.fp-field-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 12px center !important;
+  padding-right: 36px !important;
+  cursor: pointer;
+}
+
+.fp-field-select option {
+  background: var(--surface-card, #121a27);
+  color: var(--text-primary, #edf3f9);
+  padding: 8px 12px;
+}
+
 .fp-field-input:focus,
 .fp-field-select:focus {
   border-color: var(--border-focus);
   box-shadow: 0 0 0 2px rgba(10, 110, 209, 0.2);
 }
 
+.fp-field-input--error,
+.fp-field-select--error {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2) !important;
+}
+
+.fp-field-error {
+  font-size: 12px;
+  color: #ef4444;
+  margin-top: 4px;
+  display: block;
+  font-weight: 500;
+}
+
 .fp-field-textarea { min-height: 90px; resize: vertical; }
+
+.fp-checkbox-group,
+.fp-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.fp-checkbox-item,
+.fp-radio-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-primary);
+  user-select: none;
+}
+
+.fp-checkbox-item input[type="checkbox"],
+.fp-radio-item input[type="radio"] {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--primary-500);
+  cursor: pointer;
+}
 
 .fp-signature-box {
   display: flex;
@@ -576,4 +634,25 @@
   justify-content: flex-end;
   gap: 10px;
   margin-top: 14px;
+}
+
+.fp-field-input[type="date"],
+.fp-field-input[type="time"] {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.fp-field-input[type="date"]::-webkit-calendar-picker-indicator,
+.fp-field-input[type="time"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: invert(0.4);
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.fp-field-input[type="date"]::-webkit-calendar-picker-indicator:hover,
+.fp-field-input[type="time"]::-webkit-calendar-picker-indicator:hover {
+  background: var(--surface-hover);
+  filter: invert(0.2);
 }

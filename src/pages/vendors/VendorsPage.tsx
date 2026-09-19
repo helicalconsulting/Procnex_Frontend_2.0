@@ -379,7 +379,29 @@ export default function VendorsPage() {
     isEnabled: boolean;
   } | null>(null);
 
-  const anyModalOpen = !!(showModal || deleteTarget || detailVendor || credVendor || previewDoc || showUploadDocModal || renewalSuccessModal || mobileSuccessModal?.visible);
+  const [passwordSetupSuccessModal, setPasswordSetupSuccessModal] = useState<{
+    vendorName: string;
+    vendorEmail: string;
+  } | null>(null);
+
+  // ── Company Vendor Limit ──
+  const [maxVendorsAllowed, setMaxVendorsAllowed] = useState<number>(50);
+  useEffect(() => {
+    (async () => {
+      try {
+        const prof = await companySettingsService.getCompanyProfile();
+        if (prof?.maxVendors) {
+          setMaxVendorsAllowed(prof.maxVendors);
+        } else if (prof?.maxUsers) {
+          setMaxVendorsAllowed(prof.maxUsers);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+  }, []);
+
+  const anyModalOpen = !!(showModal || deleteTarget || detailVendor || credVendor || previewDoc || showUploadDocModal || renewalSuccessModal || mobileSuccessModal?.visible || passwordSetupSuccessModal);
   useBodyScrollLock(anyModalOpen);
 
   const perPage = 8;
@@ -439,21 +461,24 @@ export default function VendorsPage() {
     setCredentialsMsg(null);
     try {
       const result = await vendorService.resendPasswordSetup(credVendor.id);
-      setCredentialsMsg(
-        result.emailSent
-          ? `Password setup link emailed to ${credVendor.email}. The vendor chooses their own password.`
-          : 'Failed to send setup email. Check SMTP settings.'
-      );
       if (result.emailSent) {
+        const sentVendorName = credVendor.name;
+        const sentVendorEmail = credVendor.email;
+        closeCredentialsModal();
+        setPasswordSetupSuccessModal({
+          vendorName: sentVendorName,
+          vendorEmail: sentVendorEmail,
+        });
         reload();
-        setTimeout(closeCredentialsModal, 2500);
+      } else {
+        setCredentialsMsg('Failed to send setup email. Check SMTP settings.');
       }
     } catch (err) {
       setCredentialsMsg(err instanceof Error ? err.message : 'Failed to send setup email');
     } finally {
       setCredLoading(false);
     }
-  }, [credVendor, closeCredentialsModal]);
+  }, [credVendor, closeCredentialsModal, reload]);
 
   // ── Column state ──
   const defaultOrder = ALL_COLUMNS.map((c) => c.key);
@@ -495,6 +520,10 @@ export default function VendorsPage() {
     active: displayVendors.filter((v) => v.isActive).length,
     inactive: displayVendors.filter((v) => !v.isActive).length,
   }), [displayVendors]);
+
+  const isVendorLimitReached = useMemo(() => {
+    return summary.active >= maxVendorsAllowed;
+  }, [summary.active, maxVendorsAllowed]);
 
   // Top rated count: vendors with overallScore >= 80
   const topRatedCount = useMemo(() => displayVendors.filter((v) => v.overallScore >= 80).length, [displayVendors]);
@@ -562,6 +591,11 @@ export default function VendorsPage() {
 
     const newActive = !v.isActive;
 
+    if (newActive && isVendorLimitReached) {
+      setPageMsg(`⚠️ Company Vendor Limit Reached (${summary.active} / ${maxVendorsAllowed} active vendors). Please contact Procnex Support to upgrade.`);
+      return;
+    }
+
     // Optimistic update — update cache immediately so toggle feels instant
     queryClient.setQueriesData<VendorTableRow[]>(
       { queryKey: ['svc'], type: 'active' },
@@ -590,7 +624,7 @@ export default function VendorsPage() {
       );
       setPageMsg(err instanceof Error ? err.message : 'Could not update vendor status');
     }
-  }, [vendors, reload, queryClient]);
+  }, [vendors, isVendorLimitReached, summary.active, maxVendorsAllowed, reload, queryClient]);
 
   const toggleMobileActive = useCallback(async (id: string | number) => {
     setPageMsg(null);
@@ -689,6 +723,10 @@ export default function VendorsPage() {
 
   const handleSaveVendor = useCallback(async () => {
     if (!fName.trim() || !fEmail.trim()) return;
+    if (!editingVendor && isVendorLimitReached) {
+      setPageMsg(`⚠️ Company Vendor Limit Reached (${summary.active} / ${maxVendorsAllowed} active vendors). Please contact Procnex Support to upgrade.`);
+      return;
+    }
     setActionLoading(true);
     setPageMsg(null);
     try {
@@ -729,7 +767,7 @@ export default function VendorsPage() {
     } finally {
       setActionLoading(false);
     }
-  }, [editingVendor, fName, fEmail, fPhone, fContact, fCategory, fCategoryId, fLocation, fWebsite, detailVendor, closeFormModal, reload, queryClient]);
+  }, [editingVendor, isVendorLimitReached, summary.active, maxVendorsAllowed, fName, fEmail, fPhone, fCountryCode, fContact, fCategory, fCategoryId, fLocation, fWebsite, fMobileAccess, detailVendor, closeFormModal, reload, queryClient]);
 
   const openDeleteModal = useCallback((vendor: VendorTableRow) => {
     setDeleteTarget(vendor);
@@ -799,16 +837,32 @@ export default function VendorsPage() {
           <h1 className="text-2xl font-bold tracking-tight text-foreground m-0 mb-1">Vendors</h1>
           <p className="text-sm text-muted-foreground m-0">Manage vendor directory, track performance, and onboard new suppliers</p>
         </div>
-        <button
-          className={`vendors-page__add-btn inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm bg-gradient-to-r from-primary to-primary-600 text-white shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all ${!canCreateVendor ? 'vendors-page__add-btn--disabled opacity-50 cursor-not-allowed shadow-none' : ''}`}
-          onClick={canCreateVendor ? openAddModal : undefined}
-          title={!canCreateVendor ? 'Admin has not allowed this action. You do not have permission to create vendors.' : 'Add a new vendor'}
-          disabled={!canCreateVendor}
-        >
-          {canCreateVendor ? <Plus size={18} /> : <ShieldOff size={18} />}
-          Add Vendor
-        </button>
+        <div className="flex items-center gap-3">
+          <div className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${isVendorLimitReached ? 'bg-red-500/10 border-red-500 text-red-500' : 'bg-muted/60 border-border text-foreground'}`}>
+            <Users size={16} />
+            <span>Active Vendors: {summary.active} / {maxVendorsAllowed} Limit</span>
+          </div>
+
+          <button
+            className={`vendors-page__add-btn inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm bg-gradient-to-r from-primary to-primary-600 text-white shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all ${(isVendorLimitReached || !canCreateVendor) ? 'vendors-page__add-btn--disabled opacity-50 cursor-not-allowed shadow-none' : ''}`}
+            onClick={(!isVendorLimitReached && canCreateVendor) ? openAddModal : undefined}
+            title={!canCreateVendor ? 'Admin has not allowed this action. You do not have permission to create vendors.' : isVendorLimitReached ? 'Company vendor limit reached. Please contact Procnex Support to upgrade.' : 'Add a new vendor'}
+            disabled={isVendorLimitReached || !canCreateVendor}
+            style={(isVendorLimitReached || !canCreateVendor) ? { opacity: 0.6, cursor: 'not-allowed', pointerEvents: 'auto' } : {}}
+          >
+            {canCreateVendor ? <Plus size={18} /> : <ShieldOff size={18} />}
+            Add Vendor
+          </button>
+        </div>
       </div>
+
+      {isVendorLimitReached && (
+        <div className="mb-4">
+          <MessageStrip type="warning">
+            ⚠️ <strong>Company Vendor Limit Reached:</strong> Your organization has reached its maximum active vendor limit ({summary.active} / {maxVendorsAllowed} active vendors). Please contact your service provider (Procnex Support) to upgrade your vendor limit.
+          </MessageStrip>
+        </div>
+      )}
 
       {/* Summary — clickable filter cards */}
       <div className="vendors-summary grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -2610,6 +2664,135 @@ export default function VendorsPage() {
               }}
             >
               Got it
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Password Setup Email Sent Success Modal ────────────────────── */}
+      {passwordSetupSuccessModal && (
+        <div className="vendors-modal-backdrop" onClick={() => setPasswordSetupSuccessModal(null)}>
+          <div
+            className="vendors-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: 420,
+              padding: '28px 24px 24px',
+              textAlign: 'center',
+              borderRadius: 16,
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08)',
+              position: 'relative',
+            }}
+          >
+            {/* Header Close */}
+            <button
+              type="button"
+              onClick={() => setPasswordSetupSuccessModal(null)}
+              style={{
+                position: 'absolute',
+                top: 14,
+                right: 14,
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '50%',
+                width: 28,
+                height: 28,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+            >
+              <X size={15} />
+            </button>
+
+            {/* Icon Badge */}
+            <div
+              style={{
+                width: 76,
+                height: 76,
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.22), rgba(16, 185, 129, 0.1))',
+                border: '1.5px solid rgba(34, 197, 94, 0.4)',
+                boxShadow: '0 0 28px rgba(34, 197, 94, 0.25)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 20px',
+              }}
+            >
+              <CheckCircle2 size={40} strokeWidth={2} color="#22c55e" />
+            </div>
+
+            {/* Title */}
+            <h3
+              style={{
+                margin: '0 0 8px',
+                fontSize: 20,
+                fontWeight: 700,
+                color: 'var(--text-primary)',
+                letterSpacing: '-0.01em',
+              }}
+            >
+              Password Setup Email Sent!
+            </h3>
+
+            {/* Subtitle / Details */}
+            <p
+              style={{
+                margin: '0 0 16px',
+                fontSize: 14.5,
+                color: 'var(--text-secondary)',
+                lineHeight: 1.55,
+              }}
+            >
+              A secure password setup link has been successfully sent to <br />
+              <strong style={{ color: 'var(--text-primary)', wordBreak: 'break-all' }}>{passwordSetupSuccessModal.vendorEmail}</strong>
+            </p>
+
+            <div
+              style={{
+                background: 'rgba(255, 255, 255, 0.04)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: 10,
+                padding: '12px 14px',
+                margin: '0 0 24px',
+                textAlign: 'left',
+                fontSize: 13,
+                color: 'var(--text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+              }}
+            >
+              <Mail size={20} color="#3b82f6" style={{ flexShrink: 0 }} />
+              <div>
+                <strong style={{ color: 'var(--text-primary)', display: 'block' }}>{passwordSetupSuccessModal.vendorName}</strong>
+                <span>Link valid for 72 hours. Vendor will set their own credentials.</span>
+              </div>
+            </div>
+
+            {/* Button */}
+            <button
+              type="button"
+              onClick={() => setPasswordSetupSuccessModal(null)}
+              style={{
+                width: '100%',
+                padding: '11px 0',
+                borderRadius: 10,
+                border: 'none',
+                background: 'linear-gradient(135deg, #16a34a, #15803d)',
+                color: '#ffffff',
+                fontSize: 15,
+                fontWeight: 600,
+                cursor: 'pointer',
+                boxShadow: '0 4px 14px rgba(22, 163, 74, 0.35)',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              Done
             </button>
           </div>
         </div>

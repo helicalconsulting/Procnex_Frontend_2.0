@@ -174,6 +174,12 @@ export const NAVIGATION_MENU: MenuItem[] = [
     roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.PURCHASE_CLERK, 'purchase_clerk', 'Purchase Clerk', 'procurement_manager', 'Purchase Manager', 'purchase_manager'],
   },
   {
+    id: 'company-grn',
+    label: 'Goods Receipt Note (GRN)',
+    path: '/procurement/goods-receipt',
+    roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER, RoleName.PURCHASE_CLERK, RoleName.FINANCE_MANAGER, RoleName.FINANCE_APPROVER, 'purchase_clerk', 'Purchase Clerk', 'procurement_manager', 'Purchase Manager', 'purchase_manager'],
+  },
+  {
     id: 'contracts',
     label: 'Contracts',
     path: '/contracts',
