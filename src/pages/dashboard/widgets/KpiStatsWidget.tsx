@@ -62,15 +62,15 @@ const KPI_ICONS: Record<string, typeof FileText> = {
   tasks: Timer,
 };
 
-const KPI_TONES: Record<string, { icon: string; glow: string }> = {
-  rfq: { icon: 'bg-blue-500/10 text-blue-600 dark:text-blue-300', glow: 'hover:border-blue-500/25' },
-  approvals: { icon: 'bg-amber-500/10 text-amber-600 dark:text-amber-300', glow: 'hover:border-amber-500/25' },
-  pos: { icon: 'bg-violet-500/10 text-violet-600 dark:text-violet-300', glow: 'hover:border-violet-500/25' },
-  vendors: { icon: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-300', glow: 'hover:border-cyan-500/25' },
-  spend: { icon: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300', glow: 'hover:border-emerald-500/25' },
-  lead: { icon: 'bg-pink-500/10 text-pink-600 dark:text-pink-300', glow: 'hover:border-pink-500/25' },
-  quotes: { icon: 'bg-sky-500/10 text-sky-600 dark:text-sky-300', glow: 'hover:border-sky-500/25' },
-  tasks: { icon: 'bg-orange-500/10 text-orange-600 dark:text-orange-300', glow: 'hover:border-orange-500/25' },
+const KPI_TONES: Record<string, { icon: string }> = {
+  rfq: { icon: 'bg-blue-500/10 text-blue-600 dark:text-blue-300' },
+  approvals: { icon: 'bg-amber-500/10 text-amber-600 dark:text-amber-300' },
+  pos: { icon: 'bg-violet-500/10 text-violet-600 dark:text-violet-300' },
+  vendors: { icon: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-300' },
+  spend: { icon: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300' },
+  lead: { icon: 'bg-pink-500/10 text-pink-600 dark:text-pink-300' },
+  quotes: { icon: 'bg-sky-500/10 text-sky-600 dark:text-sky-300' },
+  tasks: { icon: 'bg-orange-500/10 text-orange-600 dark:text-orange-300' },
 };
 
 function TrendIcon({ direction }: { direction: 'up' | 'down' | 'neutral' }) {
@@ -310,19 +310,15 @@ export default function KpiStatsWidget() {
   return (
     <>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        {kpis.map((kpi, idx) => {
+        {kpis.map((kpi) => {
           const Icon = KPI_ICONS[kpi.modifier] || KPI_ICONS[kpi.id] || FileText;
           const tone = KPI_TONES[getKpiKey(kpi)] || KPI_TONES.rfq;
-          const isFirst = idx === 0;
           return (
             <button
               key={kpi.id}
               type="button"
               className={cn(
-                'group flex min-h-[78px] items-center gap-3 rounded-2xl border border-border/80 bg-card px-3.5 py-3 text-left shadow-sm outline-none transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring',
-                tone.glow,
-                isFirst &&
-                  'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
+                'group flex min-h-[78px] items-center gap-3 rounded-2xl border border-border/80 bg-card px-3.5 py-3 text-left shadow-sm outline-none transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-blue-400/70 hover:shadow-[0_0_0_1px_rgba(59,130,246,0.45),0_0_14px_rgba(59,130,246,0.28)] focus-visible:ring-2 focus-visible:ring-ring'
               )}
               onClick={() => openKpi(kpi)}
               aria-label={`Open ${kpi.label} details`}

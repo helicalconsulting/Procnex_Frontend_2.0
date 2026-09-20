@@ -793,17 +793,19 @@ export default function PurchaseRequisitionPage() {
 
       {/* ── Top Toolbar ── */}
       <div className="pr-toolbar">
-        <button className="pr-toolbar__back" onClick={() => navigate(-1)}>
-          <ArrowLeft size={18} /> Back
+        <button className="pr-toolbar__back" onClick={() => navigate(-1)} title="Go Back">
+          <ArrowLeft size={16} /> Back
         </button>
         <div className="pr-toolbar__title">
-          <ShoppingCart size={20} />
+          <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <ShoppingCart size={18} />
+          </div>
           <span className="pr-toolbar__title-text">PO Creation</span>
           {pr.poNumber && <span className="pr-toolbar__po-num">#{pr.poNumber}</span>}
           <span className={`pr-badge pr-badge--${pr.status}`}>{getStatusLabel(pr.status)}</span>
           {isReadOnly && (
-            <span className="pr-badge" style={{ background: 'rgba(10, 110, 209, 0.12)', color: 'var(--primary-500)', border: '1px solid rgba(10, 110, 209, 0.25)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              <Eye size={12} /> View Only
+            <span className="pr-badge pr-badge--view-only">
+              <Eye size={13} /> VIEW ONLY
             </span>
           )}
         </div>

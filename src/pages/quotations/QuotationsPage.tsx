@@ -36,6 +36,10 @@ import type { RFQEvaluationData } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { isL2OrHigherUser } from '../../utils/rbac';
 import { CreatorLevelPromptModal } from '../../components/shared/CreatorLevelPromptModal';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { MetricCard, PageFrame, PageLead } from '../../components/ui/product';
+import { cn } from '../../lib/utils';
 import './QuotationsPage.css';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -1016,14 +1020,14 @@ function ViewQuotationModal({
     fetchBidSecurity();
   }, [fullQuot, q.id]);
 
-  const tabs: { key: ViewTab; label: string; icon: string }[] = [
-    { key: 'vendor', label: 'Vendor Details', icon: '🏢' },
-    { key: 'paymentTerms', label: 'Payment Terms', icon: '📄' },
-    { key: 'authorization', label: 'Authorization', icon: '🔒' },
-    { key: 'items', label: `Items (${items.length})`, icon: '📋' },
-    { key: 'documents', label: `Documents (${combinedDocs.length})`, icon: '📎' },
-    { key: 'evaluation', label: 'Evaluation', icon: '📊' },
-    { key: 'history', label: 'Vendor History', icon: '📜' },
+  const tabs: { key: ViewTab; label: string }[] = [
+    { key: 'vendor', label: 'Vendor Details' },
+    { key: 'paymentTerms', label: 'Payment Terms' },
+    { key: 'authorization', label: 'Authorization' },
+    { key: 'items', label: `Items (${items.length})` },
+    { key: 'documents', label: `Documents (${combinedDocs.length})` },
+    { key: 'evaluation', label: 'Evaluation' },
+    { key: 'history', label: 'Vendor History' },
   ];
 
   return (
@@ -1119,7 +1123,6 @@ function ViewQuotationModal({
                   className={`rfq-modal__tab ${activeTab === t.key ? 'rfq-modal__tab--active' : ''}`}
                   onClick={() => setActiveTab(t.key)}
                 >
-                  <span style={{ fontSize: 16, marginRight: 4 }}>{t.icon}</span>
                   <span>{t.label}</span>
                 </button>
               ))}
@@ -1228,8 +1231,7 @@ function ViewQuotationModal({
               {/* ── Tab 2: Payment Terms ── */}
               {activeTab === 'paymentTerms' && (
                 <div className="rfq-modal__info-panel">
-                  <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 15 }}>
-                    <span>📄</span>
+                  <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 15, fontWeight: 700 }}>
                     <span>Payment Terms</span>
                   </div>
                   {q.paymentTerms && q.paymentTerms !== '—' ? (
@@ -1295,8 +1297,7 @@ function ViewQuotationModal({
               {/* ── Tab 3: Authorization Documents ── */}
               {activeTab === 'authorization' && (
                 <div className="rfq-modal__info-panel">
-                  <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 15 }}>
-                    <span>🔒</span>
+                  <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 15, fontWeight: 700 }}>
                     <span>Authorization Documents</span>
                   </div>
 
@@ -3976,38 +3977,26 @@ export default function QuotationsPage() {
   // ── Column header renderer ──────────────────────────────────
   const renderTh = (key: string) => {
     switch (key) {
-      case 'vendor':       return <div className="quot-compare__param-inner"><ArrowDownNarrowWide size={13} /> Vendor</div>;
-      case 'qNo':          return <div className="quot-compare__col-inner"><span className="quot-compare__param-icon quot-compare__param-icon--qno"><GitBranch size={13}/></span>Q.No</div>;
-      case 'totalPrice':   return <div className="quot-compare__col-inner"><span className="quot-compare__param-icon quot-compare__param-icon--price"><TrendingDown size={13}/></span>Total Price</div>;
-      case 'leadTime':     return <div className="quot-compare__col-inner"><span className="quot-compare__param-icon quot-compare__param-icon--lead"><Clock size={13}/></span>Lead Time</div>;
-      case 'paymentTerms': return <div className="quot-compare__col-inner"><span className="quot-compare__param-icon quot-compare__param-icon--terms"><FileText size={13}/></span>Payment Terms</div>;
+      case 'vendor':       return <div className="quot-compare__col-inner">VENDOR</div>;
+      case 'qNo':          return <div className="quot-compare__col-inner quot-compare__col-inner--center">Q.NO</div>;
+      case 'totalPrice':   return <div className="quot-compare__col-inner quot-compare__col-inner--right">TOTAL PRICE</div>;
+      case 'leadTime':     return <div className="quot-compare__col-inner quot-compare__col-inner--center">LEAD TIME</div>;
+      case 'paymentTerms': return <div className="quot-compare__col-inner">PAYMENT TERMS</div>;
       case 'score':
         return (
-          <div className="quot-compare__col-inner">
-            <span className="quot-compare__param-icon quot-compare__param-icon--score"><TrendingUp size={13}/></span>
-            Recommendation
-            {evalSource !== 'formula' && (
-              <span
-                className={`quot-compare__eval-badge quot-compare__eval-badge--${evalSource === 'custom_evaluation' ? 'custom' : 'simple'}`}
-                title={evalSource === 'custom_evaluation' ? 'Scored from Custom RFQ evaluation categories' : 'Scored from Simple RFQ evaluation parameters'}
-              >
-                Evaluation
-              </span>
-            )}
+          <div className="quot-compare__col-inner quot-compare__col-inner--center">
+            RECOMMENDATION
             {evalSource === 'formula' && (
-              <span
-                className="quot-compare__eval-badge quot-compare__eval-badge--formula"
-                title="Score calculated from price, lead time, and vendor rating formula"
-              >
-                Formula
+              <span className="quot-compare__eval-sublabel" title="Score calculated from price, lead time, and vendor rating formula">
+                FORMULA
               </span>
             )}
           </div>
         );
-      case 'itemCount':    return <div className="quot-compare__col-inner"><span className="quot-compare__param-icon quot-compare__param-icon--items"><ClipboardList size={13}/></span>Items</div>;
-      case 'status':       return <div className="quot-compare__col-inner"><span className="quot-compare__param-icon quot-compare__param-icon--status"><CheckCircle2 size={13}/></span>Status</div>;
-      case 'submittedAt':  return <div className="quot-compare__col-inner"><span className="quot-compare__param-icon quot-compare__param-icon--date"><Clock size={13}/></span>Submitted</div>;
-      case 'actions':      return <div className="quot-compare__col-inner" style={{ justifyContent: 'center' }}>Actions</div>;
+      case 'itemCount':    return <div className="quot-compare__col-inner quot-compare__col-inner--center">ITEMS</div>;
+      case 'status':       return <div className="quot-compare__col-inner quot-compare__col-inner--center">STATUS</div>;
+      case 'submittedAt':  return <div className="quot-compare__col-inner quot-compare__col-inner--center">SUBMITTED</div>;
+      case 'actions':      return <div className="quot-compare__col-inner quot-compare__col-inner--center">ACTIONS</div>;
       default: return null;
     }
   };
@@ -4019,7 +4008,7 @@ export default function QuotationsPage() {
     return (
       <>
         {/* RFQ Dropdown */}
-        <div className="quot-compare__search-area" style={inModal ? { border: 'none', background: 'transparent', padding: '0 0 20px' } : {}}>
+        <div className="quot-compare__search-area" style={inModal ? { border: 'none', background: 'transparent', padding: '0 0 16px' } : {}}>
           <div className="quot-compare__dropdown" ref={compareDropdownRef}>
             <button
               ref={compareDropdownBtnRef}
@@ -4027,12 +4016,12 @@ export default function QuotationsPage() {
               onClick={() => setCompareDropdownOpen(p => !p)}
               aria-expanded={compareDropdownOpen}
             >
-              <Search size={14}/>
+              <Search size={15}/>
               {selectedRFQ ? (
                 <span className="quot-compare__selected-rfq">
-                  <span>{selectedRFQ}</span>
+                  <span className="font-semibold text-primary">{selectedRFQ}</span>
                   {selectedRFQTitle && (
-                    <span className="quot-compare__selected-title-inline" style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)' }}>
+                    <span className="quot-compare__selected-title-inline text-muted-foreground font-normal">
                       — {selectedRFQTitle}
                     </span>
                   )}
@@ -4121,11 +4110,11 @@ export default function QuotationsPage() {
           </div>
           {selectedRFQ && (
             <div className="quot-compare__rfq-badge">
-              <span>{selectedRFQ}</span>
+              <span className="font-semibold text-foreground">{selectedRFQ}</span>
               <span className={`quot-compare__rfq-status-tag ${isRfqInactive(selectedRFQ) ? 'quot-compare__rfq-status-tag--inactive' : 'quot-compare__rfq-status-tag--active'}`}>
-                {isRfqInactive(selectedRFQ) ? 'Inactive (Vendor Chosen)' : 'Active (Evaluating)'}
+                {isRfqInactive(selectedRFQ) ? 'INACTIVE (VENDOR CHOSEN)' : 'ACTIVE'}
               </span>
-              <span className="quot-compare__rfq-count">
+              <span className="quot-compare__rfq-count text-muted-foreground">
                 {vendorGroups.length || evaluatedSuppliers.length} suppliers
               </span>
               <div className="quot-compare__view-toggle">
@@ -4160,48 +4149,50 @@ export default function QuotationsPage() {
               <thead>
                 <tr>
                   {visibleCols.map(key => {
-                    const colClass = key === 'vendor' ? 'quot-compare__vendor-col-header' : 
-                      key === 'qNo' ? 'quot-compare__col-header--qno' :
-                      key === 'totalPrice' ? 'quot-compare__col-header--price' :
-                      key === 'leadTime' ? 'quot-compare__col-header--lead' :
-                      key === 'paymentTerms' ? 'quot-compare__col-header--payment' :
-                      key === 'score' ? 'quot-compare__col-header--score' :
-                      key === 'itemCount' ? 'quot-compare__col-header--items' :
-                      key === 'status' ? 'quot-compare__col-header--status' :
-                      key === 'submittedAt' ? 'quot-compare__col-header--date' :
-                      'quot-compare__col-header--' + key;
+                    const colClass = key === 'vendor' ? 'quot-compare__col--vendor' : 
+                      key === 'qNo' ? 'quot-compare__col--qno' :
+                      key === 'totalPrice' ? 'quot-compare__col--price' :
+                      key === 'leadTime' ? 'quot-compare__col--lead' :
+                      key === 'paymentTerms' ? 'quot-compare__col--terms' :
+                      key === 'score' ? 'quot-compare__col--score' :
+                      key === 'itemCount' ? 'quot-compare__col--items' :
+                      key === 'status' ? 'quot-compare__col--status' :
+                      key === 'submittedAt' ? 'quot-compare__col--date' :
+                      'quot-compare__col--' + key;
                     return (
                       <th key={key} className={colClass}>
-                        {renderTh(key)}
+                        <div className="quot-compare__th-wrapper">
+                          {renderTh(key)}
+                          {key === visibleCols[visibleCols.length - 1] && (
+                            <div className="col-btn-wrap inline-flex ml-2 align-middle">
+                              <button
+                                ref={colBtnRef}
+                                className={`col-btn ${showColPanel ? 'col-btn--active' : ''}`}
+                                onClick={() => setShowColPanel(v => !v)}
+                                title="Customize columns"
+                                aria-label="Customize columns"
+                                aria-expanded={showColPanel}
+                              >
+                                <span/><span/><span/>
+                              </button>
+                              {showColPanel && (
+                                <ColumnCustomizer
+                                  columnOrder={colOrder}
+                                  visibleKeys={visibleKeys}
+                                  allColumns={ALL_QUOT_COLS}
+                                  onToggle={handleToggle}
+                                  onReorder={setColOrder}
+                                  onReset={handleReset}
+                                  onClose={() => setShowColPanel(false)}
+                                  anchorRef={colBtnRef}
+                                />
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </th>
                     );
                   })}
-                  <th className="quot-compare__customizer-th">
-                    <div className="col-btn-wrap">
-                      <button
-                        ref={colBtnRef}
-                        className={`col-btn ${showColPanel ? 'col-btn--active' : ''}`}
-                        onClick={() => setShowColPanel(v => !v)}
-                        title="Customize columns"
-                        aria-label="Customize columns"
-                        aria-expanded={showColPanel}
-                      >
-                        <span/><span/><span/>
-                      </button>
-                      {showColPanel && (
-                        <ColumnCustomizer
-                          columnOrder={colOrder}
-                          visibleKeys={visibleKeys}
-                          allColumns={ALL_QUOT_COLS}
-                          onToggle={handleToggle}
-                          onReorder={setColOrder}
-                          onReset={handleReset}
-                          onClose={() => setShowColPanel(false)}
-                          anchorRef={colBtnRef}
-                        />
-                      )}
-                    </div>
-                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -4225,14 +4216,12 @@ export default function QuotationsPage() {
                         {/* Latest Active Quotation Row */}
                         <tr className={`quot-compare__vendor-row ${mainQuot.isRecommended ? 'quot-compare__vendor-row--recommended' : ''}`}>
                           {visibleCols.map(key => renderCell(key, mainQuot, vendorCtx))}
-                          <td />
                         </tr>
 
                         {/* Collapsible History Sub-rows (Q2, Q1...) */}
                         {isExpanded && history.map(h => (
                           <tr key={h.id} className="quot-compare__vendor-row quot-compare__vendor-row--history">
                             {visibleCols.map(key => renderCell(key, h, { ...vendorCtx, isHistoryRow: true }))}
-                            <td />
                           </tr>
                         ))}
                       </React.Fragment>
@@ -4250,7 +4239,6 @@ export default function QuotationsPage() {
                     return (
                       <tr key={s.id} className={`quot-compare__vendor-row ${s.isRecommended ? 'quot-compare__vendor-row--recommended' : ''}`}>
                         {visibleCols.map(key => renderCell(key, s, fallbackCtx))}
-                        <td />
                       </tr>
                     );
                   })
@@ -4292,20 +4280,10 @@ export default function QuotationsPage() {
         const versionNum = s.versionNumber || 1;
         const displayQNo = (s.versionNumber && s.versionNumber > 1) ? `Q${s.versionNumber}` : (s.qNo || `Q${versionNum}`);
         return (
-          <td key={key} className="quot-compare__value">
-            <div className="quot-compare__qno-cell">
-              <span
-                className={`quot-compare__qno-pill ${
-                  s.status === 'RETURNED'
-                    ? 'quot-compare__qno-pill--returned'
-                    : s.isLatestVersion
-                    ? 'quot-compare__qno-pill--latest'
-                    : 'quot-compare__qno-pill--history'
-                }`}
-              >
-                {displayQNo}
-              </span>
-            </div>
+          <td key={key} className="text-center">
+            <span className="quot-compare__qno-tag">
+              {displayQNo}
+            </span>
           </td>
         );
       }
@@ -4318,12 +4296,12 @@ export default function QuotationsPage() {
                   <GitBranch size={13} />
                 </span>
                 <div className="quot-compare__supplier-info">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span className="quot-compare__history-version-tag">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-primary text-xs">
                       {s.qNo || `Q${s.versionNumber}`} (Previous Version)
                     </span>
                   </div>
-                  <span className="quot-compare__supplier-email">
+                  <span className="text-xs text-muted-foreground truncate">
                     {formatDate(s.submittedAt)}{' '}
                     {s.returnReason ? `· Returned: "${s.returnReason}"` : ''}
                   </span>
@@ -4356,32 +4334,23 @@ export default function QuotationsPage() {
                   />
                 </button>
               )}
-              <span className={`quot-compare__avatar quot-table__vendor-avatar--${s.avatarMod}`}>
-                {s.vendorInitials}
-              </span>
               <div className="quot-compare__supplier-info">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span className="quot-compare__supplier-name">{s.vendorName}</span>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="quot-compare__supplier-name truncate">{s.vendorName}</span>
                   {vendorCtx?.hasHistory && (
                     <button
                       type="button"
-                      className="quot-compare__version-count-pill"
+                      className="text-xs text-primary font-medium hover:underline flex-shrink-0"
                       onClick={(e) => {
                         e.stopPropagation();
                         vendorCtx.onToggle();
                       }}
-                      title="Click to expand previous quotation versions"
                     >
-                      {vendorCtx.versionCount} versions ({s.qNo || `Q${s.versionNumber}`})
+                      ({vendorCtx.versionCount} v)
                     </button>
                   )}
                 </div>
-                <span className="quot-compare__supplier-email">{s.vendorEmail}</span>
-                {s.isRecommended && (
-                  <span className="quot-compare__recommended-chip" title={s.recommendationReason}>
-                    <Crown size={10} /> Recommended ({s.recommendationScore || s.score}%)
-                  </span>
-                )}
+                <span className="quot-compare__supplier-email truncate">{s.vendorEmail}</span>
               </div>
             </div>
           </td>
@@ -4392,53 +4361,45 @@ export default function QuotationsPage() {
         const { converted, original } = convertPrice(priceVal, s.currency || DEFAULT_CURRENCY);
         const isBest = original === bestValues.price;
         const isConverted = activeDisplayCurrency && activeDisplayCurrency !== (s.currency || DEFAULT_CURRENCY);
+        const displayCurrencyCode = activeDisplayCurrency || s.currency || DEFAULT_CURRENCY;
         return (
-          <td key={key} className={`quot-compare__value ${isBest ? 'quot-compare__value--best' : ''}`}>
-            <div className="quot-compare__value-wrap quot-compare__value-wrap--price">
-              <span className="quot-compare__value-price">
-                <span className="quot-compare__value-main">
-                  {formatAmount(converted, activeDisplayCurrency || s.currency || DEFAULT_CURRENCY)}
-                </span>
+          <td key={key} className="text-right">
+            <div className="flex flex-col items-end gap-0.5">
+              <div className="flex items-center gap-1 font-bold text-foreground">
+                <span className="text-xs text-muted-foreground font-semibold">{displayCurrencyCode}</span>
+                <span className="text-base font-extrabold text-foreground tracking-tight">{converted.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex items-center gap-1">
                 {isConverted && (
-                  <span className="quot-compare__converted-hint" title={`Original: ${formatAmount(original, s.currency || DEFAULT_CURRENCY)}`}>
-                    ~{formatAmount(original, s.currency || DEFAULT_CURRENCY)}
+                  <span className="text-[11px] text-muted-foreground" title={`Original: ${formatAmount(original, s.currency || DEFAULT_CURRENCY)}`}>
+                    (~{formatAmount(original, s.currency || DEFAULT_CURRENCY)})
                   </span>
                 )}
-              </span>
-              <CurrencyBadge currency={activeDisplayCurrency || s.currency || DEFAULT_CURRENCY} size="sm" />
-              {isBest && <span className="quot-compare__best-chip"><Crown size={10}/> Best</span>}
+                {isBest && <span className="quot-compare__best-chip"><Crown size={9}/> BEST</span>}
+              </div>
             </div>
           </td>
-        );}
+        );
+      }
       case 'leadTime':
         return (
-          <td key={key} className={`quot-compare__value ${s.leadTimeDays === bestValues.lead ? 'quot-compare__value--best' : ''}`}>
-            <div className="quot-compare__value-wrap">
-              <span className="quot-compare__value-main">{s.leadTimeDays} days</span>
-              {s.leadTimeDays === bestValues.lead && <span className="quot-compare__best-chip"><Crown size={10}/> Best</span>}
-            </div>
+          <td key={key} className="text-center">
+            <span className="font-semibold text-foreground text-sm">{s.leadTimeDays} days</span>
           </td>
         );
       case 'paymentTerms':
         return (
-          <td key={key} className="quot-compare__value">
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              <span className="quot-compare__value-main">{s.paymentTerms}</span>
+          <td key={key} className="text-left">
+            <span className="inline-flex items-center gap-1.5 text-sm text-foreground font-medium whitespace-nowrap">
+              <span>{s.paymentTerms}</span>
               {s.paymentPlanSnapshot && s.paymentPlanSnapshot.length > 0 && (
                 <button
                   type="button"
                   title="View payment plan"
                   onClick={(e) => { e.stopPropagation(); setViewPlanQuotation({ name: s.paymentTerms, milestones: s.paymentPlanSnapshot!.map((m, i) => ({ id: `snap_${i}`, title: m.title, percentage: m.percentage })) }); }}
-                  style={{
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    color: 'var(--text-secondary)', padding: 0,
-                    display: 'inline-flex', alignItems: 'center', flexShrink: 0,
-                    transition: 'color 0.15s',
-                  }}
-                  onMouseOver={e => { e.currentTarget.style.color = 'var(--vendor-primary)'; }}
-                  onMouseOut={e => { e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                  className="text-muted-foreground hover:text-primary transition-colors"
                 >
-                  <Eye size={13} />
+                  <Eye size={14} />
                 </button>
               )}
             </span>
@@ -4446,33 +4407,31 @@ export default function QuotationsPage() {
         );
       case 'score':
         return (
-          <td key={key} className={`quot-compare__value ${s.recommendationScore === bestValues.recommendation ? 'quot-compare__value--best' : ''}`}>
-            <div className="quot-compare__score-cell">
-              <div className="quot-score">
-                <div className="quot-score__bar">
-                  <div className={`quot-score__fill quot-score__fill--${getScoreClass(s.recommendationScore || s.score || 0)}`} style={{ width: `${s.recommendationScore || s.score || 0}%` }} />
-                </div>
-                <span className="quot-score__value">{s.recommendationScore || s.score || 0}%</span>
+          <td key={key} className="text-center">
+            <div className="flex flex-col items-center gap-0.5">
+              <span className="font-extrabold text-sm text-foreground">{s.recommendationScore || s.score || 0}%</span>
+              <div className="quot-score__bar">
+                <div className={`quot-score__fill quot-score__fill--${getScoreClass(s.recommendationScore || s.score || 0)}`} style={{ width: `${s.recommendationScore || s.score || 0}%` }} />
               </div>
             </div>
           </td>
         );
       case 'itemCount':
         return (
-          <td key={key} className="quot-compare__value">
-            <span className="quot-compare__value-main">{s.itemCount} items</span>
+          <td key={key} className="text-center font-medium text-muted-foreground text-sm">
+            {s.itemCount}
           </td>
         );
       case 'status':
         return (
-          <td key={key} className="quot-compare__value">
+          <td key={key} className="text-center whitespace-nowrap">
             <span className={`quot-badge quot-badge--${getDisplayStatus(s)}`}>{STATUS_LABELS[getDisplayStatus(s)]}</span>
           </td>
         );
       case 'submittedAt':
         return (
-          <td key={key} className="quot-compare__value">
-            <span className="quot-compare__value-main">{formatDate(s.submittedAt)}</span>
+          <td key={key} className="text-center text-xs text-muted-foreground whitespace-nowrap">
+            {formatDate(s.submittedAt)}
           </td>
         );
       case 'actions': {
@@ -4483,8 +4442,8 @@ export default function QuotationsPage() {
         const actionable = displaySt !== 'ACCEPTED' && displaySt !== 'REJECTED' && displaySt !== 'RETURNED' && canUserAction;
         const hasPostAwardAccess = canPerformPostAward(s, user, roles);
         return (
-          <td key={key} className="quot-compare__value" style={{ textAlign: 'center' }}>
-            <div className="quot-table__actions" style={{ justifyContent: 'center', gap: 4 }}>
+          <td key={key} className="text-center">
+            <div className="quot-table__actions flex items-center justify-center gap-1.5">
               <button
                 className="quot-table__action-btn"
                 title="View Details"
@@ -4588,7 +4547,7 @@ export default function QuotationsPage() {
   };
 
   return (
-    <div className="quot-page">
+    <PageFrame>
       {error && <MessageStrip type="error">{error}</MessageStrip>}
       {toast && (
         <MessageStrip
@@ -4601,105 +4560,114 @@ export default function QuotationsPage() {
         </MessageStrip>
       )}
       {loading && <div className="quot-page__loading">Loading quotations…</div>}
-      {/* Header */}
-      <div className="quot-page__header">
-        <div className="quot-page__header-left">
-          <h1>Quotation Approval</h1>
-          <p>Compare vendor quotations side-by-side across your RFQs</p>
-        </div>
-        <div className="quot-page__header-actions">
-          {/* Active Quotation Comparison Button */}
-          <button
-            className="quot-page__compare-btn"
-            onClick={() => setCompareModalOpen(true)}
-            title="Open active quotation comparison"
-          >
-            <GitCompareArrows size={18} />
-            <span>Active Quotation Comparison</span>
-          </button>
-          {/* Currency Converter Widget */}
-          <div className="quot-page__converter">
-          <div className="quot-page__converter-inner">
-            <ArrowRightLeft size={15} className="quot-page__converter-icon" />
-            <span className="quot-page__converter-label">Convert to</span>
-            <CurrencySelector
-              value={activeDisplayCurrency}
-              onChange={setDisplayCurrency}
-              size="sm"
-            />
-            {displayCurrency && (
-              <button
-                className="quot-page__converter-reset"
-                onClick={() => setDisplayCurrency('')}
-                title="Reset to default currency"
-              >
-                <X size={13} />
-              </button>
-            )}
-          </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Summary — clickable KPI cards */}
-      <div className="quot-summary">
-        {[
-          { icon: <ClipboardList size={22}/>, mod: 'total',    value: stats.total, label: 'Total Quotations', filter: null as string | null },
-          { icon: <Clock size={22}/>,         mod: 'pending',  value: stats.pending,  label: 'Pending Review',   filter: 'UNDER_REVIEW' },
-          { icon: <CheckCircle2 size={22}/>,  mod: 'accepted', value: stats.accepted, label: 'Accepted',         filter: 'ACCEPTED' },
-          { icon: <XCircle size={22}/>,       mod: 'rejected', value: stats.rejected, label: 'Rejected',         filter: 'REJECTED' },
-        ].map(c => {
-          const isActive = c.mod === 'total' ? !statusFilter : statusFilter === c.filter;
-          return (
-            <div
-              key={c.mod}
-              className={`quot-summary-card ${isActive ? 'quot-summary-card--active' : ''}`}
-              onClick={() => c.mod !== 'total' ? handleKpiClick(c.filter) : setStatusFilter(null)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); c.mod !== 'total' ? handleKpiClick(c.filter) : setStatusFilter(null); } }}
+      {/* Header */}
+      <PageLead
+        title="Quotation Approval"
+        description="Compare vendor quotations side-by-side across your RFQs"
+        actions={
+          <div className="flex items-center gap-2.5">
+            {/* Active Quotation Comparison Button */}
+            <Button
+              onClick={() => setCompareModalOpen(true)}
+              title="Open active quotation comparison"
+              className="gap-2"
             >
-              <div className={`quot-summary-card__icon quot-summary-card__icon--${c.mod}`}>{c.icon}</div>
-              <div className="quot-summary-card__info">
-                <span className="quot-summary-card__value">{c.value}</span>
-                <span className="quot-summary-card__label">{c.label}</span>
+              <GitCompareArrows size={17} />
+              <span>Active Quotation Comparison</span>
+            </Button>
+            {/* Currency Converter Widget */}
+            <div className="quot-page__converter">
+              <div className="quot-page__converter-inner">
+                <ArrowRightLeft size={15} className="quot-page__converter-icon" />
+                <span className="quot-page__converter-label">Convert to</span>
+                <CurrencySelector
+                  value={activeDisplayCurrency}
+                  onChange={setDisplayCurrency}
+                  size="sm"
+                />
+                {displayCurrency && (
+                  <button
+                    className="quot-page__converter-reset"
+                    onClick={() => setDisplayCurrency('')}
+                    title="Reset to default currency"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
               </div>
             </div>
+          </div>
+        }
+      />
+
+      {/* Summary — KPI cards using MetricCard component */}
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          { icon: ClipboardList, tone: 'primary' as const, value: stats.total, label: 'Total Quotations', detail: 'All submitted quotes', filter: null as string | null },
+          { icon: Clock,         tone: 'warning' as const, value: stats.pending,  label: 'Pending Review',   detail: 'Awaiting decision', filter: 'UNDER_REVIEW' },
+          { icon: CheckCircle2,  tone: 'success' as const, value: stats.accepted, label: 'Accepted',         detail: 'Approved quotations', filter: 'ACCEPTED' },
+          { icon: XCircle,       tone: 'danger' as const,  value: stats.rejected, label: 'Rejected',         detail: 'Declined quotations', filter: 'REJECTED' },
+        ].map(c => {
+          const isActive = c.filter === null ? !statusFilter : statusFilter === c.filter;
+          return (
+            <MetricCard
+              key={c.label}
+              icon={c.icon}
+              tone={c.tone}
+              value={c.value}
+              label={c.label}
+              detail={c.detail}
+              className={cn(
+                'cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-all duration-200',
+                isActive &&
+                  'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
+              )}
+              onClick={() => c.filter !== null ? handleKpiClick(c.filter) : setStatusFilter(null)}
+              role="button"
+              tabIndex={0}
+              aria-pressed={isActive}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); c.filter !== null ? handleKpiClick(c.filter) : setStatusFilter(null); } }}
+            />
           );
         })}
       </div>
 
-      {/* ── Quotations Listing (approvals-style table) ── */}
+      {/* ── Quotations Listing ── */}
       <div className="quot-listing">
-        {/* Search Toolbar */}
-        <div className="quot-listing-toolbar">
-          <div className="quot-listing-toolbar__search">
-            <Search size={16} className="quot-listing-toolbar__search-icon" />
-            <input
+        {/* Search & Collapse Toolbar */}
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full max-w-xl">
+            <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="h-11 rounded-xl pl-10"
               type="text"
               placeholder="Search by RFQ number, title, vendor or email..."
+              aria-label="Search quotations"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setListingPage(1); }}
             />
           </div>
           {rfqGroups.length > 0 && (
-            <button
+            <Button
               type="button"
-              className="quot-rfq-card__expand-all-btn"
+              variant="outline"
+              size="sm"
+              className="h-11 rounded-xl gap-2 font-medium"
               onClick={toggleExpandAll}
             >
               {expandedRfqNumbers.size === rfqGroups.length ? (
                 <>
-                  <ChevronUp size={14} />
+                  <ChevronUp size={16} />
                   <span>Collapse All</span>
                 </>
               ) : (
                 <>
-                  <ChevronDown size={14} />
+                  <ChevronDown size={16} />
                   <span>Expand All ({rfqGroups.length})</span>
                 </>
               )}
-            </button>
+            </Button>
           )}
         </div>
 
@@ -4723,7 +4691,7 @@ export default function QuotationsPage() {
                           className={`quot-rfq-card__chevron ${isExpanded ? 'quot-rfq-card__chevron--expanded' : ''}`}
                           aria-label={isExpanded ? 'Collapse' : 'Expand'}
                         >
-                          <ChevronRight size={18} />
+                          <ChevronRight size={15} />
                         </button>
                         <div className="quot-rfq-card__title-block">
                           <div className="quot-rfq-card__badge-wrap">
@@ -4731,31 +4699,38 @@ export default function QuotationsPage() {
                             <span className={`quot-rfq-card__status-dot quot-rfq-card__status-dot--${group.isInactive ? 'inactive' : 'active'}`} />
                             <span className="quot-rfq-card__status-text">{group.isInactive ? 'Completed' : 'Active'}</span>
                           </div>
-                          <h3 className="quot-rfq-card__title">{group.rfqTitle}</h3>
+                          {group.rfqTitle && group.rfqTitle !== group.rfqNumber && (
+                            <h3 className="quot-rfq-card__title">{group.rfqTitle}</h3>
+                          )}
                         </div>
                       </div>
 
                       <div className="quot-rfq-card__header-right">
-                        <div className="quot-rfq-card__stat">
-                          <span className="quot-rfq-card__stat-label">Quotations</span>
-                          <span className="quot-rfq-card__stat-val">
-                            <ClipboardList size={13} style={{ verticalAlign: -1, marginRight: 4 }} />
-                            {group.quotationCount} {group.quotationCount === 1 ? 'Quotation' : 'Quotations'}
-                          </span>
-                        </div>
+                        <div className="quot-rfq-card__stat-group">
+                          <div className="quot-rfq-card__stat">
+                            <span className="quot-rfq-card__stat-label">QUOTATIONS</span>
+                            <span className="quot-rfq-card__stat-val">
+                              {group.quotationCount} {group.quotationCount === 1 ? 'Quotation' : 'Quotations'}
+                            </span>
+                          </div>
 
-                        <div className="quot-rfq-card__stat">
-                          <span className="quot-rfq-card__stat-label">Best Price</span>
-                          <span className="quot-rfq-card__stat-val quot-rfq-card__stat-val--best">
-                            {convertPrice(group.bestPrice, group.bestCurrency).converted}
-                          </span>
-                        </div>
+                          <div className="quot-rfq-card__stat-divider" />
 
-                        <div className="quot-rfq-card__stat">
-                          <span className="quot-rfq-card__stat-label">Latest Submitted</span>
-                          <span className="quot-rfq-card__stat-val">
-                            {formatDate(group.latestSubmitted)}
-                          </span>
+                          <div className="quot-rfq-card__stat">
+                            <span className="quot-rfq-card__stat-label">BEST PRICE</span>
+                            <span className="quot-rfq-card__stat-val quot-rfq-card__stat-val--best">
+                              {activeDisplayCurrency || group.bestCurrency} {convertPrice(group.bestPrice, group.bestCurrency).converted.toLocaleString('en-US')}
+                            </span>
+                          </div>
+
+                          <div className="quot-rfq-card__stat-divider" />
+
+                          <div className="quot-rfq-card__stat">
+                            <span className="quot-rfq-card__stat-label">LATEST SUBMITTED</span>
+                            <span className="quot-rfq-card__stat-val">
+                              {formatDate(group.latestSubmitted)}
+                            </span>
+                          </div>
                         </div>
 
                         <div className="quot-rfq-card__actions" onClick={(e) => e.stopPropagation()}>
@@ -4779,7 +4754,7 @@ export default function QuotationsPage() {
                     {isExpanded && (
                       <div className="quot-rfq-card__body">
                         <div className="quot-listing-table-wrap">
-                          <table className="quot-listing-table" style={{ tableLayout: 'fixed', minWidth: '850px' }}>
+                          <table className="quot-listing-table" style={{ width: '100%', tableLayout: 'auto' }}>
                             <colgroup>
                               {listingVisibleColumns.map((col) => (
                                 <col key={col.key} style={{ width: col.width || 'auto' }} />
@@ -4975,7 +4950,6 @@ export default function QuotationsPage() {
             </div>
 
             {/* Hero section */}
-            {/* Hero section */}
             <div className="quot-compare-modal__hero">
               <h2 className="quot-compare-modal__hero-title">Active Quotation Comparison</h2>
               <p className="quot-compare-modal__hero-desc">
@@ -5041,6 +5015,6 @@ export default function QuotationsPage() {
         data={actionSuccessModalData}
         onClose={() => setActionSuccessModalData(null)}
       />
-    </div>
+    </PageFrame>
   );
 }

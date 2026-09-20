@@ -522,69 +522,94 @@ export default function ContractsPage() {
       <PageLead
         title="Contracts"
         description="Manage contracts, track signatures, and create purchase orders"
+        actions={
+          <Button
+            onClick={() => navigate('/contracts/create')}
+            disabled={!canCreateContract}
+            title={!canCreateContract ? 'You do not have permission to create contracts.' : 'Create new contract'}
+          >
+            <Plus /> New Contract
+          </Button>
+        }
       />
 
-      {/* Metric Cards */}
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard
-          icon={FileText}
-          label="Total Contracts"
-          value={summary.total}
-          tone="primary"
-          role="button"
-          tabIndex={0}
-          aria-pressed={statusFilter === 'ALL'}
-          className="cursor-pointer"
-          onClick={() => { setStatusFilter('ALL'); setCurrentPage(1); }}
-        />
-        <MetricCard
-          icon={CheckCircle2}
-          label="Vendor Signed"
-          value={summary.vendorSigned}
-          tone="success"
-          role="button"
-          tabIndex={0}
-          aria-pressed={statusFilter === 'VENDOR_SIGNED_GROUP'}
-          className="cursor-pointer"
-          onClick={() => { setStatusFilter('VENDOR_SIGNED_GROUP'); setCurrentPage(1); }}
-        />
-        <MetricCard
-          icon={Clock}
-          label="Pending Signature"
-          value={summary.pendingSignature}
-          tone="warning"
-          role="button"
-          tabIndex={0}
-          aria-pressed={statusFilter === 'PENDING_SIGNATURE_GROUP'}
-          className="cursor-pointer"
-          onClick={() => { setStatusFilter('PENDING_SIGNATURE_GROUP'); setCurrentPage(1); }}
-        />
-        <MetricCard
-          icon={DollarSign}
-          label="Total Value"
-          value={formatAmount(summary.totalValue, displayCurrency)}
-          tone="violet"
-        />
+      {/* Metric Cards Grid matching RFQ */}
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          { icon: FileText, tone: 'primary' as const, value: summary.total, label: 'TOTAL CONTRACTS', detail: 'Across all contracts', filter: 'ALL' },
+          { icon: CheckCircle2, tone: 'success' as const, value: summary.vendorSigned, label: 'VENDOR SIGNED', detail: 'Signed & active', filter: 'VENDOR_SIGNED_GROUP' },
+          { icon: Clock, tone: 'warning' as const, value: summary.pendingSignature, label: 'PENDING SIGNATURE', detail: 'Awaiting signatures', filter: 'PENDING_SIGNATURE_GROUP' },
+          { icon: DollarSign, tone: 'primary' as const, value: formatAmount(summary.totalValue, displayCurrency), label: 'TOTAL VALUE', detail: 'Cumulative contract value', filter: 'TOTAL_VALUE' },
+        ].map((c) => {
+          const isActive = c.filter === 'TOTAL_VALUE' ? false : statusFilter === c.filter;
+          return (
+            <MetricCard
+              key={c.label}
+              icon={c.icon}
+              tone={c.tone}
+              value={c.value}
+              label={c.label}
+              detail={c.detail}
+              className={cn(
+                'cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-all duration-200',
+                isActive &&
+                  'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
+              )}
+              onClick={() => {
+                if (c.filter !== 'TOTAL_VALUE') {
+                  setStatusFilter(c.filter);
+                  setCurrentPage(1);
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              aria-pressed={isActive}
+            />
+          );
+        })}
       </div>
 
-      {/* Toolbar */}
-      <Card className="mb-6 p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative min-w-0 flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search by contract number, title, supplier, RFQ..."
-              value={search}
-              onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
-              className="pl-9"
-            />
-          </div>
-          <div className="flex items-center gap-1.5 justify-end">
+      {/* Search & Filter Toolbar matching RFQ */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full max-w-xl">
+          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="h-11 rounded-xl pl-10 pr-10"
+            type="text"
+            placeholder="Search by contract number, title, supplier, RFQ..."
+            aria-label="Search contracts"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+          />
+          {search && (
+            <button
+              type="button"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              onClick={() => setSearch('')}
+            >
+              <X size={15} />
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2.5 justify-end shrink-0 sm:ml-auto">
+          {statusFilter !== 'ALL' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setStatusFilter('ALL'); setCurrentPage(1); }}
+              className="h-11 rounded-xl px-3.5"
+            >
+              <X size={14} /> Clear Filter
+            </Button>
+          )}
+
+          <div className="flex items-center gap-1 rounded-xl border border-input bg-card p-1 h-11">
             <Button
               variant={view === 'table' ? 'secondary' : 'ghost'}
               size="sm"
               onClick={() => setView('table')}
-              className="h-9 w-9 p-0"
+              className="h-9 w-9 p-0 rounded-lg"
               title="Table View"
             >
               <LayoutList className="size-4" />
@@ -593,14 +618,14 @@ export default function ContractsPage() {
               variant={view === 'card' ? 'secondary' : 'ghost'}
               size="sm"
               onClick={() => setView('card')}
-              className="h-9 w-9 p-0"
+              className="h-9 w-9 p-0 rounded-lg"
               title="Card View"
             >
               <LayoutGrid className="size-4" />
             </Button>
           </div>
         </div>
-      </Card>
+      </div>
 
       {/* Floating Bulk Action */}
       {selectedContractIds.length > 0 && !showBatchDeleteModal && (

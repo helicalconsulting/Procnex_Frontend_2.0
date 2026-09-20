@@ -20,12 +20,17 @@ import {
   Sparkles,
   Plus,
   Trash2,
+  Building2,
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { useAuth } from '../../context/AuthContext';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
-import { useBranding } from '../../context/BrandingContext';
-import defaultHeliflowLogo from '../../assets/heliflow.png';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Card } from '../../components/ui/card';
+import { Input, Textarea } from '../../components/ui/input';
+import { PageFrame, PageLead } from '../../components/ui/product';
+import { cn } from '../../lib/utils';
 
 interface LineItemState {
   id: string;
@@ -48,7 +53,6 @@ export default function CreateGRNPage() {
   const modeParam = searchParams.get('mode');
 
   const { companyDefaultCurrency, formatAmount } = useCurrency();
-  const { logoUrl } = useBranding();
 
   // Mode Setting: AUTO_FILL (from Vendor Dispatch/Invoice) vs MANUAL (Custom GRN Entry)
   const [entryMode, setEntryMode] = useState<'AUTO_FILL' | 'MANUAL'>(() => {
@@ -416,457 +420,508 @@ export default function CreateGRNPage() {
   };
 
   return (
-    <div className="cpo-page w-full space-y-6">
+    <PageFrame>
       {/* Notifications */}
       {errorMsg && (
-        <MessageStrip type="error" onClose={() => setErrorMsg(null)}>
-          {errorMsg}
-        </MessageStrip>
+        <div className="mb-4">
+          <MessageStrip type="error" onClose={() => setErrorMsg(null)}>
+            {errorMsg}
+          </MessageStrip>
+        </div>
       )}
       {successMsg && (
-        <MessageStrip type="success" onClose={() => setSuccessMsg(null)}>
-          {successMsg}
-        </MessageStrip>
+        <div className="mb-4">
+          <MessageStrip type="success" onClose={() => setSuccessMsg(null)}>
+            {successMsg}
+          </MessageStrip>
+        </div>
       )}
 
-      {/* Header with Title & Direct Post Badge */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 py-2 px-1">
-        <div className="flex items-center gap-4">
-          <button
-            className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
-            onClick={() => navigate(-1)}
-            title="Back"
-          >
-            <ArrowLeft size={20} />
-          </button>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-white tracking-tight">Create Goods Receipt Note (GRN)</h1>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                <Zap size={13} /> Direct Post (No Approval Required)
-              </span>
-            </div>
-            <p className="text-sm text-slate-400 mt-1">
-              Record physical material receipt & auto-verify against Purchase Order & Vendor Invoice for 3-way matching.
-            </p>
+      {/* Page Header */}
+      <PageLead
+        title={
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => navigate(-1)}
+              className="size-9 rounded-md shrink-0"
+              title="Back"
+            >
+              <ArrowLeft className="size-4" />
+            </Button>
+            <span>Create Goods Receipt Note (GRN)</span>
           </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium transition-all"
+        }
+        description="Record physical material receipt and verify against Purchase Order and Vendor Invoice for 3-way matching."
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => window.print()}
+            className="gap-2"
           >
-            <Printer size={16} /> Print
-          </button>
-          <button
-            type="button"
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-sm shadow-lg shadow-blue-500/20 transition-all"
+            <Printer className="size-4" /> Print
+          </Button>
+          <Button
+            variant="default"
+            size="sm"
             onClick={handleSubmit}
             disabled={submitting}
+            className="gap-2 shadow-sm font-semibold"
           >
-            <Send size={16} /> {submitting ? 'Posting GRN…' : 'Save & Post GRN Directly'}
-          </button>
+            <Send className="size-4" /> {submitting ? 'Posting GRN…' : 'Save & Post GRN'}
+          </Button>
         </div>
-      </div>
+      </PageLead>
 
-      {/* Setting Mode Selector Box */}
-      <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 p-6 rounded-2xl shadow-xl">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Settings2 className="text-blue-400" size={20} />
-            <h2 className="text-base font-bold text-white">GRN Creation Mode Setting</h2>
-          </div>
-          <span className="text-xs text-slate-400">Choose how GRN line items are populated</span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Mode 1: Auto-Fill */}
-          <div
-            onClick={() => setEntryMode('AUTO_FILL')}
-            className={`cursor-pointer p-4 rounded-xl border transition-all flex items-start gap-4 ${
-              entryMode === 'AUTO_FILL'
-                ? 'bg-blue-600/10 border-blue-500/50 ring-1 ring-blue-500/30'
-                : 'bg-slate-900/50 border-slate-800 hover:border-slate-700'
-            }`}
-          >
-            <div className={`p-3 rounded-lg ${entryMode === 'AUTO_FILL' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
-              <Sparkles size={20} />
+      <div className="space-y-6">
+        {/* GRN Creation Mode Card */}
+        <Card className="p-6 border border-border/80 shadow-xs">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-border/60">
+            <div className="flex items-center gap-2">
+              <Settings2 className="size-5 text-primary" />
+              <h2 className="text-base font-bold text-foreground">GRN Creation Mode</h2>
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-bold text-white text-sm">Auto-fill from Vendor Invoice / Dispatch Note</h3>
-                {entryMode === 'AUTO_FILL' && (
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">Active</span>
-                )}
+            <Badge variant="outline" className="text-xs font-normal">
+              Direct Post (No Approval Required)
+            </Badge>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Mode 1: Auto-Fill */}
+            <div
+              onClick={() => setEntryMode('AUTO_FILL')}
+              className={cn(
+                'cursor-pointer p-4 rounded-xl border transition-all flex items-start gap-4',
+                entryMode === 'AUTO_FILL'
+                  ? 'bg-primary/5 border-primary ring-1 ring-primary/20'
+                  : 'bg-card border-border/70 hover:border-border hover:bg-muted/30'
+              )}
+            >
+              <div className={cn(
+                'p-3 rounded-lg flex items-center justify-center shrink-0',
+                entryMode === 'AUTO_FILL' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+              )}>
+                <Sparkles className="size-5" />
               </div>
-              <p className="text-xs text-slate-400 mt-1">
-                Select incoming Vendor Invoice or Dispatch Note. PO details, quantities, and pricing auto-populate instantly.
-              </p>
-            </div>
-          </div>
-
-          {/* Mode 2: Manual GRN */}
-          <div
-            onClick={() => setEntryMode('MANUAL')}
-            className={`cursor-pointer p-4 rounded-xl border transition-all flex items-start gap-4 ${
-              entryMode === 'MANUAL'
-                ? 'bg-indigo-600/10 border-indigo-500/50 ring-1 ring-indigo-500/30'
-                : 'bg-slate-900/50 border-slate-800 hover:border-slate-700'
-            }`}
-          >
-            <div className={`p-3 rounded-lg ${entryMode === 'MANUAL' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
-              <FileText size={20} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-bold text-white text-sm">Create GRN Manually</h3>
-                {entryMode === 'MANUAL' && (
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">Active</span>
-                )}
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-foreground text-sm">Auto-fill from Vendor Invoice / Dispatch Note</h3>
+                  {entryMode === 'AUTO_FILL' && (
+                    <Badge variant="secondary" className="text-[10px] uppercase font-bold tracking-wider">
+                      Active
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                  Select incoming Vendor Invoice or Dispatch Note. PO details, quantities, and pricing auto-populate instantly.
+                </p>
               </div>
-              <p className="text-xs text-slate-400 mt-1">
-                Select Purchase Order manually and input actual received, accepted, and rejected quantities with custom remarks.
-              </p>
+            </div>
+
+            {/* Mode 2: Manual GRN */}
+            <div
+              onClick={() => setEntryMode('MANUAL')}
+              className={cn(
+                'cursor-pointer p-4 rounded-xl border transition-all flex items-start gap-4',
+                entryMode === 'MANUAL'
+                  ? 'bg-primary/5 border-primary ring-1 ring-primary/20'
+                  : 'bg-card border-border/70 hover:border-border hover:bg-muted/30'
+              )}
+            >
+              <div className={cn(
+                'p-3 rounded-lg flex items-center justify-center shrink-0',
+                entryMode === 'MANUAL' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+              )}>
+                <FileText className="size-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-foreground text-sm">Create GRN Manually</h3>
+                  {entryMode === 'MANUAL' && (
+                    <Badge variant="secondary" className="text-[10px] uppercase font-bold tracking-wider">
+                      Active
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                  Select Purchase Order manually and input actual received, accepted, and rejected quantities with custom remarks.
+                </p>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+        </Card>
 
-      {/* Main Form Fields */}
-      <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 p-6 rounded-2xl shadow-xl space-y-6">
-        <h2 className="text-lg font-bold text-white border-b border-slate-800 pb-3 flex items-center gap-2">
-          <Truck className="text-blue-400" size={20} /> Header & Reference Details
-        </h2>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {/* GRN # */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">GRN Number (System Ref) *</label>
-            <input
-              type="text"
-              value={grnNumber}
-              onChange={(e) => setGrnNumber(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white font-mono focus:ring-2 focus:ring-blue-500/50 focus:outline-none"
-              placeholder="e.g. GRN-2026-5255"
-            />
+        {/* Header & Reference Details Card */}
+        <Card className="p-6 border border-border/80 shadow-xs space-y-6">
+          <div className="flex items-center gap-2 pb-3 border-b border-border/60">
+            <Truck className="size-5 text-primary" />
+            <h2 className="text-base font-bold text-foreground">Header & Reference Details</h2>
           </div>
 
-          {/* If Mode == AUTO_FILL, Vendor Invoice Dropdown */}
-          {entryMode === 'AUTO_FILL' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {/* GRN # */}
             <div>
-              <label className="block text-xs font-semibold text-blue-400 uppercase tracking-wider mb-2">Vendor Dispatch / Invoice *</label>
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                GRN Number (System Ref) *
+              </label>
+              <Input
+                type="text"
+                value={grnNumber}
+                onChange={(e) => setGrnNumber(e.target.value)}
+                className="font-mono text-sm bg-background"
+                placeholder="e.g. GRN-2026-5255"
+              />
+            </div>
+
+            {/* If Mode == AUTO_FILL, Vendor Invoice Dropdown */}
+            {entryMode === 'AUTO_FILL' && (
+              <div>
+                <label className="block text-xs font-semibold text-primary uppercase tracking-wider mb-1.5">
+                  Vendor Dispatch / Invoice *
+                </label>
+                <select
+                  value={selectedVendorInvoiceId}
+                  onChange={(e) => setSelectedVendorInvoiceId(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="">-- Select Incoming Vendor Invoice --</option>
+                  {invoicesList.map((inv) => (
+                    <option key={inv.id} value={inv.id}>
+                      {inv.invoiceNumber} — {inv.vendorName || 'Vendor'} ({formatAmount(inv.amount || 0, currency)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* PO Number Select */}
+            <div className={entryMode === 'AUTO_FILL' ? '' : 'sm:col-span-2'}>
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                Purchase Order (PO Ref) *
+              </label>
               <select
-                value={selectedVendorInvoiceId}
-                onChange={(e) => setSelectedVendorInvoiceId(e.target.value)}
-                className="w-full bg-slate-950 border border-blue-500/40 rounded-xl px-3.5 py-2.5 text-sm text-white focus:ring-2 focus:ring-blue-500/50 focus:outline-none"
+                value={selectedPoId}
+                onChange={(e) => setSelectedPoId(e.target.value)}
+                disabled={poLoading}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <option value="">-- Select Incoming Vendor Invoice --</option>
-                {invoicesList.map((inv) => (
-                  <option key={inv.id} value={inv.id}>
-                    {inv.invoiceNumber} — {inv.vendorName || 'Vendor'} ({formatAmount(inv.amount || 0, currency)})
+                <option value="">-- Select Approved PO --</option>
+                {approvedPOs.map((po) => (
+                  <option key={po.id} value={po.id}>
+                    {po.poNumber} — {po.vendor?.name || 'Vendor'} ({formatAmount(po.totalAmount, currency)})
                   </option>
                 ))}
               </select>
             </div>
-          )}
 
-          {/* PO Number Select */}
-          <div className={entryMode === 'AUTO_FILL' ? '' : 'md:col-span-2'}>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Purchase Order (PO Ref) *</label>
-            <select
-              value={selectedPoId}
-              onChange={(e) => setSelectedPoId(e.target.value)}
-              disabled={poLoading}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:ring-2 focus:ring-blue-500/50 focus:outline-none"
+            {/* Delivery Date */}
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                Received Date *
+              </label>
+              <Input
+                type="date"
+                value={receivedDate}
+                onChange={(e) => setReceivedDate(e.target.value)}
+                className="text-sm bg-background"
+              />
+            </div>
+
+            {/* Vendor Dispatch Note Ref */}
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                Vendor Dispatch / LR No.
+              </label>
+              <Input
+                type="text"
+                placeholder="e.g. DN-99482 / LR-1029"
+                value={vendorDispatchNoteNumber}
+                onChange={(e) => setVendorDispatchNoteNumber(e.target.value)}
+                className="text-sm bg-background"
+              />
+            </div>
+
+            {/* Warehouse Location */}
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                Store / Warehouse Location
+              </label>
+              <Input
+                type="text"
+                placeholder="e.g. Central Warehouse - Dock 1"
+                value={warehouseLocation}
+                onChange={(e) => setWarehouseLocation(e.target.value)}
+                className="text-sm bg-background"
+              />
+            </div>
+          </div>
+
+          {/* PO Details Banner */}
+          {selectedPO && (
+            <div className="p-4 rounded-xl bg-muted/40 border border-border/70 flex flex-wrap gap-6 items-center text-sm">
+              <div className="flex items-center gap-2">
+                <Building2 className="size-4 text-muted-foreground" />
+                <span className="text-muted-foreground font-medium">Supplier:</span>
+                <span className="font-bold text-foreground">{selectedPO.vendor?.name || 'Vendor'}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground font-medium">PO Total:</span>
+                <span className="font-bold text-primary">{formatAmount(selectedPO.totalAmount, currency)}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground font-medium">Status:</span>
+                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 font-semibold">
+                  {selectedPO.status}
+                </Badge>
+              </div>
+            </div>
+          )}
+        </Card>
+
+        {/* Received Items & Quantities Card */}
+        <Card className="p-6 border border-border/80 shadow-xs space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-border/60">
+            <div className="flex items-center gap-2">
+              <PackageCheck className="size-5 text-emerald-600 dark:text-emerald-400" />
+              <h2 className="text-base font-bold text-foreground">Received Materials & Inspection Quantities</h2>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleAddManualItem}
+              className="gap-1.5 text-xs font-semibold"
             >
-              <option value="">-- Select Approved PO --</option>
-              {approvedPOs.map((po) => (
-                <option key={po.id} value={po.id}>
-                  {po.poNumber} — {po.vendor?.name || 'Vendor'} ({formatAmount(po.totalAmount, currency)})
-                </option>
-              ))}
-            </select>
+              <Plus className="size-3.5" /> Add Line Item
+            </Button>
           </div>
 
-          {/* Delivery Date */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Received Date *</label>
-            <input
-              type="date"
-              value={receivedDate}
-              onChange={(e) => setReceivedDate(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:ring-2 focus:ring-blue-500/50 focus:outline-none"
-            />
-          </div>
-
-          {/* Vendor Dispatch Note Ref */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Vendor Dispatch / LR No.</label>
-            <input
-              type="text"
-              placeholder="e.g. DN-99482 / LR-1029"
-              value={vendorDispatchNoteNumber}
-              onChange={(e) => setVendorDispatchNoteNumber(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:ring-2 focus:ring-blue-500/50 focus:outline-none"
-            />
-          </div>
-
-          {/* Warehouse Location */}
-          <div className="md:col-span-2">
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Store / Warehouse Location</label>
-            <input
-              type="text"
-              placeholder="e.g. Central Warehouse - Dock 1"
-              value={warehouseLocation}
-              onChange={(e) => setWarehouseLocation(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:ring-2 focus:ring-blue-500/50 focus:outline-none"
-            />
-          </div>
-        </div>
-
-        {/* PO Details Badge Banner */}
-        {selectedPO && (
-          <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-wrap gap-6 items-center text-sm">
-            <div>
-              <span className="text-slate-400 font-medium">Supplier: </span>
-              <span className="font-bold text-white">{selectedPO.vendor?.name || 'Vendor'}</span>
-            </div>
-            <div>
-              <span className="text-slate-400 font-medium">PO Total Amount: </span>
-              <span className="font-bold text-blue-400">{formatAmount(selectedPO.totalAmount, currency)}</span>
-            </div>
-            <div>
-              <span className="text-slate-400 font-medium">PO Status: </span>
-              <span className="font-bold text-emerald-400">{selectedPO.status}</span>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Line Items Table */}
-      <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 p-6 rounded-2xl shadow-xl space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
-            <PackageCheck className="text-emerald-400" size={20} /> Received Materials & Quantities
-          </h2>
-          <button
-            type="button"
-            onClick={handleAddManualItem}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/30 text-xs font-bold border border-indigo-500/30 transition-all shadow-sm"
-          >
-            <Plus size={15} /> Add Line Item
-          </button>
-        </div>
-
-        <div className="overflow-x-auto rounded-xl border border-slate-800">
-          <table className="w-full text-left text-sm text-slate-300">
-            <thead className="bg-slate-950 text-slate-400 text-xs uppercase font-semibold">
-              <tr>
-                <th className="py-3.5 px-4 w-12">#</th>
-                <th className="py-3.5 px-4 min-w-[200px]">Item Description</th>
-                <th className="py-3.5 px-4 w-28 text-center">Ordered Qty</th>
-                <th className="py-3.5 px-4 w-32">Received Qty *</th>
-                <th className="py-3.5 px-4 w-28">Accepted Qty</th>
-                <th className="py-3.5 px-4 w-28">Rejected Qty</th>
-                <th className="py-3.5 px-4 w-32 text-right">Unit Price ({currency})</th>
-                <th className="py-3.5 px-4 w-36 text-right">Total GRN Value</th>
-                <th className="py-3.5 px-4 min-w-[160px]">Remarks</th>
-                <th className="py-3.5 px-4 w-12 text-center"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800">
-              {lineItems.length === 0 ? (
+          <div className="overflow-x-auto rounded-xl border border-border/70">
+            <table className="w-full text-left text-sm min-w-[900px]">
+              <thead className="bg-muted/50 text-muted-foreground text-xs uppercase font-semibold border-b border-border/70">
                 <tr>
-                  <td colSpan={10} className="py-8 text-center text-slate-500">
-                    No items added yet. Click '+ Add Line Item' above or select a Purchase Order to populate items.
-                  </td>
+                  <th className="py-3 px-3.5 w-10 text-center">#</th>
+                  <th className="py-3 px-3.5 min-w-[200px]">Item Description</th>
+                  <th className="py-3 px-3.5 w-24 text-center">Ordered</th>
+                  <th className="py-3 px-3.5 w-28 text-center">Received *</th>
+                  <th className="py-3 px-3.5 w-28 text-center">Accepted</th>
+                  <th className="py-3 px-3.5 w-28 text-center">Rejected</th>
+                  <th className="py-3 px-3.5 w-32 text-right">Unit Price</th>
+                  <th className="py-3 px-3.5 w-32 text-right">Total Value</th>
+                  <th className="py-3 px-3.5 min-w-[160px]">Remarks</th>
+                  <th className="py-3 px-3.5 w-10 text-center"></th>
                 </tr>
-              ) : (
-                lineItems.map((item, index) => {
-                  const rec = typeof item.receivedQty === 'number' ? item.receivedQty : 0;
-                  const price = item.unitPrice || 0;
-                  const totalLineVal = rec * price;
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {lineItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="py-8 text-center text-muted-foreground">
+                      No line items added. Select a Purchase Order or click '+ Add Line Item' above.
+                    </td>
+                  </tr>
+                ) : (
+                  lineItems.map((item, index) => {
+                    const rec = typeof item.receivedQty === 'number' ? item.receivedQty : 0;
+                    const price = item.unitPrice || 0;
+                    const totalLineVal = rec * price;
 
-                  return (
-                    <tr key={item.id} className="hover:bg-slate-800/40 transition-colors">
-                      <td className="py-3 px-4 text-slate-400 font-mono text-xs">{index + 1}</td>
-                      <td className="py-3 px-4">
-                        <input
-                          type="text"
-                          value={item.itemName}
-                          placeholder="Item description"
-                          onChange={(e) => handleUpdateItem(item.id, 'itemName', e.target.value)}
-                          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-sm text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                        />
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <input
-                          type="number"
-                          min="0"
-                          value={item.orderedQty}
-                          onChange={(e) => handleUpdateItem(item.id, 'orderedQty', parseFloat(e.target.value) || 0)}
-                          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-sm text-center text-slate-200 font-bold focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                        />
-                      </td>
-                      <td className="py-3 px-4">
-                        <input
-                          type="number"
-                          min="0"
-                          value={item.receivedQty}
-                          onChange={(e) =>
-                            handleUpdateItem(
-                              item.id,
-                              'receivedQty',
-                              e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0)
-                            )
-                          }
-                          className="w-full bg-slate-950 border border-blue-500/50 rounded-lg px-2.5 py-1.5 text-sm text-blue-400 font-bold focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                        />
-                      </td>
-                      <td className="py-3 px-4">
-                        <input
-                          type="number"
-                          min="0"
-                          value={item.acceptedQty}
-                          onChange={(e) =>
-                            handleUpdateItem(
-                              item.id,
-                              'acceptedQty',
-                              e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0)
-                            )
-                          }
-                          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-sm text-emerald-400 font-bold focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                        />
-                      </td>
-                      <td className="py-3 px-4">
-                        <input
-                          type="number"
-                          min="0"
-                          value={item.rejectedQty}
-                          onChange={(e) =>
-                            handleUpdateItem(
-                              item.id,
-                              'rejectedQty',
-                              e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value) || 0)
-                            )
-                          }
-                          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-sm text-rose-400 font-bold focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                        />
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <input
-                          type="number"
-                          min="0"
-                          step="any"
-                          value={item.unitPrice}
-                          onChange={(e) =>
-                            handleUpdateItem(
-                              item.id,
-                              'unitPrice',
-                              parseFloat(e.target.value) || 0
-                            )
-                          }
-                          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-sm text-right text-white font-mono focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                        />
-                      </td>
-                      <td className="py-3 px-4 text-right font-bold text-white tabular-nums">{formatAmount(totalLineVal, currency)}</td>
-                      <td className="py-3 px-4">
-                        <input
-                          type="text"
-                          value={item.remarks}
-                          onChange={(e) => handleUpdateItem(item.id, 'remarks', e.target.value)}
-                          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                          placeholder="Remarks..."
-                        />
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveItem(item.id)}
-                          className="text-rose-400 hover:text-rose-300 p-1.5 rounded-lg hover:bg-rose-500/10 transition-colors"
-                          title="Delete line item"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Bottom Summary & Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Remarks & Attachment */}
-        <div className="md:col-span-2 bg-slate-900/80 backdrop-blur-xl border border-slate-800 p-6 rounded-2xl shadow-xl space-y-4">
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider">Store Receiving Remarks & Documents</h3>
-          <textarea
-            rows={3}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Add storekeeper receiving observations, damage reports, waybill numbers, or batch details..."
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:ring-2 focus:ring-blue-500/50 focus:outline-none"
-          />
-
-          <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-slate-800 hover:border-blue-500/50 bg-slate-950/50 rounded-xl cursor-pointer transition-all">
-            <Upload size={24} className="text-blue-400 mb-2" />
-            <span className="text-xs font-bold text-white">Upload Delivery Challan / Proof of Delivery PDF</span>
-            <span className="text-[11px] text-slate-400 mt-0.5">Supports PDF, PNG, JPG</span>
-            <input type="file" multiple accept=".pdf,.png,.jpg" onChange={handleFileUpload} hidden />
-          </label>
-
-          {attachments.length > 0 && (
-            <div className="space-y-2">
-              {attachments.map((att) => (
-                <div key={att.id} className="flex items-center justify-between p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-xs">
-                  <div className="flex items-center gap-2">
-                    <Paperclip size={14} className="text-blue-400" />
-                    <span className="font-semibold text-white">{att.name}</span>
-                    <span className="text-slate-400">({att.size})</span>
-                  </div>
-                  <button type="button" onClick={() => setAttachments((prev) => prev.filter((a) => a.id !== att.id))} className="text-rose-400">
-                    <X size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Totals Summary */}
-        <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 p-6 rounded-2xl shadow-xl space-y-4 flex flex-col justify-between">
-          <div>
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4">Value Comparison</h3>
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between items-center text-slate-400">
-                <span>Total PO Amount:</span>
-                <span className="font-semibold text-white">{formatAmount(calculations.totalPoValue, currency)}</span>
-              </div>
-              <div className="flex justify-between items-center text-slate-400">
-                <span>Total Delivered Value:</span>
-                <span className="font-semibold text-blue-400">{formatAmount(calculations.totalGrnValue, currency)}</span>
-              </div>
-              <div className="flex justify-between items-center pt-3 border-t border-slate-800 text-base">
-                <span className="font-bold text-white">Accepted Value:</span>
-                <span className="font-bold text-emerald-400">{formatAmount(calculations.totalAcceptedValue, currency)}</span>
-              </div>
-            </div>
+                    return (
+                      <tr key={item.id} className="hover:bg-muted/30 transition-colors">
+                        <td className="py-3 px-3.5 text-center text-muted-foreground font-mono text-xs">{index + 1}</td>
+                        <td className="py-3 px-3.5">
+                          <Input
+                            type="text"
+                            value={item.itemName}
+                            placeholder="Item description"
+                            onChange={(e) => handleUpdateItem(item.id, 'itemName', e.target.value)}
+                            className="h-9 text-sm bg-background"
+                          />
+                        </td>
+                        <td className="py-3 px-3.5 text-center">
+                          <Input
+                            type="number"
+                            min="0"
+                            value={item.orderedQty}
+                            onChange={(e) => handleUpdateItem(item.id, 'orderedQty', parseFloat(e.target.value) || 0)}
+                            className="h-9 text-sm text-center font-bold bg-background"
+                          />
+                        </td>
+                        <td className="py-3 px-3.5 text-center">
+                          <Input
+                            type="number"
+                            min="0"
+                            value={item.receivedQty}
+                            onChange={(e) =>
+                              handleUpdateItem(
+                                item.id,
+                                'receivedQty',
+                                e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0)
+                              )
+                            }
+                            className="h-9 text-sm text-center font-bold text-primary border-primary/40 bg-background"
+                          />
+                        </td>
+                        <td className="py-3 px-3.5 text-center">
+                          <Input
+                            type="number"
+                            min="0"
+                            value={item.acceptedQty}
+                            onChange={(e) =>
+                              handleUpdateItem(
+                                item.id,
+                                'acceptedQty',
+                                e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0)
+                              )
+                            }
+                            className="h-9 text-sm text-center font-bold text-emerald-600 dark:text-emerald-400 bg-background"
+                          />
+                        </td>
+                        <td className="py-3 px-3.5 text-center">
+                          <Input
+                            type="number"
+                            min="0"
+                            value={item.rejectedQty}
+                            onChange={(e) =>
+                              handleUpdateItem(
+                                item.id,
+                                'rejectedQty',
+                                e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value) || 0)
+                              )
+                            }
+                            className="h-9 text-sm text-center font-bold text-destructive bg-background"
+                          />
+                        </td>
+                        <td className="py-3 px-3.5 text-right">
+                          <Input
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={item.unitPrice}
+                            onChange={(e) =>
+                              handleUpdateItem(
+                                item.id,
+                                'unitPrice',
+                                parseFloat(e.target.value) || 0
+                              )
+                            }
+                            className="h-9 text-sm text-right font-mono bg-background"
+                          />
+                        </td>
+                        <td className="py-3 px-3.5 text-right font-semibold tabular-nums text-foreground">
+                          {formatAmount(totalLineVal, currency)}
+                        </td>
+                        <td className="py-3 px-3.5">
+                          <Input
+                            type="text"
+                            value={item.remarks}
+                            onChange={(e) => handleUpdateItem(item.id, 'remarks', e.target.value)}
+                            className="h-9 text-xs text-muted-foreground bg-background"
+                            placeholder="Inspection remarks..."
+                          />
+                        </td>
+                        <td className="py-3 px-3.5 text-center">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveItem(item.id)}
+                            className="size-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            title="Delete line item"
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
+        </Card>
 
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={submitting}
-            className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-sm shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2"
-          >
-            <Send size={18} /> {submitting ? 'Posting GRN…' : 'Save & Post GRN Directly'}
-          </button>
+        {/* Remarks, Attachments & Totals Summary Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Remarks & Attachment */}
+          <Card className="md:col-span-2 p-6 border border-border/80 shadow-xs space-y-4">
+            <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">
+              Store Receiving Remarks & Documents
+            </h3>
+            <Textarea
+              rows={3}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Add storekeeper receiving observations, damage reports, waybill numbers, or batch details..."
+              className="text-sm bg-background"
+            />
+
+            <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-border/80 hover:border-primary/50 bg-muted/20 rounded-xl cursor-pointer transition-all">
+              <Upload className="size-6 text-primary mb-1.5" />
+              <span className="text-xs font-bold text-foreground">Upload Delivery Challan / Proof of Delivery</span>
+              <span className="text-[11px] text-muted-foreground mt-0.5">Supports PDF, PNG, JPG</span>
+              <input type="file" multiple accept=".pdf,.png,.jpg" onChange={handleFileUpload} hidden />
+            </label>
+
+            {attachments.length > 0 && (
+              <div className="space-y-2">
+                {attachments.map((att) => (
+                  <div key={att.id} className="flex items-center justify-between p-2.5 bg-muted/40 border border-border/60 rounded-lg text-xs">
+                    <div className="flex items-center gap-2">
+                      <Paperclip className="size-4 text-primary" />
+                      <span className="font-semibold text-foreground">{att.name}</span>
+                      <span className="text-muted-foreground">({att.size})</span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setAttachments((prev) => prev.filter((a) => a.id !== att.id))}
+                      className="size-6 text-destructive"
+                    >
+                      <X className="size-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          {/* Totals Summary */}
+          <Card className="p-6 border border-border/80 shadow-xs flex flex-col justify-between space-y-6">
+            <div>
+              <h3 className="text-sm font-bold text-foreground uppercase tracking-wider mb-4 pb-2 border-b border-border/60">
+                Value Summary
+              </h3>
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between items-center text-muted-foreground">
+                  <span>Total PO Value:</span>
+                  <span className="font-semibold text-foreground">{formatAmount(calculations.totalPoValue, currency)}</span>
+                </div>
+                <div className="flex justify-between items-center text-muted-foreground">
+                  <span>Total Delivered Value:</span>
+                  <span className="font-semibold text-primary">{formatAmount(calculations.totalGrnValue, currency)}</span>
+                </div>
+                <div className="flex justify-between items-center pt-3 border-t border-border/60 text-base">
+                  <span className="font-bold text-foreground">Accepted Value:</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatAmount(calculations.totalAcceptedValue, currency)}</span>
+                </div>
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="w-full py-2.5 gap-2 shadow-sm font-bold"
+            >
+              <Send className="size-4" /> {submitting ? 'Posting GRN…' : 'Save & Post GRN'}
+            </Button>
+          </Card>
         </div>
       </div>
-    </div>
+    </PageFrame>
   );
 }

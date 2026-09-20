@@ -32,6 +32,12 @@ import { MessageStrip } from '../../components/shared/MessageStrip';
 import BankPaymentVoucherModal, { type PaymentVoucherDocData } from '../../components/payments/BankPaymentVoucherModal';
 import { useAuth } from '../../context/AuthContext';
 import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyMaster';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Card } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
+import { MetricCard, PageFrame, PageLead } from '../../components/ui/product';
+import { cn } from '../../lib/utils';
 import './CreatePaymentVoucherPage.css';
 
 interface VendorOption {
@@ -558,7 +564,7 @@ export default function CreatePaymentVoucherPage() {
     };
 
     return (
-      <div className="cpv-page">
+      <PageFrame>
         {/* Notifications */}
         {errorMsg && (
           <MessageStrip type="error" onClose={() => setErrorMsg(null)}>
@@ -571,110 +577,72 @@ export default function CreatePaymentVoucherPage() {
           </MessageStrip>
         )}
 
-        {/* Header - Clean transparent header matching Purchase Invoice page */}
-        <div className="cpv-header">
-          <div className="cpv-header-main">
-            <div className="cpv-header-top-row">
-              <h1 className="cpv-header__title">Payment Voucher Entry & Management</h1>
-              <div className="cpv-header__actions">
-                <button
-                  className="cpv-btn cpv-btn--primary"
-                  onClick={() => setIsCreating(true)}
-                  disabled={!canCreateVoucher}
-                  title={!canCreateVoucher ? "You do not have permission to create payment vouchers." : undefined}
-                >
-                  <Plus size={16} /> New Voucher
-                </button>
-              </div>
-            </div>
-            <p className="cpv-header__subtitle">
-              Manage payment vouchers, bank disbursement entries and approval statuses
-            </p>
-          </div>
-        </div>
+        <PageLead
+          title="Payment Voucher Entry & Management"
+          description="Manage payment vouchers, bank disbursement entries and approval statuses"
+          actions={
+            <Button
+              onClick={() => setIsCreating(true)}
+              disabled={!canCreateVoucher}
+              title={!canCreateVoucher ? 'You do not have permission to create payment vouchers.' : 'Create new Voucher'}
+            >
+              <Plus /> New Voucher
+            </Button>
+          }
+        />
 
-        {/* 5 KPI Summary Cards Grid */}
-        <div className="cpv-kpi-grid">
-          <div
-            className={`cpv-kpi-card cpv-kpi-card--clickable ${statusFilter === null ? 'cpv-kpi-card--active' : ''}`}
-            onClick={() => setStatusFilter(null)}
-          >
-            <div className="cpv-kpi-icon" style={{ background: 'rgba(10,110,209,0.1)', color: '#0a6ed1' }}>
-              <FileText size={22} />
-            </div>
-            <div className="cpv-kpi-info">
-              <span className="cpv-kpi-value">{vouchersList.length}</span>
-              <span className="cpv-kpi-label">Total Documents</span>
-            </div>
-          </div>
-
-          <div
-            className={`cpv-kpi-card cpv-kpi-card--clickable ${statusFilter === 'DRAFT_PENDING' ? 'cpv-kpi-card--active' : ''}`}
-            onClick={() => setStatusFilter((prev) => (prev === 'DRAFT_PENDING' ? null : 'DRAFT_PENDING'))}
-          >
-            <div className="cpv-kpi-icon" style={{ background: 'rgba(234,179,8,0.12)', color: '#eab308' }}>
-              <Clock size={22} />
-            </div>
-            <div className="cpv-kpi-info">
-              <span className="cpv-kpi-value">{draftAndPendingCount}</span>
-              <span className="cpv-kpi-label">Draft & Pending</span>
-            </div>
-          </div>
-
-          <div
-            className={`cpv-kpi-card cpv-kpi-card--clickable ${statusFilter === 'APPROVED' ? 'cpv-kpi-card--active' : ''}`}
-            onClick={() => setStatusFilter((prev) => (prev === 'APPROVED' ? null : 'APPROVED'))}
-          >
-            <div className="cpv-kpi-icon" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>
-              <CheckCircle2 size={22} />
-            </div>
-            <div className="cpv-kpi-info">
-              <span className="cpv-kpi-value">{activeCount}</span>
-              <span className="cpv-kpi-label">Approved & Released</span>
-            </div>
-          </div>
-
-          <div
-            className={`cpv-kpi-card cpv-kpi-card--clickable ${statusFilter === 'REJECTED' ? 'cpv-kpi-card--active' : ''}`}
-            onClick={() => setStatusFilter((prev) => (prev === 'REJECTED' ? null : 'REJECTED'))}
-          >
-            <div className="cpv-kpi-icon" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444' }}>
-              <X size={22} />
-            </div>
-            <div className="cpv-kpi-info">
-              <span className="cpv-kpi-value" style={{ color: rejectedCount > 0 ? '#ef4444' : undefined }}>{rejectedCount}</span>
-              <span className="cpv-kpi-label">Rejected</span>
-            </div>
-          </div>
-
-          <div className="cpv-kpi-card">
-            <div className="cpv-kpi-icon" style={{ background: 'rgba(10,110,209,0.12)', color: '#0a6ed1' }}>
-              <CreditCard size={22} />
-            </div>
-            <div className="cpv-kpi-info">
-              <span className="cpv-kpi-value cpv-kpi-value--mono">
-                {formatAmount(totalValue, companyDefaultCurrency)}
-              </span>
-              <span className="cpv-kpi-label">Total Volume</span>
-            </div>
-          </div>
+        {/* 5 KPI Summary Cards Grid matching RFQ design */}
+        <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          {[
+            { icon: FileText, tone: 'primary' as const, value: vouchersList.length, label: 'TOTAL DOCUMENTS', detail: 'Across all vouchers', filter: null },
+            { icon: Clock, tone: 'warning' as const, value: draftAndPendingCount, label: 'DRAFT & PENDING', detail: 'Pending approval', filter: 'DRAFT_PENDING' },
+            { icon: CheckCircle2, tone: 'success' as const, value: activeCount, label: 'APPROVED & RELEASED', detail: 'Ready or disbursed', filter: 'APPROVED' },
+            { icon: X, tone: 'danger' as const, value: rejectedCount, label: 'REJECTED', detail: 'Requires review', filter: 'REJECTED' },
+            { icon: CreditCard, tone: 'primary' as const, value: formatAmount(totalValue, companyDefaultCurrency), label: 'TOTAL VOLUME', detail: 'Value across vouchers', filter: 'TOTAL_VOLUME' },
+          ].map((c) => {
+            const isActive = c.filter === 'TOTAL_VOLUME' ? false : statusFilter === c.filter;
+            return (
+              <MetricCard
+                key={c.label}
+                icon={c.icon}
+                tone={c.tone}
+                value={c.value}
+                label={c.label}
+                detail={c.detail}
+                className={cn(
+                  'cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-all duration-200',
+                  isActive &&
+                    'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
+                )}
+                onClick={() => {
+                  if (c.filter !== 'TOTAL_VOLUME') {
+                    setStatusFilter((prev) => (prev === c.filter ? null : c.filter));
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                aria-pressed={isActive}
+              />
+            );
+          })}
         </div>
 
         {/* Toolbar & Search */}
-        <div className="cpv-toolbar">
-          <div className="cpv-search-box">
-            <Search size={16} className="cpv-search-icon" />
-            <input
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full max-w-xl">
+            <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="h-11 rounded-xl pl-10 pr-10"
               type="text"
-              className="cpv-search-input"
+              placeholder="Search voucher, vendor, status..."
+              aria-label="Search voucher, vendor, status..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search voucher, vendor, status..."
             />
             {searchTerm && (
               <button
                 type="button"
-                className="cpv-search-clear"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 onClick={() => setSearchTerm('')}
                 title="Clear search"
               >
@@ -683,175 +651,186 @@ export default function CreatePaymentVoucherPage() {
             )}
           </div>
           {(statusFilter !== null || searchTerm) && (
-            <button
-              className="cpv-btn cpv-btn--outline cpv-btn--sm"
-              onClick={() => { setSearchTerm(''); setStatusFilter(null); }}
-            >
-              <X size={14} /> Clear Filters
-            </button>
+            <div className="flex items-center gap-2.5 justify-end shrink-0 sm:ml-auto">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setSearchTerm(''); setStatusFilter(null); }}
+                className="h-11 rounded-xl px-3.5"
+              >
+                <X size={14} /> Clear Filters
+              </Button>
+            </div>
           )}
         </div>
 
         {/* Floating Bulk Action Banner */}
         {selectedVoucherIds.length > 0 && !showBulkDeleteModal && (
-          <div className="cpv-bulk-banner">
-            <div className="cpv-bulk-info">
-              <CheckSquare size={18} style={{ color: 'var(--primary-500)' }} />
+          <Card className="mb-4 flex flex-col gap-3 border-primary/35 bg-primary/[0.045] p-3 shadow-md sm:flex-row sm:items-center sm:justify-between sm:px-4">
+            <div className="flex items-center gap-2.5 text-sm font-semibold text-foreground">
+              <CheckSquare size={18} className="text-primary" />
               <span><strong>{selectedVoucherIds.length}</strong> Voucher(s) selected</span>
             </div>
-            <div className="cpv-bulk-actions">
-              <button
+            <div className="flex flex-wrap gap-2">
+              <Button
                 type="button"
-                className="cpv-btn cpv-btn--outline cpv-btn--sm"
+                variant="secondary"
+                size="sm"
                 onClick={() => setSelectedVoucherIds([])}
               >
                 Cancel Selection
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="cpv-btn cpv-btn--danger cpv-btn--sm"
+                variant="destructive"
+                size="sm"
                 disabled={!canCreateVoucher}
                 onClick={() => setShowBulkDeleteModal(true)}
               >
                 <Trash2 size={14} /> Delete Selected ({selectedVoucherIds.length})
-              </button>
+              </Button>
             </div>
-          </div>
+          </Card>
         )}
 
-        {/* Management Table */}
-        {vouchersList.length === 0 ? (
-          <div className="cpv-empty">
-            <div className="cpv-empty-icon">
-              <Landmark size={28} />
+        {/* Table Card */}
+        <Card className="overflow-hidden">
+          {vouchersList.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-12 text-center">
+              <div className="grid size-12 place-items-center rounded-xl bg-primary/10 text-primary mb-3">
+                <Landmark size={28} />
+              </div>
+              <h3 className="text-lg font-semibold text-foreground">No Payment Vouchers Yet</h3>
+              <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                Click "+ New Voucher" on the top right to create your first vendor payment disbursement voucher.
+              </p>
             </div>
-            <h3>No Payment Vouchers Yet</h3>
-            <p>Click "+ New Voucher" on the top right to create your first vendor payment disbursement voucher.</p>
-          </div>
-        ) : filteredVouchers.length === 0 ? (
-          <div className="cpv-empty">
-            <div className="cpv-empty-icon">
-              <Search size={28} />
+          ) : filteredVouchers.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-12 text-center">
+              <div className="grid size-12 place-items-center rounded-xl bg-primary/10 text-primary mb-3">
+                <Search size={28} />
+              </div>
+              <h3 className="text-lg font-semibold text-foreground">No matching vouchers found</h3>
+              <p className="text-sm text-muted-foreground mt-1 max-w-sm mb-3">
+                We couldn't find any vouchers matching your search or filter criteria.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setSearchTerm(''); setStatusFilter(null); }}
+              >
+                <X size={14} /> Clear Filters
+              </Button>
             </div>
-            <h3>No matching vouchers found</h3>
-            <p>We couldn't find any vouchers matching your search or filter criteria.</p>
-            <button
-              className="cpv-btn cpv-btn--outline"
-              onClick={() => { setSearchTerm(''); setStatusFilter(null); }}
-            >
-              <X size={14} /> Clear Filters
-            </button>
-          </div>
-        ) : (
-          <div className="cpv-card-table">
-            <table className="cpv-table">
-              <colgroup>
-                <col style={{ width: '44px' }} />
-                <col style={{ width: '170px' }} />
-                <col style={{ width: '220px' }} />
-                <col style={{ width: '140px' }} />
-                <col style={{ width: '100px' }} />
-                <col style={{ width: '170px' }} />
-                <col style={{ width: '160px' }} />
-                <col style={{ width: '120px' }} />
-              </colgroup>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'center' }}>
-                    <input
-                      type="checkbox"
-                      checked={isAllSelected}
-                      disabled={!canCreateVoucher}
-                      onChange={canCreateVoucher ? handleSelectAll : undefined}
-                      style={{ cursor: canCreateVoucher ? 'pointer' : 'not-allowed', width: 16, height: 16 }}
-                    />
-                  </th>
-                  <th>Voucher Number</th>
-                  <th>Vendor</th>
-                  <th>Voucher Date</th>
-                  <th>Currency</th>
-                  <th style={{ textAlign: 'right' }}>Net Disbursement</th>
-                  <th>Status</th>
-                  <th style={{ textAlign: 'center' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredVouchers.map((v) => {
-                  const statusKey = (v.status || '').toUpperCase();
-                  const isApproved = statusKey === 'APPROVED' || statusKey === 'PAID' || statusKey === 'COMPLETED';
-                  const isRejected = statusKey === 'REJECTED' || statusKey === 'CANCELLED';
-                  const badgeClass = isApproved ? 'approved' : isRejected ? 'rejected' : 'pending';
-                  const badgeLabel = isApproved ? 'APPROVED' : isRejected ? 'REJECTED' : 'PENDING APPROVAL';
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1080px] border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-border/75 bg-muted/45 text-left text-[12px] font-bold uppercase tracking-wide text-muted-foreground">
+                    <th className="w-[44px] px-3 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={isAllSelected}
+                        disabled={!canCreateVoucher}
+                        onChange={canCreateVoucher ? handleSelectAll : undefined}
+                        className="size-4 cursor-pointer rounded border-border text-primary focus:ring-primary/40"
+                      />
+                    </th>
+                    <th className="w-[170px] px-3 py-3">VOUCHER NUMBER</th>
+                    <th className="w-[220px] px-3 py-3">VENDOR</th>
+                    <th className="w-[140px] px-3 py-3">VOUCHER DATE</th>
+                    <th className="w-[100px] px-3 py-3">CURRENCY</th>
+                    <th className="w-[170px] px-3 py-3 text-right">NET DISBURSEMENT</th>
+                    <th className="w-[160px] px-3 py-3">STATUS</th>
+                    <th className="w-[120px] px-3 py-3 text-center">ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {filteredVouchers.map((v) => {
+                    const statusKey = (v.status || '').toUpperCase();
+                    const isApproved = statusKey === 'APPROVED' || statusKey === 'PAID' || statusKey === 'COMPLETED';
+                    const isRejected = statusKey === 'REJECTED' || statusKey === 'CANCELLED';
+                    const tone = isApproved ? 'success' : isRejected ? 'danger' : 'warning';
+                    const badgeLabel = isApproved ? 'Approved' : isRejected ? 'Rejected' : 'Pending Approval';
+                    const isSelected = selectedVoucherIds.includes(String(v.id));
 
-                  return (
-                    <tr
-                      key={v.id || v.paymentId}
-                      className="cpv-table-row"
-                      onClick={() => handleViewVoucherDoc(v)}
-                    >
-                      <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
-                        <input
-                          type="checkbox"
-                          checked={selectedVoucherIds.includes(String(v.id))}
-                          disabled={!canCreateVoucher}
-                          onChange={() => canCreateVoucher && handleToggleSelect(String(v.id))}
-                          style={{ cursor: canCreateVoucher ? 'pointer' : 'not-allowed', width: 16, height: 16 }}
-                        />
-                      </td>
-                      <td className="cpv-voucher-num">{v.paymentId}</td>
-                      <td className="cpv-vendor-name">{v.vendor || '—'}</td>
-                      <td>{v.paidAt || '—'}</td>
-                      <td>{companyDefaultCurrency}</td>
-                      <td className="cpv-amount" style={{ textAlign: 'right' }}>
-                        {formatAmount(v.amount || 0, companyDefaultCurrency)}
-                      </td>
-                      <td>
-                        <span className={`cpv-badge cpv-badge--${badgeClass}`}>{badgeLabel}</span>
-                      </td>
-                      <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
-                          <button
-                            className="cpv-action-btn"
-                            onClick={() => handleViewVoucherDoc(v)}
-                            title="View Bank Payment Voucher Document"
-                          >
-                            <Eye size={15} />
-                          </button>
-                          <button
-                            className="cpv-action-btn"
+                    return (
+                      <tr
+                        key={v.id || v.paymentId}
+                        className={cn('transition-colors hover:bg-muted/40 cursor-pointer', isSelected && 'bg-primary/[0.04]')}
+                        onClick={() => handleViewVoucherDoc(v)}
+                      >
+                        <td onClick={(e) => e.stopPropagation()} className="px-3 py-3.5 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
                             disabled={!canCreateVoucher}
-                            title="Edit Payment Voucher"
-                            onClick={() => {
-                              if (!canCreateVoucher) return;
-                              setVoucherNumber(v.paymentId);
-                              setVendorName(v.vendor);
-                              setInvoiceRef(v.invoiceRef || '');
-                              setGrossAmount(v.amount);
-                              setIsCreating(true);
-                            }}
-                          >
-                            <Pencil size={15} />
-                          </button>
-                          <button
-                            className="cpv-action-btn cpv-action-btn--delete"
-                            disabled={!canCreateVoucher}
-                            title="Delete Payment Voucher"
-                            onClick={() => {
-                              if (!canCreateVoucher) return;
-                              setDeleteTarget(v);
-                            }}
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                            onChange={() => canCreateVoucher && handleToggleSelect(String(v.id))}
+                            className="size-4 cursor-pointer rounded border-border text-primary focus:ring-primary/40"
+                          />
+                        </td>
+                        <td className="px-3 py-3.5 font-semibold text-primary font-mono">{v.paymentId}</td>
+                        <td className="px-3 py-3.5 font-medium text-foreground">{v.vendor || '—'}</td>
+                        <td className="px-3 py-3.5 text-muted-foreground">{v.paidAt || '—'}</td>
+                        <td className="px-3 py-3.5 font-medium text-muted-foreground">{companyDefaultCurrency}</td>
+                        <td className="px-3 py-3.5 text-right font-semibold font-mono text-foreground">
+                          {formatAmount(v.amount || 0, companyDefaultCurrency)}
+                        </td>
+                        <td className="px-3 py-3.5">
+                          <Badge tone={tone}>
+                            <span className="size-1.5 rounded-full bg-current" />
+                            {badgeLabel}
+                          </Badge>
+                        </td>
+                        <td className="px-3 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => handleViewVoucherDoc(v)}
+                              title="View Bank Payment Voucher Document"
+                            >
+                              <Eye size={15} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              disabled={!canCreateVoucher}
+                              title="Edit Payment Voucher"
+                              onClick={() => {
+                                if (!canCreateVoucher) return;
+                                setVoucherNumber(v.paymentId);
+                                setVendorName(v.vendor);
+                                setInvoiceRef(v.invoiceRef || '');
+                                setGrossAmount(v.amount);
+                                setIsCreating(true);
+                              }}
+                            >
+                              <Pencil size={15} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              className="text-muted-foreground hover:text-destructive"
+                              disabled={!canCreateVoucher}
+                              title="Delete Payment Voucher"
+                              onClick={() => {
+                                if (!canCreateVoucher) return;
+                                setDeleteTarget(v);
+                              }}
+                            >
+                              <Trash2 size={15} />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
 
         {/* Single Voucher Delete Confirmation Modal */}
         {deleteTarget && (
@@ -944,7 +923,7 @@ export default function CreatePaymentVoucherPage() {
             onClose={() => setSelectedVoucherForModal(null)}
           />
         )}
-      </div>
+      </PageFrame>
     );
   }
 
@@ -1000,7 +979,6 @@ export default function CreatePaymentVoucherPage() {
             <div className="cpv-field">
               <label>Voucher Number (Auto)</label>
               <input type="text" value={voucherNumber} readOnly className="cpv-input--readonly" />
-              <span className="cpv-field__sub">Unique payment voucher ID</span>
             </div>
             <div className="cpv-field">
               <label>Payment Method <span>*</span></label>

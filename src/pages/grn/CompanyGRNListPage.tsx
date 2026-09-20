@@ -406,7 +406,7 @@ export default function CompanyGRNListPage() {
   return (
     <PageFrame>
       <PageLead
-        title="Goods Receipt Note (GRN) Management 📦"
+        title="Goods Receipt Note (GRN) Management"
         description="Record physical goods receipts against POs or auto-fill from Vendor Invoices with direct posting & 3-way matching."
         action={
           <Button onClick={() => navigate('/procurement/create-company-grn')} className="gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold">
@@ -415,20 +415,20 @@ export default function CompanyGRNListPage() {
         }
       />
 
-      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <MetricCard
           role="button"
           tabIndex={0}
           aria-pressed={kpiFilter === 'ALL'}
           className={cn(
-            'cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-            kpiFilter === 'ALL' && 'border-primary/40 ring-2 ring-primary/10'
+            'cursor-pointer transition-all duration-200 hover:shadow-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+            kpiFilter === 'ALL' && 'border-primary/40 ring-2 ring-primary/10 bg-primary/[0.02]'
           )}
           onClick={() => setKpiFilter('ALL')}
           icon={ShoppingCart}
           label="Total Approved Orders"
           value={kpis.totalOrders}
-          detail="Click to view all approved orders"
+          detail="Click to view all approved purchase orders"
           tone="primary"
         />
         <MetricCard
@@ -436,14 +436,14 @@ export default function CompanyGRNListPage() {
           tabIndex={0}
           aria-pressed={kpiFilter === 'PENDING'}
           className={cn(
-            'cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-            kpiFilter === 'PENDING' && 'border-amber-500/40 ring-2 ring-amber-500/10'
+            'cursor-pointer transition-all duration-200 hover:shadow-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+            kpiFilter === 'PENDING' && 'border-amber-500/40 ring-2 ring-amber-500/10 bg-amber-500/[0.02]'
           )}
           onClick={() => setKpiFilter('PENDING')}
           icon={Truck}
           label="Orders Pending GRN Entry"
           value={kpis.pendingGrns}
-          detail="Click to view orders pending GRN"
+          detail="Click to view orders awaiting GRN inspection"
           tone="warning"
         />
         <MetricCard
@@ -451,28 +451,29 @@ export default function CompanyGRNListPage() {
           tabIndex={0}
           aria-pressed={kpiFilter === 'GRN'}
           className={cn(
-            'cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-            kpiFilter === 'GRN' && 'border-emerald-500/40 ring-2 ring-emerald-500/10'
+            'cursor-pointer transition-all duration-200 hover:shadow-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+            kpiFilter === 'GRN' && 'border-emerald-500/40 ring-2 ring-emerald-500/10 bg-emerald-500/[0.02]'
           )}
           onClick={() => setKpiFilter('GRN')}
           icon={PackageCheck}
           label="Recorded GRNs"
           value={kpis.recordedGrns}
-          detail="Click to view recorded Goods Receipt Notes"
+          detail="Click to view verified Goods Receipt Notes"
           tone="success"
         />
       </div>
 
-      <Card className="mb-4 p-3 sm:p-4">
-        <div className="relative w-full">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      {/* Search & Filter Toolbar matching RFQ */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full max-w-xl">
+          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
-            className="h-10 pl-10 pr-10"
+            className="h-11 rounded-xl pl-10 pr-10"
             type="text"
             placeholder={
               kpiFilter === 'GRN'
-                ? 'Search across recorded Goods Receipt Notes by GRN number, PO number, or supplier...'
-                : 'Search across all approved orders by PO number or supplier name...'
+                ? 'Search recorded Goods Receipt Notes by GRN #, PO #, or supplier name...'
+                : 'Search approved orders by PO # or supplier name...'
             }
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -481,18 +482,19 @@ export default function CompanyGRNListPage() {
             <button
               type="button"
               onClick={() => setSearch('')}
-              className="absolute right-1.5 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-lg text-muted-foreground hover:bg-accent"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
-              <X className="size-4" />
+              <X size={15} />
             </button>
           )}
         </div>
-      </Card>
+      </div>
 
       {kpiFilter !== 'GRN' ? (
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden border border-border/80 shadow-sm">
           {poLoading ? (
-            <div className="flex min-h-[300px] items-center justify-center text-sm text-muted-foreground">
+            <div className="flex min-h-[300px] flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+              <div className="size-6 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
               Loading Purchase Orders…
             </div>
           ) : filteredPOs.length === 0 ? (
@@ -505,13 +507,13 @@ export default function CompanyGRNListPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[800px] border-collapse text-left text-sm">
-                <thead className="border-b border-border/70 bg-secondary/55 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                <thead className="border-b border-border/70 bg-muted/40 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   <tr>
-                    <th className="px-4 py-3">PO Number</th>
-                    <th className="px-4 py-3">Supplier / Vendor</th>
-                    <th className="px-4 py-3 font-right">Total Value</th>
-                    <th className="px-4 py-3">Order Date</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
+                    <th className="px-5 py-3.5">PO Number</th>
+                    <th className="px-5 py-3.5">Supplier / Vendor</th>
+                    <th className="px-5 py-3.5 font-right">Total Value</th>
+                    <th className="px-5 py-3.5">Order Date</th>
+                    <th className="px-5 py-3.5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
@@ -529,25 +531,34 @@ export default function CompanyGRNListPage() {
                     const hasGrn = (poIdStr && posWithGrn.has(poIdStr)) || (poNumStr && posWithGrn.has(poNumStr));
 
                     return (
-                      <tr key={String(po.id)} className="transition-colors hover:bg-accent/35">
-                        <td className="px-4 py-3.5 font-bold text-primary">{poNum}</td>
-                        <td className="px-4 py-3.5 font-medium">{vName}</td>
-                        <td className="px-4 py-3.5 font-semibold tabular-nums">{formatAmount(po.totalAmount, companyDefaultCurrency)}</td>
-                        <td className="px-4 py-3.5 text-xs text-muted-foreground">{formatDate(po.createdAt)}</td>
-                        <td className="px-4 py-3.5 text-right">
+                      <tr key={String(po.id)} className="transition-colors hover:bg-muted/30">
+                        <td className="px-5 py-4 font-bold text-primary">{poNum}</td>
+                        <td className="px-5 py-4 font-medium text-foreground">
+                          <div className="flex items-center gap-2.5">
+                            <div className="grid size-7 place-items-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                              {vName.slice(0, 2).toUpperCase()}
+                            </div>
+                            <span>{vName}</span>
+                          </div>
+                        </td>
+                        <td className="px-5 py-4 font-semibold tabular-nums text-foreground">{formatAmount(po.totalAmount, companyDefaultCurrency)}</td>
+                        <td className="px-5 py-4 text-xs text-muted-foreground">{formatDate(po.createdAt)}</td>
+                        <td className="px-5 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
                             {hasGrn ? (
                               <Button
                                 variant="outline"
                                 size="sm"
+                                className="gap-1.5 border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10"
                                 onClick={() => setKpiFilter('GRN')}
                               >
                                 <CheckCircle2 className="size-3.5 text-emerald-500" /> GRN Created
                               </Button>
                             ) : (
                               <Button
-                                variant="outline"
+                                variant="default"
                                 size="sm"
+                                className="gap-1.5 shadow-xs"
                                 disabled={!canCreateGRN}
                                 onClick={() => navigate(`/procurement/create-company-grn?poId=${po.id}`)}
                               >
@@ -565,9 +576,10 @@ export default function CompanyGRNListPage() {
           )}
         </Card>
       ) : (
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden border border-border/80 shadow-sm">
           {grnLoading ? (
-            <div className="flex min-h-[300px] items-center justify-center text-sm text-muted-foreground">
+            <div className="flex min-h-[300px] flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+              <div className="size-6 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
               Loading Goods Receipt Notes (GRNs)…
             </div>
           ) : filteredGRNs.length === 0 ? (
@@ -579,34 +591,21 @@ export default function CompanyGRNListPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[850px] border-collapse text-left text-sm">
-                <thead className="border-b border-border/70 bg-secondary/55 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                <thead className="border-b border-border/70 bg-muted/40 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   <tr>
-                    <th className="px-4 py-3">GRN Number</th>
-                    <th className="px-4 py-3">Linked PO Number</th>
-                    <th className="px-4 py-3">Supplier / Vendor</th>
-                    <th className="px-4 py-3">Received Date</th>
-                    <th className="px-4 py-3">Items Count</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
+                    <th className="px-5 py-3.5">GRN Number</th>
+                    <th className="px-5 py-3.5">Linked PO Number</th>
+                    <th className="px-5 py-3.5">Supplier / Vendor</th>
+                    <th className="px-5 py-3.5">Received Date</th>
+                    <th className="px-5 py-3.5">Items Count</th>
+                    <th className="px-5 py-3.5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
                   {filteredGRNs.map((grn) => {
-                    const poNum = String(grn.purchaseOrder?.poNumber || '').toLowerCase();
-                    const poId = String(grn.poId || grn.purchaseOrder?.id || '').toLowerCase();
-                    const grnNum = String(grn.grnNumber || '').toLowerCase();
-                    const grnId = String(grn.id || '').toLowerCase();
-
                     const poObj = poList.find(
                       (p) => String(p.id) === String(grn.poId) || String(p.poNumber) === String(grn.purchaseOrder?.poNumber)
                     );
-                    const isPoInvoiced = poObj && (poObj.status === 'INVOICED' || poObj.status === 'CLOSED');
-
-                    const isInvoiced =
-                      isPoInvoiced ||
-                      (poNum && invoicedPoNumbers.has(poNum)) ||
-                      (poId && invoicedPoNumbers.has(poId)) ||
-                      (grnNum && invoicedPoNumbers.has(grnNum)) ||
-                      (grnId && invoicedPoNumbers.has(grnId));
 
                     const itemsCount =
                       (grn.items && grn.items.length > 0)
@@ -618,17 +617,22 @@ export default function CompanyGRNListPage() {
                         : 1;
 
                     return (
-                      <tr key={grn.id} className="transition-colors hover:bg-accent/35">
-                        <td className="px-4 py-3.5 font-bold text-primary">{grn.grnNumber}</td>
-                        <td className="px-4 py-3.5 font-medium">{grn.purchaseOrder?.poNumber || '—'}</td>
-                        <td className="px-4 py-3.5">{grn.purchaseOrder?.vendor?.name || 'Supplier'}</td>
-                        <td className="px-4 py-3.5 text-xs text-muted-foreground">{new Date(grn.receivedDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
-                        <td className="px-4 py-3.5">{itemsCount} line item(s)</td>
-                        <td className="px-4 py-3.5 text-right">
+                      <tr key={grn.id} className="transition-colors hover:bg-muted/30">
+                        <td className="px-5 py-4 font-bold text-primary">{grn.grnNumber}</td>
+                        <td className="px-5 py-4 font-medium">{grn.purchaseOrder?.poNumber || '—'}</td>
+                        <td className="px-5 py-4 font-medium text-foreground">{grn.purchaseOrder?.vendor?.name || 'Supplier'}</td>
+                        <td className="px-5 py-4 text-xs text-muted-foreground">{new Date(grn.receivedDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                        <td className="px-5 py-4">
+                          <Badge variant="outline" className="font-normal text-xs bg-secondary/50">
+                            {itemsCount} line item(s)
+                          </Badge>
+                        </td>
+                        <td className="px-5 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <Button
-                              variant="ghost"
+                              variant="outline"
                               size="sm"
+                              className="gap-1.5"
                               onClick={() => setSelectedGrn(grn)}
                             >
                               <Eye className="size-3.5" /> View Details

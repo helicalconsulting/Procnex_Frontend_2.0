@@ -24,11 +24,14 @@ export interface PurchaseInvoicePrintData {
 }
 
 interface PrintPurchaseInvoiceModalProps {
-  data: PurchaseInvoicePrintData;
+  data?: PurchaseInvoicePrintData;
+  invoice?: PurchaseInvoicePrintData;
   onClose: () => void;
 }
 
-export default function PrintPurchaseInvoiceModal({ data, onClose }: PrintPurchaseInvoiceModalProps) {
+export default function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp, onClose }: PrintPurchaseInvoiceModalProps) {
+  const data = dataProp || invoiceProp;
+  if (!data) return null;
   const { formatAmount, companyDefaultCurrency } = useCurrency();
   const { companyName, logoUrl, profile } = useBranding();
   const printableRef = useRef<HTMLDivElement>(null);

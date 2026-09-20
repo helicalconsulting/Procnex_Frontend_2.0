@@ -290,19 +290,23 @@ export default function PaymentsPage() {
     setActionComment('');
   }, [actionComment, actionModal]);
 
-  const cardProps = (filter: PaymentStatus | 'ALL') => ({
-    role: 'button',
-    tabIndex: 0,
-    'aria-pressed': statusFilter === filter,
-    onClick: () => setStatusFilter((current) => (current === filter && filter !== 'ALL' ? 'ALL' : filter)),
-    onKeyDown: (event: KeyboardEvent) => {
-      if (event.key === 'Enter' || event.key === ' ') setStatusFilter(filter);
-    },
-    className: cn(
-      'cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-      statusFilter === filter && 'border-primary/40 ring-2 ring-primary/10'
-    ),
-  });
+  const cardProps = (filter: PaymentStatus | 'ALL') => {
+    const isActive = statusFilter === filter;
+    return {
+      role: 'button',
+      tabIndex: 0,
+      'aria-pressed': isActive,
+      onClick: () => setStatusFilter((current) => (current === filter && filter !== 'ALL' ? 'ALL' : filter)),
+      onKeyDown: (event: React.KeyboardEvent) => {
+        if (event.key === 'Enter' || event.key === ' ') setStatusFilter(filter);
+      },
+      className: cn(
+        'cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-all duration-200',
+        isActive &&
+          'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
+      ),
+    };
+  };
 
   const actionTitle =
     actionModal?.action === 'confirm'
@@ -317,70 +321,69 @@ export default function PaymentsPage() {
       <PageLead title="Payment approvals" description="Review payment vouchers and track vendor disbursements." />
       {error && <MessageStrip type="error">{error}</MessageStrip>}
 
-      <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard {...cardProps('ALL')} label="Total paid" value={amount(summary.totalPaid)} detail="Completed payments" icon={Banknote} tone="success" />
         <MetricCard {...cardProps('PENDING')} label="Pending" value={summary.pending} detail="Awaiting confirmation" icon={Clock} tone="warning" />
         <MetricCard {...cardProps('COMPLETED')} label="Completed" value={summary.completed} detail="Confirmed transactions" icon={CheckCircle2} />
         <MetricCard {...cardProps('FAILED')} label="Failed / cancelled" value={summary.failed} detail="Needs attention" icon={XCircle} tone="danger" />
       </div>
 
-      <Card className="mb-4 p-3 sm:p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative w-full max-w-xl">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              className="h-10 pl-10 pr-10"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search payment, vendor, or invoice"
-              aria-label="Search payments"
-            />
-            {search && (
-              <button
-                type="button"
-                onClick={() => setSearch('')}
-                className="absolute right-1.5 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-lg text-muted-foreground hover:bg-accent"
-              >
-                <X className="size-4" />
-              </button>
-            )}
-          </div>
-
-          <div className="relative">
-            <Button
-              ref={colBtnRef}
-              variant="outline"
-              size="sm"
-              onClick={() => setShowColPanel((v) => !v)}
-              title="Customize columns"
+      {/* Search & Filter Toolbar matching RFQ */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full max-w-xl">
+          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="h-11 rounded-xl pl-10 pr-10"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search payment, vendor, or invoice"
+            aria-label="Search payments"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              className="absolute right-2.5 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-muted-foreground hover:bg-accent"
             >
-              <SlidersHorizontal className="size-3.5" /> Columns
-            </Button>
-            {showColPanel && (
-              <ColumnCustomizer
-                columnOrder={columnOrder}
-                visibleKeys={visibleKeys}
-                allColumns={ALL_COLUMNS}
-                onToggle={(key) => {
-                  setVisibleKeys((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(key)) next.delete(key);
-                    else next.add(key);
-                    return next;
-                  });
-                }}
-                onReorder={setColumnOrder}
-                onReset={() => {
-                  setColumnOrder(defaultOrder);
-                  setVisibleKeys(new Set(defaultVisible));
-                }}
-                onClose={() => setShowColPanel(false)}
-                anchorRef={colBtnRef}
-              />
-            )}
-          </div>
+              <X className="size-4" />
+            </button>
+          )}
         </div>
-      </Card>
+
+        <div className="relative flex items-center gap-2.5 justify-end shrink-0 sm:ml-auto">
+          <Button
+            ref={colBtnRef}
+            variant="outline"
+            className="h-11 gap-2 rounded-xl px-4 border-input font-medium hover:bg-accent/50"
+            onClick={() => setShowColPanel((v) => !v)}
+            title="Customize columns"
+          >
+            <SlidersHorizontal size={16} /> Columns
+          </Button>
+          {showColPanel && (
+            <ColumnCustomizer
+              columnOrder={columnOrder}
+              visibleKeys={visibleKeys}
+              allColumns={ALL_COLUMNS}
+              onToggle={(key) => {
+                setVisibleKeys((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(key)) next.delete(key);
+                  else next.add(key);
+                  return next;
+                });
+              }}
+              onReorder={setColumnOrder}
+              onReset={() => {
+                setColumnOrder(defaultOrder);
+                setVisibleKeys(new Set(defaultVisible));
+              }}
+              onClose={() => setShowColPanel(false)}
+              anchorRef={colBtnRef}
+            />
+          )}
+        </div>
+      </div>
 
       {loading ? (
         <Card className="p-4">
@@ -411,10 +414,10 @@ export default function PaymentsPage() {
         />
       ) : (
         <>
-          <Card className="hidden overflow-hidden lg:block">
+          <Card className="hidden overflow-hidden border border-border/60 shadow-xs lg:block">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[960px] text-left text-sm">
-                <thead className="border-b border-border/70 bg-secondary/55 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                <thead className="border-b border-border/75 bg-muted/45 text-[12px] font-bold uppercase tracking-wide text-muted-foreground">
                   <tr>
                     {visibleColumns.map((col) => (
                       <th
@@ -446,16 +449,20 @@ export default function PaymentsPage() {
                           return (
                             <td key="vendorName" className="px-4 py-3.5">
                               <div className="flex items-center gap-2.5">
-                                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-[12px] font-semibold text-primary">
+                                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary ring-1 ring-primary/15">
                                   {payment.vendorInitials}
                                 </span>
-                                <span className="font-medium">{payment.vendorName}</span>
+                                <span className="font-medium text-foreground">{payment.vendorName}</span>
                               </div>
                             </td>
                           );
                         }
                         if (col.key === 'invoiceRef') {
-                          return <td key="invoiceRef" className="px-4 py-3.5 text-xs text-muted-foreground">{payment.invoiceRef}</td>;
+                          return (
+                            <td key="invoiceRef" className="px-4 py-3.5 text-sm font-medium text-foreground">
+                              {payment.invoiceRef}
+                            </td>
+                          );
                         }
                         if (col.key === 'amount') {
                           return (
@@ -468,7 +475,7 @@ export default function PaymentsPage() {
                           return <td key="method" className="px-4 py-3.5"><Badge>{payment.method}</Badge></td>;
                         }
                         if (col.key === 'date') {
-                          return <td key="date" className="px-4 py-3.5 text-xs text-muted-foreground">{formatDate(payment.date)}</td>;
+                          return <td key="date" className="px-4 py-3.5 text-sm text-muted-foreground">{formatDate(payment.date)}</td>;
                         }
                         if (col.key === 'status') {
                           return <td key="status" className="px-4 py-3.5"><StatusBadge status={payment.status} /></td>;
@@ -656,47 +663,108 @@ export default function PaymentsPage() {
       {/* Detail Dialog */}
       <Dialog open={!!detailPayment} onOpenChange={(open) => { if (!open) setDetailPayment(null); }}>
         {detailPayment && (
-          <DialogContent className="max-w-2xl">
-            <DialogHeader className="pr-10">
-              <div className="flex items-center gap-2">
-                <DialogTitle>{detailPayment.paymentNumber}</DialogTitle>
+          <DialogContent className="max-w-xl p-6 sm:p-7">
+            <DialogHeader className="space-y-1 pr-8">
+              <div className="flex items-center gap-2.5">
+                <DialogTitle className="text-xl font-bold tracking-tight text-foreground">
+                  {detailPayment.paymentNumber}
+                </DialogTitle>
                 <StatusBadge status={detailPayment.status} />
               </div>
-              <DialogDescription>
+              <DialogDescription className="text-sm font-medium text-muted-foreground">
                 {detailPayment.vendorName} · {amount(detailPayment.amount)}
               </DialogDescription>
             </DialogHeader>
-            <dl className="grid gap-2 sm:grid-cols-2">
-              {[
-                ['Invoice reference', detailPayment.invoiceRef],
-                ['Amount', amount(detailPayment.amount)],
-                ['Method', detailPayment.method],
-                ['Date', formatDate(detailPayment.date)],
-                ['Approved by', detailPayment.approvedBy],
-                ['Remarks', detailPayment.remarks || '—'],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-xl border border-border/65 bg-secondary/40 p-3">
-                  <dt className="text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{label}</dt>
-                  <dd className="mt-1 text-sm font-medium">{value}</dd>
+
+            <div className="mt-4 space-y-4">
+              <div className="border-t border-border/60 pt-4">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                  Payment details
+                </h4>
+
+                <div className="divide-y divide-border/40 text-sm">
+                  {/* Row 1: Invoice Reference & Amount */}
+                  <div className="grid grid-cols-1 gap-4 py-3 sm:grid-cols-2">
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Invoice Reference
+                      </div>
+                      <div className="mt-1 font-medium text-foreground break-words">
+                        {detailPayment.invoiceRef}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Amount
+                      </div>
+                      <div className="mt-1 text-base font-bold text-foreground">
+                        {amount(detailPayment.amount)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Row 2: Method & Date */}
+                  <div className="grid grid-cols-1 gap-4 py-3 sm:grid-cols-2">
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Method
+                      </div>
+                      <div className="mt-1 font-medium text-foreground">
+                        {detailPayment.method}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Date
+                      </div>
+                      <div className="mt-1 font-medium text-foreground">
+                        {formatDate(detailPayment.date)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Row 3: Approved By (Workflow state) */}
+                  <div className="py-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Approved By
+                    </div>
+                    <div className="mt-1 flex items-center gap-1.5 font-medium text-foreground">
+                      <span className="inline-block size-2 rounded-full bg-amber-500/80" />
+                      {detailPayment.approvedBy}
+                    </div>
+                  </div>
+
+                  {/* Row 4: Remarks (Full Width) */}
+                  <div className="py-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Remarks
+                    </div>
+                    <div className="mt-1 font-normal text-muted-foreground break-words leading-relaxed">
+                      {detailPayment.remarks || '—'}
+                    </div>
+                  </div>
                 </div>
-              ))}
-            </dl>
-            {detailPayment.comments && (
-              <div className="rounded-xl border border-border/65 p-4">
-                <div className="text-xs font-semibold text-muted-foreground">Comments</div>
-                <p className="mt-2 text-sm">{detailPayment.comments}</p>
               </div>
-            )}
-            <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
+
+              {detailPayment.comments && (
+                <div className="rounded-xl border border-border/60 bg-muted/30 p-3.5">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Comments
+                  </div>
+                  <p className="mt-1.5 text-sm text-foreground">{detailPayment.comments}</p>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter className="mt-6 flex flex-col gap-2 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
               <Button
                 variant="outline"
                 onClick={() => setChainModal({ module: 'Payments', referenceId: detailPayment.paymentNumber || detailPayment.invoiceRef })}
               >
                 <Clock className="size-4" /> View Approval Chain
               </Button>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
                 <Button
-                  variant="secondary"
                   onClick={() => {
                     const target = detailPayment;
                     setDetailPayment(null);
@@ -705,7 +773,9 @@ export default function PaymentsPage() {
                 >
                   <Printer className="size-4" /> Print Voucher
                 </Button>
-                <Button variant="secondary" onClick={() => setDetailPayment(null)}>Close</Button>
+                <Button variant="secondary" onClick={() => setDetailPayment(null)}>
+                  Close
+                </Button>
               </div>
             </DialogFooter>
           </DialogContent>

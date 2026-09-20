@@ -6,16 +6,14 @@ import { useServiceData } from '../../hooks/useServiceData';
 import type { RFQTableRow } from '../../types/viewModels';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import {
   Plus, Search, FileText, Eye, Trash2, Users, Building2,
   ArrowUpDown, ChevronLeft, ChevronRight, CalendarDays,
-  ClipboardList, ChevronDown, AlertTriangle, Clock, CheckCircle2,
+  ClipboardList, AlertTriangle, Clock, CheckCircle2,
   X, XCircle, ThumbsUp, ThumbsDown, RotateCcw, MessageSquare, CheckSquare,
 } from 'lucide-react';
 import type { RFQStatus } from '../../types';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
-import RFQDetailModal from '../../components/rfq/RFQDetailModal';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TableSkeleton } from '../../components/shared/Skeleton';
 import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
@@ -38,6 +36,8 @@ import '../../components/shared/ColumnCustomizer.css';
 // ─── Types ───────────────────────────────────────────────────
 
 type MockRFQ = RFQTableRow;
+
+const AVAILABLE_DEPARTMENTS = ['FINANCE', 'Human Resource', 'Information Technology', 'Purchase'];
 
 // ─── Column definitions ───────────────────────────────────────
 
@@ -258,11 +258,6 @@ export default function RFQPage() {
     [],
     { cacheTtlMs: 0 }
   );
-  const [detailRFQ, setDetailRFQ] = useState<MockRFQ | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [sendError, setSendError] = useState<string | null>(null);
-  const [sendSuccess, setSendSuccess] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -459,9 +454,6 @@ export default function RFQPage() {
       });
   }, [approvalActionModal, approvalComment, actionReturnTarget, reload, forceRefresh, fetchPendingApprovals]);
 
-  const anyModalOpen = !!(detailRFQ || deleteTarget || approvalActionModal || actionSuccessData);
-  useBodyScrollLock(anyModalOpen);
-
   const enrichedRfqList = useMemo(() => {
     return rfqList.map((rfq) => {
       const idStr = String(rfq.id);
@@ -494,47 +486,6 @@ export default function RFQPage() {
     setCurrentPage(1);
   }, []);
 
-  const handleSendRFQ = useCallback(async () => {
-    if (!detailRFQ || (detailRFQ.status !== 'DRAFT' && detailRFQ.status !== 'APPROVED')) return;
-
-    setSending(true);
-    setSendError(null);
-    setSendSuccess(null);
-    try {
-      let rfq = detailRFQ;
-      if (!rfq.vendors.length) {
-        const full = await rfqService.getById(rfq.id);
-        if (full) {
-          rfq = full;
-          setDetailRFQ(full);
-        }
-      }
-      const vendorTotal = rfq.vendors.length || rfq.vendorCount || 0;
-      if (vendorTotal === 0) {
-        setSendError('Add at least one vendor before sending (Create RFQ → select vendors).');
-        return;
-      }
-
-      const result = await rfqService.send(rfq.id);
-      setDetailRFQ({ ...rfq, status: 'SENT' });
-      reload();
-      if (result.emailFailures?.length) {
-        setSendError(`RFQ sent, but some emails failed: ${result.emailFailures.join('; ')}`);
-      } else {
-        setSendSuccess(`RFQ sent to ${vendorTotal} vendor(s). Invitation emails dispatched.`);
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to send RFQ';
-      if (msg.includes('PENDING_APPROVAL') || msg.includes('APPROVAL_REQUIRED')) {
-        setSendError(`RFQ #${rfq.rfqNumber} is currently pending internal approval. Please approve it from the Approvals page before sending to vendors.`);
-      } else {
-        setSendError(msg);
-      }
-    } finally {
-      setSending(false);
-    }
-  }, [detailRFQ, reload]);
-
   const requestDeleteRFQ = useCallback((rfq: MockRFQ) => {
     setDeleteError(null);
     setDeleteSuccess(null);
@@ -555,7 +506,6 @@ export default function RFQPage() {
     setDeleteForceRequired(false);
     try {
       await rfqService.delete(rfq.id);
-      if (detailRFQ?.id === rfq.id) setDetailRFQ(null);
       setDeleteSuccess(`${rfq.rfqNumber} deleted successfully.`);
       setDeleteTarget(null);
       reload();
@@ -571,7 +521,7 @@ export default function RFQPage() {
     } finally {
       setDeletingId(null);
     }
-  }, [deleteTarget, detailRFQ?.id, reload]);
+  }, [deleteTarget, reload]);
 
   const confirmForceDeleteRFQ = useCallback(async () => {
     if (!deleteTarget) return;
@@ -581,7 +531,6 @@ export default function RFQPage() {
     setDeleteSuccess(null);
     try {
       await rfqService.delete(rfq.id, { force: true });
-      if (detailRFQ?.id === rfq.id) setDetailRFQ(null);
       setDeleteSuccess(`${rfq.rfqNumber} deleted successfully.`);
       setDeleteTarget(null);
       reload();
@@ -590,7 +539,7 @@ export default function RFQPage() {
     } finally {
       setDeletingId(null);
     }
-  }, [deleteTarget, detailRFQ?.id, reload]);
+  }, [deleteTarget, reload]);
 
   useEffect(() => {
     if (!deleteSuccess && !deleteError) return;
@@ -613,15 +562,8 @@ export default function RFQPage() {
   const perPage = 8;
 
   const departmentOptions = useMemo(() => {
-    const set = new Set<string>();
-    rfqList.forEach((r) => {
-      if (r.department && r.department.trim()) {
-        set.add(r.department.trim());
-      }
-    });
-    ['Procurement', 'IT & Operations', 'Logistics', 'Finance', 'Engineering', 'Facilities'].forEach((d) => set.add(d));
-    return Array.from(set).sort();
-  }, [rfqList]);
+    return AVAILABLE_DEPARTMENTS;
+  }, []);
 
   const filtered = useMemo(() => {
     let list = enrichedRfqList.filter((r) => r.title !== 'Direct PO Master' && !r.rfqNumber?.startsWith('RFQ-DIRECT'));
@@ -708,22 +650,9 @@ export default function RFQPage() {
     [columnOrder, visibleKeys],
   );
 
-  const openDetail = useCallback(async (rfq: MockRFQ) => {
-    setDetailRFQ(rfq);
-    setSendError(null);
-    setSendSuccess(null);
-    setDetailLoading(true);
-    try {
-      const full = await rfqService.getById(rfq.id);
-      if (full) setDetailRFQ(full);
-    } catch (err) {
-      setSendError(err instanceof Error ? err.message : 'Could not load RFQ details');
-    } finally {
-      setDetailLoading(false);
-    }
-  }, []);
-
-  const closeDetail = () => setDetailRFQ(null);
+  const openDetail = useCallback((rfq: MockRFQ) => {
+    navigate(`/rfq/${rfq.id}`);
+  }, [navigate]);
 
   const handleToggleColumn = (key: string) => {
     setVisibleKeys((prev) => {
@@ -833,7 +762,6 @@ export default function RFQPage() {
                 </option>
               ))}
             </select>
-            <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           </div>
         </div>
       </div>
@@ -1120,19 +1048,6 @@ export default function RFQPage() {
             </Button>
           </div>
         </div>
-      )}
-
-      {/* RFQ Detail Modal */}
-      {detailRFQ && (
-        <RFQDetailModal
-          rfq={detailRFQ}
-          loading={detailLoading}
-          sending={sending}
-          sendError={sendError}
-          sendSuccess={sendSuccess}
-          onClose={closeDetail}
-          onSend={handleSendRFQ}
-        />
       )}
 
       {/* Single Delete Confirmation Modal */}

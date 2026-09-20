@@ -313,7 +313,7 @@ export default function PurchaseRequisitionsListPage() {
       />
 
       {requisitions.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <MetricCard
             role="button"
             tabIndex={0}
@@ -389,6 +389,32 @@ export default function PurchaseRequisitionsListPage() {
         </div>
       )}
 
+      {/* Search & Filter Toolbar matching RFQ */}
+      {requisitions.length > 0 && (
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full max-w-xl">
+            <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="h-11 rounded-xl pl-10 pr-10"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search number, vendor, status or currency"
+              aria-label="Search purchase orders"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="Clear search"
+              >
+                <X size={15} />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {requisitions.length === 0 ? (
         <EmptyState
           className="mt-5"
@@ -398,34 +424,7 @@ export default function PurchaseRequisitionsListPage() {
           action={<Button onClick={() => navigate('/procurement/create-purchase-order')}><Plus /> Create purchase order</Button>}
         />
       ) : (
-        <Card className="mt-5 overflow-hidden">
-          <div className="flex flex-col gap-3 border-b border-border/70 p-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-            <div className="relative w-full sm:max-w-md">
-              <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                className="pl-10 pr-10"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search number, vendor, status or currency"
-                aria-label="Search purchase orders"
-              />
-              {searchTerm && (
-                <button
-                  type="button"
-                  onClick={() => setSearchTerm('')}
-                  className="absolute right-1.5 top-1/2 grid size-9 -translate-y-1/2 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
-                  aria-label="Clear search"
-                >
-                  <X className="size-4" />
-                </button>
-              )}
-            </div>
-            <div className="flex items-center justify-between gap-3 sm:justify-end">
-              <p className="shrink-0 text-xs text-muted-foreground" aria-live="polite">
-                {filteredRequisitions.length} of {requisitions.length} documents
-              </p>
-            </div>
-          </div>
+        <Card className="overflow-hidden">
 
           {filteredRequisitions.length === 0 ? (
             <EmptyState

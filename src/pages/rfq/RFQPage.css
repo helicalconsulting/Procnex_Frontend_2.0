@@ -671,6 +671,50 @@
   border-radius: var(--radius-lg);
   animation: rfqSlideUp 0.28s cubic-bezier(0.32,0.72,0,1);
 }
+
+.rfq-modal--page {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  width: 100%;
+  min-height: calc(100vh - 210px);
+  max-height: none;
+  opacity: 1;
+  pointer-events: all;
+  transform: none;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  animation: none;
+}
+
+.rfq-modal--page.rfq-modal--open {
+  top: auto;
+  left: auto;
+  width: 100%;
+  max-height: none;
+  transform: none;
+  animation: none;
+}
+
+.rfq-modal--page .rfq-modal__header {
+  min-height: 64px;
+  padding: 16px 20px;
+}
+
+.rfq-modal--page .rfq-modal__rfq-num {
+  font-size: 18px;
+  letter-spacing: 0;
+}
+
+.rfq-modal--page .rfq-modal__body {
+  min-height: 360px;
+  overflow: visible;
+}
+
+.rfq-modal--page .rfq-modal__footer {
+  background: var(--surface-card);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
 @keyframes rfqSlideUp {
   from { opacity: 0; transform: translate(-50%, calc(-50% + 24px)) scale(0.97); }
   to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
@@ -1703,4 +1747,233 @@
   .rfq-modal__info-grid { grid-template-columns: repeat(2, 1fr); }
   .rfq-pagination__btns .rfq-pagination__btn:not(:first-child):not(:last-child) { display: none; }
   .rfq-pagination__btn--active { display: inline-flex; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RFQ DETAIL PAGE
+   The page variant shares the modal's data and interaction logic,
+   but uses the same separated card rhythm as the application detail pages.
+   ═══════════════════════════════════════════════════════════ */
+.rfq-modal--detail-page {
+  gap: 16px;
+  min-height: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.rfq-modal--detail-page .rfq-modal__header {
+  min-height: 84px;
+  padding: 18px 24px;
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+.rfq-modal--detail-page .rfq-modal__header-left {
+  gap: 14px;
+}
+.rfq-modal__page-heading {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+.rfq-modal--detail-page .rfq-modal__rfq-num {
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+.rfq-modal--detail-page .rfq-badge {
+  text-transform: uppercase;
+}
+.rfq-modal__page-title {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rfq-modal__page-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  border: 1px solid var(--primary-500);
+  border-radius: var(--radius-md);
+  padding: 10px 15px;
+  background: var(--primary-500);
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(10, 110, 209, 0.2);
+  transition: background 0.15s, transform 0.15s;
+}
+.rfq-modal__page-back:hover {
+  background: var(--primary-600);
+  transform: translateY(-1px);
+}
+.rfq-modal--detail-page .rfq-modal__hero {
+  margin-top: 0;
+  padding: 20px 24px;
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+.rfq-modal--detail-page .rfq-modal__hero-chips {
+  margin-bottom: 0;
+}
+.rfq-page__overview {
+  padding: 20px 24px 24px;
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+.rfq-page__section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.rfq-page__section-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.rfq-page__section-heading p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.rfq-page__overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.rfq-page__overview-card {
+  display: flex;
+  min-height: 82px;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.rfq-page__overview-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 9px;
+  background: rgba(10, 110, 209, 0.1);
+  color: var(--primary-500);
+}
+.rfq-page__overview-card > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+.rfq-page__overview-label {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.rfq-page__overview-value {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rfq-modal--detail-page .rfq-modal__tabs {
+  margin-top: 0;
+  padding: 8px 16px 0;
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: var(--shadow-sm);
+}
+.rfq-modal--detail-page .rfq-modal__body {
+  overflow: visible;
+  flex: none;
+  min-height: 0;
+  margin-top: -17px;
+  padding-top: 17px;
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-top: 0;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+.rfq-modal--detail-page .rfq-modal__info-panel,
+.rfq-modal--detail-page .rfq-modal__items-panel,
+.rfq-modal--detail-page .rfq-modal__vendors-panel,
+.rfq-modal--detail-page .rfq-modal__quotations-panel,
+.rfq-modal--detail-page .rfq-modal__approvals-panel {
+  padding: 24px;
+}
+.rfq-modal--detail-page .rfq-page__content-heading {
+  margin-bottom: 4px;
+}
+.rfq-modal--detail-page .rfq-modal__info-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.rfq-modal--detail-page .rfq-modal__footer {
+  background: var(--surface-card);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+@media (max-width: 900px) {
+  .rfq-page__overview-grid,
+  .rfq-modal--detail-page .rfq-modal__info-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .rfq-modal--detail-page .rfq-modal__header {
+    align-items: flex-start;
+    padding: 16px;
+  }
+  .rfq-modal--detail-page .rfq-modal__header-left {
+    flex-wrap: wrap;
+  }
+  .rfq-modal__page-back {
+    padding: 9px 11px;
+    font-size: 13px;
+  }
+  .rfq-page__overview,
+  .rfq-modal--detail-page .rfq-modal__hero {
+    padding: 18px 16px;
+  }
+  .rfq-page__overview-grid,
+  .rfq-modal--detail-page .rfq-modal__info-grid {
+    grid-template-columns: 1fr;
+  }
+  .rfq-modal--detail-page .rfq-modal__tabs {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .rfq-modal--detail-page .rfq-modal__info-panel,
+  .rfq-modal--detail-page .rfq-modal__items-panel,
+  .rfq-modal--detail-page .rfq-modal__vendors-panel,
+  .rfq-modal--detail-page .rfq-modal__quotations-panel,
+  .rfq-modal--detail-page .rfq-modal__approvals-panel {
+    padding: 18px 16px;
+  }
 }

@@ -117,29 +117,46 @@
   color: var(--primary-500, #0a6ed1);
   font-size: 14px;
   font-family: var(--font-mono, monospace);
-  background: rgba(10, 110, 209, 0.08);
-  padding: 4px 10px;
-  border-radius: 6px;
-  border: 1px solid rgba(10, 110, 209, 0.15);
+  background: linear-gradient(135deg, rgba(10, 110, 209, 0.1) 0%, rgba(10, 110, 209, 0.04) 100%);
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(10, 110, 209, 0.2);
   white-space: nowrap;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 [data-theme="dark"] .pr-toolbar__po-num {
-  background: rgba(59, 130, 246, 0.15);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(59, 130, 246, 0.08) 100%);
   color: #60a5fa;
-  border-color: rgba(96, 165, 250, 0.3);
+  border-color: rgba(96, 165, 250, 0.35);
 }
 
 /* ── SAP Fiori Status Badges ──────────────────────────────── */
 
 .pr-badge {
-  padding: 6px 14px;
-  border-radius: 14px;
-  font-size: 14.5px;
-  font-weight: 800;
+  padding: 5px 12px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pr-badge--view-only {
+  background: linear-gradient(135deg, rgba(10, 110, 209, 0.12) 0%, rgba(10, 110, 209, 0.06) 100%);
+  color: var(--primary-500, #0a6ed1);
+  border: 1px solid rgba(10, 110, 209, 0.25);
+  box-shadow: 0 1px 2px rgba(10, 110, 209, 0.05);
+}
+
+[data-theme="dark"] .pr-badge--view-only {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(59, 130, 246, 0.1) 100%);
+  color: #60a5fa;
+  border-color: rgba(96, 165, 250, 0.35);
 }
 
 .pr-badge--DRAFT {
@@ -532,9 +549,35 @@
   color: var(--primary-500, #0a6ed1) !important;
 }
 
-.pr-field input:hover,
-.pr-field select:hover,
-.pr-field textarea:hover {
+.pr-field input:disabled,
+.pr-field select:disabled,
+.pr-field textarea:disabled,
+.pr-items-table input:disabled,
+.pr-items-table select:disabled {
+  background: var(--surface-card, #ffffff) !important;
+  color: var(--text-primary, #0f172a) !important;
+  opacity: 1 !important;
+  cursor: default !important;
+  border: 1px solid var(--border, #cbd5e1) !important;
+  font-weight: 600 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03) !important;
+  -webkit-text-fill-color: var(--text-primary, #0f172a) !important;
+}
+
+[data-theme="dark"] .pr-field input:disabled,
+[data-theme="dark"] .pr-field select:disabled,
+[data-theme="dark"] .pr-field textarea:disabled,
+[data-theme="dark"] .pr-items-table input:disabled,
+[data-theme="dark"] .pr-items-table select:disabled {
+  background: rgba(15, 23, 42, 0.7) !important;
+  color: #f8fafc !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+  -webkit-text-fill-color: #f8fafc !important;
+}
+
+.pr-field input:hover:not(:disabled),
+.pr-field select:hover:not(:disabled),
+.pr-field textarea:hover:not(:disabled) {
   border-color: var(--border-strong);
 }
 

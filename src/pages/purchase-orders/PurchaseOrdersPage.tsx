@@ -357,57 +357,54 @@ export default function PurchaseOrdersPage() {
         </div>
       )}
 
-      <Card className="mb-4 p-3 sm:p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative w-full max-w-xl">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              className="h-10 pl-10 pr-10"
-              value={search}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                setCurrentPage(1);
-              }}
-              placeholder="Search PO, vendor, RFQ, or department"
-              aria-label="Search purchase orders"
-            />
-            {search && (
-              <button
-                type="button"
-                onClick={() => setSearch('')}
-                className="absolute right-1.5 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-lg text-muted-foreground hover:bg-accent"
-              >
-                <X className="size-4" />
-              </button>
-            )}
-          </div>
+      {/* Search & Toolbar matching RFQ */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full max-w-xl">
+          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="h-11 rounded-xl pl-10 pr-10"
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setCurrentPage(1);
+            }}
+            placeholder="Search PO, vendor, RFQ, or department"
+            aria-label="Search purchase orders"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X size={15} />
+            </button>
+          )}
+        </div>
 
-          <div className="flex items-center justify-between gap-2.5 sm:justify-end">
-            <span className="text-xs text-muted-foreground whitespace-nowrap">
-              {filtered.length} of {poResult.length} documents
-            </span>
-
-            <div className="flex items-center rounded-lg border border-border/70 p-0.5 bg-muted/40">
-              <Button
-                variant={view === 'table' ? 'secondary' : 'ghost'}
-                size="icon-sm"
-                onClick={() => setView('table')}
-                title="Table view"
-              >
-                <LayoutList className="size-4" />
-              </Button>
-              <Button
-                variant={view === 'card' ? 'secondary' : 'ghost'}
-                size="icon-sm"
-                onClick={() => setView('card')}
-                title="Card view"
-              >
-                <LayoutGrid className="size-4" />
-              </Button>
-            </div>
+        <div className="flex items-center gap-2.5 justify-end shrink-0 sm:ml-auto">
+          <div className="flex items-center gap-1 rounded-xl border border-input bg-card p-1 h-11">
+            <Button
+              variant={view === 'table' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setView('table')}
+              className="h-9 w-9 p-0 rounded-lg"
+              title="Table view"
+            >
+              <LayoutList className="size-4" />
+            </Button>
+            <Button
+              variant={view === 'card' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setView('card')}
+              className="h-9 w-9 p-0 rounded-lg"
+              title="Card view"
+            >
+              <LayoutGrid className="size-4" />
+            </Button>
           </div>
         </div>
-      </Card>
+      </div>
 
       {loading ? (
         <Card className="flex min-h-[360px] items-center justify-center p-8">
@@ -750,65 +747,123 @@ export default function PurchaseOrdersPage() {
       {/* Detail Dialog */}
       <Dialog open={!!detailPO} onOpenChange={(open) => { if (!open) setDetailPO(null); }}>
         {detailPO && (
-          <DialogContent className="max-w-2xl">
-            <DialogHeader className="pr-10">
-              <div className="flex flex-wrap items-center gap-2">
-                <DialogTitle>{detailPO.poNumber}</DialogTitle>
-                <StatusBadge status={detailPO.status} />
-                <Badge>{detailPO.priority} priority</Badge>
-              </div>
-              <DialogDescription>
-                {detailPO.vendorName} · {formatAmount(detailPO.totalAmountNum, companyDefaultCurrency)}
-              </DialogDescription>
-            </DialogHeader>
-            <dl className="grid gap-2 sm:grid-cols-2">
-              {[
-                ['RFQ reference', detailPO.rfqNumber],
-                ['Vendor', detailPO.vendorName],
-                ['Total amount', formatAmount(detailPO.totalAmountNum, companyDefaultCurrency)],
-                ['Items', String(detailPO.itemCount)],
-                ['Department', detailPO.department],
-                ['Created by', detailPO.createdBy],
-                ['Created', formatDate(detailPO.createdAt)],
-                ['Expected delivery', formatDate(detailPO.expectedDelivery)],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-xl border border-border/65 bg-secondary/40 p-3">
-                  <dt className="text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{label}</dt>
-                  <dd className="mt-1 text-sm font-medium">{value}</dd>
+          <DialogContent className="max-w-3xl overflow-hidden p-0">
+            {/* Header Banner */}
+            <div className="relative border-b border-border/60 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-6 pb-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex size-9 items-center justify-center rounded-xl bg-primary/15 text-primary">
+                      <ShoppingCart className="size-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold tracking-tight text-foreground">{detailPO.poNumber}</h2>
+                      <p className="text-xs font-medium text-muted-foreground">RFQ Ref: <span className="font-semibold text-foreground">{detailPO.rfqNumber || 'N/A'}</span></p>
+                    </div>
+                  </div>
                 </div>
-              ))}
-            </dl>
-            {detailPO.status === 'CANCELLED' ? (
-              <div className="flex items-center gap-2 rounded-xl border border-destructive/20 bg-destructive/8 p-3 text-sm text-destructive">
-                <XCircle className="size-4" /> This order has been cancelled.
+                <div className="flex items-center gap-2">
+                  <StatusBadge status={detailPO.status} />
+                  <Badge tone={detailPO.priority === 'HIGH' ? 'danger' : detailPO.priority === 'MEDIUM' ? 'warning' : 'neutral'}>
+                    {detailPO.priority} Priority
+                  </Badge>
+                </div>
               </div>
-            ) : (
-              <ol className="grid grid-cols-5 gap-1" aria-label="Order progress">
-                {PROGRESS_STEPS.map((step, index) => {
-                  const done = index <= PROGRESS_STEPS.indexOf(detailPO.status);
-                  return (
-                    <li
-                      key={step}
-                      className="relative flex min-w-0 flex-col items-center text-center before:absolute before:left-[calc(50%+12px)] before:right-[calc(-50%+12px)] before:top-3 before:h-px before:bg-border last:before:hidden"
-                    >
-                      <span
-                        className={cn(
-                          'relative z-10 grid size-6 place-items-center rounded-full border bg-card text-[11px]',
-                          done ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground'
-                        )}
-                      >
-                        {done ? <CheckCircle2 className="size-3.5" /> : index + 1}
-                      </span>
-                      <span className="mt-2 hidden text-[10px] text-muted-foreground sm:block">{STATUS_CONFIG[step].label}</span>
-                    </li>
-                  );
-                })}
-              </ol>
-            )}
-            <DialogFooter>
-              <Button variant="secondary" onClick={() => setDetailPO(null)}>Close</Button>
+            </div>
+
+            <div className="space-y-6 p-6">
+              {/* Top Overview Cards */}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="rounded-xl border border-border/60 bg-card p-3.5 shadow-sm">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Total Amount</span>
+                  <div className="mt-1 text-base font-bold text-primary">{formatAmount(detailPO.totalAmountNum, companyDefaultCurrency)}</div>
+                </div>
+                <div className="rounded-xl border border-border/60 bg-card p-3.5 shadow-sm">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Vendor</span>
+                  <div className="mt-1 truncate text-sm font-semibold text-foreground" title={detailPO.vendorName}>{detailPO.vendorName}</div>
+                </div>
+                <div className="rounded-xl border border-border/60 bg-card p-3.5 shadow-sm">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Items Count</span>
+                  <div className="mt-1 text-sm font-semibold text-foreground">{detailPO.itemCount} item(s)</div>
+                </div>
+                <div className="rounded-xl border border-border/60 bg-card p-3.5 shadow-sm">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Expected Delivery</span>
+                  <div className="mt-1 text-sm font-semibold text-foreground">{formatDate(detailPO.expectedDelivery)}</div>
+                </div>
+              </div>
+
+              {/* Order Metadata Grid */}
+              <div className="rounded-2xl border border-border/60 bg-secondary/30 p-4">
+                <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">Order Information</h3>
+                <dl className="grid gap-3 sm:grid-cols-2 text-sm">
+                  <div className="flex items-center justify-between rounded-lg bg-background/80 p-2.5 px-3 border border-border/40">
+                    <dt className="text-muted-foreground font-medium">Department</dt>
+                    <dd className="font-semibold text-foreground">{detailPO.department || 'Procurement'}</dd>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg bg-background/80 p-2.5 px-3 border border-border/40">
+                    <dt className="text-muted-foreground font-medium">Created By</dt>
+                    <dd className="font-semibold text-foreground">{detailPO.createdBy}</dd>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg bg-background/80 p-2.5 px-3 border border-border/40">
+                    <dt className="text-muted-foreground font-medium">Order Date</dt>
+                    <dd className="font-semibold text-foreground">{formatDate(detailPO.createdAt)}</dd>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg bg-background/80 p-2.5 px-3 border border-border/40">
+                    <dt className="text-muted-foreground font-medium">RFQ Reference</dt>
+                    <dd className="font-semibold text-foreground">{detailPO.rfqNumber || 'Direct PO'}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              {/* Order Status Progress Tracker */}
+              {detailPO.status === 'CANCELLED' ? (
+                <div className="flex items-center gap-2.5 rounded-xl border border-destructive/20 bg-destructive/10 p-3.5 text-sm font-medium text-destructive">
+                  <XCircle className="size-5 shrink-0" />
+                  <span>This purchase order has been cancelled and is no longer active.</span>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-border/60 bg-card p-4">
+                  <h3 className="mb-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Order Lifecycle Progress</h3>
+                  <ol className="grid grid-cols-5 gap-2" aria-label="Order progress">
+                    {PROGRESS_STEPS.map((step, index) => {
+                      const done = index <= PROGRESS_STEPS.indexOf(detailPO.status);
+                      const isCurrent = detailPO.status === step;
+                      return (
+                        <li
+                          key={step}
+                          className="relative flex min-w-0 flex-col items-center text-center before:absolute before:left-[calc(50%+14px)] before:right-[calc(-50%+14px)] before:top-3.5 before:h-0.5 before:bg-border last:before:hidden"
+                        >
+                          <span
+                            className={cn(
+                              'relative z-10 grid size-7 place-items-center rounded-full border text-xs font-bold transition-all',
+                              done
+                                ? 'border-primary bg-primary text-primary-foreground shadow-sm shadow-primary/25'
+                                : 'border-border bg-muted/50 text-muted-foreground',
+                              isCurrent && 'ring-4 ring-primary/20'
+                            )}
+                          >
+                            {done ? <CheckCircle2 className="size-4" /> : index + 1}
+                          </span>
+                          <span className={cn(
+                            'mt-2 text-[11px] font-semibold sm:block',
+                            isCurrent ? 'text-primary font-bold' : done ? 'text-foreground' : 'text-muted-foreground'
+                          )}>
+                            {STATUS_CONFIG[step].label}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter className="border-t border-border/60 bg-muted/20 p-4 px-6">
+              <Button variant="outline" onClick={() => setDetailPO(null)}>
+                Close
+              </Button>
               <Button onClick={() => downloadPurchaseOrderAsPdf(detailPO, formatAmount, companyDefaultCurrency)}>
-                <Download /> Download PDF
+                <Download className="size-4" /> Download PDF Document
               </Button>
             </DialogFooter>
           </DialogContent>

@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback, useEffect, Fragment } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import type { RFQStatus } from '../../types';
@@ -12,12 +12,31 @@ import {
   X, CalendarDays, Building2, Tag, Banknote, ClipboardList, Users,
   Package, FileText, Minus, Maximize2, Minimize2, ChevronUp,
   Trophy, Eye, ArrowRightLeft, Shield, ShieldCheck, TrendingUp, CheckCircle2,
-  XCircle, Undo2, Clock,
+  XCircle, Undo2, Clock, ArrowLeft, Send, ChevronRight, PenLine,
 } from 'lucide-react';
 import { useCurrency, CurrencySelector, CurrencyBadge, DEFAULT_CURRENCY } from '../../components/shared/CurrencyMaster';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import ViewPaymentPlanModal from '../vendor/ViewPaymentPlanModal';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Card } from '../../components/ui/card';
+import { cn } from '../../lib/utils';
 import '../../pages/rfq/RFQPage.css';
+
+function getStatusTone(status: RFQStatus): 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info' {
+  switch (status) {
+    case 'DRAFT': return 'neutral';
+    case 'PENDING_APPROVAL': return 'warning';
+    case 'APPROVED':
+    case 'SENT':
+    case 'IN_PROGRESS':
+    case 'CLOSED': return 'success';
+    case 'CANCELLED':
+    case 'REJECTED': return 'danger';
+    default: return 'neutral';
+  }
+}
+
 
 type ModalState = 'open' | 'expanded' | 'minimized';
 
@@ -158,6 +177,7 @@ const VENDOR_BAR_COLORS = ['#0a6ed1', '#16a34a', '#7c3aed', '#ca8a04', '#0891b2'
 export interface RFQDetailModalProps {
   rfq: RFQTableRow | null;
   onClose: () => void;
+  variant?: 'modal' | 'page';
   loading?: boolean;
   enableSend?: boolean;
   onSend?: () => void | Promise<void>;
@@ -173,6 +193,7 @@ export interface RFQDetailModalProps {
 export default function RFQDetailModal({
   rfq,
   onClose,
+  variant = 'modal',
   loading = false,
   enableSend = false,
   onSend,
@@ -545,9 +566,10 @@ export default function RFQDetailModal({
   const formatDate = (d: string) =>
     d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
+  const isPage = variant === 'page';
   const isOpen = !!rfq && modalState === 'open';
   const isExpanded = !!rfq && modalState === 'expanded';
-  const isMinimized = !!rfq && modalState === 'minimized';
+  const isMinimized = !isPage && !!rfq && modalState === 'minimized';
 
   const { formatAmount, convert, companyDefaultCurrency } = useCurrency();
   const activeViewDisplayCurrency = viewDisplayCurrency || companyDefaultCurrency || DEFAULT_CURRENCY;
@@ -561,13 +583,564 @@ export default function RFQDetailModal({
     }
   };
 
-  useBodyScrollLock(!!rfq);
+  useBodyScrollLock(!isPage && !!rfq);
 
   if (!rfq) return null;
 
+  if (isPage) {
+    return (
+      <div className="w-full flex flex-col gap-6">
+        {/* ── 1. RFQ PAGE HEADER ── */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between border-b border-border/70 pb-5">
+          <div className="flex items-start gap-3 min-w-0">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={onClose}
+              title="Back to RFQs"
+              aria-label="Back to RFQs"
+              className="shrink-0 mt-0.5 size-9 rounded-lg"
+            >
+              <ArrowLeft className="size-4" />
+            </Button>
+
+            <div className="flex flex-col gap-2 min-w-0">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h1 className="text-2xl font-bold tracking-tight text-foreground">{rfq.rfqNumber}</h1>
+                <Badge tone={getStatusTone(rfq.status)}>
+                  {STATUS_LABELS[rfq.status] || rfq.status}
+                </Badge>
+                {rfq.priority && (
+                  <Badge tone={rfq.priority === 'Critical' || rfq.priority === 'High' ? 'danger' : rfq.priority === 'Medium' ? 'warning' : 'neutral'}>
+                    <Tag className="size-3 mr-1" />
+                    {rfq.priority}
+                  </Badge>
+                )}
+                <Badge variant="secondary">
+                  {rfq.rfqType === 'TENDER' ? 'Tender' : 'RFQ'}
+                </Badge>
+                {rfq.department && (
+                  <Badge variant="outline">
+                    <Building2 className="size-3 mr-1 text-muted-foreground" />
+                    {rfq.department}
+                  </Badge>
+                )}
+              </div>
+              {rfq.title && (
+                <p className="text-sm font-medium text-muted-foreground line-clamp-1">{rfq.title}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
+            <div className="flex items-center gap-1.5 bg-secondary/50 rounded-lg px-2.5 py-1 border border-border/60">
+              <ArrowRightLeft className="size-3.5 text-muted-foreground" />
+              <CurrencySelector
+                value={activeViewDisplayCurrency}
+                onChange={setViewDisplayCurrency}
+                size="sm"
+              />
+              {viewDisplayCurrency && (
+                <button
+                  type="button"
+                  className="text-muted-foreground hover:text-foreground p-1 transition-colors"
+                  onClick={() => setViewDisplayCurrency('')}
+                  title="Reset to default currency"
+                >
+                  <X className="size-3" />
+                </button>
+              )}
+            </div>
+
+            {(rfq.status === 'DRAFT' || rfq.status === 'APPROVED') && onSend && (
+              <Button onClick={onSend} loading={sending}>
+                <Send className="size-4 mr-1.5" /> Send to Vendors
+              </Button>
+            )}
+
+            {enableSend && (rfq.status === 'DRAFT' || rfq.status === 'RETURNED' || (rfq.status === 'PENDING_APPROVAL' && String((rfq as any).createdBy || (rfq as any).creatorId || '') === String(user?.id || (user as any)?._id || ''))) && (
+              <Button variant="outline" onClick={() => navigate(`/rfq/edit/${rfq.id}`)}>
+                <PenLine className="size-4 mr-1.5" /> {rfq.status === 'RETURNED' ? 'Edit & Resubmit RFQ' : rfq.status === 'DRAFT' ? 'Edit Draft' : 'Edit RFQ'}
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* ── MESSAGES / NOTIFICATIONS ── */}
+        {sendSuccess && (
+          <MessageStrip type="success" onClose={onDismissSendSuccess} autoHideMs={4000}>
+            {sendSuccess}
+          </MessageStrip>
+        )}
+        {sendError && (
+          <MessageStrip type="error" onClose={onDismissSendError} autoHideMs={5000}>
+            {sendError}
+          </MessageStrip>
+        )}
+        {approvalActionSuccess && (
+          <MessageStrip type="success" onClose={() => setApprovalActionSuccess(null)} autoHideMs={4000}>
+            {approvalActionSuccess}
+          </MessageStrip>
+        )}
+        {approvalActionError && (
+          <MessageStrip type="error" onClose={() => setApprovalActionError(null)} autoHideMs={5000}>
+            {approvalActionError}
+          </MessageStrip>
+        )}
+
+        {/* ── 2. PENDING APPROVAL INTERACTIVE CARD (If PENDING_APPROVAL) ── */}
+        {rfq.status === 'PENDING_APPROVAL' && pendingApproval && (
+          <Card className="p-4 border-amber-500/30 bg-amber-500/[0.04]">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="grid size-9 place-items-center rounded-lg bg-amber-500/10 text-amber-600">
+                  <Clock className="size-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-foreground">Action Required: Internal Approval</h4>
+                  <p className="text-xs text-muted-foreground">
+                    This RFQ is pending Level {pendingApproval.levelNumber || 1} approval.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => setShowCommentBox(showCommentBox === 'return' ? null : 'return')}>
+                  <Undo2 className="size-3.5 mr-1" /> Return
+                </Button>
+                <Button variant="destructive" size="sm" onClick={() => setShowCommentBox(showCommentBox === 'reject' ? null : 'reject')}>
+                  <XCircle className="size-3.5 mr-1" /> Reject
+                </Button>
+                <Button size="sm" loading={approvalActionLoading} onClick={handleApproveRFQ}>
+                  <CheckCircle2 className="size-3.5 mr-1" /> Approve
+                </Button>
+              </div>
+            </div>
+            {showCommentBox && (
+              <div className="mt-3 border-t border-amber-500/20 pt-3">
+                <textarea
+                  className="w-full rounded-md border border-input bg-card p-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                  rows={2}
+                  placeholder={showCommentBox === 'reject' ? 'Enter reason for rejection...' : 'Enter reason for returning RFQ...'}
+                  value={approvalComment}
+                  onChange={(e) => setApprovalComment(e.target.value)}
+                />
+                <div className="mt-2 flex justify-end gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setShowCommentBox(null)}>Cancel</Button>
+                  <Button
+                    size="sm"
+                    variant={showCommentBox === 'reject' ? 'destructive' : 'default'}
+                    loading={approvalActionLoading}
+                    onClick={showCommentBox === 'reject' ? handleRejectRFQ : handleReturnRFQ}
+                  >
+                    Submit {showCommentBox === 'reject' ? 'Rejection' : 'Return'}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Card>
+        )}
+
+        {/* ── 3. COMPACT RFQ SUMMARY / METADATA CONTAINER ── */}
+        <Card className="p-4 sm:p-5">
+          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div className="flex flex-col gap-1">
+              <dt className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                <CalendarDays className="size-3.5 text-muted-foreground/70" />
+                Closing Date
+              </dt>
+              <dd className="text-sm font-semibold text-foreground">
+                {formatDate(rfq.closingDate)}
+              </dd>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <dt className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                <Banknote className="size-3.5 text-muted-foreground/70" />
+                Currency
+              </dt>
+              <dd className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                <CurrencyBadge currency={activeViewDisplayCurrency} size="sm" />
+                <span>{activeViewDisplayCurrency}</span>
+              </dd>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <dt className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                <CalendarDays className="size-3.5 text-muted-foreground/70" />
+                Created On
+              </dt>
+              <dd className="text-sm font-semibold text-foreground">
+                {formatDate(rfq.createdAt)}
+              </dd>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <dt className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                <Users className="size-3.5 text-muted-foreground/70" />
+                Created By
+              </dt>
+              <dd className="text-sm font-semibold text-foreground truncate">
+                {rfq.creator || '—'}
+              </dd>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <dt className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                <Package className="size-3.5 text-muted-foreground/70" />
+                Total Items
+              </dt>
+              <dd className="text-sm font-semibold text-foreground tabular-nums">
+                {rfq.itemCount}
+              </dd>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <dt className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                <Users className="size-3.5 text-muted-foreground/70" />
+                Vendors Invited
+              </dt>
+              <dd className="text-sm font-semibold text-foreground tabular-nums">
+                {rfq.vendorCount}
+              </dd>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <dt className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                <FileText className="size-3.5 text-muted-foreground/70" />
+                Quotations Received
+              </dt>
+              <dd className="text-sm font-semibold text-foreground tabular-nums">
+                {rfq.quotationCount}
+              </dd>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <dt className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                <Banknote className="size-3.5 text-muted-foreground/70" />
+                Total Estimate
+              </dt>
+              <dd className="text-sm font-semibold text-foreground">
+                {rfq.totalEstimate || '—'}
+              </dd>
+            </div>
+          </dl>
+        </Card>
+
+        {/* ── 4. INTEGRATED TABS BAR & CONTENT ── */}
+        <div className="rounded-xl border border-border/70 bg-card overflow-hidden">
+          <div className="flex items-center gap-1 border-b border-border/70 bg-secondary/30 px-3 pt-2 overflow-x-auto scrollbar-none">
+            {[
+              { key: 'info', label: 'Details', icon: FileText, count: null },
+              { key: 'items', label: 'Items', icon: ClipboardList, count: rfq.lineItems.length },
+              { key: 'vendors', label: 'Vendors', icon: Users, count: rfq.vendors.length },
+              { key: 'quotations', label: 'Quotations', icon: FileText, count: rfq.quotationCount, highlight: rfq.quotationCount > 0 },
+              { key: 'approvals', label: 'Approvals', icon: ShieldCheck, count: approvalChain?.totalLevels ?? null },
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActiveTab(tab.key as any)}
+                  className={cn(
+                    'flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider transition-colors relative whitespace-nowrap',
+                    isActive
+                      ? 'border-primary text-primary bg-card rounded-t-lg'
+                      : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/40 rounded-t-lg'
+                  )}
+                >
+                  <Icon className="size-3.5" />
+                  <span>{tab.label}</span>
+                  {tab.count !== null && (
+                    <span
+                      className={cn(
+                        'ml-1 rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums',
+                        isActive
+                          ? 'bg-primary/10 text-primary'
+                          : tab.highlight
+                          ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400'
+                          : 'bg-muted text-muted-foreground'
+                      )}
+                    >
+                      {tab.count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* ── 5. ACTIVE TAB CONTENT SECTION ── */}
+          <div className="p-4 sm:p-6">
+            {/* Details Tab */}
+            {activeTab === 'info' && (
+              <div className="flex flex-col gap-6">
+                {/* Description & Scope */}
+                {rfq.description ? (
+                  <div className="flex flex-col gap-2">
+                    <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <FileText className="size-4 text-primary" />
+                      Description & Scope
+                    </h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed bg-secondary/20 rounded-xl p-4 border border-border/50 whitespace-pre-line">
+                      {rfq.description}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground italic py-4">
+                    No additional description provided for this request.
+                  </div>
+                )}
+
+                {/* Bid Security Section */}
+                {rfq.bidSecurityRequired && (
+                  <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-secondary/10 p-4">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <Shield className="size-4 text-primary" />
+                      Bid Security Requirements
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                      <div>
+                        <span className="text-muted-foreground block">Type</span>
+                        <strong className="text-sm font-medium text-foreground">Bid Bond</strong>
+                      </div>
+                      {rfq.bidSecurityValueType === 'FIXED_AMOUNT' && rfq.bidSecurityValue != null && (
+                        <div>
+                          <span className="text-muted-foreground block">Required Value</span>
+                          <strong className="text-sm font-medium text-foreground">
+                            {rfq.bidSecurityCurrency || 'KES'} {Number(rfq.bidSecurityValue).toLocaleString('en-IN')}
+                          </strong>
+                        </div>
+                      )}
+                      {rfq.bidSecurityValueType === 'PERCENTAGE' && rfq.bidSecurityValue != null && (
+                        <div>
+                          <span className="text-muted-foreground block">Required Value</span>
+                          <strong className="text-sm font-medium text-foreground">
+                            {Number(rfq.bidSecurityValue)}% of Bid Value
+                          </strong>
+                        </div>
+                      )}
+                      {rfq.bidSecurityValidityValue != null && (
+                        <div>
+                          <span className="text-muted-foreground block">Required Validity</span>
+                          <strong className="text-sm font-medium text-foreground">
+                            {rfq.bidSecurityValidityValue} {rfq.bidSecurityValidityUnit === 'DAYS' ? 'Days' : ''}
+                          </strong>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Items Tab */}
+            {activeTab === 'items' && (
+              <div className="flex flex-col gap-4">
+                <div className="overflow-x-auto rounded-xl border border-border/70">
+                  <table className="w-full text-left text-sm">
+                    <thead className="border-b border-border/70 bg-secondary/55 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                      <tr>
+                        {visibleItemColumns.map((col) => (
+                          <th
+                            key={col.key}
+                            className={cn(
+                              'px-4 py-3',
+                              col.align === 'right' && 'text-right',
+                              col.align === 'center' && 'text-center'
+                            )}
+                            style={{ width: ITEM_COL_WIDTHS[col.key] || 'auto' }}
+                          >
+                            {col.renderHeader ? col.renderHeader() : col.label}
+                          </th>
+                        ))}
+                        <th className="w-10 px-2 py-3 text-center">
+                          <div className="relative">
+                            <button
+                              ref={itemColBtnRef}
+                              type="button"
+                              className="p-1 rounded-md hover:bg-accent text-muted-foreground"
+                              onClick={() => setShowItemColPanel((v) => !v)}
+                              title="Customize columns"
+                            >
+                              <span className="flex gap-0.5"><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /></span>
+                            </button>
+                            {showItemColPanel && (
+                              <ColumnCustomizer
+                                columnOrder={itemColOrder}
+                                visibleKeys={itemVisibleKeys}
+                                allColumns={ALL_ITEM_COLUMNS}
+                                onToggle={handleToggleItemColumn}
+                                onReorder={setItemColOrder}
+                                onReset={handleResetItemColumns}
+                                onClose={() => setShowItemColPanel(false)}
+                                anchorRef={itemColBtnRef}
+                              />
+                            )}
+                          </div>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/60">
+                      {rfq.lineItems.map((item, idx) => (
+                        <tr key={item.id} className="hover:bg-accent/30 transition-colors">
+                          {visibleItemColumns.map((col) => (
+                            <td
+                              key={col.key}
+                              className={cn(
+                                'px-4 py-3.5',
+                                col.align === 'right' && 'text-right',
+                                col.align === 'center' && 'text-center'
+                              )}
+                            >
+                              {col.renderCell(item, idx, formatDate)}
+                            </td>
+                          ))}
+                          <td />
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Vendors Tab */}
+            {activeTab === 'vendors' && (
+              <div className="flex flex-col gap-3">
+                {rfq.vendors.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {rfq.vendors.map((v) => (
+                      <div key={v.id} className="flex items-center gap-3 p-3.5 rounded-xl border border-border/70 bg-card hover:border-primary/30 transition-colors">
+                        <span className={`rfq-modal__vendor-avatar rfq-modal__vendor-avatar--${v.avatarMod}`}>
+                          {v.initials}
+                        </span>
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <span className="font-semibold text-sm text-foreground truncate">{v.name}</span>
+                          <span className="text-xs text-muted-foreground truncate">{v.email}</span>
+                        </div>
+                        {(v.score ?? evalData?.suppliers.find(s => s.vendorName === v.name)?.finalScore) != null && (
+                          <Badge tone={v.score >= 80 ? 'success' : v.score >= 60 ? 'warning' : 'danger'}>
+                            Score: {v.score ?? evalData?.suppliers.find(s => s.vendorName === v.name)?.finalScore}%
+                          </Badge>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-8 text-center rounded-xl border border-dashed border-border/80 text-muted-foreground">
+                    <Users className="size-8 mb-2 opacity-50" />
+                    <p className="text-sm font-medium">No vendors invited yet.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Quotations Tab */}
+            {activeTab === 'quotations' && (
+              <div className="flex flex-col gap-4">
+                {(rfq.quotations?.length ?? 0) > 0 ? (
+                  <div className="flex flex-col gap-3">
+                    {rfq.quotations?.map((q, rankIdx) => (
+                      <div key={q.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-border/70 bg-card hover:border-primary/30 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <span className="grid size-7 place-items-center rounded-full bg-secondary text-xs font-bold text-foreground">
+                            {rankIdx === 0 ? <Trophy className="size-3.5 text-amber-500" /> : `#${rankIdx + 1}`}
+                          </span>
+                          <div>
+                            <div className="font-semibold text-sm text-foreground">{q.vendorName}</div>
+                            <div className="text-xs text-muted-foreground">{q.vendorEmail}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <div className="text-base font-bold text-foreground">
+                              {formatAmount(convert(q.totalPrice, q.currency || rfq.currency, activeViewDisplayCurrency), activeViewDisplayCurrency)}
+                            </div>
+                            <div className="text-xs text-muted-foreground">{q.leadTimeDays ? `${q.leadTimeDays} days lead` : 'Submitted'}</div>
+                          </div>
+                          <Badge tone={q.status === 'ACCEPTED' ? 'success' : q.status === 'REJECTED' ? 'danger' : 'neutral'}>
+                            {QUOT_STATUS_LABELS[q.status] || q.status}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="pt-2">
+                      <button type="button" className="text-xs font-semibold text-primary hover:underline flex items-center gap-1" onClick={handleCompare}>
+                        Compare all suppliers on Quotations page <ChevronRight className="size-3" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-8 text-center rounded-xl border border-dashed border-border/80 text-muted-foreground">
+                    <FileText className="size-8 mb-2 opacity-50" />
+                    <p className="text-sm font-medium">No quotations received yet.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Approvals Tab */}
+            {activeTab === 'approvals' && (
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                    <ShieldCheck className="size-4 text-primary" /> Approval History & Audit Trail
+                  </h4>
+                  {approvalChain?.totalLevels != null && (
+                    <Badge variant="secondary">
+                      Level {approvalChain.currentLevel || 1} of {approvalChain.totalLevels}
+                    </Badge>
+                  )}
+                </div>
+
+                {approvalChainLoading ? (
+                  <div className="text-xs text-muted-foreground py-6 text-center">Loading approval chain...</div>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {((approvalChain?.history?.length ?? 0) > 0 ? approvalChain?.history : approvalChain?.levels || []).map((item: any, idx: number) => (
+                      <div key={item.id || idx} className="p-3.5 rounded-xl border border-border/70 bg-card flex flex-col gap-1.5 text-xs">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Badge tone={item.status === 'APPROVED' ? 'success' : item.status === 'REJECTED' ? 'danger' : 'warning'}>
+                              Level {item.levelNumber} — {item.status}
+                            </Badge>
+                            <span className="font-semibold text-foreground">{item.requiredRole}</span>
+                          </div>
+                          <span className="text-muted-foreground">{item.actionAt ? formatDate(item.actionAt) : '—'}</span>
+                        </div>
+                        <div className="text-muted-foreground">
+                          Action By: <strong className="text-foreground">{item.approverName || 'Pending'}</strong>
+                        </div>
+                        {item.comments && (
+                          <div className="mt-1 p-2 rounded bg-secondary/50 italic text-foreground">
+                            "{item.comments}"
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── View Payment Plan Modal ── */}
+        {viewPlanQuotation && (
+          <ViewPaymentPlanModal
+            plan={viewPlanQuotation}
+            onClose={() => setViewPlanQuotation(null)}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <>
-      {(isOpen || isExpanded) && (
+      {!isPage && (isOpen || isExpanded) && (
         <div
           className={`rfq-modal-backdrop ${isExpanded ? 'rfq-modal-backdrop--expanded' : ''}`}
           onClick={onClose}
@@ -577,6 +1150,8 @@ export default function RFQDetailModal({
       <div
         className={[
           'rfq-modal',
+          isPage ? 'rfq-modal--page' : '',
+          isPage ? 'rfq-modal--detail-page' : '',
           isOpen ? 'rfq-modal--open' : '',
           isExpanded ? 'rfq-modal--expanded' : '',
           isMinimized ? 'rfq-modal--minimized' : '',
@@ -591,7 +1166,10 @@ export default function RFQDetailModal({
           style={isMinimized ? { cursor: 'pointer' } : undefined}
         >
           <div className="rfq-modal__header-left">
-            <span className="rfq-modal__rfq-num">{rfq.title}</span>
+            <div className="rfq-modal__page-heading">
+              <span className="rfq-modal__rfq-num">{isPage ? rfq.rfqNumber : rfq.title}</span>
+              {isPage && <span className="rfq-modal__page-title">{rfq.title}</span>}
+            </div>
             {!isMinimized && (
               <span className={`rfq-badge rfq-badge--${rfq.status}`}>
                 <span className="rfq-badge__dot" />
@@ -632,15 +1210,17 @@ export default function RFQDetailModal({
           )}
 
           <div className="rfq-modal__window-controls" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              className="rfq-modal__wc-btn"
-              title={isMinimized ? 'Restore' : 'Minimize'}
-              onClick={() => setModalState(isMinimized ? 'open' : 'minimized')}
-            >
-              {isMinimized ? <ChevronUp size={14} /> : <Minus size={14} />}
-            </button>
-            {!isMinimized && (
+            {!isPage && (
+              <button
+                type="button"
+                className="rfq-modal__wc-btn"
+                title={isMinimized ? 'Restore' : 'Minimize'}
+                onClick={() => setModalState(isMinimized ? 'open' : 'minimized')}
+              >
+                {isMinimized ? <ChevronUp size={14} /> : <Minus size={14} />}
+              </button>
+            )}
+            {!isPage && !isMinimized && (
               <button
                 type="button"
                 className="rfq-modal__wc-btn"
@@ -650,10 +1230,16 @@ export default function RFQDetailModal({
                 {isExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
               </button>
             )}
-            <div className="rfq-modal__wc-divider" />
-            <button type="button" className="rfq-modal__wc-btn rfq-modal__wc-btn--close" title="Close" onClick={onClose}>
-              <X size={14} />
-            </button>
+            {!isPage && <div className="rfq-modal__wc-divider" />}
+            {isPage ? (
+              <button type="button" className="rfq-modal__page-back" onClick={onClose}>
+                <ArrowLeft size={16} /> Back to RFQs
+              </button>
+            ) : (
+              <button type="button" className="rfq-modal__wc-btn rfq-modal__wc-btn--close" title="Close" onClick={onClose}>
+                <X size={14} />
+              </button>
+            )}
           </div>
         </div>
 
@@ -673,6 +1259,37 @@ export default function RFQDetailModal({
                 </span>
               </div>
             </div>
+
+            {isPage && (
+              <section className="rfq-page__overview" aria-labelledby="rfq-overview-title">
+                <div className="rfq-page__section-heading">
+                  <div>
+                    <h2 id="rfq-overview-title">RFQ Overview</h2>
+                    <p>Key information and current RFQ activity at a glance.</p>
+                  </div>
+                </div>
+                <div className="rfq-page__overview-grid">
+                  {[
+                    { icon: <CalendarDays size={15} />, label: 'Closing Date', value: formatDate(rfq.closingDate) },
+                    { icon: <Banknote size={15} />, label: 'Currency', value: activeViewDisplayCurrency },
+                    { icon: <CalendarDays size={15} />, label: 'Created On', value: formatDate(rfq.createdAt) },
+                    { icon: <Users size={15} />, label: 'Created By', value: rfq.creator },
+                    { icon: <Package size={15} />, label: 'Total Items', value: String(rfq.itemCount) },
+                    { icon: <Users size={15} />, label: 'Vendors Invited', value: String(rfq.vendorCount) },
+                    { icon: <FileText size={15} />, label: 'Quotations Received', value: String(rfq.quotationCount) },
+                    { icon: <Banknote size={15} />, label: 'Total Estimate', value: rfq.totalEstimate },
+                  ].map((item) => (
+                    <div key={item.label} className="rfq-page__overview-card">
+                      <span className="rfq-page__overview-icon">{item.icon}</span>
+                      <div>
+                        <span className="rfq-page__overview-label">{item.label}</span>
+                        <strong className="rfq-page__overview-value">{item.value}</strong>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
 
             <div className="rfq-modal__tabs">
               {(['info', 'items', 'vendors', 'quotations', 'approvals'] as const).map((tab) => (
@@ -712,6 +1329,14 @@ export default function RFQDetailModal({
 
               {activeTab === 'info' && (
                 <div className="rfq-modal__info-panel">
+                  {isPage && (
+                    <div className="rfq-page__section-heading rfq-page__content-heading">
+                      <div>
+                        <h2><FileText size={17} /> RFQ Details</h2>
+                        <p>Review the request context, commercial requirements, and estimate.</p>
+                      </div>
+                    </div>
+                  )}
                   <div className="rfq-modal__info-grid">
                     {[
                       { icon: <CalendarDays size={13} />, label: 'Closing Date', value: formatDate(rfq.closingDate) },
@@ -721,6 +1346,7 @@ export default function RFQDetailModal({
                       { icon: <Package size={13} />, label: 'Total Items', value: String(rfq.itemCount) },
                       { icon: <Users size={13} />, label: 'Vendors Invited', value: String(rfq.vendorCount) },
                       { icon: <FileText size={13} />, label: 'Quotations Received', value: String(rfq.quotationCount) },
+                      { icon: <Banknote size={13} />, label: 'Total Estimate', value: rfq.totalEstimate },
                     ].map((item) => (
                       <div key={item.label} className="rfq-modal__info-item">
                         <span className="rfq-modal__info-label">{item.icon} {item.label}</span>
@@ -1150,7 +1776,7 @@ export default function RFQDetailModal({
                   {sendError}
                 </MessageStrip>
               )}
-              <button type="button" className="rfq-modal__btn rfq-modal__btn--secondary" onClick={onClose}>Close</button>
+              <button type="button" className="rfq-modal__btn rfq-modal__btn--secondary" onClick={onClose}>{isPage ? 'Back to RFQs' : 'Close'}</button>
               {enableSend && (rfq.status === 'DRAFT' || rfq.status === 'RETURNED' || (rfq.status === 'PENDING_APPROVAL' && String((rfq as any).createdBy || (rfq as any).creatorId || '') === String(user?.id || (user as any)?._id || ''))) && (
                 <button
                   type="button"

@@ -365,23 +365,31 @@ export default function GRNListPage() {
     <PageFrame>
       <PageLead
         title="My Invoices & Dispatches 📦"
-        description="View all purchase orders, generate dispatch notes, and manage received delivery notes."
-      />
+        description="View all approved orders, generate dispatch notes, and manage received delivery notes."
+      >
+        <div className="flex items-center gap-2">
+          {canCreateGRN && (
+            <Button onClick={() => navigate('/grn/create')} className="gap-2 shadow-sm">
+              <PackageCheck className="size-4" /> Create GRN / Dispatch Note
+            </Button>
+          )}
+        </div>
+      </PageLead>
 
-      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <MetricCard
           role="button"
           tabIndex={0}
           aria-pressed={kpiFilter === 'ALL'}
           className={cn(
-            'cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-            kpiFilter === 'ALL' && 'border-primary/40 ring-2 ring-primary/10'
+            'cursor-pointer transition-all duration-200 hover:shadow-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+            kpiFilter === 'ALL' && 'border-primary/40 ring-2 ring-primary/10 bg-primary/[0.02]'
           )}
           onClick={() => setKpiFilter('ALL')}
           icon={ShoppingCart}
           label="Total Approved Orders"
           value={kpis.totalOrders}
-          detail="Click to view all approved orders"
+          detail="Click to view all approved purchase orders"
           tone="primary"
         />
         <MetricCard
@@ -389,14 +397,14 @@ export default function GRNListPage() {
           tabIndex={0}
           aria-pressed={kpiFilter === 'PENDING'}
           className={cn(
-            'cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-            kpiFilter === 'PENDING' && 'border-amber-500/40 ring-2 ring-amber-500/10'
+            'cursor-pointer transition-all duration-200 hover:shadow-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+            kpiFilter === 'PENDING' && 'border-amber-500/40 ring-2 ring-amber-500/10 bg-amber-500/[0.02]'
           )}
           onClick={() => setKpiFilter('PENDING')}
           icon={Truck}
           label="Orders Pending Dispatch"
           value={kpis.pendingGrns}
-          detail="Click to view orders pending dispatch note"
+          detail="Click to view orders awaiting dispatch note"
           tone="warning"
         />
         <MetricCard
@@ -404,28 +412,29 @@ export default function GRNListPage() {
           tabIndex={0}
           aria-pressed={kpiFilter === 'GRN'}
           className={cn(
-            'cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-            kpiFilter === 'GRN' && 'border-emerald-500/40 ring-2 ring-emerald-500/10'
+            'cursor-pointer transition-all duration-200 hover:shadow-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+            kpiFilter === 'GRN' && 'border-emerald-500/40 ring-2 ring-emerald-500/10 bg-emerald-500/[0.02]'
           )}
           onClick={() => setKpiFilter('GRN')}
           icon={PackageCheck}
           label="Recorded Dispatches"
           value={kpis.recordedGrns}
-          detail="Click to view recorded dispatch notes"
+          detail="Click to view recorded dispatch notes & GRNs"
           tone="success"
         />
       </div>
 
-      <Card className="mb-4 p-3 sm:p-4">
-        <div className="relative w-full">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      {/* Search & Filter Toolbar matching RFQ */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full max-w-xl">
+          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
-            className="h-10 pl-10 pr-10"
+            className="h-11 rounded-xl pl-10 pr-10"
             type="text"
             placeholder={
               kpiFilter === 'GRN'
-                ? 'Search across recorded dispatch notes by dispatch note number, PO number, or supplier...'
-                : 'Search across all approved orders by PO number or supplier name...'
+                ? 'Search recorded dispatch notes by GRN #, PO #, or supplier name...'
+                : 'Search approved orders by PO # or supplier name...'
             }
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -434,18 +443,19 @@ export default function GRNListPage() {
             <button
               type="button"
               onClick={() => setSearch('')}
-              className="absolute right-1.5 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-lg text-muted-foreground hover:bg-accent"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
-              <X className="size-4" />
+              <X size={15} />
             </button>
           )}
         </div>
-      </Card>
+      </div>
 
       {kpiFilter !== 'GRN' ? (
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden border border-border/80 shadow-sm">
           {poLoading ? (
-            <div className="flex min-h-[300px] items-center justify-center text-sm text-muted-foreground">
+            <div className="flex min-h-[300px] flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+              <div className="size-6 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
               Loading Purchase Orders…
             </div>
           ) : filteredPOs.length === 0 ? (
@@ -458,13 +468,14 @@ export default function GRNListPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[800px] border-collapse text-left text-sm">
-                <thead className="border-b border-border/70 bg-secondary/55 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                <thead className="border-b border-border/70 bg-muted/40 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   <tr>
-                    <th className="px-4 py-3">PO Number</th>
-                    <th className="px-4 py-3">Supplier / Vendor</th>
-                    <th className="px-4 py-3 font-right">Total Value</th>
-                    <th className="px-4 py-3">Order Date</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
+                    <th className="px-5 py-3.5">PO Number</th>
+                    <th className="px-5 py-3.5">Supplier / Vendor</th>
+                    <th className="px-5 py-3.5 font-right">Total Value</th>
+                    <th className="px-5 py-3.5">Order Date</th>
+                    <th className="px-5 py-3.5 text-center">Status</th>
+                    <th className="px-5 py-3.5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
@@ -476,23 +487,36 @@ export default function GRNListPage() {
                         : typeof po?.vendor === 'string'
                         ? po.vendor
                         : 'Supplier';
-                    const statusStr = String(po?.status || 'APPROVED');
+                    const statusStr = String(po?.status || 'APPROVED').toUpperCase();
+                    const createdDate = new Date(po.createdAt || Date.now()).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
                     return (
-                      <tr key={String(po.id)} className="transition-colors hover:bg-accent/35">
-                        <td className="px-4 py-3.5 font-bold text-primary">{poNum}</td>
-                        <td className="px-4 py-3.5 font-medium">{vName}</td>
-                        <td className="px-4 py-3.5 font-semibold tabular-nums">{formatAmount(po.totalAmount, companyDefaultCurrency)}</td>
-                        <td className="px-4 py-3.5 text-xs text-muted-foreground">{new Date(po.createdAt || Date.now()).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
-                        <td className="px-4 py-3.5 text-right">
+                      <tr key={String(po.id)} className="transition-colors hover:bg-muted/30">
+                        <td className="px-5 py-4 font-bold text-primary">{poNum}</td>
+                        <td className="px-5 py-4 font-medium text-foreground">
+                          <div className="flex items-center gap-2.5">
+                            <div className="grid size-7 place-items-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                              {vName.slice(0, 2).toUpperCase()}
+                            </div>
+                            <span>{vName}</span>
+                          </div>
+                        </td>
+                        <td className="px-5 py-4 font-semibold tabular-nums text-foreground">{formatAmount(po.totalAmount, companyDefaultCurrency)}</td>
+                        <td className="px-5 py-4 text-xs text-muted-foreground">{createdDate}</td>
+                        <td className="px-5 py-4 text-center">
+                          <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 font-medium">
+                            {statusStr.replace(/_/g, ' ')}
+                          </Badge>
+                        </td>
+                        <td className="px-5 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
                             {(() => {
                               const poNumLower = String(po?.poNumber || '').toLowerCase();
                               const poIdLower = String(po?.id || '').toLowerCase();
-                              const statusUpper = String(po?.status || '').toUpperCase();
 
                               const isAlreadyInvoiced =
-                                statusUpper === 'INVOICED' ||
-                                statusUpper === 'CLOSED' ||
+                                statusStr === 'INVOICED' ||
+                                statusStr === 'CLOSED' ||
                                 (poNumLower && invoicedPoNumbers.has(poNumLower)) ||
                                 (poIdLower && invoicedPoNumbers.has(poIdLower)) ||
                                 allRecordedDispatches.some(
@@ -503,9 +527,9 @@ export default function GRNListPage() {
 
                               if (isAlreadyInvoiced) {
                                 return (
-                                  <Button variant="outline" size="sm" disabled className="gap-1.5 opacity-80">
+                                  <Badge variant="secondary" className="gap-1.5 py-1 px-2.5 text-xs font-medium text-muted-foreground">
                                     <CheckCircle2 className="size-3.5 text-emerald-500" /> Invoice Sent
-                                  </Button>
+                                  </Badge>
                                 );
                               }
 
@@ -513,11 +537,12 @@ export default function GRNListPage() {
                                 <Button
                                   variant="default"
                                   size="sm"
+                                  className="gap-1.5 shadow-xs"
                                   disabled={!canCreateInvoice}
                                   onClick={() => canCreateInvoice && navigate(`/vendor/create-invoice?poId=${po.id || po.poNumber}`)}
                                   title={!canCreateInvoice ? 'You do not have permission to create purchase invoices.' : undefined}
                                 >
-                                  <Receipt className="size-3.5" /> Generate Invoice
+                                  <Receipt className="size-3.5" /> Generate Invoice <ArrowRight className="size-3" />
                                 </Button>
                               );
                             })()}
@@ -532,9 +557,10 @@ export default function GRNListPage() {
           )}
         </Card>
       ) : (
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden border border-border/80 shadow-sm">
           {grnLoading ? (
-            <div className="flex min-h-[300px] items-center justify-center text-sm text-muted-foreground">
+            <div className="flex min-h-[300px] flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+              <div className="size-6 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
               Loading Dispatch Notes…
             </div>
           ) : filteredGRNs.length === 0 ? (
@@ -546,14 +572,14 @@ export default function GRNListPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[850px] border-collapse text-left text-sm">
-                <thead className="border-b border-border/70 bg-secondary/55 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                <thead className="border-b border-border/70 bg-muted/40 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   <tr>
-                    <th className="px-4 py-3">Dispatch Note Number</th>
-                    <th className="px-4 py-3">Linked PO Number</th>
-                    <th className="px-4 py-3">Supplier / Vendor</th>
-                    <th className="px-4 py-3">Received Date</th>
-                    <th className="px-4 py-3">Items Count</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
+                    <th className="px-5 py-3.5">Dispatch Note #</th>
+                    <th className="px-5 py-3.5">Linked PO #</th>
+                    <th className="px-5 py-3.5">Supplier / Vendor</th>
+                    <th className="px-5 py-3.5">Received Date</th>
+                    <th className="px-5 py-3.5">Items Count</th>
+                    <th className="px-5 py-3.5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
@@ -585,17 +611,22 @@ export default function GRNListPage() {
                         : 1;
 
                     return (
-                      <tr key={grn.id} className="transition-colors hover:bg-accent/35">
-                        <td className="px-4 py-3.5 font-bold text-primary">{grn.grnNumber}</td>
-                        <td className="px-4 py-3.5 font-medium">{grn.purchaseOrder?.poNumber || '—'}</td>
-                        <td className="px-4 py-3.5">{grn.purchaseOrder?.vendor?.name || 'Supplier'}</td>
-                        <td className="px-4 py-3.5 text-xs text-muted-foreground">{new Date(grn.receivedDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
-                        <td className="px-4 py-3.5">{itemsCount} line item(s)</td>
-                        <td className="px-4 py-3.5 text-right">
+                      <tr key={grn.id} className="transition-colors hover:bg-muted/30">
+                        <td className="px-5 py-4 font-bold text-primary">{grn.grnNumber}</td>
+                        <td className="px-5 py-4 font-medium">{grn.purchaseOrder?.poNumber || '—'}</td>
+                        <td className="px-5 py-4 font-medium text-foreground">{grn.purchaseOrder?.vendor?.name || 'Supplier'}</td>
+                        <td className="px-5 py-4 text-xs text-muted-foreground">{new Date(grn.receivedDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                        <td className="px-5 py-4">
+                          <Badge variant="outline" className="font-normal text-xs bg-secondary/50">
+                            {itemsCount} line item(s)
+                          </Badge>
+                        </td>
+                        <td className="px-5 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <Button
-                              variant="ghost"
+                              variant="outline"
                               size="sm"
+                              className="gap-1.5"
                               onClick={() => setSelectedGrn(grn)}
                             >
                               <Eye className="size-3.5" /> View Details
@@ -607,16 +638,17 @@ export default function GRNListPage() {
                               onClick={() => handleDeleteDispatch(grn)}
                               title="Delete Dispatch Note"
                             >
-                              <Trash2 className="size-3.5" /> Delete
+                              <Trash2 className="size-3.5" />
                             </Button>
                             {isInvoiced ? (
-                              <Button variant="outline" size="sm" disabled>
-                                <CheckCircle2 className="size-3.5" /> Invoice Sent
-                              </Button>
+                              <Badge variant="secondary" className="gap-1.5 py-1 px-2.5 text-xs font-medium text-muted-foreground">
+                                <CheckCircle2 className="size-3.5 text-emerald-500" /> Invoiced
+                              </Badge>
                             ) : (
                               <Button
                                 variant="default"
                                 size="sm"
+                                className="gap-1.5 shadow-xs"
                                 disabled={!canCreateInvoice}
                                 onClick={() => {
                                   if (!canCreateInvoice) return;
@@ -624,7 +656,7 @@ export default function GRNListPage() {
                                 }}
                                 title={!canCreateInvoice ? 'You do not have permission to create purchase invoices.' : undefined}
                               >
-                                <Receipt className="size-3.5" /> Generate Invoice <ArrowRight className="size-3" />
+                                <Receipt className="size-3.5" /> Generate Invoice
                               </Button>
                             )}
                           </div>

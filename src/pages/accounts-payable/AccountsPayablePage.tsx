@@ -425,19 +425,23 @@ export default function AccountsPayablePage() {
   const formatDate = (date: string) =>
     date ? new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
-  const cardProps = (filter: APStatus | 'ALL') => ({
-    role: 'button',
-    tabIndex: 0,
-    'aria-pressed': statusFilter === filter,
-    onClick: () => setStatusFilter((current) => (current === filter && filter !== 'ALL' ? 'ALL' : filter)),
-    onKeyDown: (event: React.KeyboardEvent) => {
-      if (event.key === 'Enter' || event.key === ' ') setStatusFilter(filter);
-    },
-    className: cn(
-      'cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-      statusFilter === filter && 'border-primary/40 ring-2 ring-primary/10'
-    ),
-  });
+  const cardProps = (filter: APStatus | 'ALL') => {
+    const isActive = statusFilter === filter;
+    return {
+      role: 'button',
+      tabIndex: 0,
+      'aria-pressed': isActive,
+      onClick: () => setStatusFilter((current) => (current === filter && filter !== 'ALL' ? 'ALL' : filter)),
+      onKeyDown: (event: React.KeyboardEvent) => {
+        if (event.key === 'Enter' || event.key === ' ') setStatusFilter(filter);
+      },
+      className: cn(
+        'cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-all duration-200',
+        isActive &&
+          'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
+      ),
+    };
+  };
 
   const actionTitle =
     actionModal?.action === 'approve'
@@ -488,44 +492,45 @@ export default function AccountsPayablePage() {
         </div>
       )}
 
-      <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard {...cardProps('ALL')} label="Total payable" value={formatAmount(summary.totalPayable, companyDefaultCurrency)} detail="Outstanding balance" icon={Wallet} />
         <MetricCard {...cardProps('OVERDUE')} label="Overdue" value={summary.overdue} detail="Past due date" icon={AlertTriangle} tone="danger" />
         <MetricCard {...cardProps('PENDING')} label="Pending" value={summary.pending} detail="Awaiting review" icon={Clock} tone="warning" />
         <MetricCard {...cardProps('APPROVED')} label="Paid / approved" value={summary.completed} detail="Completed this period" icon={CheckCircle2} tone="success" />
       </div>
 
-      <Card className="mb-4 p-3 sm:p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative w-full max-w-xl">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              className="h-10 pl-10 pr-10"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search invoice, vendor, or PO"
-              aria-label="Search invoices"
-            />
-            {search && (
-              <button
-                type="button"
-                onClick={() => setSearch('')}
-                className="absolute right-1.5 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-lg text-muted-foreground hover:bg-accent"
-              >
-                <X className="size-4" />
-              </button>
-            )}
-          </div>
+      {/* Search & Filter Toolbar */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full max-w-xl">
+          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="h-11 rounded-xl pl-10 pr-10"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search invoice, vendor, or PO"
+            aria-label="Search invoices"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              className="absolute right-2.5 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-muted-foreground hover:bg-accent"
+            >
+              <X className="size-4" />
+            </button>
+          )}
+        </div>
 
+        <div className="flex items-center gap-2.5 justify-end shrink-0 sm:ml-auto">
           <div className="relative">
             <Button
               ref={colBtnRef}
               variant="outline"
-              size="sm"
+              className="h-11 gap-2 rounded-xl px-4 border-input font-medium hover:bg-accent/50"
               onClick={() => setShowColPanel((v) => !v)}
               title="Customize columns"
             >
-              <SlidersHorizontal className="size-3.5" /> Columns
+              <SlidersHorizontal size={16} /> Columns
             </Button>
             {showColPanel && (
               <ColumnCustomizer
@@ -551,7 +556,7 @@ export default function AccountsPayablePage() {
             )}
           </div>
         </div>
-      </Card>
+      </div>
 
       {loading ? (
         <Card className="p-4">
@@ -582,10 +587,10 @@ export default function AccountsPayablePage() {
         />
       ) : (
         <>
-          <Card className="hidden overflow-hidden lg:block">
+          <Card className="hidden overflow-hidden border border-border/60 shadow-xs lg:block">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[980px] text-left text-sm">
-                <thead className="border-b border-border/70 bg-secondary/55 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                <thead className="border-b border-border/75 bg-muted/45 text-[12px] font-bold uppercase tracking-wide text-muted-foreground">
                   <tr>
                     {visibleColumns.map((col) => (
                       <th
@@ -613,7 +618,7 @@ export default function AccountsPayablePage() {
                           return (
                             <td key="vendorName" className="px-4 py-3.5">
                               <div className="flex items-center gap-2.5">
-                                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-[12px] font-semibold text-primary">
+                                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary ring-1 ring-primary/15">
                                   {invoice.vendorInitials}
                                 </span>
                                 <div>
@@ -851,68 +856,139 @@ export default function AccountsPayablePage() {
       {/* Detail Dialog */}
       <Dialog open={!!detailInvoice} onOpenChange={(open) => { if (!open) setDetailInvoice(null); }}>
         {detailInvoice && (
-          <DialogContent className="max-w-2xl">
-            <DialogHeader className="pr-10">
-              <div className="mb-1 flex items-center gap-2">
-                <DialogTitle>{detailInvoice.invoiceNumber}</DialogTitle>
+          <DialogContent className="max-w-xl p-6 sm:p-7">
+            <DialogHeader className="space-y-1 pr-8">
+              <div className="flex items-center gap-2.5">
+                <DialogTitle className="text-xl font-bold tracking-tight text-foreground">
+                  {detailInvoice.invoiceNumber}
+                </DialogTitle>
                 <StatusBadge status={detailInvoice.status} />
               </div>
-              <DialogDescription>
+              <DialogDescription className="text-sm font-medium text-muted-foreground">
                 {detailInvoice.vendorName} · {formatAmount(detailInvoice.amount, companyDefaultCurrency)}
               </DialogDescription>
             </DialogHeader>
 
-            <dl className="grid gap-2 sm:grid-cols-2">
-              {[
-                ['PO reference', detailInvoice.poNumber],
-                ['Department', detailInvoice.department],
-                ['Amount', formatAmount(detailInvoice.amount, companyDefaultCurrency)],
-                ['Paid', formatAmount(detailInvoice.paidAmount, companyDefaultCurrency)],
-                ['Balance', formatAmount(detailInvoice.amount - detailInvoice.paidAmount, companyDefaultCurrency)],
-                ['Payment terms', detailInvoice.paymentTerms],
-                ['Invoice date', formatDate(detailInvoice.invoiceDate)],
-                ['Due date', formatDate(detailInvoice.dueDate)],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-xl border border-border/65 bg-secondary/40 p-3">
-                  <dt className="text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{label}</dt>
-                  <dd className="mt-1 text-sm font-medium">{value}</dd>
+            <div className="mt-4 space-y-4">
+              <div className="border-t border-border/60 pt-4">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                  Invoice details
+                </h4>
+
+                <div className="divide-y divide-border/40 text-sm">
+                  {/* Row 1 */}
+                  <div className="grid grid-cols-1 gap-4 py-3 sm:grid-cols-2">
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        PO Reference
+                      </div>
+                      <div className="mt-1 font-semibold text-foreground">
+                        {detailInvoice.poNumber}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Department
+                      </div>
+                      <div className="mt-1 font-medium text-foreground">
+                        {detailInvoice.department}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Row 2 */}
+                  <div className="grid grid-cols-1 gap-4 py-3 sm:grid-cols-2">
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Amount
+                      </div>
+                      <div className="mt-1 text-base font-bold text-foreground">
+                        {formatAmount(detailInvoice.amount, companyDefaultCurrency)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Paid
+                      </div>
+                      <div className="mt-1 font-medium text-muted-foreground">
+                        {formatAmount(detailInvoice.paidAmount, companyDefaultCurrency)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Row 3 */}
+                  <div className="grid grid-cols-1 gap-4 py-3 sm:grid-cols-2">
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Balance
+                      </div>
+                      <div className="mt-1 font-bold text-foreground">
+                        {formatAmount(detailInvoice.amount - detailInvoice.paidAmount, companyDefaultCurrency)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Payment Terms
+                      </div>
+                      <div className="mt-1 font-medium text-foreground">
+                        {detailInvoice.paymentTerms}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Row 4 */}
+                  <div className="grid grid-cols-1 gap-4 py-3 sm:grid-cols-2">
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Invoice Date
+                      </div>
+                      <div className="mt-1 font-medium text-foreground">
+                        {formatDate(detailInvoice.invoiceDate)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Due Date
+                      </div>
+                      <div className="mt-1 font-medium text-foreground">
+                        {formatDate(detailInvoice.dueDate)}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              ))}
-            </dl>
-
-            {detailInvoice.comments && (
-              <div className="rounded-xl border border-border/65 p-4">
-                <div className="text-xs font-semibold text-muted-foreground">Comments</div>
-                <p className="mt-2 text-sm">{detailInvoice.comments}</p>
               </div>
-            )}
 
-            <DialogFooter>
-              <Button variant="secondary" onClick={() => setDetailInvoice(null)}>
-                Close
-              </Button>
-              {detailInvoice.status === 'PENDING' && detailInvoice.canAct && canApproveAP && (
-                <>
-                  <Button
-                    onClick={() => {
-                      setDetailInvoice(null);
-                      openAction(detailInvoice, 'approve');
-                    }}
-                  >
-                    <ThumbsUp /> Approve
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    onClick={() => {
-                      setDetailInvoice(null);
-                      openAction(detailInvoice, 'reject');
-                    }}
-                  >
-                    <ThumbsDown /> Reject
-                  </Button>
-                </>
+              {detailInvoice.comments && (
+                <div className="rounded-xl border border-border/60 bg-muted/30 p-3.5">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Comments
+                  </div>
+                  <p className="mt-1.5 text-sm text-foreground">{detailInvoice.comments}</p>
+                </div>
               )}
-            </DialogFooter>
+            </div>
+
+            {detailInvoice.status === 'PENDING' && detailInvoice.canAct && canApproveAP && (
+              <DialogFooter className="mt-6 border-t border-border/60 pt-4">
+                <Button
+                  onClick={() => {
+                    setDetailInvoice(null);
+                    openAction(detailInvoice, 'approve');
+                  }}
+                >
+                  <ThumbsUp /> Approve
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    setDetailInvoice(null);
+                    openAction(detailInvoice, 'reject');
+                  }}
+                >
+                  <ThumbsDown /> Reject
+                </Button>
+              </DialogFooter>
+            )}
           </DialogContent>
         )}
       </Dialog>
@@ -920,6 +996,7 @@ export default function AccountsPayablePage() {
       {/* Print Purchase Invoice Modal */}
       {printInvoice && (
         <PrintPurchaseInvoiceModal
+          data={printInvoice}
           invoice={printInvoice}
           onClose={() => setPrintInvoice(null)}
         />

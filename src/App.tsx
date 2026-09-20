@@ -23,6 +23,7 @@ const MyProfilePage = lazy(() => import("./pages/profile/MyProfilePage"));
 const DashboardPage = lazy(() => import("./pages/dashboard/DashboardPage"));
 const RFQPage = lazy(() => import("./pages/rfq/RFQPage"));
 const CreateRFQPage = lazy(() => import("./pages/rfq/CreateRFQPage"));
+const RFQViewPage = lazy(() => import("./pages/rfq/RFQViewPage"));
 const QuotationsPage = lazy(() => import("./pages/quotations/QuotationsPage"));
 const UsersPage = lazy(() => import("./pages/admin/UsersPage"));
 const RolesPermissionsPage = lazy(
@@ -184,6 +185,7 @@ export default function App() {
                           <Route path="/rfq" element={page(RFQPage)} />
                           <Route path="/rfq/create" element={page(CreateRFQPage)} />
                           <Route path="/rfq/edit/:id" element={page(CreateRFQPage)} />
+                          <Route path="/rfq/:id" element={page(RFQViewPage)} />
                           <Route path="/quotations" element={page(QuotationsPage)} />
                           <Route path="/admin/users" element={page(UsersPage)} />
                           <Route

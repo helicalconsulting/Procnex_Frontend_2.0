@@ -665,8 +665,10 @@ export default function ContractDetailPage() {
       <div className="ctr-detail__summary">
         <div className="ctr-detail__summary-top">
           <div className="ctr-detail__summary-left">
-            <h1 className="ctr-detail__summary-title">{contract.title}</h1>
-            <span className="ctr-detail__summary-number">{contract.contractNumber}</span>
+            <div className="ctr-detail__title-row">
+              <h1 className="ctr-detail__summary-title">{contract.title}</h1>
+              <span className="ctr-detail__summary-number">{contract.contractNumber}</span>
+            </div>
           </div>
           <div className="ctr-detail__summary-right">
             <span className={`ctr-badge ${STATUS_CLASSES[contract.status] || 'ctr-badge--DRAFT'}`}>
@@ -698,7 +700,7 @@ export default function ContractDetailPage() {
                 <PenLine size={14} /> Edit
               </button>
             )}
-            {/* Create PO — only show for accepted/vendor-signed/active contracts */}
+            {/* Create PO — show button */}
             {canCreatePO && (
               <button
                 className="ctr-detail__action-btn ctr-detail__action-btn--primary"
@@ -718,76 +720,75 @@ export default function ContractDetailPage() {
             </button>
           </div>
         </div>
-        {/* Contract Balance Summary Card — shown when accepted */}
-        {isAccepted && (
-          <div className="ctr-detail__balance-cards">
-            <div className="ctr-detail__balance-card">
-              <div className="ctr-detail__balance-card-icon ctr-detail__balance-card-icon--total">
-                <IndianRupee size={20} />
-              </div>
-              <div className="ctr-detail__balance-card-info">
-                <span className="ctr-detail__balance-card-value">
-                  {formatAmount(
-                    contractBalance?.contractValue ?? contract.contractValue,
-                    contract.currency || companyDefaultCurrency
-                  )}
-                </span>
-                <span className="ctr-detail__balance-card-label">Contract Value</span>
-              </div>
+
+        {/* Contract Balance & Stat Cards — Always displayed for rich consistent summary */}
+        <div className="ctr-detail__balance-cards">
+          <div className="ctr-detail__balance-card">
+            <div className="ctr-detail__balance-card-icon ctr-detail__balance-card-icon--total">
+              <IndianRupee size={20} />
             </div>
-            <div className="ctr-detail__balance-card">
-              <div className="ctr-detail__balance-card-icon ctr-detail__balance-card-icon--consumed">
-                <DollarSign size={20} />
-              </div>
-              <div className="ctr-detail__balance-card-info">
-                <span className="ctr-detail__balance-card-value">
-                  {formatAmount(
-                    contractBalance?.consumedValue ?? 0,
-                    contract.currency || companyDefaultCurrency
-                  )}
-                </span>
-                <span className="ctr-detail__balance-card-label">Consumed by POs</span>
-              </div>
-            </div>
-            <div className="ctr-detail__balance-card">
-              <div className={`ctr-detail__balance-card-icon ${
-                (contractBalance?.remainingValue ?? contract.contractValue) > 0 
-                  ? 'ctr-detail__balance-card-icon--remaining' 
-                  : 'ctr-detail__balance-card-icon--exhausted'
-              }`}>
-                <PieChart size={20} />
-              </div>
-              <div className="ctr-detail__balance-card-info">
-                <span className="ctr-detail__balance-card-value">
-                  {formatAmount(
-                    contractBalance?.remainingValue ?? contract.contractValue,
-                    contract.currency || companyDefaultCurrency
-                  )}
-                </span>
-                <span className="ctr-detail__balance-card-label">Remaining Value</span>
-                {contractBalance && contract.contractValue > 0 && (
-                  <span className="ctr-detail__balance-card-pct">
-                    {Math.round((contractBalance.remainingValue / contract.contractValue) * 100)}% remaining
-                  </span>
+            <div className="ctr-detail__balance-card-info">
+              <span className="ctr-detail__balance-card-value">
+                {formatAmount(
+                  contractBalance?.contractValue ?? contract.contractValue,
+                  contract.currency || companyDefaultCurrency
                 )}
-              </div>
-            </div>
-            <div className="ctr-detail__balance-card">
-              <div className="ctr-detail__balance-card-icon ctr-detail__balance-card-icon--total">
-                <Package size={20} />
-              </div>
-              <div className="ctr-detail__balance-card-info">
-                <span className="ctr-detail__balance-card-value">{contractBalance?.totalPOs ?? contract._count?.purchaseOrders ?? 0}</span>
-                <span className="ctr-detail__balance-card-label">Purchase Orders</span>
-                {contractBalance && contractBalance.totalPOs > 0 && (
-                  <span className="ctr-detail__balance-card-pct">
-                    {contractBalance.totalPOs} PO{(contractBalance.totalPOs > 1 ? 's' : '')} created
-                  </span>
-                )}
-              </div>
+              </span>
+              <span className="ctr-detail__balance-card-label">Contract Value</span>
             </div>
           </div>
-        )}
+          <div className="ctr-detail__balance-card">
+            <div className="ctr-detail__balance-card-icon ctr-detail__balance-card-icon--consumed">
+              <DollarSign size={20} />
+            </div>
+            <div className="ctr-detail__balance-card-info">
+              <span className="ctr-detail__balance-card-value">
+                {formatAmount(
+                  contractBalance?.consumedValue ?? 0,
+                  contract.currency || companyDefaultCurrency
+                )}
+              </span>
+              <span className="ctr-detail__balance-card-label">Consumed by POs</span>
+            </div>
+          </div>
+          <div className="ctr-detail__balance-card">
+            <div className={`ctr-detail__balance-card-icon ${
+              (contractBalance?.remainingValue ?? contract.contractValue) > 0 
+                ? 'ctr-detail__balance-card-icon--remaining' 
+                : 'ctr-detail__balance-card-icon--exhausted'
+            }`}>
+              <Clock size={20} />
+            </div>
+            <div className="ctr-detail__balance-card-info">
+              <span className="ctr-detail__balance-card-value">
+                {formatAmount(
+                  contractBalance?.remainingValue ?? contract.contractValue,
+                  contract.currency || companyDefaultCurrency
+                )}
+              </span>
+              <span className="ctr-detail__balance-card-label">Remaining Value</span>
+              {contract.contractValue > 0 && (
+                <span className="ctr-detail__balance-card-pct">
+                  {Math.round(((contractBalance?.remainingValue ?? contract.contractValue) / contract.contractValue) * 100)}% remaining
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="ctr-detail__balance-card">
+            <div className="ctr-detail__balance-card-icon ctr-detail__balance-card-icon--total">
+              <Package size={20} />
+            </div>
+            <div className="ctr-detail__balance-card-info">
+              <span className="ctr-detail__balance-card-value">{contractBalance?.totalPOs ?? contract._count?.purchaseOrders ?? contract.purchaseOrders?.length ?? 0}</span>
+              <span className="ctr-detail__balance-card-label">Purchase Orders</span>
+              {(contractBalance?.totalPOs || contract.purchaseOrders?.length || 0) > 0 && (
+                <span className="ctr-detail__balance-card-pct">
+                  {contractBalance?.totalPOs ?? contract.purchaseOrders?.length} POs created
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
 
         <div className="ctr-detail__summary-meta">
           <div className="ctr-detail__summary-item">
@@ -808,7 +809,17 @@ export default function ContractDetailPage() {
           </div>
           <div className="ctr-detail__summary-item">
             <span className="ctr-detail__summary-item-label">Source RFQ</span>
-            <span className="ctr-detail__summary-item-value">{contract.rfq?.rfqNumber || '—'}</span>
+            <span 
+              className="ctr-detail__summary-item-value"
+              style={contract.rfqId || contract.rfq?.id ? { cursor: 'pointer', color: 'var(--primary-500)' } : undefined}
+              onClick={() => {
+                if (contract.rfqId || contract.rfq?.id) {
+                  navigate(`/procurement/rfqs?highlight=${contract.rfqId || contract.rfq?.id}`);
+                }
+              }}
+            >
+              {contract.rfq?.rfqNumber || (contract.rfqId ? `RFQ-${contract.rfqId}` : '—')}
+            </span>
           </div>
           <div className="ctr-detail__summary-item">
             <span className="ctr-detail__summary-item-label">Owner</span>

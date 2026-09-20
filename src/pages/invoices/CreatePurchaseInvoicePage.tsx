@@ -36,6 +36,12 @@ import { MessageStrip } from '../../components/shared/MessageStrip';
 import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyMaster';
 import { useBranding } from '../../context/BrandingContext';
 import defaultHeliflowLogo from '../../assets/heliflow.png';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Card } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
+import { MetricCard, PageFrame, PageLead } from '../../components/ui/product';
+import { cn } from '../../lib/utils';
 import '../../components/purchase-orders/PurchaseOrderDocument.css';
 import './CreatePurchaseInvoicePage.css';
 
@@ -771,7 +777,7 @@ export default function CreatePurchaseInvoicePage() {
     };
 
     return (
-      <div className="cpi-page">
+      <PageFrame>
         {/* Notifications */}
         {errorMsg && (
           <MessageStrip type="error" onClose={() => setErrorMsg(null)}>
@@ -784,194 +790,223 @@ export default function CreatePurchaseInvoicePage() {
           </MessageStrip>
         )}
 
-        {/* Header - Clean transparent header matching Purchase Orders page */}
-        <div className="cpi-page-header">
-          <div className="cpi-header-main">
-            <div className="cpi-header-top-row">
-              <h1 className="cpi-header-title">Purchase Invoice Entry & Management</h1>
-              <div className="cpi-header-actions">
-                <button
-                  className="cpi-btn cpi-btn--primary"
-                  onClick={() => {
-                    if (!poIdParam && !grnIdParam) {
-                      setSelectedVendorId('');
-                      setSelectedPoId('');
-                      setSelectedGrnId('');
-                      setVendorName('');
-                    }
-                    setShowModeModal(true);
-                  }}
-                >
-                  <Plus size={16} /> New Invoice
-                </button>
-              </div>
-            </div>
-            <p className="cpi-header-subtitle">Manage purchase invoices, vendor bill entries, and 3-way matching approvals</p>
-          </div>
+        <PageLead
+          title="Purchase Invoice Entry & Management"
+          description="Manage purchase invoices, vendor bill entries, and 3-way matching approvals"
+          actions={
+            <Button
+              onClick={() => {
+                if (!poIdParam && !grnIdParam) {
+                  setSelectedVendorId('');
+                  setSelectedPoId('');
+                  setSelectedGrnId('');
+                  setVendorName('');
+                }
+                setShowModeModal(true);
+              }}
+              disabled={!canCreateInvoice}
+              title={!canCreateInvoice ? 'You do not have permission to create Purchase Invoices.' : 'Create new Invoice'}
+            >
+              <Plus /> New Invoice
+            </Button>
+          }
+        />
+
+        {/* 4 KPI Summary Cards Grid matching RFQ */}
+        <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            { icon: FileText, tone: 'primary' as const, value: invoicesList.length, label: 'TOTAL DOCUMENTS', detail: 'Across every approval state', filter: null },
+            { icon: Clock, tone: 'warning' as const, value: draftAndPendingCount, label: 'NEEDS ATTENTION', detail: 'Draft and pending approval', filter: 'DRAFT_PENDING' },
+            { icon: PackageCheck, tone: 'success' as const, value: activeCount, label: 'APPROVED & RELEASED', detail: 'Ready or sent to a vendor', filter: 'APPROVED' },
+            { icon: CreditCard, tone: 'primary' as const, value: formatAmount(totalValue, companyDefaultCurrency), label: 'TOTAL VOLUME', detail: 'Value across listed documents', filter: 'TOTAL_VOLUME' },
+          ].map((c) => {
+            const isActive = c.filter === 'TOTAL_VOLUME' ? false : statusFilter === c.filter;
+            return (
+              <MetricCard
+                key={c.label}
+                icon={c.icon}
+                tone={c.tone}
+                value={c.value}
+                label={c.label}
+                detail={c.detail}
+                className={cn(
+                  'cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-all duration-200',
+                  isActive &&
+                    'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
+                )}
+                onClick={() => {
+                  if (c.filter !== 'TOTAL_VOLUME') {
+                    setStatusFilter((prev) => (prev === c.filter ? null : c.filter));
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                aria-pressed={isActive}
+              />
+            );
+          })}
         </div>
 
-        {/* 4 KPI Summary Cards Grid matching Purchase Orders page */}
-        <div className="cpi-kpi-grid">
-          {/* Card 1: Total Documents */}
-          <div
-            className={`cpi-kpi-card cpi-kpi-card--clickable ${statusFilter === null ? 'cpi-kpi-card--active' : ''}`}
-            onClick={() => setStatusFilter(null)}
-          >
-            <div className="cpi-kpi-icon" style={{ background: 'rgba(10, 110, 209, 0.1)', color: '#0a6ed1' }}>
-              <FileText size={22} />
-            </div>
-            <div className="cpi-kpi-info">
-              <span className="cpi-kpi-value">{invoicesList.length}</span>
-              <span className="cpi-kpi-label">TOTAL DOCUMENTS</span>
-              <span className="cpi-kpi-subtext">Across every approval state</span>
-            </div>
-          </div>
-
-          {/* Card 2: Needs Attention / Draft & Pending */}
-          <div
-            className={`cpi-kpi-card cpi-kpi-card--clickable ${statusFilter === 'DRAFT_PENDING' ? 'cpi-kpi-card--active' : ''}`}
-            onClick={() => setStatusFilter((prev) => (prev === 'DRAFT_PENDING' ? null : 'DRAFT_PENDING'))}
-          >
-            <div className="cpi-kpi-icon" style={{ background: 'rgba(245, 158, 11, 0.12)', color: '#f59e0b' }}>
-              <Clock size={22} />
-            </div>
-            <div className="cpi-kpi-info">
-              <span className="cpi-kpi-value">{draftAndPendingCount}</span>
-              <span className="cpi-kpi-label">NEEDS ATTENTION</span>
-              <span className="cpi-kpi-subtext">Draft and pending approval</span>
-            </div>
-          </div>
-
-          {/* Card 3: Approved & Released */}
-          <div
-            className={`cpi-kpi-card cpi-kpi-card--clickable ${statusFilter === 'APPROVED' ? 'cpi-kpi-card--active' : ''}`}
-            onClick={() => setStatusFilter((prev) => (prev === 'APPROVED' ? null : 'APPROVED'))}
-          >
-            <div className="cpi-kpi-icon" style={{ background: 'rgba(16, 185, 129, 0.12)', color: '#10b981' }}>
-              <PackageCheck size={22} />
-            </div>
-            <div className="cpi-kpi-info">
-              <span className="cpi-kpi-value">{activeCount}</span>
-              <span className="cpi-kpi-label">APPROVED & RELEASED</span>
-              <span className="cpi-kpi-subtext">Ready or sent to a vendor</span>
-            </div>
-          </div>
-
-          {/* Card 4: Total Volume */}
-          <div className="cpi-kpi-card">
-            <div className="cpi-kpi-icon" style={{ background: 'rgba(139, 92, 246, 0.12)', color: '#8b5cf6' }}>
-              <CreditCard size={22} />
-            </div>
-            <div className="cpi-kpi-info">
-              <span className="cpi-kpi-value cpi-kpi-value--mono">
-                {formatAmount(totalValue, companyDefaultCurrency)}
-              </span>
-              <span className="cpi-kpi-label">TOTAL VOLUME</span>
-              <span className="cpi-kpi-subtext">Value across listed documents</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Toolbar: Search Bar & Batch Delete Action Bar */}
-        <div className="cpi-toolbar">
-          <div className="cpi-search-box">
-            <Search size={16} className="cpi-search-icon" />
-            <input
+        {/* Search & Filter Toolbar */}
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full max-w-xl">
+            <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="h-11 rounded-xl pl-10 pr-10"
               type="text"
-              className="cpi-search-input"
+              placeholder="Search invoice number, vendor, status..."
+              aria-label="Search invoice number, vendor, status..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search invoice number, vendor, status..."
             />
             {searchTerm && (
-              <button type="button" className="cpi-search-clear" onClick={() => setSearchTerm('')}>
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => setSearchTerm('')}
+              >
                 <X size={15} />
               </button>
             )}
           </div>
 
-          {selectedInvoiceIds.length > 0 && (
-            <div className="cpi-batch-bar">
-              <span className="cpi-batch-count">{selectedInvoiceIds.length} invoice(s) selected</span>
-              <button className="cpi-btn cpi-btn--danger cpi-btn--sm" onClick={() => setShowBulkDeleteModal(true)}>
-                <Trash2 size={14} /> Delete Selected
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedInvoiceIds([])}
-                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 13 }}
+          {statusFilter !== null && (
+            <div className="flex items-center gap-2.5 justify-end shrink-0 sm:ml-auto">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setStatusFilter(null)}
+                className="h-11 rounded-xl px-3.5"
               >
-                Clear
-              </button>
+                <X size={14} /> Clear Filter
+              </Button>
             </div>
           )}
         </div>
 
-        {/* Data Table */}
-        {invoicesList.length === 0 ? (
-          <div className="cpi-empty-state">
-            <div className="cpi-empty-icon">
-              <Receipt size={28} />
+        {/* Floating Bulk Action Banner */}
+        {selectedInvoiceIds.length > 0 && (
+          <Card className="mb-4 flex flex-col gap-3 border-primary/35 bg-primary/[0.045] p-3 shadow-md sm:flex-row sm:items-center sm:justify-between sm:px-4">
+            <div className="flex items-center gap-2.5 text-sm font-semibold text-foreground">
+              <span className="size-2 rounded-full bg-primary" />
+              <span>{selectedInvoiceIds.length} {selectedInvoiceIds.length === 1 ? 'invoice' : 'invoices'} selected</span>
             </div>
-            <h3>No Purchase Invoices Found</h3>
-            <p>Click the <strong>"+ New Invoice"</strong> button above to record a new vendor purchase invoice entry.</p>
-          </div>
-        ) : (
-          <div className="cpi-table-card">
-            <div className="cpi-table-wrap">
-              <table className="cpi-table">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setSelectedInvoiceIds([])}
+              >
+                Clear selection
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={() => setShowBulkDeleteModal(true)}
+              >
+                <Trash2 /> Delete selected
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        {/* Table Card */}
+        <Card className="overflow-hidden">
+          {invoicesList.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-12 text-center">
+              <div className="grid size-12 place-items-center rounded-xl bg-primary/10 text-primary mb-3">
+                <Receipt size={24} />
+              </div>
+              <h3 className="text-lg font-semibold text-foreground">No Purchase Invoices Found</h3>
+              <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                Click the <strong>"+ New Invoice"</strong> button above to record a new vendor purchase invoice entry.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1080px] border-collapse text-sm">
                 <thead>
-                  <tr>
-                    <th style={{ width: 44, textAlign: 'center' }}>
+                  <tr className="border-b border-border/75 bg-muted/45 text-left text-[12px] font-bold uppercase tracking-wide text-muted-foreground">
+                    <th className="w-[42px] px-3 py-3 text-center">
                       <input
                         type="checkbox"
                         checked={isAllSelected}
                         onChange={handleSelectAll}
-                        style={{ cursor: 'pointer', width: 16, height: 16, accentColor: 'var(--primary-500, #0a6ed1)' }}
+                        className="size-4 cursor-pointer rounded border-border text-primary focus:ring-primary/40"
                         title="Select all invoices"
                       />
                     </th>
-                    <th style={{ width: 160 }}>INVOICE NUMBER</th>
-                    <th style={{ width: 200 }}>VENDOR</th>
-                    <th style={{ width: 140 }}>INVOICE DATE</th>
-                    <th style={{ width: 110 }}>CURRENCY</th>
-                    <th style={{ width: 150, textAlign: 'right' }}>GRAND TOTAL</th>
-                    <th style={{ width: 160 }}>STATUS</th>
-                    <th style={{ width: 130, textAlign: 'center' }}>ACTIONS</th>
+                    <th className="w-[160px] px-3 py-3">INVOICE NUMBER</th>
+                    <th className="w-[200px] px-3 py-3">VENDOR</th>
+                    <th className="w-[140px] px-3 py-3">INVOICE DATE</th>
+                    <th className="w-[110px] px-3 py-3">CURRENCY</th>
+                    <th className="w-[150px] px-3 py-3 text-right">GRAND TOTAL</th>
+                    <th className="w-[160px] px-3 py-3">STATUS</th>
+                    <th className="w-[130px] px-3 py-3 text-center">ACTIONS</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-border/60">
                   {filteredInvoices.map((inv) => {
                     const invIdStr = String(inv.id);
                     const isSelected = selectedInvoiceIds.includes(invIdStr);
+                    const statusKey = (inv.status || 'PENDING').toUpperCase();
+                    const tone =
+                      statusKey === 'APPROVED' || statusKey === 'PAID'
+                        ? 'success'
+                        : statusKey === 'REJECTED' || statusKey === 'CANCELLED'
+                        ? 'danger'
+                        : 'warning';
+                    const statusLabel =
+                      statusKey === 'APPROVED' || statusKey === 'PAID'
+                        ? 'Approved'
+                        : statusKey === 'REJECTED' || statusKey === 'CANCELLED'
+                        ? 'Rejected'
+                        : 'Pending Approval';
+
                     return (
-                      <tr key={inv.id} className={isSelected ? 'cpi-table-row--selected' : ''}>
-                        <td style={{ textAlign: 'center' }}>
+                      <tr
+                        key={inv.id}
+                        className={cn('transition-colors hover:bg-muted/40', isSelected && 'bg-primary/[0.04]')}
+                      >
+                        <td className="px-3 py-3.5 text-center">
                           <input
                             type="checkbox"
                             checked={isSelected}
                             onChange={() => handleToggleSelect(invIdStr)}
-                            style={{ cursor: 'pointer', width: 16, height: 16, accentColor: 'var(--primary-500, #0a6ed1)' }}
+                            className="size-4 cursor-pointer rounded border-border text-primary focus:ring-primary/40"
                           />
                         </td>
-                        <td>
-                          <span className="cpi-code-link">{inv.invoiceNumber}</span>
+                        <td className="px-3 py-3.5">
+                          <button
+                            className="font-semibold text-primary transition-colors hover:text-primary/75 hover:underline"
+                            onClick={() => {
+                              if (inv.poNumber) setSelectedPoId(inv.poNumber);
+                              setCreationMode('linked');
+                              setIsCreating(true);
+                            }}
+                          >
+                            {inv.invoiceNumber}
+                          </button>
                         </td>
-                        <td style={{ fontWeight: 600 }}>{inv.vendorName || '—'}</td>
-                        <td>{inv.submittedAt || inv.dueDate || '—'}</td>
-                        <td style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>{companyDefaultCurrency}</td>
-                        <td style={{ textAlign: 'right', fontWeight: 700, fontFamily: 'var(--font-mono, monospace)' }}>
+                        <td className="px-3 py-3.5 font-medium text-foreground">{inv.vendorName || '—'}</td>
+                        <td className="px-3 py-3.5 text-muted-foreground">{inv.submittedAt || inv.dueDate || '—'}</td>
+                        <td className="px-3 py-3.5 font-medium text-muted-foreground">{companyDefaultCurrency}</td>
+                        <td className="px-3 py-3.5 text-right font-semibold font-mono text-foreground">
                           {formatAmount(inv.amount, companyDefaultCurrency)}
                         </td>
-                        <td>
-                          <span className={`cpi-badge cpi-badge--${inv.status || 'PENDING'}`}>
-                            {inv.status || 'Pending'}
-                          </span>
+                        <td className="px-3 py-3.5">
+                          <Badge tone={tone}>
+                            <span className="size-1.5 rounded-full bg-current" />
+                            {statusLabel}
+                          </Badge>
                         </td>
-                        <td style={{ textAlign: 'center' }}>
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                            <button
-                              className="cpi-action-icon-btn"
+                        <td className="px-3 py-3.5 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
                               onClick={() => {
                                 if (inv.poNumber) setSelectedPoId(inv.poNumber);
                                 setCreationMode('linked');
@@ -980,9 +1015,10 @@ export default function CreatePurchaseInvoicePage() {
                               title="View Invoice Entry"
                             >
                               <Eye size={15} />
-                            </button>
-                            <button
-                              className="cpi-action-icon-btn"
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
                               onClick={() => {
                                 if (inv.poNumber) setSelectedPoId(inv.poNumber);
                                 setCreationMode('linked');
@@ -991,14 +1027,16 @@ export default function CreatePurchaseInvoicePage() {
                               title="Edit Invoice Entry"
                             >
                               <Pencil size={15} />
-                            </button>
-                            <button
-                              className="cpi-action-icon-btn cpi-action-icon-btn--delete"
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              className="text-muted-foreground hover:text-destructive"
                               onClick={() => setDeleteTarget(inv)}
                               title="Delete Invoice Entry"
                             >
                               <Trash2 size={15} />
-                            </button>
+                            </Button>
                           </div>
                         </td>
                       </tr>
@@ -1007,8 +1045,8 @@ export default function CreatePurchaseInvoicePage() {
                 </tbody>
               </table>
             </div>
-          </div>
-        )}
+          )}
+        </Card>
 
         {/* Single Delete Confirmation Modal */}
         {deleteTarget && (
@@ -1188,7 +1226,7 @@ export default function CreatePurchaseInvoicePage() {
             </div>
           </div>
         )}
-      </div>
+      </PageFrame>
     );
   }
 

@@ -96,24 +96,24 @@ interface ApprovalColumnDef {
 
 const ALL_COLUMNS: ApprovalColumnDef[] = [
   {
-    key: 'request', label: 'Request', defaultVisible: true, required: true, width: '260px',
+    key: 'request', label: 'Request', defaultVisible: true, required: true, width: '290px',
     render: (req) => (
       <div className="flex items-center gap-3">
-        <div className="grid size-8 shrink-0 place-items-center rounded-full bg-primary/10 text-[11px] font-bold text-primary">
+        <div className="grid size-9 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary ring-1 ring-primary/15">
           {req.requestedByInitials}
         </div>
         <div className="min-w-0">
-          <div className="font-semibold text-foreground font-mono text-xs">{req.referenceNumber}</div>
-          <div className="text-[12px] font-medium text-foreground truncate max-w-[200px]">{req.title}</div>
-          <div className="text-[11px] text-muted-foreground">by {req.requestedBy} · {req.department}</div>
+          <div className="font-semibold text-foreground font-mono text-sm tracking-tight">{req.referenceNumber}</div>
+          <div className="text-sm font-medium text-foreground truncate max-w-[220px]">{req.title}</div>
+          <div className="text-xs text-muted-foreground">by {req.requestedBy} · {req.department}</div>
         </div>
       </div>
     ),
   },
   {
-    key: 'module', label: 'Module', defaultVisible: true, width: '140px',
+    key: 'module', label: 'Module', defaultVisible: true, width: '170px',
     render: (req) => (
-      <Badge variant="outline" className="gap-1 font-semibold">
+      <Badge variant="outline" className="gap-1.5 px-2.5 py-1 text-xs font-semibold shadow-2xs">
         {MODULE_ICONS[req.module]}{req.module}
       </Badge>
     ),
@@ -198,7 +198,7 @@ export default function ApprovalsPage() {
     if (m.includes('quotation')) return 'Quotation';
     if (m.includes('rfq')) return 'RFQ';
     if (m.includes('contract')) return 'Contract';
-    if (m.includes('all')) return 'ALL';
+    if (m.includes('all')) return 'All';
     return 'Purchase Order';
   });
 
@@ -207,7 +207,7 @@ export default function ApprovalsPage() {
 
   const { data: approvals, loading, error, reload, forceRefresh } = useServiceData(
     () => approvalService.listTable({
-      module: moduleFilter !== 'ALL' ? (CANONICAL_MODULE[moduleFilter] || moduleFilter) : undefined,
+      module: (moduleFilter !== 'ALL' && moduleFilter !== 'All') ? (CANONICAL_MODULE[moduleFilter] || moduleFilter) : undefined,
     }),
     [] as ApprovalTableRow[],
     [moduleFilter],
@@ -313,7 +313,7 @@ export default function ApprovalsPage() {
         }
         return a;
       });
-    if (moduleFilter !== 'ALL') {
+    if (moduleFilter !== 'ALL' && moduleFilter !== 'All') {
       const filterLower = moduleFilter.toLowerCase();
       list = list.filter((a) => {
         const modLower = (a.module || '').toLowerCase();
@@ -489,95 +489,115 @@ export default function ApprovalsPage() {
       />
 
       {/* Metric Cards */}
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard
-          icon={CheckSquare}
-          label="Total Requests"
-          value={summary.total}
-          tone="primary"
-          className="cursor-pointer"
-          onClick={() => { setStatusFilter('ALL'); setCurrentPage(1); }}
-        />
-        <MetricCard
-          icon={Clock}
-          label="Pending"
-          value={summary.pending}
-          tone="warning"
-          className="cursor-pointer"
-          onClick={() => { setStatusFilter('PENDING'); setCurrentPage(1); }}
-        />
-        <MetricCard
-          icon={CheckCircle2}
-          label="Approved"
-          value={summary.approved}
-          tone="success"
-          className="cursor-pointer"
-          onClick={() => { setStatusFilter('APPROVED'); setCurrentPage(1); }}
-        />
-        <MetricCard
-          icon={XCircle}
-          label="Rejected"
-          value={summary.rejected}
-          tone="danger"
-          className="cursor-pointer"
-          onClick={() => { setStatusFilter('REJECTED'); setCurrentPage(1); }}
-        />
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          { icon: CheckSquare, tone: 'primary' as const, label: 'Total Requests', value: summary.total, detail: 'All requests', filter: 'ALL' },
+          { icon: Clock, tone: 'warning' as const, label: 'Pending', value: summary.pending, detail: 'Requires action', filter: 'PENDING' },
+          { icon: CheckCircle2, tone: 'success' as const, label: 'Approved', value: summary.approved, detail: 'Approved requests', filter: 'APPROVED' },
+          { icon: XCircle, tone: 'danger' as const, label: 'Rejected', value: summary.rejected, detail: 'Rejected or returned', filter: 'REJECTED' },
+        ].map((c) => {
+          const isActive = statusFilter === c.filter;
+          return (
+            <MetricCard
+              key={c.label}
+              icon={c.icon}
+              tone={c.tone}
+              value={c.value}
+              label={c.label}
+              detail={c.detail}
+              className={cn(
+                'cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-all duration-200',
+                isActive &&
+                  'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
+              )}
+              onClick={() => { setStatusFilter(c.filter); setCurrentPage(1); }}
+              role="button"
+              tabIndex={0}
+              aria-pressed={isActive}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setStatusFilter(c.filter);
+                  setCurrentPage(1);
+                }
+              }}
+            />
+          );
+        })}
       </div>
 
-      {/* Toolbar */}
-      <Card className="mb-6 p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-            {['Purchase Order', 'Quotation', 'RFQ', 'Contract', 'ALL'].map(m => (
-              <button
-                key={m}
-                onClick={() => { setModuleFilter(m); setCurrentPage(1); }}
-                className={cn(
-                  'inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all',
-                  moduleFilter === m
-                    ? 'bg-primary text-primary-foreground shadow-xs'
-                    : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
-                )}
-              >
-                {m}
-              </button>
-            ))}
-          </div>
-          <div className="relative min-w-0 flex-1 max-w-xs">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search approval requests..."
-              value={search}
-              onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
-              className="pl-9"
-            />
+      {/* Toolbar: Search on Left, Filters on Right */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full max-w-xl">
+          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="h-11 rounded-xl pl-10"
+            type="text"
+            placeholder="Search approval requests..."
+            aria-label="Search approval requests"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setCurrentPage(1);
+            }}
+          />
+        </div>
+
+        <div className="flex items-center gap-2.5 justify-end shrink-0 sm:ml-auto">
+          <div className="flex h-11 items-center gap-1 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden rounded-xl border border-input bg-card p-1 shadow-xs">
+            {['All', 'Purchase Order', 'Quotation', 'RFQ', 'Contract'].map((m) => {
+              const isActive = moduleFilter === m || (m === 'All' && (moduleFilter === 'ALL' || moduleFilter === 'All'));
+              return (
+                <button
+                  key={m}
+                  onClick={() => {
+                    setModuleFilter(m);
+                    setCurrentPage(1);
+                  }}
+                  className={cn(
+                    'inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 text-xs font-semibold transition-all duration-150 cursor-pointer select-none min-w-[52px]',
+                    isActive
+                      ? 'bg-primary text-primary-foreground shadow-xs'
+                      : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                  )}
+                >
+                  {m}
+                </button>
+              );
+            })}
           </div>
         </div>
-      </Card>
+      </div>
 
       {/* Content Table */}
       <Card className="overflow-hidden">
         {loading ? (
-          <div className="p-6">
-            <TableSkeleton rows={4} columns={6} />
-          </div>
+          <TableSkeleton rows={5} columns={7} />
         ) : paginated.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full min-w-[1000px] border-collapse text-sm">
               <thead>
-                <tr className="border-b border-border/70 bg-muted/40 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  {visibleColumns.map(col => <th key={col.key} className="px-5 py-3.5">{col.label}</th>)}
-                  <th className="px-5 py-3.5 text-right">Actions</th>
+                <tr className="border-b border-border/75 bg-muted/45 text-left text-[12px] font-bold uppercase tracking-wide text-muted-foreground">
+                  {visibleColumns.map((col) => (
+                    <th key={col.key} className="px-4 py-3" style={{ textAlign: col.align || 'left', width: col.width || 'auto' }}>
+                      {col.label}
+                    </th>
+                  ))}
+                  <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border/50">
-                {paginated.map(req => (
-                  <tr key={req.id} className="transition-colors hover:bg-muted/30">
-                    {visibleColumns.map(col => <td key={col.key} className="px-5 py-3.5">{col.render(req, formatDateTime)}</td>)}
-                    <td className="px-5 py-3.5 text-right">
-                      <div className="flex items-center justify-end gap-1">
+              <tbody className="divide-y divide-border/60">
+                {paginated.map((req) => (
+                  <tr key={req.id} className="cursor-pointer transition-colors hover:bg-accent/35" onClick={() => setDetailRequest(req)}>
+                    {visibleColumns.map((col) => (
+                      <td key={col.key} className="px-4 py-3.5" style={{ textAlign: col.align || 'left' }}>
+                        {col.render(req, formatDateTime)}
+                      </td>
+                    ))}
+                    <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
+                      <div className={cn("flex items-center gap-1", req.canAct ? "justify-end" : "justify-center")}>
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="View Details" onClick={() => setDetailRequest(req)}>
-                          <Eye className="size-4" />
+                          <Eye className="size-4 text-muted-foreground hover:text-foreground" />
                         </Button>
                         {req.canAct && (
                           <>
@@ -606,23 +626,23 @@ export default function ApprovalsPage() {
 
         {filtered.length > perPage && (
           <div className="flex items-center justify-between border-t border-border/60 px-5 py-3 text-xs text-muted-foreground">
-            <span>Showing {(currentPage-1)*perPage+1}–{Math.min(currentPage*perPage, filtered.length)} of {filtered.length}</span>
+            <span>Showing {(currentPage - 1) * perPage + 1}–{Math.min(currentPage * perPage, filtered.length)} of {filtered.length}</span>
             <div className="flex items-center gap-1">
-              <Button variant="outline" size="sm" disabled={currentPage===1} onClick={() => setCurrentPage(p=>p-1)} className="h-8 w-8 p-0">
+              <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)} className="h-8 w-8 p-0">
                 <ChevronLeft className="size-4" />
               </Button>
-              {Array.from({length:totalPages},(_,i)=>i+1).map(p=>(
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
                 <Button
                   key={p}
-                  variant={currentPage===p?'default':'outline'}
+                  variant={currentPage === p ? 'default' : 'outline'}
                   size="sm"
-                  onClick={()=>setCurrentPage(p)}
+                  onClick={() => setCurrentPage(p)}
                   className="h-8 w-8 p-0"
                 >
                   {p}
                 </Button>
               ))}
-              <Button variant="outline" size="sm" disabled={currentPage===totalPages} onClick={()=>setCurrentPage(p=>p+1)} className="h-8 w-8 p-0">
+              <Button variant="outline" size="sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => p + 1)} className="h-8 w-8 p-0">
                 <ChevronRight className="size-4" />
               </Button>
             </div>
@@ -659,7 +679,7 @@ export default function ApprovalsPage() {
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring min-h-[80px]"
                   placeholder="Optional comments or notes..."
                   value={actionComment}
-                  onChange={e => setActionComment(e.target.value)}
+                  onChange={(e) => setActionComment(e.target.value)}
                 />
               </div>
             </div>
