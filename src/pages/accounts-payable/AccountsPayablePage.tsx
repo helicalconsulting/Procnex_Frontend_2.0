@@ -584,39 +584,7 @@ export default function AccountsPayablePage() {
         </div>
 
         <div className="flex items-center gap-2.5 justify-end shrink-0 sm:ml-auto">
-          <div className="relative">
-            <Button
-              ref={colBtnRef}
-              variant="outline"
-              className="h-11 gap-2 rounded-xl px-4 border-input font-medium hover:bg-accent/50"
-              onClick={() => setShowColPanel((v) => !v)}
-              title="Customize columns"
-            >
-              <SlidersHorizontal size={16} /> Columns
-            </Button>
-            {showColPanel && (
-              <ColumnCustomizer
-                columnOrder={columnOrder}
-                visibleKeys={visibleKeys}
-                allColumns={ALL_COLUMNS}
-                onToggle={(key) => {
-                  setVisibleKeys((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(key)) next.delete(key);
-                    else next.add(key);
-                    return next;
-                  });
-                }}
-                onReorder={setColumnOrder}
-                onReset={() => {
-                  setColumnOrder(defaultOrder);
-                  setVisibleKeys(new Set(defaultVisible));
-                }}
-                onClose={() => setShowColPanel(false)}
-                anchorRef={colBtnRef}
-              />
-            )}
-          </div>
+
         </div>
       </div>
 
@@ -662,7 +630,47 @@ export default function AccountsPayablePage() {
                         {col.label}
                       </th>
                     ))}
-                    <th className="px-4 py-3 text-right">Actions</th>
+                    <th className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <span>Actions</span>
+                        <div className="relative">
+                          <Button
+                            ref={colBtnRef}
+                            variant={showColPanel ? 'secondary' : 'ghost'}
+                            size="icon-sm"
+                            onClick={() => setShowColPanel((v) => !v)}
+                            title="Customize columns"
+                            aria-label="Customize columns"
+                            aria-expanded={showColPanel}
+                          >
+                            <span className="flex gap-0.5"><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /></span>
+                          </Button>
+
+                          {showColPanel && (
+                            <ColumnCustomizer
+                              columnOrder={columnOrder}
+                              visibleKeys={visibleKeys}
+                              allColumns={ALL_COLUMNS}
+                              onToggle={(key) => {
+                                setVisibleKeys((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(key)) next.delete(key);
+                                  else next.add(key);
+                                  return next;
+                                });
+                              }}
+                              onReorder={setColumnOrder}
+                              onReset={() => {
+                                setColumnOrder(ALL_COLUMNS.map((c) => c.key));
+                                setVisibleKeys(new Set(ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key)));
+                              }}
+                              onClose={() => setShowColPanel(false)}
+                              anchorRef={colBtnRef}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">

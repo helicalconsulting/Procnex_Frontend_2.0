@@ -123,15 +123,21 @@ export default function AdminNotificationBell() {
       <button
         ref={triggerRef}
         type="button"
-        className="relative inline-flex size-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card active:scale-[0.97]"
+        className="group relative inline-flex size-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card active:scale-[0.97]"
         title="Notifications"
         onClick={handleOpen}
         aria-expanded={open}
       >
-        <Bell size={18} />
-        {unreadCount > 0 && (
-          <span className={`topbar__notif-badge${bouncing ? ' topbar__notif-badge--bounce' : ''}`}>{unreadCount > 9 ? '9+' : unreadCount}</span>
-        )}
+        <div className="relative inline-flex items-center justify-center">
+          <Bell size={19} className="transition-transform group-hover:scale-105" />
+          {unreadCount > 0 && (
+            <span
+              className={`vnotif-badge topbar__notif-badge${bouncing ? ' vnotif-badge--bounce topbar__notif-badge--bounce' : ''}`}
+            >
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </div>
       </button>
 
       {/* Notification panel — using FloatingMenu */}

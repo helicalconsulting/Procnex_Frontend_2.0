@@ -4,13 +4,26 @@ import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { localDataService, type AuditEntry as ServiceAuditEntry } from '../../services/localDataService';
 import { adminService } from '../../services/adminService';
 import {
-  History, Search, ChevronLeft, ChevronRight, X, Clock,
+  History, Search, ChevronLeft, ChevronRight, Clock,
   UserCog, CheckSquare, Settings,
-  LogIn, Edit3, Trash2, Plus, Download, Filter, User, FileText, Calendar, RotateCcw,
+  LogIn, Edit3, Trash2, Plus, Download, Filter, RotateCcw,
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TableSkeleton } from '../../components/shared/Skeleton';
 import { AuditExportModal } from './AuditExportModal';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Card } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '../../components/ui/dialog';
+import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
+import { cn } from '../../lib/utils';
 
 type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'APPROVE' | 'REJECT' | 'LOGIN' | 'EXPORT';
 type AuditModule = 'RFQ' | 'Purchase Order' | 'Quotation' | 'Users' | 'Roles' | 'Vendors' | 'Approvals' | 'Auth' | 'Documents';
@@ -21,14 +34,14 @@ interface AuditEntry {
   ipAddress: string; referenceId: string; timestamp: string;
 }
 
-const ACTION_CONFIG: Record<AuditAction, { icon: any; classes: string }> = {
-  CREATE: { icon: Plus, classes: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' },
-  UPDATE: { icon: Edit3, classes: 'bg-sky-500/10 text-sky-700 dark:text-sky-300' },
-  DELETE: { icon: Trash2, classes: 'bg-destructive/10 text-destructive' },
-  APPROVE: { icon: CheckSquare, classes: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' },
-  REJECT: { icon: X, classes: 'bg-destructive/10 text-destructive' },
-  LOGIN: { icon: LogIn, classes: 'bg-primary/10 text-primary' },
-  EXPORT: { icon: Download, classes: 'bg-amber-500/10 text-amber-700 dark:text-amber-300' },
+const ACTION_CONFIG: Record<AuditAction, { icon: any; tone: 'success' | 'info' | 'danger' | 'primary' | 'warning'; iconBg: string }> = {
+  CREATE: { icon: Plus, tone: 'success', iconBg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-500/15' },
+  UPDATE: { icon: Edit3, tone: 'info', iconBg: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 ring-1 ring-sky-500/15' },
+  DELETE: { icon: Trash2, tone: 'danger', iconBg: 'bg-destructive/10 text-destructive ring-1 ring-destructive/15' },
+  APPROVE: { icon: CheckSquare, tone: 'success', iconBg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-500/15' },
+  REJECT: { icon: Trash2, tone: 'danger', iconBg: 'bg-destructive/10 text-destructive ring-1 ring-destructive/15' },
+  LOGIN: { icon: LogIn, tone: 'primary', iconBg: 'bg-primary/10 text-primary ring-1 ring-primary/15' },
+  EXPORT: { icon: Download, tone: 'warning', iconBg: 'bg-amber-500/12 text-amber-700 dark:text-amber-400 ring-1 ring-amber-500/15' },
 };
 
 function mapAuditEntry(e: any): AuditEntry {
@@ -388,8 +401,9 @@ export default function AuditTrailPage() {
     setCurrentPage(1);
   }, []);
 
-  const totalPages = Math.ceil(filtered.length / perPage);
-  const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginated = filtered.slice((safePage - 1) * perPage, safePage * perPage);
 
   const formatDateTime = (d: string) => {
     if (!d || typeof d !== 'string') return '—';
@@ -412,64 +426,94 @@ export default function AuditTrailPage() {
   };
 
   return (
-    <div className="flex w-full flex-col gap-6 pb-10">
+    <PageFrame>
       {error && <MessageStrip type="error">{error}</MessageStrip>}
       
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-[-0.035em] text-foreground">Audit Trail</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Complete activity log & compliance tracking with User, Document Type, and Date filtering</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {isFiltered && (
-            <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-input bg-background px-4 text-sm font-semibold text-foreground transition hover:bg-muted" onClick={resetFilters} title="Reset all filters">
-              <RotateCcw size={15} /> Reset Filters
-            </button>
-          )}
-          <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90" onClick={() => setExportModalOpen(true)} title="Export Audit Trail Report">
-            <Download size={16} /> Export Report ({filtered.length})
-          </button>
-        </div>
-      </div>
+      <PageLead
+        title="Audit Trail"
+        description="Complete activity log & compliance tracking with User, Document Type, and Date filtering"
+        actions={
+          <>
+            {isFiltered && (
+              <Button
+                variant="outline"
+                onClick={resetFilters}
+                title="Reset all filters"
+              >
+                <RotateCcw className="size-4" /> Reset Filters
+              </Button>
+            )}
+            <Button
+              onClick={() => setExportModalOpen(true)}
+              title="Export Audit Trail Report"
+            >
+              <Download className="size-4" /> Export Report ({filtered.length})
+            </Button>
+          </>
+        }
+      />
 
-      {/* Summary Cards */}
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {/* KPI Cards */}
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          { icon: <History size={22} />, val: summary.total, label: 'Total Entries', cls: 'bg-primary/10 text-primary' },
-          { icon: <Clock size={22} />, val: summary.today, label: 'Today', cls: 'bg-sky-500/10 text-sky-600' },
-          { icon: <Settings size={22} />, val: summary.actions, label: 'Action Types', cls: 'bg-violet-500/10 text-violet-600' },
-          { icon: <UserCog size={22} />, val: summary.users, label: 'Active Users', cls: 'bg-emerald-500/10 text-emerald-600' },
-        ].map((c, i) => (
-          <div key={i} className="flex min-h-24 items-center gap-4 rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
-            <div className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${c.cls}`}>{c.icon}</div>
-            <div className="flex flex-col">
-              <span className="text-2xl font-semibold tracking-tight text-foreground">{c.val}</span>
-              <span className="text-sm text-muted-foreground">{c.label}</span>
-            </div>
-          </div>
-        ))}
+          { icon: History, tone: 'primary' as const, value: summary.total, label: 'Total Entries', detail: 'All logged activities', filterKey: 'ALL' },
+          { icon: Clock, tone: 'cyan' as const, value: summary.today, label: 'Today', detail: 'Logged in last 24h', filterKey: 'TODAY' },
+          { icon: Settings, tone: 'violet' as const, value: summary.actions, label: 'Action Types', detail: 'Distinct activity types', filterKey: null },
+          { icon: UserCog, tone: 'success' as const, value: summary.users, label: 'Active Users', detail: 'Performers in logs', filterKey: null },
+        ].map((c) => {
+          const isActive = c.filterKey === 'ALL' ? actionFilter === 'ALL' && !fromDate && !toDate : false;
+          return (
+            <MetricCard
+              key={c.label}
+              icon={c.icon}
+              tone={c.tone}
+              value={c.value}
+              label={c.label}
+              detail={c.detail}
+              className={cn(
+                'cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-all duration-200',
+                isActive &&
+                  'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
+              )}
+              onClick={() => {
+                if (c.filterKey === 'ALL') {
+                  resetFilters();
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              aria-pressed={isActive}
+            />
+          );
+        })}
       </div>
 
-      {/* Multi-Filter Card */}
-      <div className={`rounded-2xl border bg-card p-4 shadow-sm transition ${isFiltered ? 'border-primary/40 ring-2 ring-primary/10' : 'border-border/70'}`}>
+      {/* Multi-Filter Controls */}
+      <Card className={cn('mb-4 p-4 transition-all duration-200', isFiltered && 'border-primary/45 ring-2 ring-primary/10')}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/70 pb-3">
           <div className="flex items-center gap-2">
-            <Filter size={18} className="text-primary" />
-            <h3 className="text-sm font-semibold text-foreground">Filter & Audit Controls</h3>
+            <div className="grid size-7 place-items-center rounded-lg bg-primary/10 text-primary">
+              <Filter className="size-4" />
+            </div>
+            <h3 className="text-sm font-semibold tracking-[-0.01em] text-foreground">Filter & Audit Controls</h3>
           </div>
           {isFiltered && (
-            <button className="text-xs font-semibold text-primary hover:underline flex items-center gap-1" onClick={resetFilters}>
-              <RotateCcw size={13} /> Clear All Filters
+            <button
+              type="button"
+              className="text-xs font-semibold text-primary hover:underline flex items-center gap-1 transition-colors"
+              onClick={resetFilters}
+            >
+              <RotateCcw className="size-3.5" /> Clear All Filters
             </button>
           )}
         </div>
 
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+        <div className="mt-3.5 grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold text-muted-foreground">User / Performer</label>
+            <label className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">User / Performer</label>
             <select
-              className="min-h-11 rounded-xl border border-input bg-background px-3 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+              className="h-11 w-full appearance-none rounded-xl border border-input bg-card px-3 text-sm font-medium text-foreground shadow-xs transition-colors hover:bg-accent/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
               value={userFilter}
               onChange={(e) => { setUserFilter(e.target.value); setCurrentPage(1); }}
             >
@@ -479,9 +523,9 @@ export default function AuditTrailPage() {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold text-muted-foreground">Module</label>
+            <label className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Module</label>
             <select
-              className="min-h-11 rounded-xl border border-input bg-background px-3 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+              className="h-11 w-full appearance-none rounded-xl border border-input bg-card px-3 text-sm font-medium text-foreground shadow-xs transition-colors hover:bg-accent/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
               value={moduleFilter}
               onChange={(e) => { setModuleFilter(e.target.value); setCurrentPage(1); }}
             >
@@ -491,9 +535,9 @@ export default function AuditTrailPage() {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold text-muted-foreground">Year</label>
+            <label className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Year</label>
             <select
-              className="min-h-11 rounded-xl border border-input bg-background px-3 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+              className="h-11 w-full appearance-none rounded-xl border border-input bg-card px-3 text-sm font-medium text-foreground shadow-xs transition-colors hover:bg-accent/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
               value={yearFilter}
               onChange={(e) => { setYearFilter(e.target.value); setCurrentPage(1); }}
             >
@@ -503,9 +547,9 @@ export default function AuditTrailPage() {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold text-muted-foreground">Month</label>
+            <label className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Month</label>
             <select
-              className="min-h-11 rounded-xl border border-input bg-background px-3 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+              className="h-11 w-full appearance-none rounded-xl border border-input bg-card px-3 text-sm font-medium text-foreground shadow-xs transition-colors hover:bg-accent/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
               value={monthFilter}
               onChange={(e) => { setMonthFilter(e.target.value); setCurrentPage(1); }}
             >
@@ -515,62 +559,74 @@ export default function AuditTrailPage() {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold text-muted-foreground">From Date</label>
-            <input
+            <label className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">From Date</label>
+            <Input
               type="date"
-              className="min-h-11 rounded-xl border border-input bg-background px-3 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+              className="h-11 rounded-xl"
               value={fromDate}
               onChange={(e) => { setFromDate(e.target.value); setCurrentPage(1); }}
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold text-muted-foreground">To Date</label>
-            <input
+            <label className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">To Date</label>
+            <Input
               type="date"
-              className="min-h-11 rounded-xl border border-input bg-background px-3 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+              className="h-11 rounded-xl"
               value={toDate}
               onChange={(e) => { setToDate(e.target.value); setCurrentPage(1); }}
             />
           </div>
         </div>
-      </div>
+      </Card>
 
-      {/* Action Pills & Search Bar */}
-      <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex gap-1 overflow-x-auto rounded-xl bg-muted/60 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {ACTION_FILTERS.map((act) => (
-            <button
-              type="button"
-              key={act}
-              className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition ${actionFilter === act ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-              onClick={() => { setActionFilter(act); setCurrentPage(1); }}
-            >
-              {act === 'ALL' ? 'All Actions' : act}
-              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-bold text-foreground">
-                {filterCounts[act] || 0}
-              </span>
-            </button>
-          ))}
-        </div>
-
-        <div className="relative min-w-0 flex-1 sm:max-w-md">
-          <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input
+      {/* Search Bar & Action Filter Pills Toolbar (RFQ Page Style) */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        {/* Search Bar on Left (Standalone, no Card wrapper) */}
+        <div className="relative w-full max-w-xl">
+          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
             type="search"
-            className="min-h-11 w-full rounded-xl border border-input bg-background pl-10 pr-4 text-sm outline-none transition placeholder:text-muted-foreground focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+            className="h-11 rounded-xl pl-10"
             placeholder="Search description, user, module, or reference..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
           />
         </div>
+
+        {/* Card Container around Action Filter Pills on Right */}
+        <Card className="p-1.5 shrink-0 sm:ml-auto shadow-xs">
+          <div className="flex items-center gap-1 overflow-x-auto rounded-xl bg-muted/60 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {ACTION_FILTERS.map((act) => (
+              <button
+                type="button"
+                key={act}
+                className={cn(
+                  'inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-all duration-150 cursor-pointer select-none',
+                  actionFilter === act
+                    ? 'bg-card text-primary shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-card/40'
+                )}
+                onClick={() => { setActionFilter(act); setCurrentPage(1); }}
+              >
+                {act === 'ALL' ? 'All Actions' : act}
+                <span className={cn(
+                  'rounded-full px-1.5 py-0.5 text-[11px] font-bold',
+                  actionFilter === act ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+                )}>
+                  {filterCounts[act] || 0}
+                </span>
+              </button>
+            ))}
+          </div>
+        </Card>
       </div>
 
-      {/* Log Feed */}
+      {/* Log Feed Card */}
       {loading ? (
         <TableSkeleton rows={6} columns={4} />
       ) : paginated.length > 0 ? (
-        <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
+        <Card className="overflow-hidden">
           <div className="divide-y divide-border/60">
             {paginated.map((entry) => {
               const cfg = ACTION_CONFIG[entry.action] || ACTION_CONFIG.UPDATE;
@@ -579,30 +635,39 @@ export default function AuditTrailPage() {
                 <button
                   key={entry.id}
                   type="button"
-                  className="flex w-full items-start gap-4 p-4 text-left transition hover:bg-muted/30 sm:p-5"
+                  className="flex w-full items-start gap-4 p-4 text-left transition-colors hover:bg-accent/40 sm:p-5 focus-visible:outline-none focus-visible:bg-accent/40"
                   onClick={() => setDetail(entry)}
                 >
-                  <div className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${cfg.classes}`}>
-                    <IconComponent size={16} />
+                  <div className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${cfg.iconBg}`}>
+                    <IconComponent size={18} strokeWidth={2} />
                   </div>
                   <div className="flex min-w-0 flex-1 flex-col">
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className={`rounded-full px-2.5 py-0.5 text-[12px] font-semibold ${cfg.classes}`}>{entry.action}</span>
-                        <span className="rounded-full bg-muted px-2.5 py-0.5 text-[12px] font-semibold text-foreground">{entry.module}</span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge tone={cfg.tone}>
+                          <span className="size-1.5 rounded-full bg-current" />
+                          {entry.action}
+                        </Badge>
+                        <Badge tone="neutral">
+                          {entry.module}
+                        </Badge>
                       </div>
-                      <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Clock size={12} /> {timeAgo(entry.timestamp)}
+                      <span className="text-xs text-muted-foreground flex items-center gap-1 font-medium">
+                        <Clock size={13} /> {timeAgo(entry.timestamp)}
                       </span>
                     </div>
-                    <p className="mt-2 text-sm font-medium text-foreground">{entry.description}</p>
+                    <p className="mt-2.5 text-sm font-medium text-foreground leading-relaxed">{entry.description}</p>
                     <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1.5 font-semibold text-foreground">
-                        <span className="flex size-6 items-center justify-center rounded-full bg-primary/10 text-[11px] font-bold text-primary">{entry.performedByInitials}</span>
+                        <span className="flex size-6 items-center justify-center rounded-full bg-primary/10 text-[11px] font-bold text-primary ring-1 ring-primary/15">{entry.performedByInitials}</span>
                         {entry.performedBy}
                       </span>
-                      {entry.referenceId !== '—' && <span className="font-semibold text-primary">{entry.referenceId}</span>}
-                      <span>IP: {entry.ipAddress}</span>
+                      {entry.referenceId !== '—' && (
+                        <span className="font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-md text-[11px]">
+                          {entry.referenceId}
+                        </span>
+                      )}
+                      <span className="tabular-nums">IP: {entry.ipAddress}</span>
                     </div>
                   </div>
                 </button>
@@ -610,103 +675,113 @@ export default function AuditTrailPage() {
             })}
           </div>
 
+          {/* Pagination Controls */}
           {filtered.length > perPage && (
-            <div className="flex flex-col gap-3 border-t border-border/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <span className="text-xs text-muted-foreground">
-                Showing {(currentPage - 1) * perPage + 1}–{Math.min(currentPage * perPage, filtered.length)} of {filtered.length}
+            <div className="flex flex-col gap-3 border-t border-border/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between bg-muted/20">
+              <span className="text-xs text-muted-foreground font-medium">
+                Showing {(safePage - 1) * perPage + 1}–{Math.min(safePage * perPage, filtered.length)} of {filtered.length} entries
               </span>
               <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  className="flex size-10 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted disabled:opacity-40"
-                  disabled={currentPage === 1}
-                  onClick={() => setCurrentPage((p) => p - 1)}
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  disabled={safePage === 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  title="Previous page"
                 >
-                  <ChevronLeft size={14} />
-                </button>
+                  <ChevronLeft className="size-4" />
+                </Button>
                 {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                  <button
+                  <Button
                     key={p}
-                    type="button"
-                    className={`flex size-10 items-center justify-center rounded-lg border text-sm font-medium transition ${currentPage === p ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:bg-muted'}`}
+                    variant={safePage === p ? 'default' : 'outline'}
+                    size="icon-sm"
+                    className="text-xs font-semibold"
                     onClick={() => setCurrentPage(p)}
                   >
                     {p}
-                  </button>
+                  </Button>
                 ))}
-                <button
-                  type="button"
-                  className="flex size-10 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted disabled:opacity-40"
-                  disabled={currentPage === totalPages}
-                  onClick={() => setCurrentPage((p) => p + 1)}
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  disabled={safePage === totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  title="Next page"
                 >
-                  <ChevronRight size={14} />
-                </button>
+                  <ChevronRight className="size-4" />
+                </Button>
               </div>
             </div>
           )}
-        </div>
+        </Card>
       ) : (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/80 bg-card py-14 text-center shadow-sm">
-          <div className="flex size-14 items-center justify-center rounded-2xl bg-muted/60 text-muted-foreground">
-            <History size={28} />
-          </div>
-          <h3 className="mt-4 text-base font-semibold text-foreground">No audit entries found</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {isFiltered ? 'No matching logs for selected filters.' : 'No audit trail entries recorded yet.'}
-          </p>
-          {isFiltered && (
-            <button type="button" className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-xl border border-input bg-background px-4 text-xs font-semibold text-foreground hover:bg-muted" onClick={resetFilters}>
-              <RotateCcw size={14} /> Clear All Filters
-            </button>
-          )}
-        </div>
+        <EmptyState
+          icon={History}
+          title="No audit entries found"
+          description={isFiltered ? 'No matching logs for selected filters.' : 'No audit trail entries recorded yet.'}
+          action={
+            isFiltered && (
+              <Button variant="outline" onClick={resetFilters}>
+                <RotateCcw className="size-4" /> Clear All Filters
+              </Button>
+            )
+          }
+        />
       )}
 
-      {/* Detail Modal */}
-      {detail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setDetail(null)}>
-          <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-border/70 bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-border/70 px-6 py-4">
-              <div className="flex items-center gap-2 text-base font-semibold text-foreground">
-                <History size={20} />
-                <span>Audit Entry Detail</span>
+      {/* Detail Modal Dialog */}
+      <Dialog open={!!detail} onOpenChange={(open) => { if (!open) setDetail(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary">
+                <History className="size-4" />
               </div>
-              <button type="button" className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted" onClick={() => setDetail(null)}>
-                <X size={18} />
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
+              Audit Entry Detail
+            </DialogTitle>
+          </DialogHeader>
+
+          {detail && (
+            <div className="space-y-4 pt-2">
               <div className="flex items-center gap-2">
-                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${ACTION_CONFIG[detail.action]?.classes || ''}`}>{detail.action}</span>
-                <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-foreground">{detail.module}</span>
+                <Badge tone={ACTION_CONFIG[detail.action]?.tone || 'neutral'}>
+                  <span className="size-1.5 rounded-full bg-current" />
+                  {detail.action}
+                </Badge>
+                <Badge tone="neutral">{detail.module}</Badge>
               </div>
-              <p className="text-sm font-medium text-foreground">{detail.description}</p>
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
-                  <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Performed By</span>
-                  <span className="mt-0.5 block text-xs font-semibold text-foreground">{detail.performedBy}</span>
+              <p className="text-sm font-medium leading-relaxed text-foreground bg-accent/30 p-3.5 rounded-xl border border-border/60">
+                {detail.description}
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-border/65 bg-secondary/40 p-3">
+                  <span className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Performed By</span>
+                  <span className="mt-1 block text-xs font-semibold text-foreground">{detail.performedBy}</span>
                 </div>
-                <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
-                  <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Reference</span>
-                  <span className="mt-0.5 block text-xs font-semibold text-foreground">{detail.referenceId}</span>
+                <div className="rounded-xl border border-border/65 bg-secondary/40 p-3">
+                  <span className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Reference</span>
+                  <span className="mt-1 block text-xs font-semibold text-primary">{detail.referenceId}</span>
                 </div>
-                <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
-                  <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">IP Address</span>
-                  <span className="mt-0.5 block text-xs font-semibold text-foreground">{detail.ipAddress}</span>
+                <div className="rounded-xl border border-border/65 bg-secondary/40 p-3">
+                  <span className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">IP Address</span>
+                  <span className="mt-1 block text-xs font-semibold tabular-nums text-foreground">{detail.ipAddress}</span>
                 </div>
-                <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
-                  <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Timestamp</span>
-                  <span className="mt-0.5 block text-xs font-semibold text-foreground">{formatDateTime(detail.timestamp)}</span>
+                <div className="rounded-xl border border-border/65 bg-secondary/40 p-3">
+                  <span className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Timestamp</span>
+                  <span className="mt-1 block text-xs font-semibold text-foreground">{formatDateTime(detail.timestamp)}</span>
                 </div>
               </div>
             </div>
-            <div className="flex items-center justify-end border-t border-border/70 bg-muted/20 px-6 py-4">
-              <button type="button" className="min-h-11 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90" onClick={() => setDetail(null)}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
+          )}
+
+          <DialogFooter className="pt-2">
+            <Button variant="default" onClick={() => setDetail(null)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Audit Export Modal */}
       <AuditExportModal
@@ -716,6 +791,6 @@ export default function AuditTrailPage() {
         totalLogsCount={auditLog.length}
         activeFilterSummary={activeFilterSummary}
       />
-    </div>
+    </PageFrame>
   );
 }

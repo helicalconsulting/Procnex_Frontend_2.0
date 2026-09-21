@@ -13,6 +13,8 @@ export default function VendorNotificationBell() {
   const [notifications, setNotifications] = useState<VendorNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [bouncing, setBouncing] = useState(false);
+  const bounceTimer = useRef<ReturnType<typeof setTimeout>>();
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -58,19 +60,21 @@ export default function VendorNotificationBell() {
     // so polling at 15s is enough as a safety net.
     const interval = setInterval(load, 15000);
 
+    const triggerBounce = () => {
+      setBouncing(true);
+      clearTimeout(bounceTimer.current);
+      bounceTimer.current = setTimeout(() => setBouncing(false), 600);
+      void load();
+    };
+
     // SSE real-time listener — instant notification delivery
-    // SSE connection is managed centrally by AppLayout
-    const unsubscribe = sseClient.on('vendor_notification', () => {
-      void load();
-    });
-    // Also listen for generic 'notification' events
-    const unsubscribeGeneric = sseClient.on('notification', () => {
-      void load();
-    });
+    const unsubscribe = sseClient.on('vendor_notification', triggerBounce);
+    const unsubscribeGeneric = sseClient.on('notification', triggerBounce);
 
     return () => {
       window.clearTimeout(timeout);
       clearInterval(interval);
+      clearTimeout(bounceTimer.current);
       unsubscribe();
       unsubscribeGeneric();
     };
@@ -110,15 +114,21 @@ export default function VendorNotificationBell() {
       <button
         ref={triggerRef}
         type="button"
-        className="relative inline-flex size-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card active:scale-[0.97]"
+        className="group relative inline-flex size-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card active:scale-[0.97]"
         title="Notifications"
         onClick={handleOpen}
         aria-expanded={open}
       >
-        <Bell size={18} />
-        {unreadCount > 0 && (
-          <span className="topbar__notif-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
-        )}
+        <div className="relative inline-flex items-center justify-center">
+          <Bell size={19} className="transition-transform group-hover:scale-105" />
+          {unreadCount > 0 && (
+            <span
+              className={`vnotif-badge topbar__notif-badge${bouncing ? ' vnotif-badge--bounce topbar__notif-badge--bounce' : ''}`}
+            >
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </div>
       </button>
 
       {/* Notification panel — using FloatingMenu */}

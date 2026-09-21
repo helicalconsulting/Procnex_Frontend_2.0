@@ -35,6 +35,8 @@ import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyM
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
+import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
+import '../../components/shared/ColumnCustomizer.css';
 import { Input } from '../../components/ui/input';
 import { MetricCard, PageFrame, PageLead } from '../../components/ui/product';
 import { cn } from '../../lib/utils';
@@ -96,6 +98,18 @@ export default function CreatePaymentVoucherPage() {
   const [deleteTarget, setDeleteTarget] = useState<Payment | null>(null);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  const VOUCHER_COLS = [
+    { key: 'voucherNumber', label: 'VOUCHER NUMBER', defaultVisible: true, required: true },
+    { key: 'vendor', label: 'VENDOR', defaultVisible: true },
+    { key: 'voucherDate', label: 'VOUCHER DATE', defaultVisible: true },
+    { key: 'currency', label: 'CURRENCY', defaultVisible: true },
+    { key: 'netDisbursement', label: 'NET DISBURSEMENT', defaultVisible: true },
+    { key: 'status', label: 'STATUS', defaultVisible: true },
+  ];
+  const [voucherColOrder, setVoucherColOrder] = useState<string[]>(VOUCHER_COLS.map((c) => c.key));
+  const [voucherVisibleKeys, setVoucherVisibleKeys] = useState<Set<string>>(new Set(VOUCHER_COLS.map((c) => c.key)));
+  const [showVoucherColPanel, setShowVoucherColPanel] = useState(false);
 
   // Selected voucher for detail modal view
   const [selectedVoucherForModal, setSelectedVoucherForModal] = useState<PaymentVoucherDocData | null>(null);
@@ -794,7 +808,45 @@ export default function CreatePaymentVoucherPage() {
                     <th className="w-[100px] px-3 py-3">CURRENCY</th>
                     <th className="w-[170px] px-3 py-3 text-right">NET DISBURSEMENT</th>
                     <th className="w-[160px] px-3 py-3">STATUS</th>
-                    <th className="w-[120px] px-3 py-3 text-center">ACTIONS</th>
+                    <th className="w-[120px] px-3 py-3 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <span>ACTIONS</span>
+                        <div className="relative">
+                          <Button
+                            variant={showVoucherColPanel ? 'secondary' : 'ghost'}
+                            size="icon-sm"
+                            onClick={() => setShowVoucherColPanel((v) => !v)}
+                            title="Customize columns"
+                            aria-label="Customize columns"
+                            aria-expanded={showVoucherColPanel}
+                          >
+                            <span className="flex gap-0.5"><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /></span>
+                          </Button>
+
+                          {showVoucherColPanel && (
+                            <ColumnCustomizer
+                              columnOrder={voucherColOrder}
+                              visibleKeys={voucherVisibleKeys}
+                              allColumns={VOUCHER_COLS}
+                              onToggle={(key) => {
+                                setVoucherVisibleKeys((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(key)) next.delete(key);
+                                  else next.add(key);
+                                  return next;
+                                });
+                              }}
+                              onReorder={setVoucherColOrder}
+                              onReset={() => {
+                                setVoucherColOrder(VOUCHER_COLS.map((c) => c.key));
+                                setVoucherVisibleKeys(new Set(VOUCHER_COLS.map((c) => c.key)));
+                              }}
+                              onClose={() => setShowVoucherColPanel(false)}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">

@@ -22,6 +22,8 @@ import { useAuth } from '../../context/AuthContext';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
+import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
+import '../../components/shared/ColumnCustomizer.css';
 import {
   Dialog,
   DialogContent,
@@ -84,6 +86,31 @@ export default function GRNListPage() {
   const [search, setSearch] = useState('');
   const [kpiFilter, setKpiFilter] = useState<'ALL' | 'PENDING' | 'GRN'>('ALL');
   const [selectedGrn, setSelectedGrn] = useState<GoodsReceivedNote | null>(null);
+
+  // Column Customizer state for PO table and GRN table
+  const PO_COLS = [
+    { key: 'poNumber', label: 'PO Number', defaultVisible: true, required: true },
+    { key: 'vendor', label: 'Supplier / Vendor', defaultVisible: true },
+    { key: 'totalValue', label: 'Total Value', defaultVisible: true },
+    { key: 'orderDate', label: 'Order Date', defaultVisible: true },
+    { key: 'status', label: 'Status', defaultVisible: true },
+  ];
+  const GRN_COLS = [
+    { key: 'grnNumber', label: 'Dispatch Note #', defaultVisible: true, required: true },
+    { key: 'linkedPo', label: 'Linked PO #', defaultVisible: true },
+    { key: 'vendor', label: 'Supplier / Vendor', defaultVisible: true },
+    { key: 'receivedDate', label: 'Received Date', defaultVisible: true },
+    { key: 'itemsCount', label: 'Items Count', defaultVisible: true },
+  ];
+  const [poColOrder, setPoColOrder] = useState<string[]>(PO_COLS.map((c) => c.key));
+  const [poVisibleKeys, setPoVisibleKeys] = useState<Set<string>>(new Set(PO_COLS.map((c) => c.key)));
+  const [showPoColPanel, setShowPoColPanel] = useState(false);
+  const poColBtnRef = useState<HTMLButtonElement | null>(null);
+
+  const [grnColOrder, setGrnColOrder] = useState<string[]>(GRN_COLS.map((c) => c.key));
+  const [grnVisibleKeys, setGrnVisibleKeys] = useState<Set<string>>(new Set(GRN_COLS.map((c) => c.key)));
+  const [showGrnColPanel, setShowGrnColPanel] = useState(false);
+  const grnColBtnRef = useState<HTMLButtonElement | null>(null);
 
   // Load GRNs (0ms cache TTL for instant fresh data)
   const { data: grnData, loading: grnLoading, forceRefresh: forceRefreshGRNs } = useServiceData(
@@ -475,7 +502,45 @@ export default function GRNListPage() {
                     <th className="px-5 py-3.5 font-right">Total Value</th>
                     <th className="px-5 py-3.5">Order Date</th>
                     <th className="px-5 py-3.5 text-center">Status</th>
-                    <th className="px-5 py-3.5 text-right">Actions</th>
+                    <th className="px-5 py-3.5 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <span>Actions</span>
+                        <div className="relative">
+                          <Button
+                            variant={showPoColPanel ? 'secondary' : 'ghost'}
+                            size="icon-sm"
+                            onClick={() => setShowPoColPanel((v) => !v)}
+                            title="Customize columns"
+                            aria-label="Customize columns"
+                            aria-expanded={showPoColPanel}
+                          >
+                            <span className="flex gap-0.5"><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /></span>
+                          </Button>
+
+                          {showPoColPanel && (
+                            <ColumnCustomizer
+                              columnOrder={poColOrder}
+                              visibleKeys={poVisibleKeys}
+                              allColumns={PO_COLS}
+                              onToggle={(key) => {
+                                setPoVisibleKeys((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(key)) next.delete(key);
+                                  else next.add(key);
+                                  return next;
+                                });
+                              }}
+                              onReorder={setPoColOrder}
+                              onReset={() => {
+                                setPoColOrder(PO_COLS.map((c) => c.key));
+                                setPoVisibleKeys(new Set(PO_COLS.map((c) => c.key)));
+                              }}
+                              onClose={() => setShowPoColPanel(false)}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
@@ -518,32 +583,36 @@ export default function GRNListPage() {
                                 statusStr === 'INVOICED' ||
                                 statusStr === 'CLOSED' ||
                                 (poNumLower && invoicedPoNumbers.has(poNumLower)) ||
-                                (poIdLower && invoicedPoNumbers.has(poIdLower)) ||
-                                allRecordedDispatches.some(
-                                  (g) =>
-                                    (g.poId && String(g.poId).toLowerCase() === poIdLower) ||
-                                    (g.purchaseOrder?.poNumber && String(g.purchaseOrder.poNumber).toLowerCase() === poNumLower)
-                                );
+                                (poIdLower && invoicedPoNumbers.has(poIdLower));
 
                               if (isAlreadyInvoiced) {
                                 return (
-                                  <Badge variant="secondary" className="gap-1.5 py-1 px-2.5 text-xs font-medium text-muted-foreground">
-                                    <CheckCircle2 className="size-3.5 text-emerald-500" /> Invoice Sent
-                                  </Badge>
+                                  <span className="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400 text-xs">
+                                    <CheckCircle2 size={14} /> Invoiced
+                                  </span>
                                 );
                               }
 
                               return (
-                                <Button
-                                  variant="default"
-                                  size="sm"
-                                  className="gap-1.5 shadow-xs"
-                                  disabled={!canCreateInvoice}
-                                  onClick={() => canCreateInvoice && navigate(`/vendor/create-invoice?poId=${po.id || po.poNumber}`)}
-                                  title={!canCreateInvoice ? 'You do not have permission to create purchase invoices.' : undefined}
-                                >
-                                  <Receipt className="size-3.5" /> Generate Invoice <ArrowRight className="size-3" />
-                                </Button>
+                                <>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => navigate(`/grn/create?poId=${po.id}`)}
+                                    className="gap-1.5 shadow-xs"
+                                  >
+                                    <Truck size={14} /> Generate Dispatch Note
+                                  </Button>
+                                  {canCreateInvoice && (
+                                    <Button
+                                      size="sm"
+                                      variant="secondary"
+                                      onClick={() => navigate(`/invoices/create?poId=${po.id}`)}
+                                      className="gap-1.5"
+                                    >
+                                      <Receipt size={14} /> Direct Invoice
+                                    </Button>
+                                  )}
+                                </>
                               );
                             })()}
                           </div>
@@ -579,7 +648,45 @@ export default function GRNListPage() {
                     <th className="px-5 py-3.5">Supplier / Vendor</th>
                     <th className="px-5 py-3.5">Received Date</th>
                     <th className="px-5 py-3.5">Items Count</th>
-                    <th className="px-5 py-3.5 text-right">Actions</th>
+                    <th className="px-5 py-3.5 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <span>Actions</span>
+                        <div className="relative">
+                          <Button
+                            variant={showGrnColPanel ? 'secondary' : 'ghost'}
+                            size="icon-sm"
+                            onClick={() => setShowGrnColPanel((v) => !v)}
+                            title="Customize columns"
+                            aria-label="Customize columns"
+                            aria-expanded={showGrnColPanel}
+                          >
+                            <span className="flex gap-0.5"><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /></span>
+                          </Button>
+
+                          {showGrnColPanel && (
+                            <ColumnCustomizer
+                              columnOrder={grnColOrder}
+                              visibleKeys={grnVisibleKeys}
+                              allColumns={GRN_COLS}
+                              onToggle={(key) => {
+                                setGrnVisibleKeys((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(key)) next.delete(key);
+                                  else next.add(key);
+                                  return next;
+                                });
+                              }}
+                              onReorder={setGrnColOrder}
+                              onReset={() => {
+                                setGrnColOrder(GRN_COLS.map((c) => c.key));
+                                setGrnVisibleKeys(new Set(GRN_COLS.map((c) => c.key)));
+                              }}
+                              onClose={() => setShowGrnColPanel(false)}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">

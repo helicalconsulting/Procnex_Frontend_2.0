@@ -41,6 +41,12 @@ import {
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import DesktopWindow from '../../components/shared/DesktopWindow';
 import { useAuth } from '../../hooks/useAuth';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Card } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
+import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
+import { cn } from '../../lib/utils';
 import './NewOnboardingPage.css';
 
 // Heliflow — New Onboarding Page (Exact Phone Match)
@@ -53,6 +59,21 @@ const statusConfig: Record<InviteStatus, { label: string; cls: string; icon: Rea
   expired:   { label: 'Expired',           cls: 'expired',  icon: <XCircle size={12} /> },
   declined:  { label: 'Declined',          cls: 'declined', icon: <XCircle size={12} /> },
 };
+
+function getStatusTone(status: InviteStatus): 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info' {
+  switch (status) {
+    case 'approved':
+    case 'in_queue':
+      return 'success';
+    case 'pending':
+      return 'warning';
+    case 'expired':
+    case 'declined':
+      return 'danger';
+    default:
+      return 'neutral';
+  }
+}
 
 function levenshteinDistance(a: string, b: string): number {
   if (a === b) return 0;
@@ -874,100 +895,104 @@ export default function NewOnboardingPage() {
     }
   }, [reload]);
 
-  const renderInvitationCard = (inv: VendorInvitationRow, compact: boolean) => {
+  const renderInvitationCard = (inv: VendorInvitationRow, _compact: boolean) => {
     const st = statusConfig[inv.status];
 
     return (
       <div
         key={inv.id}
-        className={`onb-invite-item ${compact ? '' : 'onb-invite-item--expanded-view'} onb-invite-item--clickable`}
-        onClick={goToQueue}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter') goToQueue(); }}
-        title="View in Onboarding Queue"
+        className="group relative rounded-xl border border-border/65 bg-card p-4 transition-all hover:border-primary/40 hover:shadow-xs"
       >
-        <div className="onb-invite-item__top">
-          <div className="onb-invite-item__info">
-            <div className={`onb-invite-item__icon-box onb-invite-item__icon-box--${st.cls}`}>
-              <Building2 size={16} />
-            </div>
-            <div className="onb-invite-item__details">
-              <span className="onb-invite-item__name">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span
+                className="cursor-pointer font-semibold text-foreground hover:text-primary transition-colors flex items-center gap-1.5"
+                onClick={goToQueue}
+              >
                 {inv.companyName}
                 {(inv.status === 'in_queue' || inv.status === 'approved') && (
-                  <ExternalLink size={11} className="onb-invite-item__external-icon" />
+                  <ExternalLink size={12} className="text-muted-foreground" />
                 )}
               </span>
-              <span className="onb-invite-item__email">
-                <Mail size={11} />
-                {inv.contactEmail}
+            </div>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <Mail size={12} /> {inv.contactEmail}
               </span>
               {inv.contactPerson && (
-                <span className="onb-invite-item__contact">
-                  <Users size={11} />
-                  {inv.contactPerson}
+                <span className="flex items-center gap-1">
+                  <Users size={12} /> {inv.contactPerson}
                 </span>
               )}
               {inv.category && (
-                <span className="onb-invite-item__contact" style={{ color: 'var(--primary-500)', fontWeight: 600 }}>
-                  <Tag size={11} />
-                  {inv.category}
+                <span className="flex items-center gap-1 font-medium text-primary">
+                  <Tag size={12} /> {inv.category}
                 </span>
               )}
             </div>
           </div>
-          <div className="onb-invite-item__meta">
-            <span className={`onb-invite-badge onb-invite-badge--${st.cls}`}>
-              {st.icon} {st.label}
-            </span>
-            <span className="onb-invite-item__date">Sent: {inv.sentAt}</span>
+
+          <div className="flex flex-col items-end gap-1.5 shrink-0">
+            <Badge tone={getStatusTone(inv.status)}>
+              <span className="size-1.5 rounded-full bg-current mr-1" />
+              {st.label}
+            </Badge>
+            <span className="text-[11px] text-muted-foreground">Sent: {inv.sentAt}</span>
           </div>
         </div>
 
-
-
-        <div className="onb-invite-item__bottom">
-          <button type="button" className="onb-invite-code" onClick={(e) => { e.stopPropagation(); handleCopyCode(inv.inviteCode); }}>
-            <span className="onb-invite-code__text">{inv.inviteCode}</span>
-            {copiedCode === inv.inviteCode
-              ? <CheckCircle2 size={12} className="onb-invite-code__copied" />
-              : <Copy size={12} className="onb-invite-code__copy" />
-            }
+        <div className="mt-3.5 flex items-center justify-between gap-2 border-t border-border/50 pt-3">
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-muted/60 px-2.5 py-1 text-xs font-mono font-medium text-foreground hover:bg-muted transition-colors"
+            onClick={(e) => { e.stopPropagation(); handleCopyCode(inv.inviteCode); }}
+            title="Click to copy invite code"
+          >
+            <span>{inv.inviteCode}</span>
+            {copiedCode === inv.inviteCode ? (
+              <CheckCircle2 size={12} className="text-emerald-500" />
+            ) : (
+              <Copy size={12} className="text-muted-foreground" />
+            )}
           </button>
 
-          <div className="onb-invite-item__actions">
-            <button
+          <div className="flex items-center gap-1">
+            <Button
               type="button"
-              className="onb-invite-action onb-invite-action--view"
+              variant="ghost"
+              size="sm"
               onClick={(e) => { e.stopPropagation(); setDetailInvitation(inv); }}
               title="View full invitation details"
             >
-              <FileText size={12} /> View Details
-            </button>
+              <FileText className="size-3.5 mr-1" /> Details
+            </Button>
+
             {(inv.status === 'expired' || inv.status === 'pending') && (
-              <button
+              <Button
                 type="button"
-                className="onb-invite-action onb-invite-action--resend"
+                variant="outline"
+                size="sm"
                 onClick={(e) => { e.stopPropagation(); if (canCreateOnboarding) handleResend(inv.id); }}
                 disabled={!canCreateOnboarding}
                 title={!canCreateOnboarding ? 'Admin has not allowed this action. You do not have permission to resend invitations.' : 'Resend Email'}
-                style={!canCreateOnboarding ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
               >
-                <RefreshCw size={12} /> Resend Email
-              </button>
+                <RefreshCw className="size-3.5 mr-1" /> Resend
+              </Button>
             )}
+
             {inv.status !== 'approved' && (
-              <button
+              <Button
                 type="button"
-                className="onb-invite-action onb-invite-action--delete"
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                 onClick={(e) => { e.stopPropagation(); if (canCreateOnboarding) handleDelete(inv.id); }}
                 disabled={!canCreateOnboarding}
                 title={!canCreateOnboarding ? 'Admin has not allowed this action. You do not have permission to delete invitations.' : 'Delete Invitation'}
-                style={!canCreateOnboarding ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
               >
-                <Trash2 size={12} />
-              </button>
+                <Trash2 className="size-3.5" />
+              </Button>
             )}
           </div>
         </div>
@@ -976,690 +1001,720 @@ export default function NewOnboardingPage() {
   };
 
   const sentInvitationsContent = loading ? (
-    <div className="onb-list-empty">
-      <p className="onb-list-empty__desc">Loading invitations…</p>
-    </div>
+    <div className="p-8 text-center text-sm text-muted-foreground">Loading invitations…</div>
   ) : visibleInvitations.length === 0 ? (
-    <div className="onb-list-empty">
-      <Send size={40} />
-      <p className="onb-list-empty__title">No invitations sent yet</p>
-      <p className="onb-list-empty__desc">Use the form to invite a supplier</p>
-    </div>
+    <EmptyState
+      className="m-2 min-h-64 border-0 shadow-none"
+      icon={Send}
+      title="No invitations sent yet"
+      description="Use the form to invite a supplier to register."
+    />
   ) : (
-    <div className="onb-list-items">
+    <div className="space-y-3">
       {visibleInvitations.map((inv) => renderInvitationCard(inv, true))}
       {/* Show deleting items with reduced opacity */}
       {invitations.filter((inv) => deletingIds.has(inv.id)).map((inv) => (
-        <div key={inv.id} className="onb-invite-item" style={{ opacity: 0.35, pointerEvents: 'none' }}>
-          <div className="onb-invite-item__top">
-            <div className="onb-invite-item__info">
-              <div className="onb-invite-item__icon-box onb-invite-item__icon-box--pending">
-                <Building2 size={16} />
-              </div>
-              <div className="onb-invite-item__details">
-                <span className="onb-invite-item__name">{inv.companyName}</span>
-                <span className="onb-invite-item__email"><Mail size={11} /> {inv.contactEmail}</span>
-              </div>
+        <div key={inv.id} className="rounded-xl border border-border/50 bg-card p-4 opacity-35 pointer-events-none">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-semibold text-foreground">{inv.companyName}</p>
+              <p className="text-xs text-muted-foreground">{inv.contactEmail}</p>
             </div>
+            <span className="text-xs text-muted-foreground">Deleting…</span>
           </div>
-          <div style={{ padding: '8px 16px', fontSize: 13, color: '#9ea4a9' }}>Deleting…</div>
         </div>
       ))}
     </div>
   );
 
   return (
-    <div className="onb-page">
-      <div className="onb-page__header">
-        <div className="onb-page__header-left">
-          <h1>New Onboarding</h1>
-          <p>Send invitations to suppliers — they register and enter the approval queue</p>
-        </div>
-      </div>
-
+    <PageFrame>
       {(error || formError) && (
         <MessageStrip type="error" onClose={() => setFormError(null)}>
           {formError || error}
         </MessageStrip>
       )}
 
-      <div className="onb-kpi-row">
+      <PageLead
+        title="New Onboarding"
+        description="Send invitations to suppliers — they register and enter the approval queue."
+        actions={
+          <Button variant="outline" onClick={() => navigate('/onboarding/queue')}>
+            View Onboarding Queue <ArrowRight className="size-4 ml-1.5" />
+          </Button>
+        }
+      />
+
+      {/* KPI Cards */}
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
         {[
-          { label: 'Invitations Sent', value: sentCount, cls: 'blue' },
-          { label: 'Waiting for user response', value: pendingCount, cls: 'amber' },
-          { label: 'In Approval Queue', value: inQueueCount, cls: 'green' },
-        ].map((k) => (
-          <div key={k.label} className="onb-kpi-card">
-            <span className="onb-kpi-card__label">{k.label}</span>
-            <span className={`onb-kpi-card__value onb-kpi-card__value--${k.cls}`}>{k.value}</span>
-          </div>
+          { icon: Send, tone: 'primary' as const, value: sentCount, label: 'Invitations Sent', detail: 'All sent invitations' },
+          { icon: Clock, tone: 'warning' as const, value: pendingCount, label: 'Waiting for user response', detail: 'Pending vendor response' },
+          { icon: CheckCircle2, tone: 'success' as const, value: inQueueCount, label: 'In Approval Queue', detail: 'Ready for approval' },
+        ].map((c) => (
+          <MetricCard
+            key={c.label}
+            icon={c.icon}
+            tone={c.tone}
+            value={c.value}
+            label={c.label}
+            detail={c.detail}
+            className="select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-all duration-200"
+          />
         ))}
       </div>
 
-      <div className="onb-content">
-        <div className="onb-form-section">
-          {isInviteExpanded && (
-            <div className="onb-form-card-backdrop" onClick={() => setIsInviteExpanded(false)} />
-          )}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 items-start">
+        {/* Left Column (60%): Grouped Form Sections */}
+        <div className="lg:col-span-7">
+          <form onSubmit={handleSendInviteClick} className="space-y-5">
+            {sentSuccess && (
+              <MessageStrip type="success" compact onClose={() => setSentSuccess('')} autoHideMs={4000}>
+                {sentSuccess}
+              </MessageStrip>
+            )}
 
-          <div className={`onb-form-card ${isInviteExpanded ? 'onb-form-card--expanded' : ''}`}>
-            <div className="onb-form-card__header">
-              <div className="onb-form-card__header-icon">
-                <Send size={16} />
-              </div>
-              <div className="onb-form-card__header-copy">
-                <h2 className="onb-form-card__header-title">Send Invitation</h2>
-                <p className="onb-form-card__header-sub">Invite a supplier to register</p>
-              </div>
-            </div>
-
-            <form onSubmit={handleSendInviteClick} className="onb-form-card__body">
-              {sentSuccess && (
-                <MessageStrip type="success" compact onClose={() => setSentSuccess('')} autoHideMs={4000}>
-                  {sentSuccess}
-                </MessageStrip>
-              )}
-
-              <div className="onb-form-field">
-                <label className="onb-form-field__label">
-                  Company Name <span>*</span>
-                  {searchLoading && <span className="onb-search-spinner" />}
-                </label>
-                <div className="onb-form-field__input-wrap">
-                  <Building2 size={16} className="onb-form-field__icon" />
-                  <input
-                    ref={companyNameRef}
-                    type="text"
-                    value={companyName}
-                    onChange={handleCompanyNameChange}
-                    onFocus={() => {
-                      if (searchResults.length > 0 && companyName.trim().length >= 2 && !continuedAsNewRef.current) {
-                        setShowSuggestions(true);
-                      }
-                    }}
-                    onBlur={handleCompanyNameBlur}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        setShowSuggestions(false);
-                        emailRef.current?.focus();
-                      }
-                    }}
-                    placeholder="e.g. Aztech Components Ltd"
-                    required
-                    autoComplete="off"
-                    className="onb-form-field__input"
-                  />
-                </div>
-
-                {/* Vendor Search Suggestions Dropdown */}
-                <VendorSuggestDropdown
-                  query={companyName}
-                  results={searchResults}
-                  loading={searchLoading}
-                  hasSearched={hasSearched}
-                  onSelect={handleSelectSearchResult}
-                  onClose={handleCloseSuggestions}
-                  anchorRef={companyNameRef}
-                  visible={showSuggestions}
-                />
+            {/* 1. Supplier Details Section */}
+            <Card className="p-5 border-border/70 shadow-xs space-y-4">
+              <div className="flex items-center gap-2 border-b border-border/60 pb-3 text-sm font-semibold text-foreground">
+                <Building2 className="size-4 text-primary" />
+                <span>Supplier Details</span>
               </div>
 
-              <div className="onb-form-field">
-                <label className="onb-form-field__label">Vendor Email <span>*</span></label>
-                <div className="onb-form-field__input-wrap">
-                  <Mail size={16} className="onb-form-field__icon" />
-                  <input
-                    ref={emailRef}
-                    type="email"
-                    value={contactEmail}
-                    onChange={(e) => setContactEmail(e.target.value)}
-                    onFocus={() => {
-                      checkAndShowDuplicateAlert();
-                    }}
-                    placeholder="vendor@company.com"
-                    required
-                    className={`onb-form-field__input ${isEmailInvalid ? 'onb-form-field__input--error' : ''}`}
-                    style={isEmailInvalid ? { borderColor: '#ef4444' } : undefined}
-                  />
-                </div>
-                {isEmailInvalid && (
-                  <span style={{ fontSize: '13px', color: '#ef4444', marginTop: '4px', display: 'block', fontWeight: 500 }}>
-                    Please enter a valid email address with domain extension (e.g. name@domain.com)
-                  </span>
-                )}
-              </div>
-
-              <div className="onb-form-field">
-                <label className="onb-form-field__label">Contact Person</label>
-                <div className="onb-form-field__input-wrap">
-                  <Users size={16} className="onb-form-field__icon" />
-                  <input
-                    type="text"
-                    value={contactPerson}
-                    onChange={(e) => setContactPerson(e.target.value)}
-                    onFocus={() => {
-                      checkAndShowDuplicateAlert();
-                    }}
-                    placeholder="Full name"
-                    className="onb-form-field__input"
-                  />
-                </div>
-              </div>
-
-              <div className="onb-form-field">
-                <label className="onb-form-field__label">Phone Number</label>
-                <PhoneInput
-                  countryCode={contactCountryCode}
-                  onCountryCodeChange={setContactCountryCode}
-                  value={contactPhone}
-                  onChange={setContactPhone}
-                  hasError={isPhoneInvalid}
-                  placeholder="Type your mobile number"
-                />
-                {isPhoneInvalid && (
-                  <span style={{ fontSize: '13px', color: '#ef4444', marginTop: '4px', display: 'block' }}>
-                    Please enter a valid phone number (7 to 15 digits)
-                  </span>
-                )}
-              </div>
-
-              <div className="onb-form-field">
-                <label className="onb-form-field__label">Vendor Category</label>
-                <div className="onb-form-field__input-wrap">
-                  <Tag size={16} className="onb-form-field__icon" />
-                  <select
-                    value={selectedCategoryId || (categories.some((c) => c.name === selectedCategory) ? categories.find((c) => c.name === selectedCategory)?.id : '')}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      const catObj = categories.find((c) => c.id === val);
-                      if (catObj) {
-                        setSelectedCategory(catObj.name);
-                        setSelectedCategoryId(catObj.id);
-                      } else {
-                        setSelectedCategory('');
-                        setSelectedCategoryId(null);
-                      }
-                    }}
-                    className="onb-form-field__input"
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <option value="">Select Vendor Category (optional)</option>
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        {cat.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="onb-form-field">
-                <label className="onb-form-field__label">Notes</label>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={2}
-                  placeholder="e.g. Preferred IT hardware supplier..."
-                  className="onb-form-field__textarea"
-                />
-              </div>
-
-              {/* Flexi / Custom Fields Section */}
-              <div className="onb-form-field" style={{ marginTop: 8 }}>
-                <label className="onb-form-field__label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>Custom Flexi Fields</span>
-                </label>
-
-                {onboardingFlexiFields.map((field) => (
-                  <div
-                    key={field.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justify: 'space-between',
-                      gap: 12,
-                      padding: '8px 12px',
-                      marginBottom: 6,
-                      background: 'var(--surface-card, #1e2530)',
-                      border: '1px solid var(--border, #2d3748)',
-                      borderRadius: 'var(--radius-md, 6px)',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary, #fff)' }}>
-                        {field.label}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 600,
-                          color: 'var(--primary-500, #0a6ed1)',
-                          background: 'rgba(10,110,209,0.12)',
-                          padding: '2px 8px',
-                          borderRadius: 10,
-                          textTransform: 'capitalize',
-                        }}
-                      >
-                        {field.fieldType}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}
-                      onClick={() => removeOnboardingFlexiField(field.id)}
-                      title="Remove field"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {/* Company Name */}
+                <div className="sm:col-span-2 onb-form-field">
+                  <label className="onb-form-field__label">
+                    Company Name <span>*</span>
+                    {searchLoading && <span className="onb-search-spinner" />}
+                  </label>
+                  <div className="onb-form-field__input-wrap">
+                    <Building2 size={16} className="onb-form-field__icon" />
+                    <input
+                      ref={companyNameRef}
+                      type="text"
+                      value={companyName}
+                      onChange={handleCompanyNameChange}
+                      onFocus={() => {
+                        if (searchResults.length > 0 && companyName.trim().length >= 2 && !continuedAsNewRef.current) {
+                          setShowSuggestions(true);
+                        }
+                      }}
+                      onBlur={handleCompanyNameBlur}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          setShowSuggestions(false);
+                          emailRef.current?.focus();
+                        }
+                      }}
+                      placeholder="e.g. Aztech Components Ltd"
+                      required
+                      autoComplete="off"
+                      className="onb-form-field__input"
+                    />
                   </div>
-                ))}
+                  <VendorSuggestDropdown
+                    query={companyName}
+                    results={searchResults}
+                    loading={searchLoading}
+                    hasSearched={hasSearched}
+                    onSelect={handleSelectSearchResult}
+                    onClose={handleCloseSuggestions}
+                    anchorRef={companyNameRef}
+                    visible={showSuggestions}
+                  />
+                </div>
 
-                <div style={{ marginTop: 8 }}>
-                  <div className="onb-add-field-container" style={{ position: 'relative', display: 'inline-block' }}>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowInfoFieldMenu((v) => !v);
+                {/* Vendor Email */}
+                <div className="sm:col-span-2 onb-form-field">
+                  <label className="onb-form-field__label">Vendor Email <span>*</span></label>
+                  <div className="onb-form-field__input-wrap">
+                    <Mail size={16} className="onb-form-field__icon" />
+                    <input
+                      ref={emailRef}
+                      type="email"
+                      value={contactEmail}
+                      onChange={(e) => setContactEmail(e.target.value)}
+                      onFocus={() => {
+                        checkAndShowDuplicateAlert();
                       }}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        padding: '6px 0',
-                        border: 'none',
-                        background: 'transparent',
-                        color: 'var(--primary-500, #0a6ed1)',
-                        fontSize: 14,
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        fontFamily: 'inherit',
-                        outline: 'none',
+                      placeholder="vendor@company.com"
+                      required
+                      className={`onb-form-field__input ${isEmailInvalid ? 'onb-form-field__input--error' : ''}`}
+                      style={isEmailInvalid ? { borderColor: '#ef4444' } : undefined}
+                    />
+                  </div>
+                  {isEmailInvalid && (
+                    <span style={{ fontSize: '13px', color: '#ef4444', marginTop: '4px', display: 'block', fontWeight: 500 }}>
+                      Please enter a valid email address with domain extension (e.g. name@domain.com)
+                    </span>
+                  )}
+                </div>
+
+                {/* Contact Person */}
+                <div className="onb-form-field">
+                  <label className="onb-form-field__label">Contact Person</label>
+                  <div className="onb-form-field__input-wrap">
+                    <Users size={16} className="onb-form-field__icon" />
+                    <input
+                      type="text"
+                      value={contactPerson}
+                      onChange={(e) => setContactPerson(e.target.value)}
+                      onFocus={() => {
+                        checkAndShowDuplicateAlert();
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.75')}
-                      onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
+                      placeholder="Full name"
+                      className="onb-form-field__input"
+                    />
+                  </div>
+                </div>
+
+                {/* Phone Number */}
+                <div className="onb-form-field">
+                  <label className="onb-form-field__label">Phone Number</label>
+                  <PhoneInput
+                    countryCode={contactCountryCode}
+                    onCountryCodeChange={setContactCountryCode}
+                    value={contactPhone}
+                    onChange={setContactPhone}
+                    hasError={isPhoneInvalid}
+                    placeholder="Type your mobile number"
+                  />
+                  {isPhoneInvalid && (
+                    <span style={{ fontSize: '13px', color: '#ef4444', marginTop: '4px', display: 'block' }}>
+                      Please enter a valid phone number (7 to 15 digits)
+                    </span>
+                  )}
+                </div>
+              </div>
+            </Card>
+
+            {/* 2. Supplier Information Section */}
+            <Card className="p-5 border-border/70 shadow-xs space-y-4">
+              <div className="flex items-center gap-2 border-b border-border/60 pb-3 text-sm font-semibold text-foreground">
+                <Tag className="size-4 text-primary" />
+                <span>Supplier Information</span>
+              </div>
+
+              <div className="space-y-4">
+                {/* Vendor Category */}
+                <div className="onb-form-field">
+                  <label className="onb-form-field__label">Vendor Category</label>
+                  <div className="onb-form-field__input-wrap">
+                    <Tag size={16} className="onb-form-field__icon" />
+                    <select
+                      value={selectedCategoryId || (categories.some((c) => c.name === selectedCategory) ? categories.find((c) => c.name === selectedCategory)?.id : '')}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const catObj = categories.find((c) => c.id === val);
+                        if (catObj) {
+                          setSelectedCategory(catObj.name);
+                          setSelectedCategoryId(catObj.id);
+                        } else {
+                          setSelectedCategory('');
+                          setSelectedCategoryId(null);
+                        }
+                      }}
+                      className="onb-form-field__input"
+                      style={{ cursor: 'pointer' }}
                     >
-                      <Plus size={14} />
-                      Add Field
-                    </button>
+                      <option value="">Select Vendor Category (optional)</option>
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>
+                          {cat.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
 
-                    {showInfoFieldMenu && (
-                      <div
-                        onClick={(e) => e.stopPropagation()}
-                        style={{
-                          position: 'absolute',
-                          top: 'calc(100% + 6px)',
-                          left: 0,
-                          zIndex: 1000,
-                          background: 'var(--surface-card, #1e2530)',
-                          border: '1px solid var(--border, #2d3748)',
-                          borderRadius: 'var(--radius-md, 8px)',
-                          boxShadow: '0 12px 36px rgba(0,0,0,0.4)',
-                          minWidth: 280,
-                          maxHeight: 320,
-                          overflowY: 'auto',
-                        }}
+                {/* Notes */}
+                <div className="onb-form-field">
+                  <label className="onb-form-field__label">Notes</label>
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={2}
+                    placeholder="e.g. Preferred IT hardware supplier..."
+                    className="onb-form-field__textarea"
+                  />
+                </div>
+
+                {/* Custom Flexi Fields */}
+                <div className="onb-form-field" style={{ marginTop: 8 }}>
+                  <label className="onb-form-field__label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Custom Flexi Fields</span>
+                  </label>
+
+                  {onboardingFlexiFields.map((field) => (
+                    <div
+                      key={field.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 12,
+                        padding: '8px 12px',
+                        marginBottom: 6,
+                        background: 'var(--surface-card, #1e2530)',
+                        border: '1px solid var(--border, #2d3748)',
+                        borderRadius: 'var(--radius-md, 6px)',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary, #fff)' }}>
+                          {field.label}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 600,
+                            color: 'var(--primary-500, #0a6ed1)',
+                            background: 'rgba(10,110,209,0.12)',
+                            padding: '2px 8px',
+                            borderRadius: 10,
+                            textTransform: 'capitalize',
+                          }}
+                        >
+                          {field.fieldType}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}
+                        onClick={() => removeOnboardingFlexiField(field.id)}
+                        title="Remove field"
                       >
-                        {preconfiguredOnboardingFields.length === 0 ? (
-                          <div
-                            style={{
-                              padding: '24px 18px',
-                              textAlign: 'center',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              gap: 10,
-                            }}
-                          >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+
+                  <div style={{ marginTop: 8 }}>
+                    <div className="onb-add-field-container" style={{ position: 'relative', display: 'inline-block' }}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowInfoFieldMenu((v) => !v);
+                        }}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          padding: '6px 0',
+                          border: 'none',
+                          background: 'transparent',
+                          color: 'var(--primary-500, #0a6ed1)',
+                          fontSize: 14,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          fontFamily: 'inherit',
+                          outline: 'none',
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.75')}
+                        onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
+                      >
+                        <Plus size={14} />
+                        Add Field
+                      </button>
+
+                      {showInfoFieldMenu && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            position: 'absolute',
+                            top: 'calc(100% + 6px)',
+                            left: 0,
+                            zIndex: 1000,
+                            background: 'var(--surface-card, #1e2530)',
+                            border: '1px solid var(--border, #2d3748)',
+                            borderRadius: 'var(--radius-md, 8px)',
+                            boxShadow: '0 12px 36px rgba(0,0,0,0.4)',
+                            minWidth: 280,
+                            maxHeight: 320,
+                            overflowY: 'auto',
+                          }}
+                        >
+                          {preconfiguredOnboardingFields.length === 0 ? (
                             <div
                               style={{
-                                width: 40,
-                                height: 40,
-                                borderRadius: '50%',
-                                background: 'var(--surface-elevated, #1a2029)',
-                                border: '1px solid var(--border, #2d3748)',
+                                padding: '24px 18px',
+                                textAlign: 'center',
                                 display: 'flex',
+                                flexDirection: 'column',
                                 alignItems: 'center',
-                                justifyContent: 'center',
+                                gap: 10,
                               }}
                             >
-                              <Plus size={18} style={{ color: 'var(--text-placeholder, #64748b)' }} />
+                              <div
+                                style={{
+                                  width: 40,
+                                  height: 40,
+                                  borderRadius: '50%',
+                                  background: 'var(--surface-elevated, #1a2029)',
+                                  border: '1px solid var(--border, #2d3748)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
+                              >
+                                <Plus size={18} style={{ color: 'var(--text-placeholder, #64748b)' }} />
+                              </div>
+                              <div>
+                                <p style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 700, color: 'var(--text-primary, #fff)' }}>
+                                  No field is created yet
+                                </p>
+                                <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary, #94a3b8)', lineHeight: 1.4 }}>
+                                  Go to <strong>Settings → Form Fields</strong> to create fields for Vendor Onboarding.
+                                </p>
+                              </div>
                             </div>
-                            <div>
-                              <p style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 700, color: 'var(--text-primary, #fff)' }}>
-                                No field is created yet
-                              </p>
-                              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary, #94a3b8)', lineHeight: 1.4 }}>
-                                Go to <strong>Settings → Form Fields</strong> to create fields for Vendor Onboarding.
-                              </p>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            <div
-                              style={{
-                                padding: '10px 14px 8px',
-                                fontSize: 12,
-                                fontWeight: 700,
-                                color: 'var(--text-placeholder, #64748b)',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.5px',
-                                borderBottom: '1px solid var(--border, #2d3748)',
-                              }}
-                            >
-                              Form Settings Fields
-                            </div>
-                            {preconfiguredOnboardingFields
-                              .filter((f) => !onboardingFlexiFields.some((ef) => ef.fieldKey === f.fieldKey || ef.label === f.label))
-                              .map((f) => (
-                                <button
-                                  type="button"
-                                  key={f.fieldKey || f.id}
-                                  onClick={() => {
-                                    addOnboardingFlexiField(f);
-                                    setShowInfoFieldMenu(false);
-                                  }}
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 10,
-                                    width: '100%',
-                                    padding: '10px 14px',
-                                    border: 'none',
-                                    borderBottom: '1px solid var(--border, #2d3748)',
-                                    background: 'transparent',
-                                    color: 'var(--text-primary, #fff)',
-                                    fontSize: 14,
-                                    cursor: 'pointer',
-                                    textAlign: 'left',
-                                    fontFamily: 'inherit',
-                                    transition: 'background 0.15s',
-                                  }}
-                                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-hover, rgba(255,255,255,0.06))')}
-                                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                                >
-                                  <span
+                          ) : (
+                            <>
+                              <div
+                                style={{
+                                  padding: '10px 14px 8px',
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                  color: 'var(--text-placeholder, #64748b)',
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.5px',
+                                  borderBottom: '1px solid var(--border, #2d3748)',
+                                }}
+                              >
+                                Form Settings Fields
+                              </div>
+                              {preconfiguredOnboardingFields
+                                .filter((f) => !onboardingFlexiFields.some((ef) => ef.fieldKey === f.fieldKey || ef.label === f.label))
+                                .map((f) => (
+                                  <button
+                                    type="button"
+                                    key={f.fieldKey || f.id}
+                                    onClick={() => {
+                                      addOnboardingFlexiField(f);
+                                      setShowInfoFieldMenu(false);
+                                    }}
                                     style={{
-                                      width: 26,
-                                      height: 26,
-                                      borderRadius: 'var(--radius-sm, 6px)',
-                                      background: 'rgba(10,110,209,0.12)',
                                       display: 'flex',
                                       alignItems: 'center',
-                                      justifyContent: 'center',
-                                      flexShrink: 0,
+                                      gap: 10,
+                                      width: '100%',
+                                      padding: '10px 14px',
+                                      border: 'none',
+                                      borderBottom: '1px solid var(--border, #2d3748)',
+                                      background: 'transparent',
+                                      color: 'var(--text-primary, #fff)',
+                                      fontSize: 14,
+                                      cursor: 'pointer',
+                                      textAlign: 'left',
+                                      fontFamily: 'inherit',
+                                      transition: 'background 0.15s',
                                     }}
+                                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-hover, rgba(255,255,255,0.06))')}
+                                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                                   >
-                                    <Plus size={13} style={{ color: 'var(--primary-500, #0a6ed1)' }} />
-                                  </span>
-                                  <span style={{ flex: 1, fontWeight: 500 }}>{f.label}</span>
-                                  <span
-                                    style={{
-                                      fontSize: 11,
-                                      fontWeight: 600,
-                                      color: 'var(--primary-500, #0a6ed1)',
-                                      background: 'rgba(10,110,209,0.12)',
-                                      padding: '2px 7px',
-                                      borderRadius: 10,
-                                      textTransform: 'capitalize',
-                                    }}
-                                  >
-                                    {f.fieldType}
-                                  </span>
-                                </button>
-                              ))}
-                            {preconfiguredOnboardingFields.filter((f) => !onboardingFlexiFields.some((ef) => ef.fieldKey === f.fieldKey || ef.label === f.label)).length === 0 && (
-                              <div style={{ padding: '14px', fontSize: 13, color: 'var(--text-secondary, #94a3b8)', textAlign: 'center' }}>
-                                All configured settings fields have been added.
-                              </div>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Items — Compact Summary + Popup Trigger */}
-              <div className="onb-items-bar">
-                <div className="onb-items-bar__left">
-                  <Package size={15} />
-                  <span className="onb-items-bar__label">Required Items</span>
-                  {items.length > 0 && (
-                    <span className="onb-items-bar__count">{items.length}</span>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  className="onb-items-bar__btn"
-                  ref={itemsBarBtnRef}
-                  onClick={() => setShowItemsPopup(true)}
-                >
-                  <Plus size={14} />
-                  {items.length === 0 ? 'Add Items' : `Edit Items (${items.length})`}
-                </button>
-              </div>
-
-              {items.length > 0 && (
-                <div className="onb-items-preview">
-                  {items.slice(0, 4).map((item, idx) => (
-                    <span key={idx} className="onb-items-preview__chip">
-                      <span className="onb-items-preview__code">{item.itemCode || '?'}</span>
-                      <span className="onb-items-preview__name">{item.itemName || 'Unnamed'}</span>
-                    </span>
-                  ))}
-                  {items.length > 4 && (
-                    <span className="onb-items-preview__more">+{items.length - 4} more</span>
-                  )}
-                </div>
-              )}
-
-              {/* ── Legal Documents Section (NDA & MNDA) — Dropdown Style ── */}
-              {(() => {
-                const legalOpen = [ndaRequired, mndaRequired, anyOtherRequired];
-                const selectedCount = legalOpen.filter(Boolean).length;
-                return (
-                  <div className="onb-legal-docs-section">
-                    <button
-                      type="button"
-                      className="onb-legal-docs-section__header onb-legal-docs-section__header--btn"
-                      onClick={() => setLegalDocsOpen(o => !o)}
-                      aria-expanded={legalDocsOpen}
-                    >
-                      <ShieldCheck size={15} className="onb-legal-docs-section__header-icon" />
-                      <span className="onb-legal-docs-section__header-title">Legal Documents</span>
-                      {selectedCount > 0 && (
-                        <span className="onb-legal-docs-section__count-badge">{selectedCount} selected</span>
+                                    <span
+                                      style={{
+                                        width: 26,
+                                        height: 26,
+                                        borderRadius: 'var(--radius-sm, 6px)',
+                                        background: 'rgba(10,110,209,0.12)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        flexShrink: 0,
+                                      }}
+                                    >
+                                      <Plus size={13} style={{ color: 'var(--primary-500, #0a6ed1)' }} />
+                                    </span>
+                                    <span style={{ flex: 1, fontWeight: 500 }}>{f.label}</span>
+                                    <span
+                                      style={{
+                                        fontSize: 11,
+                                        fontWeight: 600,
+                                        color: 'var(--primary-500, #0a6ed1)',
+                                        background: 'rgba(10,110,209,0.12)',
+                                        padding: '2px 7px',
+                                        borderRadius: 10,
+                                        textTransform: 'capitalize',
+                                      }}
+                                    >
+                                      {f.fieldType}
+                                    </span>
+                                  </button>
+                                ))}
+                              {preconfiguredOnboardingFields.filter((f) => !onboardingFlexiFields.some((ef) => ef.fieldKey === f.fieldKey || ef.label === f.label)).length === 0 && (
+                                <div style={{ padding: '14px', fontSize: 13, color: 'var(--text-secondary, #94a3b8)', textAlign: 'center' }}>
+                                  All configured settings fields have been added.
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
                       )}
-                      <ChevronDown
-                        size={15}
-                        className={`onb-legal-docs-section__chevron ${legalDocsOpen ? 'onb-legal-docs-section__chevron--open' : ''}`}
-                      />
-                    </button>
-
-                    {legalDocsOpen && (
-                      <div className="onb-legal-docs-dropdown">
-                        {/* NDA Row */}
-                        <div className={`onb-legal-doc-row ${ndaRequired ? 'onb-legal-doc-row--active' : ''}`}>
-                          <div className="onb-legal-doc-row__left">
-                            <label className="onb-legal-doc-row__toggle">
-                              <input
-                                type="checkbox"
-                                checked={ndaRequired}
-                                onChange={(e) => {
-                                  setNdaRequired(e.target.checked);
-                                  if (e.target.checked) {
-                                    setNdaTemplateId(null);
-                                    handleOpenNdaTemplateModal();
-                                  } else {
-                                    setNdaTemplateId(null);
-                                  }
-                                }}
-                                className="onb-nda-checkbox"
-                              />
-                              <div className="onb-legal-doc-row__info">
-                                <span className="onb-legal-doc-row__name">NDA Agreement</span>
-                                <span className="onb-legal-doc-row__desc">Non-Disclosure Agreement</span>
-                              </div>
-                            </label>
-                          </div>
-                          <div className="onb-legal-doc-row__right">
-                            {ndaRequired && (
-                              <>
-                                {ndaTemplateId ? (
-                                  <span className="onb-legal-doc-row__selected-badge">
-                                    <FileText size={11} />
-                                    {ndaTemplates.find(t => t.id === ndaTemplateId)?.name || 'Template Selected'}
-                                  </span>
-                                ) : (
-                                  <span className="onb-legal-doc-row__warn">No template selected</span>
-                                )}
-                                <button
-                                  type="button"
-                                  className="onb-legal-doc-row__choose-btn"
-                                  onClick={handleOpenNdaTemplateModal}
-                                >
-                                  {ndaTemplateId ? 'Change' : 'Choose Template'}
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* MNDA Row */}
-                        <div className={`onb-legal-doc-row ${mndaRequired ? 'onb-legal-doc-row--active' : ''}`}>
-                          <div className="onb-legal-doc-row__left">
-                            <label className="onb-legal-doc-row__toggle">
-                              <input
-                                type="checkbox"
-                                checked={mndaRequired}
-                                onChange={(e) => {
-                                  setMndaRequired(e.target.checked);
-                                  if (e.target.checked) {
-                                    setMndaTemplateId(null);
-                                    handleOpenMndaTemplateModal();
-                                  } else {
-                                    setMndaTemplateId(null);
-                                  }
-                                }}
-                                className="onb-nda-checkbox"
-                              />
-                              <div className="onb-legal-doc-row__info">
-                                <span className="onb-legal-doc-row__name">MNDA Agreement</span>
-                                <span className="onb-legal-doc-row__desc">Mutual Non-Disclosure Agreement</span>
-                              </div>
-                            </label>
-                          </div>
-                          <div className="onb-legal-doc-row__right">
-                            {mndaRequired && (
-                              <>
-                                {mndaTemplateId ? (
-                                  <span className="onb-legal-doc-row__selected-badge">
-                                    <FileText size={11} />
-                                    {mndaTemplates.find(t => t.id === mndaTemplateId)?.name || 'Template Selected'}
-                                  </span>
-                                ) : (
-                                  <span className="onb-legal-doc-row__warn">No template selected</span>
-                                )}
-                                <button
-                                  type="button"
-                                  className="onb-legal-doc-row__choose-btn"
-                                  onClick={handleOpenMndaTemplateModal}
-                                >
-                                  {mndaTemplateId ? 'Change' : 'Choose Template'}
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Any Other Row */}
-                        <div className={`onb-legal-doc-row ${anyOtherRequired ? 'onb-legal-doc-row--active' : ''}`}>
-                          <div className="onb-legal-doc-row__left">
-                            <label className="onb-legal-doc-row__toggle">
-                              <input
-                                type="checkbox"
-                                checked={anyOtherRequired}
-                                onChange={(e) => {
-                                  setAnyOtherRequired(e.target.checked);
-                                  if (e.target.checked) {
-                                    setAnyOtherTemplateId(null);
-                                    handleOpenAnyOtherTemplateModal();
-                                  } else {
-                                    setAnyOtherTemplateId(null);
-                                  }
-                                }}
-                                className="onb-nda-checkbox"
-                              />
-                              <div className="onb-legal-doc-row__info">
-                                <span className="onb-legal-doc-row__name">Any Other Agreement</span>
-                                <span className="onb-legal-doc-row__desc">Other legal / compliance document</span>
-                              </div>
-                            </label>
-                          </div>
-                          <div className="onb-legal-doc-row__right">
-                            {anyOtherRequired && (
-                              <>
-                                {anyOtherTemplateId ? (
-                                  <span className="onb-legal-doc-row__selected-badge">
-                                    <FileText size={11} />
-                                    {anyOtherTemplates.find(t => t.id === anyOtherTemplateId)?.name || 'Template Selected'}
-                                  </span>
-                                ) : (
-                                  <span className="onb-legal-doc-row__warn">No template selected</span>
-                                )}
-                                <button
-                                  type="button"
-                                  className="onb-legal-doc-row__choose-btn"
-                                  onClick={handleOpenAnyOtherTemplateModal}
-                                >
-                                  {anyOtherTemplateId ? 'Change' : 'Choose Template'}
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                    </div>
                   </div>
-                );
-              })()}
-
-              {/* Documents — Compact Summary + Popup Trigger */}
-              <div className="onb-items-bar">
-                <div className="onb-items-bar__left">
-                  <FileText size={15} />
-                  <span className="onb-items-bar__label">Required Documents</span>
-                  {selectedDocIds.length > 0 && (
-                    <span className="onb-items-bar__count">{selectedDocIds.length}</span>
-                  )}
                 </div>
-                <button
-                  type="button"
-                  className="onb-items-bar__btn"
-                  ref={docsBarBtnRef}
-                  onClick={handleOpenDocsPopup}
-                >
-                  <Plus size={14} />
-                  {selectedDocIds.length === 0 ? 'Select Documents' : `Edit (${selectedDocIds.length})`}
-                </button>
+              </div>
+            </Card>
+
+            {/* 3. Requirements Section */}
+            <Card className="p-5 border-border/70 shadow-xs space-y-4">
+              <div className="flex items-center gap-2 border-b border-border/60 pb-3 text-sm font-semibold text-foreground">
+                <Package className="size-4 text-primary" />
+                <span>Requirements</span>
               </div>
 
-              {selectedDocNames.length > 0 && (
-                <div className="onb-items-preview">
-                  {selectedDocNames.slice(0, 6).map((name, idx) => (
-                    <span key={idx} className="onb-items-preview__chip">
-                      <FileText size={12} style={{ opacity: 0.6, flexShrink: 0 }} />
-                      <span className="onb-items-preview__name">{name}</span>
-                    </span>
-                  ))}
-                  {selectedDocNames.length > 6 && (
-                    <span className="onb-items-preview__more">+{selectedDocNames.length - 6} more</span>
-                  )}
+              <div className="space-y-4">
+                {/* Items — Compact Summary + Popup Trigger */}
+                <div className="onb-items-bar">
+                  <div className="onb-items-bar__left">
+                    <Package size={15} />
+                    <span className="onb-items-bar__label">Required Items</span>
+                    {items.length > 0 && (
+                      <span className="onb-items-bar__count">{items.length}</span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="onb-items-bar__btn"
+                    ref={itemsBarBtnRef}
+                    onClick={() => setShowItemsPopup(true)}
+                  >
+                    <Plus size={14} />
+                    {items.length === 0 ? 'Add Items' : `Edit Items (${items.length})`}
+                  </button>
                 </div>
-              )}
+
+                {items.length > 0 && (
+                  <div className="onb-items-preview">
+                    {items.slice(0, 4).map((item, idx) => (
+                      <span key={idx} className="onb-items-preview__chip">
+                        <span className="onb-items-preview__code">{item.itemCode || '?'}</span>
+                        <span className="onb-items-preview__name">{item.itemName || 'Unnamed'}</span>
+                      </span>
+                    ))}
+                    {items.length > 4 && (
+                      <span className="onb-items-preview__more">+{items.length - 4} more</span>
+                    )}
+                  </div>
+                )}
+
+                {/* Legal Documents Section (NDA & MNDA) */}
+                {(() => {
+                  const legalOpen = [ndaRequired, mndaRequired, anyOtherRequired];
+                  const selectedCount = legalOpen.filter(Boolean).length;
+                  return (
+                    <div className="onb-legal-docs-section">
+                      <button
+                        type="button"
+                        className="onb-legal-docs-section__header onb-legal-docs-section__header--btn"
+                        onClick={() => setLegalDocsOpen(o => !o)}
+                        aria-expanded={legalDocsOpen}
+                      >
+                        <ShieldCheck size={15} className="onb-legal-docs-section__header-icon" />
+                        <span className="onb-legal-docs-section__header-title">Legal Documents</span>
+                        {selectedCount > 0 && (
+                          <span className="onb-legal-docs-section__count-badge">{selectedCount} selected</span>
+                        )}
+                        <ChevronDown
+                          size={15}
+                          className={`onb-legal-docs-section__chevron ${legalDocsOpen ? 'onb-legal-docs-section__chevron--open' : ''}`}
+                        />
+                      </button>
+
+                      {legalDocsOpen && (
+                        <div className="onb-legal-docs-dropdown">
+                          {/* NDA Row */}
+                          <div className={`onb-legal-doc-row ${ndaRequired ? 'onb-legal-doc-row--active' : ''}`}>
+                            <div className="onb-legal-doc-row__left">
+                              <label className="onb-legal-doc-row__toggle">
+                                <input
+                                  type="checkbox"
+                                  checked={ndaRequired}
+                                  onChange={(e) => {
+                                    setNdaRequired(e.target.checked);
+                                    if (e.target.checked) {
+                                      setNdaTemplateId(null);
+                                      handleOpenNdaTemplateModal();
+                                    } else {
+                                      setNdaTemplateId(null);
+                                    }
+                                  }}
+                                  className="onb-nda-checkbox"
+                                />
+                                <div className="onb-legal-doc-row__info">
+                                  <span className="onb-legal-doc-row__name">NDA Agreement</span>
+                                  <span className="onb-legal-doc-row__desc">Non-Disclosure Agreement</span>
+                                </div>
+                              </label>
+                            </div>
+                            <div className="onb-legal-doc-row__right">
+                              {ndaRequired && (
+                                <>
+                                  {ndaTemplateId ? (
+                                    <span className="onb-legal-doc-row__selected-badge">
+                                      <FileText size={11} />
+                                      {ndaTemplates.find(t => t.id === ndaTemplateId)?.name || 'Template Selected'}
+                                    </span>
+                                  ) : (
+                                    <span className="onb-legal-doc-row__warn">No template selected</span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    className="onb-legal-doc-row__choose-btn"
+                                    onClick={handleOpenNdaTemplateModal}
+                                  >
+                                    {ndaTemplateId ? 'Change' : 'Choose Template'}
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* MNDA Row */}
+                          <div className={`onb-legal-doc-row ${mndaRequired ? 'onb-legal-doc-row--active' : ''}`}>
+                            <div className="onb-legal-doc-row__left">
+                              <label className="onb-legal-doc-row__toggle">
+                                <input
+                                  type="checkbox"
+                                  checked={mndaRequired}
+                                  onChange={(e) => {
+                                    setMndaRequired(e.target.checked);
+                                    if (e.target.checked) {
+                                      setMndaTemplateId(null);
+                                      handleOpenMndaTemplateModal();
+                                    } else {
+                                      setMndaTemplateId(null);
+                                    }
+                                  }}
+                                  className="onb-nda-checkbox"
+                                />
+                                <div className="onb-legal-doc-row__info">
+                                  <span className="onb-legal-doc-row__name">MNDA Agreement</span>
+                                  <span className="onb-legal-doc-row__desc">Mutual Non-Disclosure Agreement</span>
+                                </div>
+                              </label>
+                            </div>
+                            <div className="onb-legal-doc-row__right">
+                              {mndaRequired && (
+                                <>
+                                  {mndaTemplateId ? (
+                                    <span className="onb-legal-doc-row__selected-badge">
+                                      <FileText size={11} />
+                                      {mndaTemplates.find(t => t.id === mndaTemplateId)?.name || 'Template Selected'}
+                                    </span>
+                                  ) : (
+                                    <span className="onb-legal-doc-row__warn">No template selected</span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    className="onb-legal-doc-row__choose-btn"
+                                    onClick={handleOpenMndaTemplateModal}
+                                  >
+                                    {mndaTemplateId ? 'Change' : 'Choose Template'}
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Any Other Row */}
+                          <div className={`onb-legal-doc-row ${anyOtherRequired ? 'onb-legal-doc-row--active' : ''}`}>
+                            <div className="onb-legal-doc-row__left">
+                              <label className="onb-legal-doc-row__toggle">
+                                <input
+                                  type="checkbox"
+                                  checked={anyOtherRequired}
+                                  onChange={(e) => {
+                                    setAnyOtherRequired(e.target.checked);
+                                    if (e.target.checked) {
+                                      setAnyOtherTemplateId(null);
+                                      handleOpenAnyOtherTemplateModal();
+                                    } else {
+                                      setAnyOtherTemplateId(null);
+                                    }
+                                  }}
+                                  className="onb-nda-checkbox"
+                                />
+                                <div className="onb-legal-doc-row__info">
+                                  <span className="onb-legal-doc-row__name">Any Other Agreement</span>
+                                  <span className="onb-legal-doc-row__desc">Other legal / compliance document</span>
+                                </div>
+                              </label>
+                            </div>
+                            <div className="onb-legal-doc-row__right">
+                              {anyOtherRequired && (
+                                <>
+                                  {anyOtherTemplateId ? (
+                                    <span className="onb-legal-doc-row__selected-badge">
+                                      <FileText size={11} />
+                                      {anyOtherTemplates.find(t => t.id === anyOtherTemplateId)?.name || 'Template Selected'}
+                                    </span>
+                                  ) : (
+                                    <span className="onb-legal-doc-row__warn">No template selected</span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    className="onb-legal-doc-row__choose-btn"
+                                    onClick={handleOpenAnyOtherTemplateModal}
+                                  >
+                                    {anyOtherTemplateId ? 'Change' : 'Choose Template'}
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Documents — Compact Summary + Popup Trigger */}
+                <div className="onb-items-bar">
+                  <div className="onb-items-bar__left">
+                    <FileText size={15} />
+                    <span className="onb-items-bar__label">Required Documents</span>
+                    {selectedDocIds.length > 0 && (
+                      <span className="onb-items-bar__count">{selectedDocIds.length}</span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="onb-items-bar__btn"
+                    ref={docsBarBtnRef}
+                    onClick={handleOpenDocsPopup}
+                  >
+                    <Plus size={14} />
+                    {selectedDocIds.length === 0 ? 'Select Documents' : `Edit (${selectedDocIds.length})`}
+                  </button>
+                </div>
+
+                {selectedDocNames.length > 0 && (
+                  <div className="onb-items-preview">
+                    {selectedDocNames.slice(0, 6).map((name, idx) => (
+                      <span key={idx} className="onb-items-preview__chip">
+                        <FileText size={12} style={{ opacity: 0.6, flexShrink: 0 }} />
+                        <span className="onb-items-preview__name">{name}</span>
+                      </span>
+                    ))}
+                    {selectedDocNames.length > 6 && (
+                      <span className="onb-items-preview__more">+{selectedDocNames.length - 6} more</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            {/* 4. Send Invitation Section */}
+            <Card className="p-5 border-border/70 shadow-xs space-y-4">
+              <div className="flex items-center gap-2 border-b border-border/60 pb-3 text-sm font-semibold text-foreground">
+                <Send className="size-4 text-primary" />
+                <span>Send Invitation</span>
+              </div>
 
               <div className="onb-form-info">
                 <Info size={16} className="onb-form-info__icon" />
@@ -1683,8 +1738,95 @@ export default function NewOnboardingPage() {
                   <><Send size={16} /> Send Invitation Email</>
                 )}
               </button>
-            </form>
-          </div>
+            </Card>
+          </form>
+        </div>
+
+        {/* Right Column (40%): Sticky Summary + Sent Invitations */}
+        <div className="lg:col-span-5 space-y-5 lg:sticky lg:top-6">
+          {/* Invitation Summary Card */}
+          <Card className="p-5 border-border/70 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-border/60 pb-3 text-sm font-semibold text-foreground">
+              <div className="flex items-center gap-2">
+                <FileText className="size-4 text-primary" />
+                <span>Invitation Summary</span>
+              </div>
+              <Badge tone={companyName.trim() ? 'primary' : 'neutral'}>
+                {companyName.trim() ? 'Draft In Progress' : 'New Invitation'}
+              </Badge>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="flex items-center justify-between py-1 border-b border-border/40">
+                <span className="text-muted-foreground">Supplier</span>
+                <span className="font-semibold text-foreground truncate max-w-[180px]">
+                  {companyName.trim() || '—'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between py-1 border-b border-border/40">
+                <span className="text-muted-foreground">Email</span>
+                <span className="font-medium text-foreground truncate max-w-[180px]">
+                  {contactEmail.trim() || '—'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between py-1 border-b border-border/40">
+                <span className="text-muted-foreground">Category</span>
+                <span className="font-medium text-foreground">
+                  {selectedCategory || 'Not specified'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between py-1 border-b border-border/40">
+                <span className="text-muted-foreground">Required Items</span>
+                <Badge tone={items.length > 0 ? 'info' : 'neutral'}>
+                  {items.length} {items.length === 1 ? 'item' : 'items'}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between py-1 border-b border-border/40">
+                <span className="text-muted-foreground">Legal Agreements</span>
+                <Badge tone={([ndaRequired, mndaRequired, anyOtherRequired].filter(Boolean).length) > 0 ? 'info' : 'neutral'}>
+                  {[ndaRequired, mndaRequired, anyOtherRequired].filter(Boolean).length} selected
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between py-1 border-b border-border/40">
+                <span className="text-muted-foreground">Required Documents</span>
+                <Badge tone={selectedDocIds.length > 0 ? 'info' : 'neutral'}>
+                  {selectedDocIds.length} {selectedDocIds.length === 1 ? 'document' : 'documents'}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between py-1">
+                <span className="text-muted-foreground">Custom Flexi Fields</span>
+                <Badge tone={onboardingFlexiFields.length > 0 ? 'info' : 'neutral'}>
+                  {onboardingFlexiFields.length} {onboardingFlexiFields.length === 1 ? 'field' : 'fields'}
+                </Badge>
+              </div>
+            </div>
+          </Card>
+
+          {/* Sent Invitations Card */}
+          <Card className={cn('overflow-hidden border-border/70 shadow-xs transition-all duration-200', isSentExpanded && 'fixed inset-4 sm:inset-6 z-50 overflow-y-auto bg-card border-border shadow-2xl')}>
+            <div className="flex items-center justify-between border-b border-border/60 bg-muted/40 px-5 py-4">
+              <div className="flex items-center gap-2.5">
+                <List className="size-4.5 text-muted-foreground" />
+                <h2 className="text-base font-semibold text-foreground">
+                  Sent Invitations <span className="ml-1 text-sm font-normal text-muted-foreground">({invitations.length})</span>
+                </h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="ghost" size="sm" onClick={() => navigate('/onboarding/queue')}>
+                  View Onboarding Queue <ArrowRight className="size-3.5 ml-1" />
+                </Button>
+                <Button type="button" variant="ghost" size="icon-sm" onClick={() => setIsSentExpanded(!isSentExpanded)} title={isSentExpanded ? 'Minimize' : 'Expand'}>
+                  {isSentExpanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+                </Button>
+              </div>
+            </div>
+
+            <div className="p-4 sm:p-5">
+              {sentInvitationsContent}
+            </div>
+          </Card>
+        </div>
+      </div>
 
           {/* ── Desktop-style Required Items Window ── */}
           <DesktopWindow
@@ -2221,9 +2363,8 @@ export default function NewOnboardingPage() {
                   </button>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
       {/* ── Required Document Preview Modal ── */}
       {previewDoc && (
@@ -2806,36 +2947,6 @@ export default function NewOnboardingPage() {
         </div>
       )}
 
-        <div className="onb-list-section">
-          {/* Backdrop when sent invitations are expanded */}
-          {isSentExpanded && (
-            <div className="onb-form-card-backdrop" onClick={() => setIsSentExpanded(false)} />
-          )}
-
-          <div className={`onb-list-card ${isSentExpanded ? 'onb-list-card--expanded' : ''}`}>
-            <div className="onb-list-card__header">
-              <div className="onb-list-card__header-left">
-                <List size={15} className="onb-list-card__header-icon" />
-                <h2>Sent Invitations ({invitations.length})</h2>
-              </div>
-              <div className="onb-list-card__header-actions">
-                <button className="onb-list-card__queue-link" onClick={() => navigate('/onboarding/queue')}>
-                  View Onboarding Queue <ArrowRight size={13} />
-                </button>
-              </div>
-            </div>
-
-            {isSentExpanded ? (
-              <div className="onb-list-card__expanded-body">
-                {sentInvitationsContent}
-              </div>
-            ) : (
-              sentInvitationsContent
-            )}
-          </div>
-        </div>
-      </div>
-
       {/* ── Vendor Detail Modal (from suggestion click) ── */}
       {showVendorDetail && selectedSearchVendor && (
         <VendorDetailModal
@@ -3312,6 +3423,6 @@ export default function NewOnboardingPage() {
         </div>
       )}
 
-    </div>
+    </PageFrame>
   );
 }

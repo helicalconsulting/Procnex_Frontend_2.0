@@ -291,6 +291,9 @@ export default function ApprovalsPage() {
   const [columnOrder, setColumnOrder] = useState<string[]>(defaultOrder);
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(defaultVisible);
 
+  const [showColPanel, setShowColPanel] = useState(false);
+  const colBtnRef = useRef<HTMLButtonElement>(null);
+
   const visibleColumns = useMemo(
     () => columnOrder.map((k) => ALL_COLUMNS.find((c) => c.key === k)!).filter((c) => c && visibleKeys.has(c.key)),
     [columnOrder, visibleKeys],
@@ -558,7 +561,47 @@ export default function ApprovalsPage() {
                       {col.label}
                     </th>
                   ))}
-                  <th className="px-4 py-3 text-right">Actions</th>
+                  <th className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <span>Actions</span>
+                      <div className="relative">
+                        <Button
+                          ref={colBtnRef}
+                          variant={showColPanel ? 'secondary' : 'ghost'}
+                          size="icon-sm"
+                          onClick={() => setShowColPanel((v) => !v)}
+                          title="Customize columns"
+                          aria-label="Customize columns"
+                          aria-expanded={showColPanel}
+                        >
+                          <span className="flex gap-0.5"><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /></span>
+                        </Button>
+
+                        {showColPanel && (
+                          <ColumnCustomizer
+                            columnOrder={columnOrder}
+                            visibleKeys={visibleKeys}
+                            allColumns={ALL_COLUMNS}
+                            onToggle={(key) => {
+                              setVisibleKeys((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(key)) next.delete(key);
+                                else next.add(key);
+                                return next;
+                              });
+                            }}
+                            onReorder={setColumnOrder}
+                            onReset={() => {
+                              setColumnOrder(ALL_COLUMNS.map((c) => c.key));
+                              setVisibleKeys(new Set(ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key)));
+                            }}
+                            onClose={() => setShowColPanel(false)}
+                            anchorRef={colBtnRef}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">

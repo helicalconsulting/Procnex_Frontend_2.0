@@ -39,6 +39,8 @@ import defaultHeliflowLogo from '../../assets/heliflow.png';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
+import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
+import '../../components/shared/ColumnCustomizer.css';
 import { Input } from '../../components/ui/input';
 import { MetricCard, PageFrame, PageLead } from '../../components/ui/product';
 import { cn } from '../../lib/utils';
@@ -110,6 +112,18 @@ export default function CreatePurchaseInvoicePage() {
   const [deleteTarget, setDeleteTarget] = useState<APInvoice | null>(null);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  const INV_COLS = [
+    { key: 'invoiceNumber', label: 'INVOICE NUMBER', defaultVisible: true, required: true },
+    { key: 'vendor', label: 'VENDOR', defaultVisible: true },
+    { key: 'invoiceDate', label: 'INVOICE DATE', defaultVisible: true },
+    { key: 'currency', label: 'CURRENCY', defaultVisible: true },
+    { key: 'grandTotal', label: 'GRAND TOTAL', defaultVisible: true },
+    { key: 'status', label: 'STATUS', defaultVisible: true },
+  ];
+  const [invColOrder, setInvColOrder] = useState<string[]>(INV_COLS.map((c) => c.key));
+  const [invVisibleKeys, setInvVisibleKeys] = useState<Set<string>>(new Set(INV_COLS.map((c) => c.key)));
+  const [showInvColPanel, setShowInvColPanel] = useState(false);
 
   // Load vendors list
   const { data: vendorsList } = useServiceData(
@@ -944,7 +958,45 @@ export default function CreatePurchaseInvoicePage() {
                     <th className="w-[110px] px-3 py-3">CURRENCY</th>
                     <th className="w-[150px] px-3 py-3 text-right">GRAND TOTAL</th>
                     <th className="w-[160px] px-3 py-3">STATUS</th>
-                    <th className="w-[130px] px-3 py-3 text-center">ACTIONS</th>
+                    <th className="w-[130px] px-3 py-3 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <span>ACTIONS</span>
+                        <div className="relative">
+                          <Button
+                            variant={showInvColPanel ? 'secondary' : 'ghost'}
+                            size="icon-sm"
+                            onClick={() => setShowInvColPanel((v) => !v)}
+                            title="Customize columns"
+                            aria-label="Customize columns"
+                            aria-expanded={showInvColPanel}
+                          >
+                            <span className="flex gap-0.5"><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /></span>
+                          </Button>
+
+                          {showInvColPanel && (
+                            <ColumnCustomizer
+                              columnOrder={invColOrder}
+                              visibleKeys={invVisibleKeys}
+                              allColumns={INV_COLS}
+                              onToggle={(key) => {
+                                setInvVisibleKeys((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(key)) next.delete(key);
+                                  else next.add(key);
+                                  return next;
+                                });
+                              }}
+                              onReorder={setInvColOrder}
+                              onReset={() => {
+                                setInvColOrder(INV_COLS.map((c) => c.key));
+                                setInvVisibleKeys(new Set(INV_COLS.map((c) => c.key)));
+                              }}
+                              onClose={() => setShowInvColPanel(false)}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">

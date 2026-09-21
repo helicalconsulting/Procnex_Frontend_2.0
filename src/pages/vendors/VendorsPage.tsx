@@ -14,7 +14,7 @@ import {
   Filter, LayoutList, LayoutGrid, Send, Key, Star, Award,
   ShieldCheck, CheckCircle2, Activity, BarChart3, FileCheck, AlertTriangle, PieChart,
   Maximize2, Minimize2, FileText, Download, Upload, Clock, AlertCircle, FilePlus,
-  ExternalLink, RefreshCw, Check, Info, Smartphone,
+  ExternalLink, RefreshCw, Check, Info, Smartphone, SlidersHorizontal, ArrowUpDown
 } from 'lucide-react';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import FloatingMenu from '../../components/shared/FloatingMenu';
@@ -22,10 +22,23 @@ import { MessageStrip, inferMessageType } from '../../components/shared/MessageS
 import { procurementService } from '../../services/procurementService';
 import { sapEmailService } from '../../services/sapEmailService';
 import { API_BASE } from '../../api/client';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Card } from '../../components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/ui/dialog';
+import { Input } from '../../components/ui/input';
+import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
+import { TableSkeleton } from '../../components/shared/Skeleton';
+import { cn } from '../../lib/utils';
 import '../../components/shared/ColumnCustomizer.css';
 import './VendorsPage.css';
-
-
 
 import type { VendorDocumentItem } from '../../types/viewModels';
 
@@ -110,7 +123,7 @@ const DEFAULT_VENDOR_DOCUMENTS: Record<string, VendorDocumentItem[]> = {
       type: 'GST Registration',
       documentNumber: '27AABCU9603R1ZX',
       submittedAt: '2024-06-12',
-      expiryDate: '2026-08-30', // 5 days left!
+      expiryDate: '2026-08-30',
       status: 'EXPIRING_SOON',
     },
     {
@@ -128,7 +141,7 @@ const DEFAULT_VENDOR_DOCUMENTS: Record<string, VendorDocumentItem[]> = {
       type: 'ISO Certification',
       documentNumber: 'ISO-88219-QMS',
       submittedAt: '2024-01-15',
-      expiryDate: '2026-08-22', // Expired 3 days ago!
+      expiryDate: '2026-08-22',
       status: 'EXPIRED',
     },
     {
@@ -157,7 +170,7 @@ const DEFAULT_VENDOR_DOCUMENTS: Record<string, VendorDocumentItem[]> = {
       type: 'GST Registration',
       documentNumber: '27BPCB1234R1ZY',
       submittedAt: '2024-02-01',
-      expiryDate: '2026-09-10', // 16 days left
+      expiryDate: '2026-09-10',
       status: 'EXPIRING_SOON',
     },
     {
@@ -175,7 +188,7 @@ const DEFAULT_VENDOR_DOCUMENTS: Record<string, VendorDocumentItem[]> = {
       type: 'Business License',
       documentNumber: 'E-LIC-5542',
       submittedAt: '2024-02-15',
-      expiryDate: '2026-08-20', // Expired 5 days ago!
+      expiryDate: '2026-08-20',
       status: 'EXPIRED',
     },
     {
@@ -223,50 +236,78 @@ const DEFAULT_VENDOR_DOCUMENTS: Record<string, VendorDocumentItem[]> = {
 
 interface VendorColumnDef {
   key: string; label: string; defaultVisible: boolean; required?: boolean;
-  width?: string; render: (v: VendorTableRow, fmtDate: (d: string) => string, toggle: (id: string) => void, toggleMobile?: (id: string) => void, canCreate?: boolean) => React.ReactNode;
+  width?: string; align?: 'left' | 'center' | 'right';
+  render: (v: VendorTableRow, fmtDate: (d: string) => string, toggle: (id: string) => void, toggleMobile?: (id: string) => void, canCreate?: boolean) => React.ReactNode;
 }
+
+const COL_META: Record<string, { width: string; align?: 'left'|'center'|'right' }> = {
+  vendor:       { width: '240px', align: 'left'   },
+  category:     { width: '130px', align: 'left'   },
+  location:     { width: '130px', align: 'left'   },
+  orders:       { width: '80px',  align: 'center' },
+  score:        { width: '90px',  align: 'center' },
+  status:       { width: '120px', align: 'left'   },
+  mobileAccess: { width: '150px', align: 'left'   },
+  joined:       { width: '110px', align: 'left'   },
+  contact:      { width: '140px', align: 'left'   },
+  phone:        { width: '140px', align: 'left'   },
+  website:      { width: '120px', align: 'left'   },
+};
 
 const ALL_COLUMNS: VendorColumnDef[] = [
   {
-    key: 'vendor', label: 'Vendor', defaultVisible: true, required: true, width: '220px',
+    key: 'vendor', label: 'Vendor', defaultVisible: true, required: true, width: COL_META.vendor.width, align: 'left',
     render: (v) => (
-      <div className="vendors-table__vendor">
-        <div className={`vendors-table__avatar vendors-table__avatar--${v.avatarMod}`}>{v.initials}</div>
-        <div className="vendors-table__vendor-info">
-          <span className="vendors-table__name">{v.name}</span>
-          <span className="vendors-table__email">{v.email}</span>
+      <div className="flex min-w-0 items-center gap-3">
+        <span className={`grid size-8 shrink-0 place-items-center rounded-full font-semibold text-xs text-primary ring-1 ring-primary/15 vendors-table__avatar--${v.avatarMod}`}>
+          {v.initials}
+        </span>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="truncate font-semibold text-foreground hover:text-primary transition-colors">{v.name}</span>
+          <span className="truncate text-xs text-muted-foreground">{v.email}</span>
         </div>
       </div>
     ),
   },
-  { key: 'category', label: 'Category', defaultVisible: true, width: '140px', render: (v) => <span className="vendors-cat-badge">{v.category}</span> },
-  { key: 'location', label: 'Location', defaultVisible: true, width: '130px', render: (v) => <span className="vendors-table__loc"><MapPin size={12} /> {v.location}</span> },
-  { key: 'orders', label: 'Orders', defaultVisible: true, width: '80px', render: (v) => <span className="vendors-table__orders">{v.totalOrders}</span> },
   {
-    key: 'score', label: 'Score', defaultVisible: true, width: '80px',
+    key: 'category', label: 'Category', defaultVisible: true, width: COL_META.category.width, align: 'left',
+    render: (v) => (
+      <Badge tone="info" className="font-semibold">
+        {v.category}
+      </Badge>
+    )
+  },
+  {
+    key: 'location', label: 'Location', defaultVisible: true, width: COL_META.location.width, align: 'left',
+    render: (v) => (
+      <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground truncate">
+        <MapPin size={13} className="shrink-0" /> {v.location}
+      </span>
+    )
+  },
+  {
+    key: 'orders', label: 'Orders', defaultVisible: true, width: COL_META.orders.width, align: 'center',
+    render: (v) => <span className="tabular-nums font-semibold text-foreground">{v.totalOrders}</span>
+  },
+  {
+    key: 'score', label: 'Score', defaultVisible: true, width: COL_META.score.width, align: 'center',
     render: (v) => {
       const score = v.overallScore;
-      let color = 'var(--text-placeholder)'; // muted = no data
-      if (score >= 90) color = 'var(--success-500)';
-      else if (score >= 60) color = '#d97706';
-      else if (score > 0) color = 'var(--danger-500)'; // poor but has data
+      let tone: 'success' | 'warning' | 'danger' | 'neutral' = 'neutral';
+      if (score >= 90) tone = 'success';
+      else if (score >= 60) tone = 'warning';
+      else if (score > 0) tone = 'danger';
+
       return (
-        <span style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 4,
-          fontWeight: 700,
-          fontSize: 15,
-          color,
-        }}>
-          <Star size={13} fill={color} style={{ opacity: score > 0 && score >= 60 ? 1 : 0.3 }} />
+        <Badge tone={tone} className="font-semibold tabular-nums gap-1">
+          <Star size={11} fill="currentColor" className="opacity-80" />
           {score > 0 ? `${score}%` : '—'}
-        </span>
+        </Badge>
       );
     },
   },
   {
-    key: 'status', label: 'Status', defaultVisible: true, width: '110px',
+    key: 'status', label: 'Status', defaultVisible: true, width: COL_META.status.width, align: 'left',
     render: (v, _fd, toggle, _toggleMobile, canCreate = true) => (
       <div
         className={`vendors-status-toggle ${!canCreate ? 'vendors-status-toggle--disabled' : ''}`}
@@ -284,7 +325,7 @@ const ALL_COLUMNS: VendorColumnDef[] = [
     ),
   },
   {
-    key: 'mobileAccess', label: 'Mobile App Access', defaultVisible: true, width: '150px',
+    key: 'mobileAccess', label: 'Mobile Access', defaultVisible: true, width: COL_META.mobileAccess.width, align: 'left',
     render: (v, _fd, _toggle, toggleMobile, canCreate = true) => (
       <div
         className={`vendors-status-toggle ${!canCreate ? 'vendors-status-toggle--disabled' : ''}`}
@@ -297,19 +338,30 @@ const ALL_COLUMNS: VendorColumnDef[] = [
         </div>
         <span
           className={`vendors-status-toggle__label vendors-status-toggle__label--${v.isMobileAccessEnabled ? 'active' : 'inactive'}`}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600 }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 600 }}
         >
-          <Smartphone size={16} strokeWidth={2.2} style={{ flexShrink: 0 }} />
+          <Smartphone size={14} strokeWidth={2} style={{ flexShrink: 0 }} />
           {v.isMobileAccessEnabled ? 'Enabled' : 'Disabled'}
         </span>
       </div>
     ),
   },
-  { key: 'joined', label: 'Joined', defaultVisible: true, width: '110px', render: (v, fmtDate) => <span className="vendors-table__date">{fmtDate(v.createdAt)}</span> },
-  // Extra
-  { key: 'contact', label: 'Contact Person', defaultVisible: false, width: '140px', render: (v) => <span className="vendors-table__date">{v.contactPerson}</span> },
-  { key: 'phone', label: 'Phone', defaultVisible: false, width: '140px', render: (v) => <span className="vendors-table__date">{v.phone}</span> },
-  { key: 'website', label: 'Website', defaultVisible: false, width: '120px', render: (v) => <span className="vendors-table__date">{v.website}</span> },
+  {
+    key: 'joined', label: 'Joined', defaultVisible: true, width: COL_META.joined.width, align: 'left',
+    render: (v, fmtDate) => <span className="whitespace-nowrap text-sm text-muted-foreground">{fmtDate(v.createdAt)}</span>
+  },
+  {
+    key: 'contact', label: 'Contact Person', defaultVisible: false, width: COL_META.contact.width, align: 'left',
+    render: (v) => <span className="text-sm text-muted-foreground">{v.contactPerson}</span>
+  },
+  {
+    key: 'phone', label: 'Phone', defaultVisible: false, width: COL_META.phone.width, align: 'left',
+    render: (v) => <span className="text-sm text-muted-foreground">{v.phone}</span>
+  },
+  {
+    key: 'website', label: 'Website', defaultVisible: false, width: COL_META.website.width, align: 'left',
+    render: (v) => <span className="text-sm text-muted-foreground">{v.website}</span>
+  },
 ];
 
 function getDocUrl(url?: string): string {
@@ -329,9 +381,6 @@ export default function VendorsPage() {
   const [search, setSearch] = useState('');
   const [filterMode, setFilterMode] = useState<'all' | 'active' | 'inactive' | 'top-rated'>('all');
   const [categoryFilter, setCategoryFilter] = useState('');
-  const [categoryFilterOpen, setCategoryFilterOpen] = useState(false);
-  const categoryFilterRef = useRef<HTMLDivElement>(null);
-  const categoryFilterBtnRef = useRef<HTMLButtonElement>(null);
   const [view, setView] = useState<'table' | 'card'>('table');
   const [currentPage, setCurrentPage] = useState(1);
   const { data: categories } = useServiceData(
@@ -554,8 +603,6 @@ export default function VendorsPage() {
     return counts;
   }, [displayVendors, filterMode]);
 
-  // Category filter dropdown now uses FloatingMenu (no outside click handler needed)
-
   // Filter — summary filter, category, then search text
   const filtered = useMemo(() => {
     let list = displayVendors;
@@ -578,8 +625,9 @@ export default function VendorsPage() {
     );
   }, [displayVendors, filterMode, categoryFilter, search]);
 
-  const totalPages = Math.ceil(filtered.length / perPage);
-  const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginated = filtered.slice((safePage - 1) * perPage, safePage * perPage);
 
   const queryClient = useQueryClient();
 
@@ -707,9 +755,6 @@ export default function VendorsPage() {
     setShowModal(true);
   }, [categories]);
 
-  // Reliably focus the name input when the modal opens
-  // useLayoutEffect fires synchronously after DOM commit, before browser paint
-  // — this prevents the async delay that allowed focus to be stolen
   useLayoutEffect(() => {
     if (showModal && nameInputRef.current) {
       nameInputRef.current.focus();
@@ -760,7 +805,6 @@ export default function VendorsPage() {
       }
       closeFormModal();
       reload();
-      // Also invalidate vendor cache for other pages (e.g. CreateRFQPage)
       queryClient.invalidateQueries({ queryKey: ['svc'] });
     } catch (err) {
       setPageMsg(err instanceof Error ? err.message : 'Save failed');
@@ -785,13 +829,11 @@ export default function VendorsPage() {
       setPageMsg(`Vendor "${deleteTarget.name}" deleted.`);
       setDeleteTarget(null);
       await reload();
-      // Also invalidate vendor cache for other pages (e.g. CreateRFQPage)
       queryClient.invalidateQueries({ queryKey: ['svc'] });
     } catch (err) {
       let msg = err instanceof Error ? err.message : 'Delete failed';
       if (msg.includes('Route not found')) {
-        msg =
-          'Backend is running old code (no delete route). Stop it (Ctrl+C) and run: cd Heliflow_Client_Backend && npm run dev';
+        msg = 'Backend is running old code (no delete route). Stop it (Ctrl+C) and run: cd Heliflow_Client_Backend && npm run dev';
       } else if (msg.includes('Transaction already closed') || msg.includes('timeout')) {
         msg = 'Delete timed out (slow database). Please try again — it usually works on the second attempt.';
       } else if (msg.includes('purchase orders') || msg.includes('invoices') || msg.includes('contracts')) {
@@ -802,15 +844,15 @@ export default function VendorsPage() {
     } finally {
       setActionLoading(false);
     }
-  }, [deleteTarget, detailVendor, reload]);
+  }, [deleteTarget, detailVendor, reload, queryClient]);
 
   const canSave = fName.trim() && fEmail.trim();
 
   const formatDate = (d: string) =>
-    new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
   return (
-    <div className="vendors-page w-full max-w-full m-0 p-0 flex flex-col gap-6 text-foreground">
+    <PageFrame>
       {error && <MessageStrip type="error">{error}</MessageStrip>}
       {pageMsg && (
         <MessageStrip
@@ -830,31 +872,31 @@ export default function VendorsPage() {
           {credentialsMsg}
         </MessageStrip>
       )}
-      {loading && <div className="vendors-page__loading text-sm text-muted-foreground p-4">Loading vendors…</div>}
-      {/* Header */}
-      <div className="vendors-page__header flex items-center justify-between flex-wrap gap-4">
-        <div className="vendors-page__header-left">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground m-0 mb-1">Vendors</h1>
-          <p className="text-sm text-muted-foreground m-0">Manage vendor directory, track performance, and onboard new suppliers</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${isVendorLimitReached ? 'bg-red-500/10 border-red-500 text-red-500' : 'bg-muted/60 border-border text-foreground'}`}>
-            <Users size={16} />
-            <span>Active Vendors: {summary.active} / {maxVendorsAllowed} Limit</span>
-          </div>
 
-          <button
-            className={`vendors-page__add-btn inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm bg-gradient-to-r from-primary to-primary-600 text-white shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all ${(isVendorLimitReached || !canCreateVendor) ? 'vendors-page__add-btn--disabled opacity-50 cursor-not-allowed shadow-none' : ''}`}
-            onClick={(!isVendorLimitReached && canCreateVendor) ? openAddModal : undefined}
-            title={!canCreateVendor ? 'Admin has not allowed this action. You do not have permission to create vendors.' : isVendorLimitReached ? 'Company vendor limit reached. Please contact Procnex Support to upgrade.' : 'Add a new vendor'}
-            disabled={isVendorLimitReached || !canCreateVendor}
-            style={(isVendorLimitReached || !canCreateVendor) ? { opacity: 0.6, cursor: 'not-allowed', pointerEvents: 'auto' } : {}}
-          >
-            {canCreateVendor ? <Plus size={18} /> : <ShieldOff size={18} />}
-            Add Vendor
-          </button>
-        </div>
-      </div>
+      {/* Header */}
+      <PageLead
+        title="Vendors"
+        description="Manage vendor directory, track performance, and onboard new suppliers."
+        actions={
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+            <div className={cn(
+              "inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all shadow-xs",
+              isVendorLimitReached ? "bg-destructive/10 border-destructive/30 text-destructive" : "bg-card border-border text-foreground"
+            )}>
+              <Users size={15} className="text-primary shrink-0" />
+              <span>Active Vendors: {summary.active} / {maxVendorsAllowed} Limit</span>
+            </div>
+
+            <Button
+              onClick={(!isVendorLimitReached && canCreateVendor) ? openAddModal : undefined}
+              disabled={isVendorLimitReached || !canCreateVendor}
+              title={!canCreateVendor ? 'Admin has not allowed this action. You do not have permission to create vendors.' : isVendorLimitReached ? 'Company vendor limit reached. Please contact Procnex Support to upgrade.' : 'Add a new vendor'}
+            >
+              {canCreateVendor ? <Plus /> : <ShieldOff />} Add Vendor
+            </Button>
+          </div>
+        }
+      />
 
       {isVendorLimitReached && (
         <div className="mb-4">
@@ -864,263 +906,370 @@ export default function VendorsPage() {
         </div>
       )}
 
-      {/* Summary — clickable filter cards */}
-      <div className="vendors-summary grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Metric KPI Cards */}
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          { icon: <Users size={22} />, val: summary.total, label: 'Total Vendors', cls: 'total', mode: 'all' as const },
-          { icon: <UserCheck size={22} />, val: summary.active, label: 'Active', cls: 'active', mode: 'active' as const },
-          { icon: <UserX size={22} />, val: summary.inactive, label: 'Inactive', cls: 'inactive', mode: 'inactive' as const },
-          { icon: <Award size={22} />, val: topRatedCount, label: 'Top Rated', cls: 'top-rated', mode: 'top-rated' as const },
-        ].map((c) => (
-          <div
-            key={c.cls}
-            className={`vendors-summary-card relative overflow-hidden flex items-center gap-4 p-5 rounded-2xl bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border border-white/80 dark:border-white/10 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer ${filterMode === c.mode ? 'vendors-summary-card--active border-primary ring-2 ring-primary/20 bg-primary/5' : ''}`}
-            onClick={() => {
-              setFilterMode((prev) => prev === c.mode ? 'all' : c.mode);
-              setCurrentPage(1);
-            }}
-          >
-            <div className={`vendors-summary-card__icon vendors-summary-card__icon--${c.cls} w-11 h-11 rounded-xl flex items-center justify-center shrink-0`}>{c.icon}</div>
-            <div className="vendors-summary-card__info flex flex-col gap-0.5">
-              <span className="vendors-summary-card__value text-2xl font-extrabold tracking-tight text-foreground">{c.val}</span>
-              <span className="vendors-summary-card__label text-xs font-bold uppercase tracking-wider text-muted-foreground">{c.label}</span>
-            </div>
-          </div>
-        ))}
+          { icon: Users, tone: 'primary' as const, value: summary.total, label: 'Total Vendors', detail: 'All registered suppliers', filter: 'all' as const },
+          { icon: UserCheck, tone: 'success' as const, value: summary.active, label: 'Active Vendors', detail: 'Approved & active', filter: 'active' as const },
+          { icon: UserX, tone: 'danger' as const, value: summary.inactive, label: 'Inactive Vendors', detail: 'Deactivated suppliers', filter: 'inactive' as const },
+          { icon: Award, tone: 'warning' as const, value: topRatedCount, label: 'Top Rated', detail: '80%+ performance score', filter: 'top-rated' as const },
+        ].map((c) => {
+          const isActive = filterMode === c.filter;
+          return (
+            <MetricCard
+              key={c.label}
+              icon={c.icon}
+              tone={c.tone}
+              value={c.value}
+              label={c.label}
+              detail={c.detail}
+              className={cn(
+                'cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-all duration-200',
+                isActive &&
+                  'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
+              )}
+              onClick={() => {
+                setFilterMode((prev) => prev === c.filter ? 'all' : c.filter);
+                setCurrentPage(1);
+              }}
+              role="button"
+              tabIndex={0}
+              aria-pressed={isActive}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setFilterMode((prev) => prev === c.filter ? 'all' : c.filter);
+                  setCurrentPage(1);
+                }
+              }}
+            />
+          );
+        })}
       </div>
 
-      {/* Toolbar */}
-      <div className="vendors-toolbar">
-        <div className="vendors-toolbar__search">
-          <Search size={16} className="vendors-toolbar__search-icon" />
-          <input
+      {/* Search & Category Filter Toolbar */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full max-w-xl">
+          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
             id="vendor-search-input"
             name="vendor_search_query"
+            className="h-11 rounded-xl pl-10"
             type="text"
             placeholder="Search by name, email, category, contact, or location..."
             autoComplete="off"
+            aria-label="Search vendors"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
           />
         </div>
-        <div className="vendors-toolbar__right">
-          <div className="vendors-category-filter" ref={categoryFilterRef}>              <button
-                ref={categoryFilterBtnRef}
-                type="button"
-                className={`vendors-toolbar__filter ${categoryFilter ? 'vendors-toolbar__filter--active' : ''} ${categoryFilterOpen ? 'vendors-toolbar__filter--open' : ''}`}
-                onClick={() => setCategoryFilterOpen((v) => !v)}
-                aria-expanded={categoryFilterOpen}
-                aria-haspopup="listbox"
-              >
-              <Filter size={14} />
-              <span>{categoryFilter || 'Category'}</span>
-              <ChevronDown size={14} className={`vendors-category-filter__chevron ${categoryFilterOpen ? 'vendors-category-filter__chevron--open' : ''}`} />
-            </button>
-            {/* Category filter dropdown — using FloatingMenu */}
-            <FloatingMenu
-              open={categoryFilterOpen}
-              onClose={() => setCategoryFilterOpen(false)}
-              anchorRef={categoryFilterBtnRef}
-              className="vendors-category-filter__menu"
-              options={{ placement: 'bottom-start', offset: 6, viewportPadding: 8 }}
-              minWidth={220}
-              animation="slide"
-              role="listbox"
+
+        <div className="flex items-center gap-2.5 justify-end shrink-0 sm:ml-auto">
+          <div className="relative min-w-[200px]">
+            <Building2 size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <select
+              className="h-11 w-full appearance-none rounded-xl border border-input bg-card pl-10 pr-9 text-sm font-medium text-foreground shadow-xs transition-colors hover:bg-accent/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+              value={categoryFilter}
+              onChange={(e) => {
+                setCategoryFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              aria-label="Filter by category"
             >
-              <button
-                type="button"
-                role="option"
-                aria-selected={!categoryFilter}
-                className={`vendors-category-filter__option ${!categoryFilter ? 'vendors-category-filter__option--active' : ''}`}
-                onClick={() => { setCategoryFilter(''); setCategoryFilterOpen(false); setCurrentPage(1); }}
-              >
-                <span>All Categories</span>
-                <span className="vendors-category-filter__count">
-                  {Object.values(categoryCounts).reduce((sum, n) => sum + n, 0)}
-                </span>
-              </button>
+              <option value="">All Categories</option>
               {availableCategories.map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  role="option"
-                  aria-selected={categoryFilter === cat}
-                  className={`vendors-category-filter__option ${categoryFilter === cat ? 'vendors-category-filter__option--active' : ''}`}
-                  onClick={() => { setCategoryFilter(cat); setCategoryFilterOpen(false); setCurrentPage(1); }}
-                >
-                  <span>{cat}</span>
-                  <span className="vendors-category-filter__count">{categoryCounts[cat] || 0}</span>
-                </button>
+                <option key={cat} value={cat}>
+                  {cat} ({categoryCounts[cat] || 0})
+                </option>
               ))}
-              {availableCategories.length === 0 && (
-                <div className="vendors-category-filter__empty">No categories configured</div>
-              )}
-            </FloatingMenu>
+            </select>
           </div>
-          <div className="vendors-toolbar__view-toggle">
-            <button className={`vendors-toolbar__view-btn ${view === 'table' ? 'vendors-toolbar__view-btn--active' : ''}`}
-              onClick={() => setView('table')} title="Table"><LayoutList size={16} /></button>
-            <button className={`vendors-toolbar__view-btn ${view === 'card' ? 'vendors-toolbar__view-btn--active' : ''}`}
-              onClick={() => setView('card')} title="Cards"><LayoutGrid size={16} /></button>
+
+          <div className="flex items-center rounded-xl border border-input bg-card p-1 shadow-xs">
+            <button
+              type="button"
+              className={cn(
+                "inline-flex items-center justify-center rounded-lg p-2 text-xs font-semibold transition-all cursor-pointer",
+                view === 'table' ? "bg-primary text-primary-foreground shadow-xs" : "text-muted-foreground hover:bg-accent hover:text-foreground"
+              )}
+              onClick={() => setView('table')}
+              title="Table view"
+            >
+              <LayoutList size={16} />
+            </button>
+            <button
+              type="button"
+              className={cn(
+                "inline-flex items-center justify-center rounded-lg p-2 text-xs font-semibold transition-all cursor-pointer",
+                view === 'card' ? "bg-primary text-primary-foreground shadow-xs" : "text-muted-foreground hover:bg-accent hover:text-foreground"
+              )}
+              onClick={() => setView('card')}
+              title="Grid view"
+            >
+              <LayoutGrid size={16} />
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Content */}
-      {paginated.length > 0 ? (
-        view === 'table' ? (
-          <div className="vendors-table-card">
-            <div className="vendors-table-wrap">
-              <table className="vendors-table" style={{ tableLayout: 'fixed', minWidth: '750px' }}>
-                <colgroup>
-                  {visibleColumns.map((col) => (<col key={col.key} style={{ width: col.width || 'auto' }} />))}
-                  <col style={{ width: '110px' }} />
-                </colgroup>
-                <thead>
-                  <tr>
-                    {visibleColumns.map((col) => (<th key={col.key}>{col.label}</th>))}
-                    <th>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                        <span>Actions</span>
-                        <div className="col-btn-wrap">
-                          <button ref={colBtnRef} className={`col-btn ${showColPanel ? 'col-btn--active' : ''}`} onClick={() => setShowColPanel((v) => !v)} title="Customize columns" aria-label="Customize columns" aria-expanded={showColPanel}>
-                            <span /><span /><span />
-                          </button>
-                          {showColPanel && (
-                            <ColumnCustomizer columnOrder={columnOrder} visibleKeys={visibleKeys} allColumns={ALL_COLUMNS} onToggle={handleToggleColumn} onReorder={setColumnOrder} onReset={handleResetColumns} onClose={() => setShowColPanel(false)} anchorRef={colBtnRef} />
-                          )}
+      {/* Table Card */}
+      <Card className="overflow-hidden">
+        {loading ? (
+          <TableSkeleton rows={perPage} columns={6} />
+        ) : paginated.length > 0 ? (
+          view === 'table' ? (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[900px] border-collapse text-sm">
+                  <colgroup>
+                    {visibleColumns.map((col) => (
+                      <col key={col.key} style={{ width: COL_META[col.key]?.width || 'auto' }} />
+                    ))}
+                    <col style={{ width: '130px' }} />
+                  </colgroup>
+                  <thead>
+                    <tr className="border-b border-border/75 bg-muted/45 text-left text-[12px] font-bold uppercase tracking-wide text-muted-foreground">
+                      {visibleColumns.map((col) => {
+                        const align = COL_META[col.key]?.align ?? 'left';
+                        return (
+                          <th
+                            key={col.key}
+                            className="px-4 py-3"
+                            style={{ textAlign: align }}
+                          >
+                            {col.label}
+                          </th>
+                        );
+                      })}
+                      <th className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <span>Actions</span>
+                          <div className="relative">
+                            <Button
+                              ref={colBtnRef}
+                              variant={showColPanel ? 'secondary' : 'ghost'}
+                              size="icon-sm"
+                              onClick={() => setShowColPanel((v) => !v)}
+                              title="Customize columns"
+                              aria-label="Customize columns"
+                              aria-expanded={showColPanel}
+                            >
+                              <span className="flex gap-0.5"><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /></span>
+                            </Button>
+
+                            {showColPanel && (
+                              <ColumnCustomizer
+                                columnOrder={columnOrder}
+                                visibleKeys={visibleKeys}
+                                allColumns={ALL_COLUMNS}
+                                onToggle={handleToggleColumn}
+                                onReorder={setColumnOrder}
+                                onReset={handleResetColumns}
+                                onClose={() => setShowColPanel(false)}
+                                anchorRef={colBtnRef}
+                              />
+                            )}
+                          </div>
+                        </div>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
+                    {paginated.map((v) => (
+                      <tr
+                        key={v.id}
+                        className="group transition-colors hover:bg-accent/35 cursor-pointer"
+                        onClick={() => setDetailVendor(v)}
+                      >
+                        {visibleColumns.map((col) => {
+                          const align = COL_META[col.key]?.align ?? 'left';
+                          return (
+                            <td key={col.key} className="px-4 py-3.5 align-middle" style={{ textAlign: align }}>
+                              {col.render(v, formatDate, toggleActive, toggleMobileActive, canCreateVendor)}
+                            </td>
+                          );
+                        })}
+
+                        <td className="px-4 py-3.5 align-middle text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => setDetailVendor(v)}
+                              title="View profile"
+                            >
+                              <Eye className="size-4" />
+                            </Button>
+
+                            {v.isActive && canCreateVendor && (
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={() => openCredentialsModal(v)}
+                                title="Resend password setup email"
+                              >
+                                <Key className="size-4" />
+                              </Button>
+                            )}
+
+                            {canCreateVendor ? (
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={() => openEditModal(v)}
+                                title="Edit vendor"
+                              >
+                                <Edit3 className="size-4" />
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                disabled
+                                className="opacity-50"
+                                title="Admin has not allowed this action."
+                              >
+                                <ShieldOff className="size-4" />
+                              </Button>
+                            )}
+
+                            {canCreateVendor ? (
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                onClick={() => openDeleteModal(v)}
+                                title="Delete vendor"
+                              >
+                                <Trash2 className="size-4" />
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                disabled
+                                className="opacity-50"
+                                title="Admin has not allowed this action."
+                              >
+                                <ShieldOff className="size-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            /* Cards View */
+            <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 sm:p-5">
+              {paginated.map((v) => (
+                <div
+                  key={v.id}
+                  className="group flex flex-col justify-between rounded-xl border border-border/70 bg-card p-4 shadow-xs transition-all hover:border-primary/40 hover:shadow-md cursor-pointer"
+                  onClick={() => setDetailVendor(v)}
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className={`grid size-9 shrink-0 place-items-center rounded-full font-semibold text-xs text-primary ring-1 ring-primary/15 vendors-table__avatar--${v.avatarMod}`}>
+                          {v.initials}
+                        </span>
+                        <div className="min-w-0 flex flex-col">
+                          <span className="truncate font-semibold text-foreground group-hover:text-primary transition-colors">{v.name}</span>
+                          <span className="truncate text-xs text-muted-foreground">{v.category}</span>
                         </div>
                       </div>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginated.map((v) => (
-                    <tr key={v.id} className={`vendors-table__row vendors-table__row--${v.status ? v.status.toLowerCase() : (v.isActive ? 'active' : 'inactive')}`} onClick={() => setDetailVendor(v)}>
-                      {visibleColumns.map((col) => (<td key={col.key}>{col.render(v, formatDate, toggleActive, toggleMobileActive, canCreateVendor)}</td>))}
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <div className="vendors-table__actions">
-                          <button className="vendors-table__action-btn" title="View profile" onClick={() => setDetailVendor(v)}><Eye size={15} /></button>
-                          {v.isActive && canCreateVendor && (
-                            <button
-                              className="vendors-table__action-btn"
-                              title="Resend password setup email"
-                              onClick={() => openCredentialsModal(v)}
-                            >
-                              <Key size={15} />
-                            </button>
-                          )}
-                          {canCreateVendor ? (
-                            <button
-                              className="vendors-table__action-btn"
-                              title="Edit vendor"
-                              onClick={() => openEditModal(v)}
-                            >
-                              <Edit3 size={15} />
-                            </button>
-                          ) : (
-                            <button
-                              className="vendors-table__action-btn vendors-table__action-btn--disabled"
-                              title="Admin has not allowed this action. You do not have permission to edit vendors."
-                              disabled
-                              style={{ opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' }}
-                            >
-                              <ShieldOff size={15} />
-                            </button>
-                          )}
-                          {canCreateVendor ? (
-                            <button
-                              className="vendors-table__action-btn vendors-table__action-btn--danger"
-                              title="Delete vendor"
-                              onClick={() => openDeleteModal(v)}
-                            >
-                              <Trash2 size={15} />
-                            </button>
-                          ) : (
-                            <button
-                              className="vendors-table__action-btn vendors-table__action-btn--disabled"
-                              title="Admin has not allowed this action. You do not have permission to delete vendors."
-                              disabled
-                              style={{ opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' }}
-                            >
-                              <ShieldOff size={15} />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {filtered.length > perPage && (
-              <div className="vendors-pagination">
-                <span className="vendors-pagination__info">Showing {(currentPage-1)*perPage+1}–{Math.min(currentPage*perPage, filtered.length)} of {filtered.length}</span>
-                <div className="vendors-pagination__btns">
-                  <button className="vendors-pagination__btn" disabled={currentPage===1} onClick={() => setCurrentPage(p=>p-1)}><ChevronLeft size={14} /></button>
-                  {Array.from({length:totalPages},(_,i)=>i+1).map(p=>(
-                    <button key={p} className={`vendors-pagination__btn ${currentPage===p?'vendors-pagination__btn--active':''}`} onClick={()=>setCurrentPage(p)}>{p}</button>
-                  ))}
-                  <button className="vendors-pagination__btn" disabled={currentPage===totalPages} onClick={()=>setCurrentPage(p=>p+1)}><ChevronRight size={14} /></button>
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          /* Card View */
-          <div className="vendors-cards">
-            {paginated.map((v) => (
-              <div key={v.id} className="vendors-card" onClick={() => setDetailVendor(v)}>
-                <div className="vendors-card__top">                    <div className={`vendors-card__avatar vendors-table__avatar--${v.avatarMod}`}>{v.initials}</div>
-                    <div className="vendors-card__name-block">
-                      <span className="vendors-card__name">{v.name}</span>
-                      <span className="vendors-card__cat">{v.category}</span>
+                      <Badge tone={v.overallScore >= 90 ? 'success' : v.overallScore >= 60 ? 'warning' : v.overallScore > 0 ? 'danger' : 'neutral'} className="shrink-0 gap-1 font-semibold">
+                        <Star size={11} fill="currentColor" /> {v.overallScore > 0 ? `${v.overallScore}%` : '—'}
+                      </Badge>
                     </div>
-                    <span style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 3,
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: v.overallScore >= 90 ? 'var(--success-500)' : v.overallScore >= 60 ? '#d97706' : v.overallScore > 0 ? 'var(--danger-500)' : 'var(--text-placeholder)',
-                      background: v.overallScore >= 90 ? 'rgba(16,126,62,0.1)' : v.overallScore >= 60 ? 'rgba(245,158,11,0.1)' : v.overallScore > 0 ? 'rgba(220,38,38,0.08)' : 'transparent',
-                      padding: v.overallScore > 0 ? '3px 8px' : 0,
-                      borderRadius: 8,
-                      flexShrink: 0,
-                    }}>
-                      {v.overallScore > 0 ? (
-                        <><Star size={11} fill="currentColor" style={{ opacity: v.overallScore >= 60 ? 1 : 0.4 }} />{v.overallScore}%</>
-                      ) : (
-                        <span style={{ fontSize: 12, opacity: 0.5 }}>—</span>
-                      )}
-                    </span>
-                    <span className={`vendors-card__status-dot ${v.isActive ? 'vendors-card__status-dot--active' : ''}`} />
+
+                    <div className="mt-4 space-y-1.5 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2 truncate">
+                        <Mail size={13} className="shrink-0" />
+                        <span className="truncate">{v.email}</span>
+                      </div>
+                      <div className="flex items-center gap-2 truncate">
+                        <MapPin size={13} className="shrink-0" />
+                        <span className="truncate">{v.location}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-3 text-xs">
+                    <span className="font-medium text-foreground">{v.totalOrders} orders</span>
+                    <Badge tone={v.isActive ? 'success' : 'neutral'}>
+                      {v.isActive ? 'Active' : 'Inactive'}
+                    </Badge>
+                  </div>
                 </div>
-                <div className="vendors-card__details">
-                  <div className="vendors-card__detail"><Mail size={12} /><span>{v.email}</span></div>
-                  <div className="vendors-card__detail"><MapPin size={12} /><span>{v.location}</span></div>
-                </div>
-                <div className="vendors-card__footer">
-                  <div className="vendors-card__orders">{v.totalOrders} orders</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )
-      ) : (
-        <div className="vendors-table-card">
-          <div className="vendors-empty">
-            <div className="vendors-empty__icon"><Users size={48} /></div>
-            <div className="vendors-empty__title">No vendors found</div>
-            <div className="vendors-empty__desc">
-              {search
-                ? 'Try adjusting your search.'
-                : categoryFilter
-                  ? `No vendors found in category "${categoryFilter}".`
-                  : filterMode !== 'all'
-                    ? `No ${filterMode === 'active' ? 'active' : filterMode === 'inactive' ? 'inactive' : filterMode === 'top-rated' ? 'top rated' : 'active'} vendors found.`
-                    : 'Add your first vendor to get started.'}
+              ))}
             </div>
+          )
+        ) : (
+          <EmptyState
+            className="m-4 min-h-64 border-0 shadow-none"
+            icon={Search}
+            title="No vendors found"
+            description={
+              search
+                ? 'Try adjusting your search query or clear the active filter.'
+                : categoryFilter
+                ? `No vendors found in category "${categoryFilter}".`
+                : filterMode !== 'all'
+                ? `No ${filterMode === 'active' ? 'active' : filterMode === 'inactive' ? 'inactive' : 'top rated'} vendors found.`
+                : 'Add your first vendor to get started.'
+            }
+            action={
+              (search || categoryFilter || filterMode !== 'all') ? (
+                <Button variant="outline" onClick={() => { setSearch(''); setCategoryFilter(''); setFilterMode('all'); }}>
+                  <X /> Clear filters
+                </Button>
+              ) : undefined
+            }
+          />
+        )}
+      </Card>
+
+      {/* Pagination */}
+      {filtered.length > perPage && (
+        <div className="mt-4 flex flex-col gap-3 rounded-xl border border-border/65 bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <span className="text-xs text-muted-foreground">
+            Showing {(safePage - 1) * perPage + 1}–{Math.min(safePage * perPage, filtered.length)} of {filtered.length}
+          </span>
+          <div className="flex flex-wrap gap-1">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              disabled={safePage === 1}
+              onClick={() => setCurrentPage((page) => page - 1)}
+              aria-label="Previous page"
+            >
+              <ChevronLeft />
+            </Button>
+            {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
+              <Button
+                key={page}
+                variant={safePage === page ? 'default' : 'ghost'}
+                size="icon-sm"
+                onClick={() => setCurrentPage(page)}
+                aria-label={`Page ${page}`}
+              >
+                {page}
+              </Button>
+            ))}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              disabled={safePage === totalPages}
+              onClick={() => setCurrentPage((page) => page + 1)}
+              aria-label="Next page"
+            >
+              <ChevronRight />
+            </Button>
           </div>
         </div>
       )}
@@ -1129,12 +1278,15 @@ export default function VendorsPage() {
       {showModal && (
         <div className="vendors-modal-backdrop" onClick={closeFormModal}>
           <div className="vendors-modal" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}>
-            <form onSubmit={(e) => { e.preventDefault(); if (canSave && !actionLoading) handleSaveVendor(); }}>
+            <form onSubmit={(e) => { e.preventDefault(); if (canSave && !actionLoading) handleSaveVendor(); }} style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
               <div className="vendors-modal__header">
                 <span className="vendors-modal__title">
-                  <Building2 size={20} /> {editingVendor ? 'Edit Vendor' : 'Add New Vendor'}
+                  <span className="vendors-modal__title-icon">
+                    <Building2 size={18} />
+                  </span>
+                  {editingVendor ? 'Edit Vendor' : 'Add New Vendor'}
                 </span>
-                <button type="button" className="vendors-modal__close" onClick={closeFormModal}><X size={18} /></button>
+                <button type="button" className="vendors-modal__close" onClick={closeFormModal} aria-label="Close modal"><X size={18} /></button>
               </div>
               <div className="vendors-modal__body">
                 <div className="vendors-modal__field">
@@ -1152,7 +1304,7 @@ export default function VendorsPage() {
                 </div>
                 <div className="vendors-modal__row">
                   <div className="vendors-modal__field">
-                    <label htmlFor="vendor-email" className="vendors-modal__label"><Mail size={13} style={{marginRight:4}} /> Email <span>*</span></label>
+                    <label htmlFor="vendor-email" className="vendors-modal__label"><Mail size={13} style={{marginRight:4, opacity: 0.7}} /> Email <span>*</span></label>
                     <input
                       id="vendor-email"
                       name="vendor_email"
@@ -1165,7 +1317,7 @@ export default function VendorsPage() {
                     />
                   </div>
                   <div className="vendors-modal__field">
-                    <label className="vendors-modal__label"><Phone size={13} style={{marginRight:4}} /> Phone</label>
+                    <label className="vendors-modal__label"><Phone size={13} style={{marginRight:4, opacity: 0.7}} /> Phone</label>
                     <PhoneInput
                       countryCode={fCountryCode}
                       onCountryCodeChange={setFCountryCode}
@@ -1204,7 +1356,7 @@ export default function VendorsPage() {
                 </div>
                 <div className="vendors-modal__row">
                   <div className="vendors-modal__field">
-                    <label htmlFor="vendor-location" className="vendors-modal__label"><MapPin size={13} style={{marginRight:4}} /> Location</label>
+                    <label htmlFor="vendor-location" className="vendors-modal__label"><MapPin size={13} style={{marginRight:4, opacity: 0.7}} /> Location</label>
                     <input
                       id="vendor-location"
                       name="vendor_location"
@@ -1216,7 +1368,7 @@ export default function VendorsPage() {
                     />
                   </div>
                   <div className="vendors-modal__field">
-                    <label htmlFor="vendor-website" className="vendors-modal__label"><Globe size={13} style={{marginRight:4}} /> Website</label>
+                    <label htmlFor="vendor-website" className="vendors-modal__label"><Globe size={13} style={{marginRight:4, opacity: 0.7}} /> Website</label>
                     <input
                       id="vendor-website"
                       name="vendor_website"
@@ -1228,80 +1380,166 @@ export default function VendorsPage() {
                     />
                   </div>
                 </div>
-                <div className="vendors-modal__field" style={{ marginTop: 12, padding: '10px 14px', background: 'var(--surface-elevated, #f8fafc)', borderRadius: 8, border: '1px solid var(--border, #e2e8f0)' }}>
-                  <label className="vendors-modal__label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', margin: 0 }}>
-                    <span style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 8 }}><Smartphone size={18} strokeWidth={2} style={{ color: 'var(--primary-500, #0a6ed1)' }} /> Allow Mobile App Access</span>
-                    <input
-                      type="checkbox"
-                      checked={fMobileAccess}
-                      onChange={(e) => setFMobileAccess(e.target.checked)}
-                      style={{ width: 18, height: 18, cursor: 'pointer' }}
-                    />
-                  </label>
-                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>
-                    Allow this vendor to log in to the Mobile App.
-                  </p>
+                <div className="vendors-modal__mobile-access">
+                  <div className="vendors-modal__mobile-info">
+                    <span className="vendors-modal__mobile-title">
+                      <Smartphone size={16} strokeWidth={2} style={{ color: 'var(--primary-500, #0a6ed1)' }} /> Allow Mobile App Access
+                    </span>
+                    <p className="vendors-modal__mobile-desc">
+                      Allow this vendor to log in to the Mobile App.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={fMobileAccess}
+                    onChange={(e) => setFMobileAccess(e.target.checked)}
+                    style={{ width: 18, height: 18, cursor: 'pointer', accentColor: 'var(--primary-500, #0a6ed1)' }}
+                  />
                 </div>
+                {editingVendor && (
+                  <p className="vendors-modal__edit-note">
+                    Vendor profile fields are saved to the system. Use the Active toggle in the table for portal access.
+                  </p>
+                )}
               </div>
-              {editingVendor && (
-                <p style={{ margin: '0 20px 12px', fontSize: '0.9125rem', color: 'var(--text-secondary, #64748b)' }}>
-                  Vendor profile fields are saved to the system. Use the Active toggle in the table for portal access.
-                </p>
-              )}
               <div className="vendors-modal__footer">
-                <button type="button" className="vendors-modal__btn vendors-modal__btn--secondary" onClick={closeFormModal}>Cancel</button>
-                <button
+                <Button type="button" variant="outline" onClick={closeFormModal}>Cancel</Button>
+                <Button
                   type="submit"
-                  className="vendors-modal__btn vendors-modal__btn--primary"
                   disabled={!canSave || actionLoading}
                 >
                   <Building2 size={16} /> {actionLoading ? 'Saving…' : editingVendor ? 'Save changes' : 'Add Vendor'}
-                </button>
+                </Button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Delete confirmation */}
-      {deleteTarget && (
-        <div className="vendors-modal-backdrop" onClick={() => !actionLoading && setDeleteTarget(null)}>
-          <div className="vendors-modal" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}>
-            <div className="vendors-modal__header">
-              <span className="vendors-modal__title"><Trash2 size={20} /> Delete vendor?</span>
-              <button type="button" className="vendors-modal__close" disabled={actionLoading} onClick={() => setDeleteTarget(null)}>
-                <X size={18} />
-              </button>
+      {/* Delete confirmation dialog matching RFQ Page */}
+      <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open && !actionLoading) setDeleteTarget(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <div className="mb-2 grid size-11 place-items-center rounded-xl bg-destructive/10 text-destructive">
+              <Trash2 className="size-5" />
             </div>
-            <div className="vendors-modal__body">
-              <p style={{ margin: 0, fontSize: '1.0125rem' }}>
-                Remove <strong>{deleteTarget.name}</strong> ({deleteTarget.email}) from the directory?
-              </p>
-              <p style={{ margin: '12px 0 0', fontSize: '0.9125rem', color: 'var(--text-secondary, #64748b)' }}>
-                Their quotations and RFQ invites will be removed. Vendors with purchase orders or invoices must be deactivated instead.
-              </p>
-              {deleteError && (
-                <MessageStrip type="error" compact className="sap-message-strip--flush" style={{ marginTop: 14 }}>
-                  {deleteError}
-                </MessageStrip>
-              )}
-            </div>
-            <div className="vendors-modal__footer">
-              <button type="button" className="vendors-modal__btn vendors-modal__btn--secondary" disabled={actionLoading} onClick={() => setDeleteTarget(null)}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="vendors-modal__btn vendors-modal__btn--primary"
-                style={{ background: '#dc2626' }}
-                disabled={actionLoading}
-                onClick={handleConfirmDelete}
-              >
-                <Trash2 size={16} /> {actionLoading ? 'Deleting…' : 'Delete'}
-              </button>
-            </div>
+            <DialogTitle>Delete vendor "{deleteTarget?.name}"?</DialogTitle>
+            <DialogDescription>
+              Remove {deleteTarget?.name} ({deleteTarget?.email}) from the vendor directory?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-4 flex items-start gap-3 rounded-xl border border-destructive/20 bg-destructive/[0.055] p-3.5 text-sm text-destructive">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            <span>Their quotations and RFQ invites will be removed. Vendors with purchase orders or invoices must be deactivated instead.</span>
           </div>
-        </div>
+
+          {deleteError && (
+            <MessageStrip type="error" compact className="sap-message-strip--flush mt-3">
+              {deleteError}
+            </MessageStrip>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={actionLoading}>Cancel</Button>
+            <Button variant="destructive" loading={actionLoading} onClick={handleConfirmDelete}>
+              Delete Vendor
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Resend Credentials / Password Setup Modal */}
+      {credVendor && (
+        <Dialog open={Boolean(credVendor)} onOpenChange={(open) => { if (!open && !credLoading) closeCredentialsModal(); }}>
+          <DialogContent>
+            <DialogHeader>
+              <div className="mb-2 grid size-11 place-items-center rounded-xl bg-primary/10 text-primary">
+                <Key className="size-5" />
+              </div>
+              <DialogTitle>Send Password Setup Link</DialogTitle>
+              <DialogDescription>
+                Send a secure password setup link to <strong>{credVendor.name}</strong> at <strong>{credVendor.email}</strong>.
+              </DialogDescription>
+            </DialogHeader>
+
+            {credentialsMsg && (
+              <MessageStrip type={inferMessageType(credentialsMsg)} compact className="sap-message-strip--flush mt-3">
+                {credentialsMsg}
+              </MessageStrip>
+            )}
+
+            <DialogFooter>
+              <Button variant="outline" onClick={closeCredentialsModal} disabled={credLoading}>Cancel</Button>
+              <Button loading={credLoading} onClick={handleResendPasswordSetup}>
+                <Send size={16} /> Send Setup Link
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Password Setup Success Modal */}
+      {passwordSetupSuccessModal && (
+        <Dialog open={Boolean(passwordSetupSuccessModal)} onOpenChange={() => setPasswordSetupSuccessModal(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <div className="mb-2 grid size-11 place-items-center rounded-xl bg-emerald-500/10 text-emerald-600">
+                <CheckCircle2 className="size-5" />
+              </div>
+              <DialogTitle>Password Setup Link Sent!</DialogTitle>
+              <DialogDescription>
+                An email containing secure login instructions was sent to <strong>{passwordSetupSuccessModal.vendorName}</strong> ({passwordSetupSuccessModal.vendorEmail}).
+              </DialogDescription>
+            </DialogHeader>
+
+            <DialogFooter>
+              <Button onClick={() => setPasswordSetupSuccessModal(null)}>Done</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Mobile Access Success Modal */}
+      {mobileSuccessModal?.visible && (
+        <Dialog open={Boolean(mobileSuccessModal?.visible)} onOpenChange={() => setMobileSuccessModal(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <div className="mb-2 grid size-11 place-items-center rounded-xl bg-primary/10 text-primary">
+                <Smartphone className="size-5" />
+              </div>
+              <DialogTitle>Mobile App Access Updated</DialogTitle>
+              <DialogDescription>
+                Mobile App Access for <strong>{mobileSuccessModal.vendorName}</strong> is now <strong>{mobileSuccessModal.isEnabled ? 'Enabled' : 'Disabled'}</strong>.
+              </DialogDescription>
+            </DialogHeader>
+
+            <DialogFooter>
+              <Button onClick={() => setMobileSuccessModal(null)}>Close</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Document Renewal Success Modal */}
+      {renewalSuccessModal && (
+        <Dialog open={Boolean(renewalSuccessModal)} onOpenChange={() => setRenewalSuccessModal(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <div className="mb-2 grid size-11 place-items-center rounded-xl bg-amber-500/10 text-amber-600">
+                <Send className="size-5" />
+              </div>
+              <DialogTitle>Document Renewal Requested</DialogTitle>
+              <DialogDescription>
+                A renewal request email for <strong>{renewalSuccessModal.docName}</strong> has been sent to <strong>{renewalSuccessModal.vendorName}</strong> ({renewalSuccessModal.vendorEmail}).
+              </DialogDescription>
+            </DialogHeader>
+
+            <DialogFooter>
+              <Button onClick={() => setRenewalSuccessModal(null)}>Done</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* Detail Modal — Vendor 360 Dashboard Layout */}
@@ -1312,7 +1550,6 @@ export default function VendorsPage() {
         const delivRisk = detailVendor.avgDelivery > 0 ? Math.max(0, 100 - detailVendor.avgDelivery) : 0;
         const priceRisk = detailVendor.avgPriceScore > 0 ? Math.max(0, 100 - detailVendor.avgPriceScore) : 0;
 
-        // Fetch documents for this vendor
         const currentDocs: VendorDocumentItem[] = vendorDocsMap[detailVendor.id] || (DEFAULT_VENDOR_DOCUMENTS[detailVendor.id] || [
           ...(detailVendor.gstNumber ? [{
             id: `doc-${detailVendor.id}-gst`,
@@ -1320,7 +1557,7 @@ export default function VendorsPage() {
             type: 'GST Registration',
             documentNumber: detailVendor.gstNumber,
             submittedAt: detailVendor.createdAt,
-            expiryDate: '2026-08-30', // 5 days left
+            expiryDate: '2026-08-30',
             status: 'EXPIRING_SOON' as const,
           }] : []),
           ...(detailVendor.panNumber ? [{
@@ -1347,7 +1584,7 @@ export default function VendorsPage() {
             type: 'Business License',
             documentNumber: `LIC-${detailVendor.id}-2024`,
             submittedAt: detailVendor.createdAt,
-            expiryDate: '2026-08-20', // Expired 5 days ago
+            expiryDate: '2026-08-20',
             status: 'EXPIRED' as const,
           },
         ]);
@@ -1365,7 +1602,6 @@ export default function VendorsPage() {
         const bankRisk = hasBanking ? 0 : detailVendor.bankName ? 50 : 100;
         const portalRisk = detailVendor.isActive ? 0 : 100;
 
-        // Comprehensive Overall Risk Calculation across all 6 parameters
         const overallRisk = hasEval
           ? Math.round(
               Math.max(0, 100 - detailVendor.overallScore) * 0.50 +
@@ -1381,64 +1617,6 @@ export default function VendorsPage() {
               portalRisk * 0.10
             );
 
-        // Build Dynamic Compliance Alerts
-        const complianceAlerts: { id: string; type: 'danger' | 'warning'; title: string; message: string; actionLabel?: string; onAction?: () => void }[] = [];
-
-        expiredDocs.forEach((doc) => {
-          const info = getDocExpiryInfo(doc.expiryDate);
-          complianceAlerts.push({
-            id: `expired-${doc.id}`,
-            type: 'danger',
-            title: '🚨 EXPIRED DOCUMENT ALERT',
-            message: `${doc.name} (${doc.documentNumber || 'Doc'}) ${info.label}. Immediate document renewal required before issuing purchase orders!`,
-            actionLabel: 'View Document',
-            onAction: () => setPreviewDoc(doc),
-          });
-        });
-
-        expiringDocs.forEach((doc) => {
-          const info = getDocExpiryInfo(doc.expiryDate);
-          complianceAlerts.push({
-            id: `expiring-${doc.id}`,
-            type: 'warning',
-            title: '⚠️ DOCUMENT EXPIRING SOON',
-            message: `${doc.name} (${doc.documentNumber || 'Doc'}) is ${info.label}. Request updated document from vendor.`,
-            actionLabel: 'View Document',
-            onAction: () => setPreviewDoc(doc),
-          });
-        });
-
-        if (!hasBanking) {
-          complianceAlerts.push({
-            id: 'missing-banking',
-            type: 'danger',
-            title: '🚨 BANKING SETUP INCOMPLETE',
-            message: `Bank Account Number or IFSC Code missing for ${detailVendor.name}. Automated payment voucher processing disabled.`,
-            actionLabel: 'Edit Banking Info',
-            onAction: () => {
-              const v = detailVendor;
-              setDetailVendor(null);
-              openEditModal(v);
-            },
-          });
-        }
-
-        if (!hasGst || !hasPan) {
-          complianceAlerts.push({
-            id: 'missing-tax',
-            type: 'warning',
-            title: '⚠️ TAX COMPLIANCE INCOMPLETE',
-            message: `${!hasGst && !hasPan ? 'GST Registration & PAN Card' : !hasGst ? 'GST Registration Number' : 'PAN Card Number'} missing from vendor profile.`,
-            actionLabel: 'Update Tax Info',
-            onAction: () => {
-              const v = detailVendor;
-              setDetailVendor(null);
-              openEditModal(v);
-            },
-          });
-        }
-
-        // Filtered docs for Repository Tab
         const filteredDocs = currentDocs.filter((d) => {
           const info = getDocExpiryInfo(d.expiryDate);
           if (docFilter === 'expiring') return info.isExpired || info.isExpiringSoon;
@@ -1447,219 +1625,227 @@ export default function VendorsPage() {
         });
 
         return (
-        <div className="vendors-modal-backdrop" onClick={() => { setDetailVendor(null); setIsFullScreenDetail(false); }}>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6" onClick={() => { setDetailVendor(null); setIsFullScreenDetail(false); }}>
           <div
-            className={`vendors-modal vendors-modal--detail-v360 ${isFullScreenDetail ? 'vendors-modal--fullscreen' : ''}`}
+            className={cn(
+              "flex flex-col w-full max-w-6xl max-h-[90vh] rounded-2xl border border-border/40 bg-card shadow-2xl overflow-hidden transition-all duration-200 text-foreground",
+              isFullScreenDetail && "max-w-none max-h-none h-screen w-screen rounded-none border-0"
+            )}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Top 360 Header Banner */}
-            <div className="v360-header">
-              {/* Row 1: Identity & Top Right Controls */}
-              <div className="v360-header__row1">
-                <div className="v360-header__identity">
-                  <div className={`v360-avatar vendors-table__avatar--${detailVendor.avatarMod}`}>
+            {/* Header + Summary Workspace Header */}
+            <div className="flex flex-col border-b border-border/40 bg-card px-6 pt-6 pb-5 gap-5">
+              {/* Header */}
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-4 min-w-0">
+                  <span className={`grid size-12 shrink-0 place-items-center rounded-xl font-bold text-base text-primary ring-1 ring-primary/20 bg-primary/5 vendors-table__avatar--${detailVendor.avatarMod}`}>
                     {detailVendor.initials}
-                  </div>
-                  <div className="v360-identity__info">
-                    <div className="v360-identity__subtitle">
-                      SUPPLIER RELATIONSHIP · VENDOR 360
+                  </span>
+                  <div className="flex flex-col min-w-0 gap-0.5">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                      Supplier Relationship · Vendor 360
+                    </span>
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <h2 className="text-2xl font-bold tracking-tight text-foreground truncate">{detailVendor.name}</h2>
+                      <div className="flex items-center gap-1.5">
+                        <Badge tone={detailVendor.overallScore >= 80 ? 'warning' : 'info'} className="px-2 py-0.5 text-[11px] font-semibold rounded-md border-0">
+                          {!hasEval ? 'NEW SUPPLIER' : detailVendor.overallScore >= 80 ? 'STRATEGIC TIER' : detailVendor.overallScore >= 60 ? 'PREFERRED TIER' : 'STANDARD TIER'}
+                        </Badge>
+                        <Badge tone={!hasEval ? 'info' : overallRisk <= 25 ? 'success' : overallRisk <= 50 ? 'warning' : 'danger'} className="px-2 py-0.5 text-[11px] font-semibold rounded-md border-0">
+                          {!hasEval ? 'RISK: UNTESTED' : overallRisk <= 25 ? 'RISK: LOW' : overallRisk <= 50 ? 'RISK: MED' : 'RISK: HIGH'}
+                        </Badge>
+                      </div>
                     </div>
-                    <div className="v360-identity__title-row">
-                      <h2 className="v360-identity__title">{detailVendor.name}</h2>
-                      <span className={`v360-tag v360-tag--tier ${detailVendor.overallScore >= 80 ? 'v360-tag--gold' : 'v360-tag--blue'}`}>
-                        {!hasEval ? 'NEW SUPPLIER' : detailVendor.overallScore >= 80 ? 'STRATEGIC TIER' : detailVendor.overallScore >= 60 ? 'PREFERRED TIER' : 'STANDARD TIER'}
-                      </span>
-                      <span className={`v360-tag v360-tag--risk ${!hasEval ? 'v360-tag--blue' : overallRisk <= 25 ? 'v360-tag--low' : overallRisk <= 50 ? 'v360-tag--med' : 'v360-tag--high'}`}>
-                        {!hasEval ? 'RISK: UNTESTED' : overallRisk <= 25 ? 'RISK: LOW' : overallRisk <= 50 ? 'RISK: MED' : 'RISK: HIGH'}
-                      </span>
-                      <span className="v360-identity__meta">
-                        VN-{String(detailVendor.id).length > 10 ? String(detailVendor.id).slice(-8).toUpperCase() : String(detailVendor.id).padStart(5, '0')} · Joined {formatDate(detailVendor.createdAt)}
-                      </span>
+                    <div className="text-xs text-muted-foreground font-mono mt-0.5">
+                      VN-{String(detailVendor.id).length > 10 ? String(detailVendor.id).slice(-8).toUpperCase() : String(detailVendor.id).padStart(5, '0')} · Joined {formatDate(detailVendor.createdAt)}
                     </div>
                   </div>
                 </div>
 
-                <div className="v360-actions">
-                  <button
-                    type="button"
-                    className="v360-action-btn"
+                <div className="flex items-center gap-1 shrink-0 -mt-1 -mr-2">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-foreground"
                     onClick={() => setIsFullScreenDetail((prev) => !prev)}
                     title={isFullScreenDetail ? 'Exit Fullscreen' : 'Fullscreen'}
                   >
-                    {isFullScreenDetail ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
-                  </button>
-                  <button
-                    type="button"
-                    className="v360-action-btn v360-action-btn--close"
+                    {isFullScreenDetail ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-foreground"
                     onClick={() => { setDetailVendor(null); setIsFullScreenDetail(false); }}
                     title="Close"
                   >
-                    <X size={18} />
-                  </button>
+                    <X className="size-4" />
+                  </Button>
                 </div>
               </div>
 
-              {/* Row 2: Metrics Strip (Gauge & KPIs) */}
-              <div className="v360-header__row2">
-                <div className="v360-gauge-box">
-                  <div className={`v360-gauge-ring ${!hasEval ? 'v360-gauge-ring--med' : detailVendor.overallScore >= 80 ? 'v360-gauge-ring--high' : detailVendor.overallScore >= 60 ? 'v360-gauge-ring--med' : 'v360-gauge-ring--low'}`}>
-                    <span className="v360-gauge-score">{detailVendor.overallScore > 0 ? detailVendor.overallScore : '0'}</span>
-                  </div>
-                  <div className="v360-gauge-info">
-                    <span className="v360-gauge-title">
+              {/* Summary Metrics Strip (No outer card box, clean horizontal strip with subtle dividers) */}
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between py-2.5 px-4 rounded-lg bg-muted/20 border border-border/30">
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className={cn(
+                    "text-2xl font-bold tabular-nums",
+                    !hasEval ? "text-muted-foreground" : detailVendor.overallScore >= 80 ? "text-emerald-600" : detailVendor.overallScore >= 60 ? "text-amber-600" : "text-rose-600"
+                  )}>
+                    {detailVendor.overallScore > 0 ? detailVendor.overallScore : '0'}
+                  </span>
+                  <div className="flex flex-col">
+                    <span className="text-xs font-semibold text-foreground">
                       {!hasEval ? 'New Vendor' : detailVendor.overallScore >= 80 ? 'Strategic Partner' : detailVendor.overallScore >= 60 ? 'Active Supplier' : 'Standard Supplier'}
                     </span>
-                    <span className="v360-gauge-subtitle">Composite Score</span>
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Composite Score</span>
                   </div>
                 </div>
 
-                <div className="v360-kpi-strip">
-                  <div className="v360-kpi-item">
-                    <span className="v360-kpi-val">{detailVendor.totalOrders}</span>
-                    <span className="v360-kpi-lbl">TOTAL ORDERS</span>
-                  </div>
-                  <div className="v360-kpi-item">
-                    <span className="v360-kpi-val">{detailVendor.avgQuality > 0 ? `${detailVendor.avgQuality}%` : '—'}</span>
-                    <span className="v360-kpi-lbl">QUALITY</span>
-                  </div>
-                  <div className="v360-kpi-item">
-                    <span className="v360-kpi-val">{detailVendor.avgDelivery > 0 ? `${detailVendor.avgDelivery}%` : '—'}</span>
-                    <span className="v360-kpi-lbl">DELIVERY</span>
-                  </div>
-                  <div className="v360-kpi-item">
-                    <span className="v360-kpi-val">{detailVendor.avgPriceScore > 0 ? `${detailVendor.avgPriceScore}%` : '—'}</span>
-                    <span className="v360-kpi-lbl">PRICE SCORE</span>
-                  </div>
-                  <div className="v360-kpi-item">
-                    <span className="v360-kpi-val" style={{ color: !hasEval ? 'var(--text-secondary)' : overallRisk <= 25 ? '#10b981' : overallRisk <= 50 ? '#f59e0b' : '#ef4444' }}>
-                      {hasEval ? `${overallRisk}/100` : '—'}
-                    </span>
-                    <span className="v360-kpi-lbl">RISK SCORE</span>
-                  </div>
+                <div className="hidden sm:block h-6 w-px bg-border/40" />
+
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-5 flex-1 sm:max-w-2xl sm:divide-x sm:divide-border/30">
+                  {[
+                    { label: 'Total Orders', val: detailVendor.totalOrders },
+                    { label: 'Quality', val: detailVendor.avgQuality > 0 ? `${detailVendor.avgQuality}%` : '—' },
+                    { label: 'Delivery', val: detailVendor.avgDelivery > 0 ? `${detailVendor.avgDelivery}%` : '—' },
+                    { label: 'Price Score', val: detailVendor.avgPriceScore > 0 ? `${detailVendor.avgPriceScore}%` : '—' },
+                    { label: 'Risk Score', val: hasEval ? `${overallRisk}/100` : '—', color: !hasEval ? undefined : overallRisk <= 25 ? 'text-emerald-600' : overallRisk <= 50 ? 'text-amber-600' : 'text-rose-600' },
+                  ].map((kpi, idx) => (
+                    <div key={kpi.label} className={cn("flex flex-col items-center justify-center text-center", idx > 0 && "sm:pl-3")}>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                        {kpi.label}
+                      </span>
+                      <span className={cn("text-sm font-semibold tabular-nums text-foreground mt-0.5", kpi.color)}>
+                        {kpi.val}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
 
-
-
-            {/* Sub-Header Horizontal Tab Navigation */}
-            <div className="v360-tab-bar">
-              <button
-                type="button"
-                className={`v360-tab-btn ${v360Tab === 'overview' ? 'v360-tab-btn--active' : ''}`}
-                onClick={() => setV360Tab('overview')}
-              >
-                <PieChart size={14} />
-                <span>Evaluation & Risk Overview</span>
-              </button>
-              <button
-                type="button"
-                className={`v360-tab-btn ${v360Tab === 'documents' ? 'v360-tab-btn--active' : ''}`}
-                onClick={() => setV360Tab('documents')}
-              >
-                <FileText size={14} />
-                <span>Submitted Documents & Compliance ({currentDocs.length})</span>
-                {(expiredDocs.length > 0 || expiringDocs.length > 0) && (
-                  <span className="v360-tab-dot--warn" title={`${expiredDocs.length} expired, ${expiringDocs.length} expiring soon`} />
-                )}
-              </button>
-              <button
-                type="button"
-                className={`v360-tab-btn ${v360Tab === 'directory' ? 'v360-tab-btn--active' : ''}`}
-                onClick={() => setV360Tab('directory')}
-              >
-                <Building2 size={14} />
-                <span>Banking, Performance & Directory</span>
-              </button>
+            {/* Navigation Bar (2px underline indicator, no box background) */}
+            <div className="flex items-center gap-6 border-b border-border/40 bg-card px-6 text-sm font-medium">
+              {[
+                { id: 'overview' as const, label: 'Evaluation & Risk Overview', icon: PieChart },
+                { id: 'documents' as const, label: `Submitted Documents & Compliance (${currentDocs.length})`, icon: FileText, hasWarn: expiredDocs.length > 0 || expiringDocs.length > 0 },
+                { id: 'directory' as const, label: 'Banking, Performance & Directory', icon: Building2 },
+              ].map((tab) => {
+                const Icon = tab.icon;
+                const isActive = v360Tab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    className={cn(
+                      "relative flex items-center gap-2 py-3.5 font-semibold text-xs sm:text-sm transition-all cursor-pointer border-b-2 -mb-px",
+                      isActive
+                        ? "border-primary text-primary"
+                        : "border-transparent text-muted-foreground hover:text-foreground"
+                    )}
+                    onClick={() => setV360Tab(tab.id)}
+                  >
+                    <Icon className="size-4 shrink-0" />
+                    <span>{tab.label}</span>
+                    {tab.hasWarn && <span className="size-2 rounded-full bg-amber-500 shrink-0" title="Attention required" />}
+                  </button>
+                );
+              })}
             </div>
 
-            {/* Dashboard Scroll Body */}
-            <div className="v360-body">
+            {/* Workspace Tab Body (Single workspace surface, no card grid) */}
+            <div className="flex-1 overflow-y-auto p-6 bg-card">
               {v360Tab === 'overview' ? (
-                /* Tab 1: Evaluation & Risk Overview (Score Pie Chart, Risk Dashboard, Compliance Grid) */
-                <div className="v360-grid v360-grid--3col">
-                  
-                  {/* Card 1: Donut Pie Chart Score Breakdown */}
-                  <div className="v360-card">
-                    <div className="v360-card__header">
-                      <PieChart size={15} /> Score Breakdown (Weight Breakdown)
-                      <span className="v360-badge v360-badge--green">{detailVendor.overallScore}/100</span>
+                /* Tab 1: Evaluation & Risk Overview — Left (32%) Score Breakdown | Right (68%) Risk Dashboard + Tax Checklist */
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 divide-y lg:divide-y-0 lg:divide-x divide-border/30">
+                  {/* Left Column — Score Breakdown (~32% width) */}
+                  <div className="lg:col-span-4 pr-0 lg:pr-6 space-y-6">
+                    <div className="flex items-center justify-between border-b border-border/30 pb-3">
+                      <h3 className="flex items-center gap-2 font-semibold text-sm text-foreground">
+                        <PieChart className="size-4 text-primary" /> Score Breakdown
+                      </h3>
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 tabular-nums">
+                        {detailVendor.overallScore}/100
+                      </span>
                     </div>
-                    <div className="v360-card__body">
-                      <div className="v360-pie-layout">
-                        {/* SVG Donut Chart */}
-                        <div className="v360-pie-chart-wrap">
-                          <svg viewBox="0 0 42 42" className="v360-pie-svg">
-                            <circle cx="21" cy="21" r="15.9155" fill="transparent" stroke="var(--border)" strokeWidth="4.5" />
-                            {(() => {
-                              const items = [
-                                { weight: 30, color: '#6366f1' },
-                                { weight: 30, color: '#10b981' },
-                                { weight: 20, color: '#f59e0b' },
-                                { weight: 10, color: '#ec4899' },
-                                { weight: 10, color: '#06b6d4' },
-                              ];
 
-                              let accum = 0;
-                              return items.map((item, idx) => {
-                                const dash = `${item.weight} ${100 - item.weight}`;
-                                const offset = 100 - accum + 25;
-                                accum += item.weight;
-                                return (
-                                  <circle
-                                    key={idx}
-                                    cx="21"
-                                    cy="21"
-                                    r="15.9155"
-                                    fill="transparent"
-                                    stroke={item.color}
-                                    strokeWidth="4.5"
-                                    strokeDasharray={dash}
-                                    strokeDashoffset={offset}
-                                  />
-                                );
-                              });
-                            })()}
-                            <text x="21" y="20" className="v360-pie-center-val" textAnchor="middle">
-                              {detailVendor.overallScore > 0 ? detailVendor.overallScore : '0'}
-                            </text>
-                            <text x="21" y="26" className="v360-pie-center-lbl" textAnchor="middle">
-                              SCORE
-                            </text>
-                          </svg>
+                    <div className="flex flex-col items-center">
+                      <div className="relative size-36 my-2">
+                        <svg viewBox="0 0 42 42" className="size-full -rotate-90">
+                          <circle cx="21" cy="21" r="15.9155" fill="transparent" stroke="currentColor" className="text-muted/15" strokeWidth="4" />
+                          {(() => {
+                            const items = [
+                              { weight: 30, color: '#6366f1' },
+                              { weight: 30, color: '#10b981' },
+                              { weight: 20, color: '#f59e0b' },
+                              { weight: 10, color: '#ec4899' },
+                              { weight: 10, color: '#06b6d4' },
+                            ];
+
+                            let accum = 0;
+                            return items.map((item, idx) => {
+                              const dash = `${item.weight} ${100 - item.weight}`;
+                              const offset = 100 - accum + 25;
+                              accum += item.weight;
+                              return (
+                                <circle
+                                  key={idx}
+                                  cx="21"
+                                  cy="21"
+                                  r="15.9155"
+                                  fill="transparent"
+                                  stroke={item.color}
+                                  strokeWidth="4"
+                                  strokeDasharray={dash}
+                                  strokeDashoffset={offset}
+                                />
+                              );
+                            });
+                          })()}
+                        </svg>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                          <span className="text-3xl font-bold tabular-nums text-foreground">{detailVendor.overallScore > 0 ? detailVendor.overallScore : '0'}</span>
+                          <span className="text-[10px] font-medium tracking-wider text-muted-foreground uppercase">SCORE</span>
                         </div>
+                      </div>
 
-                        {/* Pie Chart Legend & Scores */}
-                        <div className="v360-pie-legend">
-                          {[
-                            { label: 'Quality Rating', score: detailVendor.avgQuality, color: '#6366f1', weight: '30%' },
-                            { label: 'Delivery Performance', score: detailVendor.avgDelivery, color: '#10b981', weight: '30%' },
-                            { label: 'Price Competitiveness', score: detailVendor.avgPriceScore, color: '#f59e0b', weight: '20%' },
-                            { label: 'Tax Compliance', score: (hasGst && hasPan) ? 100 : (hasGst || hasPan) ? 50 : 0, color: '#ec4899', weight: '10%' },
-                            { label: 'Banking Onboarding', score: hasBanking ? 100 : detailVendor.bankName ? 50 : 0, color: '#06b6d4', weight: '10%' },
-                          ].map((item) => (
-                            <div key={item.label} className="v360-pie-legend-item">
-                              <span className="v360-pie-dot" style={{ background: item.color }} />
-                              <span className="v360-pie-label">{item.label}</span>
-                              <span className="v360-pie-val">{item.score > 0 ? `${item.score}%` : 'N/A'}</span>
-                              <span className="v360-pie-weight">({item.weight})</span>
+                      <div className="w-full space-y-2 mt-4 pt-2">
+                        {[
+                          { label: 'Quality Rating', score: detailVendor.avgQuality, color: '#6366f1', weight: '30%' },
+                          { label: 'Delivery Performance', score: detailVendor.avgDelivery, color: '#10b981', weight: '30%' },
+                          { label: 'Price Competitiveness', score: detailVendor.avgPriceScore, color: '#f59e0b', weight: '20%' },
+                          { label: 'Tax Compliance', score: (hasGst && hasPan) ? 100 : (hasGst || hasPan) ? 50 : 0, color: '#ec4899', weight: '10%' },
+                          { label: 'Banking Onboarding', score: hasBanking ? 100 : detailVendor.bankName ? 50 : 0, color: '#06b6d4', weight: '10%' },
+                        ].map((item) => (
+                          <div key={item.label} className="flex items-center justify-between text-xs py-1.5 border-b border-border/20 last:border-0">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="size-2 rounded-full shrink-0" style={{ background: item.color }} />
+                              <span className="truncate font-medium text-foreground/90">{item.label}</span>
                             </div>
-                          ))}
-                        </div>
+                            <div className="flex items-center gap-1 shrink-0 font-medium tabular-nums">
+                              <span>{item.score > 0 ? `${item.score}%` : 'N/A'}</span>
+                              <span className="text-muted-foreground text-[11px]">({item.weight})</span>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
 
-                  {/* Card 2: Risk Dashboard */}
-                  <div className="v360-card">
-                    <div className="v360-card__header">
-                      <ShieldCheck size={15} /> Risk Dashboard
-                      <span className={`v360-badge ${!hasEval ? 'v360-badge--blue' : overallRisk <= 25 ? 'v360-badge--green' : 'v360-badge--warn'}`}>
-                        {!hasEval ? 'Untested' : overallRisk <= 25 ? 'Low Risk' : overallRisk <= 50 ? 'Medium Risk' : 'High Risk'} ({hasEval ? `${overallRisk}/100` : 'No Orders'})
-                      </span>
-                    </div>
-                    <div className="v360-card__body">
-                      <div className="v360-risk-list">
+                  {/* Right Column — Risk Dashboard (Top) & Tax & Compliance (Bottom) */}
+                  <div className="lg:col-span-8 pt-6 lg:pt-0 pl-0 lg:pl-6 space-y-8">
+                    {/* Risk Dashboard — 2 Column Compact Grid */}
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between border-b border-border/30 pb-3">
+                        <h3 className="flex items-center gap-2 font-semibold text-sm text-foreground">
+                          <ShieldCheck className="size-4 text-primary" /> Risk Dashboard
+                        </h3>
+                        <Badge tone={!hasEval ? 'info' : overallRisk <= 25 ? 'success' : 'warning'} className="px-2 py-0.5 text-xs font-semibold rounded-md border-0">
+                          {!hasEval ? 'Untested' : overallRisk <= 25 ? 'Low Risk' : overallRisk <= 50 ? 'Medium Risk' : 'High Risk'} ({hasEval ? `${overallRisk}/100` : 'No Orders'})
+                        </Badge>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
                         {[
                           { label: 'Quality Defect Risk', level: qualRisk, evaluated: detailVendor.avgQuality > 0 },
                           { label: 'Late Delivery Risk', level: delivRisk, evaluated: detailVendor.avgDelivery > 0 },
@@ -1668,168 +1854,166 @@ export default function VendorsPage() {
                           { label: 'Banking Setup Risk', level: bankRisk, evaluated: true },
                           { label: 'Document Expiry Risk', level: expiredDocs.length > 0 ? 100 : expiringDocs.length > 0 ? 50 : 0, evaluated: true },
                         ].map((r) => (
-                          <div key={r.label} className="v360-risk-item">
-                            <span className="v360-risk-label">{r.label}</span>
-                            <div className="v360-risk-bar-track">
+                          <div key={r.label} className="space-y-1.5 text-xs">
+                            <div className="flex items-center justify-between text-foreground">
+                              <span className="font-medium text-foreground/90">{r.label}</span>
+                              <span className={cn("tabular-nums font-semibold", r.evaluated && r.level > 50 ? "text-rose-600" : "text-muted-foreground")}>
+                                {r.evaluated ? `${r.level}%` : 'N/A'}
+                              </span>
+                            </div>
+                            <div className="h-1.5 w-full rounded-full bg-muted/50 overflow-hidden">
                               <div
-                                className="v360-risk-bar-fill"
-                                style={{
-                                  width: `${Math.min(100, Math.max(0, r.level))}%`,
-                                  background: !r.evaluated ? 'var(--border)' : r.level > 50 ? '#ef4444' : r.level > 25 ? '#f59e0b' : '#10b981',
-                                }}
+                                className={cn(
+                                  "h-full rounded-full transition-all duration-300",
+                                  !r.evaluated ? "bg-muted-foreground/20" : r.level > 50 ? "bg-rose-500" : r.level > 25 ? "bg-amber-500" : "bg-emerald-500"
+                                )}
+                                style={{ width: `${Math.min(100, Math.max(0, r.level))}%` }}
                               />
                             </div>
-                            <span className="v360-risk-val">
-                              <strong>{r.evaluated ? `${r.level}%` : 'N/A'}</strong>
-                            </span>
                           </div>
                         ))}
                       </div>
                     </div>
-                  </div>
 
-                  {/* Card 3: Tax & Compliance Checklist (Compact 2-Column Grid) */}
-                  <div className="v360-card">
-                    <div className="v360-card__header">
-                      <FileCheck size={15} /> Tax & Compliance Checklist
-                      <span className={`v360-badge ${hasGst && hasPan && hasBanking && expiredDocs.length === 0 ? 'v360-badge--green' : 'v360-badge--warn'}`}>
-                        {(hasGst && hasPan && hasBanking && expiredDocs.length === 0) ? 'Verified' : 'Incomplete'}
-                      </span>
-                    </div>
-                    <div className="v360-card__body">
-                      <div className="v360-checklist v360-checklist--2col">
+                    {/* Tax & Compliance Checklist — Compact Rows with dividers */}
+                    <div className="space-y-4 pt-2">
+                      <div className="flex items-center justify-between border-b border-border/30 pb-3">
+                        <h3 className="flex items-center gap-2 font-semibold text-sm text-foreground">
+                          <FileCheck className="size-4 text-primary" /> Tax & Compliance Checklist
+                        </h3>
+                        <Badge tone={hasGst && hasPan && hasBanking && expiredDocs.length === 0 ? 'success' : 'warning'} className="px-2 py-0.5 text-xs font-semibold rounded-md border-0">
+                          {(hasGst && hasPan && hasBanking && expiredDocs.length === 0) ? 'Verified' : 'Incomplete'}
+                        </Badge>
+                      </div>
+
+                      <div className="divide-y divide-border/20">
                         {[
                           { label: 'GST Registration', sub: detailVendor.gstNumber ? `GST: ${detailVendor.gstNumber}` : 'Not Provided', status: detailVendor.gstNumber ? 'valid' : 'invalid' },
                           { label: 'PAN Registration', sub: detailVendor.panNumber ? `PAN: ${detailVendor.panNumber}` : 'Not Provided', status: detailVendor.panNumber ? 'valid' : 'invalid' },
                           { label: 'Bank Name', sub: detailVendor.bankName ? detailVendor.bankName : 'Not Provided', status: detailVendor.bankName ? 'valid' : 'invalid' },
                           { label: 'Bank Account Number', sub: detailVendor.bankAccountNumber ? `Account: ${detailVendor.bankAccountNumber}` : 'Not Provided', status: detailVendor.bankAccountNumber ? 'valid' : 'invalid' },
-                          { label: 'Bank IFSC Code', sub: detailVendor.bankIfscCode ? `IFSC: ${detailVendor.bankIfscCode}` : 'Not Provided', status: detailVendor.bankIfscCode ? 'valid' : 'invalid' },
+                          { label: 'Bank IFSC Code', sub: detailVendor.bankIfscCode ? `IFSC: ${detailVendor.bankIfscCode}` : 'Not Provided', status: detailVendor.bankIfscCode ? 'invalid' : 'invalid' },
                           { label: 'Submitted Documents', sub: `${currentDocs.length} Docs (${expiredDocs.length} Expired, ${expiringDocs.length} Expiring)`, status: expiredDocs.length > 0 ? 'invalid' : expiringDocs.length > 0 ? 'warn' : 'valid' },
                           { label: 'Portal Access', sub: detailVendor.isActive ? 'Active Vendor Account' : 'Inactive Account', status: detailVendor.isActive ? 'valid' : 'warn' },
-                          { label: 'Contact & Address Info', sub: (detailVendor.email && detailVendor.phone) ? 'Email & Phone On File' : 'Incomplete', status: (detailVendor.email && detailVendor.phone) ? 'valid' : 'warn' },
+                          { label: 'Contact Info', sub: (detailVendor.email && detailVendor.phone) ? 'Email & Phone On File' : 'Incomplete', status: (detailVendor.email && detailVendor.phone) ? 'valid' : 'warn' },
                         ].map((item) => (
-                          <div key={item.label} className="v360-check-item">
-                            {item.status === 'valid' ? (
-                              <CheckCircle2 size={15} className="v360-icon--valid" />
-                            ) : item.status === 'warn' ? (
-                              <AlertTriangle size={15} className="v360-icon--warn" />
-                            ) : (
-                              <X size={15} className="v360-icon--invalid" />
-                            )}
-                            <div className="v360-check-text">
-                              <span className="v360-check-label">{item.label}</span>
-                              <span className="v360-check-sub">{item.sub}</span>
+                          <div key={item.label} className="flex items-center justify-between py-2 text-xs">
+                            <div className="flex items-center gap-2.5">
+                              {item.status === 'valid' ? (
+                                <CheckCircle2 className="size-4 text-emerald-600 shrink-0" />
+                              ) : item.status === 'warn' ? (
+                                <AlertTriangle className="size-4 text-amber-600 shrink-0" />
+                              ) : (
+                                <X className="size-4 text-rose-600 shrink-0" />
+                              )}
+                              <span className="font-semibold text-foreground">{item.label}</span>
                             </div>
+                            <span className="text-[12px] text-muted-foreground font-medium">{item.sub}</span>
                           </div>
                         ))}
                       </div>
                     </div>
                   </div>
-
                 </div>
               ) : v360Tab === 'documents' ? (
-                /* Tab 2: Submitted Documents & Compliance Repository */
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {/* Top Repository Header & Actions */}
-                  <div className="v360-docs-header">
-                    <div className="v360-docs-summary">
-                      <FileText size={18} style={{ color: 'var(--primary-500)' }} />
-                      <strong>Compliance Document Repository</strong>
-                      <span className="v360-docs-chip">Total: {currentDocs.length}</span>
-                      <span className="v360-docs-chip" style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981' }}>Valid: {validDocsCount}</span>
-                      {expiringDocs.length > 0 && <span className="v360-docs-chip" style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>Expiring: {expiringDocs.length}</span>}
-                      {expiredDocs.length > 0 && <span className="v360-docs-chip" style={{ background: 'rgba(239,68,68,0.15)', color: '#ef4444' }}>Expired: {expiredDocs.length}</span>}
-                    </div>
+                /* Tab 2: Documents Repository (Clean table surface, no floating outer card) */
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/30 pb-3">
+                    <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <FileText className="size-4 text-primary" />
+                      <span>Compliance Document Repository</span>
+                    </h3>
 
-                    <div className="v360-docs-actions">
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button
-                          type="button"
-                          className={`v360-doc-filter-btn ${docFilter === 'all' ? 'v360-doc-filter-btn--active' : ''}`}
-                          onClick={() => setDocFilter('all')}
-                        >
-                          All ({currentDocs.length})
-                        </button>
-                        <button
-                          type="button"
-                          className={`v360-doc-filter-btn ${docFilter === 'expiring' ? 'v360-doc-filter-btn--active' : ''}`}
-                          onClick={() => setDocFilter('expiring')}
-                        >
-                          Expiring / Expired ({expiredDocs.length + expiringDocs.length})
-                        </button>
-                        <button
-                          type="button"
-                          className={`v360-doc-filter-btn ${docFilter === 'valid' ? 'v360-doc-filter-btn--active' : ''}`}
-                          onClick={() => setDocFilter('valid')}
-                        >
-                          Valid ({validDocsCount})
-                        </button>
-                      </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        className={cn(
+                          "px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer",
+                          docFilter === 'all' ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"
+                        )}
+                        onClick={() => setDocFilter('all')}
+                      >
+                        All ({currentDocs.length})
+                      </button>
+                      <button
+                        type="button"
+                        className={cn(
+                          "px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer",
+                          docFilter === 'expiring' ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"
+                        )}
+                        onClick={() => setDocFilter('expiring')}
+                      >
+                        Expiring / Expired ({expiredDocs.length + expiringDocs.length})
+                      </button>
+                      <button
+                        type="button"
+                        className={cn(
+                          "px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer",
+                          docFilter === 'valid' ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"
+                        )}
+                        onClick={() => setDocFilter('valid')}
+                      >
+                        Valid ({validDocsCount})
+                      </button>
                     </div>
                   </div>
 
-                  {/* Documents Table */}
-                  <div className="v360-docs-table-wrap">
-                    <table className="v360-docs-table">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm text-foreground border-collapse">
                       <thead>
-                        <tr>
-                          <th>DOCUMENT NAME & TYPE</th>
-                          <th>SUBMISSION DATE</th>
-                          <th>EXPIRY STATUS & DAYS LEFT</th>
-                          <th style={{ textAlign: 'right' }}>ACTIONS</th>
+                        <tr className="border-b border-border/30 bg-muted/15 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                          <th className="px-4 py-3">Document Name & Type</th>
+                          <th className="px-4 py-3">Submission Date</th>
+                          <th className="px-4 py-3">Expiry Status</th>
+                          <th className="px-4 py-3 text-right">Actions</th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="divide-y divide-border/20">
                         {filteredDocs.length > 0 ? (
                           filteredDocs.map((doc) => {
                             const expInfo = getDocExpiryInfo(doc.expiryDate);
                             return (
-                              <tr key={doc.id}>
-                                <td>
-                                  <div className="v360-doc-name-cell">
-                                    <div className="v360-doc-icon-box">
-                                      <FileText size={18} />
+                              <tr key={doc.id} className="hover:bg-muted/15 transition-colors">
+                                <td className="px-4 py-3.5">
+                                  <div className="flex items-center gap-3">
+                                    <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                                      <FileText className="size-4" />
                                     </div>
-                                    <div className="v360-doc-info">
-                                      <span className="v360-doc-title">{doc.name}</span>
-                                      <span className="v360-doc-type">{doc.type}</span>
+                                    <div className="flex flex-col min-w-0">
+                                      <span className="font-semibold text-foreground truncate">{doc.name}</span>
+                                      <span className="text-xs text-muted-foreground truncate">{doc.type}</span>
                                     </div>
                                   </div>
                                 </td>
-                                <td>{formatDateShort(doc.submittedAt)}</td>
-                                <td>
+                                <td className="px-4 py-3.5 text-xs text-muted-foreground whitespace-nowrap">
+                                  {formatDateShort(doc.submittedAt)}
+                                </td>
+                                <td className="px-4 py-3.5 whitespace-nowrap">
                                   {doc.isRenewalRequested ? (
-                                    <span className="v360-doc-badge v360-doc-badge--warn" style={{ background: 'rgba(245,158,11,0.18)', color: '#f59e0b', borderColor: 'rgba(245,158,11,0.4)' }}>
-                                      <Mail size={13} /> Renewal Requested (Awaiting Vendor)
-                                    </span>
+                                    <Badge tone="warning" className="gap-1.5 font-medium px-2 py-0.5 rounded-md border-0">
+                                      <Mail className="size-3" /> Renewal Requested
+                                    </Badge>
                                   ) : (
-                                    <span className={`v360-doc-badge ${expInfo.badgeClass}`}>
-                                      {expInfo.isExpired ? (
-                                        <AlertTriangle size={13} />
-                                      ) : expInfo.isExpiringSoon ? (
-                                        <Clock size={13} />
-                                      ) : (
-                                        <CheckCircle2 size={13} />
-                                      )}
+                                    <Badge tone={expInfo.isExpired ? 'danger' : expInfo.isExpiringSoon ? 'warning' : 'success'} className="gap-1.5 font-medium px-2 py-0.5 rounded-md border-0">
+                                      {expInfo.isExpired ? <AlertTriangle className="size-3" /> : expInfo.isExpiringSoon ? <Clock className="size-3" /> : <CheckCircle2 className="size-3" />}
                                       {expInfo.label}
-                                    </span>
+                                    </Badge>
                                   )}
                                 </td>
-                                <td style={{ textAlign: 'right' }}>
-                                  <div style={{ display: 'inline-flex', gap: 6 }}>
-                                    <button
-                                      type="button"
-                                      className="v360-doc-action-btn"
+                                <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
                                       onClick={() => setPreviewDoc(doc)}
-                                      title="View Document Certificate Preview"
                                     >
-                                      <Eye size={13} /> View
-                                    </button>
+                                      <Eye className="size-3.5" /> View
+                                    </Button>
                                     {doc.isRenewalRequested ? (
-                                      <button
-                                        type="button"
-                                        className="v360-doc-action-btn"
-                                        style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', borderColor: 'rgba(16,185,129,0.3)' }}
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="bg-emerald-500/15 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/25"
                                         onClick={() => {
                                           const nextYearDate = new Date();
                                           nextYearDate.setFullYear(nextYearDate.getFullYear() + 1);
@@ -1853,18 +2037,18 @@ export default function VendorsPage() {
                                             return { ...prev, [detailVendor.id]: updated };
                                           });
 
-                                          setPageMsg(`✅ Vendor (${detailVendor.email}) uploaded renewed ${doc.name}! Document status is now VALID (365 days remaining).`);
+                                          setPageMsg(`✅ Vendor (${detailVendor.email}) uploaded renewed ${doc.name}! Document status is now VALID.`);
                                           setTimeout(() => setPageMsg(null), 6000);
                                         }}
                                         title="Simulate Vendor Submitting Renewed Document"
                                       >
-                                        <RefreshCw size={13} /> Submit Renewed Doc
-                                      </button>
+                                        <RefreshCw className="size-3.5" /> Submit Renewed Doc
+                                      </Button>
                                     ) : (expInfo.isExpired || expInfo.isExpiringSoon) ? (
-                                      <button
-                                        type="button"
-                                        className="v360-doc-action-btn"
-                                        style={{ background: 'rgba(245,158,11,0.12)', color: '#f59e0b', borderColor: 'rgba(245,158,11,0.3)' }}
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="bg-amber-500/12 text-amber-600 border-amber-500/30 hover:bg-amber-500/20"
                                         onClick={() => {
                                           setVendorDocsMap((prev) => {
                                             const list = prev[detailVendor.id] || currentDocs;
@@ -1877,7 +2061,6 @@ export default function VendorsPage() {
                                             return { ...prev, [detailVendor.id]: updated };
                                           });
 
-                                          // Dispatch Real Email & SMTP Notification to Vendor
                                           sapEmailService.dispatchVendorDocumentRenewalEmail({
                                             vendorEmail: detailVendor.email,
                                             vendorName: detailVendor.name,
@@ -1896,8 +2079,8 @@ export default function VendorsPage() {
                                         }}
                                         title="Request Renewal Email to Vendor"
                                       >
-                                        <Send size={13} /> Request Renewal
-                                      </button>
+                                        <Send className="size-3.5" /> Request Renewal
+                                      </Button>
                                     ) : null}
                                   </div>
                                 </td>
@@ -1906,7 +2089,7 @@ export default function VendorsPage() {
                           })
                         ) : (
                           <tr>
-                            <td colSpan={4} style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)' }}>
+                            <td colSpan={4} className="px-4 py-8 text-center text-xs text-muted-foreground">
                               No documents found for filter "{docFilter}".
                             </td>
                           </tr>
@@ -1916,192 +2099,173 @@ export default function VendorsPage() {
                   </div>
                 </div>
               ) : (
-                /* Tab 3: Banking, Performance & Directory Details */
-                <div className="v360-grid v360-grid--3col">
-                  
-                  {/* Card 4: Banking & Financial Details */}
-                  <div className="v360-card">
-                    <div className="v360-card__header">
-                      <Building2 size={15} /> Banking & System Details
-                      <span className={`v360-badge ${hasBanking ? 'v360-badge--green' : 'v360-badge--warn'}`}>
-                        {hasBanking ? 'Banking Configured' : 'Pending Banking'}
-                      </span>
+                /* Tab 3: Banking, Performance & Directory Details — Three Clean Columns with Vertical Dividers */
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 divide-y lg:divide-y-0 lg:divide-x divide-border/30">
+                  {/* Column 1: Banking Information */}
+                  <div className="space-y-5 pr-0 lg:pr-6">
+                    <div className="flex items-center justify-between border-b border-border/30 pb-3">
+                      <h3 className="flex items-center gap-2 font-semibold text-sm text-foreground">
+                        <Building2 className="size-4 text-primary" /> Banking & Financial Details
+                      </h3>
+                      <Badge tone={hasBanking ? 'success' : 'warning'} className="px-2 py-0.5 text-xs font-semibold rounded-md border-0">
+                        {hasBanking ? 'Configured' : 'Pending'}
+                      </Badge>
                     </div>
-                    <div className="v360-card__body">
-                      <div className="v360-fin-summary">
-                        <div className="v360-fin-kpi">
-                          <span className="v360-fin-kpi__val">{detailVendor.totalOrders}</span>
-                          <span className="v360-fin-kpi__lbl">Orders</span>
-                        </div>
-                        <div className="v360-fin-kpi">
-                          <span className="v360-fin-kpi__val">{detailVendor.avgQuality > 0 ? `${detailVendor.avgQuality}%` : '—'}</span>
-                          <span className="v360-fin-kpi__lbl">Quality</span>
-                        </div>
-                        <div className="v360-fin-kpi">
-                          <span className="v360-fin-kpi__val">{detailVendor.avgDelivery > 0 ? `${detailVendor.avgDelivery}%` : '—'}</span>
-                          <span className="v360-fin-kpi__lbl">Delivery</span>
-                        </div>
-                        <div className="v360-fin-kpi">
-                          <span className="v360-fin-kpi__val">{detailVendor.avgPriceScore > 0 ? `${detailVendor.avgPriceScore}%` : '—'}</span>
-                          <span className="v360-fin-kpi__lbl">Price Score</span>
-                        </div>
-                      </div>
 
-                      <div className="v360-bank-section">
-                        <div className="v360-sub-title">BANKING INFORMATION</div>
-                        <div className="v360-detail-grid">
-                          <div className="v360-detail-item">
-                            <span className="v360-detail-lbl">Bank Name</span>
-                            <span className="v360-detail-val" style={{ color: detailVendor.bankName ? 'inherit' : '#ef4444' }}>
-                              {detailVendor.bankName || 'Not Configured'}
-                            </span>
-                          </div>
-                          <div className="v360-detail-item">
-                            <span className="v360-detail-lbl">Branch</span>
-                            <span className="v360-detail-val">{detailVendor.bankBranch || '—'}</span>
-                          </div>
-                          <div className="v360-detail-item">
-                            <span className="v360-detail-lbl">Account No.</span>
-                            <span className="v360-detail-val" style={{ color: detailVendor.bankAccountNumber ? 'inherit' : '#ef4444' }}>
-                              {detailVendor.bankAccountNumber || 'Not Configured'}
-                            </span>
-                          </div>
-                          <div className="v360-detail-item">
-                            <span className="v360-detail-lbl">IFSC Code</span>
-                            <span className="v360-detail-val" style={{ color: detailVendor.bankIfscCode ? 'inherit' : '#ef4444' }}>
-                              {detailVendor.bankIfscCode || 'Not Configured'}
-                            </span>
-                          </div>
+                    <div className="grid grid-cols-4 gap-2 py-2 px-3 rounded-md bg-muted/15 border border-border/20 text-center">
+                      <div><div className="text-sm font-semibold">{detailVendor.totalOrders}</div><div className="text-[10px] text-muted-foreground uppercase font-bold">Orders</div></div>
+                      <div><div className="text-sm font-semibold">{detailVendor.avgQuality > 0 ? `${detailVendor.avgQuality}%` : '—'}</div><div className="text-[10px] text-muted-foreground uppercase font-bold">Quality</div></div>
+                      <div><div className="text-sm font-semibold">{detailVendor.avgDelivery > 0 ? `${detailVendor.avgDelivery}%` : '—'}</div><div className="text-[10px] text-muted-foreground uppercase font-bold">Delivery</div></div>
+                      <div><div className="text-sm font-semibold">{detailVendor.avgPriceScore > 0 ? `${detailVendor.avgPriceScore}%` : '—'}</div><div className="text-[10px] text-muted-foreground uppercase font-bold">Price</div></div>
+                    </div>
+
+                    <div className="space-y-4 text-xs pt-1">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">Banking Details</div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[10px] uppercase font-bold text-muted-foreground/80">Bank Name</span>
+                          <span className="font-semibold text-foreground truncate" style={{ color: detailVendor.bankName ? 'inherit' : 'var(--destructive)' }}>
+                            {detailVendor.bankName || 'Not Configured'}
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[10px] uppercase font-bold text-muted-foreground/80">Branch</span>
+                          <span className="font-semibold text-foreground truncate">{detailVendor.bankBranch || '—'}</span>
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[10px] uppercase font-bold text-muted-foreground/80">Account Number</span>
+                          <span className="font-semibold text-foreground truncate font-mono" style={{ color: detailVendor.bankAccountNumber ? 'inherit' : 'var(--destructive)' }}>
+                            {detailVendor.bankAccountNumber || 'Not Configured'}
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[10px] uppercase font-bold text-muted-foreground/80">IFSC Code</span>
+                          <span className="font-semibold text-foreground truncate font-mono" style={{ color: detailVendor.bankIfscCode ? 'inherit' : 'var(--destructive)' }}>
+                            {detailVendor.bankIfscCode || 'Not Configured'}
+                          </span>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Card 5: Performance KPI Scorecard */}
-                  <div className="v360-card">
-                    <div className="v360-card__header">
-                      <Activity size={15} /> Performance Scorecard
-                      <span className="v360-badge v360-badge--green">{hasEval ? `${detailVendor.overallScore}% Overall` : 'No Eval'}</span>
+                  {/* Column 2: Performance Scorecard */}
+                  <div className="pt-6 lg:pt-0 px-0 lg:px-6 space-y-5">
+                    <div className="flex items-center justify-between border-b border-border/30 pb-3">
+                      <h3 className="flex items-center gap-2 font-semibold text-sm text-foreground">
+                        <Activity className="size-4 text-primary" /> Performance Scorecard
+                      </h3>
+                      <Badge tone="success" className="px-2 py-0.5 text-xs font-semibold rounded-md border-0">
+                        {hasEval ? `${detailVendor.overallScore}% Overall` : 'No Eval'}
+                      </Badge>
                     </div>
-                    <div className="v360-card__body" style={{ padding: 0 }}>
-                      <table className="v360-kpi-table">
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs text-foreground">
                         <thead>
-                          <tr>
-                            <th>METRIC</th>
-                            <th>SCORE</th>
-                            <th>STATUS</th>
+                          <tr className="border-b border-border/30 text-muted-foreground uppercase font-bold text-[10px]">
+                            <th className="py-2">Metric</th>
+                            <th className="py-2">Score</th>
+                            <th className="py-2 text-right">Status</th>
                           </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-border/20">
                           {[
                             { kpi: 'Quality Score', score: detailVendor.avgQuality > 0 ? `${detailVendor.avgQuality}%` : '—', val: detailVendor.avgQuality },
                             { kpi: 'Delivery Performance', score: detailVendor.avgDelivery > 0 ? `${detailVendor.avgDelivery}%` : '—', val: detailVendor.avgDelivery },
                             { kpi: 'Price Competitiveness', score: detailVendor.avgPriceScore > 0 ? `${detailVendor.avgPriceScore}%` : '—', val: detailVendor.avgPriceScore },
                             { kpi: 'Overall Performance', score: detailVendor.overallScore > 0 ? `${detailVendor.overallScore}%` : '—', val: detailVendor.overallScore },
-                          ].map((row) => {
-                            const statusText = row.val >= 80 ? 'Exceeds' : row.val >= 60 ? 'Meets' : row.val > 0 ? 'Under' : 'No Data';
-                            return (
-                              <tr key={row.kpi}>
-                                <td><strong>{row.kpi}</strong></td>
-                                <td>{row.score}</td>
-                                <td>
-                                  <span className={`v360-pill ${row.val >= 80 ? 'v360-pill--success' : row.val >= 60 ? 'v360-badge--warn' : 'v360-badge--blue'}`}>
-                                    {statusText}
-                                  </span>
-                                </td>
-                              </tr>
-                            );
-                          })}
+                          ].map((row) => (
+                            <tr key={row.kpi}>
+                              <td className="py-2.5 font-medium">{row.kpi}</td>
+                              <td className="py-2.5 tabular-nums font-semibold">{row.score}</td>
+                              <td className="py-2.5 text-right">
+                                <Badge tone={row.val >= 80 ? 'success' : row.val >= 60 ? 'warning' : 'neutral'} className="px-2 py-0.5 text-[11px] font-medium rounded-md border-0">
+                                  {row.val >= 80 ? 'Exceeds' : row.val >= 60 ? 'Meets' : row.val > 0 ? 'Under' : 'No Data'}
+                                </Badge>
+                              </td>
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
                     </div>
                   </div>
 
-                  {/* Card 6: Contact Information & Directory */}
-                  <div className="v360-card">
-                    <div className="v360-card__header">
-                      <Mail size={15} /> Contact & Directory Details
-                      <span className={`v360-badge ${detailVendor.isActive ? 'v360-badge--green' : 'v360-badge--warn'}`}>
+                  {/* Column 3: Contact & Directory Info */}
+                  <div className="pt-6 lg:pt-0 pl-0 lg:pl-6 space-y-5">
+                    <div className="flex items-center justify-between border-b border-border/30 pb-3">
+                      <h3 className="flex items-center gap-2 font-semibold text-sm text-foreground">
+                        <Mail className="size-4 text-primary" /> Contact & Directory Info
+                      </h3>
+                      <Badge tone={detailVendor.isActive ? 'success' : 'neutral'} className="px-2 py-0.5 text-xs font-semibold rounded-md border-0">
                         {detailVendor.isActive ? 'Active' : 'Inactive'}
-                      </span>
+                      </Badge>
                     </div>
-                    <div className="v360-card__body">
-                      <div className="v360-detail-grid">
-                        <div className="v360-detail-item">
-                          <span className="v360-detail-lbl">Email</span>
-                          <span className="v360-detail-val">{detailVendor.email}</span>
-                        </div>
-                        <div className="v360-detail-item">
-                          <span className="v360-detail-lbl">Phone</span>
-                          <span className="v360-detail-val">{detailVendor.phone}</span>
-                        </div>
-                        <div className="v360-detail-item">
-                          <span className="v360-detail-lbl">Contact Person</span>
-                          <span className="v360-detail-val">{detailVendor.contactPerson}</span>
-                        </div>
-                        <div className="v360-detail-item">
-                          <span className="v360-detail-lbl">Category</span>
-                          <span className="v360-detail-val">{detailVendor.category}</span>
-                        </div>
-                        <div className="v360-detail-item">
-                          <span className="v360-detail-lbl">Website</span>
-                          <span className="v360-detail-val">{detailVendor.website}</span>
-                        </div>
-                        <div className="v360-detail-item">
-                          <span className="v360-detail-lbl">Location</span>
-                          <span className="v360-detail-val">{detailVendor.location}</span>
-                        </div>
-                        <div className="v360-detail-item" style={{ gridColumn: '1 / -1' }}>
-                          <span className="v360-detail-lbl">Address</span>
-                          <span className="v360-detail-val">{detailVendor.address || '—'}</span>
-                        </div>
+
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-4 text-xs">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground/80">Email</span>
+                        <span className="font-semibold text-foreground truncate">{detailVendor.email}</span>
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground/80">Phone</span>
+                        <span className="font-semibold text-foreground truncate">{detailVendor.phone}</span>
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground/80">Contact Person</span>
+                        <span className="font-semibold text-foreground truncate">{detailVendor.contactPerson}</span>
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground/80">Category</span>
+                        <span className="font-semibold text-foreground truncate">{detailVendor.category}</span>
+                      </div>
+                      <div className="flex flex-col gap-0.5 col-span-2">
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground/80">Location & Address</span>
+                        <span className="font-semibold text-foreground truncate">{detailVendor.location} · {detailVendor.address || 'Address on file'}</span>
                       </div>
                     </div>
                   </div>
-
                 </div>
               )}
             </div>
 
-            {/* Modal Footer */}
-            <div className="vendors-modal__footer">
-              <button
-                className="vendors-modal__btn vendors-modal__btn--secondary"
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 border-t border-border/30 bg-card px-6 py-4 shrink-0">
+              <Button
+                variant="outline"
                 onClick={() => { setDetailVendor(null); setIsFullScreenDetail(false); }}
               >
                 Close
-              </button>
+              </Button>
               {canCreateVendor ? (
-                <button
-                  className="vendors-modal__btn vendors-modal__btn--secondary"
+                <Button
+                  variant="outline"
                   onClick={() => {
                     openEditModal(detailVendor);
                     setDetailVendor(null);
                     setIsFullScreenDetail(false);
                   }}
                 >
-                  <Edit3 size={16} /> Edit Vendor
-                </button>
+                  <Edit3 className="size-4" /> Edit Vendor
+                </Button>
               ) : (
-                <button
-                  className="vendors-modal__btn vendors-modal__btn--secondary"
+                <Button
+                  variant="outline"
                   disabled
                   title="You do not have permission to edit vendors"
                 >
-                  <ShieldOff size={16} /> Edit Vendor
-                </button>
+                  <ShieldOff className="size-4" /> Edit Vendor
+                </Button>
               )}
               {detailVendor.isActive && canCreateVendor && (
-                <button
-                  className="vendors-modal__btn vendors-modal__btn--primary"
+                <Button
                   onClick={() => {
                     openCredentialsModal(detailVendor);
                     setDetailVendor(null);
                     setIsFullScreenDetail(false);
                   }}
                 >
-                  <Send size={16} /> Password Setup Email
-                </button>
+                  <Send className="size-4" /> Password Setup Email
+                </Button>
               )}
             </div>
           </div>
@@ -2140,7 +2304,6 @@ export default function VendorsPage() {
                       </span>
                     </div>
 
-                    {/* Render Real Uploaded Document Viewer if fileUrl exists from Onboarding Queue */}
                     {previewDoc.fileUrl ? (
                       <div className="doc-uploaded-viewer-container">
                         {previewDoc.fileUrl.match(/\.(jpeg|jpg|gif|png|svg|webp)($|\?)/i) ? (
@@ -2306,497 +2469,32 @@ export default function VendorsPage() {
                         </div>
                       </div>
                     )}
+
+                    <div className="doc-preview-footer">
+                      <Button variant="outline" onClick={() => setPreviewDoc(null)}>
+                        Close Preview
+                      </Button>
+                      {previewDoc.fileUrl && (
+                        <Button
+                          onClick={() => {
+                            const a = document.createElement('a');
+                            a.href = previewDoc.fileUrl!;
+                            a.target = '_blank';
+                            a.download = previewDoc.name;
+                            a.click();
+                          }}
+                        >
+                          <Download size={15} /> Download Document
+                        </Button>
+                      )}
+                    </div>
                   </>
                 );
               })()}
-
-              <div className="vendors-modal__footer" style={{ padding: 0 }}>
-                <button className="vendors-modal__btn vendors-modal__btn--secondary" onClick={() => setPreviewDoc(null)}>
-                  Close
-                </button>
-                {previewDoc.fileUrl && (
-                  <button
-                    className="vendors-modal__btn vendors-modal__btn--secondary"
-                    onClick={() => window.open(previewDoc.fileUrl, '_blank', 'noopener,noreferrer')}
-                  >
-                    <ExternalLink size={14} /> Open Original Uploaded File
-                  </button>
-                )}
-                <button
-                  className="vendors-modal__btn vendors-modal__btn--secondary"
-                  onClick={() => window.print()}
-                >
-                  Print Certificate
-                </button>
-                <button
-                  className="vendors-modal__btn vendors-modal__btn--primary"
-                  onClick={() => {
-                    if (previewDoc.fileUrl) {
-                      window.open(previewDoc.fileUrl, '_blank');
-                    } else {
-                      setPageMsg(`Downloading official ${previewDoc.name} certificate PDF...`);
-                      setTimeout(() => setPageMsg(null), 3000);
-                    }
-                  }}
-                >
-                  <Download size={15} /> Download Document
-                </button>
-              </div>
             </div>
           </div>
         </div>
       )}
-
-      {/* Upload New Document Modal */}
-      {showUploadDocModal && detailVendor && (
-        <div className="vendors-modal-backdrop" onClick={() => setShowUploadDocModal(false)}>
-          <div className="vendors-modal" onClick={(e) => e.stopPropagation()}>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!newDocName) return;
-                const newDocItem: VendorDocumentItem = {
-                  id: `doc-${Date.now()}`,
-                  name: newDocName,
-                  type: newDocType,
-                  documentNumber: newDocNumber || undefined,
-                  submittedAt: new Date().toISOString().slice(0, 10),
-                  expiryDate: newDocExpiryDate || null,
-                  status: getDocExpiryInfo(newDocExpiryDate || null).status,
-                };
-                setVendorDocsMap((prev) => {
-                  const existing = prev[detailVendor.id] || [];
-                  return { ...prev, [detailVendor.id]: [newDocItem, ...existing] };
-                });
-                setShowUploadDocModal(false);
-                setPageMsg(`Document "${newDocName}" successfully uploaded & compliance verified.`);
-                setTimeout(() => setPageMsg(null), 4000);
-              }}
-            >
-              <div className="vendors-modal__header">
-                <span className="vendors-modal__title">
-                  <FilePlus size={20} /> Upload Vendor Document
-                </span>
-                <button type="button" className="vendors-modal__close" onClick={() => setShowUploadDocModal(false)}>
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="vendors-modal__body">
-                <div className="vendors-modal__field">
-                  <label className="vendors-modal__label">Document Title <span>*</span></label>
-                  <input
-                    className="vendors-modal__input"
-                    placeholder="e.g. GST Registration Certificate"
-                    value={newDocName}
-                    onChange={(e) => setNewDocName(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="vendors-modal__row">
-                  <div className="vendors-modal__field">
-                    <label className="vendors-modal__label">Document Type</label>
-                    <select
-                      className="vendors-modal__select"
-                      value={newDocType}
-                      onChange={(e) => setNewDocType(e.target.value)}
-                    >
-                      <option value="GST Registration">GST Registration</option>
-                      <option value="PAN Card">PAN Card</option>
-                      <option value="Business License">Business License</option>
-                      <option value="ISO Certification">ISO Certification</option>
-                      <option value="MSME Certificate">MSME Certificate</option>
-                      <option value="Bank Proof">Bank Proof / Cancelled Cheque</option>
-                      <option value="Tax Compliance Certificate">Tax Compliance Certificate</option>
-                    </select>
-                  </div>
-
-                  <div className="vendors-modal__field">
-                    <label className="vendors-modal__label">Registration / Document No.</label>
-                    <input
-                      className="vendors-modal__input"
-                      placeholder="e.g. 27AABCU9603R1ZX"
-                      value={newDocNumber}
-                      onChange={(e) => setNewDocNumber(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="vendors-modal__field">
-                  <label className="vendors-modal__label">Expiry Date (Leave blank if permanent)</label>
-                  <input
-                    className="vendors-modal__input"
-                    type="date"
-                    value={newDocExpiryDate}
-                    onChange={(e) => setNewDocExpiryDate(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="vendors-modal__footer">
-                <button type="button" className="vendors-modal__btn vendors-modal__btn--secondary" onClick={() => setShowUploadDocModal(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="vendors-modal__btn vendors-modal__btn--primary">
-                  <Upload size={15} /> Upload & Save
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Resend secure password setup link (vendor sets own password) */}
-      {credVendor && (
-        <div className="vendors-modal-backdrop" onClick={closeCredentialsModal}>
-          <div className="vendors-modal" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}>
-            <div className="vendors-modal__header">
-              <span className="vendors-modal__title"><Key size={20} /> Portal access</span>
-              <button className="vendors-modal__close" onClick={closeCredentialsModal}><X size={18} /></button>
-            </div>
-            <div className="vendors-modal__body">
-              <p style={{ margin: '0 0 12px', fontSize: '0.9625rem', color: 'var(--text-secondary, #64748b)' }}>
-                <strong>{credVendor.name}</strong> — send a secure link so the vendor can create their own password.
-                Admins never see or store the vendor&apos;s password.
-              </p>
-              <div className="vendors-modal__field">
-                <label className="vendors-modal__label">Login email</label>
-                <input className="vendors-modal__input" value={credVendor.email} readOnly />
-              </div>
-              <p style={{ margin: '12px 0 0', fontSize: '0.9125rem', color: 'var(--text-secondary, #64748b)' }}>
-                {credVendor.hasPortalCredentials
-                  ? 'This vendor already has a portal password. Resending sends a new setup link (e.g. if they forgot it).'
-                  : credVendor.passwordSetupPending
-                    ? 'A setup link was already sent and is still valid. You can resend if they did not receive it.'
-                    : 'On onboarding approval, a setup email is sent automatically. Use resend only if needed.'}
-              </p>
-              {credentialsMsg && credVendor && (
-                <MessageStrip
-                  type={inferMessageType(credentialsMsg)}
-                  compact
-                  className="sap-message-strip--flush"
-                  style={{ marginTop: 10 }}
-                >
-                  {credentialsMsg}
-                </MessageStrip>
-              )}
-            </div>
-            <div className="vendors-modal__footer">
-              <button className="vendors-modal__btn vendors-modal__btn--secondary" onClick={closeCredentialsModal}>Cancel</button>
-              <button
-                className="vendors-modal__btn vendors-modal__btn--primary"
-                disabled={credLoading}
-                onClick={handleResendPasswordSetup}
-              >
-                <Send size={16} /> {credLoading ? 'Sending…' : 'Send password setup link'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Renewal Request Email Sent Success Modal */}
-      {renewalSuccessModal && (
-        <div className="vendors-modal-backdrop" onClick={() => setRenewalSuccessModal(null)}>
-          <div className="vendors-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
-            <div className="vendors-modal__header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(16,185,129,0.15)', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Send size={18} />
-                </div>
-                <div>
-                  <span className="vendors-modal__title" style={{ fontSize: 17 }}>Renewal Request Sent!</span>
-                  <div style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>Email notification dispatched</div>
-                </div>
-              </div>
-              <button type="button" className="vendors-modal__close" onClick={() => setRenewalSuccessModal(null)}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="vendors-modal__body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>RECIPIENT VENDOR:</span>
-                  <strong style={{ color: 'var(--text-primary)' }}>{renewalSuccessModal.vendorName}</strong>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>VENDOR EMAIL:</span>
-                  <strong style={{ color: 'var(--primary-500)' }}>{renewalSuccessModal.vendorEmail}</strong>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>TARGET DOCUMENT:</span>
-                  <strong style={{ color: 'var(--text-primary)' }}>{renewalSuccessModal.docName}</strong>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>EXPIRY STATUS:</span>
-                  <span style={{ color: '#f59e0b', fontWeight: 700 }}>{renewalSuccessModal.expiryLabel}</span>
-                </div>
-              </div>
-
-              <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.5 }}>
-                An official document renewal notification email with a <strong>secure 1-click document re-upload link</strong> has been dispatched to <strong>{renewalSuccessModal.vendorEmail}</strong>.
-              </div>
-
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', background: 'rgba(10,110,209,0.08)', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(10,110,209,0.2)' }}>
-                ℹ️ Document status in Vendor 360 has been marked as <strong>Renewal Requested</strong>. As soon as the vendor uploads the new certificate, compliance and risk scores will automatically update.
-              </div>
-            </div>
-
-            <div className="vendors-modal__footer">
-              <button
-                type="button"
-                className="vendors-modal__btn vendors-modal__btn--primary"
-                onClick={() => setRenewalSuccessModal(null)}
-              >
-                <CheckCircle2 size={15} /> Done, Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Mobile Access Success Modal ────────────────────── */}
-      {mobileSuccessModal?.visible && (
-        <div className="vendors-modal-backdrop" onClick={() => setMobileSuccessModal(null)}>
-          <div
-            className="vendors-modal"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              maxWidth: 400,
-              padding: '28px 24px 24px',
-              textAlign: 'center',
-              borderRadius: 16,
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08)',
-              position: 'relative',
-            }}
-          >
-            {/* Header Close */}
-            <button
-              type="button"
-              onClick={() => setMobileSuccessModal(null)}
-              style={{
-                position: 'absolute',
-                top: 14,
-                right: 14,
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: '50%',
-                width: 28,
-                height: 28,
-                display: 'flex',
-                alignItems: 'center',
-                justify: 'center',
-                color: 'var(--text-secondary)',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-              }}
-            >
-              <X size={15} />
-            </button>
-
-            {/* Icon Badge */}
-            <div
-              style={{
-                width: 76,
-                height: 76,
-                borderRadius: '50%',
-                background: mobileSuccessModal.isEnabled
-                  ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.22), rgba(16, 185, 129, 0.1))'
-                  : 'linear-gradient(135deg, rgba(239, 68, 68, 0.22), rgba(225, 29, 72, 0.1))',
-                border: `1.5px solid ${mobileSuccessModal.isEnabled ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`,
-                boxShadow: `0 0 28px ${mobileSuccessModal.isEnabled ? 'rgba(34, 197, 94, 0.25)' : 'rgba(239, 68, 68, 0.25)'}`,
-                display: 'flex',
-                alignItems: 'center',
-                justify: 'center',
-                margin: '0 auto 20px',
-              }}
-            >
-              <Smartphone size={38} strokeWidth={2} color={mobileSuccessModal.isEnabled ? '#22c55e' : '#ef4444'} />
-            </div>
-
-            {/* Title */}
-            <h3
-              style={{
-                margin: '0 0 8px',
-                fontSize: 20,
-                fontWeight: 700,
-                color: 'var(--text-primary)',
-                letterSpacing: '-0.01em',
-              }}
-            >
-              Mobile Access {mobileSuccessModal.isEnabled ? 'Enabled' : 'Disabled'}
-            </h3>
-
-            {/* Subtitle */}
-            <p
-              style={{
-                margin: '0 0 24px',
-                fontSize: 15,
-                color: 'var(--text-secondary)',
-                lineHeight: 1.55,
-              }}
-            >
-              Mobile App access for <strong style={{ color: 'var(--text-primary)' }}>{mobileSuccessModal.vendorName}</strong> has been {mobileSuccessModal.isEnabled ? 'granted successfully.' : 'revoked.'}
-            </p>
-
-            {/* Button */}
-            <button
-              type="button"
-              onClick={() => setMobileSuccessModal(null)}
-              style={{
-                width: '100%',
-                padding: '11px 0',
-                borderRadius: 10,
-                border: 'none',
-                background: mobileSuccessModal.isEnabled
-                  ? 'linear-gradient(135deg, #16a34a, #15803d)'
-                  : 'linear-gradient(135deg, #dc2626, #b91c1c)',
-                color: '#ffffff',
-                fontSize: 15,
-                fontWeight: 600,
-                cursor: 'pointer',
-                boxShadow: mobileSuccessModal.isEnabled
-                  ? '0 4px 14px rgba(22, 163, 74, 0.35)'
-                  : '0 4px 14px rgba(220, 38, 38, 0.35)',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              Got it
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── Password Setup Email Sent Success Modal ────────────────────── */}
-      {passwordSetupSuccessModal && (
-        <div className="vendors-modal-backdrop" onClick={() => setPasswordSetupSuccessModal(null)}>
-          <div
-            className="vendors-modal"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              maxWidth: 420,
-              padding: '28px 24px 24px',
-              textAlign: 'center',
-              borderRadius: 16,
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08)',
-              position: 'relative',
-            }}
-          >
-            {/* Header Close */}
-            <button
-              type="button"
-              onClick={() => setPasswordSetupSuccessModal(null)}
-              style={{
-                position: 'absolute',
-                top: 14,
-                right: 14,
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: '50%',
-                width: 28,
-                height: 28,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--text-secondary)',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-              }}
-            >
-              <X size={15} />
-            </button>
-
-            {/* Icon Badge */}
-            <div
-              style={{
-                width: 76,
-                height: 76,
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.22), rgba(16, 185, 129, 0.1))',
-                border: '1.5px solid rgba(34, 197, 94, 0.4)',
-                boxShadow: '0 0 28px rgba(34, 197, 94, 0.25)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 20px',
-              }}
-            >
-              <CheckCircle2 size={40} strokeWidth={2} color="#22c55e" />
-            </div>
-
-            {/* Title */}
-            <h3
-              style={{
-                margin: '0 0 8px',
-                fontSize: 20,
-                fontWeight: 700,
-                color: 'var(--text-primary)',
-                letterSpacing: '-0.01em',
-              }}
-            >
-              Password Setup Email Sent!
-            </h3>
-
-            {/* Subtitle / Details */}
-            <p
-              style={{
-                margin: '0 0 16px',
-                fontSize: 14.5,
-                color: 'var(--text-secondary)',
-                lineHeight: 1.55,
-              }}
-            >
-              A secure password setup link has been successfully sent to <br />
-              <strong style={{ color: 'var(--text-primary)', wordBreak: 'break-all' }}>{passwordSetupSuccessModal.vendorEmail}</strong>
-            </p>
-
-            <div
-              style={{
-                background: 'rgba(255, 255, 255, 0.04)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: 10,
-                padding: '12px 14px',
-                margin: '0 0 24px',
-                textAlign: 'left',
-                fontSize: 13,
-                color: 'var(--text-secondary)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-              }}
-            >
-              <Mail size={20} color="#3b82f6" style={{ flexShrink: 0 }} />
-              <div>
-                <strong style={{ color: 'var(--text-primary)', display: 'block' }}>{passwordSetupSuccessModal.vendorName}</strong>
-                <span>Link valid for 72 hours. Vendor will set their own credentials.</span>
-              </div>
-            </div>
-
-            {/* Button */}
-            <button
-              type="button"
-              onClick={() => setPasswordSetupSuccessModal(null)}
-              style={{
-                width: '100%',
-                padding: '11px 0',
-                borderRadius: 10,
-                border: 'none',
-                background: 'linear-gradient(135deg, #16a34a, #15803d)',
-                color: '#ffffff',
-                fontSize: 15,
-                fontWeight: 600,
-                cursor: 'pointer',
-                boxShadow: '0 4px 14px rgba(22, 163, 74, 0.35)',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              Done
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+    </PageFrame>
   );
 }
