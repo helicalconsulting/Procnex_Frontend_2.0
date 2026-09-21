@@ -18,6 +18,7 @@ export interface DocumentSignatureRecord {
   signedBy: string;
   signedAt: string;
   dataUrl: string;
+  levelNumber?: number;
   comments?: string;
 }
 
@@ -25,6 +26,8 @@ export interface SignDocumentPayload {
   module: string;
   referenceId: string;
   signatureId: string;
+  dataUrl?: string;
+  levelNumber?: number;
   comments?: string;
 }
 
@@ -105,14 +108,19 @@ async function mockSetDefault(id: string | number): Promise<void> {
 
 async function mockSignDocument(payload: SignDocumentPayload): Promise<DocumentSignatureRecord> {
   const sig = readSigs().find((s) => s.id === payload.signatureId);
+  const userStr = localStorage.getItem('heliflow_user');
+  const user = userStr ? JSON.parse(userStr) : null;
+  const userName = user?.name || user?.fullName || 'Authorized Approver';
+
   const record: DocumentSignatureRecord = {
     id: String(Date.now()),
     module: payload.module,
     referenceId: payload.referenceId,
     signatureId: payload.signatureId,
-    signedBy: 'Current User',
+    signedBy: userName,
     signedAt: new Date().toISOString(),
-    dataUrl: sig?.dataUrl || '',
+    dataUrl: payload.dataUrl || sig?.dataUrl || '',
+    levelNumber: payload.levelNumber,
     comments: payload.comments,
   };
   writeDocSigs([...readDocSigs(), record]);
@@ -148,15 +156,29 @@ async function apiSetDefault(id: string | number): Promise<void> {
   });
 }
 
+const MODULE_MAP: Record<string, string> = {
+  Payments: 'INVOICE',
+  AccountsPayable: 'INVOICE',
+  PurchaseInvoice: 'INVOICE',
+  PurchaseOrder: 'PURCHASE_ORDER',
+  RFQ: 'RFQ',
+  Quotation: 'QUOTATION',
+};
+
 async function apiSignDocument(payload: SignDocumentPayload): Promise<DocumentSignatureRecord> {
+  const mappedModule = MODULE_MAP[payload.module] || payload.module.toUpperCase();
   return apiRequest<DocumentSignatureRecord>('/signatures/sign', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      ...payload,
+      module: mappedModule,
+    }),
   });
 }
 
 async function apiGetDocumentSignatures(module: string, referenceId: string): Promise<DocumentSignatureRecord[]> {
-  return apiRequest<DocumentSignatureRecord[]>(`/signatures/document/${module}/${referenceId}`);
+  const mappedModule = MODULE_MAP[module] || module.toUpperCase();
+  return apiRequest<DocumentSignatureRecord[]>(`/signatures/document/${mappedModule}/${referenceId}`);
 }
 
 export const signatureService = {

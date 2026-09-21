@@ -272,7 +272,7 @@ export const localDataService = {
     try {
       const data = await apiRequest<{ payments: Array<Record<string, any>> }>('/payments');
       if (data.payments && Array.isArray(data.payments)) {
-        return data.payments.map((p, idx) => ({
+        const mappedList = data.payments.map((p, idx) => ({
           id: p.id || idx + 1,
           paymentId: p.paymentNumber || p.paymentId || `PAY-${p.id}`,
           vendor: p.vendorName || p.vendor || '—',
@@ -294,6 +294,19 @@ export const localDataService = {
           tdsAmount: p.tdsAmount ? Number(p.tdsAmount) : undefined,
           items: p.items || undefined,
         })) as Payment[];
+
+        // Deduplicate items to prevent double rendering if identical payments exist
+        const seen = new Set<string>();
+        const uniquePayments: Payment[] = [];
+        for (const item of mappedList) {
+          const cleanRef = (item.invoiceRef || '').replace(/^(Invoice:\s*|PO:\s*)/gi, '').trim().toLowerCase();
+          const key = cleanRef ? `${item.vendor.toLowerCase()}_${item.amount}_${cleanRef}` : String(item.paymentId);
+          if (!seen.has(key)) {
+            seen.add(key);
+            uniquePayments.push(item);
+          }
+        }
+        return uniquePayments;
       }
     } catch (_err) {
       console.warn('Failed to fetch payments from backend API:', _err);

@@ -28,7 +28,7 @@ async function listAll(): Promise<Quotation[]> {
   return list(true);
 }
 
-async function getById(id: number): Promise<Quotation | null> {
+async function getById(id: number | string): Promise<Quotation | null> {
   const q = await apiRequest<Quotation>(`/quotations/${id}`);
   return q ? normalizeQuotation(q) : null;
 }

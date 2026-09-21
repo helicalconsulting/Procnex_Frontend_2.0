@@ -1,7 +1,8 @@
-import React, { useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Printer, Download, X, CheckCircle2, ShieldCheck, Landmark, Building2, AlertCircle, Clock } from 'lucide-react';
 import { useCurrency } from '../shared/CurrencyMaster';
 import { useBranding } from '../../context/BrandingContext';
+import { signatureService } from '../../services/signatureService';
 import './BankPaymentVoucherModal.css';
 
 export interface PaymentVoucherDocData {
@@ -74,10 +75,64 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
     window.print();
   };
 
-  const defaultApprovers = data.approvers && data.approvers.length > 0 ? data.approvers : [
-    { level: 'Initiator / Verification', name: displayCompanyName ? `${displayCompanyName} Procurement` : 'Procurement Officer', role: 'Procurement Executive', date: data.voucherDate, status: 'APPROVED' as const, comments: 'Document 3-way matched & verified' },
+  const [approversList, setApproversList] = useState<any[]>(data.approvers || []);
+
+  useEffect(() => {
+    if (data.approvers && data.approvers.length > 0) {
+      setApproversList(data.approvers);
+      return;
+    }
+    let isMounted = true;
+    const fetchSigs = async () => {
+      try {
+        const pNo = data.voucherNumber;
+        const invRef = data.invoiceRef;
+        const [docSigsP, docSigsInv, savedSigs] = await Promise.all([
+          signatureService.getDocumentSignatures('Payments', pNo).catch(() => []),
+          invRef ? signatureService.getDocumentSignatures('Payments', invRef).catch(() => []) : Promise.resolve([]),
+          signatureService.list().catch(() => []),
+        ]);
+        if (!isMounted) return;
+
+        const docSigs = [...docSigsP, ...docSigsInv];
+        const defaultSigUrl = savedSigs.find((s) => s.isDefault)?.dataUrl || savedSigs[0]?.dataUrl;
+
+        const sigL1 = docSigs.find((d: any) => Number(d.levelNumber) === 1)?.dataUrl || docSigs[0]?.dataUrl || defaultSigUrl;
+        const sigL2 = docSigs.find((d: any) => Number(d.levelNumber) === 2)?.dataUrl || docSigs[1]?.dataUrl;
+
+        setApproversList([
+          {
+            level: 'Level 1 Review',
+            name: (data as any).approvedBy && (data as any).approvedBy !== '—' ? (data as any).approvedBy : 'Purchase Manager',
+            role: 'Purchase Manager',
+            date: data.voucherDate,
+            status: 'APPROVED' as const,
+            comments: 'Quantities & PO rates approved',
+            signatureUrl: sigL1,
+          },
+          {
+            level: 'Level 2 Authorization',
+            name: 'Treasury / Finance VP',
+            role: 'Treasury / Finance VP',
+            date: data.voucherDate,
+            status: sigL2 ? ('APPROVED' as const) : ('PENDING' as const),
+            comments: sigL2 ? 'Bank payment release authorized' : 'Awaiting Level 2 Approval',
+            signatureUrl: sigL2,
+          },
+        ]);
+      } catch (_err) {
+        // ignore
+      }
+    };
+    fetchSigs();
+    return () => {
+      isMounted = false;
+    };
+  }, [data]);
+
+  const defaultApprovers = approversList.length > 0 ? approversList : [
     { level: 'Level 1 Review', name: 'Purchase Manager', role: 'Purchase Manager', date: data.voucherDate, status: 'APPROVED' as const, comments: 'Quantities & PO rates approved' },
-    { level: 'Level 2 Authorization', name: 'Treasury / Finance VP', role: 'Treasury / Finance VP', date: data.voucherDate, status: 'APPROVED' as const, comments: 'Bank payment release authorized' },
+    { level: 'Level 2 Authorization', name: 'Treasury / Finance VP', role: 'Treasury / Finance VP', date: data.voucherDate, status: 'PENDING' as const, comments: 'Awaiting Level 2 Approval' },
   ];
 
   const displayItems: PaymentVoucherItem[] = (data.items && data.items.length > 0)

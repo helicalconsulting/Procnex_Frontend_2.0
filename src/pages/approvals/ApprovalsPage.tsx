@@ -526,7 +526,7 @@ export default function ApprovalsPage() {
         })}
       </div>
 
-      {/* Toolbar: Search on Left, Filters on Right */}
+      {/* Toolbar: Search */}
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative w-full max-w-xl">
           <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -541,31 +541,6 @@ export default function ApprovalsPage() {
               setCurrentPage(1);
             }}
           />
-        </div>
-
-        <div className="flex items-center gap-2.5 justify-end shrink-0 sm:ml-auto">
-          <div className="flex h-11 items-center gap-1 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden rounded-xl border border-input bg-card p-1 shadow-xs">
-            {['All', 'Purchase Order', 'Quotation', 'RFQ', 'Contract'].map((m) => {
-              const isActive = moduleFilter === m || (m === 'All' && (moduleFilter === 'ALL' || moduleFilter === 'All'));
-              return (
-                <button
-                  key={m}
-                  onClick={() => {
-                    setModuleFilter(m);
-                    setCurrentPage(1);
-                  }}
-                  className={cn(
-                    'inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 text-xs font-semibold transition-all duration-150 cursor-pointer select-none min-w-[52px]',
-                    isActive
-                      ? 'bg-primary text-primary-foreground shadow-xs'
-                      : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
-                  )}
-                >
-                  {m}
-                </button>
-              );
-            })}
-          </div>
         </div>
       </div>
 

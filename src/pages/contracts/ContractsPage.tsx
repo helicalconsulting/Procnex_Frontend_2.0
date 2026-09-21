@@ -522,15 +522,6 @@ export default function ContractsPage() {
       <PageLead
         title="Contracts"
         description="Manage contracts, track signatures, and create purchase orders"
-        actions={
-          <Button
-            onClick={() => navigate('/contracts/create')}
-            disabled={!canCreateContract}
-            title={!canCreateContract ? 'You do not have permission to create contracts.' : 'Create new contract'}
-          >
-            <Plus /> New Contract
-          </Button>
-        }
       />
 
       {/* Metric Cards Grid matching RFQ */}

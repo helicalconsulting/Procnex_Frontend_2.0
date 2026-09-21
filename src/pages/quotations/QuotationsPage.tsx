@@ -530,9 +530,9 @@ function ViewQuotationModal({
         setSelectedItems(new Set(qItems.map((i: any) => i.id || i.rfqItemId || String(i.itemName))));
       }
       try {
-        const numId = typeof q.id === 'number' ? q.id : parseInt(String(q.id).replace(/\D/g, ''), 10);
-        if (!isNaN(numId) && numId > 0 && !String(q.id).includes('-v')) {
-          const data = await quotationService.getById(numId);
+        const cleanId = String(q.id).split('-v')[0];
+        if (cleanId) {
+          const data = await quotationService.getById(cleanId);
           if (data) {
             setFullQuot(data);
             const prevSelected: string[] = (data as any).selectedItemIds || [];
@@ -550,12 +550,34 @@ function ViewQuotationModal({
     fetchData();
   }, [q.id]);
 
+  // Fallback to fetch RFQ details if embedded rfq object is missing fields
+  useEffect(() => {
+    const rfqId = fullQuot?.rfqId || fullQuot?.rfq?.id || q.rfqId;
+    if (rfqId && (!fullQuot?.rfq?.title || !fullQuot?.rfq?.items)) {
+      rfqService.getById(String(rfqId)).then((rfqData) => {
+        if (rfqData) {
+          setFullQuot((prev: any) => ({
+            ...(prev || q),
+            rfq: {
+              ...(prev?.rfq || {}),
+              ...rfqData,
+            },
+          }));
+        }
+      }).catch(() => {});
+    }
+  }, [fullQuot?.rfqId, fullQuot?.rfq?.id, fullQuot?.rfq?.title, fullQuot?.rfq?.items, q.rfqId]);
+
   // Build a map of rfqItemId → item name from the RFQ data
   const itemNameMap = useMemo(() => {
-    const map = new Map<number, { name: string; qty: number; unit: string }>();
+    const map = new Map<string | number, { name: string; qty: number; unit: string }>();
     if (fullQuot?.rfq?.items) {
       fullQuot.rfq.items.forEach((item: any) => {
-        map.set(item.id, { name: item.itemName, qty: item.quantity, unit: item.unit || '—' });
+        if (item.id != null) {
+          const val = { name: item.itemName, qty: item.quantity, unit: item.unit || '—' };
+          map.set(item.id, val);
+          map.set(String(item.id), val);
+        }
       });
     }
     return map;
@@ -590,8 +612,13 @@ function ViewQuotationModal({
   }, [q.id, selectedItems, onSelectionSaved]);
 
   const vendor = fullQuot?.vendor || { name: q.vendorName, email: q.vendorEmail };
-  const rfq = fullQuot?.rfq || { rfqNumber: q.rfqNumber, title: '', description: '', priority: '', department: '' };
-  const items = fullQuot?.items || (q as any).items || [];
+  const rfq = fullQuot?.rfq || (q as any).rfq || { rfqNumber: q.rfqNumber, title: '', description: '', priority: '', department: '' };
+  const rawItems = (fullQuot?.items && fullQuot.items.length > 0)
+    ? fullQuot.items
+    : ((q as any).items && (q as any).items.length > 0)
+    ? (q as any).items
+    : (fullQuot?.rfq?.items || (q as any).rfq?.items || (fullQuot?.rfq?.lineItems || []));
+  const items = Array.isArray(rawItems) ? rawItems : [];
   const attachments = fullQuot?.attachments || q.attachments || [];
   const defCur = q.currency || DEFAULT_CURRENCY;
   // Only convert when user explicitly selected a display currency (not when falling back to company default)
@@ -2673,6 +2700,42 @@ export default function QuotationsPage() {
   const [toast, setToast] = useState<{ message: string; type: MessageStripType } | null>(null);
   const [compareDropdownOpen, setCompareDropdownOpen] = useState(false);
   const [compareExpanded, setCompareExpanded] = useState(false);
+
+  const toggleCompareFullscreen = useCallback(() => {
+    setCompareExpanded(prev => {
+      const next = !prev;
+      if (next) {
+        if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        }
+      } else {
+        if (document.exitFullscreen && document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        }
+      }
+      return next;
+    });
+  }, []);
+
+  const handleCloseCompareModal = useCallback(() => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    }
+    setCompareExpanded(false);
+    setCompareModalOpen(false);
+  }, []);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement && compareExpanded) {
+        setCompareExpanded(false);
+      }
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, [compareExpanded]);
   const [activeModal, setActiveModal]                 = useState<ActiveModal | null>(null);
   const [viewPlanQuotation, setViewPlanQuotation] = useState<{ name: string; milestones: Array<{ id: string; title: string; percentage: number }> } | null>(null);
   const [postAwardQuotation, setPostAwardQuotation] = useState<MockQuotation | null>(null);
@@ -4897,7 +4960,7 @@ export default function QuotationsPage() {
 
       {/* ── Active Quotation Comparison Full-Page Modal (Gmail-style like RFQ modal) ── */}
       {compareModalOpen && (
-        <div className={`quot-compare-modal-backdrop ${compareExpanded ? 'quot-compare-modal-backdrop--expanded' : ''}`} onClick={() => setCompareModalOpen(false)}>
+        <div className={`quot-compare-modal-backdrop ${compareExpanded ? 'quot-compare-modal-backdrop--expanded' : ''}`} onClick={handleCloseCompareModal}>
           <div
             className={`quot-compare-modal ${compareExpanded ? 'quot-compare-modal--expanded' : 'quot-compare-modal--open'}`}
             onClick={e => e.stopPropagation()}
@@ -4934,15 +4997,15 @@ export default function QuotationsPage() {
                 <div className="quot-compare-modal__wc-divider" />
                 <button
                   className="quot-compare-modal__wc-btn"
-                  title={compareExpanded ? 'Restore' : 'Expand'}
-                  onClick={() => setCompareExpanded(v => !v)}
+                  title={compareExpanded ? 'Restore' : 'Fullscreen'}
+                  onClick={toggleCompareFullscreen}
                 >
                   {compareExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
                 </button>
                 <button
                   className="quot-compare-modal__wc-btn quot-compare-modal__wc-btn--close"
                   title="Close"
-                  onClick={() => setCompareModalOpen(false)}
+                  onClick={handleCloseCompareModal}
                 >
                   <X size={14} />
                 </button>

@@ -120,7 +120,7 @@ export interface ApprovalTableRow {
   id: string;
   /** The ID of the referenced document (quotation / PO / RFQ) */
   referenceId: string;
-  module: 'RFQ' | 'Purchase Order' | 'Quotation' | 'Contract';
+  module: 'RFQ' | 'Purchase Order' | 'Quotation' | 'Contract' | 'Accounts Payable' | 'Purchase Invoice';
   referenceNumber: string;
   title: string;
   requestedBy: string;

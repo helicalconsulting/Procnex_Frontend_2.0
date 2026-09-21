@@ -2,14 +2,17 @@ import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { AlertCircle, AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
 import './MessageStrip.css';
 
-export type MessageStripType = 'success' | 'error' | 'warning' | 'information';
+export type MessageStripType = 'success' | 'error' | 'warning' | 'information' | 'info' | 'primary' | 'danger';
 
-const ICONS = {
+const ICONS: Record<string, typeof Info> = {
   success: CheckCircle2,
   error: AlertCircle,
   warning: AlertTriangle,
   information: Info,
-} as const;
+  info: Info,
+  primary: Info,
+  danger: AlertCircle,
+};
 
 export function inferMessageType(message: unknown): MessageStripType {
   const str = typeof message === 'string' ? message : (message && typeof message === 'object') ? JSON.stringify(message) : String(message || '');
@@ -45,7 +48,7 @@ export function MessageStrip({
   className = '',
   style,
 }: MessageStripProps) {
-  const Icon = ICONS[type];
+  const Icon = ICONS[type] || Info;
 
   // Store onClose in a ref so inline callbacks don't reset the auto-hide timer on each render
   const onCloseRef = useRef(onClose);

@@ -285,6 +285,57 @@ export default function CreatePaymentVoucherPage() {
     });
   };
 
+  const handleAddCustomInvoice = () => {
+    const nextIdx = vendorInvoices.length + 1;
+    const newInv: VendorInvoiceItem = {
+      id: `custom_inv_${Date.now()}`,
+      invoiceNumber: `INV-2026-${String(nextIdx).padStart(3, '0')}`,
+      poNumber: `PO-2026-${String(3700 + nextIdx)}`,
+      grnNumber: `GRN-2026-${String(40 + nextIdx)}`,
+      amount: 1000,
+      paidAmount: 0,
+      balanceDue: 1000,
+      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+      invoiceDate: new Date().toISOString().slice(0, 10),
+      threeWayMatch: 'MATCHED',
+      selected: true,
+      paymentAmount: 1000,
+    };
+    setVendorInvoices((prev) => {
+      const updated = [...prev, newInv];
+      updateTotalsFromInvoices(updated);
+      return updated;
+    });
+  };
+
+  const handleInvoiceFieldChange = (invId: string, field: keyof VendorInvoiceItem, val: any) => {
+    setVendorInvoices((prev) => {
+      const updated = prev.map((item) => {
+        if (item.id === invId) {
+          const newItem = { ...item, [field]: val };
+          if (field === 'paymentAmount' || field === 'amount') {
+            const numVal = typeof val === 'number' ? val : parseFloat(val) || 0;
+            newItem.amount = numVal;
+            newItem.paymentAmount = numVal;
+            newItem.balanceDue = numVal;
+          }
+          return newItem;
+        }
+        return item;
+      });
+      updateTotalsFromInvoices(updated);
+      return updated;
+    });
+  };
+
+  const handleRemoveInvoice = (invId: string) => {
+    setVendorInvoices((prev) => {
+      const updated = prev.filter((i) => i.id !== invId);
+      updateTotalsFromInvoices(updated);
+      return updated;
+    });
+  };
+
   // Prefill from URL query params (e.g. from Approved Purchase Invoice)
   useEffect(() => {
     const qVendor = searchParams.get('vendorName');
@@ -360,6 +411,7 @@ export default function CreatePaymentVoucherPage() {
 
   // Submission API Call (Triggers Payments Workflow)
   const submitVoucher = async () => {
+    if (submitting) return;
     if (!validateForm()) return;
 
     setSubmitting(true);
@@ -1086,7 +1138,16 @@ export default function CreatePaymentVoucherPage() {
               <span className="cpv-section__num">02B</span>
               <span className="cpv-section__title">Select Invoices for Payment (Single & Multiple Invoices)</span>
             </div>
-            <div className="cpv-invoice-mode-toggle">
+            <div className="cpv-invoice-mode-toggle" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleAddCustomInvoice}
+                className="h-8 gap-1 text-xs border-primary/40 text-primary hover:bg-primary/10"
+              >
+                <Plus size={14} /> Add Invoice Line
+              </Button>
               <button
                 type="button"
                 className={`cpv-mode-btn ${selectionMode === 'multiple' ? 'cpv-mode-btn--active' : ''}`}
@@ -1108,71 +1169,138 @@ export default function CreatePaymentVoucherPage() {
             <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '14px' }}>
               Loading supplier invoices & 3-way match data...
             </div>
-          ) : vendorInvoices.length === 0 ? (
-            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '14px' }}>
-              {selectedVendorId ? 'No open invoices found for this supplier.' : 'Select a supplier above to load open/approved invoices.'}
-            </div>
           ) : (
-            <div className="cpv-inv-table-wrap">
-              <table className="cpv-inv-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: '40px', textAlign: 'center' }}>
-                      {selectionMode === 'multiple' && (
-                        <input
-                          type="checkbox"
-                          checked={vendorInvoices.length > 0 && vendorInvoices.every((i) => i.selected)}
-                          onChange={(e) => handleSelectAllInvoices(e.target.checked)}
-                          style={{ cursor: 'pointer', width: 16, height: 16 }}
-                          title="Select / Deselect All Invoices"
-                        />
-                      )}
-                    </th>
-                    <th>Invoice Number</th>
-                    <th>PO Ref</th>
-                    <th>GRN Ref</th>
-                    <th>3-Way Match</th>
-                    <th>Invoice Date</th>
-                    <th>Due Date</th>
-                    <th style={{ textAlign: 'right' }}>Total Amount</th>
-                    <th style={{ textAlign: 'right' }}>Disbursement Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {vendorInvoices.map((inv) => (
-                    <tr
-                      key={inv.id}
-                      className={inv.selected ? 'cpv-inv-row--selected' : ''}
-                      onClick={() => handleToggleSelectInvoice(inv.id)}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type={selectionMode === 'single' ? 'radio' : 'checkbox'}
-                          name="inv_select_radio"
-                          checked={inv.selected}
-                          onChange={() => handleToggleSelectInvoice(inv.id)}
-                          style={{ cursor: 'pointer', width: 16, height: 16 }}
-                        />
-                      </td>
-                      <td><strong>{inv.invoiceNumber}</strong></td>
-                      <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{inv.poNumber}</td>
-                      <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{inv.grnNumber}</td>
-                      <td>
-                        <span className={`cpv-match-tag cpv-match-tag--${inv.threeWayMatch === 'MATCHED' ? 'matched' : 'discrepancy'}`}>
-                          {inv.threeWayMatch === 'MATCHED' ? '✅ MATCHED' : '⚠️ DISCREPANCY'}
-                        </span>
-                      </td>
-                      <td>{inv.invoiceDate}</td>
-                      <td>{inv.dueDate}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatAmount(inv.amount, currency)}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 700, color: inv.selected ? 'var(--primary-500)' : undefined }}>
-                        {formatAmount(inv.paymentAmount, currency)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div>
+              {vendorInvoices.length === 0 ? (
+                <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '14px' }}>
+                  <p>{selectedVendorId ? 'No open database invoices found for this supplier.' : 'Select a supplier above or click below to add invoice lines manually.'}</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddCustomInvoice}
+                    className="mt-3 gap-1.5"
+                  >
+                    <Plus size={14} /> Add Invoice Line
+                  </Button>
+                </div>
+              ) : (
+                <div className="cpv-inv-table-wrap">
+                  <table className="cpv-inv-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: '40px', textAlign: 'center' }}>
+                          {selectionMode === 'multiple' && (
+                            <input
+                              type="checkbox"
+                              checked={vendorInvoices.length > 0 && vendorInvoices.every((i) => i.selected)}
+                              onChange={(e) => handleSelectAllInvoices(e.target.checked)}
+                              style={{ cursor: 'pointer', width: 16, height: 16 }}
+                              title="Select / Deselect All Invoices"
+                            />
+                          )}
+                        </th>
+                        <th>Invoice Number</th>
+                        <th>PO Ref</th>
+                        <th>GRN Ref</th>
+                        <th>3-Way Match</th>
+                        <th>Invoice Date</th>
+                        <th>Due Date</th>
+                        <th style={{ textAlign: 'right' }}>Total Amount</th>
+                        <th style={{ textAlign: 'right' }}>Disbursement Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {vendorInvoices.map((inv) => (
+                        <tr
+                          key={inv.id}
+                          className={inv.selected ? 'cpv-inv-row--selected' : ''}
+                          onClick={() => handleToggleSelectInvoice(inv.id)}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type={selectionMode === 'single' ? 'radio' : 'checkbox'}
+                              name="inv_select_radio"
+                              checked={inv.selected}
+                              onChange={() => handleToggleSelectInvoice(inv.id)}
+                              style={{ cursor: 'pointer', width: 16, height: 16 }}
+                            />
+                          </td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="text"
+                              value={inv.invoiceNumber}
+                              onChange={(e) => handleInvoiceFieldChange(inv.id, 'invoiceNumber', e.target.value)}
+                              className="rounded border border-input bg-background/80 px-2 py-1 text-xs font-bold text-foreground focus:ring-1 focus:ring-primary"
+                              style={{ width: '140px' }}
+                            />
+                          </td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="text"
+                              value={inv.poNumber}
+                              onChange={(e) => handleInvoiceFieldChange(inv.id, 'poNumber', e.target.value)}
+                              className="rounded border border-input bg-background/80 px-2 py-1 text-xs text-muted-foreground focus:ring-1 focus:ring-primary"
+                              style={{ width: '140px' }}
+                            />
+                          </td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="text"
+                              value={inv.grnNumber}
+                              onChange={(e) => handleInvoiceFieldChange(inv.id, 'grnNumber', e.target.value)}
+                              className="rounded border border-input bg-background/80 px-2 py-1 text-xs text-muted-foreground focus:ring-1 focus:ring-primary"
+                              style={{ width: '120px' }}
+                            />
+                          </td>
+                          <td>
+                            <span className={`cpv-match-tag cpv-match-tag--${inv.threeWayMatch === 'MATCHED' ? 'matched' : 'discrepancy'}`}>
+                              {inv.threeWayMatch === 'MATCHED' ? '✅ MATCHED' : '⚠️ DISCREPANCY'}
+                            </span>
+                          </td>
+                          <td>{inv.invoiceDate}</td>
+                          <td>{inv.dueDate}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatAmount(inv.amount, currency)}</td>
+                          <td style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyRight: 'flex-end', gap: 6 }}>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={inv.paymentAmount || ''}
+                                onChange={(e) => handleInvoiceFieldChange(inv.id, 'paymentAmount', parseFloat(e.target.value) || 0)}
+                                className="rounded border border-input bg-background/80 px-2 py-1 text-right text-xs font-bold text-foreground focus:ring-1 focus:ring-primary"
+                                style={{ width: '110px' }}
+                              />
+                              {vendorInvoices.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveInvoice(inv.id)}
+                                  title="Remove Invoice Line"
+                                  style={{ padding: 4, background: 'none', border: 'none', color: '#ff4d4f', cursor: 'pointer' }}
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <div className="p-3 border-t border-border/60 bg-muted/20">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleAddCustomInvoice}
+                  className="gap-1.5 text-xs text-primary font-semibold hover:bg-primary/10"
+                >
+                  <Plus size={14} /> Add Another Invoice Line
+                </Button>
+              </div>
             </div>
           )}
         </div>

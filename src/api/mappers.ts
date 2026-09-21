@@ -229,33 +229,53 @@ export function mapApprovalToTableRow(a: Record<string, unknown>): ApprovalTable
     'PO Approval': 'Purchase Order',
     Contract: 'Contract',
     Contracts: 'Contract',
+    AccountsPayable: 'Purchase Invoice',
+    'Accounts Payable': 'Purchase Invoice',
+    'AccountsPayable Approval': 'Purchase Invoice',
+    PurchaseInvoice: 'Purchase Invoice',
+    'Purchase Invoice': 'Purchase Invoice',
+    'PurchaseInvoice Approval': 'Purchase Invoice',
+    'Purchase Invoice Approval': 'Purchase Invoice',
+    'PO Invoice': 'Purchase Invoice',
   };
   const level = a.level as { levelNumber?: number; requiredRole?: string } | undefined;
   const createdBy = a.createdBy as { fullName?: string } | undefined;
   const amount = Number(a.amount || 0);
   const currency = (a.currency as string) || 'KES';
 
+  const rawLevelNum = Number(
+    (a.currentLevel as number) ?? (a.current_level as number) ?? level?.levelNumber ?? 1
+  );
+  const rawTotalLevels = Number(
+    (a.totalLevels as number) ?? (a.maxLevels as number) ?? (a.max_levels as number) ?? 2
+  );
+  const rawRole =
+    (a.requiredRole as string) ||
+    (a.required_role as string) ||
+    level?.requiredRole ||
+    (rawLevelNum === 2 ? 'Purchase Clerk' : 'Purchase Manager');
+
   return {
     id: String(a.id),
-    referenceId: String(a.referenceId || ''),
-    module: moduleMap[String(a.module)] || 'RFQ',
-    referenceNumber: String(a.referenceNumber || `#${a.referenceId}`),
+    referenceId: String(a.referenceId || a.entityId || ''),
+    module: moduleMap[String(a.module || a.entityType)] || 'RFQ',
+    referenceNumber: String(a.referenceNumber || a.referenceId || `#${a.id}`),
     title: String(a.title || `${a.module} #${a.referenceId}`),
-    requestedBy: createdBy?.fullName || 'Unknown',
-    requestedByInitials: initials(createdBy?.fullName),
+    requestedBy: createdBy?.fullName || String(a.createdBy || 'Unknown'),
+    requestedByInitials: initials(createdBy?.fullName || String(a.createdBy || 'Unknown')),
     avatarMod: String((Number(a.id) % 6) + 1),
     amount: amount ? formatApprovalAmount(amount, currency) : '—',
     amountNum: amount,
     currency,
-    currentLevel: level?.levelNumber || 1,
-    totalLevels: Number(a.totalLevels || 1),
-    requiredRole: level?.requiredRole || 'Approver',
+    currentLevel: rawLevelNum,
+    totalLevels: rawTotalLevels,
+    requiredRole: rawRole,
     status: String(a.status) as ApprovalTableRow['status'],
     priority: (String(a.priority || 'MEDIUM').toUpperCase() as ApprovalTableRow['priority']) || 'MEDIUM',
     submittedAt: String(a.createdAt || a.submittedAt || new Date().toISOString()),
     comments: a.comments ? String(a.comments) : undefined,
     department: String(a.department || '—'),
-    canAct: Boolean(a.canAct ?? true),
+    canAct: Boolean(a.canAct ?? false),
   };
 }
 

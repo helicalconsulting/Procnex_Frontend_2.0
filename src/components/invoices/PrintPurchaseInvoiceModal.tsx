@@ -1,7 +1,9 @@
-import React, { useRef } from 'react';
-import { Printer, X, FileText, CheckCircle2, ShieldCheck, Landmark, Building2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Printer, X, FileText, CheckCircle2, ShieldCheck, Landmark, Building2, Clock } from 'lucide-react';
 import { useCurrency } from '../shared/CurrencyMaster';
 import { useBranding } from '../../context/BrandingContext';
+import { approvalService } from '../../services/approvalService';
+import { signatureService } from '../../services/signatureService';
 import './PrintPurchaseInvoiceModal.css';
 
 export interface PurchaseInvoicePrintData {
@@ -21,6 +23,15 @@ export interface PurchaseInvoicePrintData {
   currentLevel?: number;
   totalLevels?: number;
   requiredRole?: string;
+  approvers?: {
+    level: string;
+    name: string;
+    role: string;
+    date: string;
+    status: 'APPROVED' | 'PENDING';
+    comments?: string;
+    signatureUrl?: string;
+  }[];
 }
 
 interface PrintPurchaseInvoiceModalProps {
@@ -35,6 +46,7 @@ export default function PrintPurchaseInvoiceModal({ data: dataProp, invoice: inv
   const { formatAmount, companyDefaultCurrency } = useCurrency();
   const { companyName, logoUrl, profile } = useBranding();
   const printableRef = useRef<HTMLDivElement>(null);
+  const [approversList, setApproversList] = useState<any[]>(data.approvers || []);
 
   const displayCompanyName = companyName && !companyName.includes('Procnex') ? companyName : (profile?.companyName || 'Helical Consulting');
   const companyAddress = profile?.companyAddress
@@ -49,12 +61,104 @@ export default function PrintPurchaseInvoiceModal({ data: dataProp, invoice: inv
     }
   };
 
+  const statusLabel = data.status || 'PENDING';
+  const isApproved = statusLabel === 'APPROVED' || statusLabel === 'PAID';
+
+  useEffect(() => {
+    if (data.approvers && data.approvers.length > 0) {
+      setApproversList(data.approvers);
+      return;
+    }
+
+    let isMounted = true;
+    const fetchChain = async () => {
+      try {
+        const targetRef = data.invoiceNumber;
+        const [res, docSigs, savedSigs] = await Promise.all([
+          approvalService.getChain('AccountsPayable', targetRef).catch(() => null),
+          signatureService.getDocumentSignatures('AccountsPayable', targetRef).catch(() => []),
+          signatureService.list().catch(() => []),
+        ]);
+        if (!isMounted) return;
+
+        const chainItems = res?.history && res.history.length > 0 ? res.history : res?.levels || [];
+        const defaultSigUrl = savedSigs.find((s) => s.isDefault)?.dataUrl || savedSigs[0]?.dataUrl;
+
+        if (chainItems && chainItems.length > 0) {
+          const mapped = chainItems.map((item: any, idx: number) => {
+            const levelNum = item.levelNumber || idx + 1;
+            const roleName = item.requiredRole
+              ? item.requiredRole.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+              : `Level ${levelNum} Approver`;
+            const name = item.approverName || (item.status === 'APPROVED' ? 'Authorized Approver' : 'Pending Approval');
+            const isLevelApproved = item.status === 'APPROVED' || item.status === 'AUTO_FORWARDED';
+
+            const matchSig = docSigs.find((d: any) => Number(d.levelNumber) === Number(levelNum)) || docSigs[idx];
+            const signatureUrl = isLevelApproved ? matchSig?.dataUrl : undefined;
+
+            return {
+              level: `Level ${levelNum}`,
+              name,
+              role: roleName,
+              date: item.actionAt ? new Date(item.actionAt).toISOString().slice(0, 10) : fmtDate(data.invoiceDate),
+              status: isLevelApproved ? 'APPROVED' : 'PENDING',
+              signatureUrl,
+            };
+          });
+          setApproversList(mapped);
+        } else {
+          const sigL1 = docSigs.find((d: any) => Number(d.levelNumber) === 1)?.dataUrl || docSigs[0]?.dataUrl;
+          const sigL2 = docSigs.find((d: any) => Number(d.levelNumber) === 2)?.dataUrl || docSigs[1]?.dataUrl;
+
+          setApproversList([
+            {
+              level: 'Level 1',
+              name: 'Purchase Manager',
+              role: 'Purchase Manager',
+              date: fmtDate(data.invoiceDate),
+              status: isApproved ? 'APPROVED' : 'PENDING',
+              signatureUrl: isApproved ? sigL1 : undefined,
+            },
+            {
+              level: 'Level 2',
+              name: 'Purchase Clerk',
+              role: 'Purchase Clerk',
+              date: fmtDate(data.invoiceDate),
+              status: statusLabel === 'PAID' ? 'APPROVED' : 'PENDING',
+              signatureUrl: statusLabel === 'PAID' ? sigL2 : undefined,
+            },
+          ]);
+        }
+      } catch {
+        if (!isMounted) return;
+        setApproversList([
+          {
+            level: 'Level 1',
+            name: 'Purchase Manager',
+            role: 'Purchase Manager',
+            date: fmtDate(data.invoiceDate),
+            status: isApproved ? 'APPROVED' : 'PENDING',
+          },
+          {
+            level: 'Level 2',
+            name: 'Purchase Clerk',
+            role: 'Purchase Clerk',
+            date: fmtDate(data.invoiceDate),
+            status: statusLabel === 'PAID' ? 'APPROVED' : 'PENDING',
+          },
+        ]);
+      }
+    };
+
+    fetchChain();
+    return () => {
+      isMounted = false;
+    };
+  }, [data, isApproved, statusLabel]);
+
   const handlePrint = () => {
     window.print();
   };
-
-  const statusLabel = data.status || 'PENDING';
-  const isApproved = statusLabel === 'APPROVED' || statusLabel === 'PAID';
 
   return (
     <div className="ppi-modal-backdrop" onClick={onClose}>
@@ -222,17 +326,74 @@ export default function PrintPurchaseInvoiceModal({ data: dataProp, invoice: inv
             </div>
           )}
 
-          {/* Signature & Stamp Footer */}
-          <div className="ppi-sheet__footer">
-            <div>
-              <div style={{ fontWeight: 700, color: '#0f172a' }}>{displayCompanyName} — Accounts Payable System</div>
-              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
-                Computer Generated Purchase Invoice Document • Verified & Synced
-              </div>
+          {/* Approval Hierarchy & Digital Signature Stamps */}
+          <div className="ppi-stamps-section">
+            <div className="ppi-stamps-title">
+              <Building2 size={15} /> APPROVAL HIERARCHY & AUTHORIZATION STAMPS
             </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ borderBottom: '1px solid #cbd5e1', width: 160, marginBottom: 4 }}></div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>Authorized Signatory</div>
+
+            <div className="ppi-stamps-grid">
+              {approversList.map((app, idx) => {
+                const isPending = app.status === 'PENDING';
+                return (
+                  <div key={idx} className="ppi-stamp-card">
+                    {/* Level & Status */}
+                    <div className="ppi-stamp-card__header">
+                      <span className="ppi-stamp-level-pill">LEVEL {idx + 1}</span>
+                      <span className={`ppi-stamp-status-tag ${isPending ? 'ppi-stamp-status-tag--pending' : ''}`}>
+                        {isPending ? <Clock size={11} /> : <CheckCircle2 size={11} />}
+                        {isPending ? 'PENDING' : 'APPROVED & SIGNED'}
+                      </span>
+                    </div>
+
+                    {/* Role & Date */}
+                    <div className="ppi-stamp-card__details">
+                      <div className="ppi-stamp-role">{app.role}</div>
+                      <div className="ppi-stamp-date">Date: <strong>{app.date}</strong></div>
+                    </div>
+
+                    {/* Digital Signature */}
+                    <div className="ppi-stamp-card__signature">
+                      {isPending ? (
+                        <div className="ppi-stamp-sig-pending">Pending Digital Signature</div>
+                      ) : (
+                        <div className="ppi-stamp-sig-active">
+                          {app.signatureUrl ? (
+                            <img src={app.signatureUrl} alt={`Signature of ${app.name}`} className="ppi-stamp-sig-img" />
+                          ) : (
+                            <div className="ppi-stamp-sig-svg-wrap">
+                              <svg viewBox="0 0 170 32" style={{ width: '100%', height: '26px' }}>
+                                <path
+                                  d="M 12 20 Q 30 5, 50 22 T 90 12 T 135 24 T 158 10"
+                                  fill="none"
+                                  stroke="#1e3a8a"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                />
+                                <text
+                                  x="15"
+                                  y="24"
+                                  fontFamily="'Dancing Script', 'Brush Script MT', cursive, sans-serif"
+                                  fontSize="13"
+                                  fill="#1e3a8a"
+                                  fontStyle="italic"
+                                  opacity="0.85"
+                                >
+                                  {app.name}
+                                </text>
+                              </svg>
+                            </div>
+                          )}
+                          <div className="ppi-stamp-sig-seal">
+                            <ShieldCheck size={10} />
+                            <span>Digitally Signed</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
