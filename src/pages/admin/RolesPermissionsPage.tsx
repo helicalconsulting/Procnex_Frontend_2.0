@@ -24,8 +24,6 @@ import {
   ShieldAlert,
   Info,
   ShieldPlus,
-  Type,
-  AlignLeft,
   Trash2,
   AlertTriangle,
 } from 'lucide-react';
@@ -42,6 +40,13 @@ import {
 } from '../../config/modulePermissions';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { CardSkeleton } from '../../components/shared/Skeleton';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Card } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
+import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
+import { cn } from '../../lib/utils';
+import './RolesPermissionsPage.css';
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -151,18 +156,29 @@ function PermissionToggleCell({
   onToggle: () => void;
 }) {
   if (!moduleSupports(module, field)) {
-    return <span className="inline-flex items-center justify-center rounded-full px-2 py-1 text-[11px] font-semibold bg-muted text-muted-foreground" title="Not applicable">—</span>;
+    return <span className="inline-flex size-7 items-center justify-center text-xs text-muted-foreground font-medium">—</span>;
   }
   return (
     <button
       type="button"
-      className="inline-flex min-h-10 items-center"
+      role="switch"
+      aria-checked={value}
+      className="inline-flex items-center justify-center p-1 rounded-full outline-none border-none ring-0 shadow-none !bg-transparent focus:outline-none focus:ring-0"
       onClick={onToggle}
-      aria-pressed={value}
       aria-label={`${field.replace('can', '')} permission for ${module}`}
     >
-      <span className={`relative h-6 w-11 rounded-full transition-colors ${value ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-700'}`}>
-        <span className={`absolute top-1 left-1 size-4 rounded-full bg-white shadow transition-transform ${value ? 'translate-x-5' : 'translate-x-0'}`} />
+      <span
+        className={cn(
+          'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out',
+          value ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-700'
+        )}
+      >
+        <span
+          className={cn(
+            'pointer-events-none inline-block size-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out',
+            value ? 'translate-x-5' : 'translate-x-0'
+          )}
+        />
       </span>
     </button>
   );
@@ -181,10 +197,15 @@ function PermissionMatrixRow({
 }) {
   const hint = getModuleCapability(perm.module).hint;
   return (
-    <div className={`grid min-w-[680px] grid-cols-[minmax(220px,1fr)_110px_110px_110px] items-center border-b border-border/60 px-4 py-3 ${striped ? 'bg-muted/25' : ''}`}>
-      <div className="min-w-0 pr-3">
+    <div
+      className={cn(
+        'grid min-w-[640px] grid-cols-[minmax(220px,1fr)_100px_100px_100px] items-center border-b border-border/50 px-4 py-3 transition-colors hover:bg-muted/40',
+        striped ? 'bg-muted/15' : 'bg-card'
+      )}
+    >
+      <div className="min-w-0 pr-4">
         <span className="block text-xs font-semibold text-foreground">{perm.module}</span>
-        {hint && <span className="mt-0.5 block text-[12px] text-muted-foreground">{hint}</span>}
+        {hint && <span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">{hint}</span>}
       </div>
       {(['canView', 'canCreate', 'canApprove'] as PermissionField[]).map((field) => (
         <div key={field} className="flex justify-center">
@@ -205,11 +226,27 @@ function PermissionMatrixRow({
 }
 
 const ROLE_ICON_MAP: Record<RoleName, React.ReactNode> = {
-  'Super Admin': <Crown size={20} />,
-  Administrator: <Settings size={20} />,
-  Manager: <UserCog size={20} />,
-  'Finance Approver': <FileCheck size={20} />,
-  Staff: <Users size={20} />,
+  'Super Admin': <Crown size={18} />,
+  Administrator: <Settings size={18} />,
+  Manager: <UserCog size={18} />,
+  'Finance Approver': <FileCheck size={18} />,
+  Staff: <Users size={18} />,
+};
+
+const ROLE_ICON_TONE: Record<RoleName, string> = {
+  'Super Admin': 'bg-violet-500/10 text-violet-600 ring-violet-500/20 dark:text-violet-300',
+  Administrator: 'bg-primary/10 text-primary ring-primary/20',
+  Manager: 'bg-cyan-500/10 text-cyan-600 ring-cyan-500/20 dark:text-cyan-300',
+  'Finance Approver': 'bg-amber-500/10 text-amber-600 ring-amber-500/20 dark:text-amber-300',
+  Staff: 'bg-slate-500/10 text-slate-600 ring-slate-500/20 dark:text-slate-300',
+};
+
+const ROLE_BAR_FILL: Record<RoleName, string> = {
+  'Super Admin': 'bg-violet-500',
+  Administrator: 'bg-primary',
+  Manager: 'bg-cyan-500',
+  'Finance Approver': 'bg-amber-500',
+  Staff: 'bg-slate-400',
 };
 
 // ─── Component ──────────────────────────────────────────────
@@ -395,95 +432,95 @@ export default function RolesPermissionsPage() {
   }, [deleteTarget, expandedRole, forceRefresh]);
 
   return (
-    <div className="flex w-full flex-col gap-6 pb-10">
+    <PageFrame className="space-y-6">
       {error && <MessageStrip type="error">{error}</MessageStrip>}
-      
+
       {/* ── Header ─────────────────────────────────────────── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-[-0.035em] text-foreground">Roles & Permissions</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Manage roles, define access levels, and configure module permissions</p>
-        </div>
-        <button
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
-          onClick={openCreateModal}
-          disabled={!hasPermission('Roles & Permissions', 'canCreate')}
-          title={!hasPermission('Roles & Permissions', 'canCreate') ? 'Admin has not allowed this action. You do not have permission to create roles.' : 'Create new role'}
-        >
-          <Plus size={18} />
-          Create Role
-        </button>
-      </div>
+      <PageLead
+        title="Roles & Permissions"
+        description="Manage roles, define access levels, and configure module permissions"
+        actions={
+          <Button
+            onClick={openCreateModal}
+            disabled={!hasPermission('Roles & Permissions', 'canCreate')}
+            title={
+              !hasPermission('Roles & Permissions', 'canCreate')
+                ? 'Admin has not allowed this action. You do not have permission to create roles.'
+                : 'Create new role'
+            }
+            className="gap-2"
+          >
+            <Plus size={16} />
+            Create Role
+          </Button>
+        }
+      />
 
       {/* ── Summary Cards ──────────────────────────────────── */}
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <button
-          type="button"
-          className={`flex min-h-24 items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md ${roleFilter === 'all' && !showModulesList ? 'border-primary ring-2 ring-primary/10' : 'border-border/70'}`}
-          onClick={() => { setRoleFilter('all'); setShowModulesList(false); }}
-        >
-          <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <Shield size={22} />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-2xl font-semibold tracking-tight text-foreground">{summary.totalRoles}</span>
-            <span className="text-sm text-muted-foreground">Total Roles</span>
-          </div>
-        </button>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard
+          label="Total Roles"
+          value={summary.totalRoles}
+          icon={Shield}
+          tone="primary"
+          aria-pressed={roleFilter === 'all' && !showModulesList}
+          className="cursor-pointer"
+          onClick={() => {
+            setRoleFilter('all');
+            setShowModulesList(false);
+          }}
+        />
 
-        <button
-          type="button"
-          className={`flex min-h-24 items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md ${showModulesList ? 'border-primary ring-2 ring-primary/10' : 'border-border/70'}`}
-          onClick={() => { setRoleFilter('all'); setShowModulesList((prev) => !prev); }}
-        >
-          <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600">
-            <Lock size={22} />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-2xl font-semibold tracking-tight text-foreground">{PERMISSION_MODULE_NAMES.length}</span>
-            <span className="text-sm text-muted-foreground">Modules</span>
-          </div>
-        </button>
+        <MetricCard
+          label="Modules"
+          value={PERMISSION_MODULE_NAMES.length}
+          icon={Lock}
+          tone="warning"
+          aria-pressed={showModulesList}
+          className="cursor-pointer"
+          onClick={() => {
+            setRoleFilter('all');
+            setShowModulesList((prev) => !prev);
+          }}
+        />
 
-        <button
-          type="button"
-          className={`flex min-h-24 items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md ${roleFilter === 'system' ? 'border-primary ring-2 ring-primary/10' : 'border-border/70'}`}
-          onClick={() => { setRoleFilter(roleFilter === 'system' ? 'all' : 'system'); setShowModulesList(false); }}
-        >
-          <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600">
-            <ShieldCheck size={22} />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-2xl font-semibold tracking-tight text-foreground">{summary.systemRoles}</span>
-            <span className="text-sm text-muted-foreground">System Roles</span>
-          </div>
-        </button>
+        <MetricCard
+          label="System Roles"
+          value={summary.systemRoles}
+          icon={ShieldCheck}
+          tone="success"
+          aria-pressed={roleFilter === 'system'}
+          className="cursor-pointer"
+          onClick={() => {
+            setRoleFilter(roleFilter === 'system' ? 'all' : 'system');
+            setShowModulesList(false);
+          }}
+        />
 
-        <button
-          type="button"
-          className={`flex min-h-24 items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md ${roleFilter === 'custom' ? 'border-primary ring-2 ring-primary/10' : 'border-border/70'}`}
-          onClick={() => { setRoleFilter(roleFilter === 'custom' ? 'all' : 'custom'); setShowModulesList(false); }}
-        >
-          <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-violet-500/10 text-violet-600">
-            <ShieldAlert size={22} />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-2xl font-semibold tracking-tight text-foreground">{summary.customRoles}</span>
-            <span className="text-sm text-muted-foreground">Custom Roles</span>
-          </div>
-        </button>
+        <MetricCard
+          label="Custom Roles"
+          value={summary.customRoles}
+          icon={ShieldAlert}
+          tone="violet"
+          aria-pressed={roleFilter === 'custom'}
+          className="cursor-pointer"
+          onClick={() => {
+            setRoleFilter(roleFilter === 'custom' ? 'all' : 'custom');
+            setShowModulesList(false);
+          }}
+        />
       </div>
 
       {/* ── Inline Modules List ────────────────────────────── */}
       {showModulesList && (
-        <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
-          <div className="flex items-center gap-2 border-b border-border/70 bg-muted/30 px-4 py-3 text-sm font-semibold text-foreground">
+        <Card className="overflow-hidden border-border/70 shadow-sm">
+          <div className="flex items-center gap-2 border-b border-border/70 bg-muted/30 px-5 py-3.5 text-sm font-semibold text-foreground">
             <Lock size={16} className="text-primary" />
             <span>All Modules ({PERMISSION_MODULE_NAMES.length})</span>
           </div>
           <div className="overflow-x-auto">
-            <div className="grid min-w-[680px] grid-cols-[minmax(220px,1fr)_110px_110px_110px] border-b border-border/70 bg-muted/40 px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              <div className="min-w-0 pr-3">Module</div>
+            <div className="grid min-w-[640px] grid-cols-[minmax(220px,1fr)_100px_100px_100px] border-b border-border/70 bg-muted/40 px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              <div className="min-w-0 pr-4">Module</div>
               <div className="flex justify-center">View</div>
               <div className="flex justify-center">Create</div>
               <div className="flex justify-center">Approve</div>
@@ -491,36 +528,44 @@ export default function RolesPermissionsPage() {
             {MODULE_CAPABILITIES.map((mod, idx) => (
               <div
                 key={mod.module}
-                className={`grid min-w-[680px] grid-cols-[minmax(220px,1fr)_110px_110px_110px] items-center border-b border-border/60 px-4 py-3 ${idx % 2 === 0 ? 'bg-muted/15' : ''}`}
+                className={cn(
+                  'grid min-w-[640px] grid-cols-[minmax(220px,1fr)_100px_100px_100px] items-center border-b border-border/50 px-4 py-3 transition-colors hover:bg-muted/30',
+                  idx % 2 === 0 ? 'bg-muted/15' : 'bg-card'
+                )}
               >
-                <div className="min-w-0 pr-3">
+                <div className="min-w-0 pr-4">
                   <span className="block text-xs font-semibold text-foreground">{mod.module}</span>
-                  <span className="mt-0.5 block text-[12px] text-muted-foreground">{mod.hint}</span>
+                  <span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">{mod.hint}</span>
                 </div>
                 {(['canView', 'canCreate', 'canApprove'] as PermissionField[]).map((field) => {
                   const supported = mod.supports.includes(field);
                   return (
                     <div key={field} className="flex justify-center">
-                      <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${supported ? 'bg-emerald-500/10 text-emerald-600' : 'bg-muted text-muted-foreground'}`}>
-                        {supported ? field.replace('can', '') : '—'}
-                      </span>
+                      {supported ? (
+                        <Badge tone="emerald" variant="soft" className="px-2 py-0.5 text-[11px] font-medium">
+                          {field.replace('can', '')}
+                        </Badge>
+                      ) : (
+                        <span className="text-xs text-muted-foreground font-medium">—</span>
+                      )}
                     </div>
                   );
                 })}
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       )}
 
-      {/* ── Toolbar ────────────────────────────────────────── */}
-      <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative min-w-0 flex-1 sm:max-w-xl">
-          <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input
-            className="min-h-11 w-full rounded-xl border border-input bg-background pl-10 pr-4 text-sm outline-none transition placeholder:text-muted-foreground focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
-            type="search"
+      {/* ── Search Toolbar ─────────────────────────────────── */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full max-w-xl">
+          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="h-11 rounded-xl pl-10"
+            type="text"
             placeholder="Search roles by name or description..."
+            aria-label="Search roles and permissions"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -536,29 +581,34 @@ export default function RolesPermissionsPage() {
             const isExpanded = expandedRole === role.id;
             const { granted: permCount, applicable: permTotal } = countGrantedPermissions(role.permissions);
             const permPercent = permTotal > 0 ? Math.round((permCount / permTotal) * 100) : 0;
+            const toneClass = ROLE_ICON_TONE[role.iconRole] || ROLE_ICON_TONE.Staff;
+            const barFillClass = ROLE_BAR_FILL[role.iconRole] || ROLE_BAR_FILL.Staff;
 
             return (
-              <div
+              <Card
                 key={role.id}
-                className={`overflow-hidden rounded-2xl border bg-card shadow-sm transition ${isExpanded ? 'border-primary/40 ring-2 ring-primary/10' : 'border-border/70'}`}
+                className={cn(
+                  'overflow-hidden transition-all duration-200',
+                  isExpanded ? 'border-primary/40 ring-2 ring-primary/10 shadow-md' : 'hover:border-border/90'
+                )}
               >
                 {/* Card Header */}
                 <div
-                  className="flex cursor-pointer items-center justify-between gap-4 p-5 transition hover:bg-muted/20"
+                  className="flex cursor-pointer items-center justify-between gap-4 p-4 sm:p-5 transition-colors hover:bg-muted/20"
                   onClick={() => toggleExpand(role.id)}
                 >
-                  <div className="flex min-w-0 items-center gap-4">
-                    <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                      {ROLE_ICON_MAP[role.iconRole] ?? <Users size={20} />}
+                  <div className="flex min-w-0 items-center gap-3.5">
+                    <div className={cn('grid size-10 shrink-0 place-items-center rounded-xl ring-1', toneClass)}>
+                      {ROLE_ICON_MAP[role.iconRole] ?? <Users size={18} />}
                     </div>
                     <div className="flex min-w-0 flex-col">
                       <div className="flex items-center gap-2">
                         <span className="truncate text-base font-semibold text-foreground">{role.roleName}</span>
                         {role.isSystem && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-500/10 px-2.5 py-0.5 text-[12px] font-semibold text-slate-700 dark:text-slate-300">
-                            <Lock size={10} />
+                          <Badge variant="secondary" className="gap-1 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider">
+                            <Lock size={9} />
                             System
-                          </span>
+                          </Badge>
                         )}
                       </div>
                       <span className="mt-0.5 truncate text-xs text-muted-foreground">{role.description}</span>
@@ -566,56 +616,59 @@ export default function RolesPermissionsPage() {
                   </div>
 
                   <div className="flex shrink-0 items-center gap-4">
-                    <div className="hidden items-center gap-4 sm:flex">
+                    <div className="hidden items-center gap-5 sm:flex">
                       <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                         <Users size={14} />
                         <span>{role.userCount} user{role.userCount !== 1 ? 's' : ''}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="h-2 w-24 overflow-hidden rounded-full bg-muted">
-                          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${permPercent}%` }} />
+                          <div className={cn('h-full rounded-full transition-all duration-300', barFillClass)} style={{ width: `${permPercent}%` }} />
                         </div>
                         <span className="text-xs font-semibold text-muted-foreground">{permCount}/{permTotal}</span>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-primary/10 hover:text-primary disabled:opacity-40"
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 text-muted-foreground hover:bg-primary/10 hover:text-primary disabled:opacity-40"
                         title="Edit Permissions"
                         onClick={() => openEditModal(role)}
                         disabled={!hasPermission('Roles & Permissions', 'canCreate')}
                       >
                         <Edit3 size={15} />
-                      </button>
+                      </Button>
                       {role.roleName !== 'Super Admin' && canDeleteRoles && (
-                        <button
-                          type="button"
-                          className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
                           title="Delete Role"
                           onClick={() => setDeleteTarget(role)}
                           disabled={!hasPermission('Roles & Permissions', 'canCreate')}
                         >
                           <Trash2 size={15} />
-                        </button>
+                        </Button>
                       )}
-                      <button
-                        type="button"
-                        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted"
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 text-muted-foreground hover:bg-muted"
                         onClick={() => toggleExpand(role.id)}
                       >
                         {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 </div>
 
                 {/* Expanded Matrix */}
                 {isExpanded && (
-                  <div className="border-t border-border/70 bg-muted/10 p-5">
-                    <div className="overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm">
-                      <div className="grid min-w-[680px] grid-cols-[minmax(220px,1fr)_110px_110px_110px] border-b border-border/70 bg-muted/40 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <div className="border-t border-border/70 bg-muted/10 p-4 sm:p-5">
+                    <Card className="overflow-hidden border-border/70 shadow-sm">
+                      <div className="grid min-w-[640px] grid-cols-[minmax(220px,1fr)_100px_100px_100px] border-b border-border/70 bg-muted/40 px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                         <div>Module</div>
                         <div className="flex justify-center">View</div>
                         <div className="flex justify-center">Create</div>
@@ -629,48 +682,47 @@ export default function RolesPermissionsPage() {
                           mode="view"
                         />
                       ))}
-                    </div>
+                    </Card>
                   </div>
                 )}
-              </div>
+              </Card>
             );
           })
         )}
       </div>
 
       {filtered.length === 0 && !loading && (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/80 bg-card py-12 text-center shadow-sm">
-          <div className="flex size-14 items-center justify-center rounded-2xl bg-muted/60 text-muted-foreground">
-            <Shield size={28} />
-          </div>
-          <h3 className="mt-4 text-base font-semibold text-foreground">No roles found</h3>
-          <p className="mt-1 text-sm text-muted-foreground">Try adjusting your filter or search criteria.</p>
-        </div>
+        <EmptyState
+          icon={Shield}
+          title="No roles found"
+          description="Try adjusting your filter or search criteria."
+          size="default"
+        />
       )}
 
       {/* ── Edit Permissions Modal ──────────────────────────── */}
       {editingRole && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setEditingRole(null)}>
-          <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <Card className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden border-border/70 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-border/70 px-6 py-4">
               <div className="flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <div className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/20">
                   <Shield size={20} />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-foreground">Edit Permissions</h2>
+                  <h2 className="text-lg font-semibold tracking-tight text-foreground">Edit Permissions</h2>
                   <p className="text-xs text-muted-foreground">Configure access level for role: <span className="font-semibold text-foreground">{editingRole.roleName}</span></p>
                 </div>
               </div>
-              <button type="button" className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted" onClick={() => setEditingRole(null)}>
+              <Button variant="ghost" size="icon" className="size-9 rounded-lg" onClick={() => setEditingRole(null)}>
                 <X size={18} />
-              </button>
+              </Button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-6">
               {saveError && <MessageStrip type="error" className="mb-4">{saveError}</MessageStrip>}
-              <div className="overflow-hidden rounded-xl border border-border/70 bg-card">
-                <div className="grid min-w-[680px] grid-cols-[minmax(220px,1fr)_110px_110px_110px] border-b border-border/70 bg-muted/40 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <Card className="overflow-hidden border-border/70">
+                <div className="grid min-w-[640px] grid-cols-[minmax(220px,1fr)_100px_100px_100px] border-b border-border/70 bg-muted/40 px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                   <div>Module</div>
                   <div className="flex justify-center">View</div>
                   <div className="flex justify-center">Create</div>
@@ -685,36 +737,38 @@ export default function RolesPermissionsPage() {
                     onToggle={(field) => togglePermission(idx, field)}
                   />
                 ))}
-              </div>
+              </Card>
             </div>
 
             <div className="flex items-center justify-end gap-3 border-t border-border/70 bg-muted/20 px-6 py-4">
-              <button type="button" className="min-h-11 rounded-xl border border-input bg-background px-5 text-sm font-semibold text-foreground transition hover:bg-muted" onClick={() => setEditingRole(null)} disabled={saving}>Cancel</button>
-              <button type="button" className="min-h-11 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50" onClick={savePermissions} disabled={saving}>
+              <Button variant="outline" onClick={() => setEditingRole(null)} disabled={saving}>
+                Cancel
+              </Button>
+              <Button onClick={savePermissions} disabled={saving}>
                 {saving ? 'Saving...' : 'Save Permissions'}
-              </button>
+              </Button>
             </div>
-          </div>
+          </Card>
         </div>
       )}
 
       {/* ── Create Role Modal ───────────────────────────────── */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setShowCreateModal(false)}>
-          <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <Card className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden border-border/70 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-border/70 px-6 py-4">
               <div className="flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <div className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/20">
                   <ShieldPlus size={20} />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-foreground">Create New Role</h2>
+                  <h2 className="text-lg font-semibold tracking-tight text-foreground">Create New Role</h2>
                   <p className="text-xs text-muted-foreground">Define role name, description, and module permission rules</p>
                 </div>
               </div>
-              <button type="button" className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted" onClick={() => setShowCreateModal(false)}>
+              <Button variant="ghost" size="icon" className="size-9 rounded-lg" onClick={() => setShowCreateModal(false)}>
                 <X size={18} />
-              </button>
+              </Button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 space-y-5">
@@ -723,9 +777,8 @@ export default function RolesPermissionsPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-foreground">Role Name *</label>
-                  <input
+                  <Input
                     type="text"
-                    className="min-h-11 w-full rounded-xl border border-input bg-background px-4 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
                     placeholder="e.g. Regional Procurement Officer"
                     value={newRoleName}
                     onChange={(e) => setNewRoleName(e.target.value)}
@@ -733,9 +786,8 @@ export default function RolesPermissionsPage() {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-foreground">Description</label>
-                  <input
+                  <Input
                     type="text"
-                    className="min-h-11 w-full rounded-xl border border-input bg-background px-4 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
                     placeholder="Role responsibilities overview..."
                     value={newRoleDesc}
                     onChange={(e) => setNewRoleDesc(e.target.value)}
@@ -743,8 +795,8 @@ export default function RolesPermissionsPage() {
                 </div>
               </div>
 
-              <div className="overflow-hidden rounded-xl border border-border/70 bg-card">
-                <div className="grid min-w-[680px] grid-cols-[minmax(220px,1fr)_110px_110px_110px] border-b border-border/70 bg-muted/40 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <Card className="overflow-hidden border-border/70">
+                <div className="grid min-w-[640px] grid-cols-[minmax(220px,1fr)_100px_100px_100px] border-b border-border/70 bg-muted/40 px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                   <div>Module</div>
                   <div className="flex justify-center">View</div>
                   <div className="flex justify-center">Create</div>
@@ -759,39 +811,46 @@ export default function RolesPermissionsPage() {
                     onToggle={(field) => toggleNewPerm(idx, field)}
                   />
                 ))}
-              </div>
+              </Card>
             </div>
 
             <div className="flex items-center justify-end gap-3 border-t border-border/70 bg-muted/20 px-6 py-4">
-              <button type="button" className="min-h-11 rounded-xl border border-input bg-background px-5 text-sm font-semibold text-foreground transition hover:bg-muted" onClick={() => setShowCreateModal(false)} disabled={saving}>Cancel</button>
-              <button type="button" className="min-h-11 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50" onClick={handleCreateRole} disabled={saving || !newRoleName.trim()}>
+              <Button variant="outline" onClick={() => setShowCreateModal(false)} disabled={saving}>
+                Cancel
+              </Button>
+              <Button onClick={handleCreateRole} disabled={saving || !newRoleName.trim()}>
                 {saving ? 'Creating...' : 'Create Role'}
-              </button>
+              </Button>
             </div>
-          </div>
+          </Card>
         </div>
       )}
 
       {/* ── Delete Confirmation Modal ──────────────────────── */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setDeleteTarget(null)}>
-          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-border/70 bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <Card className="w-full max-w-md overflow-hidden border-border/70 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="p-6 text-center">
-              <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+              <div className="mx-auto grid size-14 place-items-center rounded-2xl bg-destructive/10 text-destructive ring-1 ring-destructive/20">
                 <AlertTriangle size={28} />
               </div>
-              <h3 className="mt-4 text-lg font-semibold text-foreground">Delete Role?</h3>
-              <p className="mt-2 text-sm text-muted-foreground">Are you sure you want to delete role <span className="font-semibold text-foreground">"{deleteTarget.roleName}"</span>? This action cannot be undone.</p>
+              <h3 className="mt-4 text-lg font-semibold tracking-tight text-foreground">Delete Role?</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Are you sure you want to delete role <span className="font-semibold text-foreground">"{deleteTarget.roleName}"</span>? This action cannot be undone.
+              </p>
             </div>
             <div className="flex items-center justify-end gap-3 border-t border-border/70 bg-muted/20 px-6 py-4">
-              <button type="button" className="min-h-11 rounded-xl border border-input bg-background px-4 text-sm font-semibold text-foreground transition hover:bg-muted" onClick={() => setDeleteTarget(null)} disabled={saving}>Cancel</button>
-              <button type="button" className="min-h-11 rounded-xl bg-destructive px-4 text-sm font-semibold text-destructive-foreground transition hover:bg-destructive/90 disabled:opacity-50" onClick={handleDeleteRole} disabled={saving}>
+              <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={saving}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleDeleteRole} disabled={saving}>
                 {saving ? 'Deleting...' : 'Delete Role'}
-              </button>
+              </Button>
             </div>
-          </div>
+          </Card>
         </div>
       )}
-    </div>
+    </PageFrame>
   );
 }
+

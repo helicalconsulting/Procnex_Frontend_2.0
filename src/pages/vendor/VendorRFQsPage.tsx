@@ -13,10 +13,16 @@ import {
   FileText, Search, ChevronDown, Clock, Send, X, Calendar,
   CheckCircle2, AlertTriangle, RotateCcw, Plus, Check,
   Minus, Maximize2, Minimize2, ChevronUp, ChevronRight, Eye,
-  Trash2, Pencil, Shield, Upload, Sliders,
+  Trash2, Pencil, Shield, Upload, Sliders, ClipboardList,
 } from 'lucide-react';
 import { CurrencySelector, CurrencyAmountInput, CurrencyBadge, useCurrency } from '../../components/shared/CurrencyMaster';
 import { MessageStrip } from '../../components/shared/MessageStrip';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Card } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
+import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
+import { cn } from '../../lib/utils';
 import { quotationService } from '../../services/quotationService';
 import { rfqService } from '../../services/rfqService';
 import { PREDEFINED_EVAL_CATEGORIES } from '../../mocks/rfqEvaluation.mock';
@@ -182,12 +188,12 @@ function mapVendorRfq(r: RFQ & {
   };
 }
 
-const STATUS_MAP: Record<RFQStatus, { label: string; cls: string }> = {
-  OPEN: { label: 'Open', cls: 'sent' },
-  SUBMITTED: { label: 'Submitted', cls: 'submitted' },
-  CLOSED: { label: 'Closed', cls: 'closed' },
-  CANCELLED: { label: 'Cancelled', cls: 'cancelled' },
-  RETURNED: { label: 'Returned', cls: 'progress' },
+const STATUS_MAP: Record<RFQStatus, { label: string; tone: 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info' }> = {
+  OPEN: { label: 'Pending Response', tone: 'warning' },
+  SUBMITTED: { label: 'Submitted', tone: 'success' },
+  CLOSED: { label: 'Closed', tone: 'info' },
+  CANCELLED: { label: 'Cancelled', tone: 'danger' },
+  RETURNED: { label: 'Returned', tone: 'danger' },
 };
 
 // ─── Component ──────────────────────────────────────────────
@@ -825,247 +831,288 @@ export default function VendorRFQsPage() {
   }, [quotModal, quotLeadTime, quotPrices, itemCurrencies, companyDefaultCurrency, convert, quotTotal, quotPayTerms, selectedPaymentPlanId, currency, reload, attachments, customFieldValues, evalParamValues, bidSecValueType, bidSecValue, bidSecCurrency, bidSecValidityValue, bidSecFile, bidSecBondNumber, bidSecIssuer, bidBondFile, bidBondNumber, bidBondIssuer, bidBondAmount, bidBondCurrency, bidBondIssueDate, bidBondExpiryDate, bidBondValidityValue, bidBondValidityUnit]);
 
   return (
-    <div className="vendor-portal">
-      <div className="vendor-portal__container">
-        {error && <MessageStrip type="error">{error}</MessageStrip>}
-        {returnToast && (
-          <MessageStrip type="warning" onClose={() => setReturnToast(null)} autoHideMs={8000}>
-            {returnToast}
-          </MessageStrip>
-        )}
-        {loading && <div className="vendor-portal__loading">Loading RFQs…</div>}
+    <PageFrame>
+      {error && <MessageStrip type="error">{error}</MessageStrip>}
+      {returnToast && (
+        <MessageStrip type="warning" onClose={() => setReturnToast(null)} autoHideMs={8000}>
+          {returnToast}
+        </MessageStrip>
+      )}
 
-        {/* ── Header ────────────────────────────────── */}
-        <div className="vendor-header">
-          <div className="vendor-header__content">
-            <h1>My RFQ Assignments 📋</h1>
-            <p>Manage and respond to RFQs assigned to your company</p>
-          </div>
+      {/* ── Page Lead Header ────────────────────────── */}
+      <PageLead
+        title="My RFQ Assignments"
+        description="Manage and respond to RFQs assigned to your company"
+      />
+
+      {/* ── KPI Metric Cards ────────────────────────── */}
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        {[
+          { icon: ClipboardList, tone: 'primary' as const, value: summary.total, label: 'Total Assigned', detail: 'All time', filter: null as RFQStatus | 'DEADLINE_SOON' | null },
+          { icon: Clock, tone: 'warning' as const, value: summary.open, label: 'Pending Response', detail: 'Awaiting quotation', filter: 'OPEN' as RFQStatus },
+          { icon: RotateCcw, tone: 'danger' as const, value: summary.returned, label: 'Returned', detail: 'Resubmission needed', filter: 'RETURNED' as RFQStatus },
+          { icon: CheckCircle2, tone: 'success' as const, value: summary.submitted, label: 'Submitted', detail: 'Quotation sent', filter: 'SUBMITTED' as RFQStatus },
+          { icon: AlertTriangle, tone: 'danger' as const, value: summary.deadlineSoon, label: 'Deadline Soon', detail: 'Within 3 days', filter: 'DEADLINE_SOON' as RFQStatus | 'DEADLINE_SOON' },
+        ].map((c) => {
+          const isActive = c.filter === null ? !kpiFilter : kpiFilter === c.filter;
+          return (
+            <MetricCard
+              key={c.label}
+              icon={c.icon}
+              tone={c.tone}
+              value={c.value}
+              label={c.label}
+              detail={c.detail}
+              className={cn(
+                'cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-all duration-200',
+                isActive &&
+                  'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
+              )}
+              onClick={() => setKpiFilter(isActive ? null : c.filter)}
+              role="button"
+              tabIndex={0}
+              aria-pressed={isActive}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiFilter(isActive ? null : c.filter); } }}
+            />
+          );
+        })}
+      </div>
+
+      {/* ── Search Toolbar ──────────────────────────── */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full max-w-xl">
+          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="h-11 rounded-xl pl-10"
+            type="text"
+            placeholder="Search by RFQ number, title, or buyer..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
+      </div>
 
-        {/* ── KPIs ───────────────────────────────────── */}
-        <div className="vendor-kpis">
-          {[
-            { key: null, icon: <FileText size={24} />, value: summary.total, label: 'Total Assigned', sub: 'All time' },
-            { key: 'OPEN' as RFQStatus, icon: <Clock size={24} />, value: summary.open, label: 'Pending Response', sub: 'Awaiting quotation', style: { background: 'rgba(233,115,12,0.1)', color: '#e9730c' } },
-            { key: 'RETURNED' as RFQStatus, icon: <RotateCcw size={24} />, value: summary.returned, label: 'Returned', sub: 'Resubmission needed', style: { background: 'rgba(233,115,12,0.08)', color: '#e9730c' } },
-            { key: 'SUBMITTED' as RFQStatus, icon: <Send size={24} />, value: summary.submitted, label: 'Submitted', sub: 'Quotation sent', style: { background: 'rgba(16,126,62,0.1)', color: '#107e3e' } },
-            { key: 'DEADLINE_SOON' as RFQStatus | 'DEADLINE_SOON', icon: <AlertTriangle size={24} />, value: summary.deadlineSoon, label: 'Deadline Soon', sub: 'Within 3 days', style: { background: 'rgba(187,0,0,0.08)', color: '#bb0000' } },
-          ].map((k) => {
-            const isActive = kpiFilter === k.key;
+      {/* ── RFQ List Cards ──────────────────────────── */}
+      {loading ? (
+        <Card className="p-8 text-center text-sm text-muted-foreground">Loading RFQs…</Card>
+      ) : filtered.length > 0 ? (
+        <div className="flex flex-col gap-3.5">
+          {filtered.map(rfq => {
+            const isExpanded = expandedRFQ === rfq.id;
+            const dl = getDeadlineInfo(rfq.deadline);
+            const statusCfg = STATUS_MAP[rfq.status];
+
             return (
-              <button
-                key={k.label}
-                type="button"
-                className={`vendor-kpi-card ${isActive ? 'vendor-kpi-card--active' : ''}`}
-                onClick={() => setKpiFilter(isActive ? null : k.key)}
+              <Card
+                id={`vrfq-card-${rfq.id}`}
+                key={rfq.id}
+                className={cn(
+                  'overflow-hidden transition-all duration-200 border-border/80 hover:border-primary/30',
+                  isExpanded && 'ring-1 ring-primary/20 shadow-md'
+                )}
               >
-                <div className="vendor-kpi-icon" style={k.style}>{k.icon}</div>
-                <div>
-                  <div className="vendor-kpi-label">{k.label}</div>
-                  <div className="vendor-kpi-value">{k.value}</div>
-                  <div className="vendor-kpi-subtext">{k.sub}</div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* ── Search & Filters ──────────────────────── */}
-        <div className="vo-toolbar">
-          <div className="vo-toolbar__search">
-            <Search size={16} className="vo-toolbar__search-icon" />
-            <input type="text" placeholder="Search by RFQ number or title..." value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
-        </div>
-
-        {/* ── RFQ Cards ─────────────────────────────── */}
-        {filtered.length > 0 ? (
-          <div className="vo-orders">
-            {filtered.map(rfq => {
-              const isExpanded = expandedRFQ === rfq.id;
-              const dl = getDeadlineInfo(rfq.deadline);
-              const statusCfg = STATUS_MAP[rfq.status];
-
-              return (
-                <div id={`vrfq-card-${rfq.id}`} key={rfq.id} className={`vrfq-card ${isExpanded ? 'vrfq-card--expanded' : ''}`}>
-                  {/* Header */}
-                  <div className="vrfq-card__header" onClick={() => setExpandedRFQ(isExpanded ? null : rfq.id)}>
-                    <div className="vrfq-card__left">
-                      <div className="vrfq-card__number">
-                        <FileText size={16} style={{ color: 'var(--vendor-primary)' }} />
-                        <span className="vrfq-card__rfq-id">{rfq.rfqNumber}</span>
-                        <span className={`vendor-badge vendor-badge--${statusCfg.cls}`}>{statusCfg.label}</span>
-                        <span className="vendor-badge" style={{
-                          background: rfq.rfqType === 'TENDER' ? 'rgba(124, 58, 237, 0.12)' : 'rgba(10, 110, 209, 0.1)',
-                          color: rfq.rfqType === 'TENDER' ? '#7c3aed' : '#0a6ed1',
-                          fontWeight: 700,
-                          fontSize: 12,
-                          padding: '2px 8px',
-                          borderRadius: 4,
-                          marginLeft: 6,
-                        }}>
-                          {rfq.rfqType === 'TENDER' ? 'Tender' : 'RFQ'}
-                        </span>
-                      </div>
-                      <span className="vrfq-card__title">{rfq.title} · {rfq.buyerCompany}</span>
+                {/* Header */}
+                <div
+                  className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between cursor-pointer hover:bg-accent/25 transition-colors"
+                  onClick={() => setExpandedRFQ(isExpanded ? null : rfq.id)}
+                >
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-bold text-foreground text-base">{rfq.rfqNumber}</span>
+                      <Badge tone={statusCfg.tone}>
+                        <span className="size-1.5 rounded-full bg-current" />
+                        {statusCfg.label}
+                      </Badge>
+                      {rfq.rfqType === 'TENDER' && (
+                        <Badge tone="info">Tender</Badge>
+                      )}
                     </div>
-                    <div className="vrfq-card__right" onClick={(e) => e.stopPropagation()}>
-                      {rfq.status === 'OPEN' && !rfq.needsResubmit && (
-                        <button
-                          type="button"
-                          className="vendor-btn vendor-btn--primary"
-                          style={{ padding: '6px 12px', fontSize: 13 }}
-                          onClick={() => openQuotModal(rfq)}
-                        >
-                          <Send size={13} /> Submit Quote
-                        </button>
-                      )}
-                      {rfq.status === 'SUBMITTED' && !rfq.needsResubmit && (
-                        <button
-                          type="button"
-                          className="vendor-btn vendor-btn--outline"
-                          style={{ padding: '6px 12px', fontSize: 13 }}
-                          onClick={() => openQuotModal(rfq)}
-                        >
-                          <Eye size={13} /> View Quote
-                        </button>
-                      )}
-                      {rfq.status === 'RETURNED' && (
-                        <button
-                          type="button"
-                          className="vendor-btn vendor-btn--primary"
-                          style={{ padding: '6px 12px', fontSize: 13 }}
-                          onClick={() => openQuotModal(rfq)}
-                        >
-                          <RotateCcw size={13} /> Resubmit Quote
-                        </button>
-                      )}
-                      {rfq.status === 'OPEN' && (
-                        <span className={`vrfq-card__deadline vrfq-card__deadline--${dl.cls}`}>
-                          <Clock size={13} /> {dl.text}
-                        </span>
-                      )}
-                      <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{rfq.items.length} items</span>
-                      <ChevronDown size={18} className={`vrfq-card__chevron ${isExpanded ? 'vrfq-card__chevron--open' : ''}`} onClick={() => setExpandedRFQ(isExpanded ? null : rfq.id)} />
+                    <div className="text-sm font-medium text-muted-foreground truncate">
+                      {rfq.title} <span className="text-muted-foreground/50">·</span> {rfq.buyerCompany}
                     </div>
                   </div>
 
-                  {/* Expanded Body */}
-                  {isExpanded && (
-                    <div className="vrfq-card__body">
-                      {rfq.description && <div className="vrfq-card__desc">{rfq.description}</div>}
+                  <div className="flex flex-wrap items-center gap-2.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    {rfq.status === 'OPEN' && !rfq.needsResubmit && (
+                      <Button
+                        size="sm"
+                        onClick={() => openQuotModal(rfq)}
+                      >
+                        <Send size={14} /> Submit Quote
+                      </Button>
+                    )}
+                    {rfq.status === 'SUBMITTED' && !rfq.needsResubmit && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openQuotModal(rfq)}
+                      >
+                        <Eye size={14} /> View Quote
+                      </Button>
+                    )}
+                    {rfq.status === 'RETURNED' && (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => openQuotModal(rfq)}
+                      >
+                        <RotateCcw size={14} /> Resubmit Quote
+                      </Button>
+                    )}
+                    {rfq.status === 'OPEN' && (
+                      <span className={cn('inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-md', dl.cls === 'urgent' ? 'bg-destructive/10 text-destructive' : dl.cls === 'soon' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'bg-secondary text-muted-foreground')}>
+                        <Clock size={13} /> {dl.text}
+                      </span>
+                    )}
+                    <span className="text-xs font-medium text-muted-foreground bg-muted/60 px-2.5 py-1 rounded-md">
+                      {rfq.items.length} {rfq.items.length === 1 ? 'item' : 'items'}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => setExpandedRFQ(isExpanded ? null : rfq.id)}
+                      aria-label="Toggle RFQ details"
+                    >
+                      <ChevronDown className={cn('size-4 transition-transform duration-200', isExpanded && 'rotate-180')} />
+                    </Button>
+                  </div>
+                </div>
 
-                      <div>
-                        <div className="vrfq-card__items-title">Required Items</div>
-                        <table className="vo-items-table">
-                          <thead>
-                            <tr><th>Item</th><th>Description</th><th>Qty</th><th>Expected By</th></tr>
-                          </thead>
-                          <tbody>
-                            {rfq.items.map((item, idx) => (
-                              <tr key={idx}>
-                                <td className="vo-items-table__name">{item.name}</td>
-                                <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{item.description}</td>
-                                <td>{item.quantity} {item.unit}</td>
-                                <td>{item.expectedDate ? new Date(item.expectedDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—'}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                {/* Expanded Body */}
+                {isExpanded && (
+                  <div className="border-t border-border/60 bg-card p-4 flex flex-col gap-4 text-sm">
+                    {rfq.description && (
+                      <p className="text-muted-foreground leading-relaxed">{rfq.description}</p>
+                    )}
 
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, color: 'var(--text-secondary)' }}>
-                        <span><Calendar size={13} style={{ verticalAlign: -2, marginRight: 4 }} />Created: {new Date(rfq.createdAt).toLocaleDateString('en-IN')}</span>
-                        <span>Deadline: {new Date(rfq.deadline).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                      </div>
-
-                      {/* ── Bid Security Required (Buyer requires it) ── */}
-                      {rfq.bidSecurityRequired && (
-                        <div style={{
-                          padding: '12px 16px', background: 'rgba(10,110,209,0.04)',
-                          border: '1px solid rgba(10,110,209,0.15)', borderRadius: 'var(--radius-md)',
-                          marginBottom: rfq.bidBondRequired ? 12 : 0,
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <Shield size={16} style={{ color: 'var(--primary-500)', flexShrink: 0 }} />
-                            <div>
-                              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-                                Bid Security Required
-                              </div>
-                              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 1 }}>
-                                Vendor must provide: amount, type, validity & document when submitting quotation
-                              </div>
-                            </div>
+                    {/* Dates Highlight Card */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl bg-muted/30 border border-border/70">
+                      <div className="flex items-center gap-3">
+                        <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
+                          <Calendar size={18} />
+                        </div>
+                        <div>
+                          <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Created Date</div>
+                          <div className="text-sm font-bold text-foreground">
+                            {new Date(rfq.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                           </div>
                         </div>
-                      )}
+                      </div>
 
-                      {/* ── Bid Bond Required (Buyer requires it) ── */}
-                      {rfq.bidBondRequired && (
-                        <div style={{
-                          padding: '12px 16px', background: 'rgba(10,110,209,0.04)',
-                          border: '1px solid rgba(10,110,209,0.15)', borderRadius: 'var(--radius-md)',
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <Shield size={16} style={{ color: 'var(--primary-500)', flexShrink: 0 }} />
-                            <div>
-                              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-                                Bid Bond Required
-                              </div>
-                              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 1 }}>
-                                Vendor must provide: bond number, issuer, amount, dates & document when submitting quotation
-                              </div>
-                            </div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex size-9 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0">
+                          <Clock size={18} />
+                        </div>
+                        <div>
+                          <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Closing / Deadline Date</div>
+                          <div className="text-sm font-bold text-amber-600 dark:text-amber-400">
+                            {new Date(rfq.deadline).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                           </div>
                         </div>
-                      )}
-
-                      <div className="vrfq-card__footer">
-                        {rfq.status === 'OPEN' && !rfq.needsResubmit && (
-                          <button className="vendor-btn vendor-btn--primary" onClick={() => openQuotModal(rfq)}>
-                            <Send size={15} /> Submit Quotation
-                          </button>
-                        )}
-                        {rfq.status === 'RETURNED' && (
-                          <div className="vrfq-card__footer-resubmit">
-                            <span className="vendor-badge vendor-badge--progress">
-                              <RotateCcw size={13} /> Returned for Revision — Resubmit Required
-                            </span>
-                            <button
-                              className="vendor-btn vendor-btn--primary"
-                              onClick={() => openQuotModal(rfq)}
-                            >
-                              <RotateCcw size={15} /> Resubmit Quotation
-                            </button>
-                          </div>
-                        )}
-                        {rfq.status === 'SUBMITTED' && !rfq.needsResubmit && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                            <span className="vendor-badge vendor-badge--submitted"><CheckCircle2 size={13} /> Quotation Already Submitted</span>
-                            <button
-                              type="button"
-                              className="vendor-btn vendor-btn--outline"
-                              onClick={() => openQuotModal(rfq)}
-                            >
-                              <Eye size={15} /> View Quote
-                            </button>
-                          </div>
-                        )}
                       </div>
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="vendor-empty-state">
-            <div className="vendor-empty-state__icon">📋</div>
-            <div className="vendor-empty-state__title">No RFQs Found</div>
-            <div className="vendor-empty-state__text">{search ? 'Try adjusting your search.' : 'No RFQs have been assigned yet.'}</div>
-          </div>
-        )}
+
+                    {/* Required Items Modern Card Grid */}
+                    <div className="flex flex-col gap-2.5">
+                      <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                        Required Items ({rfq.items.length})
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {rfq.items.map((item, idx) => (
+                          <div key={idx} className="flex flex-col justify-between p-3.5 rounded-xl border border-border/70 bg-background/60 shadow-xs hover:border-primary/30 transition-all gap-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="font-semibold text-foreground text-sm leading-snug">{item.name}</div>
+                              <Badge tone="primary" className="tabular-nums font-bold text-xs shrink-0">
+                                {item.quantity} {item.unit}
+                              </Badge>
+                            </div>
+                            {item.description && (
+                              <div className="text-xs text-muted-foreground leading-relaxed line-clamp-2">{item.description}</div>
+                            )}
+                            <div className="pt-2 border-t border-border/40 flex items-center justify-between mt-auto">
+                              <span className="text-[11px] font-medium text-muted-foreground">Expected Delivery:</span>
+                              {item.expectedDate ? (
+                                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-md">
+                                  <Calendar size={12} />
+                                  {new Date(item.expectedDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* ── Bid Security Required (Buyer requires it) ── */}
+                    {rfq.bidSecurityRequired && (
+                      <div className="p-3 rounded-xl bg-primary/[0.04] border border-primary/15 flex items-center gap-3">
+                        <Shield size={16} className="text-primary shrink-0" />
+                        <div>
+                          <div className="text-sm font-semibold text-foreground">
+                            Bid Security Required
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Vendor must provide: amount, type, validity & document when submitting quotation
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Bid Bond Required (Buyer requires it) ── */}
+                    {rfq.bidBondRequired && (
+                      <div className="p-3 rounded-xl bg-primary/[0.04] border border-primary/15 flex items-center gap-3">
+                        <Shield size={16} className="text-primary shrink-0" />
+                        <div>
+                          <div className="text-sm font-semibold text-foreground">
+                            Bid Bond Required
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Vendor must provide: bond number, issuer, amount, dates & document when submitting quotation
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-end gap-3 pt-2 border-t border-border/50">
+                      {rfq.status === 'OPEN' && !rfq.needsResubmit && (
+                        <Button onClick={() => openQuotModal(rfq)}>
+                          <Send size={14} /> Submit Quotation
+                        </Button>
+                      )}
+                      {rfq.status === 'RETURNED' && (
+                        <div className="flex items-center gap-3">
+                          <Badge tone="warning">
+                            <RotateCcw size={13} /> Returned for Revision — Resubmit Required
+                          </Badge>
+                          <Button onClick={() => openQuotModal(rfq)}>
+                            <RotateCcw size={14} /> Resubmit Quotation
+                          </Button>
+                        </div>
+                      )}
+                      {rfq.status === 'SUBMITTED' && !rfq.needsResubmit && (
+                        <div className="flex items-center gap-3">
+                          <Badge tone="success">
+                            <CheckCircle2 size={13} /> Quotation Already Submitted
+                          </Badge>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+      ) : (
+        <EmptyState
+          icon={FileText}
+          title="No RFQs Found"
+          description={search ? "Try adjusting your search criteria." : "No RFQs have been assigned to your company yet."}
+          action={search ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>Clear search</Button> : undefined}
+        />
+      )}
 
         {/* ── Custom Payment Plan Modal ── */}
         {showCustomPlanModal && (
@@ -1437,20 +1484,6 @@ export default function VendorRFQsPage() {
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => setIsSnapshotFullScreen(!isSnapshotFullScreen)}
-                                  style={{
-                                    background: 'rgba(10, 110, 209, 0.15)', border: '1px solid rgba(10, 110, 209, 0.3)', color: '#0a6ed1',
-                                    cursor: 'pointer', padding: '5px 12px', borderRadius: 6,
-                                    display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600,
-                                    transition: 'all 0.15s ease'
-                                  }}
-                                  title={isSnapshotFullScreen ? "Exit Fullscreen" : "Maximize Fullscreen"}
-                                >
-                                  {isSnapshotFullScreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-                                  <span>{isSnapshotFullScreen ? "Exit Fullscreen" : "Fullscreen"}</span>
-                                </button>
-                                <button
-                                  type="button"
                                   onClick={() => setShowPreviousQuoteDetails(false)}
                                   style={{
                                     background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444',
@@ -1507,13 +1540,39 @@ export default function VendorRFQsPage() {
                                       onClick={() => toggleSnapshotSection('items')}
                                       style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
                                     >
-                                      <span>📦 Item Pricing Matrix</span>
+                                      <span>Item Pricing Matrix</span>
                                       <span style={{ fontSize: 12, opacity: 0.8, fontWeight: 'normal' }}>
                                         {isCollapsed ? '▼ Show Details' : '▲ Hide Details'}
                                       </span>
                                     </div>
                                     {!isCollapsed && (
                                       <>
+                                        <div className="vquot-snapshot-summary-bar" style={{ borderTop: 'none', borderBottom: '1px solid var(--border, #e2e8f0)', padding: 14 }}>
+                                          <div className="vquot-snapshot-summary-item">
+                                            <span className="vquot-snapshot-summary-label">Total Quotation Value</span>
+                                            <span className="vquot-snapshot-summary-val" style={{ color: '#0a6ed1', fontFamily: 'monospace', fontSize: 16 }}>
+                                              {activePrevQuote?.currency || 'KES'} {Number(displayTotalPrice).toLocaleString()}
+                                            </span>
+                                          </div>
+                                          <div className="vquot-snapshot-summary-item">
+                                            <span className="vquot-snapshot-summary-label">Lead Time</span>
+                                            <span className="vquot-snapshot-summary-val">{displayLeadTime} Days</span>
+                                          </div>
+                                          <div className="vquot-snapshot-summary-item">
+                                            <span className="vquot-snapshot-summary-label">Payment Terms</span>
+                                            <span className="vquot-snapshot-summary-val">{displayPaymentTerms}</span>
+                                            {displayPaymentPlan && Array.isArray(displayPaymentPlan) && displayPaymentPlan.length > 0 && (
+                                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                                                {displayPaymentPlan.map((m: any, i: number) => (
+                                                  <span key={i} className="vquot-snapshot-badge-val" style={{ fontSize: 12, padding: '2px 8px' }}>
+                                                    {m.title || m.name || `Milestone ${i+1}`}: {m.percentage}%
+                                                  </span>
+                                                ))}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+
                                         <div className="vquot-snapshot-modal-table-wrap" style={{ border: 'none', borderRadius: 0 }}>
                                           <table className="vquot-snapshot-modal-table">
                                             <thead>
@@ -1542,31 +1601,6 @@ export default function VendorRFQsPage() {
                                               })}
                                             </tbody>
                                           </table>
-                                        </div>
-                                        <div className="vquot-snapshot-summary-bar">
-                                          <div className="vquot-snapshot-summary-item">
-                                            <span className="vquot-snapshot-summary-label">Total Quotation Value</span>
-                                            <span className="vquot-snapshot-summary-val" style={{ color: '#0a6ed1', fontFamily: 'monospace', fontSize: 17 }}>
-                                              {activePrevQuote?.currency || 'KES'} {Number(displayTotalPrice).toLocaleString()}
-                                            </span>
-                                          </div>
-                                          <div className="vquot-snapshot-summary-item">
-                                            <span className="vquot-snapshot-summary-label">Lead Time</span>
-                                            <span className="vquot-snapshot-summary-val">{displayLeadTime} Days</span>
-                                          </div>
-                                          <div className="vquot-snapshot-summary-item" style={{ gridColumn: 'span 2' }}>
-                                            <span className="vquot-snapshot-summary-label">Payment Terms</span>
-                                            <span className="vquot-snapshot-summary-val">{displayPaymentTerms}</span>
-                                            {displayPaymentPlan && Array.isArray(displayPaymentPlan) && displayPaymentPlan.length > 0 && (
-                                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
-                                                {displayPaymentPlan.map((m: any, i: number) => (
-                                                  <span key={i} className="vquot-snapshot-badge-val" style={{ fontSize: 12, padding: '2px 8px' }}>
-                                                    {m.title || m.name || `Milestone ${i+1}`}: {m.percentage}%
-                                                  </span>
-                                                ))}
-                                              </div>
-                                            )}
-                                          </div>
                                         </div>
                                       </>
                                     )}
@@ -1815,18 +1849,6 @@ export default function VendorRFQsPage() {
                                   </>
                                 );
                               })()}
-                            </div>
-
-                            {/* Popup Footer */}
-                            <div className="vquot-snapshot-modal-footer">
-                              <button
-                                type="button"
-                                className="vquot-snapshot-close-btn"
-                                onClick={() => setShowPreviousQuoteDetails(false)}
-                              >
-                                <X size={14} />
-                                Close Snapshot
-                              </button>
                             </div>
                           </div>
                         </div>,
@@ -2630,28 +2652,21 @@ export default function VendorRFQsPage() {
                   {submitError}
                 </MessageStrip>
               )}
-              {!isVquotMinimized && (
+              {!isVquotMinimized && !isQuotReadOnly && (
                 <div className="vquot-modal__footer">
-                  {isQuotReadOnly ? (
-                    <button className="vendor-btn vendor-btn--secondary" onClick={() => setQuotModal(null)}>Close</button>
-                  ) : (
-                    <>
-                      <button className="vendor-btn vendor-btn--secondary" onClick={() => setQuotModal(null)}>Cancel</button>
-                      <button
-                        className="vendor-btn vendor-btn--primary"
-                        disabled={submitting || quotTotal <= 0 || !quotLeadTime}
-                        onClick={handleSubmitQuot}
-                      >
-                        <Send size={15} /> {submitting ? 'Submitting…' : (quotModal.needsResubmit ? 'Resubmit Quotation' : 'Submit Quotation')}
-                      </button>
-                    </>
-                  )}
+                  <button className="vendor-btn vendor-btn--secondary" onClick={() => setQuotModal(null)}>Cancel</button>
+                  <button
+                    className="vendor-btn vendor-btn--primary"
+                    disabled={submitting || quotTotal <= 0 || !quotLeadTime}
+                    onClick={handleSubmitQuot}
+                  >
+                    <Send size={15} /> {submitting ? 'Submitting…' : (quotModal.needsResubmit ? 'Resubmit Quotation' : 'Submit Quotation')}
+                  </button>
                 </div>
               )}
             </div>
           </>
         )}
-      </div>
-    </div>
+    </PageFrame>
   );
 }

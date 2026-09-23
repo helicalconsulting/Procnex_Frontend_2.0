@@ -86,12 +86,28 @@ export default function VendorInvoicesPage() {
         <MetricCard label="Overdue" value={amount(summary.overdue)} detail="Past due date" icon={AlertTriangle} tone="danger" />
       </div>
 
-      <Card className="mb-4 p-3 sm:p-4">
-        <div className="relative max-w-xl">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input className="h-10 pl-10" placeholder="Search invoice, PO, or description" value={search} onChange={(event) => setSearch(event.target.value)} aria-label="Search invoices" />
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full max-w-xl">
+          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="h-11 rounded-xl pl-10 pr-10"
+            type="text"
+            placeholder="Search invoice, PO, or description..."
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            aria-label="Search invoices"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <XCircle size={15} />
+            </button>
+          )}
         </div>
-      </Card>
+      </div>
 
       {loading ? (
         <Card className="grid min-h-64 place-items-center text-sm text-muted-foreground">Loading invoices…</Card>

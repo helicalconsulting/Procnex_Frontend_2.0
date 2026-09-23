@@ -4,26 +4,23 @@ import {
   AlertCircle, Calendar, CheckCircle2, ChevronDown, Clock, Download, FileText,
   IndianRupee, MapPin, Package, Receipt, Search, Truck, XCircle,
 } from 'lucide-react';
-import { CurrencyBadge, CurrencySelector, useCurrency } from '@/components/shared/CurrencyMaster';
-import { Badge } from '@/components/ui/badge';
-import { Button, buttonVariants } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { CollapsibleContent } from '@/components/ui/collapsible-content';
-import { DataTableViewport } from '@/components/ui/data-table-viewport';
-import { EmptyState, MetricCard, PageFrame, PageLead } from '@/components/ui/product';
-import { useServiceData } from '@/hooks/useServiceData';
-import { cn } from '@/lib/utils';
-import type { VendorOrderMock } from '@/mocks/vendorPortal.mock';
-import { vendorPortalService } from '@/services/vendorPortalService';
-import { downloadPurchaseOrderAsPdf } from '@/utils/pdfDownload';
+import { CurrencyBadge, CurrencySelector, useCurrency } from '../../components/shared/CurrencyMaster';
+import { Badge } from '../../components/ui/badge';
+import { Button, buttonVariants } from '../../components/ui/button';
+import { Card } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
+import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
+import { useServiceData } from '../../hooks/useServiceData';
+import { cn } from '../../lib/utils';
+import type { VendorOrderMock } from '../../mocks/vendorPortal.mock';
+import { vendorPortalService } from '../../services/vendorPortalService';
+import { downloadPurchaseOrderAsPdf } from '../../utils/pdfDownload';
 
-type OrderStatus = 'CONFIRMED' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED' | 'APPROVED' | 'ISSUED' | 'SENT' | 'COMPLETED' | 'PENDING' | 'REJECTED';
 type Tone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
 
 const STATUS_CONFIG: Record<string, { label: string; tone: Tone; icon: typeof Truck }> = {
-  CONFIRMED: { label: 'Confirmed', tone: 'primary', icon: CheckCircle2 },
-  APPROVED: { label: 'Approved', tone: 'primary', icon: CheckCircle2 },
+  CONFIRMED: { label: 'Confirmed', tone: 'success', icon: CheckCircle2 },
+  APPROVED: { label: 'Approved', tone: 'success', icon: CheckCircle2 },
   ISSUED: { label: 'Issued', tone: 'info', icon: FileText },
   SENT: { label: 'Sent', tone: 'info', icon: Truck },
   PROCESSING: { label: 'Processing', tone: 'warning', icon: Clock },
@@ -36,7 +33,6 @@ const STATUS_CONFIG: Record<string, { label: string; tone: Tone; icon: typeof Tr
   PENDING: { label: 'Pending', tone: 'neutral', icon: Clock },
 };
 
-const DEFAULT_STATUS_CONFIG = { label: 'Order', tone: 'neutral' as Tone, icon: Package };
 const STEPS = ['Confirmed', 'Processing', 'Shipped', 'Delivered'];
 const STATUS_INDEX: Record<string, number> = {
   CONFIRMED: 0,
@@ -59,8 +55,12 @@ function StatusBadge({ status }: { status?: string }) {
     tone: 'neutral' as Tone,
     icon: Package,
   };
-  const Icon = config.icon || Package;
-  return <Badge tone={config.tone}><Icon className="size-3" />{config.label}</Badge>;
+  return (
+    <Badge tone={config.tone}>
+      <span className="size-1.5 rounded-full bg-current" />
+      {config.label}
+    </Badge>
+  );
 }
 
 export default function VendorOrdersPage() {
@@ -70,96 +70,311 @@ export default function VendorOrdersPage() {
     () => vendorPortalService.listOrders(), [] as VendorOrderMock[],
   );
   const [search, setSearch] = useState('');
+  const [kpiFilter, setKpiFilter] = useState<'ACTIVE' | 'DELIVERED' | 'CANCELLED' | null>(null);
   const [expandedOrder, setExpandedOrder] = useState<number | null>(null);
+
   const summary = useMemo(() => ({
     total: orders.length,
     active: orders.filter((order) => ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'ISSUED', 'SENT', 'APPROVED', 'IN_PROGRESS'].includes((order.status || '').toUpperCase())).length,
     delivered: orders.filter((order) => ['DELIVERED', 'COMPLETED'].includes((order.status || '').toUpperCase())).length,
     cancelled: orders.filter((order) => ['CANCELLED', 'REJECTED'].includes((order.status || '').toUpperCase())).length,
   }), [orders]);
+
   const filtered = useMemo(() => {
+    let list = orders;
+    if (kpiFilter === 'ACTIVE') {
+      list = list.filter((order) => ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'ISSUED', 'SENT', 'APPROVED', 'IN_PROGRESS'].includes((order.status || '').toUpperCase()));
+    } else if (kpiFilter === 'DELIVERED') {
+      list = list.filter((order) => ['DELIVERED', 'COMPLETED'].includes((order.status || '').toUpperCase()));
+    } else if (kpiFilter === 'CANCELLED') {
+      list = list.filter((order) => ['CANCELLED', 'REJECTED'].includes((order.status || '').toUpperCase()));
+    }
+
     const query = search.trim().toLowerCase();
-    if (!query) return orders;
-    return orders.filter((order) => [order.poNumber, order.rfqNumber, order.buyerName, ...order.items.map((item) => item.name)].some((field) => field.toLowerCase().includes(query)));
-  }, [orders, search]);
+    if (query) {
+      list = list.filter((order) =>
+        [order.poNumber, order.rfqNumber, order.buyerCompany || order.buyerName, ...order.items.map((item) => item.name)]
+          .some((field) => (field || '').toLowerCase().includes(query))
+      );
+    }
+    return list;
+  }, [orders, kpiFilter, search]);
+
   const amount = (value: number) => formatAmount(value, displayCurrency);
   const formatDate = (date: string) => new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
   return (
     <PageFrame>
-      <PageLead title="My Orders" description="Track fulfilment milestones and purchase-order details." actions={<CurrencySelector value={displayCurrency} onChange={setDisplayCurrency} size="sm" />} />
-      {error && <Card className="mb-4 border-destructive/25 bg-destructive/8 p-4 text-sm text-destructive">{error}</Card>}
-      <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <MetricCard label="Total orders" value={summary.total} detail="All time" icon={Package} aria-pressed={true} />
-        <MetricCard label="Active orders" value={summary.active} detail="In progress" icon={Truck} tone="warning" />
-        <MetricCard label="Delivered" value={summary.delivered} detail="Completed" icon={CheckCircle2} tone="success" />
-        <MetricCard label="Cancelled" value={summary.cancelled} detail="All time" icon={XCircle} tone="danger" />
+      <PageLead
+        title="My Orders"
+        description="Track fulfilment milestones, delivery schedules, and purchase-order details."
+      />
+
+      {error && (
+        <Card className="mb-4 border-destructive/25 bg-destructive/8 p-4 text-sm text-destructive">
+          {error}
+        </Card>
+      )}
+
+      {/* ── KPI Metric Cards ────────────────────────── */}
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          { icon: Package, tone: 'primary' as const, value: summary.total, label: 'Total Orders', detail: 'All time', filter: null },
+          { icon: Truck, tone: 'warning' as const, value: summary.active, label: 'Active Orders', detail: 'In progress', filter: 'ACTIVE' as const },
+          { icon: CheckCircle2, tone: 'success' as const, value: summary.delivered, label: 'Delivered', detail: 'Completed', filter: 'DELIVERED' as const },
+          { icon: XCircle, tone: 'danger' as const, value: summary.cancelled, label: 'Cancelled', detail: 'All time', filter: 'CANCELLED' as const },
+        ].map((c) => {
+          const isActive = c.filter === null ? !kpiFilter : kpiFilter === c.filter;
+          return (
+            <MetricCard
+              key={c.label}
+              icon={c.icon}
+              tone={c.tone}
+              value={c.value}
+              label={c.label}
+              detail={c.detail}
+              className={cn(
+                'cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-all duration-200',
+                isActive &&
+                  'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
+              )}
+              onClick={() => setKpiFilter(isActive ? null : c.filter)}
+              role="button"
+              tabIndex={0}
+              aria-pressed={isActive}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setKpiFilter(isActive ? null : c.filter);
+                }
+              }}
+            />
+          );
+        })}
       </div>
-      <Card className="mb-4 p-3 sm:p-4">
-        <div className="relative max-w-xl"><Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="h-10 pl-10" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search PO, RFQ, buyer, or item" aria-label="Search orders" /></div>
-      </Card>
 
+      {/* ── Search & Currency Toolbar ──────────────── */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full max-w-xl">
+          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="h-11 rounded-xl pl-10"
+            type="text"
+            placeholder="Search by PO number, RFQ number, buyer, or item..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <CurrencySelector value={displayCurrency} onChange={setDisplayCurrency} size="sm" />
+      </div>
+
+      {/* ── Orders List ────────────────────────────── */}
       {loading ? (
-        <Card className="grid min-h-64 place-items-center text-sm text-muted-foreground">Loading orders…</Card>
+        <Card className="p-8 text-center text-sm text-muted-foreground">Loading orders…</Card>
       ) : filtered.length === 0 ? (
-        <EmptyState icon={Package} title="No orders found" description={search ? 'Try another search term.' : 'Issued purchase orders will appear here.'} action={search ? <Button variant="secondary" onClick={() => setSearch('')}>Clear search</Button> : undefined} />
+        <EmptyState
+          icon={Package}
+          title="No Orders Found"
+          description={search ? "Try adjusting your search criteria." : "Issued purchase orders will appear here once created."}
+          action={search ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>Clear search</Button> : undefined}
+        />
       ) : (
-        <div className="grid gap-3">
+        <div className="flex flex-col gap-2.5">
           {filtered.map((order) => {
-            const expanded = expandedOrder === order.id;
-            const currentStep = STATUS_INDEX[order.status];
+            const isExpanded = expandedOrder === order.id;
+            const currentStep = STATUS_INDEX[(order.status || '').toUpperCase()] ?? 0;
+            const isCancelled = ['CANCELLED', 'REJECTED'].includes((order.status || '').toUpperCase());
+
             return (
-              <Card key={order.id} className={cn('overflow-hidden transition-shadow', expanded && 'shadow-md')}>
-                <button type="button" className="flex w-full flex-col gap-3 p-4 text-left outline-none transition hover:bg-accent/35 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40 sm:flex-row sm:items-center sm:justify-between sm:p-5" onClick={() => setExpandedOrder(expanded ? null : order.id)} aria-expanded={expanded}>
-                  <span className="min-w-0">
-                    <span className="flex flex-wrap items-center gap-2"><FileText className="size-4 text-primary" /><span className="font-semibold text-primary">{order.poNumber}</span><Badge>{order.rfqNumber}</Badge></span>
-                    <span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"><span>{order.buyerCompany}</span><span>{order.items.length} item{order.items.length === 1 ? '' : 's'}</span><span className="flex items-center gap-1"><Calendar className="size-3" />{formatDate(order.orderDate)}</span></span>
-                  </span>
-                  <span className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end"><span className="font-semibold tabular-nums">{amount(order.totalAmount)}</span><StatusBadge status={order.status} /><ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform', expanded && 'rotate-180')} /></span>
-                </button>
+              <Card
+                id={`vorder-card-${order.id}`}
+                key={order.id}
+                className={cn(
+                  'overflow-hidden transition-all duration-200 border-border/80 hover:border-primary/30 bg-card',
+                  isExpanded && 'ring-1 ring-primary/20 shadow-xs'
+                )}
+              >
+                {/* ── COLLAPSED STATE ────────────────────────── */}
+                <div
+                  className="flex items-center justify-between gap-3 px-4 py-3.5 cursor-pointer hover:bg-accent/25 transition-colors"
+                  onClick={() => setExpandedOrder(isExpanded ? null : order.id)}
+                >
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <span className="font-bold text-foreground text-base tracking-tight">{order.poNumber}</span>
+                      <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20">
+                        {order.rfqNumber}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm text-muted-foreground">
+                      <span className="font-semibold text-foreground">{order.buyerCompany || order.buyerName || 'Procnex'}</span>
+                      <span className="text-muted-foreground/40">·</span>
+                      <span className="font-medium text-muted-foreground">{formatDate(order.orderDate)}</span>
+                    </div>
+                  </div>
 
-                <CollapsibleContent open={expanded} className="border-t border-border/65 bg-secondary/20 p-4 sm:p-5">
-                    {order.status === 'CANCELLED' ? (
-                      <div className="mb-5 flex items-center gap-2 rounded-xl border border-destructive/20 bg-destructive/8 p-3 text-sm font-medium text-destructive"><AlertCircle className="size-4" />This order was cancelled.</div>
-                    ) : (
-                      <ol className="mb-6 grid grid-cols-4 gap-1" aria-label="Order progress">
-                        {STEPS.map((step, index) => {
-                          const done = index <= currentStep;
-                          return <li key={step} className="relative flex min-w-0 flex-col items-center text-center before:absolute before:left-[calc(50%+16px)] before:right-[calc(-50%+16px)] before:top-3 before:h-px before:bg-border last:before:hidden"><span className={cn('relative z-10 grid size-6 place-items-center rounded-full border bg-card', done ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground')}>{done ? <CheckCircle2 className="size-3.5" /> : <span className="size-1.5 rounded-full bg-current" />}</span><span className={cn('mt-2 truncate text-[11px] font-medium sm:text-xs', done ? 'text-foreground' : 'text-muted-foreground')}>{step}</span></li>;
-                        })}
-                      </ol>
-                    )}
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="font-bold text-primary text-base sm:text-lg tabular-nums">
+                      {amount(order.totalAmount)}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExpandedOrder(isExpanded ? null : order.id);
+                      }}
+                      aria-label="Toggle Order details"
+                      className="size-8 rounded-lg"
+                    >
+                      <ChevronDown className={cn('size-4 text-muted-foreground transition-transform duration-200', isExpanded && 'rotate-180')} />
+                    </Button>
+                  </div>
+                </div>
 
-                    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(260px,.75fr)]">
-                      <Card className="overflow-hidden border-border/60 shadow-none">
-                        <div className="border-b border-border/60 px-4 py-3 text-sm font-semibold">Order items</div>
-                        <DataTableViewport label={`Items in ${order.poNumber}`}>
-                          <table className="w-full min-w-[560px] text-left text-xs">
-                            <thead className="bg-secondary/45 text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground"><tr><th className="px-4 py-2.5">Item</th><th className="px-4 py-2.5 text-right">Quantity</th><th className="px-4 py-2.5 text-right">Unit price</th><th className="px-4 py-2.5 text-right">Total</th></tr></thead>
-                            <tbody className="divide-y divide-border/55">{order.items.map((item, index) => <tr key={`${item.name}-${index}`}><td className="px-4 py-3 font-medium">{item.name}</td><td className="px-4 py-3 text-right">{item.quantity} {item.unit}</td><td className="px-4 py-3 text-right tabular-nums">{amount(item.unitPrice)}</td><td className="px-4 py-3 text-right font-semibold tabular-nums">{amount(item.quantity * item.unitPrice)}</td></tr>)}</tbody>
-                            <tfoot className="border-t border-border bg-secondary/45"><tr><td colSpan={3} className="px-4 py-3 text-right font-semibold">Grand total</td><td className="px-4 py-3 text-right font-semibold tabular-nums">{amount(order.totalAmount)} <CurrencyBadge currency={displayCurrency} size="sm" /></td></tr></tfoot>
-                          </table>
-                        </DataTableViewport>
-                      </Card>
+                {/* ── EXPANDED STATE ────────────────────────── */}
+                {isExpanded && (
+                  <div className="border-t border-border/60 bg-card p-4 sm:p-5 flex flex-col gap-5 text-sm">
+                    {/* 1. PO Overview & Status Tracker */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between pb-2 border-b border-border/50">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Order Status</span>
+                          <StatusBadge status={order.status} />
+                        </div>
+                      </div>
 
-                      <Card className="border-border/60 p-4 shadow-none">
-                        <h3 className="text-sm font-semibold">Shipping & payment</h3>
-                        <dl className="mt-4 grid gap-4">
-                          {[
-                            { icon: MapPin, label: 'Delivery address', value: order.shippingAddress },
-                            { icon: Calendar, label: 'Expected delivery', value: formatDate(order.expectedDelivery) },
-                            ...(order.deliveredDate ? [{ icon: CheckCircle2, label: 'Delivered on', value: formatDate(order.deliveredDate) }] : []),
-                            { icon: IndianRupee, label: 'Payment terms', value: order.paymentTerms },
-                            ...(order.trackingId ? [{ icon: Truck, label: 'Tracking ID', value: order.trackingId }] : []),
-                          ].map((item) => <div key={item.label} className="flex items-start gap-2.5"><item.icon className="mt-0.5 size-4 shrink-0 text-primary" /><div><dt className="text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{item.label}</dt><dd className="mt-1 text-xs font-medium leading-relaxed">{item.value}</dd></div></div>)}
+                      {isCancelled ? (
+                        <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/8 p-3 text-xs font-medium text-destructive">
+                          <AlertCircle className="size-4 shrink-0" />
+                          This purchase order was cancelled or rejected.
+                        </div>
+                      ) : (
+                        <ol className="grid grid-cols-4 gap-1 py-1" aria-label="Order progress">
+                          {STEPS.map((step, index) => {
+                            const done = index <= currentStep;
+                            return (
+                              <li key={step} className="relative flex min-w-0 flex-col items-center text-center before:absolute before:left-[calc(50%+16px)] before:right-[calc(-50%+16px)] before:top-2.5 before:h-px before:bg-border last:before:hidden">
+                                <span className={cn('relative z-10 grid size-5 place-items-center rounded-full border bg-card text-[10px] transition-colors', done ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground')}>
+                                  {done ? <CheckCircle2 className="size-3" /> : <span className="size-1 rounded-full bg-current" />}
+                                </span>
+                                <span className={cn('mt-1.5 truncate text-[11px] font-medium', done ? 'text-foreground font-semibold' : 'text-muted-foreground')}>
+                                  {step}
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ol>
+                      )}
+                    </div>
+
+                    {/* 2 & 3. Order Summary and Delivery & Payment */}
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {/* Order Summary */}
+                      <div className="rounded-lg border border-border/70 bg-muted/20 p-3.5">
+                        <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2.5">Order Summary</h4>
+                        <dl className="grid grid-cols-2 gap-y-2 gap-x-3 text-xs">
+                          <div>
+                            <dt className="text-muted-foreground">Buyer / Company</dt>
+                            <dd className="font-semibold text-foreground mt-0.5">{order.buyerCompany || order.buyerName || '—'}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-muted-foreground">RFQ Number</dt>
+                            <dd className="font-semibold text-foreground font-mono mt-0.5">{order.rfqNumber || '—'}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-muted-foreground">Order Date</dt>
+                            <dd className="font-semibold text-foreground mt-0.5">{formatDate(order.orderDate)}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-muted-foreground">Total Items</dt>
+                            <dd className="font-semibold text-foreground mt-0.5">{order.items.length} line item(s)</dd>
+                          </div>
                         </dl>
-                      </Card>
+                      </div>
+
+                      {/* Delivery & Payment */}
+                      <div className="rounded-lg border border-border/70 bg-muted/20 p-3.5">
+                        <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2.5">Delivery & Payment</h4>
+                        <dl className="grid gap-2 text-xs">
+                          <div className="flex items-start gap-2">
+                            <MapPin className="size-3.5 text-primary shrink-0 mt-0.5" />
+                            <div>
+                              <dt className="text-muted-foreground text-[11px]">Delivery Address</dt>
+                              <dd className="font-medium text-foreground leading-snug">{order.shippingAddress || '—'}</dd>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4 pt-1">
+                            <div className="flex items-center gap-1.5">
+                              <Calendar className="size-3.5 text-primary shrink-0" />
+                              <div>
+                                <dt className="text-muted-foreground text-[11px]">Expected Delivery</dt>
+                                <dd className="font-semibold text-foreground">{formatDate(order.expectedDelivery)}</dd>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 border-l border-border/60 pl-3">
+                              <IndianRupee className="size-3.5 text-primary shrink-0" />
+                              <div>
+                                <dt className="text-muted-foreground text-[11px]">Payment Terms</dt>
+                                <dd className="font-semibold text-foreground">{order.paymentTerms || '—'}</dd>
+                              </div>
+                            </div>
+                          </div>
+                        </dl>
+                      </div>
                     </div>
-                    <div className="mt-4 flex flex-wrap gap-2 border-t border-border/60 pt-4">
-                      <Button size="sm" onClick={() => downloadPurchaseOrderAsPdf(order, formatAmount, displayCurrency)}><Download />Download PO</Button>
-                      {order.status === 'DELIVERED' && <Link to="/vendor/invoices" className={buttonVariants({ variant: 'secondary', size: 'sm' })}><Receipt className="size-4" />View invoices</Link>}
+
+                    {/* 4 & 5. Items & Total */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Ordered Items</h4>
+                        <span className="text-xs text-muted-foreground">{order.items.length} item(s)</span>
+                      </div>
+                      <div className="rounded-lg border border-border/70 overflow-hidden bg-background">
+                        <table className="w-full border-collapse text-left text-xs">
+                          <thead>
+                            <tr className="border-b border-border/60 bg-muted/40 font-semibold text-muted-foreground">
+                              <th className="p-2.5">Item</th>
+                              <th className="p-2.5 text-right">Quantity</th>
+                              <th className="p-2.5 text-right">Unit Price</th>
+                              <th className="p-2.5 text-right">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border/50">
+                            {order.items.map((item, idx) => (
+                              <tr key={`${item.name}-${idx}`} className="hover:bg-accent/20 transition-colors">
+                                <td className="p-2.5 font-medium text-foreground">{item.name}</td>
+                                <td className="p-2.5 text-right tabular-nums text-foreground">{item.quantity} {item.unit}</td>
+                                <td className="p-2.5 text-right tabular-nums text-muted-foreground">{amount(item.unitPrice)}</td>
+                                <td className="p-2.5 text-right font-semibold tabular-nums text-foreground">{amount(item.quantity * item.unitPrice)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot className="border-t border-border/70 bg-muted/30">
+                            <tr>
+                              <td colSpan={3} className="p-2.5 text-right font-semibold text-foreground">Grand Total</td>
+                              <td className="p-2.5 text-right font-bold text-sm tabular-nums text-primary">
+                                {amount(order.totalAmount)} <CurrencyBadge currency={displayCurrency} size="sm" />
+                              </td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
                     </div>
-                </CollapsibleContent>
+
+                    {/* 6. Action Footer (Download PO & Invoices) */}
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
+                      {['DELIVERED', 'COMPLETED'].includes((order.status || '').toUpperCase()) && (
+                        <Link to="/vendor/invoices" className={buttonVariants({ variant: 'secondary', size: 'sm' })}>
+                          <Receipt className="size-3.5" /> View Invoices
+                        </Link>
+                      )}
+                      <Button size="sm" onClick={() => downloadPurchaseOrderAsPdf(order, formatAmount, displayCurrency)}>
+                        <Download className="size-3.5" /> Download PO
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </Card>
             );
           })}
@@ -168,3 +383,5 @@ export default function VendorOrdersPage() {
     </PageFrame>
   );
 }
+
+

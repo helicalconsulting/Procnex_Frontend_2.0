@@ -12,14 +12,21 @@ import { API_BASE } from '../../api/client';
 import { authService } from '../../services/authService';
 import {
   ClipboardList, Search, ChevronDown, CheckCircle2,
-  Clock, XCircle, TrendingUp, FileSpreadsheet, Shield, FileText,
-  Eye, X, Minus, Maximize2, Minimize2, ChevronUp, ArrowRightLeft,
-  Download, Tag,
+  Clock, XCircle, FileSpreadsheet, Shield, FileText,
+  Eye, Download, Tag, RotateCcw, AlertTriangle,
+  Minus, Maximize2, Minimize2, ChevronUp, X,
+  Building, Paperclip, ExternalLink,
 } from 'lucide-react';
 import { downloadDocument } from '../../utils/download';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { CurrencyBadge, CurrencySelector, useCurrency } from '../../components/shared/CurrencyMaster';
+import { Badge } from '../../components/ui/badge';
+import { Button, buttonVariants } from '../../components/ui/button';
+import { Card } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
+import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
+import { cn } from '../../lib/utils';
 import '../../components/shared/ColumnCustomizer.css';
 import '../../styles/vendor-portal.css';
 import '../../styles/vendor-orders.css';
@@ -155,12 +162,28 @@ function mapRow(q: VendorQuotationRow): VendorQuotation {
 
 // ─── Status helpers ───────────────────────────────────────────
 
-const STATUS_CONFIG: Record<QuotStatus, { label: string; cls: string; icon: React.ReactNode }> = {
-  PENDING: { label: 'Pending Review', cls: 'pending', icon: <Clock size={13} /> },
-  ACCEPTED: { label: 'Accepted', cls: 'accepted', icon: <CheckCircle2 size={13} /> },
-  REJECTED: { label: 'Rejected', cls: 'rejected', icon: <XCircle size={13} /> },
-  RETURNED: { label: 'Returned', cls: 'progress', icon: <Clock size={13} /> },
+const STATUS_CONFIG: Record<QuotStatus, { label: string; tone: 'warning' | 'success' | 'neutral' | 'danger'; icon: React.ReactNode }> = {
+  PENDING: { label: 'Under Review', tone: 'warning', icon: <Clock size={13} /> },
+  ACCEPTED: { label: 'Accepted', tone: 'success', icon: <CheckCircle2 size={13} /> },
+  REJECTED: { label: 'Rejected', tone: 'danger', icon: <XCircle size={13} /> },
+  RETURNED: { label: 'Returned', tone: 'danger', icon: <RotateCcw size={13} /> },
 };
+
+function StatusBadge({ status }: { status: QuotStatus | string }) {
+  const cfg = STATUS_CONFIG[status as QuotStatus] || { label: status, tone: 'neutral', icon: null };
+  return (
+    <span className={cn(
+      "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border",
+      cfg.tone === 'success' && "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+      cfg.tone === 'warning' && "bg-amber-500/10 text-amber-600 border-amber-500/20",
+      cfg.tone === 'danger' && "bg-rose-500/10 text-rose-600 border-rose-500/20",
+      cfg.tone === 'neutral' && "bg-muted text-muted-foreground border-border"
+    )}>
+      {cfg.icon}
+      <span>{cfg.label}</span>
+    </span>
+  );
+}
 
 // ─── Component ────────────────────────────────────────────────
 
@@ -224,11 +247,15 @@ export default function VendorQuotationsPage() {
   const summary = useMemo(() => {
     const total = quotations.length;
     const accepted = quotations.filter((q) => q.status === 'ACCEPTED').length;
+    const pending = quotations.filter((q) => q.status === 'PENDING').length;
+    const returned = quotations.filter((q) => q.status === 'RETURNED').length;
+    const rejected = quotations.filter((q) => q.status === 'REJECTED').length;
     return {
       total,
       accepted,
-      pending: quotations.filter((q) => q.status === 'PENDING').length,
-      rejected: quotations.filter((q) => q.status === 'REJECTED').length,
+      pending,
+      returned,
+      rejected,
       winRate: total > 0 ? Math.round((accepted / total) * 100) : 0,
     };
   }, [quotations]);
@@ -239,7 +266,7 @@ export default function VendorQuotationsPage() {
     if (search.trim()) {
       const s = search.toLowerCase();
       list = list.filter(
-        (q) => q.rfqNumber.toLowerCase().includes(s) || q.rfqTitle.toLowerCase().includes(s)
+        (q) => q.rfqNumber.toLowerCase().includes(s) || q.rfqTitle.toLowerCase().includes(s) || (q.vendorQuotationNumber && q.vendorQuotationNumber.toLowerCase().includes(s))
       );
     }
     return list;
@@ -269,44 +296,44 @@ export default function VendorQuotationsPage() {
     switch (key) {
       case 'status':
         return (
-          <td key={key} className="vo-items-table__status">
+          <td key={key} className="p-3">
             {item.isSelected ? (
-              <span className="vo-item-status vo-item-status--selected" title="Selected">
-                <CheckCircle2 size={14} /> Selected
-              </span>
+              <Badge tone="success" className="gap-1 text-xs">
+                <CheckCircle2 size={12} /> Selected
+              </Badge>
             ) : (
-              <span className="vo-item-status vo-item-status--not-selected" title="Not Selected">
-                <XCircle size={14} /> Not Selected
-              </span>
+              <Badge tone="neutral" className="gap-1 text-xs text-muted-foreground">
+                <XCircle size={12} /> Not Selected
+              </Badge>
             )}
           </td>
         );
       case 'item':
-        return <td key={key} className="vo-items-table__name"><span className="vo-item-name-text">{item.name}</span></td>;
+        return <td key={key} className="p-3 font-medium text-foreground">{item.name}</td>;
       case 'qty':
         return (
-          <td key={key}>
+          <td key={key} className="p-3 text-foreground tabular-nums">
             {item.quantity} {item.unit}
           </td>
         );
       case 'unitPrice': {
         const convertedUP = convert(item.unitPrice, quot.currency || defCur, displayCurrency);
-        return <td key={key}>{formatAmount(convertedUP, displayCurrency)}</td>;
+        return <td key={key} className="p-3 tabular-nums text-foreground">{formatAmount(convertedUP, displayCurrency)}</td>;
       }
       case 'lineTotal': {
         const convertedLT = convert(item.quantity * item.unitPrice, quot.currency || defCur, displayCurrency);
         return (
-          <td key={key} className="vo-items-table__total">
+          <td key={key} className="p-3 tabular-nums font-semibold text-foreground">
             {formatAmount(convertedLT, displayCurrency)}
           </td>
         );
       }
       case 'leadTime':
-        return <td key={key}>{quot.leadTimeDays}d</td>;
+        return <td key={key} className="p-3 text-muted-foreground">{quot.leadTimeDays}d</td>;
       case 'paymentTerms':
-        return <td key={key}>{quot.paymentTerms}</td>;
+        return <td key={key} className="p-3 text-muted-foreground">{quot.paymentTerms}</td>;
       default:
-        return <td key={key} />;
+        return <td key={key} className="p-3" />;
     }
   };
 
@@ -349,342 +376,309 @@ export default function VendorQuotationsPage() {
   };
 
   return (
-    <div className="vendor-portal">
-      <div className="vendor-portal__container">
-        {error && (
-          <MessageStrip type="error">
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              {error}
-              <button type="button" className="vendor-btn vendor-btn--secondary" onClick={() => reload()}>
-                Retry
-              </button>
-            </span>
-          </MessageStrip>
-        )}
-        {loading && <div className="vendor-portal__loading">Loading your quotation history…</div>}
+    <PageFrame>
+      {error && <MessageStrip type="error">{error}</MessageStrip>}
 
-        <div className="vendor-header">
-          <div className="vendor-header__content">
-            <h1>My Quotations</h1>
-            <p>Full history of quotations you have submitted — amounts, line items, and review status</p>
-          </div>
-          <div className="vendor-header__actions">
-            <CurrencySelector
-              value={displayCurrency}
-              onChange={setDisplayCurrency}
-              size="sm"
+      {/* ── Page Lead Header ────────────────────────── */}
+      <PageLead
+        title="My Quotations"
+        description="Full history of quotations you have submitted — amounts, line items, and review status"
+        actions={
+          <CurrencySelector
+            value={displayCurrency}
+            onChange={setDisplayCurrency}
+            size="sm"
+          />
+        }
+      />
+
+      {/* ── KPI Metric Cards ────────────────────────── */}
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        {[
+          { icon: ClipboardList, tone: 'primary' as const, value: summary.total, label: 'Total Submitted', detail: 'All time', filter: null as QuotStatus | null },
+          { icon: Clock, tone: 'warning' as const, value: summary.pending, label: 'Under Review', detail: 'Awaiting decision', filter: 'PENDING' as QuotStatus },
+          { icon: RotateCcw, tone: 'danger' as const, value: summary.returned, label: 'Returned', detail: 'Resubmission needed', filter: 'RETURNED' as QuotStatus },
+          { icon: CheckCircle2, tone: 'success' as const, value: summary.accepted, label: 'Accepted', detail: 'Approved by buyer', filter: 'ACCEPTED' as QuotStatus },
+          { icon: XCircle, tone: 'danger' as const, value: summary.rejected, label: 'Rejected', detail: summary.rejected > 0 ? 'Not selected' : 'None rejected', filter: 'REJECTED' as QuotStatus },
+        ].map((c) => {
+          const isActive = c.filter === null ? !kpiFilter : kpiFilter === c.filter;
+          return (
+            <MetricCard
+              key={c.label}
+              icon={c.icon}
+              tone={c.tone}
+              value={c.value}
+              label={c.label}
+              detail={c.detail}
+              className={cn(
+                'cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-all duration-200',
+                isActive &&
+                  'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
+              )}
+              onClick={() => setKpiFilter(isActive ? null : c.filter)}
+              role="button"
+              tabIndex={0}
+              aria-pressed={isActive}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiFilter(isActive ? null : c.filter); } }}
             />
-          </div>
+          );
+        })}
+      </div>
+
+      {/* ── Search Toolbar ──────────────────────────── */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full max-w-xl">
+          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="h-11 rounded-xl pl-10"
+            type="text"
+            placeholder="Search by RFQ number, title, or reference..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
+      </div>
 
-        {/* ── KPI Tiles ── */}
-        <div className="vd-tiles">
-          {[
-            { key: null, label: 'Submitted', value: summary.total, foot: 'Total quotations', icon: <ClipboardList size={16} />, iconCls: 'blue' },
-            { key: 'ACCEPTED' as QuotStatus, label: 'Accepted', value: summary.accepted, foot: 'Approved by buyer', icon: <CheckCircle2 size={16} />, iconCls: 'green' },
-            { key: 'PENDING' as QuotStatus, label: 'Under Review', value: summary.pending, foot: 'Awaiting decision', icon: <Clock size={16} />, iconCls: 'orange' },
-            { key: 'REJECTED' as QuotStatus, label: 'Rejected', value: summary.rejected, foot: summary.rejected > 0 ? 'Not selected' : 'None rejected', icon: <XCircle size={16} />, iconCls: 'red' },
-          ].map((tile) => (
-            <button
-              key={tile.label}
-              type="button"
-              className={`vd-tile ${kpiFilter === tile.key ? 'vd-tile--active' : ''}`}
-              onClick={() => setKpiFilter(kpiFilter === tile.key ? null : tile.key)}
-            >
-              <div className="vd-tile__head">
-                <span className="vd-tile__label">{tile.label}</span>
-                <span className={`vd-tile__icon vd-tile__icon--${tile.iconCls}`}>{tile.icon}</span>
-              </div>
-              <span className="vd-tile__value">{tile.value}</span>
-              <span className="vd-tile__foot">{tile.foot}</span>
-            </button>
-          ))}
-        </div>
+      {/* ── Quotation List Cards ────────────────────── */}
+      {loading ? (
+        <Card className="p-8 text-center text-sm text-muted-foreground">Loading your quotation history…</Card>
+      ) : filtered.length > 0 ? (
+        <div className="flex flex-col gap-3.5">
+          {filtered.map((quot) => {
+            const isExpanded = expandedQuot === quot.id;
+            const statusCfg = STATUS_CONFIG[quot.status] || { label: quot.status || 'Submitted', tone: 'neutral' as const, icon: null };
 
-        <div className="vo-toolbar">
-          <div className="vo-toolbar__search">
-            <Search size={16} className="vo-toolbar__search-icon" />
-            <input
-              type="text"
-              placeholder="Search by RFQ number or title..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-        </div>
+            // Compute total of selected items only
+            const selectedTotal = quot.items
+              .filter(i => i.isSelected)
+              .reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
+            const selectedCount = quot.items.filter(i => i.isSelected).length;
+            const allSelected = selectedCount === quot.items.length;
 
-        {filtered.length > 0 ? (
-          <div className="vo-orders">
-            {filtered.map((quot) => {
-              const isExpanded = expandedQuot === quot.id;
-              const cfg = STATUS_CONFIG[quot.status] || STATUS_CONFIG.SUBMITTED || { label: quot.status || 'Submitted', cls: 'info', icon: null };
-
-              // Compute total of selected items only
-              const selectedTotal = quot.items
-                .filter(i => i.isSelected)
-                .reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
-              const selectedCount = quot.items.filter(i => i.isSelected).length;
-              const allSelected = selectedCount === quot.items.length;
-
-              return (
-                <div key={quot.id} className={`vrfq-card ${isExpanded ? 'vrfq-card--expanded' : ''}`}>
-                  <div
-                    className="vrfq-card__header"
-                    onClick={() => setExpandedQuot(isExpanded ? null : quot.id)}
-                  >
-                    <div className="vrfq-card__left">
-                      <div className="vrfq-card__number">
-                        <ClipboardList size={16} style={{ color: 'var(--vendor-primary)' }} />
-                        <span className="vrfq-card__rfq-id">{quot.rfqNumber}</span>
-                        {(quot.qNo || quot.versionNumber) && (
-                          <span className="quot-compare__qno-pill quot-compare__qno-pill--latest" style={{ fontSize: 12, padding: '1px 6px' }}>
-                            {(quot.versionNumber && quot.versionNumber > 1) ? `Q${quot.versionNumber}` : (quot.qNo || `Q${quot.versionNumber}`)}
-                          </span>
-                        )}
-                        <span className={`vendor-badge vendor-badge--${cfg.cls}`}>
-                          {cfg.icon} {cfg.label}
-                        </span>
-                        <span
-                          className="vendor-badge"
-                          style={{
-                            fontSize: 12,
-                            padding: '2px 8px',
-                            fontWeight: 600,
-                            background: 'rgba(10, 110, 209, 0.08)',
-                            color: 'var(--vendor-primary, #0a6ed1)',
-                            border: '1px solid rgba(10, 110, 209, 0.2)',
-                            borderRadius: 4,
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 4,
-                          }}
-                          title="Vendor Quotation Ref Number"
-                        >
-                          <Tag size={11} />
-                          Ref: {quot.vendorQuotationNumber || `QTN-${String(quot.id).slice(-6).toUpperCase()}`}
-                        </span>
-                      </div>
-                      <span className="vrfq-card__title">
-                        {quot.rfqTitle} · Quote Ref: {quot.vendorQuotationNumber || `QTN-${String(quot.id).slice(-6).toUpperCase()}`} · {quot.items.length} line items · submitted {fmtDate(quot.submittedAt)}
+            return (
+              <Card
+                id={`vquot-card-${quot.id}`}
+                key={quot.id}
+                className={cn(
+                  'overflow-hidden transition-all duration-200 border-border/80 hover:border-primary/30',
+                  isExpanded && 'ring-1 ring-primary/20 shadow-md'
+                )}
+              >
+                {/* Header */}
+                <div
+                  className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between cursor-pointer hover:bg-accent/25 transition-colors"
+                  onClick={() => setExpandedQuot(isExpanded ? null : Number(quot.id))}
+                >
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <ClipboardList size={16} className="text-primary shrink-0" />
+                      <span className="font-semibold text-foreground text-base">{quot.rfqNumber}</span>
+                      {(quot.qNo || quot.versionNumber) && (
+                        <Badge tone="neutral" className="text-xs">
+                          {(quot.versionNumber && quot.versionNumber > 1) ? `Q${quot.versionNumber}` : (quot.qNo || `Q${quot.versionNumber}`)}
+                        </Badge>
+                      )}
+                      <Badge tone={statusCfg.tone}>
+                        <span className="size-1.5 rounded-full bg-current" />
+                        {statusCfg.label}
+                      </Badge>
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
+                        <Tag size={11} />
+                        Ref: {quot.vendorQuotationNumber || `QTN-${String(quot.id).slice(-6).toUpperCase()}`}
                       </span>
-                    </div>
-                    <div className="vrfq-card__right">
-                      {/* Eye view button */}
-                      <button
-                        type="button"
-                        className="vrfq-card__eye-btn"
-                        onClick={(e) => { e.stopPropagation(); openViewQuot(quot); }}
-                        title="View full quotation details"
-                        style={{
-                          background: 'none', border: 'none', cursor: 'pointer',
-                          color: 'var(--vendor-primary)', padding: '4px 6px',
-                          display: 'inline-flex', alignItems: 'center',
-                          borderRadius: 4, transition: 'background 0.15s',
-                        }}
-                        onMouseOver={e => { e.currentTarget.style.background = 'rgba(10,110,209,0.08)'; }}
-                        onMouseOut={e => { e.currentTarget.style.background = 'transparent'; }}
-                      >
-                        <Eye size={15} />
-                      </button>
-
-
-
-                      {/* Bid Bond indicator in collapsed header */}
                       {quot.bidSecurityRequired && (
-                        <span style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 3,
-                          fontSize: 11, fontWeight: 700, color: '#107e3e',
-                          background: 'rgba(16,126,62,0.08)',
-                          padding: '2px 6px', borderRadius: 3,
-                          whiteSpace: 'nowrap',
-                        }}>
-                          <Shield size={10} />
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                          <Shield size={11} />
                           Bond
                         </span>
                       )}
-                      <span style={{ fontSize: 16, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        {formatAmount(convert(selectedTotal, quot.currency || defCur, displayCurrency), displayCurrency)}
-                        {!allSelected && selectedCount > 0 && (
-                          <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--vendor-text-muted, #6a6d70)' }}>
-                            ({selectedCount}/{quot.items.length} items)
-                          </span>
-                        )}
-                        <CurrencyBadge currency={displayCurrency} size="sm" />
-                      </span>
-                      <ChevronDown
-                        size={18}
-                        className={`vrfq-card__chevron ${isExpanded ? 'vrfq-card__chevron--open' : ''}`}
-                      />
+                    </div>
+                    <div className="text-sm font-medium text-muted-foreground truncate">
+                      {quot.rfqTitle} <span className="text-muted-foreground/50">·</span> {quot.items.length} {quot.items.length === 1 ? 'line item' : 'line items'} <span className="text-muted-foreground/50">·</span> Submitted {fmtDate(quot.submittedAt)}
                     </div>
                   </div>
 
-                  {isExpanded && (
-                    <div className="vrfq-card__body">
-                      {/* Items table — Status column is ALWAYS visible (hardcoded) */}
-                      <div className="vrfq-items-table-wrap">
-                        <div className="vrfq-items-table__toolbar">
-                          {quot.status === 'ACCEPTED' && (
-                            <button
-                              type="button"
-                              className="vrfq-excel-btn"
-                              onClick={(e) => { e.stopPropagation(); downloadQuotationExcel(quot.id); }}
-                              disabled={downloadingExcel === quot.id}
-                              title="Download items Excel with selection status"
-                            >
-                              {downloadingExcel === quot.id ? (
-                                <>
-                                  <span className="vrfq-excel-btn__spinner" />
-                                  Downloading…
-                                </>
-                              ) : (
-                                <>
-                                  <FileSpreadsheet size={15} />
-                                  Download Excel
-                                </>
-                              )}
-                            </button>
-                          )}
+                  <div className="flex flex-wrap items-center gap-3 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <div className="text-right">
+                      <div className="text-base font-bold text-foreground flex items-center gap-1.5 tabular-nums justify-end">
+                        {formatAmount(convert(selectedTotal, quot.currency || defCur, displayCurrency), displayCurrency)}
+                        <CurrencyBadge currency={displayCurrency} size="sm" />
+                      </div>
+                      {!allSelected && selectedCount > 0 && (
+                        <div className="text-xs text-muted-foreground">
+                          ({selectedCount}/{quot.items.length} items)
                         </div>
-                        <table className="vo-items-table">
+                      )}
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openViewQuot(quot)}
+                    >
+                      <Eye size={14} /> View Quote
+                    </Button>
+
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => setExpandedQuot(isExpanded ? null : Number(quot.id))}
+                      aria-label="Toggle quotation details"
+                    >
+                      <ChevronDown className={cn('size-4 transition-transform duration-200', isExpanded && 'rotate-180')} />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Expanded Body */}
+                {isExpanded && (
+                  <div className="border-t border-border/60 bg-card p-4 flex flex-col gap-4 text-sm">
+                    {quot.returnReason && (
+                      <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-xs text-destructive font-medium flex items-start gap-2">
+                        <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+                        <div>
+                          <strong>Returned Reason:</strong> {quot.returnReason}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Items table */}
+                    <div className="rounded-xl border border-border/70 overflow-hidden">
+                      <div className="bg-muted/40 px-3.5 py-2.5 text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border/70 flex items-center justify-between">
+                        <span>Line Items & Pricing</span>
+                        <div className="flex items-center gap-2">
+                          {quot.status === 'ACCEPTED' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs px-2.5"
+                              onClick={() => downloadQuotationExcel(Number(quot.id))}
+                              disabled={downloadingExcel === Number(quot.id)}
+                            >
+                              <FileSpreadsheet size={13} />
+                              {downloadingExcel === Number(quot.id) ? 'Downloading…' : 'Download Excel'}
+                            </Button>
+                          )}
+                          <div className="col-btn-wrap relative inline-flex">
+                            <button
+                              ref={colBtnRef}
+                              className={cn('col-btn', showColPanel && 'col-btn--active')}
+                              onClick={(e) => { e.stopPropagation(); setShowColPanel(v => !v); }}
+                              title="Customize table columns"
+                              aria-label="Customize table columns"
+                              aria-expanded={showColPanel}
+                            >
+                              <span /><span /><span />
+                            </button>
+                            {showColPanel && (
+                              <ColumnCustomizer
+                                columnOrder={columnOrder}
+                                visibleKeys={visibleKeys}
+                                allColumns={ITEMS_TABLE_COLUMNS}
+                                onToggle={handleToggle}
+                                onReorder={handleReorder}
+                                onReset={handleReset}
+                                onClose={() => setShowColPanel(false)}
+                                anchorRef={colBtnRef}
+                              />
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse text-sm">
                           <thead>
-                            <tr>
-                              <th>Status</th>
+                            <tr className="border-b border-border/60 bg-muted/20 text-left text-xs font-semibold text-muted-foreground">
+                              <th className="p-3">Status</th>
                               {visibleDataCols.map((key) => (
-                                <th key={key}>{ITEMS_COLUMN_HEADERS[key]}</th>
+                                <th key={key} className="p-3">{ITEMS_COLUMN_HEADERS[key]}</th>
                               ))}
-                              {dataColCount > 0 && (
-                                <th className="vo-items-table__actions-th">
-                                  <div className="col-btn-wrap" style={{ position: 'relative', display: 'inline-flex' }}>
-                                    <button
-                                      ref={colBtnRef}
-                                      className={`col-btn ${showColPanel ? 'col-btn--active' : ''}`}
-                                      onClick={(e) => { e.stopPropagation(); setShowColPanel(v => !v); }}
-                                      title="Customize table columns"
-                                      aria-label="Customize table columns"
-                                      aria-expanded={showColPanel}
-                                    >
-                                      <span /><span /><span />
-                                    </button>
-                                    {showColPanel && (
-                                      <ColumnCustomizer
-                                        columnOrder={columnOrder}
-                                        visibleKeys={visibleKeys}
-                                        allColumns={ITEMS_TABLE_COLUMNS}
-                                        onToggle={handleToggle}
-                                        onReorder={handleReorder}
-                                        onReset={handleReset}
-                                        onClose={() => setShowColPanel(false)}
-                                        anchorRef={colBtnRef}
-                                      />
-                                    )}
-                                  </div>
-                                </th>
-                              )}
+                              {dataColCount > 0 && <th className="p-3 w-10" />}
                             </tr>
                           </thead>
-                          <tbody>
+                          <tbody className="divide-y divide-border/60">
                             {quot.items.map((item, idx) => (
-                              <tr key={idx}>
+                              <tr key={idx} className="hover:bg-accent/20 transition-colors">
                                 {renderTableCell('status', item, quot)}
                                 {visibleDataCols.map((key) => renderTableCell(key, item, quot))}
-                                {dataColCount > 0 && <td className="vo-items-table__actions-td" />}
+                                {dataColCount > 0 && <td className="p-3" />}
                               </tr>
                             ))}
                           </tbody>
                           {showGrandTotal && dataColCount > 0 && (
                             <tfoot>
-                              <tr>
-                                <td
-                                  colSpan={dataColCount}
-                                  className="vo-items-table__grand-label"
-                                >
-                                  {allSelected ? 'Total' : 'Selected items total'}
+                              <tr className="border-t-2 border-border bg-muted/30 font-semibold">
+                                <td colSpan={dataColCount} className="p-3 text-right text-muted-foreground">
+                                  {allSelected ? 'Total:' : 'Selected Items Total:'}
                                 </td>
-                                <td className="vo-items-table__grand-total">
+                                <td className="p-3 text-foreground font-bold tabular-nums">
                                   {formatAmount(convert(selectedTotal, quot.currency || defCur, displayCurrency), displayCurrency)}
                                   {!allSelected && (
-                                    <span className="vo-items-table__grand-sub">
+                                    <span className="text-xs text-muted-foreground font-normal">
                                       {' '}of {formatAmount(convert(quot.totalPrice, quot.currency || defCur, displayCurrency), displayCurrency)}
                                     </span>
                                   )}
                                 </td>
-                                <td className="vo-items-table__actions-td" />
+                                <td className="p-3" />
                               </tr>
                             </tfoot>
                           )}
                         </table>
                       </div>
-
-                      {/* ── Bid Bond Document ── */}
-                      {quot.bidSecurityRequired && (
-                        <div style={{
-                          marginTop: 16, padding: '10px 14px',
-                          background: 'rgba(10,110,209,0.04)',
-                          border: '1px solid rgba(10,110,209,0.12)',
-                          borderRadius: 'var(--radius-md)',
-                          display: 'flex', alignItems: 'center', gap: 10,
-                        }}>
-                          <Shield size={16} style={{ color: 'var(--primary-500)', flexShrink: 0 }} />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 2 }}>
-                              Bid Bond Document
-                            </div>
-                            {bidSecurityLoading ? (
-                              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Loading…</span>
-                            ) : bidSecurityDocs[String(quot.id)] ? (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                <FileText size={12} style={{ color: '#0070c0', flexShrink: 0 }} />
-                                <a
-                                  href={bidSecurityDocs[String(quot.id)]!.publicUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  style={{
-                                    fontSize: 13, color: 'var(--vendor-primary)',
-                                    fontWeight: 600, textDecoration: 'none',
-                                    overflow: 'hidden', textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap', maxWidth: 250, flex: 1,
-                                  }}
-                                >
-                                  {bidSecurityDocs[String(quot.id)]!.originalName}
-                                </a>
-                                <button
-                                  type="button"
-                                  onClick={() => downloadDocument(bidSecurityDocs[String(quot.id)]!.publicUrl, bidSecurityDocs[String(quot.id)]!.originalName)}
-                                  title="Download"
-                                  aria-label="Download bid bond document"
-                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--vendor-primary)', padding: '2px', display: 'inline-flex', alignItems: 'center', borderRadius: 3 }}
-                                >
-                                  <Download size={12} />
-                                </button>
-                              </div>
-                            ) : (
-                              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                                Not provided
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          !loading && (
-            <div className="vendor-empty-state">
-              <div className="vendor-empty-state__icon">📄</div>
-              <div className="vendor-empty-state__title">No quotations yet</div>
-              <div className="vendor-empty-state__text">
-                Submit a quotation from <strong>My RFQs</strong> — it will appear here with full pricing history.
-              </div>
-            </div>
-          )
-        )}
 
-      </div>
+                    {/* Bid Bond Document Card */}
+                    {quot.bidSecurityRequired && (
+                      <div className="p-3.5 rounded-xl bg-primary/[0.04] border border-primary/15 flex items-center gap-3">
+                        <Shield size={16} className="text-primary shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-semibold text-foreground mb-0.5">
+                            Bid Bond Document
+                          </div>
+                          {bidSecurityLoading ? (
+                            <span className="text-xs text-muted-foreground">Loading…</span>
+                          ) : bidSecurityDocs[String(quot.id)] ? (
+                            <div className="flex items-center gap-2 flex-wrap text-xs">
+                              <FileText size={13} className="text-primary shrink-0" />
+                              <a
+                                href={bidSecurityDocs[String(quot.id)]!.publicUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-medium text-primary hover:underline truncate max-w-xs"
+                              >
+                                {bidSecurityDocs[String(quot.id)]!.originalName}
+                              </a>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                className="h-6 w-6"
+                                onClick={() => downloadDocument(bidSecurityDocs[String(quot.id)]!.publicUrl, bidSecurityDocs[String(quot.id)]!.originalName)}
+                                title="Download document"
+                              >
+                                <Download size={13} />
+                              </Button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Not provided</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+      ) : (
+        <EmptyState
+          icon={ClipboardList}
+          title="No Quotations Found"
+          description={search ? "Try adjusting your search criteria." : "Submit a quotation from My RFQs — it will appear here with full pricing history and status."}
+          action={search ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>Clear search</Button> : undefined}
+        />
+      )}
 
       {/* ── View Quotation Modal (same layout as admin side, no Evaluation) ── */}
       {viewQuot && (
@@ -696,7 +690,7 @@ export default function VendorQuotationsPage() {
           attachments={viewQuot.attachments || []}
         />
       )}
-    </div>
+    </PageFrame>
   );
 }
 
@@ -779,12 +773,12 @@ function ViewVendorQuotationModal({
   const fmtDate = (d: string) =>
     new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
-  const tabs: { key: VendorViewTab; label: string; icon: string }[] = [
-    { key: 'vendor', label: 'Vendor Details', icon: '🏢' },
-    { key: 'paymentTerms', label: 'Payment Terms', icon: '📄' },
-    { key: 'authorization', label: bidSecurityDoc ? 'Authorization' : 'Authorization', icon: '🔒' },
-    { key: 'items', label: `Items (${q.items.length})`, icon: '📋' },
-    { key: 'documents', label: 'Documents', icon: '📎' },
+  const tabs: { key: VendorViewTab; label: string; icon: React.ReactNode }[] = [
+    { key: 'vendor', label: 'Vendor Details', icon: <Building className="size-4" /> },
+    { key: 'paymentTerms', label: 'Payment Terms', icon: <FileText className="size-4" /> },
+    { key: 'authorization', label: 'Authorization', icon: <Shield className="size-4" /> },
+    { key: 'items', label: `Items (${q.items.length})`, icon: <ClipboardList className="size-4" /> },
+    { key: 'documents', label: 'Documents', icon: <Paperclip className="size-4" /> },
   ];
 
   return (
@@ -853,14 +847,19 @@ function ViewVendorQuotationModal({
         {!isMinimized && (
           <>
             {/* Tabs */}
-            <div className="rfq-modal__tabs">
+            <div className="flex items-center gap-1 px-6 border-b border-border/60 bg-muted/20 overflow-x-auto">
               {tabs.map(t => (
                 <button
                   key={t.key}
-                  className={`rfq-modal__tab ${activeTab === t.key ? 'rfq-modal__tab--active' : ''}`}
+                  type="button"
+                  className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-colors whitespace-nowrap ${
+                    activeTab === t.key
+                      ? 'border-primary text-primary bg-background/50'
+                      : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30'
+                  }`}
                   onClick={() => setActiveTab(t.key)}
                 >
-                  <span style={{ fontSize: 16, marginRight: 4 }}>{t.icon}</span>
+                  {t.icon}
                   <span>{t.label}</span>
                 </button>
               ))}
@@ -869,42 +868,52 @@ function ViewVendorQuotationModal({
             <div className="rfq-modal__body">
               {/* ── Tab 1: Vendor Details ── */}
               {activeTab === 'vendor' && (
-                <div className="rfq-modal__info-panel">
-                  <div className="rfq-modal__info-grid quot-view-modal__info-grid">
-                    {[
-                      { label: 'RFQ Number', value: q.rfqNumber },
-                      { label: 'RFQ Title', value: q.rfqTitle || '—' },
-                      { label: 'Description', value: (rfqData?.description as string) || '—', fullWidth: true },
-                      { label: 'Lead Time', value: `${q.leadTimeDays} days` },
-                      { label: 'Submitted', value: fmtDate(q.submittedAt) },
-                      { label: 'Status', value: STATUS_CONFIG[q.status]?.label || q.status },
-                    ].map(row => (
-                      <div
-                        key={row.label}
-                        className="rfq-modal__info-item"
-                        style={row.fullWidth ? { gridColumn: '1 / -1' } : undefined}
-                      >
-                        <span className="rfq-modal__info-label">{row.label}</span>
-                        <span className="rfq-modal__info-value">{row.value}</span>
+                <div className="p-6 space-y-6">
+                  {/* Clean 2-column key-value layout (no cards) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-5 gap-x-8">
+                    <div>
+                      <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">RFQ Number</div>
+                      <div className="text-sm font-semibold text-foreground">{q.rfqNumber}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">RFQ Title</div>
+                      <div className="text-sm font-semibold text-foreground">{q.rfqTitle || '—'}</div>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">Description</div>
+                      <div className="text-sm text-foreground/90 whitespace-pre-line">{(rfqData?.description as string) || '—'}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">Lead Time</div>
+                      <div className="text-sm font-semibold text-foreground">{q.leadTimeDays} days</div>
+                    </div>
+                    <div>
+                      <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">Submitted Date</div>
+                      <div className="text-sm font-semibold text-foreground">{fmtDate(q.submittedAt)}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">Status</div>
+                      <div className="text-sm">
+                        <StatusBadge status={q.status} />
                       </div>
-                    ))}
-                    {/* Submitted Currency */}
-                    <div className="rfq-modal__info-item">
-                      <span className="rfq-modal__info-label">Submitted in</span>
-                      <span className="rfq-modal__info-value">
+                    </div>
+                    <div>
+                      <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">Submitted In</div>
+                      <div className="text-sm">
                         <CurrencyBadge currency={defCur} size="sm" />
-                      </span>
+                      </div>
                     </div>
-                    {/* Total Price */}
-                    <div className="rfq-modal__info-item quot-view-modal__info-item--highlight">
-                      <span className="rfq-modal__info-label">Total Price</span>
-                      <span className="rfq-modal__info-value">
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                          {formatAmount(q.totalPrice, defCur)}
-                          <CurrencyBadge currency={defCur} size="sm" />
-                        </span>
-                      </span>
+                  </div>
+
+                  {/* Highlighted Total Price Banner */}
+                  <div className="flex items-center justify-between p-4 rounded-xl bg-primary/[0.04] border border-primary/15">
+                    <div>
+                      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Price</div>
+                      <div className="text-2xl font-bold text-foreground mt-0.5">
+                        {formatAmount(q.totalPrice, defCur)}
+                      </div>
                     </div>
+                    <CurrencyBadge currency={defCur} size="md" />
                   </div>
 
                   {/* ── Custom Field Values Section ── */}
@@ -918,21 +927,16 @@ function ViewVendorQuotationModal({
                     if (!hasCustomFields || !hasCfValues) return null;
 
                     return (
-                      <div className="quot-view-modal__custom-section">
-                        <div className="quot-view-modal__custom-section-header">
-                          <span className="quot-view-modal__custom-badge--simple">
-                            <span style={{ fontSize: 11, fontWeight: 700 }}>A</span>
-                          </span>
-                          <span>Additional Information</span>
-                        </div>
-                        <div className="rfq-modal__info-grid quot-view-modal__info-grid">
+                      <div className="pt-4 border-t border-border/60">
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">Additional Information</h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-8">
                           {customFields.filter((cf: any) => cf.active !== false).map((cf: any) => {
                             const val = cfValues[cf.id];
                             if (val == null || val === '') return null;
                             return (
-                              <div key={cf.id} className="rfq-modal__info-item">
-                                <span className="rfq-modal__info-label">{cf.fieldName}</span>
-                                <span className="rfq-modal__info-value">{String(val)}</span>
+                              <div key={cf.id}>
+                                <div className="text-xs font-medium text-muted-foreground mb-0.5">{cf.fieldName}</div>
+                                <div className="text-sm font-medium text-foreground">{String(val)}</div>
                               </div>
                             );
                           })}
@@ -940,93 +944,56 @@ function ViewVendorQuotationModal({
                       </div>
                     );
                   })()}
-
                 </div>
               )}
 
               {/* ── Tab 2: Payment Terms ── */}
               {activeTab === 'paymentTerms' && (
-                <div className="rfq-modal__info-panel">
-                  <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 15 }}>
-                    <span>📄</span>
-                    <span>Payment Terms</span>
+                <div className="p-6 space-y-5">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <FileText className="size-4 text-primary" />
+                    <span>Payment Terms & Schedule</span>
                   </div>
                   {q.paymentTerms && q.paymentTerms !== '—' ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div className="space-y-4">
                       {/* Payment Term Name */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
-                        <FileText size={16} style={{ color: 'var(--primary-500)' }} />
-                        <span style={{ fontSize: 15, fontWeight: 700 }}>{q.paymentTerms}</span>
+                      <div className="flex items-center gap-3 p-3.5 rounded-lg bg-muted/30 border border-border/60">
+                        <FileText className="size-4 text-primary shrink-0" />
+                        <span className="text-sm font-semibold text-foreground">{q.paymentTerms}</span>
                       </div>
 
                       {/* Milestone Details */}
                       {q.paymentPlanSnapshot && q.paymentPlanSnapshot.length > 0 && (
-                        <div style={{ padding: '14px 16px', background: 'var(--surface-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
-                          <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: '1fr 80px',
-                            gap: 8,
-                            padding: '6px 0',
-                            fontSize: 12,
-                            fontWeight: 600,
-                            color: 'var(--text-secondary)',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.04em',
-                            borderBottom: '1px solid var(--border)',
-                            marginBottom: 4,
-                          }}>
-                            <span>Milestone</span>
-                            <span style={{ textAlign: 'right' }}>Allocation</span>
-                          </div>
-                          {q.paymentPlanSnapshot.map((m, idx) => (
-                            <div
-                              key={idx}
-                              style={{
-                                display: 'grid',
-                                gridTemplateColumns: '1fr 80px',
-                                gap: 8,
-                                padding: '8px 0',
-                                borderBottom: idx < q.paymentPlanSnapshot!.length - 1
-                                  ? '1px solid var(--border)'
-                                  : 'none',
-                              }}
-                            >
-                              <span style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.4 }}>
-                                {m.title}
-                              </span>
-                              <span style={{
-                                fontSize: 14,
-                                fontWeight: 700,
-                                color: 'var(--text-primary)',
-                                textAlign: 'right',
-                              }}>
-                                {m.percentage}%
-                              </span>
-                            </div>
-                          ))}
-                          {/* Total */}
-                          <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '8px 0 0',
-                            borderTop: '2px solid var(--border)',
-                            marginTop: 4,
-                          }}>
-                            <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Total</span>
-                            <span style={{
-                              fontSize: 15,
-                              fontWeight: 800,
-                              color: '#107e3e',
-                            }}>
-                              {q.paymentPlanSnapshot.reduce((sum, m) => sum + m.percentage, 0).toFixed(1)}%
-                            </span>
-                          </div>
+                        <div className="rounded-lg border border-border/60 overflow-hidden">
+                          <table className="w-full text-left text-xs">
+                            <thead className="bg-muted/40 text-muted-foreground font-semibold border-b border-border/60">
+                              <tr>
+                                <th className="py-2.5 px-4">Milestone</th>
+                                <th className="py-2.5 px-4 text-right">Allocation</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border/60 text-sm">
+                              {q.paymentPlanSnapshot.map((m, idx) => (
+                                <tr key={idx} className="hover:bg-muted/20">
+                                  <td className="py-3 px-4 text-foreground">{m.title}</td>
+                                  <td className="py-3 px-4 text-right font-semibold text-foreground">{m.percentage}%</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot className="bg-muted/30 border-t border-border/60 font-semibold text-sm">
+                              <tr>
+                                <td className="py-3 px-4 text-foreground">Total</td>
+                                <td className="py-3 px-4 text-right text-emerald-600 font-bold">
+                                  {q.paymentPlanSnapshot.reduce((sum, m) => sum + m.percentage, 0).toFixed(1)}%
+                                </td>
+                              </tr>
+                            </tfoot>
+                          </table>
                         </div>
                       )}
                     </div>
                   ) : (
-                    <div className="quot-view-modal__empty">
+                    <div className="text-center py-10 text-xs text-muted-foreground">
                       No payment terms provided with this quotation.
                     </div>
                   )}
@@ -1035,205 +1002,146 @@ function ViewVendorQuotationModal({
 
               {/* ── Tab 3: Authorization Documents ── */}
               {activeTab === 'authorization' && (
-                <div className="rfq-modal__info-panel">
-                  <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 15 }}>
-                    <span>🔒</span>
-                    <span>Authorization Documents</span>
+                <div className="p-6 space-y-5">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <Shield className="size-4 text-primary" />
+                    <span>Authorization & Compliance Documents</span>
                   </div>
 
                   {q.bidSecurityRequired && (
-                    <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
-                      <Shield size={16} style={{ color: 'var(--primary-500)', flexShrink: 0 }} />
-                      <div style={{ flex: 1 }}>
-                        <strong style={{ fontSize: 14, color: 'var(--text-primary)' }}>Bid Security Required</strong>
-                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
-                          <span>Type: Bid Bond</span>
-                        </div>
+                    <div className="flex items-center gap-3 p-3.5 rounded-lg bg-muted/30 border border-border/60">
+                      <Shield className="size-4 text-primary shrink-0" />
+                      <div>
+                        <div className="text-sm font-semibold text-foreground">Bid Security Required</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">Type: Bid Bond</div>
                       </div>
                     </div>
                   )}
 
                   {bidSecurityDoc ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 14px', background: 'var(--surface-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
-                        <div style={{
-                          width: 36, height: 36, borderRadius: 8, flexShrink: 0,
-                          background: 'rgba(16,126,62,0.08)',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>
-                          <Shield size={16} style={{ color: 'var(--success-500)' }} />
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
-                            <strong style={{ fontSize: 14, color: 'var(--text-primary)' }}>Bid Security</strong>
-                            <span className={`rfq-badge rfq-badge--${bidSecurityDoc.status === 'VERIFIED' ? 'CLOSED' : bidSecurityDoc.status === 'REJECTED' ? 'CANCELLED' : 'SENT'}`} style={{ fontSize: 11, padding: '2px 8px' }}>
-                              {bidSecurityDoc.status}
-                            </span>
+                    <div className="space-y-4">
+                      <div className="p-4 rounded-xl bg-card border border-border/60 space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <Shield className="size-4 text-emerald-600" />
+                            <span className="text-sm font-semibold text-foreground">Bid Security</span>
                           </div>
-                          {bidSecurityDoc.bidSecurityValueType && (
-                            <div style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 4 }}>
-                              <span><strong>Type:</strong> {bidSecurityDoc.bidSecurityValueType === 'FIXED_AMOUNT' ? 'Fixed Amount' : 'Percentage'}</span>
-                              {bidSecurityDoc.bidSecurityValue != null && (
-                                <span><strong>Value:</strong>{' '}
-                                  {bidSecurityDoc.bidSecurityValueType === 'PERCENTAGE'
-                                    ? `${Number(bidSecurityDoc.bidSecurityValue)}% of Bid Value`
-                                    : `${bidSecurityDoc.bidSecurityCurrency || 'KES'} ${Number(bidSecurityDoc.bidSecurityValue).toLocaleString('en-IN')}`}
-                                </span>
-                              )}
-                              {bidSecurityDoc.bidSecurityValidityValue != null && (
-                                <span><strong>Validity:</strong> {bidSecurityDoc.bidSecurityValidityValue} {bidSecurityDoc.bidSecurityValidityUnit === 'DAYS' ? 'Days' : ''}</span>
-                              )}
-                              {/* Bond Details (from Bid Security section) */}
-                              {bidSecurityDoc.bondNumber && <span><strong>Bond #:</strong> {bidSecurityDoc.bondNumber}</span>}
-                              {bidSecurityDoc.issuer && <span><strong>Issuer:</strong> {bidSecurityDoc.issuer}</span>}
-                            </div>
-                          )}
-                          {bidSecurityDoc.publicUrl && (
-                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                              <a
-                                href={bidSecurityDoc.publicUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{ fontSize: 13, fontWeight: 600, color: 'var(--primary-500)', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
-                              >
-                                <FileText size={13} />
-                                {bidSecurityDoc.originalName || 'Document'} ↗
-                              </a>
-                              <button
-                                type="button"
-                                onClick={() => downloadDocument(bidSecurityDoc.publicUrl, bidSecurityDoc.originalName || 'Document')}
-                                title="Download document"
-                                aria-label="Download document"
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary-500)', padding: '2px 4px', display: 'inline-flex', alignItems: 'center', borderRadius: 4, transition: 'background 0.15s' }}
-                                onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(10,110,209,0.08)'; }}
-                                onMouseOut={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-                              >
-                                <Download size={13} />
-                              </button>
-                            </div>
-                          )}
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded bg-muted text-foreground">
+                            {bidSecurityDoc.status}
+                          </span>
                         </div>
-                      </div>
 
-                      {(bidSecurityDoc.bondNumber || bidSecurityDoc.issuer || bidSecurityDoc.publicUrl || bidSecurityDoc.bidBondValidityValue != null) && (
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 14px', background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
-                          <div style={{
-                            width: 36, height: 36, borderRadius: 8, flexShrink: 0,
-                            background: 'rgba(16,126,62,0.08)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          }}>
-                            <Shield size={16} style={{ color: 'var(--success-500)' }} />
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                              <strong style={{ fontSize: 14, color: 'var(--text-primary)' }}>Bid Bond</strong>
-                            </div>
-                            <div style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                              {bidSecurityDoc.bondNumber && <span><strong>Bond #:</strong> {bidSecurityDoc.bondNumber}</span>}
-                              {bidSecurityDoc.issuer && <span><strong>Issuer:</strong> {bidSecurityDoc.issuer}</span>}
-                              {bidSecurityDoc.bondAmount != null && (
-                                <span><strong>Amount:</strong> {formatAmount(bidSecurityDoc.bondAmount, bidSecurityDoc.bondCurrency || 'KES')}</span>
-                              )}
-                              {bidSecurityDoc.issueDate && (
-                                <span><strong>Issue Date:</strong> {new Date(bidSecurityDoc.issueDate).toLocaleDateString('en-IN')}</span>
-                              )}
-                              {bidSecurityDoc.expiryDate && (
-                                <span><strong>Expiry:</strong> {new Date(bidSecurityDoc.expiryDate).toLocaleDateString('en-IN')}</span>
-                              )}
-                              {bidSecurityDoc.bidBondValidityValue != null && (
-                                <span><strong>Bond Validity:</strong> {bidSecurityDoc.bidBondValidityValue} {bidSecurityDoc.bidBondValidityUnit === 'DAYS' ? 'Days' : bidSecurityDoc.bidBondValidityUnit || ''}</span>
-                              )}
-                            </div>
-                            {bidSecurityDoc.publicUrl && (
-                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
-                                <a
-                                  href={bidSecurityDoc.publicUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  style={{ fontSize: 13, fontWeight: 600, color: 'var(--primary-500)', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
-                                >
-                                  <FileText size={13} />
-                                  {bidSecurityDoc.originalName || 'Bid Bond Document'} ↗
-                                </a>
-                                <button
-                                  type="button"
-                                  onClick={() => downloadDocument(bidSecurityDoc.publicUrl, (bidSecurityDoc.originalName || 'Bid_Bond_Document'))}
-                                  title="Download document"
-                                  aria-label="Download document"
-                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary-500)', padding: '2px 4px', display: 'inline-flex', alignItems: 'center', borderRadius: 4, transition: 'background 0.15s' }}
-                                  onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(10,110,209,0.08)'; }}
-                                  onMouseOut={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-                                >
-                                  <Download size={13} />
-                                </button>
+                        {bidSecurityDoc.bidSecurityValueType && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-muted-foreground pt-1">
+                            <div><strong className="text-foreground">Type:</strong> {bidSecurityDoc.bidSecurityValueType === 'FIXED_AMOUNT' ? 'Fixed Amount' : 'Percentage'}</div>
+                            {bidSecurityDoc.bidSecurityValue != null && (
+                              <div><strong className="text-foreground">Value:</strong>{' '}
+                                {bidSecurityDoc.bidSecurityValueType === 'PERCENTAGE'
+                                  ? `${Number(bidSecurityDoc.bidSecurityValue)}% of Bid Value`
+                                  : `${bidSecurityDoc.bidSecurityCurrency || 'KES'} ${Number(bidSecurityDoc.bidSecurityValue).toLocaleString('en-IN')}`}
                               </div>
                             )}
+                            {bidSecurityDoc.bidSecurityValidityValue != null && (
+                              <div><strong className="text-foreground">Validity:</strong> {bidSecurityDoc.bidSecurityValidityValue} {bidSecurityDoc.bidSecurityValidityUnit === 'DAYS' ? 'Days' : ''}</div>
+                            )}
+                            {bidSecurityDoc.bondNumber && <div><strong className="text-foreground">Bond #:</strong> {bidSecurityDoc.bondNumber}</div>}
+                            {bidSecurityDoc.issuer && <div><strong className="text-foreground">Issuer:</strong> {bidSecurityDoc.issuer}</div>}
                           </div>
-                        </div>
-                      )}
+                        )}
+
+                        {bidSecurityDoc.publicUrl && (
+                          <div className="flex items-center gap-3 pt-2 border-t border-border/40">
+                            <a
+                              href={bidSecurityDoc.publicUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs font-semibold text-primary hover:underline flex items-center gap-1.5"
+                            >
+                              <FileText className="size-3.5" />
+                              {bidSecurityDoc.originalName || 'Document'} <ExternalLink className="size-3" />
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => downloadDocument(bidSecurityDoc.publicUrl, bidSecurityDoc.originalName || 'Document')}
+                              className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+                            >
+                              <Download className="size-3.5" /> Download
+                            </button>
+                          </div>
+                        )}
+                      </div>
 
                       {bidSecurityDoc.status === 'REJECTED' && bidSecurityDoc.rejectionReason && (
-                        <div style={{ padding: '8px 12px', background: 'rgba(187,0,0,0.06)', border: '1px solid rgba(187,0,0,0.15)', borderRadius: 'var(--radius-sm)', fontSize: 13, color: '#bb0000' }}>
+                        <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive">
                           <strong>Rejection Reason:</strong> {bidSecurityDoc.rejectionReason}
                         </div>
                       )}
                     </div>
                   ) : (
-                    <div className="quot-view-modal__empty">No authorization documents submitted for this quotation.</div>
+                    <div className="text-center py-10 text-xs text-muted-foreground">
+                      No authorization documents submitted for this quotation.
+                    </div>
                   )}
                 </div>
               )}
 
               {/* ── Tab 4: Items ── */}
               {activeTab === 'items' && (
-                <div className="rfq-modal__info-panel">
-                  <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 15 }}>
-                    <span>📋</span>
-                    <span>Quotation Items</span>
+                <div className="p-6 space-y-5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <ClipboardList className="size-4 text-primary" />
+                      <span>Quotation Items</span>
+                    </div>
                     <CurrencyBadge currency={defCur} size="sm" />
                   </div>
 
-                  <div className="quot-view-modal__items">
-                    <div className="quot-view-modal__items-header">
-                      <span className="quot-view-modal__items-col--sel">Status</span>
-                      <span className="quot-view-modal__items-col--name">Item Name</span>
-                      <span className="quot-view-modal__items-col--qty">Qty</span>
-                      <span className="quot-view-modal__items-col--price">Unit Price</span>
-                      <span className="quot-view-modal__items-col--total">Total</span>
+                  <div className="rounded-lg border border-border/60 overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-muted/40 text-muted-foreground font-semibold border-b border-border/60">
+                          <tr>
+                            <th className="py-2.5 px-3 w-12 text-center">Status</th>
+                            <th className="py-2.5 px-4">Item Name</th>
+                            <th className="py-2.5 px-4 text-right">Qty</th>
+                            <th className="py-2.5 px-4 text-right">Unit Price</th>
+                            <th className="py-2.5 px-4 text-right">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/60 text-sm">
+                          {q.items.map((item, idx) => {
+                            const lineTotal = item.quantity * item.unitPrice;
+                            return (
+                              <tr key={idx} className={`hover:bg-muted/20 ${!item.isSelected ? 'opacity-60 bg-muted/10' : ''}`}>
+                                <td className="py-3 px-3 text-center">
+                                  {item.isSelected ? (
+                                    <CheckCircle2 className="size-4 text-emerald-600 inline-block" />
+                                  ) : (
+                                    <XCircle className="size-4 text-destructive inline-block" />
+                                  )}
+                                </td>
+                                <td className="py-3 px-4">
+                                  <div className="font-medium text-foreground">{item.name}</div>
+                                  {item.unit && <div className="text-xs text-muted-foreground">{item.unit}</div>}
+                                </td>
+                                <td className="py-3 px-4 text-right text-foreground">{item.quantity}</td>
+                                <td className="py-3 px-4 text-right text-foreground">
+                                  {formatAmount(convert(item.unitPrice, q.currency || defCur, defCur), defCur)}
+                                </td>
+                                <td className="py-3 px-4 text-right font-semibold text-foreground">
+                                  {formatAmount(convert(lineTotal, q.currency || defCur, defCur), defCur)}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
-                    {q.items.map((item, idx) => {
-                      const lineTotal = item.quantity * item.unitPrice;
-                      return (
-                        <div
-                          key={idx}
-                          className={`quot-view-modal__item-row ${item.isSelected ? 'quot-view-modal__item-row--selected' : 'quot-view-modal__item-row--deselected'}`}
-                        >
-                          <span className="quot-view-modal__items-col--sel">
-                            {item.isSelected ? (
-                              <CheckCircle2 size={18} style={{ color: '#107e3e' }} />
-                            ) : (
-                              <XCircle size={18} style={{ color: '#bb0000' }} />
-                            )}
-                          </span>
-                          <span className="quot-view-modal__items-col--name">
-                            <span className="quot-view-modal__item-name">{item.name}</span>
-                            <span className="quot-view-modal__item-unit">{item.unit}</span>
-                          </span>
-                          <span className="quot-view-modal__items-col--qty">{item.quantity}</span>
-                          <span className="quot-view-modal__items-col--price">
-                            {formatAmount(convert(item.unitPrice, q.currency || defCur, defCur), defCur)}
-                          </span>
-                          <span className="quot-view-modal__items-col--total">
-                            {formatAmount(convert(lineTotal, q.currency || defCur, defCur), defCur)}
-                          </span>
-                        </div>
-                      );
-                    })}
-                    <div className="quot-view-modal__items-summary">
-                      <span className="quot-view-modal__items-summary-label">
+                    <div className="flex items-center justify-between p-3.5 bg-muted/30 border-t border-border/60 text-xs font-semibold">
+                      <span className="text-muted-foreground">
                         {q.items.filter(i => i.isSelected).length} of {q.items.length} items selected
                       </span>
-                      <span className="quot-view-modal__items-summary-total">
+                      <span className="text-foreground text-sm font-bold">
                         Total: {formatAmount(convert(
                           q.items.filter(i => i.isSelected).reduce((sum, i) => sum + i.quantity * i.unitPrice, 0),
                           q.currency || defCur,
@@ -1247,104 +1155,64 @@ function ViewVendorQuotationModal({
 
               {/* ── Tab 5: Documents (Attachments) ── */}
               {activeTab === 'documents' && (
-                <div className="rfq-modal__info-panel">
-                  <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 15 }}>
-                    <span>📎</span>
+                <div className="p-6 space-y-5">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <Paperclip className="size-4 text-primary" />
                     <span>Attachments</span>
                     {attachments && attachments.length > 0 && (
-                      <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 400, marginLeft: 4 }}>
-                        — {attachments.length} file(s)
+                      <span className="text-xs text-muted-foreground font-normal">
+                        ({attachments.length} files)
                       </span>
                     )}
                   </div>
 
                   {attachments && attachments.length > 0 ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {attachments.map((att, idx) => {
-                        const fileIcon = getFileIcon(att.originalName);
-                        return (
-                          <div
-                            key={att.id || idx}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 12,
-                              padding: '10px 14px',
-                              background: 'var(--surface-card)',
-                              border: '1px solid var(--border)',
-                              borderRadius: 'var(--radius-md)',
-                              textDecoration: 'none',
-                              cursor: 'default',
-                            }}
+                    <div className="space-y-2">
+                      {attachments.map((att, idx) => (
+                        <div
+                          key={att.id || idx}
+                          className="flex items-center justify-between gap-3 p-3 rounded-lg bg-card border border-border/60 hover:bg-muted/20 transition-colors"
+                        >
+                          <a
+                            href={att.publicUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-3 flex-1 min-w-0 group"
                           >
-                            <a
-                              href={att.publicUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 12,
-                                flex: 1,
-                                textDecoration: 'none',
-                                color: 'inherit',
-                              }}
-                            >
-                              <span style={{ fontSize: 23, lineHeight: 1 }}>{fileIcon.icon}</span>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{
-                                  fontSize: 14,
-                                  fontWeight: 600,
-                                  color: 'var(--text-primary)',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                }}>
-                                  {att.originalName}
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
-                                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                                    {formatFileSize(att.fileSize)}
-                                  </span>
-                                  {att.uploadedAt && (
-                                    <>
-                                      <span style={{ fontSize: 11, color: 'var(--text-placeholder)' }}>•</span>
-                                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                                        {new Date(att.uploadedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                                      </span>
-                                    </>
-                                  )}
-                                </div>
+                            <div className="p-2 rounded-md bg-primary/10 text-primary group-hover:bg-primary/20 transition-colors">
+                              <FileText className="size-4" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-semibold text-foreground truncate group-hover:text-primary transition-colors">
+                                {att.originalName}
                               </div>
-                              <span style={{
-                                fontSize: 12,
-                                fontWeight: 600,
-                                color: 'var(--primary-500)',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 2,
-                                flexShrink: 0,
-                              }}>
-                                Open ↗
-                              </span>
-                            </a>
-                            <button
-                              type="button"
-                              onClick={() => downloadDocument(att.publicUrl, att.originalName)}
-                              title="Download document"
-                              aria-label="Download document"
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary-500)', padding: '6px', display: 'inline-flex', alignItems: 'center', borderRadius: 4, transition: 'background 0.15s', flexShrink: 0 }}
-                              onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(10,110,209,0.08)'; }}
-                              onMouseOut={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-                            >
-                              <Download size={15} />
-                            </button>
-                          </div>
-                        );
-                      })}
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                                <span>{formatFileSize(att.fileSize)}</span>
+                                {att.uploadedAt && (
+                                  <>
+                                    <span>•</span>
+                                    <span>{new Date(att.uploadedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            <span className="text-xs font-semibold text-primary flex items-center gap-1 shrink-0">
+                              Open <ExternalLink className="size-3" />
+                            </span>
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => downloadDocument(att.publicUrl, att.originalName)}
+                            title="Download document"
+                            className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                          >
+                            <Download className="size-4" />
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   ) : (
-                    <div className="quot-view-modal__empty">
+                    <div className="text-center py-10 text-xs text-muted-foreground">
                       No attachments uploaded with this quotation.
                     </div>
                   )}

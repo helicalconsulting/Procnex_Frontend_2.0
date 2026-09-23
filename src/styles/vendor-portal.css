@@ -1577,7 +1577,7 @@
   opacity: 1;
   pointer-events: all;
   top: 50%; left: 50%; transform: translate(-50%, -50%);
-  width: min(1280px, calc(100vw - 40px)); max-height: 92vh;
+  width: min(840px, calc(100vw - 32px)); max-height: 88vh;
   border-radius: var(--vendor-radius-xl);
   animation: vquotSlideUp 0.28s cubic-bezier(0.32,0.72,0,1);
 }

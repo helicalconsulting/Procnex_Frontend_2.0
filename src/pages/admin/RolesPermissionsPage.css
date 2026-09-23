@@ -1322,3 +1322,16 @@
     font-size: 11px;
   }
 }
+
+/* ─── Toggle Switch Clean Reset ────────────────────────────── */
+button[role="switch"],
+button[role="switch"][aria-checked="true"],
+button[role="switch"]:focus,
+button[role="switch"]:focus-visible,
+button[role="switch"]:active {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background-color: transparent !important;
+}
+

@@ -2,14 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, Ban, Building2, Calendar, CheckCircle2, ChevronDown, Clock,
-  Download, Eye, FileSignature, FileText, Search, XCircle,
+  Download, Eye, FileSignature, FileText, Search, XCircle, Shield,
 } from 'lucide-react';
 import { useCurrency } from '@/components/shared/CurrencyMaster';
+import { MessageStrip } from '@/components/shared/MessageStrip';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { CollapsibleContent } from '@/components/ui/collapsible-content';
 import { EmptyState, MetricCard, PageFrame, PageLead } from '@/components/ui/product';
 import { useServiceData } from '@/hooks/useServiceData';
 import { cn } from '@/lib/utils';
@@ -19,6 +19,8 @@ import { downloadContractAsPdf } from '@/utils/pdfDownload';
 import { getVendorPath } from '@/utils/tenantResolver';
 
 type Tone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
+type ContractFilter = 'PENDING_SIGNATURE' | 'ACTIVE' | 'TOTAL' | null;
+
 const STATUS: Record<string, { label: string; tone: Tone; icon: typeof FileText }> = {
   DRAFT: { label: 'Draft', tone: 'neutral', icon: FileText },
   PENDING_VENDOR_SIGNATURE: { label: 'Awaiting your signature', tone: 'warning', icon: Clock },
@@ -37,93 +39,301 @@ const STATUS: Record<string, { label: string; tone: Tone; icon: typeof FileText 
 function StatusBadge({ status }: { status: string }) {
   const config = STATUS[status] ?? { label: status.replaceAll('_', ' '), tone: 'neutral' as Tone, icon: FileText };
   const Icon = config.icon;
-  return <Badge tone={config.tone}><Icon className="size-3" />{config.label}</Badge>;
+  return (
+    <Badge tone={config.tone}>
+      <Icon className="size-3" />
+      {config.label}
+    </Badge>
+  );
 }
 
 export default function VendorContractsPage() {
   const navigate = useNavigate();
   const { formatAmount, companyDefaultCurrency } = useCurrency();
   const { data: contracts, loading, error, reload } = useServiceData(
-    () => contractService.listVendorContracts().then((result) => result.contracts), [] as Contract[], [],
-    { cacheKey: 'vendor:contracts', cacheTtlMs: 30_000 },
+    () => contractService.listVendorContracts().then((result) => result.contracts),
+    [] as Contract[],
+    [],
+    { cacheKey: 'vendor:contracts', cacheTtlMs: 30_000 }
   );
+
   const [search, setSearch] = useState('');
+  const [kpiFilter, setKpiFilter] = useState<ContractFilter>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribeSigned = sseClient.on('contract_signed', reload);
     const unsubscribePurchaseOrder = sseClient.on('po_created', reload);
-    return () => { unsubscribeSigned(); unsubscribePurchaseOrder(); };
+    return () => {
+      unsubscribeSigned();
+      unsubscribePurchaseOrder();
+    };
   }, [reload]);
 
-  const summary = useMemo(() => ({
-    total: contracts.length,
-    pendingSignature: contracts.filter((contract) => ['AWAITING_VENDOR_SIGNATURE', 'PENDING_VENDOR_SIGNATURE'].includes(contract.status)).length,
-    active: contracts.filter((contract) => ['VENDOR_SIGNED', 'ACCEPTED', 'COMPLETED', 'ACTIVE'].includes(contract.status)).length,
-    totalValue: contracts.reduce((sum, contract) => sum + contract.contractValue, 0),
-  }), [contracts]);
+  const summary = useMemo(
+    () => ({
+      total: contracts.length,
+      pendingSignature: contracts.filter((contract) =>
+        ['AWAITING_VENDOR_SIGNATURE', 'PENDING_VENDOR_SIGNATURE'].includes(contract.status)
+      ).length,
+      active: contracts.filter((contract) =>
+        ['VENDOR_SIGNED', 'ACCEPTED', 'COMPLETED', 'ACTIVE'].includes(contract.status)
+      ).length,
+      totalValue: contracts.reduce((sum, contract) => sum + contract.contractValue, 0),
+    }),
+    [contracts]
+  );
+
   const filtered = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return contracts;
-    return contracts.filter((contract) => [contract.contractNumber, contract.title, contract.rfq?.rfqNumber ?? ''].some((field) => field.toLowerCase().includes(query)));
-  }, [contracts, search]);
-  const formatDate = (date: string | null | undefined) => date ? new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
-  const formatCurrency = (value: number, currency?: string) => formatAmount(value, currency || companyDefaultCurrency);
-  const needsVendorSignature = (contract: Contract) => ['AWAITING_VENDOR_SIGNATURE', 'PENDING_VENDOR_SIGNATURE'].includes(contract.status);
+    let list = contracts;
+
+    if (kpiFilter === 'PENDING_SIGNATURE') {
+      list = list.filter((c) => ['AWAITING_VENDOR_SIGNATURE', 'PENDING_VENDOR_SIGNATURE'].includes(c.status));
+    } else if (kpiFilter === 'ACTIVE') {
+      list = list.filter((c) => ['VENDOR_SIGNED', 'ACCEPTED', 'COMPLETED', 'ACTIVE'].includes(c.status));
+    }
+
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((contract) =>
+        [contract.contractNumber, contract.title, contract.rfq?.rfqNumber ?? '', contract.contractOwner?.fullName ?? '']
+          .some((field) => field.toLowerCase().includes(q))
+      );
+    }
+    return list;
+  }, [contracts, kpiFilter, search]);
+
+  const formatDate = (date: string | null | undefined) =>
+    date ? new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+  const formatCurrency = (value: number, currency?: string) =>
+    formatAmount(value, currency || companyDefaultCurrency);
+  const needsVendorSignature = (contract: Contract) =>
+    ['AWAITING_VENDOR_SIGNATURE', 'PENDING_VENDOR_SIGNATURE'].includes(contract.status);
 
   return (
     <PageFrame>
-      <PageLead title="My Contracts" description="Review, download, and sign contracts awarded to your company." />
-      {error && <Card className="mb-4 border-destructive/25 bg-destructive/8 p-4 text-sm text-destructive">{error}</Card>}
-      <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <MetricCard label="Total contracts" value={summary.total} detail="All awarded contracts" icon={FileText} aria-pressed={true} />
-        <MetricCard label="Need signature" value={summary.pendingSignature} detail="Action required" icon={FileSignature} tone="warning" />
-        <MetricCard label="Active" value={summary.active} detail="Signed or completed" icon={CheckCircle2} tone="success" />
-        <MetricCard label="Total value" value={formatAmount(summary.totalValue, companyDefaultCurrency)} detail="Across all contracts" icon={Building2} tone="violet" />
-      </div>
-      <Card className="mb-4 p-3 sm:p-4"><div className="relative max-w-xl"><Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="h-10 pl-10" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search number, title, or RFQ" aria-label="Search contracts" /></div></Card>
+      {error && <MessageStrip type="error">{error}</MessageStrip>}
 
+      {/* ── Page Lead Header ────────────────────────── */}
+      <PageLead
+        title="My Contracts"
+        description="Review, download, and sign contracts awarded to your company."
+      />
+
+      {/* ── KPI Metric Cards ────────────────────────── */}
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          {
+            icon: FileText,
+            tone: 'primary' as const,
+            value: summary.total,
+            label: 'Total contracts',
+            detail: 'All awarded contracts',
+            filter: null as ContractFilter,
+          },
+          {
+            icon: FileSignature,
+            tone: 'warning' as const,
+            value: summary.pendingSignature,
+            label: 'Need signature',
+            detail: 'Action required',
+            filter: 'PENDING_SIGNATURE' as ContractFilter,
+          },
+          {
+            icon: CheckCircle2,
+            tone: 'success' as const,
+            value: summary.active,
+            label: 'Active',
+            detail: 'Signed or completed',
+            filter: 'ACTIVE' as ContractFilter,
+          },
+          {
+            icon: Building2,
+            tone: 'violet' as const,
+            value: formatAmount(summary.totalValue, companyDefaultCurrency),
+            label: 'Total value',
+            detail: 'Across all contracts',
+            filter: null as ContractFilter,
+            isTotalValue: true,
+          },
+        ].map((c) => {
+          const isActive = c.isTotalValue ? false : c.filter === null ? !kpiFilter : kpiFilter === c.filter;
+          return (
+            <MetricCard
+              key={c.label}
+              icon={c.icon}
+              tone={c.tone}
+              value={c.value}
+              label={c.label}
+              detail={c.detail}
+              className={cn(
+                !c.isTotalValue && 'cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-all duration-200',
+                isActive &&
+                  'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
+              )}
+              onClick={() => {
+                if (!c.isTotalValue) setKpiFilter(isActive ? null : c.filter);
+              }}
+              role={c.isTotalValue ? undefined : 'button'}
+              tabIndex={c.isTotalValue ? undefined : 0}
+              aria-pressed={isActive}
+              onKeyDown={(e) => {
+                if (!c.isTotalValue && (e.key === 'Enter' || e.key === ' ')) {
+                  e.preventDefault();
+                  setKpiFilter(isActive ? null : c.filter);
+                }
+              }}
+            />
+          );
+        })}
+      </div>
+
+      {/* ── Search Toolbar ──────────────────────────── */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full max-w-xl">
+          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="h-11 rounded-xl pl-10"
+            type="text"
+            placeholder="Search by contract number, title, RFQ, or buyer..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Search contracts"
+          />
+        </div>
+      </div>
+
+      {/* ── Contracts List Cards ────────────────────── */}
       {loading ? (
-        <Card className="grid min-h-64 place-items-center text-sm text-muted-foreground">Loading contracts…</Card>
+        <Card className="p-8 text-center text-sm text-muted-foreground">Loading contracts…</Card>
       ) : filtered.length === 0 ? (
-        <EmptyState icon={FileText} title="No contracts found" description={search ? 'Try another search term.' : 'Awarded contracts will appear here for review and signing.'} action={search ? <Button variant="secondary" onClick={() => setSearch('')}>Clear search</Button> : undefined} />
+        <EmptyState
+          icon={FileText}
+          title="No contracts found"
+          description={search || kpiFilter ? 'Try clearing your search filter.' : 'Awarded contracts will appear here for review and signing.'}
+          action={
+            search || kpiFilter ? (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setSearch('');
+                  setKpiFilter(null);
+                }}
+              >
+                Clear filters
+              </Button>
+            ) : undefined
+          }
+        />
       ) : (
-        <div className="grid gap-3">
+        <div className="flex flex-col gap-3.5">
           {filtered.map((contract) => {
-            const expanded = expandedId === contract.id;
+            const isExpanded = expandedId === contract.id;
             return (
-              <Card key={contract.id} className={cn('overflow-hidden transition-shadow', expanded && 'shadow-md')}>
-                <button type="button" className="flex w-full flex-col gap-3 p-4 text-left outline-none transition hover:bg-accent/35 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40 sm:flex-row sm:items-center sm:justify-between sm:p-5" onClick={() => setExpandedId(expanded ? null : contract.id)} aria-expanded={expanded}>
-                  <span className="min-w-0"><span className="flex flex-wrap items-center gap-2"><span className="font-semibold text-primary">{contract.contractNumber}</span><span className="truncate text-sm font-medium">{contract.title}</span></span><span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"><span className="flex items-center gap-1"><Building2 className="size-3" />{contract.rfq?.rfqNumber || 'No RFQ reference'}</span><span className="flex items-center gap-1"><Calendar className="size-3" />{formatDate(contract.effectiveDate)}</span></span></span>
-                  <span className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end"><span className="font-semibold tabular-nums">{formatCurrency(contract.contractValue, contract.currency)}</span><StatusBadge status={contract.status} /><ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform', expanded && 'rotate-180')} /></span>
-                </button>
-                <CollapsibleContent open={expanded} className="border-t border-border/65 bg-secondary/20 p-4 sm:p-5">
-                    <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                      {[
-                        ['Contract type', contract.contractType?.replaceAll('_', ' ') || '—'],
-                        ['Value', formatCurrency(contract.contractValue, contract.currency)],
-                        ['Currency', contract.currency || companyDefaultCurrency],
-                        ['Priority', contract.priority || 'Medium'],
-                        ['Buyer contact', contract.contractOwner?.fullName || '—'],
-                        ['Source RFQ', contract.rfq?.rfqNumber || '—'],
-                        ['RFQ title', contract.rfq?.title || '—'],
-                        ['Payment terms', contract.paymentTerms || '—'],
-                      ].map(([label, value]) => <div key={label} className="rounded-xl border border-border/60 bg-card p-3"><dt className="text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{label}</dt><dd className="mt-1 break-words text-sm font-medium">{value}</dd></div>)}
-                    </dl>
-                    <div className="mt-4 flex flex-wrap gap-2 border-t border-border/60 pt-4">
-                      <Button size="sm" onClick={() => navigate(getVendorPath(`/vendor/contracts/${contract.id}`))}>
-                        <Eye />View details
-                      </Button>
-                      <Button variant="secondary" size="sm" onClick={() => downloadContractAsPdf(contract.contentSnapshot, contract.contractNumber, contract.title)}>
-                        <Download />Download
-                      </Button>
-                      {needsVendorSignature(contract) && (
-                        <Button size="sm" className="border-emerald-600 bg-emerald-600 hover:bg-emerald-700" onClick={() => navigate(getVendorPath(`/vendor/contracts/${contract.id}?action=sign`))}>
-                          <FileSignature />Sign contract
-                        </Button>
+              <Card
+                key={contract.id}
+                className={cn(
+                  'overflow-hidden transition-all duration-200 border-border/80 hover:border-primary/30',
+                  isExpanded && 'ring-1 ring-primary/20 shadow-md'
+                )}
+              >
+                {/* Header */}
+                <div
+                  className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between cursor-pointer hover:bg-accent/25 transition-colors"
+                  onClick={() => setExpandedId(isExpanded ? null : contract.id)}
+                >
+                  <div className="flex flex-col gap-1.5 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <FileText size={18} className="text-primary shrink-0" />
+                      <span className="font-bold text-foreground text-base tracking-tight">{contract.contractNumber}</span>
+                      <StatusBadge status={contract.status} />
+                    </div>
+                    <div className="text-xs font-medium text-muted-foreground truncate">
+                      {contract.title.replace(new RegExp(`\\s*[-·—]?\\s*${contract.rfq?.rfqNumber || ''}`, 'gi'), '').trim()}
+                      {contract.rfq?.rfqNumber && (
+                        <>
+                          <span className="mx-1.5 opacity-40">·</span>
+                          <span className="text-foreground/80 font-medium">RFQ: {contract.rfq.rfqNumber}</span>
+                        </>
                       )}
                     </div>
-                </CollapsibleContent>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    {/* Prominent Price Display */}
+                    <div className="text-right mr-2">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">Contract Amount</div>
+                      <div className="text-lg font-bold tabular-nums text-foreground">
+                        {formatCurrency(contract.contractValue, contract.currency)}
+                      </div>
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigate(getVendorPath(`/vendor/contracts/${contract.id}`))}>
+                      <Eye size={14} /> View Details
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      onClick={() => downloadContractAsPdf(contract.contentSnapshot, contract.contractNumber, contract.title)}>
+                      <Download size={14} /> Download
+                    </Button>
+
+                    {needsVendorSignature(contract) && (
+                      <Button
+                        size="sm"
+                        className="border-emerald-600 bg-emerald-600 hover:bg-emerald-700 text-white"
+                        onClick={() => navigate(getVendorPath(`/vendor/contracts/${contract.id}?action=sign`))}>
+                        <FileSignature size={14} /> Sign Contract
+                      </Button>
+                    )}
+
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => setExpandedId(isExpanded ? null : contract.id)}
+                      aria-label="Toggle contract details">
+                      <ChevronDown className={cn('size-4 transition-transform duration-200', isExpanded && 'rotate-180')} />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Expanded Details Body */}
+                {isExpanded && (
+                  <div className="border-t border-border/60 bg-muted/10 p-5 space-y-4 text-sm">
+                    {/* Key Dates Badge Grid */}
+                    <div className="flex flex-wrap items-center gap-3 pb-3 border-b border-border/50 text-xs">
+                      <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-background px-3 py-1.5 font-medium text-foreground">
+                        <Calendar size={14} className="text-primary shrink-0" />
+                        <span>Effective Date: <strong>{formatDate(contract.effectiveDate)}</strong></span>
+                      </div>
+                      <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-background px-3 py-1.5 font-medium text-foreground">
+                        <Clock size={14} className="text-muted-foreground shrink-0" />
+                        <span>End Date: <strong>{formatDate(contract.endDate)}</strong></span>
+                      </div>
+                    </div>
+
+                    {/* Metadata Grid */}
+                    <div className="grid grid-cols-2 gap-y-3.5 gap-x-6 sm:grid-cols-4 text-xs">
+                      {[
+                        ['Contract Type', contract.contractType?.replaceAll('_', ' ') || '—'],
+                        ['Currency', contract.currency || companyDefaultCurrency],
+                        ['Priority', contract.priority || 'Medium'],
+                        ['Buyer Contact', contract.contractOwner?.fullName || '—'],
+                        ['Source RFQ', contract.rfq?.rfqNumber || '—'],
+                        ['RFQ Title', contract.rfq?.title || '—'],
+                        ['Payment Terms', contract.paymentTerms || '—'],
+                      ].map(([label, value]) => (
+                        <div key={label}>
+                          <div className="text-muted-foreground font-medium mb-0.5 text-[11px]">{label}</div>
+                          <div className="font-semibold text-foreground text-xs">{value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </Card>
             );
           })}
@@ -132,3 +342,4 @@ export default function VendorContractsPage() {
     </PageFrame>
   );
 }
+

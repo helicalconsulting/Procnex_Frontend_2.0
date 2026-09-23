@@ -4,9 +4,15 @@ import { useServiceData } from '../../hooks/useServiceData';
 import { contractService, type Contract } from '../../services/contractService';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
+import { Badge } from '../../components/ui/badge';
+import { Button, buttonVariants } from '../../components/ui/button';
+import { Card } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
+import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
+import { cn } from '../../lib/utils';
 import {
   ChevronLeft, Download, FileSignature, CheckCircle2,
-  Clock, AlertTriangle, Trash2, FileText, Maximize2, Minimize2,
+  Clock, AlertTriangle, Trash2, FileText,
   DollarSign, PieChart, Package, Shield, Calendar, IndianRupee,
   Printer, Check, X, Building2, User, PenLine, Upload
 } from 'lucide-react';
@@ -20,18 +26,21 @@ import './VendorContractDetailPage.css';
 
 // ─── Status Badge Mappings ───────────────────────────────────
 
-const STATUS_LABELS: Record<string, string> = {
-  DRAFT: 'Draft',
-  PENDING_VENDOR_SIGNATURE: 'Awaiting Your Signature',
-  AWAITING_VENDOR_SIGNATURE: 'Awaiting Your Signature',
-  AWAITING_CUSTOMER_SIGNATURE: 'Awaiting Buyer Signature',
-  VENDOR_SIGNED: 'Vendor Signed',
-  ACCEPTED: 'Active',
-  COMPLETED: 'Completed',
-  ACTIVE: 'Active',
-  EXPIRING_SOON: 'Expiring Soon',
-  CANCELLED: 'Cancelled',
-  TERMINATED: 'Terminated',
+type Tone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
+
+const STATUS_CONFIG: Record<string, { label: string; tone: Tone }> = {
+  DRAFT: { label: 'Draft', tone: 'neutral' },
+  PENDING_VENDOR_SIGNATURE: { label: 'Awaiting Your Signature', tone: 'warning' },
+  AWAITING_VENDOR_SIGNATURE: { label: 'Awaiting Your Signature', tone: 'warning' },
+  AWAITING_CUSTOMER_SIGNATURE: { label: 'Awaiting Buyer Signature', tone: 'info' },
+  VENDOR_SIGNED: { label: 'Vendor Signed', tone: 'success' },
+  ACCEPTED: { label: 'Active', tone: 'success' },
+  COMPLETED: { label: 'Completed', tone: 'success' },
+  ACTIVE: { label: 'Active', tone: 'success' },
+  EXPIRING_SOON: { label: 'Expiring Soon', tone: 'warning' },
+  EXPIRED: { label: 'Expired', tone: 'danger' },
+  CANCELLED: { label: 'Cancelled', tone: 'danger' },
+  TERMINATED: { label: 'Terminated', tone: 'danger' },
 };
 
 const INK_COLORS = [
@@ -40,8 +49,6 @@ const INK_COLORS = [
   { id: 'royal', color: '#0a6ed1', label: 'Royal Blue' },
   { id: 'red', color: '#dc2626', label: 'Red Ink' },
 ];
-
-// ─── Component ──────────────────────────────────────────────
 
 export default function VendorContractDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -63,7 +70,6 @@ export default function VendorContractDetailPage() {
   const [hasDrawn, setHasDrawn] = useState(false);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [fullPreview, setFullPreview] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [penColor, setPenColor] = useState('#000000');
@@ -249,18 +255,32 @@ export default function VendorContractDetailPage() {
     win.print();
   };
 
-  if (loading) return <div className="vcd-page"><div className="vcd-page__loading">Loading contract…</div></div>;
-  if (fetchError) return (
-    <div className="vcd-page">
-      <button className="vcd-back" onClick={() => navigate(getVendorPath('/vendor/contracts'))}><ChevronLeft size={16} /> Back to Contracts</button>
-      <div className="vcd-page__error">
-        <div className="vcd-page__error-icon"><AlertTriangle size={48} /></div>
-        <p style={{ fontWeight: 700, fontSize: 19 }}>Failed to load contract</p>
-        <p style={{ fontSize: 15, color: 'var(--text-secondary)' }}>{fetchError}</p>
-        <button className="vcd-action-btn vcd-action-btn--primary" onClick={reload} style={{ marginTop: 16 }}>Retry</button>
-      </div>
-    </div>
-  );
+  if (loading) {
+    return (
+      <PageFrame>
+        <Card className="p-12 text-center text-sm text-muted-foreground">Loading contract details…</Card>
+      </PageFrame>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <PageFrame>
+        <Button variant="ghost" size="sm" onClick={() => navigate(getVendorPath('/vendor/contracts'))} className="mb-4 gap-1.5">
+          <ChevronLeft className="size-4" /> Back to Contracts
+        </Button>
+        <Card className="p-8 text-center space-y-3">
+          <div className="flex justify-center text-destructive">
+            <AlertTriangle className="size-12" />
+          </div>
+          <h3 className="text-lg font-bold text-foreground">Failed to load contract</h3>
+          <p className="text-sm text-muted-foreground">{fetchError}</p>
+          <Button onClick={reload} className="mt-2">Retry</Button>
+        </Card>
+      </PageFrame>
+    );
+  }
+
   if (!data) return null;
 
   const contract = data.contract;
@@ -270,204 +290,313 @@ export default function VendorContractDetailPage() {
   const formatDate = (d: string | null | undefined) =>
     d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
+  const statusCfg = STATUS_CONFIG[status] || { label: status, tone: 'neutral' as Tone };
+
   const tabs = [
-    { id: 'overview', label: 'Overview', icon: <FileText size={14} /> },
-    { id: 'terms', label: 'Terms & Clauses', icon: <Shield size={14} />, count: (contract.clauses?.length || 0) + (contract.slaEntries?.length || 0) > 0 ? (contract.clauses?.length || 0) + (contract.slaEntries?.length || 0) : undefined },
-    { id: 'document', label: 'Document Preview', icon: <FileText size={14} /> },
-    { id: 'orders', label: 'Purchase Orders', icon: <Package size={14} />, count: contract.purchaseOrders?.length || 0 },
-    { id: 'signature', label: isSigned ? 'Signature Info' : 'Sign Contract', icon: <FileSignature size={14} /> },
+    { id: 'overview', label: 'Overview', icon: FileText },
+    { id: 'terms', label: 'Terms & Clauses', icon: Shield, count: (contract.clauses?.length || 0) + (contract.slaEntries?.length || 0) > 0 ? (contract.clauses?.length || 0) + (contract.slaEntries?.length || 0) : undefined },
+    { id: 'document', label: 'Document Preview', icon: FileText },
+    { id: 'orders', label: 'Purchase Orders', icon: Package, count: contract.purchaseOrders?.length || 0 },
+    { id: 'signature', label: isSigned ? 'Signature Info' : 'Sign Contract', icon: FileSignature },
   ];
 
   return (
-    <div className="vcd-page">
+    <PageFrame>
       {pageMsg && (
         <MessageStrip type={inferMessageType(pageMsg)} onClose={() => setPageMsg(null)} autoHideMs={6000}>
           {pageMsg}
         </MessageStrip>
       )}
 
-      {/* Back Button */}
-      <button className="vcd-back" onClick={() => navigate(getVendorPath('/vendor/contracts'))}>
-        <ChevronLeft size={16} /> Back to Contracts
-      </button>
+      {/* Top Back Action Bar */}
+      <div className="mb-3 flex items-center justify-between">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate(getVendorPath('/vendor/contracts'))}
+          className="gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <ChevronLeft className="size-4" /> Back to Contracts
+        </Button>
+      </div>
 
-      {/* Summary Header */}
-      <div className="vcd-summary">
-        <div className="vcd-summary__top">
-          <div className="vcd-summary__top-left">
-            <h1 className="vcd-summary__title">{contract.title}</h1>
-            <span className="vcd-summary__number">{contract.contractNumber}</span>
-          </div>
-          <div className="vcd-summary__top-right">
-            <span className={`vc-status vc-status--${status}`}>
-              {isSigned ? <CheckCircle2 size={14} /> : canSign ? <Clock size={14} /> : <FileText size={14} />}
-              {STATUS_LABELS[status] || status}
-            </span>
+      {/* Page Lead Header */}
+      <PageLead
+        title={contract.title}
+        description={`Contract Ref: ${contract.contractNumber} · Awarded to your company`}
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone={statusCfg.tone} className="py-1 px-2.5 text-xs font-semibold">
+              <span className="size-1.5 rounded-full bg-current mr-1" />
+              {statusCfg.label}
+            </Badge>
 
             {canSign && (
-              <button className="vcd-action-btn vcd-action-btn--primary" onClick={() => setActiveTab('signature')}>
-                <FileSignature size={14} /> Sign Now
+              <Button size="sm" onClick={() => setActiveTab('signature')} className="gap-1.5">
+                <FileSignature className="size-4" /> Sign Now
+              </Button>
+            )}
+
+            <Button variant="outline" size="sm" onClick={handleDownload} className="gap-1.5">
+              <Download className="size-4" /> Download PDF
+            </Button>
+
+            <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5">
+              <Printer className="size-4" /> Print
+            </Button>
+          </div>
+        }
+      />
+
+      {/* KPI Metrics / Balance Cards (Shown when signed/active) */}
+      {isSigned && contractBalance ? (
+        <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <MetricCard
+            icon={IndianRupee}
+            tone="primary"
+            value={formatAmount(contractBalance.contractValue, contractBalance.currency)}
+            label="Contract Value"
+            detail="Total awarded amount"
+          />
+          <MetricCard
+            icon={DollarSign}
+            tone="info"
+            value={formatAmount(contractBalance.consumedValue, contractBalance.currency)}
+            label="Consumed by POs"
+            detail={`Across ${contractBalance.totalPOs} orders`}
+          />
+          <MetricCard
+            icon={PieChart}
+            tone={contractBalance.remainingValue > 0 ? 'success' : 'warning'}
+            value={formatAmount(contractBalance.remainingValue, contractBalance.currency)}
+            label="Remaining Balance"
+            detail="Available limit"
+          />
+          <MetricCard
+            icon={Package}
+            tone="violet"
+            value={contractBalance.totalPOs}
+            label="Purchase Orders"
+            detail="Generated PO count"
+          />
+        </div>
+      ) : (
+        /* Standalone Contract Overview Cards when not yet active */
+        <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <MetricCard
+            icon={IndianRupee}
+            tone="primary"
+            value={formatAmount(contract.contractValue, contract.currency)}
+            label="Contract Value"
+            detail="Total value"
+          />
+          <MetricCard
+            icon={Building2}
+            tone="info"
+            value={contract.contractOwner?.fullName || 'Buyer Team'}
+            label="Buyer Representative"
+            detail={contract.contractOwner?.email || '—'}
+          />
+          <MetricCard
+            icon={Calendar}
+            tone="neutral"
+            value={formatDate(contract.effectiveDate)}
+            label="Effective Date"
+            detail={`Expires: ${formatDate(contract.expirationDate)}`}
+          />
+          <MetricCard
+            icon={FileText}
+            tone="warning"
+            value={contract.rfq?.rfqNumber || 'Direct'}
+            label="Source RFQ"
+            detail={contract.rfq?.title || 'Contract reference'}
+          />
+        </div>
+      )}
+
+      {/* Tab Navigation */}
+      <Card className="mb-4 p-1.5 bg-muted/40">
+        <div className="flex flex-wrap items-center gap-1">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={cn(
+                  'flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all duration-150 outline-none',
+                  isActive
+                    ? 'bg-background text-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/40'
+                )}
+              >
+                <Icon className="size-4" />
+                <span>{tab.label}</span>
+                {tab.count !== undefined && tab.count > 0 && (
+                  <Badge tone="neutral" className="ml-1 text-[10px] px-1.5 py-0.2">
+                    {tab.count}
+                  </Badge>
+                )}
               </button>
-            )}
-            <button className="vcd-action-btn vcd-action-btn--secondary" onClick={handleDownload}>
-              <Download size={14} /> Download PDF
-            </button>
-            <button className="vcd-action-btn vcd-action-btn--secondary" onClick={handlePrint}>
-              <Printer size={14} /> Print
-            </button>
-          </div>
+            );
+          })}
         </div>
-
-        {/* Balance Cards Summary (Shown when signed/active) */}
-        {isSigned && contractBalance && (
-          <div className="vcd-balance__cards">
-            <div className="vcd-balance__card">
-              <div className="vcd-balance__card-icon vcd-balance__card-icon--total">
-                <IndianRupee size={20} />
-              </div>
-              <div className="vcd-balance__card-info">
-                <span className="vcd-balance__card-value">{formatAmount(contractBalance.contractValue, contractBalance.currency)}</span>
-                <span className="vcd-balance__card-label">Contract Value</span>
-              </div>
-            </div>
-
-            <div className="vcd-balance__card">
-              <div className="vcd-balance__card-icon vcd-balance__card-icon--consumed">
-                <DollarSign size={20} />
-              </div>
-              <div className="vcd-balance__card-info">
-                <span className="vcd-balance__card-value">{formatAmount(contractBalance.consumedValue, contractBalance.currency)}</span>
-                <span className="vcd-balance__card-label">Consumed by POs</span>
-              </div>
-            </div>
-
-            <div className="vcd-balance__card">
-              <div className={`vcd-balance__card-icon ${contractBalance.remainingValue > 0 ? 'vcd-balance__card-icon--remaining' : 'vcd-balance__card-icon--exhausted'}`}>
-                <PieChart size={20} />
-              </div>
-              <div className="vcd-balance__card-info">
-                <span className="vcd-balance__card-value">{formatAmount(contractBalance.remainingValue, contractBalance.currency)}</span>
-                <span className="vcd-balance__card-label">Remaining Balance</span>
-              </div>
-            </div>
-
-            <div className="vcd-balance__card">
-              <div className="vcd-balance__card-icon vcd-balance__card-icon--total">
-                <Package size={20} />
-              </div>
-              <div className="vcd-balance__card-info">
-                <span className="vcd-balance__card-value">{contractBalance.totalPOs}</span>
-                <span className="vcd-balance__card-label">Purchase Orders</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Metadata Grid */}
-        <div className="vcd-summary__meta">
-          <div className="vcd-summary__item">
-            <span className="vcd-summary__item-label">Buyer</span>
-            <span className="vcd-summary__item-value">{contract.contractOwner?.fullName || 'Buyer Organization'}</span>
-          </div>
-          <div className="vcd-summary__item">
-            <span className="vcd-summary__item-label">Contract Value</span>
-            <span className="vcd-summary__item-value">{formatAmount(contract.contractValue, contract.currency)}</span>
-          </div>
-          <div className="vcd-summary__item">
-            <span className="vcd-summary__item-label">Effective Date</span>
-            <span className="vcd-summary__item-value">{formatDate(contract.effectiveDate)}</span>
-          </div>
-          <div className="vcd-summary__item">
-            <span className="vcd-summary__item-label">Expiration Date</span>
-            <span className="vcd-summary__item-value">{formatDate(contract.expirationDate)}</span>
-          </div>
-          <div className="vcd-summary__item">
-            <span className="vcd-summary__item-label">Source RFQ</span>
-            <span className="vcd-summary__item-value">{contract.rfq?.rfqNumber || '—'}</span>
-            {contract.rfq?.title && (
-              <span className="vcd-summary__item-sub">{contract.rfq.title}</span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Tabs Bar */}
-      <div className="vcd-tabs">
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            className={`vcd-tab ${activeTab === tab.id ? 'vcd-tab--active' : ''}`}
-            onClick={() => setActiveTab(tab.id)}
-          >
-            {tab.icon}
-            <span>{tab.label}</span>
-            {tab.count !== undefined && tab.count > 0 && (
-              <span className="vcd-tab__count">{tab.count}</span>
-            )}
-          </button>
-        ))}
-      </div>
+      </Card>
 
       {/* Tab Content Panels */}
-      <div className="vcd-tab-content">
+      <div className="space-y-4">
         {/* ── OVERVIEW TAB ── */}
         {activeTab === 'overview' && (
-          <div className="vcd-grid">
-            <div className="vcd-card-panel">
-              <h3 className="vcd-panel-title"><Building2 size={16} /> Contract Information</h3>
-              <div className="vcd-field-row"><span className="vcd-field-label">Title</span><span className="vcd-field-value">{contract.title}</span></div>
-              <div className="vcd-field-row"><span className="vcd-field-label">Contract Number</span><span className="vcd-field-value">{contract.contractNumber}</span></div>
-              <div className="vcd-field-row"><span className="vcd-field-label">Contract Type</span><span className="vcd-field-value">{contract.contractType?.replace(/_/g, ' ') || 'General Agreement'}</span></div>
-              <div className="vcd-field-row"><span className="vcd-field-label">Status</span><span className="vcd-field-value">{STATUS_LABELS[status] || status}</span></div>
-              <div className="vcd-field-row"><span className="vcd-field-label">Priority</span><span className="vcd-field-value">{contract.priority || 'Standard'}</span></div>
-            </div>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <Card className="p-5 space-y-4">
+              <div className="flex items-center gap-2 border-b border-border/60 pb-3 font-semibold text-foreground text-sm">
+                <Building2 className="size-4 text-primary" /> Contract Information
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div>
+                  <div className="text-muted-foreground font-medium mb-1">Title</div>
+                  <div className="font-semibold text-foreground">{contract.title}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground font-medium mb-1">Contract Number</div>
+                  <div className="font-semibold text-primary">{contract.contractNumber}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground font-medium mb-1">Contract Type</div>
+                  <div className="font-medium text-foreground">{contract.contractType?.replace(/_/g, ' ') || 'General Agreement'}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground font-medium mb-1">Priority</div>
+                  <div className="font-medium text-foreground">{contract.priority || 'Standard'}</div>
+                </div>
+              </div>
+            </Card>
 
-            <div className="vcd-card-panel">
-              <h3 className="vcd-panel-title"><User size={16} /> Buyer & Reference</h3>
-              <div className="vcd-field-row"><span className="vcd-field-label">Buyer Representative</span><span className="vcd-field-value">{contract.contractOwner?.fullName || 'Procurement Team'}</span></div>
-              <div className="vcd-field-row"><span className="vcd-field-label">Buyer Email</span><span className="vcd-field-value">{contract.contractOwner?.email || '—'}</span></div>
-              <div className="vcd-field-row"><span className="vcd-field-label">Source RFQ</span><span className="vcd-field-value">{contract.rfq?.rfqNumber || '—'}</span></div>
-              <div className="vcd-field-row"><span className="vcd-field-label">RFQ Title</span><span className="vcd-field-value">{contract.rfq?.title || '—'}</span></div>
-            </div>
+            <Card className="p-5 space-y-4">
+              <div className="flex items-center gap-2 border-b border-border/60 pb-3 font-semibold text-foreground text-sm">
+                <User className="size-4 text-primary" /> Buyer & Reference
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div>
+                  <div className="text-muted-foreground font-medium mb-1">Buyer Representative</div>
+                  <div className="font-semibold text-foreground">{contract.contractOwner?.fullName || 'Procurement Team'}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground font-medium mb-1">Buyer Email</div>
+                  <div className="font-medium text-foreground">{contract.contractOwner?.email || '—'}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground font-medium mb-1">Source RFQ</div>
+                  <div className="font-semibold text-foreground">{contract.rfq?.rfqNumber || '—'}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground font-medium mb-1">RFQ Title</div>
+                  <div className="font-medium text-foreground">{contract.rfq?.title || '—'}</div>
+                </div>
+              </div>
+            </Card>
 
-            <div className="vcd-card-panel">
-              <h3 className="vcd-panel-title"><IndianRupee size={16} /> Commercial Terms</h3>
-              <div className="vcd-field-row"><span className="vcd-field-label">Contract Value</span><span className="vcd-field-value">{formatAmount(contract.contractValue, contract.currency)}</span></div>
-              <div className="vcd-field-row"><span className="vcd-field-label">Currency</span><span className="vcd-field-value">{contract.currency || 'KES'}</span></div>
-              <div className="vcd-field-row"><span className="vcd-field-label">Payment Terms</span><span className="vcd-field-value">{contract.paymentTerms || 'Net 30'}</span></div>
-              <div className="vcd-field-row"><span className="vcd-field-label">Delivery Terms</span><span className="vcd-field-value">{contract.deliveryTerms || 'FOB Destination'}</span></div>
-            </div>
+            <Card className="p-5 space-y-4">
+              <div className="flex items-center gap-2 border-b border-border/60 pb-3 font-semibold text-foreground text-sm">
+                <IndianRupee className="size-4 text-primary" /> Commercial Terms
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div>
+                  <div className="text-muted-foreground font-medium mb-1">Contract Value</div>
+                  <div className="font-semibold text-foreground">{formatAmount(contract.contractValue, contract.currency)}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground font-medium mb-1">Currency</div>
+                  <div className="font-medium text-foreground">{contract.currency || 'KES'}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground font-medium mb-1">Payment Terms</div>
+                  <div className="font-medium text-foreground">{contract.paymentTerms || 'Net 30'}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground font-medium mb-1">Delivery Terms</div>
+                  <div className="font-medium text-foreground">{contract.deliveryTerms || 'FOB Destination'}</div>
+                </div>
+              </div>
+            </Card>
 
-            <div className="vcd-card-panel">
-              <h3 className="vcd-panel-title"><Calendar size={16} /> Key Timeline Dates</h3>
-              <div className="vcd-field-row"><span className="vcd-field-label">Effective Date</span><span className="vcd-field-value">{formatDate(contract.effectiveDate)}</span></div>
-              <div className="vcd-field-row"><span className="vcd-field-label">Expiration Date</span><span className="vcd-field-value">{formatDate(contract.expirationDate)}</span></div>
-              <div className="vcd-field-row"><span className="vcd-field-label">Created Date</span><span className="vcd-field-value">{formatDate(contract.createdAt)}</span></div>
-              {contract.signedByVendorAt && <div className="vcd-field-row"><span className="vcd-field-label">Signed by You</span><span className="vcd-field-value">{formatDate(contract.signedByVendorAt)}</span></div>}
-            </div>
+            <Card className="p-5 space-y-4">
+              <div className="flex items-center gap-2 border-b border-border/60 pb-3 font-semibold text-foreground text-sm">
+                <Calendar className="size-4 text-primary" /> Key Timeline Dates
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div>
+                  <div className="text-muted-foreground font-medium mb-1">Effective Date</div>
+                  <div className="font-semibold text-foreground">{formatDate(contract.effectiveDate)}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground font-medium mb-1">Expiration Date</div>
+                  <div className="font-semibold text-foreground">{formatDate(contract.expirationDate)}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground font-medium mb-1">Created Date</div>
+                  <div className="font-semibold text-foreground">{formatDate(contract.createdAt)}</div>
+                </div>
+                {contract.signedByVendorAt && (
+                  <div>
+                    <div className="text-muted-foreground font-medium mb-1">Signed by You</div>
+                    <div className="font-semibold text-emerald-600">{formatDate(contract.signedByVendorAt)}</div>
+                  </div>
+                )}
+              </div>
+            </Card>
           </div>
         )}
 
         {/* ── TERMS & CLAUSES TAB ── */}
         {activeTab === 'terms' && (
-          <div className="vcd-grid">
-            <div className="vcd-card-panel">
-              <h3 className="vcd-panel-title"><IndianRupee size={16} /> Payment & Billing</h3>
-              <div className="vcd-field-row"><span className="vcd-field-label">Payment Terms</span><span className="vcd-field-value">{contract.paymentTerms || '—'}</span></div>
-              <div className="vcd-field-row"><span className="vcd-field-label">Payment Schedule</span><span className="vcd-field-value">{contract.paymentSchedule || '—'}</span></div>
-              <div className="vcd-field-row"><span className="vcd-field-label">Tax / VAT Percentage</span><span className="vcd-field-value">{contract.taxPercentage ? `${contract.taxPercentage}%` : 'Standard'}</span></div>
-            </div>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <Card className="p-6 space-y-4">
+              <div className="flex items-center gap-2 border-b border-border/60 pb-3.5 font-semibold text-foreground text-sm">
+                <IndianRupee className="size-4 text-primary" /> Payment & Billing
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                <div>
+                  <div className="text-muted-foreground font-medium mb-1">Payment Terms</div>
+                  <div className="font-semibold text-foreground">{contract.paymentTerms || '—'}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground font-medium mb-1">Payment Schedule</div>
+                  <div className="font-semibold text-foreground">{contract.paymentSchedule || '—'}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground font-medium mb-1">Tax / VAT</div>
+                  <div className="font-semibold text-foreground">{contract.taxPercentage ? `${contract.taxPercentage}%` : 'Standard'}</div>
+                </div>
+              </div>
+            </Card>
 
-            <div className="vcd-card-panel">
-              <h3 className="vcd-panel-title"><Package size={16} /> Delivery & Logistics</h3>
-              <div className="vcd-field-row"><span className="vcd-field-label">Delivery Terms</span><span className="vcd-field-value">{contract.deliveryTerms || '—'}</span></div>
-              <div className="vcd-field-row"><span className="vcd-field-label">Delivery Location</span><span className="vcd-field-value">{contract.deliveryLocation || '—'}</span></div>
-              <div className="vcd-field-row"><span className="vcd-field-label">Lead Time</span><span className="vcd-field-value">{contract.leadTime || '—'}</span></div>
-            </div>
+            <Card className="p-6 space-y-4">
+              <div className="flex items-center gap-2 border-b border-border/60 pb-3.5 font-semibold text-foreground text-sm">
+                <Package className="size-4 text-primary" /> Delivery & Logistics
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                <div>
+                  <div className="text-muted-foreground font-medium mb-1">Delivery Terms</div>
+                  <div className="font-semibold text-foreground">{contract.deliveryTerms || '—'}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground font-medium mb-1">Location</div>
+                  <div className="font-semibold text-foreground">{contract.deliveryLocation || '—'}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground font-medium mb-1">Lead Time</div>
+                  <div className="font-semibold text-foreground">{contract.leadTime || '—'}</div>
+                </div>
+              </div>
+            </Card>
 
-            <div className="vcd-card-panel vcd-card-panel--full">
-              <h3 className="vcd-panel-title"><Shield size={16} /> Compliance & Warranties</h3>
-              <div className="vcd-compliance-grid">
+            <Card className="p-6 space-y-4 lg:col-span-2">
+              <div className="flex items-center gap-2 border-b border-border/60 pb-3.5 font-semibold text-foreground text-sm">
+                <Shield className="size-4 text-primary" /> Compliance & Warranties
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
                 {[
                   { label: 'Confidentiality', val: contract.confidentiality },
                   { label: 'Data Protection', val: contract.dataProtection },
@@ -476,146 +605,165 @@ export default function VendorContractDetailPage() {
                   { label: 'Insurance Required', val: contract.insuranceRequired },
                   { label: 'Audit Rights', val: contract.auditRights },
                 ].map((item, idx) => (
-                  <div key={idx} className={item.val ? 'vcd-comp-item vcd-comp-item--yes' : 'vcd-comp-item vcd-comp-item--no'}>
-                    {item.val ? <Check size={14} /> : <X size={14} />} <span>{item.label}</span>
+                  <div
+                    key={idx}
+                    className={cn(
+                      'flex items-center gap-2.5 p-3 rounded-xl border font-medium',
+                      item.val ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400' : 'border-border/60 bg-muted/10 text-muted-foreground'
+                    )}
+                  >
+                    {item.val ? <Check className="size-4 shrink-0 text-emerald-600" /> : <X className="size-4 shrink-0 text-muted-foreground" />}
+                    <span>{item.label}</span>
                   </div>
                 ))}
               </div>
-            </div>
+            </Card>
           </div>
         )}
 
         {/* ── DOCUMENT PREVIEW TAB ── */}
         {activeTab === 'document' && (
-          <div className={`vcd-doc-preview ${fullPreview ? 'vcd-doc-preview--full' : ''}`}>
-            <div className="vcd-doc-preview__toolbar">
-              <div className="vcd-doc-preview__toolbar-left">
-                <FileText size={16} />
-                <span>Executed Contract Document</span>
+          <Card className="overflow-hidden">
+            <div className="flex items-center justify-between border-b border-border/60 bg-muted/20 px-4 py-3">
+              <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                <FileText className="size-4 text-primary" /> Executed Contract Document
               </div>
-              <div className="vcd-doc-preview__toolbar-right">
-                <button className="vcd-doc-preview__toggle" onClick={handleDownload}>
-                  <Download size={15} /> <span>Download</span>
-                </button>
-              </div>
-
+              <Button size="sm" variant="outline" onClick={handleDownload} className="gap-1.5 text-xs">
+                <Download className="size-3.5" /> Download PDF
+              </Button>
             </div>
-            <div className="vcd-doc-preview__body">
+            <div className="p-6 bg-card min-h-[400px]">
               {contract.contentSnapshot ? (
-                <div className="vcd-doc-content" dangerouslySetInnerHTML={{ __html: cleanDuplicateSignatures(contract.contentSnapshot) }} />
+                <div
+                  className="prose dark:prose-invert max-w-none text-sm text-foreground leading-relaxed"
+                  dangerouslySetInnerHTML={{ __html: cleanDuplicateSignatures(contract.contentSnapshot) }}
+                />
               ) : (
-                <div className="vcd-empty-doc">
-                  <FileText size={48} />
-                  <p>Document content unavailable</p>
-                </div>
+                <EmptyState
+                  icon={FileText}
+                  title="Document content unavailable"
+                  description="The text payload for this contract is not formatted for browser preview."
+                />
               )}
             </div>
-          </div>
+          </Card>
         )}
 
         {/* ── PURCHASE ORDERS TAB ── */}
         {activeTab === 'orders' && (
-          <div className="vcd-card-panel vcd-card-panel--full">
-            <h3 className="vcd-panel-title"><Package size={16} /> Issued Purchase Orders</h3>
+          <Card className="p-5 space-y-4">
+            <div className="flex items-center gap-2 border-b border-border/60 pb-3 font-semibold text-foreground text-sm">
+              <Package className="size-4 text-primary" /> Issued Purchase Orders
+            </div>
             {contract.purchaseOrders && contract.purchaseOrders.length > 0 ? (
-              <table className="vcd-po-table">
-                <thead>
-                  <tr>
-                    <th>PO Number</th>
-                    <th>Issue Date</th>
-                    <th>Amount</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {contract.purchaseOrders.map(po => (
-                    <tr key={po.id}>
-                      <td className="vcd-po-number">{po.poNumber}</td>
-                      <td>{formatDate(po.createdAt)}</td>
-                      <td className="vcd-po-amount">{formatAmount(po.totalAmount, contract.currency)}</td>
-                      <td>
-                        <span className={`vc-status vc-status--${po.status}`}>
-                          {po.status.replace(/_/g, ' ')}
-                        </span>
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-border/60 bg-muted/20 text-left font-semibold text-muted-foreground">
+                      <th className="p-3">PO Number</th>
+                      <th className="p-3">Issue Date</th>
+                      <th className="p-3">Amount</th>
+                      <th className="p-3">Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-border/50">
+                    {contract.purchaseOrders.map((po) => (
+                      <tr key={po.id} className="hover:bg-accent/20">
+                        <td className="p-3 font-semibold text-primary">{po.poNumber}</td>
+                        <td className="p-3 text-muted-foreground">{formatDate(po.createdAt)}</td>
+                        <td className="p-3 tabular-nums font-semibold text-foreground">{formatAmount(po.totalAmount, contract.currency)}</td>
+                        <td className="p-3">
+                          <Badge tone="primary">{po.status.replace(/_/g, ' ')}</Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
-              <p className="vcd-empty-text">No Purchase Orders have been generated against this contract yet.</p>
+              <EmptyState
+                icon={Package}
+                title="No Purchase Orders"
+                description="No purchase orders have been generated against this contract yet."
+              />
             )}
-          </div>
+          </Card>
         )}
 
         {/* ── SIGNATURE TAB ── */}
         {activeTab === 'signature' && (
-          <div id="vcd-sign-section" className="vcd-card-panel vcd-card-panel--full">
-            <h3 className="vcd-panel-title"><FileSignature size={18} /> Digital Signature Execution</h3>
+          <Card id="vcd-sign-section" className="p-5 space-y-4">
+            <div className="flex items-center gap-2 border-b border-border/60 pb-3 font-semibold text-foreground text-sm">
+              <FileSignature className="size-4 text-primary" /> Digital Signature Execution
+            </div>
 
             {isSigned ? (
-              <div className="vcd-signed-banner">
-                <CheckCircle2 size={32} className="vcd-signed-icon" />
+              <div className="flex items-start gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-800 dark:text-emerald-300">
+                <CheckCircle2 className="size-6 text-emerald-600 shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="vcd-signed-title">Contract Signed &amp; Active</h4>
-                  <p className="vcd-signed-desc">
-                    You signed this contract on {formatDate(contract.signedByVendorAt)}. The executed document is binding and available for download.
+                  <h4 className="font-bold text-sm">Contract Signed & Active</h4>
+                  <p className="text-xs mt-1 leading-relaxed">
+                    You signed this contract on {formatDate(contract.signedByVendorAt)}. The executed document is legally binding and available for download.
                   </p>
                 </div>
               </div>
             ) : canSign ? (
-              <div className="vcd-sign-studio">
-                <div className="vcd-sign-studio__left">
-                  <div className="vcd-sign-info-card">
-                    <h4 className="vcd-sign-info-title">Signer Authorization</h4>
-                    <p className="vcd-sign-info-desc">
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+                {/* Signer Authorization Info */}
+                <div className="lg:col-span-5 space-y-4 rounded-xl border border-border/60 bg-muted/10 p-4">
+                  <div>
+                    <h4 className="font-semibold text-foreground text-sm">Signer Authorization</h4>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
                       Executing this document certifies that you are an authorized representative of <strong>{contract.vendor?.name || 'the Vendor Organization'}</strong> with legal authority to enter binding agreements.
                     </p>
+                  </div>
 
-                    <div className="vcd-form-group">
-                      <label className="vcd-form-label">
-                        <User size={13} /> Signer Full Name *
+                  <div className="space-y-3 pt-2">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-foreground flex items-center gap-1">
+                        <User className="size-3 text-muted-foreground" /> Signer Full Name *
                       </label>
-                      <input
+                      <Input
                         type="text"
-                        className="vcd-form-input"
+                        className="h-10 rounded-xl"
                         value={signerName}
-                        onChange={e => setSignerName(e.target.value)}
+                        onChange={(e) => setSignerName(e.target.value)}
                         placeholder="e.g. Rahul Sharma"
                         disabled={signing}
                       />
                     </div>
 
-                    <div className="vcd-form-group">
-                      <label className="vcd-form-label">
-                        <Building2 size={13} /> Title / Role
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-foreground flex items-center gap-1">
+                        <Building2 className="size-3 text-muted-foreground" /> Title / Role
                       </label>
-                      <input
+                      <Input
                         type="text"
-                        className="vcd-form-input"
+                        className="h-10 rounded-xl"
                         value={signerTitle}
-                        onChange={e => setSignerTitle(e.target.value)}
+                        onChange={(e) => setSignerTitle(e.target.value)}
                         placeholder="e.g. Managing Director"
                         disabled={signing}
                       />
                     </div>
+                  </div>
 
-                    <div className="vcd-security-badge">
-                      <Shield size={14} />
-                      <span>21 CFR Part 11 &amp; IT Act Compliant Digital Signature</span>
-                    </div>
+                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground pt-2">
+                    <Shield className="size-3.5 text-primary shrink-0" />
+                    <span>21 CFR Part 11 & IT Act Compliant Digital Signature</span>
                   </div>
                 </div>
 
-                <div className="vcd-sign-studio__right">
-                  <div className="vcd-signature-pad-card">
-                    <div className="vcd-signature-pad-header">
-                      <span className="vcd-signature-pad-title">Signature Studio</span>
+                {/* Signature Pad / Controls */}
+                <div className="lg:col-span-7 space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-border/60">
+                    <span className="text-xs font-semibold text-foreground">Signature Studio</span>
 
+                    <div className="flex items-center gap-1.5">
                       {mode === 'draw' && (
-                        <div className="vcd-color-picker" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Ink Color:</span>
-                          {INK_COLORS.map(c => (
+                        <div className="flex items-center gap-1.5 mr-2">
+                          <span className="text-[11px] font-semibold text-muted-foreground uppercase">Ink:</span>
+                          {INK_COLORS.map((c) => (
                             <button
                               key={c.id}
                               type="button"
@@ -624,151 +772,159 @@ export default function VendorContractDetailPage() {
                                 const ctx = canvasRef.current?.getContext('2d');
                                 if (ctx) ctx.strokeStyle = c.color;
                               }}
-                              style={{
-                                width: 22,
-                                height: 22,
-                                borderRadius: '50%',
-                                background: c.color,
-                                border: penColor === c.color ? '2px solid var(--primary-500, #0a6ed1)' : '2px solid #ffffff',
-                                boxShadow: penColor === c.color ? '0 0 0 2px rgba(10,110,209,0.4)' : '0 1px 3px rgba(0,0,0,0.2)',
-                                cursor: 'pointer',
-                                padding: 0,
-                                transition: 'transform 0.15s, box-shadow 0.15s',
-                                transform: penColor === c.color ? 'scale(1.18)' : 'scale(1)',
-                              }}
+                              className={cn(
+                                'size-5 rounded-full border transition-transform',
+                                penColor === c.color ? 'scale-110 ring-2 ring-primary ring-offset-1' : 'opacity-80'
+                              )}
+                              style={{ backgroundColor: c.color }}
                               title={c.label}
                             />
                           ))}
                         </div>
                       )}
 
-                      <div className="vcd-segmented-control">
+                      <div className="flex items-center gap-1 rounded-lg border border-border/70 p-1 bg-muted/20">
                         {savedSigs.length > 0 && (
-                          <button
-                            type="button"
-                            className={`vcd-segmented-btn ${mode === 'saved' ? 'vcd-segmented-btn--active' : ''}`}
+                          <Button
+                            variant={mode === 'saved' ? 'secondary' : 'ghost'}
+                            size="sm"
+                            className="h-7 text-xs px-2"
                             onClick={() => { setMode('saved'); setHasDrawn(true); }}
                             disabled={signing}
                           >
                             ⭐ Saved ({savedSigs.length})
-                          </button>
+                          </Button>
                         )}
-                        <button
-                          type="button"
-                          className={`vcd-segmented-btn ${mode === 'draw' ? 'vcd-segmented-btn--active' : ''}`}
+                        <Button
+                          variant={mode === 'draw' ? 'secondary' : 'ghost'}
+                          size="sm"
+                          className="h-7 text-xs px-2 gap-1"
                           onClick={() => { setMode('draw'); clearCanvas(); }}
                           disabled={signing}
                         >
-                          <PenLine size={13} /> Draw
-                        </button>
-                        <button
-                          type="button"
-                          className={`vcd-segmented-btn ${mode === 'upload' ? 'vcd-segmented-btn--active' : ''}`}
+                          <PenLine className="size-3" /> Draw
+                        </Button>
+                        <Button
+                          variant={mode === 'upload' ? 'secondary' : 'ghost'}
+                          size="sm"
+                          className="h-7 text-xs px-2 gap-1"
                           onClick={() => { setMode('upload'); clearCanvas(); fileInputRef.current?.click(); }}
                           disabled={signing}
                         >
-                          <Upload size={13} /> Upload
-                        </button>
+                          <Upload className="size-3" /> Upload
+                        </Button>
                       </div>
                     </div>
-
-                    {mode === 'saved' && (
-                      <div style={{ background: 'var(--surface-elevated, rgba(255,255,255,0.04))', border: '1px solid var(--border)', borderRadius: 8, padding: 14, margin: '10px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>Click to select a saved digital signature:</span>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
-                          {savedSigs.map((s) => (
-                            <div
-                              key={s.id}
-                              onClick={() => { setSelectedSigId(s.id); setSelectedSigUrl(s.dataUrl); setHasDrawn(true); }}
-                              style={{
-                                border: selectedSigId === s.id ? '2px solid var(--primary-500, #0a6ed1)' : '1px solid var(--border)',
-                                background: selectedSigId === s.id ? 'rgba(10, 110, 209, 0.08)' : 'var(--surface-card, #ffffff)',
-                                borderRadius: 8,
-                                padding: 10,
-                                cursor: 'pointer',
-                                textAlign: 'center',
-                                position: 'relative',
-                                transition: 'all 0.15s ease',
-                              }}
-                            >
-                              {s.isDefault && (
-                                <span style={{ position: 'absolute', top: 4, right: 4, fontSize: 10, background: 'rgba(234, 179, 8, 0.15)', color: '#d97706', border: '1px solid rgba(234, 179, 8, 0.3)', borderRadius: 4, padding: '1px 4px', fontWeight: 700 }}>
-                                  ⭐ Default
-                                </span>
-                              )}
-                              <img src={s.dataUrl} alt={s.name} style={{ maxHeight: 45, maxWidth: '100%', objectFit: 'contain', margin: '4px auto', display: 'block' }} />
-                              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', display: 'block' }}>{s.name}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {mode === 'draw' && (
-                      <div className="vcd-canvas-container">
-                        <canvas
-                          ref={canvasRef}
-                          className="vcd-canvas-element"
-                          width={480}
-                          height={160}
-                          onMouseDown={startDraw}
-                          onMouseMove={draw}
-                          onMouseUp={stopDraw}
-                          onMouseLeave={stopDraw}
-                          onTouchStart={startDraw}
-                          onTouchMove={draw}
-                          onTouchEnd={stopDraw}
-                        />
-                        {!hasDrawn && (
-                          <div className="vcd-canvas-placeholder">
-                            <PenLine size={20} />
-                            <span>Sign here using your mouse or touch screen</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {mode === 'upload' && (
-                      <div className="vcd-canvas-container vcd-canvas-container--upload" onClick={() => fileInputRef.current?.click()}>
-                        {uploadedImage ? (
-                          <img src={uploadedImage} alt="Uploaded signature" className="vcd-uploaded-img" />
-                        ) : (
-                          <div className="vcd-upload-prompt">
-                            <Upload size={28} />
-                            <span>Click to upload PNG or JPG signature image</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFileUpload} />
-
-                    <div className="vcd-signature-pad-footer">
-                      {hasDrawn && (
-                        <button type="button" className="vcd-action-btn vcd-action-btn--danger" onClick={clearCanvas} disabled={signing}>
-                          <Trash2 size={13} /> Clear
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        className="vcd-action-btn vcd-action-btn--primary vcd-action-btn--lg"
-                        onClick={handleSign}
-                        disabled={signing || !signerName.trim() || !hasDrawn}
-                      >
-                        {signing ? <><Clock size={16} /> Signing Contract…</> : <><FileSignature size={16} /> Execute &amp; Sign Contract</>}
-                      </button>
-                    </div>
-
-                    {error && <MessageStrip type="error" compact style={{ marginTop: 12 }} onClose={() => setError(null)}>{error}</MessageStrip>}
                   </div>
+
+                  {/* Saved Signatures List */}
+                  {mode === 'saved' && (
+                    <div className="rounded-xl border border-border/60 bg-muted/10 p-3 space-y-2">
+                      <span className="text-xs font-medium text-muted-foreground">Select saved signature:</span>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {savedSigs.map((s) => (
+                          <div
+                            key={s.id}
+                            onClick={() => { setSelectedSigId(s.id); setSelectedSigUrl(s.dataUrl); setHasDrawn(true); }}
+                            className={cn(
+                              'cursor-pointer rounded-xl border p-2 text-center transition-all bg-card',
+                              selectedSigId === s.id ? 'border-primary ring-2 ring-primary/20 bg-primary/5' : 'border-border/60 hover:border-primary/40'
+                            )}
+                          >
+                            <img src={s.dataUrl} alt={s.name} className="h-10 max-w-full object-contain mx-auto my-1" />
+                            <span className="text-[11px] font-semibold text-foreground block truncate">{s.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Draw Canvas */}
+                  {mode === 'draw' && (
+                    <div className="relative rounded-xl border border-border/70 bg-background overflow-hidden">
+                      <canvas
+                        ref={canvasRef}
+                        className="w-full h-40 cursor-crosshair touch-none"
+                        width={480}
+                        height={160}
+                        onMouseDown={startDraw}
+                        onMouseMove={draw}
+                        onMouseUp={stopDraw}
+                        onMouseLeave={stopDraw}
+                        onTouchStart={startDraw}
+                        onTouchMove={draw}
+                        onTouchEnd={stopDraw}
+                      />
+                      {!hasDrawn && (
+                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 text-xs text-muted-foreground/60">
+                          <PenLine className="size-4" />
+                          <span>Sign here using your mouse or touch screen</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Upload Signature Container */}
+                  {mode === 'upload' && (
+                    <div
+                      className="rounded-xl border border-dashed border-border/80 bg-background p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      {uploadedImage ? (
+                        <img src={uploadedImage} alt="Uploaded signature" className="max-h-24 mx-auto object-contain" />
+                      ) : (
+                        <div className="space-y-1 text-xs text-muted-foreground">
+                          <Upload className="size-6 mx-auto text-primary" />
+                          <span>Click to upload PNG or JPG signature image</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
+
+                  <div className="flex items-center justify-between pt-2">
+                    {hasDrawn ? (
+                      <Button variant="ghost" size="sm" onClick={clearCanvas} disabled={signing} className="text-xs text-destructive hover:bg-destructive/10">
+                        <Trash2 className="size-3.5" /> Clear Signature
+                      </Button>
+                    ) : <div />}
+
+                    <Button
+                      onClick={handleSign}
+                      disabled={signing || !signerName.trim() || !hasDrawn}
+                      className="gap-2"
+                    >
+                      {signing ? (
+                        <>
+                          <Clock className="size-4 animate-spin" /> Signing Contract…
+                        </>
+                      ) : (
+                        <>
+                          <FileSignature className="size-4" /> Execute & Sign Contract
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  {error && (
+                    <MessageStrip type="error" onClose={() => setError(null)}>
+                      {error}
+                    </MessageStrip>
+                  )}
                 </div>
               </div>
             ) : (
-              <p className="vcd-empty-text">This contract is not currently awaiting signature.</p>
+              <EmptyState
+                icon={FileSignature}
+                title="Signature not required"
+                description="This contract is not currently awaiting vendor signature execution."
+              />
             )}
-          </div>
+          </Card>
         )}
       </div>
-    </div>
+    </PageFrame>
   );
 }
+

@@ -26,6 +26,11 @@ import { MessageStrip } from '../../components/shared/MessageStrip';
 import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
 import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyMaster';
 import { useBranding } from '../../context/BrandingContext';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Card } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
+import { PageFrame, PageLead } from '../../components/ui/product';
 import defaultHeliflowLogo from '../../assets/heliflow.png';
 import '../purchase-orders/CreatePurchaseOrderPage.css';
 import '../../components/purchase-orders/PurchaseOrderDocument.css';
@@ -445,7 +450,7 @@ export default function VendorCreateInvoicePage() {
   };
 
   return (
-    <div className="cpo-page vendor-portal">
+    <PageFrame>
       {/* Notifications */}
       {errorMsg && (
         <MessageStrip type="error" onClose={() => setErrorMsg(null)}>
@@ -459,55 +464,78 @@ export default function VendorCreateInvoicePage() {
       )}
 
       {/* Header */}
-      <div className="cpo-header">
-        <div className="cpo-header__left">
-          <button className="cpo-back-btn" onClick={() => navigate(-1)} title="Back" aria-label="Back">
-            <ArrowLeft size={18} />
-          </button>
-          <div className="cpo-header__title-wrap">
-            <h1>Submit Invoice to Buyer 🧾</h1>
-            <p>Create & dispatch your tax invoice directly to the buyer for PO #{selectedPO?.poNumber || 'Order'}</p>
+      <PageLead
+        title={
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="icon-sm"
+              onClick={() => navigate(-1)}
+              title="Go back"
+              aria-label="Go back"
+              className="rounded-lg shrink-0"
+            >
+              <ArrowLeft className="size-4" />
+            </Button>
+            <span>Submit Invoice to Buyer</span>
           </div>
-        </div>
-        <div className="cpo-header__actions">
-          <button
-            type="button"
-            className="cpo-btn cpo-btn--outline"
-            onClick={() => window.print()}
+        }
+        description={`Create & dispatch your tax invoice directly to the buyer for PO #${selectedPO?.poNumber || 'Order'}`}
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate(-1)}
+            className="gap-1.5"
           >
-            <Printer size={15} /> Print Document
-          </button>
-          <button
-            className="cpo-btn cpo-btn--outline"
+            <ArrowLeft className="size-4" /> Back
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.print()}
+            className="gap-1.5"
+          >
+            <Printer className="size-4" /> Print Document
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => handleSubmitInvoice(true)}
             disabled={savingDraft || submitting}
+            className="gap-1.5"
           >
-            <Save size={15} /> {savingDraft ? 'Saving…' : 'Save Draft'}
-          </button>
-          <button
-            className="cpo-btn cpo-btn--primary"
+            <Save className="size-4" /> {savingDraft ? 'Saving…' : 'Save Draft'}
+          </Button>
+          <Button
+            size="sm"
             onClick={() => handleSubmitInvoice(false)}
             disabled={savingDraft || submitting}
+            className="gap-1.5 shadow-xs"
           >
-            <Send size={15} /> {submitting ? 'Sending Invoice…' : 'Send Invoice to Buyer'}
-          </button>
+            <Send className="size-4" /> {submitting ? 'Sending Invoice…' : 'Send Invoice to Buyer'}
+          </Button>
         </div>
-      </div>
+      </PageLead>
 
       {/* Form Body */}
-      <div className="cpo-body">
+      <div className="space-y-6">
         {/* Section 01: Order & Invoice Details */}
-        <div className="cpo-section">
-          <div className="cpo-section__header">
-            <span className="cpo-section__num">01</span>
-            <span className="cpo-section__title">Purchase Order & Invoice Details</span>
-            <span className="cpo-section__hint">Auto-loaded from confirmed Purchase Order</span>
+        <Card className="overflow-hidden border border-border/80 shadow-xs p-5">
+          <div className="flex items-center gap-3 pb-3 border-b border-border/60 mb-5">
+            <span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-xs font-bold text-primary">01</span>
+            <div>
+              <h3 className="font-semibold text-foreground text-base">Purchase Order & Invoice Details</h3>
+              <p className="text-xs text-muted-foreground">Auto-loaded from confirmed Purchase Order</p>
+            </div>
           </div>
 
-          <div className="cpo-grid cpo-grid--3">
-            <div className="cpo-field">
-              <label>SELECT PURCHASE ORDER *</label>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">SELECT PURCHASE ORDER *</label>
               <select
+                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ring"
                 value={selectedPoId}
                 onChange={(e) => {
                   setSelectedPoId(e.target.value);
@@ -529,9 +557,10 @@ export default function VendorCreateInvoicePage() {
               </select>
             </div>
 
-            <div className="cpo-field">
-              <label>VENDOR INVOICE NUMBER *</label>
-              <input
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">VENDOR INVOICE NUMBER *</label>
+              <Input
+                className="h-10 rounded-xl text-sm font-medium"
                 type="text"
                 value={invoiceNumber}
                 onChange={(e) => setInvoiceNumber(e.target.value)}
@@ -539,9 +568,10 @@ export default function VendorCreateInvoicePage() {
               />
             </div>
 
-            <div className="cpo-field">
-              <label>BUYER / CLIENT NAME</label>
-              <input
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">BUYER / CLIENT NAME</label>
+              <Input
+                className="h-10 rounded-xl text-sm font-medium"
                 type="text"
                 value={buyerName}
                 onChange={(e) => setBuyerName(e.target.value)}
@@ -549,27 +579,33 @@ export default function VendorCreateInvoicePage() {
               />
             </div>
 
-            <div className="cpo-field">
-              <label>INVOICE DATE *</label>
-              <input
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">INVOICE DATE *</label>
+              <Input
+                className="h-10 rounded-xl text-sm font-medium"
                 type="date"
                 value={invoiceDate}
                 onChange={(e) => setInvoiceDate(e.target.value)}
               />
             </div>
 
-            <div className="cpo-field">
-              <label>DUE DATE *</label>
-              <input
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">DUE DATE *</label>
+              <Input
+                className="h-10 rounded-xl text-sm font-medium"
                 type="date"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
               />
             </div>
 
-            <div className="cpo-field">
-              <label>PAYMENT TERMS</label>
-              <select value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)}>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">PAYMENT TERMS</label>
+              <select
+                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ring"
+                value={paymentTerms}
+                onChange={(e) => setPaymentTerms(e.target.value)}
+              >
                 <option value="Net 15">Net 15</option>
                 <option value="Net 30">Net 30</option>
                 <option value="Net 45">Net 45</option>
@@ -577,67 +613,69 @@ export default function VendorCreateInvoicePage() {
               </select>
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Section 02: Line Items & Invoiced Quantities */}
-        <div className="cpo-section">
-          <div className="cpo-section__header cpo-section__header--flex">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span className="cpo-section__num">02</span>
-              <span className="cpo-section__title">Line Items & Invoiced Quantities</span>
+        <Card className="overflow-hidden border border-border/80 shadow-xs p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-border/60 mb-5">
+            <div className="flex items-center gap-3">
+              <span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-xs font-bold text-primary">02</span>
+              <div>
+                <h3 className="font-semibold text-foreground text-base">Line Items & Invoiced Quantities</h3>
+                <p className="text-xs text-muted-foreground">Specify quantities, rates, and taxes per line item</p>
+              </div>
             </div>
-            <button className="cpo-btn cpo-btn--outline cpo-btn--sm" onClick={handleAddLineItem}>
-              <Plus size={14} /> Add Line Item
-            </button>
+            <Button variant="outline" size="sm" onClick={handleAddLineItem} className="gap-1.5">
+              <Plus className="size-4" /> Add Line Item
+            </Button>
           </div>
 
-          <div className="cpo-table-wrap">
-            <table className="cpo-table">
-              <thead>
+          <div className="overflow-x-auto rounded-xl border border-border/70">
+            <table className="w-full border-collapse text-left text-sm">
+              <thead className="border-b border-border/70 bg-muted/40 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 <tr>
-                  <th style={{ width: '220px' }}>Item Name / Description *</th>
-                  <th style={{ width: '100px', background: 'rgba(10, 110, 209, 0.08)' }}>PO Qty</th>
-                  <th style={{ width: '100px', background: 'rgba(16, 185, 129, 0.08)' }}>GRN Qty</th>
-                  <th style={{ width: '120px', background: 'rgba(234, 179, 8, 0.12)' }}>Invoiced Qty *</th>
-                  <th style={{ width: '130px' }}>Unit Price ({currency})</th>
-                  <th style={{ width: '80px' }}>Tax %</th>
-                  <th style={{ width: '140px', textAlign: 'right' }}>Total ({currency})</th>
-                  <th style={{ width: '44px' }}></th>
+                  <th className="px-4 py-3 min-w-[220px]">Item Name / Description *</th>
+                  <th className="px-4 py-3 min-w-[90px] text-center bg-primary/5">PO Qty</th>
+                  <th className="px-4 py-3 min-w-[90px] text-center bg-emerald-500/5">GRN Qty</th>
+                  <th className="px-4 py-3 min-w-[110px] text-center bg-amber-500/10 text-amber-700 dark:text-amber-400">Invoiced Qty *</th>
+                  <th className="px-4 py-3 min-w-[130px]">Unit Price ({currency})</th>
+                  <th className="px-4 py-3 min-w-[80px]">Tax %</th>
+                  <th className="px-4 py-3 min-w-[130px] text-right">Total ({currency})</th>
+                  <th className="px-3 py-3 w-[44px]"></th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-border/60">
                 {lineItems.map((item) => {
                   const qty = typeof item.invoicedQty === 'number' ? item.invoicedQty : 0;
                   const price = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
                   const lineTotal = qty * price * (1 + (item.taxPercent || 0) / 100);
 
                   return (
-                    <tr key={item.id}>
-                      <td>
-                        <input
+                    <tr key={item.id} className="transition-colors hover:bg-muted/20">
+                      <td className="px-4 py-3">
+                        <Input
                           type="text"
-                          className="cpo-table__input"
+                          className="h-9 rounded-lg"
                           placeholder="Item description..."
                           value={item.itemName}
                           onChange={(e) => handleUpdateLineItem(item.id, 'itemName', e.target.value)}
                         />
                       </td>
-                      <td style={{ background: 'rgba(10, 110, 209, 0.03)' }}>
-                        <span style={{ display: 'inline-block', padding: '6px 12px', background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: 6, fontWeight: 700, color: 'var(--primary-500)' }}>
+                      <td className="px-4 py-3 text-center bg-primary/[0.02]">
+                        <Badge tone="primary" className="font-bold tabular-nums">
                           {item.poQty}
-                        </span>
+                        </Badge>
                       </td>
-                      <td style={{ background: 'rgba(16, 185, 129, 0.03)' }}>
-                        <span style={{ display: 'inline-block', padding: '6px 12px', background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: 6, fontWeight: 700, color: '#10b981' }}>
+                      <td className="px-4 py-3 text-center bg-emerald-500/[0.02]">
+                        <Badge tone="success" className="font-bold tabular-nums">
                           {item.grnQty}
-                        </span>
+                        </Badge>
                       </td>
-                      <td style={{ background: 'rgba(234, 179, 8, 0.04)' }}>
-                        <input
+                      <td className="px-4 py-3 text-center bg-amber-500/[0.03]">
+                        <Input
                           type="number"
                           min="0"
-                          className="cpo-table__input"
-                          style={{ fontWeight: 800, borderColor: '#eab308' }}
+                          className="h-9 rounded-lg text-center font-extrabold border-amber-500/50 text-foreground"
                           placeholder="0"
                           value={item.invoicedQty}
                           onChange={(e) =>
@@ -649,12 +687,12 @@ export default function VendorCreateInvoicePage() {
                           }
                         />
                       </td>
-                      <td>
-                        <input
+                      <td className="px-4 py-3">
+                        <Input
                           type="number"
                           min="0"
                           step="0.01"
-                          className="cpo-table__input"
+                          className="h-9 rounded-lg"
                           placeholder="0.00"
                           value={item.unitPrice}
                           onChange={(e) =>
@@ -666,12 +704,12 @@ export default function VendorCreateInvoicePage() {
                           }
                         />
                       </td>
-                      <td>
-                        <input
+                      <td className="px-4 py-3">
+                        <Input
                           type="number"
                           min="0"
                           max="100"
-                          className="cpo-table__input"
+                          className="h-9 rounded-lg text-center"
                           value={item.taxPercent}
                           onChange={(e) =>
                             handleUpdateLineItem(
@@ -682,18 +720,20 @@ export default function VendorCreateInvoicePage() {
                           }
                         />
                       </td>
-                      <td style={{ textAlign: 'right', fontWeight: 700, paddingTop: 14 }}>
+                      <td className="px-4 py-3 text-right font-semibold tabular-nums text-foreground">
                         {formatAmount(lineTotal, currency)}
                       </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <button
-                          type="button"
-                          className="cpo-trash-btn"
+                      <td className="px-3 py-3 text-center">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                           onClick={() => handleRemoveLineItem(item.id)}
                           disabled={lineItems.length <= 1}
+                          title="Remove item"
                         >
-                          <Trash2 size={15} />
-                        </button>
+                          <Trash2 className="size-4" />
+                        </Button>
                       </td>
                     </tr>
                   );
@@ -701,95 +741,113 @@ export default function VendorCreateInvoicePage() {
               </tbody>
             </table>
           </div>
-        </div>
+        </Card>
 
         {/* Section 03 & Section 04 */}
-        <div className="cpo-grid cpo-grid--split">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
           {/* Remarks & Physical Invoice Attachment */}
-          <div className="cpo-section">
-            <div className="cpo-section__header">
-              <span className="cpo-section__num">03</span>
-              <span className="cpo-section__title">Remarks & Physical Invoice PDF</span>
-            </div>
-            <div className="cpo-grid cpo-grid--1" style={{ gap: 16 }}>
-              <div className="cpo-field">
-                <label>INVOICE NOTES / REMARKS FOR BUYER</label>
-                <textarea
-                  rows={3}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Add delivery notes, tax calculation comments, or payment details for buyer..."
-                />
+          <Card className="overflow-hidden border border-border/80 shadow-xs p-5 lg:col-span-7 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-3 pb-3 border-b border-border/60 mb-5">
+                <span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-xs font-bold text-primary">03</span>
+                <div>
+                  <h3 className="font-semibold text-foreground text-base">Remarks & Physical Invoice PDF</h3>
+                  <p className="text-xs text-muted-foreground">Attach signed bill and add buyer comments</p>
+                </div>
               </div>
 
-              <div className="cpo-field">
-                <label>ATTACH VENDOR TAX INVOICE PDF</label>
-                <label style={{ padding: '36px 20px', background: 'var(--surface-elevated)', border: '2px dashed rgba(10, 110, 209, 0.4)', borderRadius: 10, textAlign: 'center', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'all 0.2s ease' }}>
-                  <Upload size={28} style={{ color: 'var(--primary-500)' }} />
-                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.4px' }}>CLICK TO UPLOAD PHYSICAL VENDOR BILL PDF</div>
-                  <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Drag and drop your signed tax invoice PDF here, or click to browse files</div>
-                  <input type="file" multiple accept=".pdf,.png,.jpg" onChange={handleFileUpload} hidden />
-                </label>
-                {attachments.length > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
-                    {attachments.map((att) => (
-                      <div key={att.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 14 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <Paperclip size={14} style={{ color: 'var(--primary-500)' }} />
-                          <span style={{ fontWeight: 600 }}>{att.name}</span>
-                          <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>({att.size})</span>
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">INVOICE NOTES / REMARKS FOR BUYER</label>
+                  <textarea
+                    className="w-full min-h-[90px] rounded-xl border border-input bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    rows={3}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Add delivery notes, tax calculation comments, or payment details for buyer..."
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">ATTACH VENDOR TAX INVOICE PDF</label>
+                  <label className="group flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primary/30 bg-primary/[0.02] p-6 text-center cursor-pointer transition-all hover:border-primary/60 hover:bg-primary/[0.05]">
+                    <Upload className="size-7 text-primary transition-transform group-hover:-translate-y-0.5" />
+                    <div className="text-sm font-bold text-foreground">CLICK TO UPLOAD PHYSICAL VENDOR BILL PDF</div>
+                    <div className="text-xs text-muted-foreground">Drag and drop your signed tax invoice PDF here, or click to browse files</div>
+                    <input type="file" multiple accept=".pdf,.png,.jpg" onChange={handleFileUpload} hidden />
+                  </label>
+                  {attachments.length > 0 && (
+                    <div className="flex flex-col gap-2 pt-2">
+                      {attachments.map((att) => (
+                        <div key={att.id} className="flex items-center justify-between rounded-xl border border-border/70 bg-muted/30 p-2.5 text-xs">
+                          <div className="flex items-center gap-2">
+                            <Paperclip className="size-4 text-primary shrink-0" />
+                            <span className="font-semibold text-foreground">{att.name}</span>
+                            <span className="text-muted-foreground">({att.size})</span>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            onClick={() => handleRemoveAttachment(att.id)}
+                          >
+                            <X className="size-3.5" />
+                          </Button>
                         </div>
-                        <button type="button" onClick={() => handleRemoveAttachment(att.id)} style={{ background: 'none', border: 'none', color: 'var(--danger-500)', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center' }}>
-                          <X size={14} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          </Card>
 
           {/* Totals Summary */}
-          <div className="cpo-section cpo-totals-card">
-            <div className="cpo-section__header">
-              <span className="cpo-section__num">04</span>
-              <span className="cpo-section__title">Invoice Value Summary</span>
+          <Card className="overflow-hidden border border-border/80 shadow-xs p-5 lg:col-span-5 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-3 pb-3 border-b border-border/60 mb-5">
+                <span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-xs font-bold text-primary">04</span>
+                <div>
+                  <h3 className="font-semibold text-foreground text-base">Invoice Value Summary</h3>
+                  <p className="text-xs text-muted-foreground">Summary breakdown of taxes and total payable</p>
+                </div>
+              </div>
+
+              <div className="space-y-3 text-sm">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">CURRENCY</label>
+                  <CurrencySelector value={currency} onChange={setCurrency} size="sm" />
+                </div>
+
+                <div className="flex items-center justify-between text-muted-foreground pt-2">
+                  <span>Subtotal</span>
+                  <span className="font-semibold text-foreground tabular-nums">{formatAmount(calculations.subtotal, currency)}</span>
+                </div>
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span>Total Tax</span>
+                  <span className="font-semibold text-foreground tabular-nums">{formatAmount(calculations.totalTax, currency)}</span>
+                </div>
+
+                <div className="border-t border-border/60 my-2" />
+
+                <div className="flex items-center justify-between text-base font-bold text-foreground">
+                  <span>Final Value</span>
+                  <span className="text-primary tabular-nums">{formatAmount(calculations.grandTotal, currency)}</span>
+                </div>
+              </div>
             </div>
 
-            <div className="cpo-totals">
-              <div className="cpo-field" style={{ marginBottom: 12 }}>
-                <label>CURRENCY</label>
-                <CurrencySelector value={currency} onChange={setCurrency} />
-              </div>
-
-              <div className="cpo-totals__row">
-                <span>Subtotal</span>
-                <span>{formatAmount(calculations.subtotal, currency)}</span>
-              </div>
-              <div className="cpo-totals__row">
-                <span>Total Tax</span>
-                <span>{formatAmount(calculations.totalTax, currency)}</span>
-              </div>
-
-              <div className="cpo-totals__divider" />
-
-              <div className="cpo-totals__grand">
-                <span>Final Value</span>
-                <span style={{ color: 'var(--primary-500)' }}>{formatAmount(calculations.grandTotal, currency)}</span>
-              </div>
-            </div>
-
-            <div className="cpo-action-panel">
-              <button
-                className="cpo-btn cpo-btn--primary cpo-btn--full"
+            <div className="pt-6">
+              <Button
+                size="lg"
                 onClick={() => handleSubmitInvoice(false)}
                 disabled={savingDraft || submitting}
+                className="w-full gap-2 shadow-xs"
               >
-                <Send size={16} /> {submitting ? 'Sending Invoice…' : 'Send Invoice to Buyer'}
-              </button>
+                <Send className="size-4" /> {submitting ? 'Sending Invoice…' : 'Send Invoice to Buyer'}
+              </Button>
             </div>
-          </div>
+          </Card>
         </div>
       </div>
 
@@ -1000,6 +1058,6 @@ export default function VendorCreateInvoicePage() {
           </p>
         </div>
       </div>
-    </div>
+    </PageFrame>
   );
 }

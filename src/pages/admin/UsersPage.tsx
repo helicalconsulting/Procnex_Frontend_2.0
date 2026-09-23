@@ -9,37 +9,27 @@ import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import PhoneInput from '../../components/shared/PhoneInput';
 import type { User } from '../../types';
 import {
-  Plus,
-  Search,
-  Users,
-  UserCheck,
-  UserX,
-  Shield,
-  Eye,
-  Edit3,
-  Trash2,
-  X,
-  UserPlus,
-  Mail,
-  Phone,
-  Building2,
-  ChevronLeft,
-  ChevronRight,
-  FileText,
-  Upload,
-  CheckCircle2,
-  ArrowRight,
-  ArrowLeft,
-  ShoppingCart,
-  Zap,
-  LayoutList,
-  LayoutGrid,
-  CheckSquare,
-  Smartphone,
+  Plus, Search, Eye, Edit3, Trash2, Users, Shield, UserCheck, UserX,
+  ChevronLeft, ChevronRight, X, UserPlus, Mail, Phone, Building2,
+  Zap, LayoutList, LayoutGrid, CheckSquare, Smartphone, Clock
 } from 'lucide-react';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
 import { TableSkeleton } from '../../components/shared/Skeleton';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Card } from '../../components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/ui/dialog';
+import { Input } from '../../components/ui/input';
+import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
+import { cn } from '../../lib/utils';
 import '../../components/shared/ColumnCustomizer.css';
 import './UsersPage.css';
 
@@ -143,7 +133,14 @@ const ALL_COLUMNS: UserColumnDef[] = [
   { key: 'email', label: 'Email', defaultVisible: true, width: '200px', render: (u) => <span className="users-table__email">{u.email}</span> },
   {
     key: 'role', label: 'Role', defaultVisible: true, width: '140px',
-    render: (u) => <span className={`users-role-badge users-role-badge--${ROLE_CLASS_MAP[u.role] || 'staff'}`}>{u.role}</span>,
+    render: (u) => {
+      let tone: 'primary' | 'info' | 'warning' | 'neutral' | 'success' | 'danger' = 'neutral';
+      if (u.role === 'Super Admin' || u.role === 'Administrator') tone = 'primary';
+      else if (u.role.includes('Manager')) tone = 'info';
+      else if (u.role.includes('Finance')) tone = 'warning';
+      else tone = 'neutral';
+      return <Badge tone={tone}>{u.role}</Badge>;
+    },
   },
   { key: 'department', label: 'Department', defaultVisible: true, width: '110px', render: (u) => <span className="users-table__dept">{u.department}</span> },
   {
@@ -769,7 +766,7 @@ export default function UsersPage() {
   }, [summary.active, maxUsersAllowed]);
 
   return (
-    <div className="users-page w-full max-w-full m-0 p-0 flex flex-col gap-6 text-foreground">
+    <PageFrame>
       {error && <MessageStrip type="error">{error}</MessageStrip>}
       {pageMsg && (
         <MessageStrip
@@ -781,30 +778,29 @@ export default function UsersPage() {
         </MessageStrip>
       )}
 
-      {/* ── Header ─────────────────────────────────────────── */}
-      <div className="users-page__header flex items-center justify-between flex-wrap gap-4">
-        <div className="users-page__header-left">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground m-0 mb-1">User Management</h1>
-          <p className="text-sm text-muted-foreground m-0">Manage users, assign roles, and control access</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${isUserLimitReached ? 'bg-red-500/10 border-red-500 text-red-500' : 'bg-muted/60 border-border text-foreground'}`}>
-            <Users size={16} />
-            <span>Active Users: {summary.active} / {maxUsersAllowed} Limit</span>
-          </div>
+      <PageLead
+        title="User Management"
+        description="Manage users, assign roles, and control access"
+        actions={
+          <div className="flex items-center gap-3">
+            <div className={cn(
+              "inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all",
+              isUserLimitReached ? "bg-red-500/10 border-red-500 text-red-500" : "bg-muted/60 border-border text-foreground"
+            )}>
+              <Users size={16} />
+              <span>Active Users: {summary.active} / {maxUsersAllowed} Limit</span>
+            </div>
 
-          <button
-            className="users-page__add-btn inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm bg-gradient-to-r from-primary to-primary-600 text-white shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all"
-            onClick={(!isUserLimitReached && hasPermission('User Management', 'canCreate')) ? openAddModal : undefined}
-            disabled={isUserLimitReached || !hasPermission('User Management', 'canCreate')}
-            title={!hasPermission('User Management', 'canCreate') ? 'Admin has not allowed this action. You do not have permission to add users.' : isUserLimitReached ? 'Company user limit reached. Please contact Procnex Support to upgrade.' : 'Add new staff user'}
-            style={(isUserLimitReached || !hasPermission('User Management', 'canCreate')) ? { opacity: 0.6, cursor: 'not-allowed', pointerEvents: 'auto' } : {}}
-          >
-            <Plus size={18} />
-            Add User
-          </button>
-        </div>
-      </div>
+            <Button
+              onClick={(!isUserLimitReached && hasPermission('User Management', 'canCreate')) ? openAddModal : undefined}
+              disabled={isUserLimitReached || !hasPermission('User Management', 'canCreate')}
+              title={!hasPermission('User Management', 'canCreate') ? 'Admin has not allowed this action. You do not have permission to add users.' : isUserLimitReached ? 'Company user limit reached. Please contact Procnex Support to upgrade.' : 'Add new staff user'}
+            >
+              <Plus /> Add User
+            </Button>
+          </div>
+        }
+      />
 
       {isUserLimitReached && (
         <div className="mb-4">
@@ -814,61 +810,76 @@ export default function UsersPage() {
         </div>
       )}
 
-      {/* ── Summary Cards ──────────────────────────────────── */}
-      <div className="users-summary grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* ── Summary KPI Cards ──────────────────────────────────── */}
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          { icon: <Users size={22} />, val: summary.total, label: 'Total Users', cls: 'total', mode: 'all' as const },
-          { icon: <UserCheck size={22} />, val: summary.active, label: 'Active', cls: 'active', mode: 'active' as const },
-          { icon: <UserX size={22} />, val: summary.inactive, label: 'Inactive', cls: 'inactive', mode: 'inactive' as const },
-          { icon: <Shield size={22} />, val: summary.admins, label: 'Admins', cls: 'admins', mode: 'admins' as const },
-        ].map((c) => (
-          <div
-            key={c.cls}
-            className={`users-summary-card relative overflow-hidden flex items-center gap-4 p-5 rounded-2xl bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border border-white/80 dark:border-white/10 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer ${statusFilter === c.mode ? 'users-summary-card--active border-primary ring-2 ring-primary/20 bg-primary/5' : ''}`}
-            onClick={() => {
-              setStatusFilter((prev) => prev === c.mode ? 'all' : c.mode);
-              setCurrentPage(1);
-            }}
-          >
-            <div className={`users-summary-card__icon users-summary-card__icon--${c.cls} w-11 h-11 rounded-xl flex items-center justify-center shrink-0`}>{c.icon}</div>
-            <div className="users-summary-card__info flex flex-col gap-0.5">
-              <span className="users-summary-card__value text-2xl font-extrabold tracking-tight text-foreground">{c.val}</span>
-              <span className="users-summary-card__label text-xs font-bold uppercase tracking-wider text-muted-foreground">{c.label}</span>
-            </div>
-          </div>
-        ))}
+          { icon: Users, tone: 'primary' as const, value: summary.total, label: 'TOTAL USERS', detail: 'All registered users', mode: 'all' as const },
+          { icon: UserCheck, tone: 'success' as const, value: summary.active, label: 'ACTIVE', detail: 'Active user accounts', mode: 'active' as const },
+          { icon: UserX, tone: 'danger' as const, value: summary.inactive, label: 'INACTIVE', detail: 'Deactivated accounts', mode: 'inactive' as const },
+          { icon: Shield, tone: 'info' as const, value: summary.admins, label: 'ADMINS', detail: 'Admin & Super Admin', mode: 'admins' as const },
+        ].map((c) => {
+          const isActive = statusFilter === c.mode;
+          return (
+            <MetricCard
+              key={c.label}
+              icon={c.icon}
+              tone={c.tone}
+              value={c.value}
+              label={c.label}
+              detail={c.detail}
+              className={cn(
+                'cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-all duration-200',
+                isActive &&
+                  'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
+              )}
+              onClick={() => {
+                setStatusFilter((prev) => prev === c.mode ? 'all' : c.mode);
+                setCurrentPage(1);
+              }}
+              role="button"
+              tabIndex={0}
+              aria-pressed={isActive}
+            />
+          );
+        })}
       </div>
 
-      {/* ── Toolbar ────────────────────────────────────────── */}
-      <div className="users-toolbar">
-        <div className="users-toolbar__search">
-          <Search size={16} className="users-toolbar__search-icon" />
-          <input
-            type="search"
-            name="usersTableSearch"
-            autoComplete="off"
+      {/* ── Search Toolbar & View Toggle ────────────────────────── */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full max-w-xl">
+          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="h-11 rounded-xl pl-10"
+            type="text"
             placeholder="Search by name, username, email, or department..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
           />
         </div>
-        <div className="users-toolbar__right">
-          <div className="users-toolbar__view-toggle">
+
+        <div className="flex items-center gap-2 justify-end shrink-0 sm:ml-auto">
+          <div className="inline-flex rounded-xl border border-input bg-card p-1 shadow-xs">
             <button
               type="button"
-              className={`users-toolbar__view-btn ${view === 'table' ? 'users-toolbar__view-btn--active' : ''}`}
+              className={cn(
+                "inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-xs font-semibold transition-all",
+                view === 'table' ? "bg-primary text-primary-foreground shadow-xs" : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+              )}
               onClick={() => setView('table')}
               title="Table view"
             >
-              <LayoutList size={16} />
+              <LayoutList size={15} />
             </button>
             <button
               type="button"
-              className={`users-toolbar__view-btn ${view === 'card' ? 'users-toolbar__view-btn--active' : ''}`}
+              className={cn(
+                "inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-xs font-semibold transition-all",
+                view === 'card' ? "bg-primary text-primary-foreground shadow-xs" : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+              )}
               onClick={() => setView('card')}
               title="Card view"
             >
-              <LayoutGrid size={16} />
+              <LayoutGrid size={15} />
             </button>
           </div>
         </div>
@@ -876,58 +887,45 @@ export default function UsersPage() {
 
       {/* ── Floating Bulk Action Banner ── */}
       {selectedUserIds.length > 0 && !showBatchDeleteModal && (
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          background: 'var(--surface-card)', border: '1px solid var(--primary-500)',
-          padding: '12px 18px', borderRadius: 'var(--radius-md)', marginBottom: '16px',
-          boxShadow: '0 4px 14px rgba(0,0,0,0.12)', transition: 'all 0.2s ease'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
-            <CheckSquare size={18} style={{ color: 'var(--primary-500)' }} />
+        <Card className="mb-4 flex flex-col gap-3 border-primary/35 bg-primary/[0.045] p-3 shadow-md sm:flex-row sm:items-center sm:justify-between sm:px-4">
+          <div className="flex items-center gap-2.5 text-sm font-semibold text-foreground">
+            <CheckSquare size={18} className="text-primary" />
             <span><strong>{selectedUserIds.length}</strong> User(s) selected</span>
           </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button
+          <div className="flex flex-wrap gap-2">
+            <Button
               type="button"
-              className="users-modal__btn users-modal__btn--secondary"
-              style={{ padding: '7px 16px', fontSize: 14, fontWeight: 600 }}
+              variant="secondary"
+              size="sm"
               onClick={() => setSelectedUserIds([])}
             >
-              Cancel Selection
-            </button>
-            <button
+              Clear selection
+            </Button>
+            <Button
               type="button"
+              variant="destructive"
+              size="sm"
               disabled={!hasPermission('User Management', 'canCreate')}
-              style={{
-                background: hasPermission('User Management', 'canCreate') ? '#dc2626' : '#64748b',
-                color: '#ffffff', border: 'none',
-                padding: '7px 16px', fontSize: 14, fontWeight: 700,
-                borderRadius: 'var(--radius-sm)',
-                cursor: hasPermission('User Management', 'canCreate') ? 'pointer' : 'not-allowed',
-                opacity: hasPermission('User Management', 'canCreate') ? 1 : 0.5,
-                pointerEvents: 'auto',
-                display: 'inline-flex', alignItems: 'center', gap: 6
-              }}
               title={!hasPermission('User Management', 'canCreate') ? "Admin has not allowed this action. You do not have permission to delete users." : undefined}
               onClick={() => {
                 if (!hasPermission('User Management', 'canCreate')) return;
                 setShowBatchDeleteModal(true);
               }}
             >
-              <Trash2 size={14} /> Delete Selected ({selectedUserIds.length})
-            </button>
+              <Trash2 /> Delete Selected ({selectedUserIds.length})
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* ── Content ────────────────────────────────────────── */}
       {loading ? (
-        <div className="users-table-card">
+        <Card className="overflow-hidden">
           <TableSkeleton rows={4} columns={5} />
-        </div>
+        </Card>
       ) : paginated.length > 0 ? (
         view === 'table' ? (
-          <div className="users-table-card">
+          <Card className="overflow-hidden">
             <div className="users-table-wrap">
               <table className="users-table" style={{ tableLayout: 'fixed', minWidth: '800px' }}>
                 <colgroup>
@@ -1035,73 +1033,120 @@ export default function UsersPage() {
                 </div>
               </div>
             )}
-          </div>
+          </Card>
         ) : (
           <div className="users-cards-wrap">
-            <div className="users-cards">
-              {paginated.map((user) => (
-                <div key={user.id} className="users-card" onClick={() => openViewUser(user)}>
-                  <div className="users-card__top">
-                    <div className={`users-card__avatar users-table__avatar--${user.avatarMod}`}>{user.initials}</div>
-                    <div className="users-card__name-block">
-                      <span className="users-card__name">{user.fullName}</span>
-                      <span className={`users-role-badge users-role-badge--${ROLE_CLASS_MAP[user.role] || 'staff'}`}>{user.role}</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {paginated.map((user) => {
+                let roleTone: 'primary' | 'info' | 'warning' | 'neutral' | 'success' | 'danger' = 'neutral';
+                if (user.role === 'Super Admin' || user.role === 'Administrator') roleTone = 'primary';
+                else if (user.role.includes('Manager')) roleTone = 'info';
+                else if (user.role.includes('Finance')) roleTone = 'warning';
+
+                return (
+                  <Card
+                    key={user.id}
+                    className="p-4 cursor-pointer hover:border-primary/50 hover:shadow-md transition-all duration-200 flex flex-col justify-between"
+                    onClick={() => openViewUser(user)}
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`users-table__avatar users-table__avatar--${user.avatarMod} size-10 text-sm`}>
+                            {user.initials}
+                          </div>
+                          <div className="min-w-0 flex flex-col gap-1">
+                            <span className="font-bold text-foreground text-sm truncate leading-none">
+                              {user.fullName}
+                            </span>
+                            <span className="text-xs text-muted-foreground truncate">
+                              @{user.username}
+                            </span>
+                          </div>
+                        </div>
+
+                        <span className={cn(
+                          "size-2.5 rounded-full shrink-0 mt-1",
+                          user.isActive ? "bg-emerald-500 ring-2 ring-emerald-500/20" : "bg-muted-foreground/40"
+                        )} />
+                      </div>
+
+                      <div className="mb-4">
+                        <Badge tone={roleTone} className="text-[10px] px-2 py-0.5 max-w-full truncate">
+                          {user.role}
+                        </Badge>
+                      </div>
+
+                      <div className="space-y-1.5 text-xs text-muted-foreground mb-4">
+                        <div className="flex items-center gap-2 truncate">
+                          <Mail size={13} className="shrink-0 text-muted-foreground/70" />
+                          <span className="truncate">{user.email}</span>
+                        </div>
+                        <div className="flex items-center gap-2 truncate">
+                          <Building2 size={13} className="shrink-0 text-muted-foreground/70" />
+                          <span className="truncate">{user.department}</span>
+                        </div>
+                        {user.phone !== '—' && (
+                          <div className="flex items-center gap-2 truncate">
+                            <Phone size={13} className="shrink-0 text-muted-foreground/70" />
+                            <span className="truncate">{user.phone}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <span className={`users-card__status-dot ${user.isActive ? 'users-card__status-dot--active' : ''}`} />
-                  </div>
-                  <div className="users-card__details">
-                    <div className="users-card__detail"><Mail size={12} /><span>{user.email}</span></div>
-                    <div className="users-card__detail"><Building2 size={12} /><span>{user.department}</span></div>
-                    {user.phone !== '—' && (
-                      <div className="users-card__detail"><Phone size={12} /><span>{user.phone}</span></div>
-                    )}
-                  </div>
-                  <div className="users-card__footer">
-                    <div className="users-card__meta">
-                      <span className="users-card__meta-label">Last login</span>
-                      <span className="users-card__meta-value">{formatDateTime(user.lastLoginAt)}</span>
-                    </div>
-                    <div className="users-card__actions" onClick={(e) => e.stopPropagation()}>
-                      <button type="button" className="users-table__action-btn" title="View" onClick={() => openViewUser(user)}><Eye size={15} /></button>
-                      <button
-                        type="button"
-                        className="users-table__action-btn"
-                        title={hasPermission('User Management', 'canCreate') ? "Edit" : "Admin has not allowed this action. You do not have permission to edit users."}
-                        onClick={() => hasPermission('User Management', 'canCreate') && openEditUser(user)}
-                        disabled={!hasPermission('User Management', 'canCreate')}
-                        style={!hasPermission('User Management', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : {}}
-                      >
-                        <Edit3 size={15} />
-                      </button>
-                      <button
-                        type="button"
-                        className="users-table__action-btn"
-                        title={hasPermission('User Management', 'canCreate') ? "Widgets" : "Admin has not allowed this action. You do not have permission to configure widgets."}
-                        onClick={() => hasPermission('User Management', 'canCreate') && openWidgetConfig(user)}
-                        disabled={!hasPermission('User Management', 'canCreate')}
-                        style={!hasPermission('User Management', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : {}}
-                      >
-                        <Zap size={15} />
-                      </button>
-                      {user.role !== 'Super Admin' && (
-                        <button
-                          type="button"
-                          className="users-table__action-btn users-table__action-btn--danger"
-                          title={hasPermission('User Management', 'canCreate') ? "Delete" : "Admin has not allowed this action. You do not have permission to delete users."}
-                          onClick={() => hasPermission('User Management', 'canCreate') && setDeleteTarget(user)}
-                          disabled={!hasPermission('User Management', 'canCreate')}
-                          style={!hasPermission('User Management', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : {}}
+
+                    <div className="flex items-center justify-between pt-3 border-t border-border/60 text-xs text-muted-foreground">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/70">Last login</span>
+                        <span className="font-medium text-foreground text-[11px]">{formatDateTime(user.lastLoginAt)}</span>
+                      </div>
+                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          title="View"
+                          onClick={() => openViewUser(user)}
                         >
-                          <Trash2 size={15} />
-                        </button>
-                      )}
+                          <Eye size={14} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          title={hasPermission('User Management', 'canCreate') ? "Edit" : "No permission"}
+                          disabled={!hasPermission('User Management', 'canCreate')}
+                          onClick={() => hasPermission('User Management', 'canCreate') && openEditUser(user)}
+                        >
+                          <Edit3 size={14} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          title={hasPermission('User Management', 'canCreate') ? "Widgets" : "No permission"}
+                          disabled={!hasPermission('User Management', 'canCreate')}
+                          onClick={() => hasPermission('User Management', 'canCreate') && openWidgetConfig(user)}
+                        >
+                          <Zap size={14} />
+                        </Button>
+                        {user.role !== 'Super Admin' && (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            title={hasPermission('User Management', 'canCreate') ? "Delete" : "No permission"}
+                            disabled={!hasPermission('User Management', 'canCreate')}
+                            onClick={() => hasPermission('User Management', 'canCreate') && setDeleteTarget(user)}
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </div>
-              ))}
+                  </Card>
+                );
+              })}
             </div>
             {filtered.length > perPage && (
-              <div className="users-table-card users-cards-wrap__pagination">
+              <Card className="users-cards-wrap__pagination">
                 <div className="users-pagination">
                   <span className="users-pagination__info">
                     Showing {(currentPage - 1) * perPage + 1}–{Math.min(currentPage * perPage, filtered.length)} of {filtered.length}
@@ -1114,26 +1159,26 @@ export default function UsersPage() {
                     <button className="users-pagination__btn" disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => p + 1)}><ChevronRight size={14} /></button>
                   </div>
                 </div>
-              </div>
+              </Card>
             )}
           </div>
         )
       ) : (
-        <div className="users-table-card">
-          <div className="users-empty">
-            <div className="users-empty__icon"><Users size={48} /></div>
-            <div className="users-empty__title">No users found</div>
-            <div className="users-empty__desc">
-              {search
+        <Card className="overflow-hidden">
+          <EmptyState
+            icon={Users}
+            title="No users found"
+            description={
+              search
                 ? 'Try adjusting your search criteria.'
                 : statusFilter !== 'all'
                   ? statusFilter === 'admins'
                     ? 'No admin users found.'
                     : `No ${statusFilter} users match the current filters.`
-                  : 'Create your first user to get started.'}
-            </div>
-          </div>
-        </div>
+                  : 'Create your first user to get started.'
+            }
+          />
+        </Card>
       )}
 
       {/* ── Add User Modal ─────────────────────────────────── */}
@@ -1371,8 +1416,7 @@ export default function UsersPage() {
                 <div className="users-modal__field"><label className="users-modal__label">Last Login</label><p style={{ margin: 0 }}>{formatDateTime(viewUser.lastLoginAt)}</p></div>
               </div>
             </div>
-            <div className="users-modal__footer">
-              <button type="button" className="users-modal__btn users-modal__btn--secondary" onClick={() => setViewUser(null)}>Close</button>
+            <div className="users-modal__footer" style={{ justifyContent: 'flex-end' }}>
               <button type="button" className="users-modal__btn users-modal__btn--primary" onClick={() => { setViewUser(null); openEditUser(viewUser); }}>
                 <Edit3 size={16} /> Edit User
               </button>
@@ -1485,118 +1529,90 @@ export default function UsersPage() {
         </div>
       )}
 
-      {/* ── SAP Widget Toast ────────────────────────────────── */}
-      {sapToast?.visible && (
-        <div style={{
-          position: 'fixed', bottom: 24, right: 24, width: 400,
-          background: 'var(--surface-card)', border: '1px solid var(--border)',
-          borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
-          zIndex: 9999, overflow: 'hidden',
-          animation: 'sapToastSlideIn 0.35s cubic-bezier(0.22,1,0.36,1)',
-        }}>
-          <style>{`
-            @keyframes sapToastSlideIn {
-              from { opacity: 0; transform: translateY(24px) scale(0.97); }
-              to   { opacity: 1; transform: translateY(0) scale(1); }
-            }
-          `}</style>
-
-          {/* Toast Header */}
-          <div style={{
-            padding: '14px 18px', borderBottom: '1px solid var(--border)',
-            background: 'linear-gradient(135deg, rgba(139,92,246,0.08), rgba(10,110,209,0.08))',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 21 }}>✨</span>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>Configure Dashboard</div>
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                  Select widgets for <strong>{sapToast.userName}</strong>
+      {/* ── Widget Configuration Modal ────────────────────────────────── */}
+      <Dialog open={Boolean(sapToast?.visible)} onOpenChange={(open) => { if (!open) setSapToast(null); }}>
+        {sapToast?.visible && (
+          <DialogContent className="max-w-xl p-0 overflow-hidden sm:rounded-2xl">
+            <DialogHeader className="p-6 pb-4 border-b border-border bg-muted/30">
+              <div className="flex items-center gap-3">
+                <div className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary">
+                  <Zap size={20} />
+                </div>
+                <div>
+                  <DialogTitle className="text-lg font-bold text-foreground">Configure Dashboard Widgets</DialogTitle>
+                  <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                    Select widgets to display on the dashboard for <strong className="text-foreground font-semibold">{sapToast.userName}</strong>
+                  </DialogDescription>
                 </div>
               </div>
-            </div>
-            <button onClick={() => setSapToast(null)} style={{
-              width: 28, height: 28, border: 'none', background: 'transparent',
-              cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 19,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6,
-            }}>×</button>
-          </div>
+            </DialogHeader>
 
-          {/* Widget Grid */}
-          <div style={{ padding: '12px 14px', maxHeight: 300, overflowY: 'auto' }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-placeholder)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
-              Select widgets to enable
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              {WIDGET_LIST.map((widget) => {
-                const active = sapToast.selectedWidgets.includes(widget.id);
-                return (
-                  <button
-                    key={widget.id}
-                    onClick={() => toggleToastWidget(widget.id)}
-                    style={{
-                      padding: '10px 12px',
-                      border: `1.5px solid ${active ? 'var(--primary-500)' : 'var(--border)'}`,
-                      borderRadius: 8,
-                      background: active ? 'rgba(10,110,209,0.06)' : 'var(--surface)',
-                      cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s',
-                      display: 'flex', alignItems: 'flex-start', gap: 8,
-                    }}
-                  >
-                    <span style={{ fontSize: 17, flexShrink: 0, marginTop: 1 }}>{widget.icon}</span>
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{
-                        fontSize: 13, fontWeight: 700,
-                        color: active ? 'var(--primary-500)' : 'var(--text-primary)',
-                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                      }}>{widget.name}</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.3, marginTop: 2 }}>
-                        {widget.description}
+            <div className="p-6 max-h-[60vh] overflow-y-auto space-y-4">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                Available Widgets
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {WIDGET_LIST.map((widget) => {
+                  const active = sapToast.selectedWidgets.includes(widget.id);
+                  return (
+                    <button
+                      key={widget.id}
+                      type="button"
+                      onClick={() => toggleToastWidget(widget.id)}
+                      className={cn(
+                        "flex items-start gap-3 p-3.5 rounded-xl border text-left transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                        active
+                          ? "border-primary/60 bg-primary/5 ring-1 ring-primary/20 shadow-xs"
+                          : "border-border/80 bg-card hover:border-border hover:bg-accent/40"
+                      )}
+                    >
+                      <span className="text-xl shrink-0 mt-0.5">{widget.icon}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className={cn("text-sm font-semibold truncate", active ? "text-primary" : "text-foreground")}>
+                          {widget.name}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5 leading-snug line-clamp-2">
+                          {widget.description}
+                        </div>
                       </div>
-                    </div>
-                    {active && (
-                      <span style={{
-                        marginLeft: 'auto', flexShrink: 0, width: 16, height: 16,
-                        borderRadius: '50%', background: 'var(--primary-500)', color: '#fff',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 11, fontWeight: 700,
-                      }}>✓</span>
-                    )}
-                  </button>
-                );
-              })}
+                      <div className={cn(
+                        "grid size-5 shrink-0 place-items-center rounded-md border transition-all mt-0.5",
+                        active
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-muted-foreground/30 bg-background"
+                      )}>
+                        {active && <span className="text-xs font-bold">✓</span>}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
 
-          {/* Toast Footer */}
-          <div style={{
-            padding: '12px 14px', borderTop: '1px solid var(--border)',
-            background: 'var(--surface-elevated)',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
-          }}>
-            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-              {sapToast.selectedWidgets.length} widget{sapToast.selectedWidgets.length !== 1 ? 's' : ''} selected
-            </span>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => setSapToast(null)} style={{
-                padding: '8px 16px', border: '1px solid var(--border)', borderRadius: 6,
-                background: 'var(--surface-card)', color: 'var(--text-primary)',
-                fontSize: 14, fontWeight: 600, cursor: 'pointer',
-              }}>Skip</button>
-              <button onClick={handleSaveWidgets} disabled={widgetSaving} style={{
-                padding: '8px 20px', border: 'none', borderRadius: 6,
-                background: 'linear-gradient(135deg, #8b5cf6, #0a6ed1)',
-                color: '#fff', fontSize: 14, fontWeight: 700,
-                cursor: widgetSaving ? 'not-allowed' : 'pointer',
-                opacity: widgetSaving ? 0.7 : 1,
-              }}>
-                {widgetSaving ? 'Saving…' : 'Save & Apply'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            <DialogFooter className="px-6 py-4 border-t border-border bg-muted/20 sm:flex-row sm:items-center sm:justify-between">
+              <span className="text-xs font-medium text-muted-foreground mb-2 sm:mb-0">
+                {sapToast.selectedWidgets.length} widget{sapToast.selectedWidgets.length !== 1 ? 's' : ''} selected
+              </span>
+              <div className="flex items-center gap-2.5">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setSapToast(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleSaveWidgets}
+                  disabled={widgetSaving}
+                >
+                  {widgetSaving ? 'Saving...' : 'Save & Apply'}
+                </Button>
+              </div>
+            </DialogFooter>
+          </DialogContent>
+        )}
+      </Dialog>
 
       {/* ── Batch Delete Confirm Modal ────────────────────────── */}
       {showBatchDeleteModal && (
@@ -1733,6 +1749,6 @@ export default function UsersPage() {
           </div>
         </div>
       )}
-    </div>
+    </PageFrame>
   );
 }
