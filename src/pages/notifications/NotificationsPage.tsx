@@ -1,13 +1,15 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { notificationService } from '../../services/notificationService';
 import { sseClient } from '../../services/sseClient';
 import type { NotificationRow } from '../../types/viewModels';
+import { getNotificationTargetUrl } from '../../lib/notificationRouter';
 import {
   Bell, BellOff, Search, CheckCheck, Trash2,
   ShoppingCart, FileText, CheckSquare, AlertTriangle, Clock,
-  Users, Shield, ChevronLeft, ChevronRight, MailOpen, Mail,
+  Users, Shield, ChevronLeft, ChevronRight, MailOpen, Mail, ExternalLink,
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { PageFrame, PageLead, MetricCard, EmptyState } from '../../components/ui/product';
@@ -50,6 +52,7 @@ const TYPE_TONES: Record<NotiType, string> = {
 const FILTERS: ('ALL' | 'UNREAD' | 'READ')[] = ['ALL', 'UNREAD', 'READ'];
 
 export default function NotificationsPage() {
+  const navigate = useNavigate();
   const { data: notis, loading, error, reload } = useServiceData(
     () => notificationService.list(),
     [] as NotificationRow[]
@@ -199,49 +202,68 @@ export default function NotificationsPage() {
       <Card className="overflow-hidden">
         {paginated.length > 0 ? (
           <div className="divide-y divide-border/50">
-            {paginated.map(n => (
-              <div
-                key={n.id}
-                onClick={() => { markRead(n.id); setDetail(n); }}
-                className={cn(
-                  'group flex cursor-pointer items-start gap-4 p-4 transition-colors hover:bg-muted/40',
-                  !n.isRead && 'bg-primary/5'
-                )}
-              >
-                <div className={cn('grid size-9 shrink-0 place-items-center rounded-lg ring-1 mt-0.5', TYPE_TONES[n.type])}>
-                  {TYPE_ICONS[n.type]}
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <h4 className={cn('text-sm font-semibold text-foreground truncate', !n.isRead && 'text-primary')}>
-                      {n.title}
-                    </h4>
-                    <span className="flex shrink-0 items-center gap-1 text-[12px] text-muted-foreground">
-                      <Clock className="size-3" /> {timeAgo(n.createdAt)}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground line-clamp-2 leading-relaxed">{n.message}</p>
-                  <div className="mt-2.5 flex items-center gap-2 text-[12px]">
-                    {n.linkedRef !== '-' && (
-                      <Badge variant="outline" className="font-mono text-[11px]">{n.linkedRef}</Badge>
-                    )}
-                    <span className="text-muted-foreground">from <strong className="text-foreground">{n.from}</strong></span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100" onClick={e => e.stopPropagation()}>
-                  {!n.isRead && (
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Mark read" onClick={() => markRead(n.id)}>
-                      <CheckCheck className="size-4" />
-                    </Button>
+            {paginated.map(n => {
+              const targetUrl = getNotificationTargetUrl(n.title, n.message, n.linkedRef);
+              return (
+                <div
+                  key={n.id}
+                  onClick={() => {
+                    markRead(n.id);
+                    navigate(targetUrl);
+                  }}
+                  className={cn(
+                    'group flex cursor-pointer items-start gap-4 p-4 transition-colors hover:bg-muted/40',
+                    !n.isRead && 'bg-primary/5'
                   )}
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive hover:text-destructive" title="Delete" onClick={() => deleteNoti(n.id)}>
-                    <Trash2 className="size-4" />
-                  </Button>
+                >
+                  <div className={cn('grid size-9 shrink-0 place-items-center rounded-lg ring-1 mt-0.5', TYPE_TONES[n.type])}>
+                    {TYPE_ICONS[n.type]}
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <h4 className={cn('text-sm font-semibold text-foreground truncate', !n.isRead && 'text-primary')}>
+                        {n.title}
+                      </h4>
+                      <span className="flex shrink-0 items-center gap-1 text-[12px] text-muted-foreground">
+                        <Clock className="size-3" /> {timeAgo(n.createdAt)}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground line-clamp-2 leading-relaxed">{n.message}</p>
+                    <div className="mt-2.5 flex items-center gap-2 text-[12px]">
+                      {n.linkedRef !== '-' && (
+                        <Badge variant="outline" className="font-mono text-[11px]">{n.linkedRef}</Badge>
+                      )}
+                      <span className="text-muted-foreground">from <strong className="text-foreground">{n.from}</strong></span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100" onClick={e => e.stopPropagation()}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 gap-1 px-2 text-xs font-semibold text-primary hover:bg-primary/10"
+                      title="Open page"
+                      onClick={() => {
+                        markRead(n.id);
+                        navigate(targetUrl);
+                      }}
+                    >
+                      <ExternalLink className="size-3.5" />
+                      <span>Open</span>
+                    </Button>
+                    {!n.isRead && (
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Mark read" onClick={() => markRead(n.id)}>
+                        <CheckCheck className="size-4" />
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive hover:text-destructive" title="Delete" onClick={() => deleteNoti(n.id)}>
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <EmptyState
@@ -323,8 +345,19 @@ export default function NotificationsPage() {
               </div>
             </div>
 
-            <DialogFooter>
-              <Button onClick={() => setDetail(null)}>Close</Button>
+            <DialogFooter className="gap-2 sm:justify-between">
+              <Button
+                variant="default"
+                onClick={() => {
+                  const targetUrl = getNotificationTargetUrl(detail.title, detail.message, detail.linkedRef);
+                  setDetail(null);
+                  navigate(targetUrl);
+                }}
+                className="gap-1.5"
+              >
+                <ExternalLink className="size-4" /> Open Record / Page
+              </Button>
+              <Button variant="outline" onClick={() => setDetail(null)}>Close</Button>
             </DialogFooter>
           </DialogContent>
         )}

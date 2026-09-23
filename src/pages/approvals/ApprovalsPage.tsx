@@ -26,6 +26,8 @@ import {
   FileSignature,
   Minus,
   Wallet,
+  User,
+  Layers,
 } from 'lucide-react';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import '../../components/shared/ColumnCustomizer.css';
@@ -283,7 +285,8 @@ export default function ApprovalsPage() {
   const [actionComment, setActionComment] = useState('');
   const [actionReturnTarget, setActionReturnTarget] = useState<'ORIGINATOR' | 'LEVEL_1' | 'VENDOR'>('ORIGINATOR');
   const [detailRequest, setDetailRequest] = useState<ApprovalRequest | null>(null);
-  useBodyScrollLock(!!(actionModal || detailRequest || actionSuccessData));
+  const [chainModal, setChainModal] = useState<{ module: string; referenceId: string } | null>(null);
+  useBodyScrollLock(!!(actionModal || detailRequest || actionSuccessData || chainModal));
   const perPage = 8;
 
   const defaultOrder = ALL_COLUMNS.map((c) => c.key);
@@ -716,6 +719,181 @@ export default function ApprovalsPage() {
         )}
       </Dialog>
 
+      {/* Detail View Dialog (Payment Voucher Eye View Style) */}
+      <Dialog open={!!detailRequest} onOpenChange={() => setDetailRequest(null)}>
+        {detailRequest && (
+          <DialogContent className="max-w-xl p-6 sm:p-7">
+            <DialogHeader className="space-y-1 pr-8">
+              <div className="flex items-center gap-2.5">
+                <DialogTitle className="text-xl font-bold tracking-tight text-foreground font-mono">
+                  {detailRequest.referenceNumber}
+                </DialogTitle>
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "px-2.5 py-1 text-xs font-semibold uppercase tracking-wider gap-1.5",
+                    STATUS_TONES[detailRequest.status] || STATUS_TONES.PENDING
+                  )}
+                >
+                  <span className={cn(
+                    "inline-block size-2 rounded-full",
+                    detailRequest.status === 'APPROVED' || detailRequest.status === 'APPROVED_L1' ? "bg-emerald-500" :
+                    detailRequest.status === 'REJECTED' ? "bg-rose-500" :
+                    detailRequest.status === 'RETURNED' ? "bg-orange-500" :
+                    "bg-amber-500/80"
+                  )} />
+                  {STATUS_LABELS[detailRequest.status] || detailRequest.status}
+                </Badge>
+              </div>
+              <DialogDescription className="text-sm font-medium text-muted-foreground">
+                {detailRequest.requestedBy} · <span className="font-bold text-foreground font-mono">{detailRequest.amount}</span>
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="mt-4 space-y-4">
+              <div className="border-t border-border/60 pt-4">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                  {detailRequest.module.toUpperCase()} DETAILS
+                </h4>
+
+                <div className="divide-y divide-border/40 text-sm">
+                  {/* Row 1: Invoice / Document Reference & Amount */}
+                  <div className="grid grid-cols-1 gap-4 py-3 sm:grid-cols-2">
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        INVOICE REFERENCE
+                      </div>
+                      <div className="mt-1 font-medium text-foreground font-mono break-words">
+                        {detailRequest.referenceNumber}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        AMOUNT
+                      </div>
+                      <div className="mt-1 text-base font-bold text-foreground font-mono">
+                        {detailRequest.amount}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Row 2: Method / Module Category & Date */}
+                  <div className="grid grid-cols-1 gap-4 py-3 sm:grid-cols-2">
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        METHOD / MODULE
+                      </div>
+                      <div className="mt-1 font-medium text-foreground flex items-center gap-1.5">
+                        {MODULE_ICONS[detailRequest.module as ModuleType]} {detailRequest.module}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        DATE
+                      </div>
+                      <div className="mt-1 font-medium text-foreground">
+                        {formatDateTime(detailRequest.submittedAt)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Row 3: Approved By / Workflow Stage */}
+                  <div className="py-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      APPROVED BY
+                    </div>
+                    <div className="mt-1 flex items-center gap-1.5 font-medium text-foreground">
+                      <span className={cn(
+                        "inline-block size-2 rounded-full",
+                        detailRequest.status === 'APPROVED' ? "bg-emerald-500" :
+                        detailRequest.status === 'REJECTED' ? "bg-rose-500" :
+                        "bg-amber-500/80"
+                      )} />
+                      {detailRequest.status === 'PENDING' ? (
+                        <span>Pending Approval ({detailRequest.requiredRole || `Level ${detailRequest.currentLevel || 1}`})</span>
+                      ) : (
+                        <span>{STATUS_LABELS[detailRequest.status] || detailRequest.status} by Workflow</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Row 4: Remarks */}
+                  <div className="py-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      REMARKS
+                    </div>
+                    <div className="mt-1 font-normal text-muted-foreground break-words leading-relaxed">
+                      {detailRequest.comments || detailRequest.title || '—'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="mt-6 flex flex-col gap-2 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <Button
+                variant="outline"
+                className="gap-2 rounded-full px-4"
+                onClick={() => {
+                  const req = detailRequest;
+                  const refId = req.referenceId || req.referenceNumber;
+                  setChainModal({ module: req.module, referenceId: refId });
+                }}
+              >
+                <Clock className="size-4" /> View Approval Chain
+              </Button>
+
+              <div className="flex items-center gap-2">
+                {detailRequest.canAct ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-amber-600 hover:text-amber-700 border-amber-500/30 hover:bg-amber-500/10 rounded-full px-3.5"
+                      onClick={() => {
+                        const req = detailRequest;
+                        setDetailRequest(null);
+                        openAction(req, 'return');
+                      }}
+                    >
+                      <RotateCcw className="size-3.5 mr-1" /> Return
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="rounded-full px-3.5"
+                      onClick={() => {
+                        const req = detailRequest;
+                        setDetailRequest(null);
+                        openAction(req, 'reject');
+                      }}
+                    >
+                      <ThumbsDown className="size-3.5 mr-1" /> Reject
+                    </Button>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-full px-4"
+                      onClick={() => {
+                        const req = detailRequest;
+                        setDetailRequest(null);
+                        openAction(req, 'approve');
+                      }}
+                    >
+                      <ThumbsUp className="size-3.5 mr-1" /> Approve
+                    </Button>
+                  </>
+                ) : (
+                  <Button variant="secondary" className="rounded-full px-5" onClick={() => setDetailRequest(null)}>
+                    Close
+                  </Button>
+                )}
+              </div>
+            </DialogFooter>
+          </DialogContent>
+        )}
+      </Dialog>
+
       {/* Success Modal */}
       {actionSuccessData && (
         <ActionSuccessModal
@@ -723,6 +901,93 @@ export default function ApprovalsPage() {
           onClose={() => setActionSuccessData(null)}
         />
       )}
+
+      {/* Approval Chain Modal */}
+      {chainModal && (
+        <ApprovalChainView
+          module={chainModal.module}
+          referenceId={chainModal.referenceId}
+          onClose={() => setChainModal(null)}
+        />
+      )}
     </PageFrame>
   );
 }
+
+function ApprovalChainView({ module, referenceId, onClose }: { module: string; referenceId: string; onClose: () => void }) {
+  const [chainData, setChainData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchChain = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await approvalService.getChain(module, referenceId);
+        if (!cancelled) setChainData(data);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load approval chain');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetchChain();
+    return () => {
+      cancelled = true;
+    };
+  }, [module, referenceId]);
+
+  const itemsToDisplay = chainData?.history && chainData.history.length > 0
+    ? chainData.history
+    : chainData?.timeline && chainData.timeline.length > 0
+    ? chainData.timeline
+    : chainData?.levels || [];
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Approval history & timeline</DialogTitle>
+          <DialogDescription>{module} · {referenceId}</DialogDescription>
+        </DialogHeader>
+
+        {loading ? (
+          <div className="py-8 text-center text-sm text-muted-foreground">Loading approval chain…</div>
+        ) : error ? (
+          <div className="py-8 text-center text-sm text-destructive">{error}</div>
+        ) : itemsToDisplay.length === 0 ? (
+          <div className="py-8 text-center text-sm text-muted-foreground">No approval history available.</div>
+        ) : (
+          <div className="space-y-4 py-2">
+            {itemsToDisplay.map((item: any, idx: number) => (
+              <div key={idx} className="flex gap-3 rounded-xl border border-border/70 bg-secondary/40 p-3.5 text-sm">
+                <div className="grid size-7 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                  {item.levelNumber || idx + 1}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold">
+                      {item.requiredRole ? item.requiredRole.replace(/_/g, ' ') : `Level ${idx + 1}`}
+                    </span>
+                    <Badge tone={item.status === 'APPROVED' ? 'success' : item.status === 'REJECTED' ? 'danger' : 'warning'}>
+                      {item.status}
+                    </Badge>
+                  </div>
+                  {item.approverName && <p className="mt-1 text-xs text-muted-foreground">By: {item.approverName}</p>}
+                  {item.comments && <p className="mt-1 rounded-lg bg-background p-2 text-xs italic">{item.comments}</p>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="secondary" onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+

@@ -154,6 +154,8 @@ export default function AccountsPayablePage() {
   const [actionModal, setActionModal] = useState<{ invoice: APInvoice; action: ActionType } | null>(null);
   const [actionComment, setActionComment] = useState('');
   const [actionSaving, setActionSaving] = useState(false);
+  const [chainModal, setChainModal] = useState<{ module: string; referenceId: string } | null>(null);
+  useBodyScrollLock(!!(actionModal || detailInvoice || printInvoice || chainModal));
 
   const [generatedVoucherBanner, setGeneratedVoucherBanner] = useState<{
     voucherNumber: string;
@@ -1112,27 +1114,66 @@ export default function AccountsPayablePage() {
               )}
             </div>
 
-            {detailInvoice.status === 'PENDING' && detailInvoice.canAct && canApproveAP && (
-              <DialogFooter className="mt-6 border-t border-border/60 pt-4">
-                <Button
-                  onClick={() => {
-                    setDetailInvoice(null);
-                    openAction(detailInvoice, 'approve');
-                  }}
-                >
-                  <ThumbsUp /> Approve
-                </Button>
-                <Button
-                  variant="destructive"
-                  onClick={() => {
-                    setDetailInvoice(null);
-                    openAction(detailInvoice, 'reject');
-                  }}
-                >
-                  <ThumbsDown /> Reject
-                </Button>
-              </DialogFooter>
-            )}
+            <DialogFooter className="mt-6 flex flex-col gap-2 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <Button
+                variant="outline"
+                className="gap-2 rounded-full px-4"
+                onClick={() => {
+                  const inv = detailInvoice;
+                  const refId = inv.invoiceNumber || String(inv.id);
+                  setChainModal({ module: 'AccountsPayable', referenceId: refId });
+                }}
+              >
+                <Clock className="size-4" /> View Approval Chain
+              </Button>
+
+              <div className="flex items-center gap-2">
+                {detailInvoice.status === 'PENDING' && detailInvoice.canAct && canApproveAP ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-amber-600 hover:text-amber-700 border-amber-500/30 hover:bg-amber-500/10 rounded-full px-3.5"
+                      onClick={() => {
+                        const inv = detailInvoice;
+                        setDetailInvoice(null);
+                        openAction(inv, 'return');
+                      }}
+                    >
+                      <RotateCcw className="size-3.5 mr-1" /> Return
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="rounded-full px-3.5"
+                      onClick={() => {
+                        const inv = detailInvoice;
+                        setDetailInvoice(null);
+                        openAction(inv, 'reject');
+                      }}
+                    >
+                      <ThumbsDown className="size-3.5 mr-1" /> Reject
+                    </Button>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-full px-4"
+                      onClick={() => {
+                        const inv = detailInvoice;
+                        setDetailInvoice(null);
+                        openAction(inv, 'approve');
+                      }}
+                    >
+                      <ThumbsUp className="size-3.5 mr-1" /> Approve
+                    </Button>
+                  </>
+                ) : (
+                  <Button variant="secondary" className="rounded-full px-5" onClick={() => setDetailInvoice(null)}>
+                    Close
+                  </Button>
+                )}
+              </div>
+            </DialogFooter>
           </DialogContent>
         )}
       </Dialog>
@@ -1145,6 +1186,92 @@ export default function AccountsPayablePage() {
           onClose={() => setPrintInvoice(null)}
         />
       )}
+
+      {/* Approval Chain Modal */}
+      {chainModal && (
+        <ApprovalChainView
+          module={chainModal.module}
+          referenceId={chainModal.referenceId}
+          onClose={() => setChainModal(null)}
+        />
+      )}
     </PageFrame>
+  );
+}
+
+function ApprovalChainView({ module, referenceId, onClose }: { module: string; referenceId: string; onClose: () => void }) {
+  const [chainData, setChainData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchChain = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await approvalService.getChain(module, referenceId);
+        if (!cancelled) setChainData(data);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load approval chain');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetchChain();
+    return () => {
+      cancelled = true;
+    };
+  }, [module, referenceId]);
+
+  const itemsToDisplay = chainData?.history && chainData.history.length > 0
+    ? chainData.history
+    : chainData?.timeline && chainData.timeline.length > 0
+    ? chainData.timeline
+    : chainData?.levels || [];
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Approval history & timeline</DialogTitle>
+          <DialogDescription>{module} · {referenceId}</DialogDescription>
+        </DialogHeader>
+
+        {loading ? (
+          <div className="py-8 text-center text-sm text-muted-foreground">Loading approval chain…</div>
+        ) : error ? (
+          <div className="py-8 text-center text-sm text-destructive">{error}</div>
+        ) : itemsToDisplay.length === 0 ? (
+          <div className="py-8 text-center text-sm text-muted-foreground">No approval history available.</div>
+        ) : (
+          <div className="space-y-4 py-2">
+            {itemsToDisplay.map((item: any, idx: number) => (
+              <div key={idx} className="flex gap-3 rounded-xl border border-border/70 bg-secondary/40 p-3.5 text-sm">
+                <div className="grid size-7 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                  {item.levelNumber || idx + 1}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold">
+                      {item.requiredRole ? item.requiredRole.replace(/_/g, ' ') : `Level ${idx + 1}`}
+                    </span>
+                    <Badge tone={item.status === 'APPROVED' ? 'success' : item.status === 'REJECTED' ? 'danger' : 'warning'}>
+                      {item.status}
+                    </Badge>
+                  </div>
+                  {item.approverName && <p className="mt-1 text-xs text-muted-foreground">By: {item.approverName}</p>}
+                  {item.comments && <p className="mt-1 rounded-lg bg-background p-2 text-xs italic">{item.comments}</p>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="secondary" onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -104,6 +104,33 @@
   gap: 3px;
 }
 
+.toast__header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.toast__paused-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #d97706;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 1px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.2px;
+  line-height: 1.3;
+}
+
+.toast--paused {
+  border-color: rgba(245, 158, 11, 0.5) !important;
+}
+
 .toast__title {
   font-size: 14px;
   font-weight: 700;

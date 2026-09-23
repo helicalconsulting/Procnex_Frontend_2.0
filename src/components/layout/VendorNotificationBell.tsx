@@ -4,6 +4,7 @@ import { Bell, FileText, Check } from 'lucide-react';
 import { vendorPortalService, type VendorNotification } from '../../services/vendorPortalService';
 import { sseClient } from '../../services/sseClient';
 import { USE_MOCK } from '../../config/mock';
+import { getVendorNotificationTargetUrl } from '../../lib/notificationRouter';
 import FloatingMenu from '../shared/FloatingMenu';
 import './VendorNotificationBell.css';
 
@@ -98,8 +99,8 @@ export default function VendorNotificationBell() {
       setUnreadCount((c) => Math.max(0, c - 1));
     }
     setOpen(false);
-    const rfqId = n.metadata?.rfqId;
-    navigate(rfqId ? `/vendor/rfqs?rfq=${rfqId}` : '/vendor/rfqs');
+    const targetUrl = getVendorNotificationTargetUrl(n.title, n.message || '', n.metadata?.rfqId);
+    navigate(targetUrl);
   };
 
   const markAllRead = async () => {

@@ -169,3 +169,24 @@
     transform: translateY(0) scale(1);
   }
 }
+
+.sap-message-strip__paused-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #d97706;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  flex-shrink: 0;
+  letter-spacing: 0.2px;
+}
+
+.sap-message-strip--paused {
+  border-left-color: #f59e0b !important;
+}
+

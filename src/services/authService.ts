@@ -100,12 +100,17 @@ async function mockGetCurrentUser(): Promise<AuthResponse | null> {
 }
 
 async function apiLogin(payload: LoginPayload): Promise<AuthResponse> {
-  const res = await fetch(`${API_BASE}/auth/login`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify(payload),
-  });
-  const json = await res.json();
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(payload),
+    });
+  } catch (err) {
+    throw new Error(`Unable to connect to authentication server at ${API_BASE}. Please verify server network status.`);
+  }
+  const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(json.error || json.message || 'Login failed');
   }
@@ -114,16 +119,21 @@ async function apiLogin(payload: LoginPayload): Promise<AuthResponse> {
 
 async function apiVendorLogin(payload: LoginPayload): Promise<AuthResponse> {
   const companyCode = localStorage.getItem('vendor_company_code') || undefined;
-  const res = await fetch(`${API_BASE}/vendors/auth/login`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify({
-      username: payload.username.trim(),
-      password: payload.password,
-      companyCode,
-    }),
-  });
-  const json = await res.json();
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/vendors/auth/login`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        username: payload.username.trim(),
+        password: payload.password,
+        companyCode,
+      }),
+    });
+  } catch (err) {
+    throw new Error(`Unable to connect to vendor authentication server at ${API_BASE}. Please verify server network status.`);
+  }
+  const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(json.error || json.message || 'Login failed');
   }

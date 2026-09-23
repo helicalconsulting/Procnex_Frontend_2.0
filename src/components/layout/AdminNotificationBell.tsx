@@ -5,6 +5,7 @@ import { notificationService } from '../../services/notificationService';
 import { sseClient } from '../../services/sseClient';
 import { USE_MOCK } from '../../config/mock';
 import type { NotificationRow } from '../../types/viewModels';
+import { getNotificationTargetUrl } from '../../lib/notificationRouter';
 import FloatingMenu from '../shared/FloatingMenu';
 import './VendorNotificationBell.css';
 
@@ -91,18 +92,8 @@ export default function AdminNotificationBell() {
       setUnreadCount((c) => Math.max(0, c - 1));
     }
     setOpen(false);
-    const combined = `${n.title} ${n.message}`;
-    const t = combined.toLowerCase();
-    const rfqMatch = combined.match(/RFQ[-\w]+/i);
-    if (t.includes('document') || t.includes('uploaded') || t.includes('compliance')) {
-      navigate('/onboarding/queue');
-    } else if (t.includes('quotation')) {
-      navigate(rfqMatch ? `/quotations?rfq=${encodeURIComponent(rfqMatch[0])}` : '/quotations');
-    } else if (t.includes('rfq')) {
-      navigate('/rfq');
-    } else {
-      navigate('/notifications');
-    }
+    const targetUrl = getNotificationTargetUrl(n.title, n.message, n.linkedRef);
+    navigate(targetUrl);
   };
 
   const markAllRead = async () => {

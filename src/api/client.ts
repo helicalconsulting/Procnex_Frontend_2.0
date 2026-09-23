@@ -1,7 +1,16 @@
 import { USE_MOCK } from '../config/mock';
 
 function getApiBase(): string {
-  let url = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').trim();
+  let envUrl = import.meta.env.VITE_API_URL;
+  if (
+    !envUrl &&
+    typeof window !== 'undefined' &&
+    !window.location.hostname.includes('localhost') &&
+    !window.location.hostname.includes('127.0.0.1')
+  ) {
+    envUrl = `${window.location.origin}/api`;
+  }
+  let url = (envUrl || 'http://localhost:3000/api').trim();
   url = url.replace(/\/+$/, '');
   if (!url.endsWith('/api')) {
     url = `${url}/api`;
