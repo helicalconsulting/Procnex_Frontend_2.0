@@ -103,21 +103,22 @@ const ALL_COLUMNS: ColumnDef[] = [
       const isApprovedByMe = (rfq as any)._isApprovedByMe;
       const isReturnedByMe = (rfq as any)._isReturnedByMe;
       const isRejectedByMe = (rfq as any)._isRejectedByMe;
-      const isPending = rfq.status === 'PENDING_APPROVAL';
-      let displayStatus: string = (rfq.status === 'SENT' || rfq.status === 'IN_PROGRESS' || rfq.status === 'ACCEPTED' || rfq.status === 'APPROVED')
+      let displayStatus: string = (rfq.status === 'SENT' || rfq.status === 'IN_PROGRESS' || rfq.status === 'ACCEPTED' || rfq.status === 'APPROVED' || isApprovedByMe)
         ? 'APPROVED'
-        : (isPending && isRejectedByMe)
+        : (isRejectedByMe || rfq.status === 'REJECTED')
         ? 'REJECTED'
-        : (isPending && isReturnedByMe)
+        : (isReturnedByMe || rfq.status === 'RETURNED')
         ? 'RETURNED'
-        : (isPending && isApprovedByMe)
-        ? 'APPROVED'
         : rfq.status;
       const label = (displayStatus === 'APPROVED' || displayStatus === 'SENT')
         ? 'Approved'
         : displayStatus === 'ACCEPTED'
         ? 'Accepted'
-        : (STATUS_LABELS[rfq.status as RFQStatus] || displayStatus);
+        : displayStatus === 'RETURNED'
+        ? 'Returned'
+        : displayStatus === 'REJECTED'
+        ? 'Rejected'
+        : (STATUS_LABELS[displayStatus as RFQStatus] || STATUS_LABELS[rfq.status as RFQStatus] || displayStatus);
       return (
         <Badge tone={statusTone(displayStatus)}>
           <span className="size-1.5 rounded-full bg-current" />
@@ -271,6 +272,7 @@ export default function RFQPage() {
 
   // Approval Action State
   const [pendingApprovalsMap, setPendingApprovalsMap] = useState<Map<string, any>>(new Map());
+  const [localStatusMap, setLocalStatusMap] = useState<Map<string, RFQStatus>>(new Map());
   const [myApprovedMap, setMyApprovedMap] = useState<Set<string>>(new Set());
   const [myReturnedMap, setMyReturnedMap] = useState<Set<string>>(new Set());
   const [myRejectedMap, setMyRejectedMap] = useState<Set<string>>(new Set());
@@ -307,7 +309,11 @@ export default function RFQPage() {
         if (r.referenceNumber) aSet.add(String(r.referenceNumber));
         if (r.id) aSet.add(String(r.id));
       });
-      setMyApprovedMap(aSet);
+      setMyApprovedMap((prev) => {
+        const next = new Set(prev);
+        aSet.forEach((x) => next.add(x));
+        return next;
+      });
 
       const rSet = new Set<string>();
       returnedRows.forEach((r) => {
@@ -315,7 +321,11 @@ export default function RFQPage() {
         if (r.referenceNumber) rSet.add(String(r.referenceNumber));
         if (r.id) rSet.add(String(r.id));
       });
-      setMyReturnedMap(rSet);
+      setMyReturnedMap((prev) => {
+        const next = new Set(prev);
+        rSet.forEach((x) => next.add(x));
+        return next;
+      });
 
       const rejSet = new Set<string>();
       rejectedRows.forEach((r) => {
@@ -323,7 +333,11 @@ export default function RFQPage() {
         if (r.referenceNumber) rejSet.add(String(r.referenceNumber));
         if (r.id) rejSet.add(String(r.id));
       });
-      setMyRejectedMap(rejSet);
+      setMyRejectedMap((prev) => {
+        const next = new Set(prev);
+        rejSet.forEach((x) => next.add(x));
+        return next;
+      });
     } catch {
       setPendingApprovalsMap(new Map());
       setMyApprovedMap(new Set());
@@ -401,6 +415,15 @@ export default function RFQPage() {
     setApprovalActionLoading(false);
 
     // ⚡ INSTANT Optimistic State Updates in local maps (0ms latency!)
+    const optimisticStatus: RFQStatus = action === 'approve' ? 'APPROVED' : action === 'reject' ? 'REJECTED' : 'RETURNED';
+    setLocalStatusMap((prev) => {
+      const next = new Map(prev);
+      next.set(String(rfq.id), optimisticStatus);
+      if (rfq.rfqNumber) next.set(rfq.rfqNumber, optimisticStatus);
+      if (approvalId) next.set(approvalId, optimisticStatus);
+      return next;
+    });
+
     setPendingApprovalsMap((prev) => {
       const next = new Map(prev);
       next.delete(String(rfq.id));
@@ -457,17 +480,21 @@ export default function RFQPage() {
   const enrichedRfqList = useMemo(() => {
     return rfqList.map((rfq) => {
       const idStr = String(rfq.id);
-      const isApproved = myApprovedMap.has(idStr) || (rfq.rfqNumber && myApprovedMap.has(rfq.rfqNumber));
-      const isReturned = myReturnedMap.has(idStr) || (rfq.rfqNumber && myReturnedMap.has(rfq.rfqNumber));
-      const isRejected = myRejectedMap.has(idStr) || (rfq.rfqNumber && myRejectedMap.has(rfq.rfqNumber));
+      const overrideStatus = localStatusMap.get(idStr) || (rfq.rfqNumber && localStatusMap.get(rfq.rfqNumber));
+      const effectiveStatus = overrideStatus || rfq.status;
+
+      const isApproved = effectiveStatus === 'APPROVED' || effectiveStatus === 'SENT' || effectiveStatus === 'ACCEPTED' || myApprovedMap.has(idStr) || (rfq.rfqNumber && myApprovedMap.has(rfq.rfqNumber));
+      const isReturned = effectiveStatus === 'RETURNED' || myReturnedMap.has(idStr) || (rfq.rfqNumber && myReturnedMap.has(rfq.rfqNumber));
+      const isRejected = effectiveStatus === 'REJECTED' || myRejectedMap.has(idStr) || (rfq.rfqNumber && myRejectedMap.has(rfq.rfqNumber));
       return {
         ...rfq,
+        status: effectiveStatus,
         _isApprovedByMe: Boolean(isApproved),
         _isReturnedByMe: Boolean(isReturned),
         _isRejectedByMe: Boolean(isRejected),
       };
     });
-  }, [rfqList, myApprovedMap, myReturnedMap, myRejectedMap]);
+  }, [rfqList, localStatusMap, myApprovedMap, myReturnedMap, myRejectedMap]);
 
   const stats = useMemo(() => {
     const cleanList = enrichedRfqList.filter((r) => r.title !== 'Direct PO Master' && !r.rfqNumber?.startsWith('RFQ-DIRECT'));
@@ -592,7 +619,7 @@ export default function RFQPage() {
       );
     }
     return list;
-  }, [rfqList, statusFilter, departmentFilter, search]);
+  }, [enrichedRfqList, statusFilter, departmentFilter, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
   const safePage = Math.min(currentPage, totalPages);
@@ -871,9 +898,9 @@ export default function RFQPage() {
                   {paginated.map((rfq) => {
                     const rfqIdStr = String(rfq.id);
                     const isSelected = selectedRfqIds.includes(rfqIdStr);
-                    const isPending = rfq.status === 'PENDING_APPROVAL';
+                    const isPending = rfq.status === 'PENDING_APPROVAL' && !rfq._isApprovedByMe && !rfq._isReturnedByMe && !rfq._isRejectedByMe;
                     const pendingApproval = pendingApprovalsMap.get(String(rfq.id)) || pendingApprovalsMap.get(rfq.rfqNumber);
-                    const canUserActOnRFQ = isPending && Boolean(pendingApproval?.canAct);
+                    const canUserActOnRFQ = isPending && Boolean(pendingApproval?.canAct) && !rfq._isApprovedByMe && !rfq._isReturnedByMe && !rfq._isRejectedByMe;
 
                     return (
                       <tr

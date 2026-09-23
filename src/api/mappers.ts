@@ -75,7 +75,17 @@ export function mapApiRfqToTableRow(rfq: Record<string, unknown>): RFQTableRow {
     rfqNumber: String(rfq.rfqNumber),
     title: String(rfq.title),
     description: String(rfq.description || ''),
-    status: mapBackendRfqStatus(String(rfq.status)),
+    status: rfq.isApprovedByMe || rfq.userAction === 'APPROVED'
+      ? 'APPROVED'
+      : rfq.isRejectedByMe || rfq.userAction === 'REJECTED'
+      ? 'REJECTED'
+      : rfq.isReturnedByMe || rfq.userAction === 'RETURNED'
+      ? 'RETURNED'
+      : mapBackendRfqStatus(String(rfq.status)),
+    _isApprovedByMe: Boolean(rfq.isApprovedByMe || rfq.userAction === 'APPROVED'),
+    _isReturnedByMe: Boolean(rfq.isReturnedByMe || rfq.userAction === 'RETURNED'),
+    _isRejectedByMe: Boolean(rfq.isRejectedByMe || rfq.userAction === 'REJECTED'),
+    canUserAct: Boolean(rfq.canUserAct),
     createdAt: String(rfq.createdAt).slice(0, 10),
     creator: creator?.fullName || 'Unknown',
     creatorInitials: initials(creator?.fullName),
@@ -237,6 +247,12 @@ export function mapApprovalToTableRow(a: Record<string, unknown>): ApprovalTable
     'PurchaseInvoice Approval': 'Purchase Invoice',
     'Purchase Invoice Approval': 'Purchase Invoice',
     'PO Invoice': 'Purchase Invoice',
+    Payments: 'Payment',
+    Payment: 'Payment',
+    'Payment Voucher': 'Payment',
+    'Payment Voucher Approval': 'Payment',
+    'Payment Approval': 'Payment',
+    PAYMENT: 'Payment',
   };
   const level = a.level as { levelNumber?: number; requiredRole?: string } | undefined;
   const createdBy = a.createdBy as { fullName?: string } | undefined;

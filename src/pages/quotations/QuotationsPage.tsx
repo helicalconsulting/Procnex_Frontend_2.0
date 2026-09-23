@@ -73,6 +73,8 @@ interface MockQuotation {
   hasPO?: boolean;
   hasContract?: boolean;
   postAwardDecision?: string;
+  canUserAct?: boolean;
+  userAction?: string | null;
   // Versioning & Vendor Quotation Number fields
   versionNumber?: number;
   qNo?: string;
@@ -306,6 +308,7 @@ function mapQuotationToRow(q: Quotation): MockQuotation {
     attachments: (q as Quotation & { attachments?: QuotationAttachment[] }).attachments,
     returnReason: (q as Quotation & { returnComment?: string | null }).returnComment || null,
     userAction: (q as any).userAction || null,
+    canUserAct: typeof (q as any).canUserAct === 'boolean' ? (q as any).canUserAct : undefined,
     isFinalApprover: typeof (q as any).isFinalApprover === 'boolean'
       ? (q as any).isFinalApprover
       : (((rfqObj as any)?.quotationApprovalMode || (q as any).quotationApprovalMode) !== 'FULL_CHAIN'),
@@ -1170,7 +1173,7 @@ function ViewQuotationModal({
                       { label: 'Department', value: rfq.department || '—' },
                       { label: 'Lead Time', value: `${q.leadTimeDays} days` },
                       { label: 'Submitted', value: formatDate(q.submittedAt) },
-                      { label: 'Status', value: STATUS_LABELS[q.status] },
+                      { label: 'Status', value: STATUS_LABELS[getDisplayStatus(q)] || q.status },
                     ].map(row => (
                       <div
                         key={row.label}
@@ -2056,38 +2059,60 @@ function canActionQuotation(s: MockQuotation | null | undefined, user: any, role
     return false;
   }
 
-  const currentUserId = String(user?.id || '');
+  // If user has already acted on this quotation, hide action buttons
+  if (s.userAction || (s as any)._isApprovedByMe || (s as any)._isReturnedByMe || (s as any)._isRejectedByMe) {
+    return false;
+  }
+
+  // If backend provided canUserAct flag explicitly, respect it
+  if (s.canUserAct !== undefined) {
+    return Boolean(s.canUserAct);
+  }
+
+  const currentUserId = String(user?.id || user?._id || '');
   const rfqCreatorId = String(s.rfqCreatedBy || (s as any).rfq?.createdBy || (s as any).createdBy || '');
   const isOriginatorUser = !!currentUserId && !!rfqCreatorId && currentUserId === rfqCreatorId;
-
-  const isSuperAdmin = Array.isArray(roles) && (
-    roles.includes('Super Admin') || roles.includes('Administrator') || roles.includes('SUPER_ADMIN') || user?.role === 'SUPER_ADMIN' || currentUserId === '1'
-  );
 
   const quotMode = (s as any).quotationApprovalMode || (s as any).rfq?.quotationApprovalMode;
   const isDirectXMode = (quotMode === 'DIRECT_X_ONLY' || (!quotMode && (s as any).rfqApprovalStartPoint === 'ORIGINATOR'));
 
   if (isDirectXMode) {
-    // In DIRECT_X_ONLY mode, ONLY the RFQ Originator (creator) or Super Admin can Accept/Reject/Return
-    return isOriginatorUser || isSuperAdmin;
+    // In DIRECT_X_ONLY mode, ONLY the actual RFQ Originator (creator) can Accept/Reject/Return
+    return isOriginatorUser;
   }
 
   // If Quotation Approval Mode is FULL_CHAIN / multi-level chain:
   // ONLY users matching the requiredRole of the active approval level can act.
-  // Admin / RFQ Creator who do not hold that level's role will get VIEW ONLY access.
+  // Admin / other users who do not hold that level's role will get VIEW ONLY access.
   const activeRole = (s as any).currentLevelRole;
   if (!activeRole) return false;
 
   const userRoles: string[] = Array.isArray(roles) ? roles : [];
-  const normalizedActiveRole = activeRole.toLowerCase();
+  const stripPrefix = (str: string) => str.replace(/^level\s*\d+(\s*of\s*\d+)?\s*:\s*/i, '').trim();
+  const reqClean = stripPrefix(activeRole).toLowerCase().replace(/[\s_-]+/g, '');
 
-  return userRoles.some((r) => {
-    const normalizedUserRole = r.toLowerCase();
-    return (
-      normalizedUserRole === normalizedActiveRole ||
-      normalizedUserRole.includes(normalizedActiveRole) ||
-      normalizedActiveRole.includes(normalizedUserRole)
-    );
+  const aliases: Record<string, string[]> = {
+    l1user: ['l1user', 'l1_user', 'l1', 'approver1', 'level1user', 'level1', 'purchasemanager', 'purchase_manager', 'procurementmanager', 'procurement_manager', 'procurement', 'purchaseclerk', 'buyer'],
+    approver1: ['approver1', 'level1user', 'level1', 'l1user', 'l1_user', 'l1', 'purchasemanager', 'purchase_manager', 'procurementmanager', 'procurement_manager', 'procurement', 'purchaseclerk', 'buyer'],
+    purchasemanager: ['purchasemanager', 'purchase_manager', 'procurementmanager', 'procurement_manager', 'l1user', 'l1_user', 'l1', 'approver1', 'level1user', 'level1', 'l2user', 'l2_user', 'l2', 'approver2', 'level2user', 'level2', 'procurement'],
+    financeapprover: ['financeapprover', 'financemanager', 'finance_approver', 'finance_manager', 'finance', 'l2user', 'l2_user', 'l2', 'approver2', 'level2user', 'level2'],
+    l2user: ['l2user', 'l2_user', 'l2', 'approver2', 'level2user', 'level2', 'purchasemanager', 'purchase_manager', 'procurementmanager', 'procurement_manager', 'financeapprover', 'financemanager', 'purchaseclerk'],
+    approver2: ['approver2', 'level2user', 'level2', 'l2user', 'l2_user', 'l2', 'purchasemanager', 'purchase_manager', 'procurementmanager', 'financeapprover', 'purchaseclerk'],
+    generalmanager: ['generalmanager', 'general_manager', 'managingdirector', 'managing_director', 'director', 'executive', 'l3user', 'l3_user', 'l3', 'approver3', 'level3user', 'level3'],
+    l3user: ['l3user', 'l3_user', 'l3', 'approver3', 'level3user', 'level3', 'generalmanager', 'general_manager', 'managingdirector', 'director', 'executive'],
+    approver3: ['approver3', 'level3user', 'level3', 'l3user', 'l3_user', 'l3', 'generalmanager', 'general_manager', 'managingdirector', 'director'],
+    admin: ['admin', 'superadmin', 'systemadministrator', 'administrator'],
+    superadmin: ['superadmin', 'admin', 'systemadministrator', 'administrator'],
+    systemadministrator: ['systemadministrator', 'admin', 'superadmin', 'administrator'],
+    administrator: ['administrator', 'admin', 'superadmin', 'systemadministrator'],
+  };
+
+  return userRoles.some((uRole) => {
+    const usrClean = stripPrefix(uRole).toLowerCase().replace(/[\s_-]+/g, '');
+    if (reqClean === usrClean) return true;
+    if (aliases[reqClean] && aliases[reqClean].includes(usrClean)) return true;
+    if (aliases[usrClean] && aliases[usrClean].includes(reqClean)) return true;
+    return false;
   });
 }
 
@@ -2401,7 +2426,7 @@ function ActionModalInner({
           {/* Status badge */}
           <div className="quot-action-modal__status-row">
             <span className="quot-action-modal__info-label">Current Status</span>
-            <span className={`quot-badge quot-badge--${q.status}`}>{STATUS_LABELS[q.status]}</span>
+            <span className={`quot-badge quot-badge--${getDisplayStatus(q)}`}>{STATUS_LABELS[getDisplayStatus(q)] || q.status}</span>
           </div>
 
           {/* Attachments */}
@@ -2702,40 +2727,13 @@ export default function QuotationsPage() {
   const [compareExpanded, setCompareExpanded] = useState(false);
 
   const toggleCompareFullscreen = useCallback(() => {
-    setCompareExpanded(prev => {
-      const next = !prev;
-      if (next) {
-        if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
-          document.documentElement.requestFullscreen().catch(() => {});
-        }
-      } else {
-        if (document.exitFullscreen && document.fullscreenElement) {
-          document.exitFullscreen().catch(() => {});
-        }
-      }
-      return next;
-    });
+    setCompareExpanded(prev => !prev);
   }, []);
 
   const handleCloseCompareModal = useCallback(() => {
-    if (document.fullscreenElement) {
-      document.exitFullscreen().catch(() => {});
-    }
     setCompareExpanded(false);
     setCompareModalOpen(false);
   }, []);
-
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      if (!document.fullscreenElement && compareExpanded) {
-        setCompareExpanded(false);
-      }
-    };
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-    };
-  }, [compareExpanded]);
   const [activeModal, setActiveModal]                 = useState<ActiveModal | null>(null);
   const [viewPlanQuotation, setViewPlanQuotation] = useState<{ name: string; milestones: Array<{ id: string; title: string; percentage: number }> } | null>(null);
   const [postAwardQuotation, setPostAwardQuotation] = useState<MockQuotation | null>(null);
@@ -4505,8 +4503,8 @@ export default function QuotationsPage() {
         const actionable = displaySt !== 'ACCEPTED' && displaySt !== 'REJECTED' && displaySt !== 'RETURNED' && canUserAction;
         const hasPostAwardAccess = canPerformPostAward(s, user, roles);
         return (
-          <td key={key} className="text-center">
-            <div className="quot-table__actions flex items-center justify-center gap-1.5">
+          <td key={key} className="text-center quot-compare__col--actions">
+            <div className="quot-table__actions flex items-center justify-center gap-1.5 flex-nowrap whitespace-nowrap">
               <button
                 className="quot-table__action-btn"
                 title="View Details"

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { signatureService, type SavedSignature } from '../../services/signatureService';
 import {
   FileSignature,
@@ -70,8 +71,26 @@ export function DigitalSignatureApprovalModal({
       try {
         const sigs = await signatureService.list();
         if (!isMounted) return;
-        setSavedSignatures(sigs);
-        const def = sigs.find((s) => s.isDefault) || sigs[0];
+
+        // Deduplicate saved signatures by dataUrl
+        const seen = new Set<string>();
+        const uniqueSigs: SavedSignature[] = [];
+        for (const s of sigs) {
+          if (!s.dataUrl) continue;
+          if (seen.has(s.dataUrl)) continue;
+          seen.add(s.dataUrl);
+          uniqueSigs.push(s);
+        }
+
+        // Ensure only one signature is marked default
+        const firstDefaultIndex = uniqueSigs.findIndex((s) => s.isDefault);
+        const normalizedSigs = uniqueSigs.map((s, idx) => ({
+          ...s,
+          isDefault: firstDefaultIndex !== -1 ? idx === firstDefaultIndex : idx === 0,
+        }));
+
+        setSavedSignatures(normalizedSigs);
+        const def = normalizedSigs.find((s) => s.isDefault) || normalizedSigs[0];
         if (def) {
           setSelectedSigId(def.id);
           setSelectedDataUrl(def.dataUrl);
@@ -223,11 +242,14 @@ export function DigitalSignatureApprovalModal({
       // Option to save signature if drawn/uploaded
       if ((activeTab === 'draw' || activeTab === 'upload') && saveForFuture && finalUrl) {
         try {
-          await signatureService.create({
-            name: `Signature ${savedSignatures.length + 1}`,
-            dataUrl: finalUrl,
-            type: activeTab === 'draw' ? 'drawn' : 'uploaded',
-          });
+          const alreadyExists = savedSignatures.some((s) => s.dataUrl === finalUrl);
+          if (!alreadyExists) {
+            await signatureService.create({
+              name: `Signature ${savedSignatures.length + 1}`,
+              dataUrl: finalUrl,
+              type: activeTab === 'draw' ? 'drawn' : 'uploaded',
+            });
+          }
         } catch {
           // ignore save error
         }
@@ -243,7 +265,7 @@ export function DigitalSignatureApprovalModal({
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div className="sig-approve-backdrop" onClick={onClose}>
       <div className="sig-approve-modal" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
@@ -441,6 +463,7 @@ export function DigitalSignatureApprovalModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

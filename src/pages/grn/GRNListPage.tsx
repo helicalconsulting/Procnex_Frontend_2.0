@@ -396,8 +396,8 @@ export default function GRNListPage() {
       >
         <div className="flex items-center gap-2">
           {canCreateGRN && (
-            <Button onClick={() => navigate('/grn/create')} className="gap-2 shadow-sm">
-              <PackageCheck className="size-4" /> Create GRN / Dispatch Note
+            <Button onClick={() => navigate(isVendor ? '/vendor/create-invoice' : '/procurement/create-grn')} className="gap-2 shadow-sm">
+              <PackageCheck className="size-4" /> Create Dispatch Note / Invoice
             </Button>
           )}
         </div>
@@ -594,25 +594,20 @@ export default function GRNListPage() {
                               }
 
                               return (
-                                <>
-                                  <Button
-                                    size="sm"
-                                    onClick={() => navigate(`/grn/create?poId=${po.id}`)}
-                                    className="gap-1.5 shadow-xs"
-                                  >
-                                    <Truck size={14} /> Generate Dispatch Note
-                                  </Button>
-                                  {canCreateInvoice && (
-                                    <Button
-                                      size="sm"
-                                      variant="secondary"
-                                      onClick={() => navigate(`/invoices/create?poId=${po.id}`)}
-                                      className="gap-1.5"
-                                    >
-                                      <Receipt size={14} /> Direct Invoice
-                                    </Button>
-                                  )}
-                                </>
+                                <Button
+                                  size="sm"
+                                  onClick={() => {
+                                    const targetPoId = po.id || po.poNumber;
+                                    if (isVendor) {
+                                      navigate(`/vendor/create-invoice?poId=${targetPoId}`);
+                                    } else {
+                                      navigate(`/procurement/create-grn?poId=${targetPoId}`);
+                                    }
+                                  }}
+                                  className="gap-1.5 shadow-xs whitespace-nowrap"
+                                >
+                                  <Truck size={14} /> Generate Dispatch Note or Invoice
+                                </Button>
                               );
                             })()}
                           </div>

@@ -43,6 +43,7 @@ import { vendorService } from '../../services/vendorService';
 import { useAuth } from '../../context/AuthContext';
 import { DigitalSignatureApprovalModal } from '../../components/shared/DigitalSignatureApprovalModal';
 import { signatureService } from '../../services/signatureService';
+import { apiRequest } from '../../api/client';
 import '../../components/shared/ColumnCustomizer.css';
 
 type PaymentStatus = 'COMPLETED' | 'PENDING' | 'PROCESSING' | 'FAILED' | 'CONFIRMED' | 'CANCELLED' | 'RETRIED';
@@ -183,36 +184,61 @@ export default function PaymentsPage() {
       ]);
 
       const approvalRows = [...approvalRowsPay, ...approvalRowsAP];
+      const normalize = (str?: string | number) =>
+        String(str || '')
+          .toLowerCase()
+          .replace(/[\s_-]+/g, '');
+
       const approvalGroups = new Map<string, any[]>();
       approvalRows.forEach((a) => {
-        const keys = [
+        const rawKeys = [
           String(a.referenceId || ''),
           String(a.referenceNumber || ''),
           String(a.id || ''),
         ].filter(Boolean);
 
-        keys.forEach((key) => {
+        rawKeys.forEach((key) => {
           if (!approvalGroups.has(key)) approvalGroups.set(key, []);
           if (!approvalGroups.get(key)!.includes(a)) {
             approvalGroups.get(key)!.push(a);
+          }
+          const norm = normalize(key);
+          if (norm && norm !== key) {
+            if (!approvalGroups.has(norm)) approvalGroups.set(norm, []);
+            if (!approvalGroups.get(norm)!.includes(a)) {
+              approvalGroups.get(norm)!.push(a);
+            }
           }
         });
       });
 
       const mapped = rawPayments.map((p) => {
         const base = mapPayment(p);
+        const pIdNorm = normalize(p.id);
+        const payIdNorm = normalize(p.paymentId);
+        const invRefNorm = normalize(p.invoiceRef);
+
         let rows =
           approvalGroups.get(String(p.id)) ||
+          (pIdNorm ? approvalGroups.get(pIdNorm) : undefined) ||
           approvalGroups.get(p.paymentId) ||
-          approvalGroups.get(p.invoiceRef) ||
+          (payIdNorm ? approvalGroups.get(payIdNorm) : undefined) ||
+          (p.invoiceRef ? approvalGroups.get(p.invoiceRef) : undefined) ||
+          (invRefNorm ? approvalGroups.get(invRefNorm) : undefined) ||
           [];
 
         if (rows.length === 0) {
-          const matchByTitle = approvalRows.find(
-            (a) =>
-              (p.paymentId && (a.referenceNumber === p.paymentId || a.referenceId === p.paymentId || a.title?.includes(p.paymentId))) ||
-              (p.invoiceRef && a.title?.includes(p.invoiceRef))
-          );
+          const matchByTitle = approvalRows.find((a) => {
+            const aNum = normalize(a.referenceNumber);
+            const aRef = normalize(a.referenceId);
+            const aTitle = normalize(a.title);
+
+            return (
+              (payIdNorm && (aNum === payIdNorm || aRef === payIdNorm || aTitle.includes(payIdNorm))) ||
+              (pIdNorm && (aNum === pIdNorm || aRef === pIdNorm)) ||
+              (invRefNorm && invRefNorm !== '—' && (aNum === invRefNorm || aRef === invRefNorm || aTitle.includes(invRefNorm)))
+            );
+          });
           if (matchByTitle) {
             rows = [matchByTitle];
           }
@@ -223,7 +249,7 @@ export default function PaymentsPage() {
         const activeApp = pendingRow || rejectedRow || rows[rows.length - 1];
 
         const hasApprovedPriorLevel = rows.some(
-          (r) => r.status === 'APPROVED' && (isAdmin || isRoleMatching(r.requiredRole, authRoles))
+          (r) => r.status === 'APPROVED' && isRoleMatching(r.requiredRole, authRoles)
         );
 
         if (activeApp) {
@@ -239,7 +265,7 @@ export default function PaymentsPage() {
 
           const canAct =
             status === 'PENDING' &&
-            (isAdmin || isRoleMatching(reqRole, authRoles));
+            (activeApp.canAct !== undefined ? Boolean(activeApp.canAct) : isRoleMatching(reqRole, authRoles));
 
           return {
             ...base,
@@ -255,12 +281,12 @@ export default function PaymentsPage() {
 
         const canAct =
           base.status === 'PENDING' &&
-          (isAdmin || isRoleMatching('Purchase Manager', authRoles));
+          isRoleMatching('Purchase Manager', authRoles);
 
         return {
           ...base,
           currentLevel: 1,
-          totalLevels: 1,
+          totalLevels: 2,
           requiredRole: 'Purchase Manager',
           canAct,
           hasApprovedPriorLevel,
@@ -336,41 +362,97 @@ export default function PaymentsPage() {
         ]);
         if (!isMounted) return;
 
-        const docSigs = [...docSigsPayP, ...docSigsPayInv, ...docSigsAPP, ...docSigsAPInv];
-        const res = (resPay?.history?.length || resPay?.levels?.length) ? resPay : resAP;
-        const chainItems = res?.history && res.history.length > 0 ? res.history : res?.levels || [];
+        const allRawDocSigs = [...docSigsPayP, ...docSigsPayInv, ...docSigsAPP, ...docSigsAPInv];
+        
+        // Deduplicate signatures by unique signer ID so each user only has one canonical signature
+        const signerMap = new Map<string, any>();
+        for (const s of allRawDocSigs) {
+          const signerKey = s.signedById || s.signatureId || s.id || (s.signature?.dataUrl || s.dataUrl);
+          if (!signerKey) continue;
+          if (!signerMap.has(signerKey) || (!signerMap.get(signerKey).dataUrl && (s.dataUrl || s.signature?.dataUrl))) {
+            signerMap.set(signerKey, s);
+          }
+        }
+        const uniqueDocSigs = Array.from(signerMap.values()).sort((a: any, b: any) => {
+          const levA = Number(a.levelNumber) || 0;
+          const levB = Number(b.levelNumber) || 0;
+          if (levA && levB) return levA - levB;
+          const timeA = a.signedAt ? new Date(a.signedAt).getTime() : 0;
+          const timeB = b.signedAt ? new Date(b.signedAt).getTime() : 0;
+          return timeA - timeB;
+        });
+
+        const res = resPay?.levels?.length ? resPay : resAP?.levels?.length ? resAP : (resPay || resAP);
+        const rawLevels = res?.levels && res.levels.length > 0 ? res.levels : [];
+
+        // Deduplicate levels strictly by levelNumber so we only have Level 1, Level 2, etc.
+        const seenLevelNums = new Set<number>();
+        const uniqueLevels = rawLevels.filter((item: any) => {
+          const num = Number(item.levelNumber) || 0;
+          if (num && seenLevelNums.has(num)) return false;
+          if (num) seenLevelNums.add(num);
+          return true;
+        });
+
         const defaultSigUrl = savedSigs.find((s) => s.isDefault)?.dataUrl || savedSigs[0]?.dataUrl;
-
         const currentLvl = selectedPrintVoucher.currentLevel || 1;
-        const isVoucherConfirmed = ['CONFIRMED', 'COMPLETED'].includes(selectedPrintVoucher.status);
+        const isVoucherConfirmed = ['CONFIRMED', 'COMPLETED', 'APPROVED'].includes(selectedPrintVoucher.status);
 
-        if (chainItems && chainItems.length > 0) {
-          const mapped = chainItems.map((item: any, idx: number) => {
-            const levelNum = item.levelNumber || idx + 1;
+        const getSigForLevel = (lvlNum: number, idx: number, approverId?: string | null, approverName?: string | null) => {
+          // 1. Direct match by approverId
+          if (approverId) {
+            const byId = uniqueDocSigs.find((d: any) => d.signedById && String(d.signedById) === String(approverId));
+            if (byId) return byId.dataUrl || byId.signature?.dataUrl;
+          }
+          // 2. Match by approverName
+          if (approverName && approverName !== '—') {
+            const byName = uniqueDocSigs.find((d: any) => {
+              const sName = d.signedBy?.fullName || d.signedByName || d.signature?.name;
+              return sName && sName.toLowerCase().trim() === approverName.toLowerCase().trim();
+            });
+            if (byName) return byName.dataUrl || byName.signature?.dataUrl;
+          }
+          // 3. Match by explicit levelNumber
+          const byLevel = uniqueDocSigs.find((d: any) => Number(d.levelNumber || d.level) === Number(lvlNum));
+          if (byLevel) return byLevel.dataUrl || byLevel.signature?.dataUrl;
+
+          // 4. Sequential match by chronological unique signer index
+          const byIdx = uniqueDocSigs[idx];
+          if (byIdx) {
+            return byIdx.dataUrl || byIdx.signature?.dataUrl;
+          }
+          return undefined;
+        };
+
+        if (uniqueLevels && uniqueLevels.length > 0) {
+          const mapped = uniqueLevels.map((item: any, idx: number) => {
+            const levelNum = Number(item.levelNumber) || idx + 1;
             const roleName = item.requiredRole
               ? item.requiredRole.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
               : levelNum === 1 ? 'Purchase Manager' : 'Purchase Clerk';
+            const isApproved = item.status === 'APPROVED' || item.status === 'AUTO_FORWARDED' || (levelNum === 1 && (currentLvl > 1 || isVoucherConfirmed));
             const name =
               item.approverName ||
               (item.status === 'AUTO_FORWARDED'
                 ? 'Auto-Approved (System)'
-                : item.status === 'APPROVED'
-                ? selectedPrintVoucher.approvedBy !== '—'
+                : isApproved
+                ? (levelNum === 1 && selectedPrintVoucher.approvedBy !== '—'
                   ? selectedPrintVoucher.approvedBy
-                  : 'Authorized Approver'
+                  : roleName)
                 : 'Pending Approval');
             const comments =
               item.comments ||
-              (item.status === 'APPROVED'
-                ? 'Approved & Signed'
+              (isApproved
+                ? 'Approved & Digitally Signed'
                 : item.status === 'AUTO_FORWARDED'
                 ? 'Auto-approved by system deadline'
-                : 'Awaiting action');
+                : `Awaiting Level ${levelNum} Approval`);
             const date = item.actionAt ? new Date(item.actionAt).toISOString().slice(0, 10) : selectedPrintVoucher.date;
-            const isApproved = item.status === 'APPROVED' || item.status === 'AUTO_FORWARDED';
 
-            const matchSig = docSigs.find((d: any) => Number(d.levelNumber) === Number(levelNum)) || docSigs[idx];
-            const signatureUrl = isApproved ? (matchSig?.dataUrl || defaultSigUrl) : undefined;
+            const foundSig = getSigForLevel(levelNum, idx, item.approverId, name);
+            const signatureUrl = isApproved
+              ? (foundSig || (levelNum === 1 && uniqueDocSigs.length === 0 ? defaultSigUrl : undefined))
+              : undefined;
 
             return {
               level: `Level ${levelNum}`,
@@ -384,8 +466,8 @@ export default function PaymentsPage() {
           });
           setVoucherApprovers(mapped);
         } else {
-          const sigL1 = docSigs.find((d: any) => Number(d.levelNumber) === 1)?.dataUrl || docSigs[0]?.dataUrl || (currentLvl > 1 || isVoucherConfirmed ? defaultSigUrl : undefined);
-          const sigL2 = docSigs.find((d: any) => Number(d.levelNumber) === 2)?.dataUrl || docSigs[1]?.dataUrl || (isVoucherConfirmed ? defaultSigUrl : undefined);
+          const sigL1 = getSigForLevel(1, 0, null, selectedPrintVoucher.approvedBy) || (currentLvl > 1 || isVoucherConfirmed ? (uniqueDocSigs.length === 0 ? defaultSigUrl : undefined) : undefined);
+          const sigL2 = getSigForLevel(2, 1);
 
           const isL1Approved = currentLvl > 1 || isVoucherConfirmed;
           const isL2Approved = isVoucherConfirmed;
@@ -492,14 +574,19 @@ export default function PaymentsPage() {
     const target = actionModal.payment;
     const act = actionModal.action;
     const comment = actionComment.trim() || undefined;
-    const status: PaymentStatus =
-      act === 'confirm' ? 'CONFIRMED' : act === 'cancel' ? 'CANCELLED' : 'RETRIED';
+    const isLevel1 = (target.currentLevel || 1) === 1;
+    const isMultiLevel = (target.totalLevels || 2) > 1;
+    const optimisticStatus: PaymentStatus = act === 'confirm'
+      ? (isLevel1 && isMultiLevel ? 'PENDING' : 'CONFIRMED')
+      : act === 'cancel' ? 'CANCELLED' : 'RETRIED';
 
     setPendingActions((current) => ({
       ...current,
       [target.id]: {
         ...target,
-        status,
+        status: optimisticStatus,
+        currentLevel: isLevel1 && isMultiLevel ? 2 : target.currentLevel,
+        requiredRole: isLevel1 && isMultiLevel ? 'Purchase Clerk' : target.requiredRole,
         comments: comment,
       },
     }));
@@ -514,13 +601,26 @@ export default function PaymentsPage() {
           approvalService.listTable({ module: 'AccountsPayable' }).catch(() => []),
         ]);
         const approvalRows = [...rowsPay, ...rowsAP];
-        const matched = approvalRows.find(
-          (a) =>
-            a.referenceId === String(target.id) ||
-            a.referenceNumber === target.paymentNumber ||
-            a.referenceId === target.paymentNumber ||
-            (target.invoiceRef && target.invoiceRef !== '—' && (a.referenceId === target.invoiceRef || a.referenceNumber === target.invoiceRef || a.title?.includes(target.invoiceRef)))
-        );
+        const normalize = (str?: string | number) =>
+          String(str || '')
+            .toLowerCase()
+            .replace(/[\s_-]+/g, '');
+        const targetIdNorm = normalize(target.id);
+        const targetNumNorm = normalize(target.paymentNumber);
+        const targetInvNorm = normalize(target.invoiceRef);
+
+        const matched = approvalRows.find((a) => {
+          const aNum = normalize(a.referenceNumber);
+          const aRef = normalize(a.referenceId);
+          const aTitle = normalize(a.title);
+
+          return (
+            (targetNumNorm && (aNum === targetNumNorm || aRef === targetNumNorm || aTitle.includes(targetNumNorm))) ||
+            (targetIdNorm && (aNum === targetIdNorm || aRef === targetIdNorm)) ||
+            (targetInvNorm && targetInvNorm !== '—' && (aNum === targetInvNorm || aRef === targetInvNorm || aTitle.includes(targetInvNorm)))
+          );
+        });
+
         if (matched) {
           approvalIdToUse = matched.id;
         } else {
@@ -534,6 +634,7 @@ export default function PaymentsPage() {
       }
     }
 
+    let actionSucceeded = false;
     if (approvalIdToUse) {
       try {
         if (act === 'confirm') {
@@ -543,12 +644,35 @@ export default function PaymentsPage() {
         } else {
           await approvalService.return(approvalIdToUse, comment);
         }
+        actionSucceeded = true;
       } catch (err) {
-        console.error('Payment voucher approval action failed:', err);
+        console.warn('Payment voucher approval action via approvalService failed, trying status endpoint:', err);
       }
     }
+
+    if (!actionSucceeded) {
+      try {
+        const statusMap: Record<ActionType, string> = {
+          confirm: 'APPROVED',
+          cancel: 'CANCELLED',
+          retry: 'PENDING_APPROVAL',
+        };
+        await apiRequest(`/payments/${target.paymentNumber || target.id}/status`, {
+          method: 'PUT',
+          body: JSON.stringify({ status: statusMap[act] || 'APPROVED', comments: comment }),
+        });
+      } catch (statusErr) {
+        console.error('Payment status update fallback failed:', statusErr);
+      }
+    }
+
     window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
     await fetchPaymentsData();
+    setPendingActions((current) => {
+      const next = { ...current };
+      delete next[target.id];
+      return next;
+    });
   }, [actionComment, actionModal, fetchPaymentsData]);
 
   const handleSignatureConfirm = useCallback(
@@ -557,6 +681,8 @@ export default function PaymentsPage() {
       const target = actionModal.payment;
 
       const levelNum = target.currentLevel || 1;
+      const isLevel1 = levelNum === 1;
+      const isMultiLevel = (target.totalLevels || 2) > 1;
       try {
         await signatureService.signDocument({
           module: 'Payments',
@@ -584,7 +710,9 @@ export default function PaymentsPage() {
         ...current,
         [target.id]: {
           ...target,
-          status: 'CONFIRMED',
+          status: isLevel1 && isMultiLevel ? 'PENDING' : 'CONFIRMED',
+          currentLevel: isLevel1 && isMultiLevel ? 2 : target.currentLevel,
+          requiredRole: isLevel1 && isMultiLevel ? 'Purchase Clerk' : target.requiredRole,
           comments: comment,
         },
       }));
@@ -599,13 +727,26 @@ export default function PaymentsPage() {
             approvalService.listTable({ module: 'AccountsPayable' }).catch(() => []),
           ]);
           const approvalRows = [...rowsPay, ...rowsAP];
-          const matched = approvalRows.find(
-            (a) =>
-              a.referenceId === String(target.id) ||
-              a.referenceNumber === target.paymentNumber ||
-              a.referenceId === target.paymentNumber ||
-              (target.invoiceRef && target.invoiceRef !== '—' && (a.referenceId === target.invoiceRef || a.referenceNumber === target.invoiceRef || a.title?.includes(target.invoiceRef)))
-          );
+          const normalize = (str?: string | number) =>
+            String(str || '')
+              .toLowerCase()
+              .replace(/[\s_-]+/g, '');
+          const targetIdNorm = normalize(target.id);
+          const targetNumNorm = normalize(target.paymentNumber);
+          const targetInvNorm = normalize(target.invoiceRef);
+
+          const matched = approvalRows.find((a) => {
+            const aNum = normalize(a.referenceNumber);
+            const aRef = normalize(a.referenceId);
+            const aTitle = normalize(a.title);
+
+            return (
+              (targetNumNorm && (aNum === targetNumNorm || aRef === targetNumNorm || aTitle.includes(targetNumNorm))) ||
+              (targetIdNorm && (aNum === targetIdNorm || aRef === targetIdNorm)) ||
+              (targetInvNorm && targetInvNorm !== '—' && (aNum === targetInvNorm || aRef === targetInvNorm || aTitle.includes(targetInvNorm)))
+            );
+          });
+
           if (matched) {
             approvalIdToUse = matched.id;
           } else {
@@ -619,15 +760,34 @@ export default function PaymentsPage() {
         }
       }
 
+      let signActionSucceeded = false;
       if (approvalIdToUse) {
         try {
           await approvalService.approve(approvalIdToUse, comment);
+          signActionSucceeded = true;
         } catch (err) {
-          console.error('Payment voucher digital signature approval action failed:', err);
+          console.warn('Payment voucher digital signature approval action failed, trying status endpoint:', err);
         }
       }
+
+      if (!signActionSucceeded) {
+        try {
+          await apiRequest(`/payments/${target.paymentNumber || target.id}/status`, {
+            method: 'PUT',
+            body: JSON.stringify({ status: 'APPROVED', comments: comment }),
+          });
+        } catch (statusErr) {
+          console.error('Payment status update fallback after digital signature failed:', statusErr);
+        }
+      }
+
       window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
       await fetchPaymentsData();
+      setPendingActions((current) => {
+        const next = { ...current };
+        delete next[target.id];
+        return next;
+      });
     },
     [actionModal, fetchPaymentsData]
   );
@@ -884,16 +1044,15 @@ export default function PaymentsPage() {
                           >
                             <Printer className="size-4" />
                           </Button>
-                          {ACTIONABLE.includes(payment.status) && (
+                          {ACTIONABLE.includes(payment.status) && payment.canAct && (
                             <>
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
                                 className="text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-700"
-                                disabled={!payment.canAct}
-                                onClick={() => payment.canAct && openAction(payment, 'confirm')}
+                                onClick={() => openAction(payment, 'confirm')}
                                 aria-label={`Confirm ${payment.paymentNumber}`}
-                                title={payment.canAct ? 'Confirm payment' : `Pending Level ${payment.currentLevel || 1} (${payment.requiredRole || 'Approver'}) approval`}
+                                title="Confirm payment"
                               >
                                 <ThumbsUp className="size-4" />
                               </Button>
@@ -901,20 +1060,18 @@ export default function PaymentsPage() {
                                 variant="ghost"
                                 size="icon-sm"
                                 className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                disabled={!payment.canAct}
-                                onClick={() => payment.canAct && openAction(payment, 'cancel')}
+                                onClick={() => openAction(payment, 'cancel')}
                                 aria-label={`Cancel ${payment.paymentNumber}`}
-                                title={payment.canAct ? 'Cancel payment' : `Pending Level ${payment.currentLevel || 1} (${payment.requiredRole || 'Approver'}) approval`}
+                                title="Cancel payment"
                               >
                                 <Ban className="size-4" />
                               </Button>
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
-                                disabled={!payment.canAct}
-                                onClick={() => payment.canAct && openAction(payment, 'retry')}
+                                onClick={() => openAction(payment, 'retry')}
                                 aria-label={`Retry ${payment.paymentNumber}`}
-                                title={payment.canAct ? 'Retry payment' : 'Permission denied'}
+                                title="Retry payment"
                               >
                                 <RotateCcw className="size-4" />
                               </Button>
@@ -965,7 +1122,7 @@ export default function PaymentsPage() {
                   <Button variant="ghost" size="sm" onClick={() => setSelectedPrintVoucher(payment)}>
                     <Printer /> Print
                   </Button>
-                  {ACTIONABLE.includes(payment.status) && canApprovePayment && (
+                  {ACTIONABLE.includes(payment.status) && payment.canAct && (
                     <>
                       <Button size="sm" onClick={() => openAction(payment, 'confirm')}>
                         <ThumbsUp /> Confirm

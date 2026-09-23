@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
 import { useAuth } from '../../context/AuthContext';
+import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
 import {

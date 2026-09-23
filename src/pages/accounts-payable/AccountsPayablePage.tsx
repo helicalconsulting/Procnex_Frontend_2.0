@@ -36,6 +36,7 @@ import {
   CheckCircle2,
   Clock,
   Eye,
+  FileText,
   IndianRupee,
   MessageSquare,
   Printer,
@@ -49,7 +50,7 @@ import {
 } from 'lucide-react';
 import '../../components/shared/ColumnCustomizer.css';
 
-type APStatus = 'PENDING' | 'OVERDUE' | 'PAID' | 'PARTIAL' | 'APPROVED' | 'REJECTED' | 'RETURNED';
+type APStatus = 'DRAFT' | 'PENDING' | 'OVERDUE' | 'PAID' | 'PARTIAL' | 'APPROVED' | 'REJECTED' | 'RETURNED';
 type ActionType = 'approve' | 'reject' | 'return';
 type Tone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
 
@@ -77,6 +78,7 @@ interface APInvoice {
 }
 
 const STATUS_CONFIG: Record<APStatus, { label: string; tone: Tone; icon: typeof Clock }> = {
+  DRAFT: { label: 'Draft', tone: 'neutral', icon: FileText as any },
   PENDING: { label: 'Pending', tone: 'warning', icon: Clock },
   OVERDUE: { label: 'Overdue', tone: 'danger', icon: AlertTriangle },
   PAID: { label: 'Paid', tone: 'success', icon: CheckCircle2 },
@@ -252,7 +254,7 @@ export default function AccountsPayablePage() {
         const reqRole = activeApp.requiredRole || 'Purchase Manager';
         const effectiveCanAct =
           status === 'PENDING' &&
-          (isAdmin || isRoleMatching(reqRole, authRoles));
+          (activeApp.canAct !== undefined ? Boolean(activeApp.canAct) : isRoleMatching(reqRole, authRoles));
 
         const hasApprovedPriorLevel = rows.some(
           (r) => r.status === 'APPROVED' && isRoleMatching(r.requiredRole, authRoles)
@@ -299,10 +301,12 @@ export default function AccountsPayablePage() {
             OVERDUE: 'OVERDUE',
             REJECTED: 'REJECTED',
             RETURNED: 'RETURNED',
-            DRAFT: 'PENDING',
+            DRAFT: 'DRAFT',
+            REGISTERED: 'DRAFT',
           };
-          const status = statusMap[inv.status] || 'PENDING';
-          const effectiveCanAct = status === 'PENDING' && (isAdmin || isRoleMatching('Purchase Manager', authRoles));
+          const status = statusMap[inv.status] || (inv.status === 'DRAFT' ? 'DRAFT' : 'PENDING');
+          const isPendingApproval = status === 'PENDING';
+          const effectiveCanAct = isPendingApproval && isRoleMatching('Purchase Manager', authRoles);
 
           merged.push({
             id: inv.id,
@@ -318,9 +322,9 @@ export default function AccountsPayablePage() {
             status,
             paymentTerms: inv.paymentTerms || 'Net 30',
             department: inv.department || 'Finance',
-            currentLevel: 1,
-            totalLevels: 1,
-            requiredRole: 'Purchase Manager',
+            currentLevel: isPendingApproval ? 1 : 0,
+            totalLevels: isPendingApproval ? 1 : 0,
+            requiredRole: isPendingApproval ? 'Purchase Manager' : '',
             canAct: effectiveCanAct,
             hasApprovedPriorLevel: false,
           });
@@ -377,18 +381,32 @@ export default function AccountsPayablePage() {
   }, [invoicesList, search, statusFilter, isAdmin]);
 
   const handleAction = useCallback(async () => {
-    if (!actionModal || !actionModal.invoice.approvalId) return;
+    if (!actionModal) return;
     setActionSaving(true);
     const targetInvoice = actionModal.invoice;
-    const approvalId = targetInvoice.approvalId!;
+    let approvalId = targetInvoice.approvalId;
     const comment = actionComment.trim() || undefined;
     const act = actionModal.action;
+
+    if (!approvalId) {
+      try {
+        const list = await approvalService.listTable({ module: 'AccountsPayable' }).catch(() => []);
+        const found = list.find(
+          (r: any) =>
+            r.referenceId === String(targetInvoice.id) ||
+            r.referenceNumber === targetInvoice.invoiceNumber ||
+            r.referenceId === targetInvoice.invoiceNumber ||
+            (r.title && r.title.includes(targetInvoice.invoiceNumber))
+        );
+        if (found) approvalId = found.id;
+      } catch {}
+    }
 
     // ⚡ INSTANT (0ms) Optimistic local state update
     const newStatus: APStatus = act === 'approve' ? 'APPROVED' : act === 'reject' ? 'REJECTED' : 'RETURNED';
     setInvoicesList((prev) =>
       prev.map((inv) =>
-        inv.id === targetInvoice.id || inv.invoiceNumber === targetInvoice.invoiceNumber || inv.approvalId === approvalId
+        inv.id === targetInvoice.id || inv.invoiceNumber === targetInvoice.invoiceNumber || (approvalId && inv.approvalId === approvalId)
           ? { ...inv, status: newStatus, canAct: false }
           : inv
       )
@@ -397,22 +415,27 @@ export default function AccountsPayablePage() {
     setActionComment('');
 
     try {
-      if (act === 'approve') {
-        const res = await approvalService.approve(approvalId, comment);
-        const isFinal = res?.nextLevel === false || targetInvoice.currentLevel >= targetInvoice.totalLevels;
+      if (approvalId) {
+        if (act === 'approve') {
+          const res = await approvalService.approve(approvalId, comment);
+          const isFinal = res?.nextLevel === false || targetInvoice.currentLevel >= targetInvoice.totalLevels;
 
-        if (isFinal) {
-          setGeneratedVoucherBanner({
-            voucherNumber: targetInvoice.invoiceNumber,
-            invoiceNumber: targetInvoice.invoiceNumber,
-            vendorName: targetInvoice.vendorName,
-            amount: targetInvoice.amount,
-          });
+          if (isFinal) {
+            setGeneratedVoucherBanner({
+              voucherNumber: targetInvoice.invoiceNumber,
+              invoiceNumber: targetInvoice.invoiceNumber,
+              vendorName: targetInvoice.vendorName,
+              amount: targetInvoice.amount,
+            });
+          }
+        } else if (act === 'reject') {
+          await approvalService.reject(approvalId, comment);
+        } else {
+          await approvalService.return(approvalId, comment, 'ORIGINATOR');
         }
-      } else if (act === 'reject') {
-        await approvalService.reject(approvalId, comment);
       } else {
-        await approvalService.return(approvalId, comment, 'ORIGINATOR');
+        const statusToSet = act === 'approve' ? 'APPROVED' : act === 'reject' ? 'REJECTED' : 'RETURNED';
+        await invoiceService.updateStatus(targetInvoice.id, statusToSet);
       }
 
       window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
@@ -427,10 +450,36 @@ export default function AccountsPayablePage() {
 
   const handleSignatureConfirm = useCallback(
     async (signatureDataUrl: string, comment?: string) => {
-      if (!actionModal || !actionModal.invoice.approvalId) return;
+      if (!actionModal) return;
       setActionSaving(true);
       const targetInvoice = actionModal.invoice;
-      const approvalId = targetInvoice.approvalId!;
+      let approvalId = targetInvoice.approvalId;
+
+      if (!approvalId) {
+        try {
+          const list = await approvalService.listTable({ module: 'AccountsPayable' }).catch(() => []);
+          const found = list.find(
+            (r: any) =>
+              r.referenceId === String(targetInvoice.id) ||
+              r.referenceNumber === targetInvoice.invoiceNumber ||
+              r.referenceId === targetInvoice.invoiceNumber ||
+              (r.title && r.title.includes(targetInvoice.invoiceNumber))
+          );
+          if (found) {
+            approvalId = found.id;
+          } else {
+            await approvalService.resubmit('AccountsPayable', targetInvoice.id, 1).catch(() => null);
+            const updatedList = await approvalService.listTable({ module: 'AccountsPayable' }).catch(() => []);
+            const updatedFound = updatedList.find(
+              (r: any) =>
+                r.referenceId === String(targetInvoice.id) ||
+                r.referenceNumber === targetInvoice.invoiceNumber ||
+                r.referenceId === targetInvoice.invoiceNumber
+            );
+            if (updatedFound) approvalId = updatedFound.id;
+          }
+        } catch {}
+      }
 
       try {
         await signatureService.signDocument({
@@ -438,15 +487,26 @@ export default function AccountsPayablePage() {
           referenceId: targetInvoice.invoiceNumber || String(targetInvoice.id),
           signatureId: 'digital_signature',
           dataUrl: signatureDataUrl,
+          levelNumber: targetInvoice.currentLevel || 1,
           comments: comment,
         });
+        if (targetInvoice.id && targetInvoice.id !== targetInvoice.invoiceNumber) {
+          await signatureService.signDocument({
+            module: 'AccountsPayable',
+            referenceId: String(targetInvoice.id),
+            signatureId: 'digital_signature',
+            dataUrl: signatureDataUrl,
+            levelNumber: targetInvoice.currentLevel || 1,
+            comments: comment,
+          }).catch(() => {});
+        }
       } catch (sigErr) {
         console.warn('Digital signature recording warning:', sigErr);
       }
 
       setInvoicesList((prev) =>
         prev.map((inv) =>
-          inv.id === targetInvoice.id || inv.invoiceNumber === targetInvoice.invoiceNumber || inv.approvalId === approvalId
+          inv.id === targetInvoice.id || inv.invoiceNumber === targetInvoice.invoiceNumber || (approvalId && inv.approvalId === approvalId)
             ? { ...inv, status: 'APPROVED', canAct: false }
             : inv
         )
@@ -455,16 +515,20 @@ export default function AccountsPayablePage() {
       setActionComment('');
 
       try {
-        const res = await approvalService.approve(approvalId, comment);
-        const isFinal = res?.nextLevel === false || targetInvoice.currentLevel >= targetInvoice.totalLevels;
+        if (approvalId) {
+          const res = await approvalService.approve(approvalId, comment);
+          const isFinal = res?.nextLevel === false || targetInvoice.currentLevel >= targetInvoice.totalLevels;
 
-        if (isFinal) {
-          setGeneratedVoucherBanner({
-            voucherNumber: targetInvoice.invoiceNumber,
-            invoiceNumber: targetInvoice.invoiceNumber,
-            vendorName: targetInvoice.vendorName,
-            amount: targetInvoice.amount,
-          });
+          if (isFinal) {
+            setGeneratedVoucherBanner({
+              voucherNumber: targetInvoice.invoiceNumber,
+              invoiceNumber: targetInvoice.invoiceNumber,
+              vendorName: targetInvoice.vendorName,
+              amount: targetInvoice.amount,
+            });
+          }
+        } else {
+          await invoiceService.updateStatus(targetInvoice.id, 'APPROVED');
         }
 
         window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));

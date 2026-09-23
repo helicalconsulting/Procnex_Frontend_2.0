@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Printer, X, FileText, CheckCircle2, ShieldCheck, Landmark, Building2, Clock } from 'lucide-react';
 import { useCurrency } from '../shared/CurrencyMaster';
 import { useBranding } from '../../context/BrandingContext';
@@ -48,7 +49,8 @@ export default function PrintPurchaseInvoiceModal({ data: dataProp, invoice: inv
   const printableRef = useRef<HTMLDivElement>(null);
   const [approversList, setApproversList] = useState<any[]>(data.approvers || []);
 
-  const displayCompanyName = companyName && !companyName.includes('Procnex') ? companyName : (profile?.companyName || 'Helical Consulting');
+  const rawName = companyName || profile?.companyName;
+  const displayCompanyName = rawName && !rawName.toLowerCase().includes('procnex') ? rawName : 'Helical Consulting';
   const companyAddress = profile?.companyAddress
     ? [profile.companyAddress, profile.companyCity, profile.companyCountry].filter(Boolean).join(', ')
     : '232, Sahukara Bareilly 232 • Corporate Headquarters';
@@ -74,15 +76,66 @@ export default function PrintPurchaseInvoiceModal({ data: dataProp, invoice: inv
     const fetchChain = async () => {
       try {
         const targetRef = data.invoiceNumber;
-        const [res, docSigs, savedSigs] = await Promise.all([
+        const [res, docSigs1, docSigs2, savedSigs] = await Promise.all([
           approvalService.getChain('AccountsPayable', targetRef).catch(() => null),
           signatureService.getDocumentSignatures('AccountsPayable', targetRef).catch(() => []),
+          data.id && data.id !== targetRef ? signatureService.getDocumentSignatures('AccountsPayable', String(data.id)).catch(() => []) : Promise.resolve([]),
           signatureService.list().catch(() => []),
         ]);
         if (!isMounted) return;
 
+        const allRawDocSigs = [...docSigs1, ...docSigs2];
+        const signerMap = new Map<string, any>();
+        for (const s of allRawDocSigs) {
+          const sigUrl = s.dataUrl || s.signature?.dataUrl;
+          const signerKey = s.signedById ? String(s.signedById) : (sigUrl || s.signatureId || s.id);
+          if (!signerKey) continue;
+          if (!signerMap.has(signerKey) || (!signerMap.get(signerKey).dataUrl && sigUrl)) {
+            signerMap.set(signerKey, s);
+          }
+        }
+
+        // Sort unique signatures by signedAt ASCENDING so Level 1 signer is first, Level 2 signer is second
+        const sortedDocSigs = Array.from(signerMap.values()).sort((a: any, b: any) => {
+          const levA = Number(a.levelNumber) || 0;
+          const levB = Number(b.levelNumber) || 0;
+          if (levA && levB) return levA - levB;
+          const timeA = a.signedAt ? new Date(a.signedAt).getTime() : 0;
+          const timeB = b.signedAt ? new Date(b.signedAt).getTime() : 0;
+          return timeA - timeB;
+        });
+
         const chainItems = res?.history && res.history.length > 0 ? res.history : res?.levels || [];
         const defaultSigUrl = savedSigs.find((s) => s.isDefault)?.dataUrl || savedSigs[0]?.dataUrl;
+
+        const getSigForLevel = (lvlNum: number, idx: number, approverId?: string | null, approverName?: string | null) => {
+          // 1. Direct match by approverId
+          if (approverId) {
+            const byId = sortedDocSigs.find((d: any) => d.signedById && String(d.signedById) === String(approverId));
+            if (byId) return byId.dataUrl || byId.signature?.dataUrl;
+          }
+
+          // 2. Match by approverName
+          if (approverName && approverName !== '—' && !approverName.toLowerCase().includes('pending')) {
+            const cleanName = approverName.toLowerCase().trim();
+            const byName = sortedDocSigs.find((d: any) => {
+              const sName = (d.signedBy?.fullName || d.signedByName || d.signature?.name || '').toLowerCase().trim();
+              return sName && (sName === cleanName || sName.includes(cleanName) || cleanName.includes(sName));
+            });
+            if (byName) return byName.dataUrl || byName.signature?.dataUrl;
+          }
+
+          // 3. Match by explicit levelNumber
+          const byLevel = sortedDocSigs.find((d: any) => Number(d.levelNumber || d.level) === Number(lvlNum));
+          if (byLevel) return byLevel.dataUrl || byLevel.signature?.dataUrl;
+
+          // 4. Sequential match by distinct signer index
+          const byIdx = sortedDocSigs[idx];
+          if (byIdx) {
+            return byIdx.dataUrl || byIdx.signature?.dataUrl;
+          }
+          return undefined;
+        };
 
         if (chainItems && chainItems.length > 0) {
           const mapped = chainItems.map((item: any, idx: number) => {
@@ -93,8 +146,10 @@ export default function PrintPurchaseInvoiceModal({ data: dataProp, invoice: inv
             const name = item.approverName || (item.status === 'APPROVED' ? 'Authorized Approver' : 'Pending Approval');
             const isLevelApproved = item.status === 'APPROVED' || item.status === 'AUTO_FORWARDED';
 
-            const matchSig = docSigs.find((d: any) => Number(d.levelNumber) === Number(levelNum)) || docSigs[idx];
-            const signatureUrl = isLevelApproved ? matchSig?.dataUrl : undefined;
+            const foundSig = getSigForLevel(levelNum, idx, item.approverId, name);
+            const signatureUrl = isLevelApproved
+              ? (foundSig || (levelNum === 1 && sortedDocSigs.length === 0 ? defaultSigUrl : undefined))
+              : undefined;
 
             return {
               level: `Level ${levelNum}`,
@@ -107,8 +162,8 @@ export default function PrintPurchaseInvoiceModal({ data: dataProp, invoice: inv
           });
           setApproversList(mapped);
         } else {
-          const sigL1 = docSigs.find((d: any) => Number(d.levelNumber) === 1)?.dataUrl || docSigs[0]?.dataUrl;
-          const sigL2 = docSigs.find((d: any) => Number(d.levelNumber) === 2)?.dataUrl || docSigs[1]?.dataUrl;
+          const sigL1 = getSigForLevel(1, 0, null, 'Purchase Manager') || (sortedDocSigs.length === 0 ? defaultSigUrl : undefined);
+          const sigL2 = getSigForLevel(2, 1, null, 'Purchase Clerk');
 
           setApproversList([
             {
@@ -160,7 +215,7 @@ export default function PrintPurchaseInvoiceModal({ data: dataProp, invoice: inv
     window.print();
   };
 
-  return (
+  return createPortal(
     <div className="ppi-modal-backdrop" onClick={onClose}>
       <div className="ppi-modal" onClick={(e) => e.stopPropagation()}>
         {/* Top Controls Header (Hidden in Print) */}
@@ -398,6 +453,7 @@ export default function PrintPurchaseInvoiceModal({ data: dataProp, invoice: inv
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

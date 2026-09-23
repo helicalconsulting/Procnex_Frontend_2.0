@@ -1,14 +1,13 @@
 import { useState, useCallback, useEffect, useRef, useMemo, createElement } from 'react';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
-import { companySettingsService, ALLOWED_CONTRACT_UPLOAD_EXTENSIONS, type Department, type Category, type Unit, type Position, type Warehouse, type Branch, type PaymentTerm, type CompanyProfile, type EmailTemplate, type RequiredDocument, type DocumentTemplate, type DocumentTemplateInput, type ContractTemplate, type ContractTemplateInput, type FormFieldConfig, type SequenceSetting } from '../../services/companySettingsService';
-import { adminService } from '../../services/adminService';
+import { companySettingsService, ALLOWED_CONTRACT_UPLOAD_EXTENSIONS, type Department, type Category, type Unit, type Position, type Warehouse, type PaymentTerm, type CompanyProfile, type EmailTemplate, type RequiredDocument, type DocumentTemplate, type DocumentTemplateInput, type ContractTemplate, type ContractTemplateInput, type FormFieldConfig, type SequenceSetting } from '../../services/companySettingsService';
 import { invalidateApiCache } from '../../api/client';
 import {
   Plus, X, Edit3, Building2, Tag, ChevronDown, ChevronRight, ChevronUp, Search,
   Save, Settings, DollarSign, Trash2, Ruler, Users, CreditCard, Mail, Phone, FileText, RotateCcw, Clock, Calendar,
   Palette, Image, FileSignature, Eye, Upload, Loader2, ArrowRight, Sparkles, AlertTriangle, CheckCircle2, Info, FileCheck, Globe, Hash,
-  Lock, Unlock, ShieldCheck, Key, EyeOff, Check, MapPin, GitBranch,
+  Lock, Unlock, ShieldCheck, Key, EyeOff, Check,
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import ImageCropperModal from '../../components/shared/ImageCropperModal';
@@ -404,7 +403,7 @@ function resolvePlaceholders(template: string): string {
 
 // ─── Tab Definitions ────────────────────────────────────────
 
-type TabKey = 'general' | 'branding' | 'departments' | 'branches' | 'warehouses' | 'forms' | 'form-documents' | 'email-templates' | 'documents-contracts' | 'doc-serialization';
+type TabKey = 'general' | 'branding' | 'departments' | 'warehouses' | 'forms' | 'form-documents' | 'email-templates' | 'documents-contracts' | 'doc-serialization';
 
 interface TabDef {
   key: TabKey;
@@ -416,7 +415,6 @@ const TABS: TabDef[] = [
   { key: 'general',             label: 'General',                icon: <Settings size={15} /> },
   { key: 'branding',            label: 'Branding',               icon: <Palette size={15} /> },
   { key: 'departments',         label: 'Departments',            icon: <Building2 size={15} /> },
-  { key: 'branches',            label: 'Branches',               icon: <MapPin size={15} /> },
   { key: 'warehouses',          label: 'Warehouses',             icon: <Building2 size={15} /> },
   { key: 'forms',               label: 'Forms Settings',         icon: <FileText size={15} /> },
   { key: 'form-documents',      label: 'Required Documents',     icon: <FileCheck size={15} /> },
@@ -718,129 +716,6 @@ export default function CompanySettingsPage() {
       setPageMsg(err instanceof Error ? err.message : 'Failed to set default warehouse');
     }
   }, [canCreateSettings, reloadWarehouses]);
-
-  // ── Branches State ──
-  const { data: branches, loading: branchesLoading, reload: reloadBranches } = useServiceData(
-    () => companySettingsService.listBranches(true),
-    [] as Branch[],
-    [],
-    { cacheTtlMs: 30000, enabled: isDataFetchEnabled }
-  );
-
-  const { data: userList } = useServiceData(
-    () => adminService.listUsers(),
-    [],
-    [],
-    { cacheTtlMs: 60000, enabled: isDataFetchEnabled }
-  );
-
-  const [branchSearch, setBranchSearch] = useState('');
-  const [showBranchModal, setShowBranchModal] = useState(false);
-  const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
-
-  const [bCode, setBCode] = useState('');
-  const [bName, setBName] = useState('');
-  const [bCity, setBCity] = useState('');
-  const [bAddress, setBAddress] = useState('');
-  const [bManagerId, setBManagerId] = useState('');
-  const [bIsDefault, setBIsDefault] = useState(false);
-  const [bIsActive, setBIsActive] = useState(true);
-
-  const filteredBranches = useMemo(() => {
-    return branches.filter((br) => {
-      if (!branchSearch.trim()) return true;
-      const q = branchSearch.toLowerCase().trim();
-      return (
-        br.code.toLowerCase().includes(q) ||
-        br.name.toLowerCase().includes(q) ||
-        (br.city && br.city.toLowerCase().includes(q)) ||
-        (br.address && br.address.toLowerCase().includes(q)) ||
-        (br.managerName && br.managerName.toLowerCase().includes(q))
-      );
-    });
-  }, [branches, branchSearch]);
-
-  const openBranchModal = useCallback((br: Branch | null) => {
-    if (br) {
-      setEditingBranch(br);
-      setBCode(br.code);
-      setBName(br.name);
-      setBCity(br.city || '');
-      setBAddress(br.address || '');
-      setBManagerId(br.managerId || '');
-      setBIsDefault(br.isDefault || false);
-      setBIsActive(br.isActive ?? true);
-    } else {
-      setEditingBranch(null);
-      setBCode(`BR-00${branches.length + 1}`);
-      setBName('');
-      setBCity('');
-      setBAddress('');
-      setBManagerId('');
-      setBIsDefault(branches.length === 0);
-      setBIsActive(true);
-    }
-    setShowBranchModal(true);
-  }, [branches.length]);
-
-  const handleSaveBranch = useCallback(async () => {
-    if (!canCreateSettings) return;
-    if (!bCode.trim() || !bName.trim()) {
-      setPageMsg('Branch Code and Name are required.');
-      return;
-    }
-    setActionLoading(true);
-    try {
-      const mgr = userList.find((u) => u.id === bManagerId);
-      const payload: Partial<Branch> = {
-        code: bCode.trim().toUpperCase(),
-        name: bName.trim(),
-        city: bCity.trim() || undefined,
-        address: bAddress.trim() || undefined,
-        managerId: bManagerId || undefined,
-        managerName: mgr ? mgr.fullName : undefined,
-        isDefault: bIsDefault,
-        isActive: bIsActive,
-      };
-
-      if (editingBranch) {
-        await companySettingsService.updateBranch(editingBranch.id, payload);
-        setPageMsg(`Branch ${payload.code} updated successfully.`);
-      } else {
-        await companySettingsService.createBranch(payload);
-        setPageMsg(`Branch ${payload.code} created successfully.`);
-      }
-      setShowBranchModal(false);
-      reloadBranches();
-    } catch (err) {
-      setPageMsg(err instanceof Error ? err.message : 'Failed to save branch');
-    } finally {
-      setActionLoading(false);
-    }
-  }, [canCreateSettings, bCode, bName, bCity, bAddress, bManagerId, bIsDefault, bIsActive, userList, editingBranch, reloadBranches]);
-
-  const handleSetDefaultBranch = useCallback(async (id: string) => {
-    if (!canCreateSettings) return;
-    try {
-      await companySettingsService.setDefaultBranch(id);
-      setPageMsg('Default Company Branch updated.');
-      reloadBranches();
-    } catch (err) {
-      setPageMsg(err instanceof Error ? err.message : 'Failed to set default branch');
-    }
-  }, [canCreateSettings, reloadBranches]);
-
-  const handleDeleteBranch = useCallback(async (id: string) => {
-    if (!canCreateSettings) return;
-    if (!window.confirm('Are you sure you want to delete this branch? Users assigned to this branch will be unlinked.')) return;
-    try {
-      await companySettingsService.deleteBranch(id);
-      setPageMsg('Branch deleted successfully.');
-      reloadBranches();
-    } catch (err) {
-      setPageMsg(err instanceof Error ? err.message : 'Failed to delete branch');
-    }
-  }, [canCreateSettings, reloadBranches]);
 
   // UI state
   const [activeTab, setActiveTab] = useState<TabKey>('general');
@@ -3898,140 +3773,6 @@ export default function CompanySettingsPage() {
       {/* -------------------------------------------------------
           TAB: Warehouses (SRM Logistics & Ship-To Locations)
           ------------------------------------------------------- */}
-      {/* ── Branches Tab ── */}
-      {activeTab === 'branches' && (
-        <div className="cs-tab-panel" role="tabpanel">
-          <div className="cs-section-card">
-            <div className="cs-section-header">
-              <div className="cs-section-header__left">
-                <h2><MapPin size={17} /> Branch Master (Company Branches &amp; Offices)</h2>
-                <p>Manage office locations, regional branches, and assign Branch Managers for user tagging &amp; transaction tracking.</p>
-              </div>
-              <div className="cs-section-header__actions">
-                <button
-                  className="company-settings__btn company-settings__btn--primary"
-                  onClick={() => openBranchModal(null)}
-                  disabled={!canCreateSettings}
-                  style={disabledActionStyle}
-                  title={canCreateSettings ? undefined : noPermissionTitle}
-                >
-                  <Plus size={16} /> Add Branch
-                </button>
-              </div>
-            </div>
-            <div className="cs-section-body">
-              {/* Search Bar */}
-              <div className="cs-wh-toolbar">
-                <div className="cs-wh-search" style={{ flex: 1 }}>
-                  <Search size={15} />
-                  <input
-                    type="text"
-                    placeholder="Search by Code, Branch Name, City, Address or Manager..."
-                    value={branchSearch}
-                    onChange={(e) => setBranchSearch(e.target.value)}
-                  />
-                  {branchSearch && (
-                    <button className="cs-wh-clear" onClick={() => setBranchSearch('')}>
-                      <X size={14} />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {filteredBranches.length === 0 ? (
-                <div className="cs-empty">
-                  <div className="cs-empty__icon"><MapPin size={28} /></div>
-                  <p>{branches.length === 0 ? 'No company branches defined yet. Add your first branch location.' : 'No matching branches found.'}</p>
-                  {branches.length === 0 && (
-                    <button
-                      className="company-settings__btn company-settings__btn--primary"
-                      onClick={() => openBranchModal(null)}
-                      disabled={!canCreateSettings}
-                      style={disabledActionStyle}
-                      title={canCreateSettings ? undefined : noPermissionTitle}
-                    >
-                      <Plus size={16} /> Add Branch
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="cs-wh-table-wrap">
-                  <table className="cs-wh-table">
-                    <thead>
-                      <tr>
-                        <th>Branch Code</th>
-                        <th>Branch Name</th>
-                        <th>City / Address</th>
-                        <th>Branch Manager</th>
-                        <th>Status</th>
-                        <th style={{ textAlign: 'right' }}>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredBranches.map((br) => (
-                        <tr key={br.id} className={!br.isActive ? 'cs-wh-tr--inactive' : ''}>
-                          <td>
-                            <span className="cs-wh-code-badge" style={{ background: 'var(--primary-100)', color: 'var(--primary-700)' }}>
-                              {br.code}
-                            </span>
-                          </td>
-                          <td>
-                            <div className="cs-wh-name-cell">
-                              <span className="cs-wh-title" style={{ fontWeight: 600 }}>{br.name}</span>
-                            </div>
-                          </td>
-                          <td>
-                            <div className="cs-wh-sub-text">
-                              {br.address ? `${br.address}${br.city ? `, ${br.city}` : ''}` : (br.city || '—')}
-                            </div>
-                          </td>
-                          <td>
-                            <div className="cs-wh-contact-cell">
-                              {br.manager ? (
-                                <span className="cs-wh-contact-name">{br.manager.fullName} ({br.manager.email})</span>
-                              ) : br.managerName ? (
-                                <span className="cs-wh-contact-name">{br.managerName}</span>
-                              ) : (
-                                <span style={{ color: 'var(--text-tertiary)', fontSize: 13 }}>Unassigned</span>
-                              )}
-                            </div>
-                          </td>
-                          <td>
-                            <span className={`company-settings__badge company-settings__badge--sm ${br.isActive ? 'company-settings__badge--active' : 'company-settings__badge--inactive'}`}>
-                              {br.isActive ? 'Active' : 'Inactive'}
-                            </span>
-                          </td>
-                          <td>
-                            <div className="cs-wh-actions">
-                              <button
-                                className="company-settings__icon-btn"
-                                onClick={() => openBranchModal(br)}
-                                title="Edit Branch"
-                                disabled={!canCreateSettings}
-                              >
-                                <Edit3 size={15} />
-                              </button>
-                              <button
-                                className="company-settings__icon-btn company-settings__icon-btn--danger"
-                                onClick={() => handleDeleteBranch(br.id)}
-                                title="Delete Branch"
-                                disabled={!canCreateSettings}
-                              >
-                                <Trash2 size={15} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       {activeTab === 'warehouses' && (
         <div className="cs-tab-panel" role="tabpanel">
           <div className="cs-section-card">
@@ -6024,103 +5765,6 @@ export default function CompanySettingsPage() {
       )}
 
 
-
-      {/* ── Branch Modal ── */}
-      {showBranchModal && (
-        <div className="company-settings__backdrop" onClick={() => !actionLoading && setShowBranchModal(false)}>
-          <div className="company-settings__modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 580, width: '100%', overflowX: 'hidden' }}>
-            <div className="company-settings__modal-header">
-              <span>{editingBranch ? `Edit Branch #${editingBranch.code}` : 'Add New Branch'}</span>
-              <button className="company-settings__icon-btn" onClick={() => setShowBranchModal(false)}>
-                <X size={18} />
-              </button>
-            </div>
-            <div className="company-settings__modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
-                <div className="company-settings__field">
-                  <label>Branch Code <span>*</span></label>
-                  <input
-                    type="text"
-                    placeholder="e.g. DEL-01"
-                    value={bCode}
-                    onChange={(e) => setBCode(e.target.value.toUpperCase())}
-                  />
-                </div>
-                <div className="company-settings__field">
-                  <label>Branch Name <span>*</span></label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Delhi Regional Office"
-                    value={bName}
-                    onChange={(e) => setBName(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div className="company-settings__field">
-                  <label>City / Location</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Delhi"
-                    value={bCity}
-                    onChange={(e) => setBCity(e.target.value)}
-                  />
-                </div>
-                <div className="company-settings__field">
-                  <label>Branch Manager</label>
-                  <select
-                    value={bManagerId}
-                    onChange={(e) => setBManagerId(e.target.value)}
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface-card)', color: 'var(--text-primary)', outline: 'none' }}
-                  >
-                    <option value="">Select Branch Manager...</option>
-                    {userList.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.fullName} ({u.email})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="company-settings__field">
-                <label>Address Details</label>
-                <textarea
-                  placeholder="Street address, building name, suite number..."
-                  value={bAddress}
-                  onChange={(e) => setBAddress(e.target.value)}
-                  rows={2}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface-card)', color: 'var(--text-primary)', outline: 'none', resize: 'vertical' }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4, padding: '12px 14px', background: 'var(--surface-ground)', borderRadius: 8, border: '1px solid var(--border)' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>
-                  <input
-                    type="checkbox"
-                    checked={bIsActive}
-                    onChange={(e) => setBIsActive(e.target.checked)}
-                    style={{ width: 16, height: 16, cursor: 'pointer' }}
-                  />
-                  <span>Active Status</span>
-                </label>
-              </div>
-            </div>
-
-            <div className="company-settings__modal-footer">
-              <button className="company-settings__btn company-settings__btn--secondary" onClick={() => setShowBranchModal(false)}>Cancel</button>
-              <button
-                className="company-settings__btn company-settings__btn--primary"
-                disabled={!bCode.trim() || !bName.trim() || actionLoading}
-                onClick={handleSaveBranch}
-              >
-                <Save size={16} /> {actionLoading ? 'Saving…' : editingBranch ? 'Update Branch' : 'Create Branch'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── Warehouse Modal ── */}
       {showWarehouseModal && (

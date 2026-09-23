@@ -53,6 +53,10 @@ export interface RFQTableRow {
   // Raw backend fields passed through for edit page
   customFields?: Array<Record<string, unknown>>;
   evaluationParameters?: Array<Record<string, unknown>>;
+  _isApprovedByMe?: boolean;
+  _isReturnedByMe?: boolean;
+  _isRejectedByMe?: boolean;
+  canUserAct?: boolean;
 }
 
 /** Quotation row on RFQ detail (admin view) */
@@ -118,9 +122,9 @@ export interface VendorTableRow {
 
 export interface ApprovalTableRow {
   id: string;
-  /** The ID of the referenced document (quotation / PO / RFQ) */
+  /** The ID of the referenced document (quotation / PO / RFQ / Payment) */
   referenceId: string;
-  module: 'RFQ' | 'Purchase Order' | 'Quotation' | 'Contract' | 'Accounts Payable' | 'Purchase Invoice';
+  module: 'RFQ' | 'Purchase Order' | 'Quotation' | 'Contract' | 'Accounts Payable' | 'Purchase Invoice' | 'Payment' | 'Payments';
   referenceNumber: string;
   title: string;
   requestedBy: string;

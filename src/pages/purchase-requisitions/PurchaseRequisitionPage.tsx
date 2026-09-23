@@ -4,7 +4,7 @@ import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { rfqService } from '../../services/rfqService';
 import { contractService } from '../../services/contractService';
 import { purchaseRequisitionService, type PurchaseRequisition, type PurchaseRequisitionItem } from '../../services/purchaseRequisitionService';
-import { companySettingsService } from '../../services/companySettingsService';
+import { companySettingsService, type Warehouse } from '../../services/companySettingsService';
 import { apiRequest } from '../../api/client';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyMaster';
@@ -102,15 +102,23 @@ export default function PurchaseRequisitionPage() {
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [itemValidationErrors, setItemValidationErrors] = useState<Record<number, Record<string, string>>>({});
 
-  // Company settings for auto-fill
+  // Company settings & Warehouses for auto-fill
   const [companyProfile, setCompanyProfile] = useState<Record<string, any> | null>(null);
   const [vendorsList, setVendorsList] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
 
   useEffect(() => {
     apiRequest<{ vendors?: any[]; data?: any[] }>('/vendors')
       .then((res) => {
         const list = res.vendors || res.data || [];
         setVendorsList(list);
+      })
+      .catch(() => {});
+
+    companySettingsService.listWarehouses()
+      .then((whs) => {
+        setWarehouses(whs || []);
       })
       .catch(() => {});
   }, []);
@@ -349,6 +357,26 @@ export default function PurchaseRequisitionPage() {
       setPr(draft);
     }
   }, [pr, recalc, isReadOnly]);
+
+  // Handle Warehouse selection from Company Settings Master
+  const handleWarehouseChange = useCallback((whId: string) => {
+    if (!pr || isReadOnly) return;
+    setSelectedWarehouseId(whId);
+    const wh = warehouses.find(w => w.id === whId);
+    if (wh) {
+      const whLabel = `${wh.code} — ${wh.name}`;
+      const fullAddress = [wh.address, wh.city, wh.country].filter(Boolean).join(', ');
+      setPr(prev => prev ? {
+        ...prev,
+        shipToWarehouse: whLabel,
+        ...(fullAddress ? { shipToAddress: fullAddress } : {}),
+        ...(wh.contactPerson ? { shipToContact: wh.contactPerson } : {}),
+        ...(wh.phone ? { shipToPhone: wh.phone } : {}),
+      } : null);
+    } else {
+      updateField('shipToWarehouse', '');
+    }
+  }, [pr, isReadOnly, warehouses, updateField]);
 
   // Update an item field
   const updateItem = useCallback((index: number, key: keyof PurchaseRequisitionItem, value: any) => {
@@ -935,18 +963,8 @@ export default function PurchaseRequisitionPage() {
             <div className="pr-field pr-field--wide" style={{ marginBottom: 16 }}>
               <label>Select Registered Vendor from Master</label>
               <select
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  color: 'var(--text-primary)',
-                  fontSize: '15px',
-                  fontWeight: 600,
-                  outline: 'none',
-                  cursor: 'pointer',
-                }}
+                className="pr-select"
+                style={{ width: '100%' }}
                 onChange={(e) => {
                   const v = vendorsList.find(item => item.id === e.target.value);
                   if (v) {
@@ -991,7 +1009,34 @@ export default function PurchaseRequisitionPage() {
           <div className="pr-section__header"><Truck size={16} /> Ship To</div>
           <div className="pr-section__grid pr-section__grid--2col">
             <div className="pr-field"><label>Company</label><input value={pr.shipToCompany} disabled={isReadOnly} onChange={e => updateField('shipToCompany', e.target.value)} /></div>
-            <div className="pr-field"><label>Warehouse</label><input value={pr.shipToWarehouse} disabled={isReadOnly} onChange={e => updateField('shipToWarehouse', e.target.value)} /></div>
+            <div className="pr-field">
+              <label>Warehouse</label>
+              {warehouses.length > 0 && !isReadOnly ? (
+                <select
+                  className="pr-select"
+                  style={{ width: '100%' }}
+                  value={
+                    warehouses.find(w => `${w.code} — ${w.name}` === pr.shipToWarehouse || w.name === pr.shipToWarehouse || w.id === selectedWarehouseId)?.id || ''
+                  }
+                  disabled={isReadOnly}
+                  onChange={e => handleWarehouseChange(e.target.value)}
+                >
+                  <option value="">-- Select Warehouse from Company Settings --</option>
+                  {warehouses.map((wh) => (
+                    <option key={wh.id} value={wh.id}>
+                      {wh.code} — {wh.name} {wh.city ? `(${wh.city})` : ''} {wh.isDefault ? '★ Default' : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  value={pr.shipToWarehouse}
+                  disabled={isReadOnly}
+                  placeholder="Enter warehouse name..."
+                  onChange={e => updateField('shipToWarehouse', e.target.value)}
+                />
+              )}
+            </div>
             <div className="pr-field pr-field--wide"><label>Address</label><input value={pr.shipToAddress} disabled={isReadOnly} onChange={e => updateField('shipToAddress', e.target.value)} /></div>
             <div className="pr-field"><label>Contact</label><input value={pr.shipToContact} disabled={isReadOnly} onChange={e => updateField('shipToContact', e.target.value)} /></div>
             <div className="pr-field"><label>Phone</label><input value={pr.shipToPhone} disabled={isReadOnly} onChange={e => updateField('shipToPhone', e.target.value)} /></div>

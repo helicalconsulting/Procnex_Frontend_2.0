@@ -263,24 +263,31 @@ export default function RFQDetailModal({
 
   const handleApproveRFQ = async () => {
     if (!pendingApproval || !rfq) return;
+    const approvalId = pendingApproval.id;
+    const comment = approvalComment;
+    
+    // Instant optimistic update
+    setPendingApproval(null);
+    rfq.status = 'APPROVED';
+    (rfq as any)._isApprovedByMe = true;
+    (rfq as any).canUserAct = false;
+    setShowCommentBox(null);
+    setApprovalComment('');
     setApprovalActionLoading(true);
     setApprovalActionError(null);
-    setApprovalActionSuccess(null);
+    setApprovalActionSuccess('RFQ Level approved successfully!');
+    window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
+
     try {
-      const res = await approvalService.approve(pendingApproval.id, approvalComment);
-      setApprovalActionSuccess(res.message || 'RFQ Approved successfully!');
-      setShowCommentBox(null);
-      setApprovalComment('');
-      if (res.nextLevel) {
-        // Re-fetch pending approval for next level
+      const res = await approvalService.approve(approvalId, comment);
+      if (res?.message) setApprovalActionSuccess(res.message);
+      if (res?.nextLevel) {
         const rows = await approvalService.listTable({ module: 'RFQ', status: 'PENDING' });
-        const found = rows.find((r) => String(r.referenceId) === String(rfq.id) || r.referenceNumber === rfq.rfqNumber);
+        const found = rows.find((r) => (String(r.referenceId) === String(rfq.id) || r.referenceNumber === rfq.rfqNumber) && r.canAct);
         if (found) setPendingApproval(found);
-      } else {
-        setPendingApproval(null);
-        rfq.status = 'APPROVED';
       }
       fetchApprovalChain();
+      window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
     } catch (err) {
       setApprovalActionError(err instanceof Error ? err.message : 'Failed to approve RFQ');
     } finally {
@@ -294,17 +301,26 @@ export default function RFQDetailModal({
       setApprovalActionError('Please enter a comment explaining the reason for rejection.');
       return;
     }
+    const approvalId = pendingApproval.id;
+    const comment = approvalComment;
+
+    // Instant optimistic update
+    setPendingApproval(null);
+    rfq.status = 'REJECTED';
+    (rfq as any)._isRejectedByMe = true;
+    (rfq as any).canUserAct = false;
+    setShowCommentBox(null);
+    setApprovalComment('');
     setApprovalActionLoading(true);
     setApprovalActionError(null);
-    setApprovalActionSuccess(null);
+    setApprovalActionSuccess('RFQ Rejected.');
+    window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
+
     try {
-      const res = await approvalService.reject(pendingApproval.id, approvalComment);
-      setApprovalActionSuccess(res.message || 'RFQ Rejected.');
-      setPendingApproval(null);
-      setShowCommentBox(null);
-      setApprovalComment('');
-      rfq.status = 'REJECTED';
+      const res = await approvalService.reject(approvalId, comment);
+      if (res?.message) setApprovalActionSuccess(res.message);
       fetchApprovalChain();
+      window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
     } catch (err) {
       setApprovalActionError(err instanceof Error ? err.message : 'Failed to reject RFQ');
     } finally {
@@ -318,17 +334,26 @@ export default function RFQDetailModal({
       setApprovalActionError('Please enter a comment explaining the reason for return.');
       return;
     }
+    const approvalId = pendingApproval.id;
+    const comment = approvalComment;
+
+    // Instant optimistic update
+    setPendingApproval(null);
+    rfq.status = 'RETURNED';
+    (rfq as any)._isReturnedByMe = true;
+    (rfq as any).canUserAct = false;
+    setShowCommentBox(null);
+    setApprovalComment('');
     setApprovalActionLoading(true);
     setApprovalActionError(null);
-    setApprovalActionSuccess(null);
+    setApprovalActionSuccess('RFQ Returned for revision.');
+    window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
+
     try {
-      const res = await approvalService.return(pendingApproval.id, approvalComment, 'LEVEL_1');
-      setApprovalActionSuccess(res.message || 'RFQ Returned for revision.');
-      setPendingApproval(null);
-      setShowCommentBox(null);
-      setApprovalComment('');
-      rfq.status = 'DRAFT';
+      const res = await approvalService.return(approvalId, comment, 'LEVEL_1');
+      if (res?.message) setApprovalActionSuccess(res.message);
       fetchApprovalChain();
+      window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
     } catch (err) {
       setApprovalActionError(err instanceof Error ? err.message : 'Failed to return RFQ');
     } finally {
@@ -689,7 +714,7 @@ export default function RFQDetailModal({
         )}
 
         {/* ── 2. PENDING APPROVAL INTERACTIVE CARD (If PENDING_APPROVAL) ── */}
-        {rfq.status === 'PENDING_APPROVAL' && pendingApproval && (
+        {rfq.status === 'PENDING_APPROVAL' && pendingApproval && pendingApproval.canAct && (
           <Card className="p-4 border-amber-500/30 bg-amber-500/[0.04]">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">

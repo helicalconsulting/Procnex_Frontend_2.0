@@ -462,6 +462,7 @@ export default function CreatePaymentVoucherPage() {
         const res = await apiRequest<{ id: string; paymentNumber: string }>('/payments', {
           method: 'POST',
           body: JSON.stringify({
+            paymentNumber: voucherNumber || undefined,
             vendorId: selectedVendorId || undefined,
             vendorName,
             invoiceRef: invoiceRef || (selectedInvoices.length > 0 ? selectedInvoices.map(i => i.invoiceNumber).join(', ') : undefined),
@@ -852,10 +853,11 @@ export default function CreatePaymentVoucherPage() {
                 <tbody className="divide-y divide-border/60">
                   {filteredVouchers.map((v) => {
                     const statusKey = (v.status || '').toUpperCase();
+                    const isDraft = statusKey === 'DRAFT';
                     const isApproved = statusKey === 'APPROVED' || statusKey === 'PAID' || statusKey === 'COMPLETED';
                     const isRejected = statusKey === 'REJECTED' || statusKey === 'CANCELLED';
-                    const tone = isApproved ? 'success' : isRejected ? 'danger' : 'warning';
-                    const badgeLabel = isApproved ? 'Approved' : isRejected ? 'Rejected' : 'Pending Approval';
+                    const tone = isDraft ? 'neutral' : isApproved ? 'success' : isRejected ? 'danger' : 'warning';
+                    const badgeLabel = isDraft ? 'Draft' : isApproved ? 'Approved' : isRejected ? 'Rejected' : 'Pending Approval';
                     const isSelected = selectedVoucherIds.includes(String(v.id));
 
                     return (
@@ -907,6 +909,13 @@ export default function CreatePaymentVoucherPage() {
                                 setVendorName(v.vendor);
                                 setInvoiceRef(v.invoiceRef || '');
                                 setGrossAmount(v.amount);
+                                if (v.method) setPaymentMethod(v.method);
+                                if (v.bankName) setBankName(v.bankName);
+                                if (v.accountNumber) setAccountNumber(v.accountNumber);
+                                if (v.ifscCode) setIfscCode(v.ifscCode);
+                                if (v.beneficiaryName) setBeneficiaryName(v.beneficiaryName);
+                                if (v.remarks) setRemarks(v.remarks);
+                                if (v.purpose) setPurpose(v.purpose);
                                 setIsCreating(true);
                               }}
                             >

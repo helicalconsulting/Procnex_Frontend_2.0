@@ -230,6 +230,14 @@ export default function App() {
                             element={page(CreateGRNPage)}
                           />
                           <Route
+                            path="/grn/create"
+                            element={page(CreateGRNPage)}
+                          />
+                          <Route
+                            path="/invoices/create"
+                            element={page(CreatePurchaseInvoicePage)}
+                          />
+                          <Route
                             path="/payments/create-voucher"
                             element={page(CreatePaymentVoucherPage)}
                           />

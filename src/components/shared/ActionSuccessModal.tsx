@@ -74,7 +74,7 @@ export function ActionSuccessModal({ data, onClose }: ActionSuccessModalProps) {
 
         {/* Dynamic Icon Circle */}
         <div className={`action-success-modal__icon-wrap action-success-modal__icon-wrap--${typeClass}`}>
-          {isApprove && <CheckCircle2 size={38} className="action-success-modal__icon" />}
+          {(isApprove || isSent) && <CheckCircle2 size={38} className="action-success-modal__icon" />}
           {isReject && <XCircle size={38} className="action-success-modal__icon" />}
           {isReturn && <RotateCcw size={38} className="action-success-modal__icon" />}
         </div>

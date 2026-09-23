@@ -81,6 +81,22 @@ export default function CreateGRNPage() {
     const rawOrders = poData.orders || [];
     const rawReqs = reqList || [];
 
+    const combined: any[] = [];
+    const addedKeys = new Set<string>();
+
+    // Add actual Purchase Orders first so genuine PO IDs take precedence
+    rawOrders.forEach((po) => {
+      const numKey = String(po.poNumber || '').toLowerCase().trim();
+      const idKey = String(po.id || '').toLowerCase().trim();
+      const key = numKey || idKey;
+      if (key && !addedKeys.has(key)) {
+        addedKeys.add(key);
+        if (numKey) addedKeys.add(numKey);
+        if (idKey) addedKeys.add(idKey);
+        combined.push(po);
+      }
+    });
+
     const mappedReqs = rawReqs.map((req) => ({
       id: req.id || req.rfqId,
       poNumber: req.poNumber,
@@ -101,24 +117,9 @@ export default function CreateGRNPage() {
       isRequisition: true,
     }));
 
-    const combined: any[] = [];
-    const addedKeys = new Set<string>();
-
     mappedReqs.forEach((r) => {
       const numKey = String(r.poNumber || '').toLowerCase().trim();
       const idKey = String(r.id || '').toLowerCase().trim();
-      const key = numKey || idKey;
-      if (key && !addedKeys.has(key)) {
-        addedKeys.add(key);
-        if (numKey) addedKeys.add(numKey);
-        if (idKey) addedKeys.add(idKey);
-        combined.push(r);
-      }
-    });
-
-    rawOrders.forEach((po) => {
-      const numKey = String(po.poNumber || '').toLowerCase().trim();
-      const idKey = String(po.id || '').toLowerCase().trim();
       if ((numKey && addedKeys.has(numKey)) || (idKey && addedKeys.has(idKey))) {
         return;
       }
@@ -127,7 +128,7 @@ export default function CreateGRNPage() {
         addedKeys.add(key);
         if (numKey) addedKeys.add(numKey);
         if (idKey) addedKeys.add(idKey);
-        combined.push(po);
+        combined.push(r);
       }
     });
 
@@ -210,10 +211,12 @@ export default function CreateGRNPage() {
     if (entryMode === 'AUTO_FILL' && selectedInvoice) {
       if (selectedInvoice.poId || selectedInvoice.poNumber) {
         const matchedPo = approvedPOs.find(
-          (p) => String(p.id) === String(selectedInvoice.poId) || String(p.poNumber) === String(selectedInvoice.poNumber)
+          (p) =>
+            (selectedInvoice.poId && (String(p.id) === String(selectedInvoice.poId) || String(p.poNumber) === String(selectedInvoice.poId))) ||
+            (selectedInvoice.poNumber && (String(p.id) === String(selectedInvoice.poNumber) || String(p.poNumber) === String(selectedInvoice.poNumber)))
         );
         if (matchedPo) {
-          setSelectedPoId(String(matchedPo.id || matchedPo.poNumber));
+          setSelectedPoId(String(matchedPo.id));
         }
       }
       if (selectedInvoice.invoiceNumber) {
@@ -399,10 +402,11 @@ export default function CreateGRNPage() {
       }));
 
       await grnService.create({
-        poId: selectedPoId || 'MANUAL-PO',
+        poId: selectedPO?.id || selectedPoId || 'MANUAL-PO',
         entryMode,
         dispatchNoteNumber: vendorDispatchNoteNumber || grnNumber,
         vendorInvoiceNumber: selectedInvoice?.invoiceNumber || vendorDispatchNoteNumber,
+        invoiceId: selectedInvoice?.id,
         vendorId: selectedPO?.vendorId || selectedInvoice?.vendorId,
         vendorName: selectedPO?.vendor?.name || selectedInvoice?.vendorName || 'Supplier',
         receivedDate,

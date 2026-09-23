@@ -417,7 +417,7 @@ export default function VendorQuotationsPage() {
           <div className="vo-orders">
             {filtered.map((quot) => {
               const isExpanded = expandedQuot === quot.id;
-              const cfg = STATUS_CONFIG[quot.status];
+              const cfg = STATUS_CONFIG[quot.status] || STATUS_CONFIG.SUBMITTED || { label: quot.status || 'Submitted', cls: 'info', icon: null };
 
               // Compute total of selected items only
               const selectedTotal = quot.items

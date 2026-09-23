@@ -337,25 +337,6 @@ export default function VendorRFQsPage() {
     }
   };
 
-  const activePrevQuote = useMemo(() => {
-    let target = previousQuotation;
-    if (selectedPrevVersionId && previousQuotationsList.length > 0) {
-      const found = previousQuotationsList.find((q) => String(q.id) === String(selectedPrevVersionId));
-      if (found) target = found;
-    }
-    if (!target) return null;
-    if (previousQuotationsList.length === 1) {
-      return {
-        ...target,
-        versionNumber: 1,
-        qNo: 'Q1',
-      };
-    }
-    return target;
-  }, [selectedPrevVersionId, previousQuotationsList, previousQuotation]);
-
-  const isQuotReadOnly = quotModal?.status === 'SUBMITTED' && !quotModal?.needsResubmit;
-
   // ── Bid Security — per-RFQ state to support multiple RFQ cards ──
   const [bidSecurityUploadingRfqId, setBidSecurityUploadingRfqId] = useState<number | null>(null);
   const [bidSecurityDocs, setBidSecurityDocs] = useState<Record<number, QuotationBidSecurity>>({});
@@ -621,6 +602,53 @@ export default function VendorRFQsPage() {
       return sum + convert(lineTotal, itemCurrency, currency);
     }, 0);
   }, [quotModal, quotPrices, itemCurrencies, companyDefaultCurrency, currency, convert]);
+
+  const isQuotReadOnly = Boolean(quotModal?.status === 'SUBMITTED' && !quotModal?.needsResubmit);
+
+  const activePrevQuote = useMemo(() => {
+    let target = previousQuotation;
+    if (selectedPrevVersionId && previousQuotationsList.length > 0) {
+      const found = previousQuotationsList.find((q) => String(q.id) === String(selectedPrevVersionId));
+      if (found) target = found;
+    }
+    if (!target && quotModal && (quotModal.status === 'SUBMITTED' || isQuotReadOnly || (quotModal as any).quotationId || (quotModal as any).myQuotation)) {
+      const mq = (quotModal as any).myQuotation || quotModal;
+      target = {
+        id: mq.quotationId || mq.id || String(quotModal.id),
+        vendorQuotationNumber: vendorQuotationNumber || mq.vendorQuotationNumber || `QTN-${quotModal.rfqNumber?.replace(/^RFQ-?/i, '') || 'SUBMITTED'}`,
+        currency: currency || mq.currency || 'KES',
+        totalPrice: quotTotal || mq.totalPrice || mq.totalAmount || 0,
+        totalAmount: quotTotal || mq.totalPrice || mq.totalAmount || 0,
+        leadTimeDays: quotLeadTime || mq.leadTimeDays || mq.leadTime || 0,
+        paymentTerms: quotPayTerms || mq.paymentTerms || 'Advance',
+        submittedAt: mq.submittedAt || Date.now(),
+        status: mq.status || 'SUBMITTED',
+        items: quotModal.items?.map((item, idx) => ({
+          name: item.name,
+          description: item.description,
+          quantity: item.quantity,
+          unit: item.unit,
+          unitPrice: quotPrices[idx] !== undefined ? quotPrices[idx] : (item.unitPrice || 0),
+          totalPrice: ((quotPrices[idx] !== undefined ? quotPrices[idx] : (item.unitPrice || 0)) * (item.quantity || 1)),
+        })) || [],
+        customFieldValues: { ...customFieldValues, ...evalParamValues },
+        bidSecurityBondNumber: bidSecBondNumber || mq.bidSecurityBondNumber,
+        bidSecurityIssuer: bidSecIssuer || mq.bidSecurityIssuer,
+        bidSecurityValue: bidSecValue || mq.bidSecurityValue,
+        bidSecurityCurrency: bidSecCurrency || mq.bidSecurityCurrency,
+        bidSecurityValidityValue: bidSecValidityValue || mq.bidSecurityValidityValue,
+      };
+    }
+    if (!target) return null;
+    if (previousQuotationsList.length <= 1) {
+      return {
+        ...target,
+        versionNumber: target.versionNumber || 1,
+        qNo: target.qNo || `Q${target.versionNumber || 1}`,
+      };
+    }
+    return target;
+  }, [selectedPrevVersionId, previousQuotationsList, previousQuotation, quotModal, isQuotReadOnly, vendorQuotationNumber, currency, quotTotal, quotLeadTime, quotPayTerms, quotPrices, customFieldValues, evalParamValues, bidSecBondNumber, bidSecIssuer, bidSecValue, bidSecCurrency, bidSecValidityValue]);
 
   // Submit quotation (new or resubmit)
   const handleSubmitQuot = useCallback(async () => {
@@ -1352,9 +1380,11 @@ export default function VendorRFQsPage() {
                           </button>
                         </div>
                       </div>
+                    </div>
+                  )}
 
-                      {/* ── Separate Popup Overlay Modal for Version Snapshot (Portaled to document.body) ── */}
-                      {showPreviousQuoteDetails && activePrevQuote && createPortal(
+                  {/* ── Separate Popup Overlay Modal for Version Snapshot (Portaled to document.body) ── */}
+                  {showPreviousQuoteDetails && activePrevQuote && createPortal(
                         <div
                           className={`vquot-snapshot-modal-overlay ${isSnapshotFullScreen ? 'vquot-snapshot-modal-overlay--fullscreen' : ''}`}
                           style={{ zIndex: 999990 }}
@@ -1802,8 +1832,6 @@ export default function VendorRFQsPage() {
                         </div>,
                         document.body
                       )}
-                    </div>
-                  )}
 
                   <div className="vrfq-card__items-title">Item Pricing</div>
                   <div className="vquot-modal__items">

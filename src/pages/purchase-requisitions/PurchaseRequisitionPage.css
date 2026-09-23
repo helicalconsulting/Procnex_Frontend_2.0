@@ -589,17 +589,37 @@
   background: var(--surface-card);
 }
 
-.pr-field select {
+.pr-field select,
+.pr-select {
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236a6d70' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
   padding-right: 36px;
   cursor: pointer;
+  background-color: var(--surface, #ffffff);
+  color: var(--text-primary, #0f172a);
 }
 
-[data-theme="dark"] .pr-field select {
+.pr-field select option,
+.pr-select option {
+  background-color: #ffffff;
+  color: #0f172a;
+  padding: 8px 12px;
+}
+
+[data-theme="dark"] .pr-field select,
+[data-theme="dark"] .pr-select {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238d9399' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-color: var(--surface-card, #1e293b) !important;
+  color: #f8fafc !important;
+  border-color: var(--border, rgba(255, 255, 255, 0.18)) !important;
+}
+
+[data-theme="dark"] .pr-field select option,
+[data-theme="dark"] .pr-select option {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
 }
 
 /* ── SAP Fiori Items Grid Table ───────────────────────────── */

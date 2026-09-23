@@ -56,7 +56,16 @@ function getDocSigStorageKey(): string {
 function readSigs(): SavedSignature[] {
   try {
     const raw = localStorage.getItem(getSigStorageKey());
-    return raw ? JSON.parse(raw) : [];
+    const list: SavedSignature[] = raw ? JSON.parse(raw) : [];
+    const seen = new Set<string>();
+    const unique: SavedSignature[] = [];
+    for (const s of list) {
+      if (!s.dataUrl) continue;
+      if (seen.has(s.dataUrl)) continue;
+      seen.add(s.dataUrl);
+      unique.push(s);
+    }
+    return unique;
   } catch {
     return [];
   }
@@ -86,6 +95,8 @@ async function mockList(): Promise<SavedSignature[]> {
 
 async function mockCreate(data: { name: string; dataUrl: string; type: 'drawn' | 'uploaded' }): Promise<SavedSignature> {
   const sigs = readSigs();
+  const existing = sigs.find((s) => s.dataUrl === data.dataUrl);
+  if (existing) return existing;
   const sig: SavedSignature = {
     id: Date.now(),
     name: data.name,
@@ -123,12 +134,15 @@ async function mockSignDocument(payload: SignDocumentPayload): Promise<DocumentS
     levelNumber: payload.levelNumber,
     comments: payload.comments,
   };
-  writeDocSigs([...readDocSigs(), record]);
+  const existingDocSigs = readDocSigs().filter(
+    (d) => !(d.module === payload.module && String(d.referenceId) === String(payload.referenceId) && Number(d.levelNumber) === Number(payload.levelNumber))
+  );
+  writeDocSigs([...existingDocSigs, record]);
   return record;
 }
 
 async function mockGetDocumentSignatures(module: string, referenceId: string): Promise<DocumentSignatureRecord[]> {
-  return readDocSigs().filter((d) => d.module === module && d.referenceId === referenceId);
+  return readDocSigs().filter((d) => (d.module === module || module.toLowerCase().includes(d.module.toLowerCase()) || d.module.toLowerCase().includes(module.toLowerCase())) && String(d.referenceId) === String(referenceId));
 }
 
 async function apiList(): Promise<SavedSignature[]> {

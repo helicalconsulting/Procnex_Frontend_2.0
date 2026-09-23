@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Printer, Download, X, CheckCircle2, ShieldCheck, Landmark, Building2, AlertCircle, Clock } from 'lucide-react';
 import { useCurrency } from '../shared/CurrencyMaster';
 import { useBranding } from '../../context/BrandingContext';
@@ -87,36 +87,77 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
       try {
         const pNo = data.voucherNumber;
         const invRef = data.invoiceRef;
-        const [docSigsP, docSigsInv, savedSigs] = await Promise.all([
+        const [docSigsP, docSigsInv, docSigsAP, savedSigs] = await Promise.all([
           signatureService.getDocumentSignatures('Payments', pNo).catch(() => []),
           invRef ? signatureService.getDocumentSignatures('Payments', invRef).catch(() => []) : Promise.resolve([]),
+          invRef ? signatureService.getDocumentSignatures('AccountsPayable', invRef).catch(() => []) : Promise.resolve([]),
           signatureService.list().catch(() => []),
         ]);
         if (!isMounted) return;
 
-        const docSigs = [...docSigsP, ...docSigsInv];
+        const allRawDocSigs = [...docSigsP, ...docSigsInv, ...docSigsAP];
+        const signerMap = new Map<string, any>();
+        for (const s of allRawDocSigs) {
+          const sigUrl = s.dataUrl || s.signature?.dataUrl;
+          const signerKey = s.signedById ? String(s.signedById) : (sigUrl || s.signatureId || s.id);
+          if (!signerKey) continue;
+          if (!signerMap.has(signerKey) || (!signerMap.get(signerKey).dataUrl && sigUrl)) {
+            signerMap.set(signerKey, s);
+          }
+        }
+        const uniqueDocSigs = Array.from(signerMap.values()).sort((a: any, b: any) => {
+          const levA = Number(a.levelNumber) || 0;
+          const levB = Number(b.levelNumber) || 0;
+          if (levA && levB) return levA - levB;
+          const timeA = a.signedAt ? new Date(a.signedAt).getTime() : 0;
+          const timeB = b.signedAt ? new Date(b.signedAt).getTime() : 0;
+          return timeA - timeB;
+        });
         const defaultSigUrl = savedSigs.find((s) => s.isDefault)?.dataUrl || savedSigs[0]?.dataUrl;
 
-        const sigL1 = docSigs.find((d: any) => Number(d.levelNumber) === 1)?.dataUrl || docSigs[0]?.dataUrl || defaultSigUrl;
-        const sigL2 = docSigs.find((d: any) => Number(d.levelNumber) === 2)?.dataUrl || docSigs[1]?.dataUrl;
+        const getSigForLevel = (lvlNum: number, idx: number, approverName?: string | null) => {
+          if (approverName && approverName !== '—' && !approverName.toLowerCase().includes('pending')) {
+            const cleanName = approverName.toLowerCase().trim();
+            const byName = uniqueDocSigs.find((d: any) => {
+              const sName = (d.signedBy?.fullName || d.signedByName || d.signature?.name || '').toLowerCase().trim();
+              return sName && (sName === cleanName || sName.includes(cleanName) || cleanName.includes(sName));
+            });
+            if (byName) return byName.dataUrl || byName.signature?.dataUrl;
+          }
+
+          const match =
+            uniqueDocSigs.find((d: any) => Number(d.levelNumber) === Number(lvlNum)) ||
+            uniqueDocSigs.find((d: any) => Number(d.levelNumber || d.level) === Number(lvlNum));
+          if (match) return match.dataUrl || match.signature?.dataUrl;
+
+          const byIdx = uniqueDocSigs[idx];
+          if (byIdx) {
+            return byIdx.dataUrl || byIdx.signature?.dataUrl;
+          }
+          return undefined;
+        };
+
+        const l1ApproverName = (data as any).approvedBy && (data as any).approvedBy !== '—' ? (data as any).approvedBy : 'Purchase Manager';
+        const sigL1 = getSigForLevel(1, 0, l1ApproverName) || (uniqueDocSigs.length === 0 ? defaultSigUrl : undefined);
+        const sigL2 = getSigForLevel(2, 1, 'Purchase Clerk');
 
         setApproversList([
           {
-            level: 'Level 1 Review',
-            name: (data as any).approvedBy && (data as any).approvedBy !== '—' ? (data as any).approvedBy : 'Purchase Manager',
+            level: 'Level 1',
+            name: l1ApproverName,
             role: 'Purchase Manager',
             date: data.voucherDate,
             status: 'APPROVED' as const,
-            comments: 'Quantities & PO rates approved',
+            comments: 'Approved & Digitally Signed',
             signatureUrl: sigL1,
           },
           {
-            level: 'Level 2 Authorization',
-            name: 'Treasury / Finance VP',
-            role: 'Treasury / Finance VP',
+            level: 'Level 2',
+            name: 'Purchase Clerk',
+            role: 'Purchase Clerk',
             date: data.voucherDate,
             status: sigL2 ? ('APPROVED' as const) : ('PENDING' as const),
-            comments: sigL2 ? 'Bank payment release authorized' : 'Awaiting Level 2 Approval',
+            comments: sigL2 ? 'Approved & Digitally Signed' : 'Awaiting Level 2 Approval',
             signatureUrl: sigL2,
           },
         ]);
@@ -130,10 +171,21 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
     };
   }, [data]);
 
-  const defaultApprovers = approversList.length > 0 ? approversList : [
-    { level: 'Level 1 Review', name: 'Purchase Manager', role: 'Purchase Manager', date: data.voucherDate, status: 'APPROVED' as const, comments: 'Quantities & PO rates approved' },
-    { level: 'Level 2 Authorization', name: 'Treasury / Finance VP', role: 'Treasury / Finance VP', date: data.voucherDate, status: 'PENDING' as const, comments: 'Awaiting Level 2 Approval' },
-  ];
+  const defaultApprovers = useMemo(() => {
+    const list = approversList.length > 0 ? approversList : [
+      { level: 'Level 1', name: 'Purchase Manager', role: 'Purchase Manager', date: data.voucherDate, status: 'APPROVED' as const, comments: 'Approved & Digitally Signed' },
+      { level: 'Level 2', name: 'Purchase Clerk', role: 'Purchase Clerk', date: data.voucherDate, status: 'PENDING' as const, comments: 'Awaiting Level 2 Approval' },
+    ];
+
+    // Deduplicate by level to ensure only distinct levels (Level 1, Level 2) are displayed
+    const seen = new Set<string>();
+    return list.filter((app) => {
+      const key = String(app.level || app.role || '').toLowerCase().replace(/[\s_-]+/g, '');
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [approversList, data.voucherDate]);
 
   const displayItems: PaymentVoucherItem[] = (data.items && data.items.length > 0)
     ? data.items

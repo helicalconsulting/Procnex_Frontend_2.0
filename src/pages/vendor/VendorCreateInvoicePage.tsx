@@ -62,9 +62,15 @@ export default function VendorCreateInvoicePage() {
   const poList = poData.orders || [];
 
   // Form State - initialize state directly from URL query parameters if present
-  const [selectedPoId, setSelectedPoId] = useState<string>('');
+  const [selectedPoId, setSelectedPoId] = useState<string>(() => poIdParam || '');
   const [selectedGrnId, setSelectedGrnId] = useState<string>(() => grnIdParam || '');
   const [grnOptions, setGrnOptions] = useState<GoodsReceivedNote[]>([]);
+
+  useEffect(() => {
+    if (poIdParam) {
+      setSelectedPoId(poIdParam);
+    }
+  }, [poIdParam]);
 
   const [invoiceNumber, setInvoiceNumber] = useState<string>('');
 
@@ -394,6 +400,7 @@ export default function VendorCreateInvoicePage() {
         amount: calculations.grandTotal,
         notes,
         isDraft,
+        isVendorSubmission: true,
       };
 
       const { apiRequest } = await import('../../api/client');
@@ -403,7 +410,6 @@ export default function VendorCreateInvoicePage() {
       });
 
       window.dispatchEvent(new CustomEvent('heliflow:invoice-created'));
-      window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
       try {
         const bc = new BroadcastChannel('heliflow_sync');
         bc.postMessage({ type: 'INVOICE_CREATED', timestamp: Date.now() });
@@ -421,7 +427,7 @@ export default function VendorCreateInvoicePage() {
           title: `Tax Invoice Sent to Buyer`,
           actionTitle: `Purchase Invoice Sent`,
           badgeText: `SENT`,
-          message: `Tax Invoice #${invoiceNumber} has been sent to Buyer successfully! Buyer notification & approval workflow initiated.`,
+          message: `Tax Invoice #${invoiceNumber} has been sent to Buyer successfully! Buyer notification has been sent to the Procurement & Accounts team to review and register the Purchase Invoice.`,
           details: [
             { label: 'PO Reference', value: displayPoNumber },
             { label: 'GRN Reference', value: displayGrnNumber },

@@ -18,22 +18,48 @@ import type { VendorOrderMock } from '@/mocks/vendorPortal.mock';
 import { vendorPortalService } from '@/services/vendorPortalService';
 import { downloadPurchaseOrderAsPdf } from '@/utils/pdfDownload';
 
-type OrderStatus = 'CONFIRMED' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED';
+type OrderStatus = 'CONFIRMED' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED' | 'APPROVED' | 'ISSUED' | 'SENT' | 'COMPLETED' | 'PENDING' | 'REJECTED';
 type Tone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
 
-const STATUS_CONFIG: Record<OrderStatus, { label: string; tone: Tone; icon: typeof Truck }> = {
+const STATUS_CONFIG: Record<string, { label: string; tone: Tone; icon: typeof Truck }> = {
   CONFIRMED: { label: 'Confirmed', tone: 'primary', icon: CheckCircle2 },
+  APPROVED: { label: 'Approved', tone: 'primary', icon: CheckCircle2 },
+  ISSUED: { label: 'Issued', tone: 'info', icon: FileText },
+  SENT: { label: 'Sent', tone: 'info', icon: Truck },
   PROCESSING: { label: 'Processing', tone: 'warning', icon: Clock },
+  IN_PROGRESS: { label: 'In Progress', tone: 'warning', icon: Clock },
   SHIPPED: { label: 'Shipped', tone: 'info', icon: Truck },
   DELIVERED: { label: 'Delivered', tone: 'success', icon: CheckCircle2 },
+  COMPLETED: { label: 'Completed', tone: 'success', icon: CheckCircle2 },
   CANCELLED: { label: 'Cancelled', tone: 'danger', icon: XCircle },
+  REJECTED: { label: 'Rejected', tone: 'danger', icon: XCircle },
+  PENDING: { label: 'Pending', tone: 'neutral', icon: Clock },
 };
-const STEPS = ['Confirmed', 'Processing', 'Shipped', 'Delivered'];
-const STATUS_INDEX: Record<OrderStatus, number> = { CONFIRMED: 0, PROCESSING: 1, SHIPPED: 2, DELIVERED: 3, CANCELLED: -1 };
 
-function StatusBadge({ status }: { status: OrderStatus }) {
-  const config = STATUS_CONFIG[status];
-  const Icon = config.icon;
+const DEFAULT_STATUS_CONFIG = { label: 'Order', tone: 'neutral' as Tone, icon: Package };
+const STEPS = ['Confirmed', 'Processing', 'Shipped', 'Delivered'];
+const STATUS_INDEX: Record<string, number> = {
+  CONFIRMED: 0,
+  APPROVED: 0,
+  ISSUED: 0,
+  SENT: 0,
+  PROCESSING: 1,
+  IN_PROGRESS: 1,
+  SHIPPED: 2,
+  DELIVERED: 3,
+  COMPLETED: 3,
+  CANCELLED: -1,
+  REJECTED: -1,
+};
+
+function StatusBadge({ status }: { status?: string }) {
+  const normalized = (status || '').toUpperCase().trim();
+  const config = STATUS_CONFIG[normalized] || {
+    label: status ? status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Order',
+    tone: 'neutral' as Tone,
+    icon: Package,
+  };
+  const Icon = config.icon || Package;
   return <Badge tone={config.tone}><Icon className="size-3" />{config.label}</Badge>;
 }
 
@@ -47,9 +73,9 @@ export default function VendorOrdersPage() {
   const [expandedOrder, setExpandedOrder] = useState<number | null>(null);
   const summary = useMemo(() => ({
     total: orders.length,
-    active: orders.filter((order) => ['CONFIRMED', 'PROCESSING', 'SHIPPED'].includes(order.status)).length,
-    delivered: orders.filter((order) => order.status === 'DELIVERED').length,
-    cancelled: orders.filter((order) => order.status === 'CANCELLED').length,
+    active: orders.filter((order) => ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'ISSUED', 'SENT', 'APPROVED', 'IN_PROGRESS'].includes((order.status || '').toUpperCase())).length,
+    delivered: orders.filter((order) => ['DELIVERED', 'COMPLETED'].includes((order.status || '').toUpperCase())).length,
+    cancelled: orders.filter((order) => ['CANCELLED', 'REJECTED'].includes((order.status || '').toUpperCase())).length,
   }), [orders]);
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();

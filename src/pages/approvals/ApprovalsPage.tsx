@@ -311,6 +311,7 @@ export default function ApprovalsPage() {
           return {
             ...a,
             status: opt.status,
+            canAct: false,
             currentLevel: opt.currentLevel ?? (isApproved ? (a.totalLevels || 1) : a.currentLevel),
           };
         }
@@ -336,6 +337,12 @@ export default function ApprovalsPage() {
     return list;
   }, [approvals, optimisticMap, moduleFilter, search]);
 
+  const { user, roles: authRoles } = useAuth();
+  const isAdmin = useMemo(() => {
+    if (!authRoles || authRoles.length === 0) return false;
+    return authRoles.some((r) => r === 'Super Admin' || r === 'Administrator' || r.toLowerCase().includes('admin'));
+  }, [authRoles]);
+
   const getEffectiveStatus = useCallback((a: ApprovalRequest): ApprovalStatusType => {
     if (a.status === 'APPROVED') return 'APPROVED';
     if (a.status === 'REJECTED') return 'REJECTED';
@@ -343,38 +350,32 @@ export default function ApprovalsPage() {
 
     if (a.status === 'PENDING') {
       if (a.canAct) return 'PENDING';
-      if ((a.currentLevel || 1) > 1) return 'APPROVED';
+      if ((a.currentLevel || 1) > 1 && !isAdmin) return 'APPROVED';
       return 'PENDING';
     }
     return a.status;
-  }, []);
-
-  const { user, roles: authRoles } = useAuth();
-  const isAdmin = useMemo(() => {
-    if (!authRoles || authRoles.length === 0) return false;
-    return authRoles.some((r) => r === 'Super Admin' || r === 'Administrator' || r.toLowerCase().includes('admin'));
-  }, [authRoles]);
+  }, [isAdmin]);
 
   const filtered = useMemo(() => {
-    let list = moduleFiltered;
-    if (!isAdmin) {
-      list = list.filter((a) => {
-        if (a.status === 'PENDING' && !a.canAct) {
-          return false;
-        }
-        return true;
-      });
-    }
+    let list = moduleFiltered.filter((a) => {
+      if (a.status === 'PENDING' && !a.canAct && !isAdmin) {
+        return false;
+      }
+      return true;
+    });
     if (statusFilter === 'ALL') return list;
     return list.filter((a) => getEffectiveStatus(a) === statusFilter);
-  }, [moduleFiltered, statusFilter, getEffectiveStatus, isAdmin, user?.id]);
+  }, [moduleFiltered, statusFilter, getEffectiveStatus, isAdmin]);
 
-  const summary = useMemo(() => ({
-    total: moduleFiltered.length,
-    pending: moduleFiltered.filter((a) => getEffectiveStatus(a) === 'PENDING').length,
-    approved: moduleFiltered.filter((a) => getEffectiveStatus(a) === 'APPROVED').length,
-    rejected: moduleFiltered.filter((a) => getEffectiveStatus(a) === 'REJECTED').length,
-  }), [moduleFiltered, getEffectiveStatus]);
+  const summary = useMemo(() => {
+    const list = moduleFiltered.filter((a) => isAdmin || a.status !== 'PENDING' || a.canAct);
+    return {
+      total: list.length,
+      pending: list.filter((a) => getEffectiveStatus(a) === 'PENDING').length,
+      approved: list.filter((a) => getEffectiveStatus(a) === 'APPROVED').length,
+      rejected: list.filter((a) => getEffectiveStatus(a) === 'REJECTED').length,
+    };
+  }, [moduleFiltered, getEffectiveStatus, isAdmin]);
 
   const totalPages = Math.ceil(filtered.length / perPage);
   const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
