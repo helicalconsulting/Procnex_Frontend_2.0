@@ -196,7 +196,7 @@ export default function VendorQuotationsPage() {
 
   const [search, setSearch] = useState('');
   const [kpiFilter, setKpiFilter] = useState<QuotStatus | null>(null);
-  const [expandedQuot, setExpandedQuot] = useState<number | null>(null);
+  const [expandedQuot, setExpandedQuot] = useState<string | number | null>(null);
 
   // ── View Quotation Modal state ──────────────────────────
   const [viewQuot, setViewQuot] = useState<VendorQuotation | null>(null);
@@ -350,8 +350,8 @@ export default function VendorQuotationsPage() {
   }, []);
 
   // ── Download Excel button handler ──
-  const [downloadingExcel, setDownloadingExcel] = useState<number | null>(null);
-  const downloadQuotationExcel = async (quotationId: number) => {
+  const [downloadingExcel, setDownloadingExcel] = useState<string | number | null>(null);
+  const downloadQuotationExcel = async (quotationId: string | number) => {
     setDownloadingExcel(quotationId);
     try {
       const token = authService.getToken();
@@ -445,7 +445,7 @@ export default function VendorQuotationsPage() {
       ) : filtered.length > 0 ? (
         <div className="flex flex-col gap-3.5">
           {filtered.map((quot) => {
-            const isExpanded = expandedQuot === quot.id;
+            const isExpanded = String(expandedQuot) === String(quot.id);
             const statusCfg = STATUS_CONFIG[quot.status] || { label: quot.status || 'Submitted', tone: 'neutral' as const, icon: null };
 
             // Compute total of selected items only
@@ -467,7 +467,7 @@ export default function VendorQuotationsPage() {
                 {/* Header */}
                 <div
                   className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between cursor-pointer hover:bg-accent/25 transition-colors"
-                  onClick={() => setExpandedQuot(isExpanded ? null : Number(quot.id))}
+                  onClick={() => setExpandedQuot(isExpanded ? null : quot.id)}
                 >
                   <div className="flex flex-col gap-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -522,7 +522,7 @@ export default function VendorQuotationsPage() {
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      onClick={() => setExpandedQuot(isExpanded ? null : Number(quot.id))}
+                      onClick={() => setExpandedQuot(isExpanded ? null : quot.id)}
                       aria-label="Toggle quotation details"
                     >
                       <ChevronDown className={cn('size-4 transition-transform duration-200', isExpanded && 'rotate-180')} />
@@ -552,11 +552,11 @@ export default function VendorQuotationsPage() {
                               variant="outline"
                               size="sm"
                               className="h-7 text-xs px-2.5"
-                              onClick={() => downloadQuotationExcel(Number(quot.id))}
-                              disabled={downloadingExcel === Number(quot.id)}
+                              onClick={() => downloadQuotationExcel(quot.id)}
+                              disabled={downloadingExcel === quot.id}
                             >
                               <FileSpreadsheet size={13} />
-                              {downloadingExcel === Number(quot.id) ? 'Downloading…' : 'Download Excel'}
+                              {downloadingExcel === quot.id ? 'Downloading…' : 'Download Excel'}
                             </Button>
                           )}
                           <div className="col-btn-wrap relative inline-flex">

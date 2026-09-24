@@ -49,11 +49,10 @@ export default function PrintPurchaseInvoiceModal({ data: dataProp, invoice: inv
   const printableRef = useRef<HTMLDivElement>(null);
   const [approversList, setApproversList] = useState<any[]>(data.approvers || []);
 
-  const rawName = companyName || profile?.companyName;
-  const displayCompanyName = rawName && !rawName.toLowerCase().includes('procnex') ? rawName : 'Helical Consulting';
+  const displayCompanyName = profile?.companyName || companyName || 'Procnex';
   const companyAddress = profile?.companyAddress
-    ? [profile.companyAddress, profile.companyCity, profile.companyCountry].filter(Boolean).join(', ')
-    : '232, Sahukara Bareilly 232 • Corporate Headquarters';
+    ? [profile.companyAddress, profile.companyCity, profile.companyState, profile.companyCountry].filter(Boolean).join(', ')
+    : (profile?.companyName || companyName || 'Procnex') + ' • Corporate Headquarters';
 
   const fmtDate = (d: string) => {
     try {
@@ -253,7 +252,13 @@ export default function PrintPurchaseInvoiceModal({ data: dataProp, invoice: inv
               )}
               {logoUrl && <h2 style={{ fontSize: 19, margin: '4px 0 2px 0' }}>{displayCompanyName}</h2>}
               <p>{companyAddress}</p>
-              <p>Phone: {profile?.companyPhone || '+91 8272811866'} | Email: {profile?.companyEmail || 'finance@helical.com'}</p>
+              {(profile?.companyPhone || profile?.companyEmail) && (
+                <p>
+                  {profile?.companyPhone ? `Phone: ${profile.companyPhone}` : ''}
+                  {profile?.companyPhone && profile?.companyEmail ? ' | ' : ''}
+                  {profile?.companyEmail ? `Email: ${profile.companyEmail}` : ''}
+                </p>
+              )}
               {profile?.taxRegistrationNumber && (
                 <p style={{ fontWeight: 600, color: '#0f172a', marginTop: 2 }}>
                   GSTIN / VAT: {profile.taxRegistrationNumber}

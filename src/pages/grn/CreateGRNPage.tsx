@@ -1,10 +1,11 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
 import { purchaseRequisitionService } from '../../services/purchaseRequisitionService';
 import { grnService, type GRNItemPayload } from '../../services/grnService';
 import { invoiceService } from '../../services/invoiceService';
+import { apiRequest } from '../../api/client';
 import {
   ArrowLeft,
   Truck,
@@ -44,11 +45,32 @@ interface LineItemState {
   remarks: string;
 }
 
+// Safe string helper defined at top-level scope before component mounts
+function safeStr(val: any): string {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'string') return val;
+  if (typeof val === 'number') return String(val);
+  if (typeof val === 'object') return val.poNumber || val.id || val.name || '';
+  return '';
+}
+
 export default function CreateGRNPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { roles = [], user } = useAuth();
   const [searchParams] = useSearchParams();
-  const poIdParam = searchParams.get('poId');
+
+  // Extract PO passed in router location state (if navigated directly from table action button)
+  const poFromState = location.state?.po || location.state?.purchaseOrder || location.state?.poData;
+  const poIdParam =
+    searchParams.get('poId') ||
+    searchParams.get('po') ||
+    searchParams.get('poNumber') ||
+    searchParams.get('id') ||
+    location.state?.poId ||
+    poFromState?.id ||
+    poFromState?.poNumber;
+
   const invoiceIdParam = searchParams.get('invoiceId');
   const modeParam = searchParams.get('mode');
 
@@ -60,6 +82,9 @@ export default function CreateGRNPage() {
     if (modeParam === 'autofill' || invoiceIdParam) return 'AUTO_FILL';
     return 'AUTO_FILL'; // Default to autofill mode for convenience
   });
+
+  // Single fetched PO state if not found in list but poIdParam is present
+  const [fetchedDirectPO, setFetchedDirectPO] = useState<any>(null);
 
   // Load purchase orders list
   const { data: poData, loading: poLoading1 } = useServiceData(
@@ -159,7 +184,7 @@ export default function CreateGRNPage() {
 
   // Form State
   const [grnNumber, setGrnNumber] = useState<string>(() => `GRN-2026-${Math.floor(1000 + Math.random() * 9000)}`);
-  const [selectedPoId, setSelectedPoId] = useState<string>('');
+  const [selectedPoId, setSelectedPoId] = useState<string>(() => safeStr(poIdParam));
   const [vendorDispatchNoteNumber, setVendorDispatchNoteNumber] = useState<string>('');
   const [selectedVendorInvoiceId, setSelectedVendorInvoiceId] = useState<string>('');
   const [receivedDate, setReceivedDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
@@ -176,41 +201,105 @@ export default function CreateGRNPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Safe string helper
-  const safeStr = (val: any): string => {
-    if (val === null || val === undefined) return '';
-    if (typeof val === 'string') return val;
-    if (typeof val === 'number') return String(val);
-    if (typeof val === 'object') return val.poNumber || val.id || val.name || '';
-    return '';
-  };
-
-  // Selected PO details
+  // Selected PO details (prioritizes location.state po, fetchedDirectPO, then matches rawPoList)
   const selectedPO = useMemo(() => {
-    if (!selectedPoId || !approvedPOs || approvedPOs.length === 0) return null;
-    const target = safeStr(selectedPoId).toLowerCase();
+    if (poFromState) return poFromState;
+    if (fetchedDirectPO) return fetchedDirectPO;
+    if (!selectedPoId || !rawPoList || rawPoList.length === 0) return null;
+    const target = safeStr(selectedPoId).toLowerCase().trim();
     return (
-      approvedPOs.find((po) => {
-        const pId = safeStr(po.id || (po as any)._id).toLowerCase();
-        const pNum = safeStr(po.poNumber).toLowerCase();
-        return (pId && pId === target) || (pNum && pNum === target);
+      rawPoList.find((po) => {
+        const pId = safeStr(po.id || (po as any)._id).toLowerCase().trim();
+        const pNum = safeStr(po.poNumber).toLowerCase().trim();
+        const rfqId = safeStr(po.rfqId).toLowerCase().trim();
+        return (pId && pId === target) || (pNum && pNum === target) || (rfqId && rfqId === target);
       }) || null
     );
-  }, [approvedPOs, selectedPoId]);
+  }, [poFromState, fetchedDirectPO, rawPoList, selectedPoId]);
+
+  // Keep selectedPoId in sync with selectedPO id/poNumber
+  useEffect(() => {
+    if (selectedPO) {
+      const canonicalId = safeStr(selectedPO.id || selectedPO.poNumber);
+      if (canonicalId && selectedPoId !== canonicalId) {
+        setSelectedPoId(canonicalId);
+      }
+    }
+  }, [selectedPO]);
+
+  // Display options for PO select dropdown (includes selectedPO if missing from approvedPOs)
+  const displayPOOptions = useMemo(() => {
+    const list = [...approvedPOs];
+    if (selectedPO) {
+      const selId = safeStr(selectedPO.id || selectedPO.poNumber).toLowerCase().trim();
+      if (!list.some((p) => safeStr(p.id || p.poNumber).toLowerCase().trim() === selId)) {
+        list.unshift(selectedPO);
+      }
+    }
+    return list;
+  }, [approvedPOs, selectedPO]);
+
+  // Fetch single PO directly from API if poIdParam is present but not found in state or rawPoList
+  useEffect(() => {
+    if (poIdParam && !selectedPO && !poLoading) {
+      apiRequest<any>(`/purchase-orders/${poIdParam}`)
+        .then((res) => {
+          if (res) {
+            setFetchedDirectPO(res);
+            setSelectedPoId(String(res.id || res.poNumber || poIdParam));
+          }
+        })
+        .catch(() => {
+          // Ignore API error if PO is not found by ID endpoint
+        });
+    }
+  }, [poIdParam, selectedPO, poLoading]);
+
+  // Display options for Vendor Invoice / Dispatch Note select dropdown (includes PO dispatch note if missing)
+  const displayInvoiceOptions = useMemo(() => {
+    const list = [...(invoicesList || [])];
+    const poDispatchNum = safeStr(
+      selectedPO?.dispatchNoteNumber ||
+      selectedPO?.vendorDispatchNoteNumber ||
+      selectedPO?.vendorInvoiceNumber
+    );
+
+    if (poDispatchNum && poDispatchNum !== safeStr(selectedPO?.poNumber)) {
+      const exists = list.some(
+        (inv) =>
+          safeStr(inv.id).toLowerCase() === poDispatchNum.toLowerCase() ||
+          safeStr(inv.invoiceNumber).toLowerCase() === poDispatchNum.toLowerCase()
+      );
+      if (!exists) {
+        list.unshift({
+          id: poDispatchNum,
+          invoiceNumber: poDispatchNum,
+          vendorName: selectedPO?.vendor?.name || 'Supplier',
+          poNumber: selectedPO?.poNumber || '',
+          poId: selectedPO?.id || '',
+          amount: Number(selectedPO?.totalAmount || 0),
+          status: 'DISPATCHED',
+          dueDate: new Date().toISOString().slice(0, 10),
+          submittedAt: new Date().toISOString().slice(0, 10),
+        });
+      }
+    }
+    return list;
+  }, [invoicesList, selectedPO]);
 
   // Selected Vendor Invoice details for Auto-fill
   const selectedInvoice = useMemo(() => {
-    if (!selectedVendorInvoiceId || !invoicesList) return null;
-    return invoicesList.find(
+    if (!selectedVendorInvoiceId || !displayInvoiceOptions) return null;
+    return displayInvoiceOptions.find(
       (inv) => String(inv.id) === String(selectedVendorInvoiceId) || String(inv.invoiceNumber) === String(selectedVendorInvoiceId)
     ) || null;
-  }, [invoicesList, selectedVendorInvoiceId]);
+  }, [displayInvoiceOptions, selectedVendorInvoiceId]);
 
   // Handle Auto-fill selection from Vendor Invoice / Dispatch Note
   useEffect(() => {
-    if (entryMode === 'AUTO_FILL' && selectedInvoice) {
+    if (entryMode === 'AUTO_FILL' && selectedInvoice && !poIdParam) {
       if (selectedInvoice.poId || selectedInvoice.poNumber) {
-        const matchedPo = approvedPOs.find(
+        const matchedPo = rawPoList.find(
           (p) =>
             (selectedInvoice.poId && (String(p.id) === String(selectedInvoice.poId) || String(p.poNumber) === String(selectedInvoice.poId))) ||
             (selectedInvoice.poNumber && (String(p.id) === String(selectedInvoice.poNumber) || String(p.poNumber) === String(selectedInvoice.poNumber)))
@@ -223,9 +312,45 @@ export default function CreateGRNPage() {
         setVendorDispatchNoteNumber(selectedInvoice.invoiceNumber);
       }
     }
-  }, [entryMode, selectedInvoice, approvedPOs]);
+  }, [entryMode, selectedInvoice, rawPoList, poIdParam]);
 
-  // Update line items when PO selection changes
+  // Auto-select matching Vendor Invoice / Dispatch Note when PO selection or invoice list changes
+  useEffect(() => {
+    if (!selectedPO) return;
+
+    const targetPoId = safeStr(selectedPO.id).toLowerCase().trim();
+    const targetPoNum = safeStr(selectedPO.poNumber).toLowerCase().trim();
+
+    const match = displayInvoiceOptions.find((inv) => {
+      const invPoId = safeStr(inv.poId).toLowerCase().trim();
+      const invPoNum = safeStr(inv.poNumber).toLowerCase().trim();
+      if (!invPoId && !invPoNum) return false;
+      return (
+        (targetPoId && (invPoId === targetPoId || invPoNum === targetPoId)) ||
+        (targetPoNum && (invPoId === targetPoNum || invPoNum === targetPoNum))
+      );
+    });
+
+    if (match) {
+      setSelectedVendorInvoiceId(String(match.id));
+      setVendorDispatchNoteNumber(match.invoiceNumber);
+    } else {
+      const fallbackDn = safeStr(
+        selectedPO.dispatchNoteNumber ||
+        selectedPO.vendorDispatchNoteNumber ||
+        selectedPO.vendorInvoiceNumber
+      );
+      if (fallbackDn && fallbackDn !== targetPoNum) {
+        setSelectedVendorInvoiceId(fallbackDn);
+        setVendorDispatchNoteNumber(fallbackDn);
+      } else {
+        setSelectedVendorInvoiceId('');
+        setVendorDispatchNoteNumber('');
+      }
+    }
+  }, [selectedPO, displayInvoiceOptions]);
+
+  // Update line items and header details when PO selection changes
   useEffect(() => {
     if (!selectedPO) {
       setLineItems([]);
@@ -234,8 +359,12 @@ export default function CreateGRNPage() {
 
     const rawItems: any[] =
       (selectedPO.items && selectedPO.items.length > 0 && selectedPO.items) ||
+      (selectedPO.lineItems && selectedPO.lineItems.length > 0 && selectedPO.lineItems) ||
+      (selectedPO.products && selectedPO.products.length > 0 && selectedPO.products) ||
+      (selectedPO.materials && selectedPO.materials.length > 0 && selectedPO.materials) ||
       (selectedPO.rfq?.selectedQuotation?.items && selectedPO.rfq.selectedQuotation.items.length > 0 && selectedPO.rfq.selectedQuotation.items) ||
       (selectedPO.rfq?.items && selectedPO.rfq.items.length > 0 && selectedPO.rfq.items) ||
+      (selectedPO.requisition?.items && selectedPO.requisition.items.length > 0 && selectedPO.requisition.items) ||
       [];
 
     if (rawItems.length > 0) {
@@ -246,53 +375,76 @@ export default function CreateGRNPage() {
             item.name ||
             item.description ||
             item.itemDescription ||
-            (selectedPO.rfq?.title && selectedPO.rfq.title !== 'Direct PO Master' ? selectedPO.rfq.title : '')
+            item.title ||
+            (selectedPO.rfq?.title && selectedPO.rfq.title !== 'Direct PO Master' ? selectedPO.rfq.title : '') ||
+            selectedPO.title ||
+            selectedPO.poNumber ||
+            'Purchase Order Material/Services'
           );
-          const qty = Number(item.quantity || item.orderedQty || 1);
-          const price = Number(item.unitPrice || item.price || 0);
+          const qty = Number(item.quantity || item.orderedQty || item.qty || 1);
+          const price = Number(item.unitPrice || item.price || item.rate || 0);
 
           return {
             id: `item_${idx}_${Date.now()}`,
-            itemName: name || '',
+            itemName: name || 'Purchase Order Material/Services',
             orderedQty: qty,
             receivedQty: qty,
             acceptedQty: qty,
             rejectedQty: 0,
             unitPrice: price,
-            unit: safeStr(item.unit || 'Units'),
+            unit: safeStr(item.unit || item.uom || 'Units'),
             remarks: 'Inspected - Goods in good condition',
           };
         })
       );
     } else {
       const fallbackTitle = safeStr(
-        (selectedPO.rfq?.title && selectedPO.rfq.title !== 'Direct PO Master' ? selectedPO.rfq.title : '') || ''
+        (selectedPO.rfq?.title && selectedPO.rfq.title !== 'Direct PO Master' ? selectedPO.rfq.title : '') ||
+        selectedPO.title ||
+        selectedPO.poNumber ||
+        'Purchase Order Material/Services'
       );
 
       setLineItems([
         {
           id: `item_0_${Date.now()}`,
-          itemName: fallbackTitle || '',
+          itemName: fallbackTitle || 'Purchase Order Material/Services',
           orderedQty: 1,
           receivedQty: 1,
           acceptedQty: 1,
           rejectedQty: 0,
-          unitPrice: Number(selectedPO.totalAmount || 0),
+          unitPrice: Number(selectedPO.totalAmount || selectedPO.grandTotal || 0),
           unit: 'Units',
           remarks: 'Inspected - Verified',
         },
       ]);
     }
+
+    // Auto-fill warehouse location & dispatch note if available on selected PO
+    if (selectedPO.warehouseLocation || selectedPO.deliveryLocation || selectedPO.shippingAddress) {
+      setWarehouseLocation(selectedPO.warehouseLocation || selectedPO.deliveryLocation || selectedPO.shippingAddress || '');
+    }
+    if (selectedPO.dispatchNoteNumber || selectedPO.vendorDispatchNoteNumber || selectedPO.vendorInvoiceNumber) {
+      setVendorDispatchNoteNumber(selectedPO.dispatchNoteNumber || selectedPO.vendorDispatchNoteNumber || selectedPO.vendorInvoiceNumber || '');
+    }
   }, [selectedPO]);
 
-  // Pre-select PO ONLY if poId is in URL query params
+  // Pre-select PO ONLY if poId is in URL query params or router state
   useEffect(() => {
-    if (!approvedPOs || approvedPOs.length === 0) return;
+    if (!rawPoList || rawPoList.length === 0) return;
     if (poIdParam) {
-      const match = approvedPOs.find((p) => String(p.id) === String(poIdParam) || String(p.poNumber) === String(poIdParam));
-      if (match) setSelectedPoId(String(match.id || match.poNumber));
+      const target = safeStr(poIdParam).toLowerCase().trim();
+      const match = rawPoList.find((p) => {
+        const pId = safeStr(p.id || (p as any)._id).toLowerCase().trim();
+        const pNum = safeStr(p.poNumber).toLowerCase().trim();
+        const rfqId = safeStr(p.rfqId).toLowerCase().trim();
+        return (pId && pId === target) || (pNum && pNum === target) || (rfqId && rfqId === target);
+      });
+      if (match) {
+        setSelectedPoId(String(match.id || match.poNumber));
+      }
     }
-  }, [poIdParam, approvedPOs]);
+  }, [poIdParam, rawPoList]);
 
   // Handle line item edits
   const handleUpdateItem = (id: string, field: keyof LineItemState, value: any) => {
@@ -592,7 +744,7 @@ export default function CreateGRNPage() {
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="">-- Select Incoming Vendor Invoice --</option>
-                  {invoicesList.map((inv) => (
+                  {displayInvoiceOptions.map((inv) => (
                     <option key={inv.id} value={inv.id}>
                       {inv.invoiceNumber} — {inv.vendorName || 'Vendor'} ({formatAmount(inv.amount || 0, currency)})
                     </option>
@@ -607,17 +759,20 @@ export default function CreateGRNPage() {
                 Purchase Order (PO Ref) *
               </label>
               <select
-                value={selectedPoId}
+                value={selectedPO ? safeStr(selectedPO.id || selectedPO.poNumber) : selectedPoId}
                 onChange={(e) => setSelectedPoId(e.target.value)}
                 disabled={poLoading}
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <option value="">-- Select Approved PO --</option>
-                {approvedPOs.map((po) => (
-                  <option key={po.id} value={po.id}>
-                    {po.poNumber} — {po.vendor?.name || 'Vendor'} ({formatAmount(po.totalAmount, currency)})
-                  </option>
-                ))}
+                {displayPOOptions.map((po) => {
+                  const optVal = safeStr(po.id || po.poNumber);
+                  return (
+                    <option key={optVal} value={optVal}>
+                      {po.poNumber} — {po.vendor?.name || 'Vendor'} ({formatAmount(po.totalAmount, currency)})
+                    </option>
+                  );
+                })}
               </select>
             </div>
 

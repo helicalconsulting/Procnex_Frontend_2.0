@@ -11,7 +11,8 @@ import type { User } from '../../types';
 import {
   Plus, Search, Eye, Edit3, Trash2, Users, Shield, UserCheck, UserX,
   ChevronLeft, ChevronRight, X, UserPlus, Mail, Phone, Building2,
-  Zap, LayoutList, LayoutGrid, CheckSquare, Smartphone, Clock
+  Zap, LayoutList, LayoutGrid, CheckSquare, Smartphone, Clock,
+  ShoppingCart, CheckCircle2, ArrowRight, ArrowLeft, Upload, FileText
 } from 'lucide-react';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
@@ -1215,13 +1216,13 @@ export default function UsersPage() {
                     <div className={`users-modal__type-card ${selectedUserType === 'rfq' ? 'users-modal__type-card--selected' : ''}`} onClick={() => setSelectedUserType('rfq')}>
                       <div className="users-modal__type-card-icon users-modal__type-card-icon--rfq"><ShoppingCart size={28} /></div>
                       <div className="users-modal__type-card-check">{selectedUserType === 'rfq' && <CheckCircle2 size={22} />}</div>
-                      <h3>RFQ User</h3>
+                      <h3>P2P User</h3>
                       <p>Create a user for company positions like Purchase Clerk, Store Keeper, etc.</p>
                     </div>
                     <div className={`users-modal__type-card ${selectedUserType === 'heliflow' ? 'users-modal__type-card--selected' : ''}`} onClick={() => setSelectedUserType('heliflow')}>
                       <div className="users-modal__type-card-icon users-modal__type-card-icon--heliflow"><Zap size={28} /></div>
                       <div className="users-modal__type-card-check">{selectedUserType === 'heliflow' && <CheckCircle2 size={22} />}</div>
-                      <h3>Procnex User</h3>
+                      <h3>Workflow User</h3>
                       <p>Platform user with full access. Requires document verification.</p>
                     </div>
                   </div>
@@ -1244,7 +1245,7 @@ export default function UsersPage() {
                   )}
                   <div className="users-modal__type-badge">
                     {selectedUserType === 'rfq' ? <ShoppingCart size={14} /> : <Zap size={14} />}
-                    {selectedUserType === 'rfq' ? 'RFQ User' : 'Procnex User'}
+                    {selectedUserType === 'rfq' ? 'P2P User' : 'Workflow User'}
                   </div>
                   <div className="users-modal__field">
                     <label className="users-modal__label">Full Name <span>*</span></label>

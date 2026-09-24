@@ -13,8 +13,8 @@ const SYSTEM_SUBDOMAINS = ['srm', 'app', 'www', 'api', 'dev', 'staging', 'procne
  * 4. Subdomain (e.g. helical.procnex.com -> HELICAL)
  */
 export function getTenantCompanyCode(): string | null {
-  // 1. Path check
-  const path = window.location.pathname;
+  // 1. Path check (/v/:companyCode/*)
+  const path = typeof window !== 'undefined' ? window.location.pathname : '';
   const match = path.match(/^\/v\/([a-zA-Z0-9_-]+)/);
   if (match && match[1]) {
     const codeFromPath = match[1].toUpperCase();
@@ -24,30 +24,52 @@ export function getTenantCompanyCode(): string | null {
     }
   }
 
-  // 2. Query param check
-  const params = new URLSearchParams(window.location.search);
-  const qCompany = params.get('company') || params.get('companyCode');
-  if (qCompany?.trim()) {
-    const codeFromQuery = qCompany.trim().toUpperCase();
-    localStorage.setItem('vendor_company_code', codeFromQuery);
-    return codeFromQuery;
+  // 2. Query param check (?company=helical or ?companyCode=helical)
+  if (typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search);
+    const qCompany = params.get('company') || params.get('companyCode');
+    if (qCompany?.trim()) {
+      const codeFromQuery = qCompany.trim().toUpperCase();
+      localStorage.setItem('vendor_company_code', codeFromQuery);
+      return codeFromQuery;
+    }
   }
 
-  // 3. LocalStorage check
-  const storedCode = localStorage.getItem('vendor_company_code');
-  if (storedCode?.trim()) {
-    return storedCode.trim().toUpperCase();
+  // 3. LocalStorage check (Scoped ONLY to vendor routes to prevent polluting internal procurement pages)
+  const isVendorRoute = path.startsWith('/v/') || path.startsWith('/vendor');
+  if (isVendorRoute) {
+    const storedCode = localStorage.getItem('vendor_company_code');
+    if (storedCode?.trim()) {
+      return storedCode.trim().toUpperCase();
+    }
+    try {
+      const userStr = localStorage.getItem('heliflow_user');
+      if (userStr) {
+        const userObj = JSON.parse(userStr);
+        if (userObj?.companyCode?.trim()) {
+          const uCode = userObj.companyCode.trim().toUpperCase();
+          localStorage.setItem('vendor_company_code', uCode);
+          return uCode;
+        }
+      }
+    } catch {
+      // ignore JSON parse errors
+    }
   }
 
   // 4. Subdomain check
-  const host = window.location.hostname;
-  const parts = host.split('.');
-  if (parts.length >= 3) {
-    const sub = parts[0].toLowerCase();
-    if (!SYSTEM_SUBDOMAINS.includes(sub)) {
-      const codeFromSub = sub.toUpperCase();
-      localStorage.setItem('vendor_company_code', codeFromSub);
-      return codeFromSub;
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    const parts = host.split('.');
+    if (parts.length >= 3) {
+      const sub = parts[0].toLowerCase();
+      if (!SYSTEM_SUBDOMAINS.includes(sub)) {
+        const codeFromSub = sub.toUpperCase();
+        if (isVendorRoute) {
+          localStorage.setItem('vendor_company_code', codeFromSub);
+        }
+        return codeFromSub;
+      }
     }
   }
 

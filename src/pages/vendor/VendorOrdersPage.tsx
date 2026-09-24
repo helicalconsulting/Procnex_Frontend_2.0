@@ -15,6 +15,7 @@ import { cn } from '../../lib/utils';
 import type { VendorOrderMock } from '../../mocks/vendorPortal.mock';
 import { vendorPortalService } from '../../services/vendorPortalService';
 import { downloadPurchaseOrderAsPdf } from '../../utils/pdfDownload';
+import { getVendorPath } from '../../utils/tenantResolver';
 
 type Tone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
 
@@ -365,7 +366,7 @@ export default function VendorOrdersPage() {
                     {/* 6. Action Footer (Download PO & Invoices) */}
                     <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
                       {['DELIVERED', 'COMPLETED'].includes((order.status || '').toUpperCase()) && (
-                        <Link to="/vendor/invoices" className={buttonVariants({ variant: 'secondary', size: 'sm' })}>
+                        <Link to={getVendorPath('/vendor/invoices')} className={buttonVariants({ variant: 'secondary', size: 'sm' })}>
                           <Receipt className="size-3.5" /> View Invoices
                         </Link>
                       )}

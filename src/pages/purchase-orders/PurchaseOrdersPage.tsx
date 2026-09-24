@@ -11,6 +11,7 @@ import {
   Eye,
   FileText,
   Package,
+  PackageCheck,
   Plus,
   Search,
   ShoppingCart,
@@ -589,6 +590,14 @@ export default function PurchaseOrdersPage() {
                               title={`View ${order.poNumber}`}
                             >
                               <Eye className="size-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => navigate(`/procurement/create-grn?poId=${order.id || order.poNumber}`, { state: { po: order } })}
+                              title={`Create GRN for ${order.poNumber}`}
+                            >
+                              <PackageCheck className="size-4 text-emerald-600 dark:text-emerald-400" />
                             </Button>
                             <Button
                               variant="ghost"

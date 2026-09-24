@@ -435,38 +435,86 @@ img {
   background: transparent;
 }
 
-/* ─── Global Document Preview Styling (Pure White Background & Pure Black Text) ─── */
+/* ─── Global Document Preview Styling (Pure White Paper & Dark Text in All Modes) ─── */
 .ctr-detail__doc-preview,
 [data-theme="dark"] .ctr-detail__doc-preview,
+.dark .ctr-detail__doc-preview,
 .vcd-doc-preview,
 [data-theme="dark"] .vcd-doc-preview,
+.dark .vcd-doc-preview,
 .vcd-doc-preview__body,
 [data-theme="dark"] .vcd-doc-preview__body,
+.dark .vcd-doc-preview__body,
 .ctr-template-preview-content,
 [data-theme="dark"] .ctr-template-preview-content,
+.dark .ctr-template-preview-content,
 .va-preview-content,
 [data-theme="dark"] .va-preview-content,
+.dark .va-preview-content,
 .onb-template-preview-content,
-[data-theme="dark"] .onb-template-preview-content {
+[data-theme="dark"] .onb-template-preview-content,
+.dark .onb-template-preview-content {
   background: #ffffff !important;
-  color: #000000 !important;
+  color: #111827 !important;
   border-color: #cbd5e1 !important;
 }
 
-.ctr-detail__doc-preview *,
-[data-theme="dark"] .ctr-detail__doc-preview *,
+.ctr-detail__doc-preview p,
+.ctr-detail__doc-preview span,
+.ctr-detail__doc-preview div,
+.ctr-detail__doc-preview h1,
+.ctr-detail__doc-preview h2,
+.ctr-detail__doc-preview h3,
+.ctr-detail__doc-preview h4,
+.ctr-detail__doc-preview td,
+.ctr-detail__doc-preview th,
+.ctr-detail__doc-preview strong,
+[data-theme="dark"] .ctr-detail__doc-preview p,
+[data-theme="dark"] .ctr-detail__doc-preview span,
+[data-theme="dark"] .ctr-detail__doc-preview div,
+[data-theme="dark"] .ctr-detail__doc-preview h1,
+[data-theme="dark"] .ctr-detail__doc-preview h2,
+[data-theme="dark"] .ctr-detail__doc-preview h3,
+[data-theme="dark"] .ctr-detail__doc-preview h4,
+[data-theme="dark"] .ctr-detail__doc-preview td,
+[data-theme="dark"] .ctr-detail__doc-preview th,
+[data-theme="dark"] .ctr-detail__doc-preview strong,
+.dark .ctr-detail__doc-preview p,
+.dark .ctr-detail__doc-preview span,
+.dark .ctr-detail__doc-preview div,
+.dark .ctr-detail__doc-preview h1,
+.dark .ctr-detail__doc-preview h2,
+.dark .ctr-detail__doc-preview h3,
+.dark .ctr-detail__doc-preview h4,
+.dark .ctr-detail__doc-preview td,
+.dark .ctr-detail__doc-preview th,
+.dark .ctr-detail__doc-preview strong,
 .vcd-doc-preview *,
 [data-theme="dark"] .vcd-doc-preview *,
-.vcd-doc-preview__body *,
-[data-theme="dark"] .vcd-doc-preview__body *,
+.dark .vcd-doc-preview *,
 .ctr-template-preview-content *,
 [data-theme="dark"] .ctr-template-preview-content *,
+.dark .ctr-template-preview-content *,
 .va-preview-content *,
 [data-theme="dark"] .va-preview-content *,
+.dark .va-preview-content *,
 .onb-template-preview-content *,
-[data-theme="dark"] .onb-template-preview-content * {
-  color: #000000 !important;
-  background-color: transparent !important;
+[data-theme="dark"] .onb-template-preview-content *,
+.dark .onb-template-preview-content * {
+  color: #111827 !important;
+}
+
+.ctr-detail__doc-preview .parties,
+[data-theme="dark"] .ctr-detail__doc-preview .parties,
+.dark .ctr-detail__doc-preview .parties,
+.ctr-template-preview-content .parties,
+[data-theme="dark"] .ctr-template-preview-content .parties,
+.dark .ctr-template-preview-content .parties,
+.va-preview-content .parties,
+[data-theme="dark"] .va-preview-content .parties,
+.dark .va-preview-content .parties {
+  background: #f8fafc !important;
+  border: 1px solid #cbd5e1 !important;
 }
 
 /* ─── Theme Transition Helper ─────────────────────────────── */

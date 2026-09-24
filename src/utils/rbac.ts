@@ -323,6 +323,12 @@ export const VENDOR_NAVIGATION_MENU: MenuItem[] = [
     roles: [RoleName.VENDOR],
   },
   {
+    id: 'vendor-invoices',
+    label: 'My Invoices & Dispatches',
+    path: '/vendor/invoices',
+    roles: [RoleName.VENDOR],
+  },
+  {
     id: 'vendor-agreements',
     label: 'Agreements',
     path: '/vendor/agreements',

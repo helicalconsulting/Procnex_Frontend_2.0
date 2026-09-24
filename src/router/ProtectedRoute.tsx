@@ -1,4 +1,4 @@
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { isVendor } from '../utils/rbac';
 import { getTenantCompanyCode } from '../utils/tenantResolver';
@@ -10,6 +10,7 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ allowedRoles, requireVendor }: ProtectedRouteProps) {
   const { isAuthenticated, isLoading, hasAnyRole, roles } = useAuth();
+  const location = useLocation();
 
   // Show nothing while checking session (prevents flash)
   if (isLoading) {
@@ -34,6 +35,11 @@ export function ProtectedRoute({ allowedRoles, requireVendor }: ProtectedRoutePr
   if (requireVendor) {
     if (!isVendor(roles)) {
       return <Navigate to="/dashboard" replace />;
+    }
+    const companyCode = getTenantCompanyCode();
+    if (location.pathname.startsWith('/vendor') && companyCode) {
+      const target = location.pathname.replace('/vendor', `/v/${companyCode.toLowerCase()}`);
+      return <Navigate to={`${target}${location.search}${location.hash}`} replace />;
     }
     return <Outlet />;
   }

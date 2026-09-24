@@ -867,13 +867,15 @@ export default function VendorCreateInvoicePage() {
             <img src={finalLogoUrl} alt={companyName || 'Procnex'} className="po-doc__logo" />
             <div className="po-doc__company-info">
               <h1 className="po-doc__company-name">
-                {companyName && !companyName.includes('Procnex') ? companyName : 'Procnex'}
+                {companyName || 'Procnex'}
               </h1>
               <p className="po-doc__company-detail">
-                {selectedPO?.companyAddress || selectedPO?.shipToAddress || '232,Sahukara Bareilly 232'}
+                {selectedPO?.companyAddress || selectedPO?.shipToAddress || (companyName || 'Procnex') + ' • Corporate Headquarters'}
               </p>
               <p className="po-doc__company-detail">
-                Phone: {companyPhone || selectedPO?.companyPhone || '+918272811866'} &nbsp;|&nbsp; Email: {companyEmail || selectedPO?.companyEmail || 'nischalagarwal674@gmail.com'}
+                {companyPhone || selectedPO?.companyPhone ? `Phone: ${companyPhone || selectedPO?.companyPhone}` : ''}
+                {(companyPhone || selectedPO?.companyPhone) && (companyEmail || selectedPO?.companyEmail) ? ' | ' : ''}
+                {companyEmail || selectedPO?.companyEmail ? `Email: ${companyEmail || selectedPO?.companyEmail}` : ''}
               </p>
               <p className="po-doc__company-detail">
                 {selectedPO?.companyWebsite || 'www.procnex.com'}
@@ -911,20 +913,20 @@ export default function VendorCreateInvoicePage() {
         <div className="po-doc__parties">
           <div className="po-doc__party-box">
             <h3 className="po-doc__party-heading">VENDOR / SUPPLIER</h3>
-            <p className="po-doc__party-name">{user?.fullName || selectedPO?.vendor?.name || selectedPO?.vendorName || 'Embedded'}</p>
-            <p className="po-doc__party-detail">Contact: {selectedPO?.vendor?.contactPerson || selectedPO?.vendorContactPerson || user?.fullName || 'Nischal Agarwal'}</p>
-            <p className="po-doc__party-detail">Address: {selectedPO?.vendor?.address || selectedPO?.vendorAddress || '232,Sahukara Bareilly 232'}</p>
-            <p className="po-doc__party-detail">Phone: {selectedPO?.vendor?.phone || selectedPO?.vendorPhone || '+918272811866'}</p>
-            <p className="po-doc__party-detail">Email: {user?.email || selectedPO?.vendor?.email || selectedPO?.vendorEmail || 'nischalagarwal674@gmail.com'}</p>
-            <p className="po-doc__party-detail">GST/VAT: {selectedPO?.vendor?.gstVat || selectedPO?.vendorGstVat || 'VAT60707070706'}</p>
+            <p className="po-doc__party-name">{user?.fullName || selectedPO?.vendor?.name || selectedPO?.vendorName || 'Supplier'}</p>
+            <p className="po-doc__party-detail">Contact: {selectedPO?.vendor?.contactPerson || selectedPO?.vendorContactPerson || user?.fullName || 'Sales / Accounts'}</p>
+            <p className="po-doc__party-detail">Address: {selectedPO?.vendor?.address || selectedPO?.vendorAddress || 'Vendor Address'}</p>
+            <p className="po-doc__party-detail">Phone: {selectedPO?.vendor?.phone || selectedPO?.vendorPhone || '—'}</p>
+            <p className="po-doc__party-detail">Email: {user?.email || selectedPO?.vendor?.email || selectedPO?.vendorEmail || '—'}</p>
+            <p className="po-doc__party-detail">GST/VAT: {selectedPO?.vendor?.gstVat || selectedPO?.vendorGstVat || '—'}</p>
           </div>
           <div className="po-doc__party-box">
             <h3 className="po-doc__party-heading">BILL TO (BUYER / CLIENT)</h3>
             <p className="po-doc__party-name">{buyerName || companyName || 'Procnex'}</p>
             <p className="po-doc__party-detail">Warehouse: {selectedPO?.shipToWarehouse || 'Central Warehouse'}</p>
-            <p className="po-doc__party-detail">Address: {selectedPO?.shipToAddress || '232,Sahukara Bareilly 232'}</p>
-            <p className="po-doc__party-detail">Contact: {selectedPO?.shipToContact || 'Nischal Agarwal'}</p>
-            <p className="po-doc__party-detail">Phone: {companyPhone || selectedPO?.shipToPhone || '+918272811866'}</p>
+            <p className="po-doc__party-detail">Address: {selectedPO?.shipToAddress || 'Corporate Headquarters'}</p>
+            <p className="po-doc__party-detail">Contact: {selectedPO?.shipToContact || 'Accounts Payable / Treasury'}</p>
+            <p className="po-doc__party-detail">Phone: {companyPhone || selectedPO?.shipToPhone || '—'}</p>
           </div>
         </div>
 

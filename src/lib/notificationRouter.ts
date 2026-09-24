@@ -15,55 +15,94 @@ export function getNotificationTargetUrl(
   const rfqMatch = combined.match(/\brfq-[a-z0-9_-]+\b/i);
   const piMatch = combined.match(/\bpi-[a-z0-9_-]+\b/i);
   const payMatch = combined.match(/\b(pay|pv)-[a-z0-9_-]+\b/i);
-  const contractMatch = combined.match(/\b(cnt|ctr|cont)-[a-z0-9_-]+\b/i);
+  const contractMatch = combined.match(/\b(cnt|ctr|cont|con)-[a-z0-9_-]+\b/i);
+  const qtnMatch = combined.match(/\bqtn-[a-z0-9_-]+\b/i);
 
-  // 1. Approvals (PO, PR, PI, Payment approval requests & status updates)
+  // 1. Quotations & Quotation Approvals (Quotation Approval Module -> /quotations)
   if (
-    lower.includes('approval') ||
-    lower.includes('approver') ||
-    lower.includes('level 1') ||
-    lower.includes('level 2') ||
-    lower.includes('level 3') ||
-    lower.includes('pending review') ||
-    lower.includes('approval chain')
+    lower.includes('quotation') ||
+    lower.includes('quote') ||
+    lower.includes('bid') ||
+    lower.includes('winning quotation') ||
+    qtnMatch
   ) {
-    if (poMatch) return `/approvals?search=${encodeURIComponent(poMatch[0])}`;
-    if (prMatch) return `/approvals?search=${encodeURIComponent(prMatch[0])}`;
-    if (piMatch) return `/approvals?search=${encodeURIComponent(piMatch[0])}`;
-    if (payMatch) return `/approvals?search=${encodeURIComponent(payMatch[0])}`;
-    return '/approvals';
+    if (rfqMatch) return `/quotations?rfq=${encodeURIComponent(rfqMatch[0])}`;
+    if (qtnMatch) return `/quotations?search=${encodeURIComponent(qtnMatch[0])}`;
+    return '/quotations';
   }
 
-  // 2. Purchase Orders
+  // 2. RFQ & RFQ Approvals (RFQ Module -> /rfq)
+  if (lower.includes('rfq') || rfqMatch) {
+    if (rfqMatch) return `/rfq?search=${encodeURIComponent(rfqMatch[0])}`;
+    return '/rfq';
+  }
+
+  // 3. Purchase Orders & PO Approvals
   if (lower.includes('purchase order') || lower.includes('po ') || poMatch) {
+    if (
+      lower.includes('approval') ||
+      lower.includes('approver') ||
+      lower.includes('level') ||
+      lower.includes('pending review')
+    ) {
+      if (poMatch) return `/approvals?search=${encodeURIComponent(poMatch[0])}`;
+      return '/approvals';
+    }
     if (poMatch) return `/procurement/purchase-orders?search=${encodeURIComponent(poMatch[0])}`;
     return '/procurement/purchase-orders';
   }
 
-  // 3. Purchase Requisitions
+  // 4. Purchase Requisitions & PR Approvals
   if (lower.includes('purchase requisition') || lower.includes('requisition') || prMatch) {
+    if (
+      lower.includes('approval') ||
+      lower.includes('approver') ||
+      lower.includes('level') ||
+      lower.includes('pending review')
+    ) {
+      if (prMatch) return `/approvals?search=${encodeURIComponent(prMatch[0])}`;
+      return '/approvals';
+    }
     if (prMatch) return `/procurement/purchase-requisitions?search=${encodeURIComponent(prMatch[0])}`;
     return '/procurement/purchase-requisitions';
   }
 
-  // 4. Accounts Payable / Purchase Invoices
+  // 5. Accounts Payable / Purchase Invoices & PI Approvals
   if (
     lower.includes('purchase invoice') ||
     lower.includes('invoice') ||
     lower.includes('accounts payable') ||
     piMatch
   ) {
+    if (
+      lower.includes('approval') ||
+      lower.includes('approver') ||
+      lower.includes('level') ||
+      lower.includes('pending review')
+    ) {
+      if (piMatch) return `/approvals?search=${encodeURIComponent(piMatch[0])}`;
+      return '/approvals';
+    }
     if (piMatch) return `/accounts-payable?search=${encodeURIComponent(piMatch[0])}`;
     return '/accounts-payable';
   }
 
-  // 5. Payment Vouchers & Payments
+  // 6. Payment Vouchers & Payment Approvals
   if (lower.includes('payment') || lower.includes('voucher') || payMatch) {
+    if (
+      lower.includes('approval') ||
+      lower.includes('approver') ||
+      lower.includes('level') ||
+      lower.includes('pending review')
+    ) {
+      if (payMatch) return `/approvals?search=${encodeURIComponent(payMatch[0])}`;
+      return '/approvals';
+    }
     if (payMatch) return `/payments?search=${encodeURIComponent(payMatch[0])}`;
     return '/payments';
   }
 
-  // 6. Contracts & Digital Agreements
+  // 7. Contracts & Digital Agreements
   if (
     lower.includes('contract') ||
     lower.includes('agreement') ||
@@ -74,7 +113,7 @@ export function getNotificationTargetUrl(
     return '/contracts';
   }
 
-  // 7. Onboarding & Vendor Compliance
+  // 8. Onboarding & Vendor Compliance
   if (
     lower.includes('onboarding') ||
     lower.includes('uploaded') ||
@@ -86,21 +125,22 @@ export function getNotificationTargetUrl(
     return '/onboarding/queue';
   }
 
-  // 8. Goods Receipt Note (GRN)
+  // 9. Goods Receipt Note (GRN)
   if (lower.includes('grn') || lower.includes('goods receipt') || lower.includes('receipt')) {
     return '/procurement/goods-receipt';
   }
 
-  // 9. Quotations & Vendor Bids
-  if (lower.includes('quotation') || lower.includes('bid')) {
-    if (rfqMatch) return `/quotations?rfq=${encodeURIComponent(rfqMatch[0])}`;
-    return '/quotations';
-  }
-
-  // 10. RFQ
-  if (lower.includes('rfq') || rfqMatch) {
-    if (rfqMatch) return `/rfq?search=${encodeURIComponent(rfqMatch[0])}`;
-    return '/rfq';
+  // 10. Generic Approvals Fallback
+  if (
+    lower.includes('approval') ||
+    lower.includes('approver') ||
+    lower.includes('level 1') ||
+    lower.includes('level 2') ||
+    lower.includes('level 3') ||
+    lower.includes('pending review') ||
+    lower.includes('approval chain')
+  ) {
+    return '/approvals';
   }
 
   // 11. Vendor Management
@@ -118,21 +158,29 @@ export function getNotificationTargetUrl(
 export function getVendorNotificationTargetUrl(
   title: string,
   message: string = '',
-  rfqId?: string
+  rfqId?: string,
+  companyCode?: string
 ): string {
   const combined = `${title} ${message}`.toLowerCase();
+  const base = companyCode ? `/v/${companyCode}` : '/vendor';
 
   if (combined.includes('contract') || combined.includes('agreement') || combined.includes('sign')) {
-    return '/vendor/contracts';
+    return `${base}/contracts`;
   }
   if (combined.includes('invoice') || combined.includes('payment') || combined.includes('voucher')) {
-    return '/vendor/invoices';
+    return `${base}/invoices`;
+  }
+  if (combined.includes('order') || combined.includes('po-')) {
+    return `${base}/orders`;
+  }
+  if (combined.includes('quotation') || combined.includes('quote') || combined.includes('qtn-') || combined.includes('bid')) {
+    return `${base}/quotations`;
   }
   if (combined.includes('profile') || combined.includes('bank') || combined.includes('document')) {
-    return '/vendor/profile';
+    return `${base}/profile`;
   }
   if (rfqId) {
-    return `/vendor/rfqs?rfq=${encodeURIComponent(rfqId)}`;
+    return `${base}/rfqs?rfq=${encodeURIComponent(rfqId)}`;
   }
-  return '/vendor/rfqs';
+  return `${base}/rfqs`;
 }

@@ -470,7 +470,7 @@ async function mockInvoices(): Promise<VendorInvoiceMock[]> {
 
 async function apiInvoices(): Promise<VendorInvoiceMock[]> {
   try {
-    const data = await vendorFetch<{ invoices?: VendorInvoiceMock[] }>('/erp-data');
+    const data = await vendorFetch<{ invoices?: VendorInvoiceMock[] }>('/invoices', { cacheTtlMs: 0 });
     return (data.invoices as VendorInvoiceMock[]) ?? [];
   } catch {
     return [];

@@ -632,12 +632,14 @@ export default function VendorContractDetailPage() {
                 <Download className="size-3.5" /> Download PDF
               </Button>
             </div>
-            <div className="p-6 bg-card min-h-[400px]">
+            <div className="p-4 sm:p-8 bg-muted/30 min-h-[400px] flex justify-center">
               {contract.contentSnapshot ? (
-                <div
-                  className="prose dark:prose-invert max-w-none text-sm text-foreground leading-relaxed"
-                  dangerouslySetInnerHTML={{ __html: cleanDuplicateSignatures(contract.contentSnapshot) }}
-                />
+                <div className="vcd-doc-preview w-full max-w-4xl bg-white shadow-lg rounded-xl border border-slate-200">
+                  <div
+                    className="vcd-doc-preview__body p-6 sm:p-12 text-sm leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: cleanDuplicateSignatures(contract.contentSnapshot) }}
+                  />
+                </div>
               ) : (
                 <EmptyState
                   icon={FileText}

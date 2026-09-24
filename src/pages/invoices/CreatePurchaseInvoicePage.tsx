@@ -1757,17 +1757,20 @@ export default function CreatePurchaseInvoicePage() {
       <div className="grn-print-document po-document">
         <div className="po-doc__header">
           <div className="po-doc__header-left">
-            <img src={finalLogoUrl} alt={companyName || 'Procnex'} className="po-doc__logo" />
+            <img src={finalLogoUrl} alt={profile?.companyName || companyName || 'Procnex'} className="po-doc__logo" />
             <div className="po-doc__company-info">
               <h1 className="po-doc__company-name">
-                {companyName && !companyName.includes('Procnex') ? companyName : 'Procnex'}
+                {profile?.companyName || companyName || 'Procnex'}
               </h1>
               <p className="po-doc__company-detail">
-                {selectedPO?.companyAddress || selectedPO?.shipToAddress || '232,Sahukara Bareilly 232'}
+                {profile?.companyAddress
+                  ? [profile.companyAddress, profile.companyCity, profile.companyState, profile.companyCountry].filter(Boolean).join(', ')
+                  : selectedPO?.companyAddress || selectedPO?.shipToAddress || (profile?.companyName || companyName || 'Procnex') + ' • Corporate Headquarters'}
               </p>
               <p className="po-doc__company-detail">
-                Phone: {companyPhone || selectedPO?.companyPhone || '+918272811866'} &nbsp;|&nbsp; Email:{' '}
-                {companyEmail || selectedPO?.companyEmail || 'nischalagarwal674@gmail.com'}
+                {companyPhone || profile?.companyPhone || selectedPO?.companyPhone ? `Phone: ${companyPhone || profile?.companyPhone || selectedPO?.companyPhone}` : ''}
+                {(companyPhone || profile?.companyPhone || selectedPO?.companyPhone) && (companyEmail || profile?.companyEmail || selectedPO?.companyEmail) ? ' | ' : ''}
+                {companyEmail || profile?.companyEmail || selectedPO?.companyEmail ? `Email: ${companyEmail || profile?.companyEmail || selectedPO?.companyEmail}` : ''}
               </p>
               <p className="po-doc__company-detail">{selectedPO?.companyWebsite || 'www.procnex.com'}</p>
             </div>
@@ -1803,33 +1806,35 @@ export default function CreatePurchaseInvoicePage() {
         <div className="po-doc__parties">
           <div className="po-doc__party-box">
             <h3 className="po-doc__party-heading">VENDOR / SUPPLIER</h3>
-            <p className="po-doc__party-name">{vendorName || selectedPO?.vendor?.name || selectedPO?.vendorName || 'Embedded'}</p>
+            <p className="po-doc__party-name">{vendorName || selectedPO?.vendor?.name || selectedPO?.vendorName || 'Supplier'}</p>
             <p className="po-doc__party-detail">
-              Contact: {selectedPO?.vendor?.contactPerson || selectedPO?.vendorContactPerson || 'Nischal Agarwal'}
+              Contact: {selectedPO?.vendor?.contactPerson || selectedPO?.vendorContactPerson || 'Sales / Accounts'}
             </p>
             <p className="po-doc__party-detail">
-              Address: {selectedPO?.vendor?.address || selectedPO?.vendorAddress || '232,Sahukara Bareilly 232'}
+              Address: {selectedPO?.vendor?.address || selectedPO?.vendorAddress || 'Vendor Address'}
             </p>
             <p className="po-doc__party-detail">
-              Phone: {selectedPO?.vendor?.phone || selectedPO?.vendorPhone || '+918272811866'}
+              Phone: {selectedPO?.vendor?.phone || selectedPO?.vendorPhone || '—'}
             </p>
             <p className="po-doc__party-detail">
-              Email: {selectedPO?.vendor?.email || selectedPO?.vendorEmail || 'nischalagarwal674@gmail.com'}
+              Email: {selectedPO?.vendor?.email || selectedPO?.vendorEmail || '—'}
             </p>
             <p className="po-doc__party-detail">
-              GST/VAT: {selectedPO?.vendor?.gstVat || selectedPO?.vendorGstVat || 'VAT60707070706'}
+              GST/VAT: {selectedPO?.vendor?.gstVat || selectedPO?.vendorGstVat || '—'}
             </p>
           </div>
           <div className="po-doc__party-box">
             <h3 className="po-doc__party-heading">BILL TO (BUYER / CLIENT)</h3>
-            <p className="po-doc__party-name">{companyName && !companyName.includes('Procnex') ? companyName : 'Procnex'}</p>
+            <p className="po-doc__party-name">{profile?.companyName || companyName || 'Procnex'}</p>
             <p className="po-doc__party-detail">Warehouse: {selectedPO?.shipToWarehouse || 'Central Warehouse'}</p>
             <p className="po-doc__party-detail">
-              Address: {selectedPO?.shipToAddress || '232,Sahukara Bareilly 232'}
+              Address: {profile?.companyAddress
+                ? [profile.companyAddress, profile.companyCity, profile.companyState, profile.companyCountry].filter(Boolean).join(', ')
+                : selectedPO?.shipToAddress || 'Corporate Headquarters'}
             </p>
-            <p className="po-doc__party-detail">Contact: {selectedPO?.shipToContact || 'Nischal Agarwal'}</p>
+            <p className="po-doc__party-detail">Contact: {selectedPO?.shipToContact || 'Accounts Payable / Treasury'}</p>
             <p className="po-doc__party-detail">
-              Phone: {companyPhone || selectedPO?.shipToPhone || '+918272811866'}
+              Phone: {companyPhone || profile?.companyPhone || selectedPO?.shipToPhone || '—'}
             </p>
           </div>
         </div>

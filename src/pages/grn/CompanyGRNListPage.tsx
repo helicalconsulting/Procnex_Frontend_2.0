@@ -561,7 +561,7 @@ export default function CompanyGRNListPage() {
                                 size="sm"
                                 className="gap-1.5 shadow-xs"
                                 disabled={!canCreateGRN}
-                                onClick={() => navigate(`/procurement/create-company-grn?poId=${po.id}`)}
+                                onClick={() => navigate(`/procurement/create-company-grn?poId=${po.id || po.poNumber}`, { state: { po } })}
                               >
                                 <PackageCheck className="size-3.5" /> Create GRN
                               </Button>

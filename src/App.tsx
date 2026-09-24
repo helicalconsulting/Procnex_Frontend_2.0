@@ -155,7 +155,7 @@ export default function App() {
                         <Route path="/v/:companyCode/rfqs" element={page(VendorRFQsPage)} />
                         <Route path="/v/:companyCode/quotations" element={page(VendorQuotationsPage)} />
                         <Route path="/v/:companyCode/orders" element={page(VendorOrdersPage)} />
-                        <Route path="/v/:companyCode/invoices" element={<Navigate to="/procurement/grns" replace />} />
+                        <Route path="/v/:companyCode/invoices" element={page(VendorInvoicesPage)} />
                         <Route path="/v/:companyCode/create-invoice" element={page(VendorCreateInvoicePage)} />
                         <Route path="/v/:companyCode/profile" element={page(VendorProfilePage)} />
                         <Route path="/v/:companyCode/contracts" element={page(VendorContractsPage)} />
@@ -167,7 +167,7 @@ export default function App() {
                         <Route path="/vendor/rfqs" element={page(VendorRFQsPage)} />
                         <Route path="/vendor/quotations" element={page(VendorQuotationsPage)} />
                         <Route path="/vendor/orders" element={page(VendorOrdersPage)} />
-                        <Route path="/vendor/invoices" element={<Navigate to="/procurement/grns" replace />} />
+                        <Route path="/vendor/invoices" element={page(VendorInvoicesPage)} />
                         <Route path="/vendor/create-invoice" element={page(VendorCreateInvoicePage)} />
                         <Route path="/vendor/profile" element={page(VendorProfilePage)} />
                         <Route path="/vendor/contracts" element={page(VendorContractsPage)} />

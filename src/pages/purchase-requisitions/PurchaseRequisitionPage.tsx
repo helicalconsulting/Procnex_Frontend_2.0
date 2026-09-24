@@ -1247,11 +1247,11 @@ export default function PurchaseRequisitionPage() {
         className="po-print-area"
         style={{
           position: 'fixed',
-          left: 0,
+          left: '-9999px',
           top: 0,
           width: '794px',
           background: '#ffffff',
-          zIndex: -10,
+          zIndex: -9999,
           opacity: 1,
           pointerEvents: 'none',
           padding: '40px 48px',

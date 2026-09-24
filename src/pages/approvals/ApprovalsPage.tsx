@@ -277,7 +277,12 @@ export default function ApprovalsPage() {
     };
   }, [forceRefresh]);
 
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => searchParams.get('search') || '');
+
+  useEffect(() => {
+    const s = searchParams.get('search');
+    if (s !== null) setSearch(s);
+  }, [searchParams]);
   const [currentPage, setCurrentPage] = useState(1);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [actionSuccessData, setActionSuccessData] = useState<ActionSuccessModalData | null>(null);

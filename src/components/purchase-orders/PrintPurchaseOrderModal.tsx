@@ -32,10 +32,10 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
   const { companyName, logoUrl, profile } = useBranding();
   const printableRef = useRef<HTMLDivElement>(null);
 
-  const displayCompanyName = companyName && !companyName.includes('Procnex') ? companyName : (profile?.companyName || 'Helical Consulting');
+  const displayCompanyName = profile?.companyName || companyName || 'Procnex';
   const companyAddress = profile?.companyAddress
-    ? [profile.companyAddress, profile.companyCity, profile.companyCountry].filter(Boolean).join(', ')
-    : '232, Sahukara Bareilly 232 • Corporate Headquarters';
+    ? [profile.companyAddress, profile.companyCity, profile.companyState, profile.companyCountry].filter(Boolean).join(', ')
+    : (profile?.companyName || companyName || 'Procnex') + ' • Corporate Headquarters';
 
   // Parse vendor name if embedded in title like "Purchase Order for Ajabu Consulting — Direct PO Master"
   const derivedVendorName = data.vendorName || (() => {
@@ -109,7 +109,13 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
               )}
               {logoUrl && <h2 style={{ fontSize: 19, margin: '4px 0 2px 0' }}>{displayCompanyName}</h2>}
               <p>{companyAddress}</p>
-              <p>Phone: {profile?.companyPhone || '+91 8272811866'} | Email: {profile?.companyEmail || 'procurement@helical.com'}</p>
+              {(profile?.companyPhone || profile?.companyEmail) && (
+                <p>
+                  {profile?.companyPhone ? `Phone: ${profile.companyPhone}` : ''}
+                  {profile?.companyPhone && profile?.companyEmail ? ' | ' : ''}
+                  {profile?.companyEmail ? `Email: ${profile.companyEmail}` : ''}
+                </p>
+              )}
               {profile?.taxRegistrationNumber && (
                 <p style={{ fontWeight: 600, color: '#0f172a', marginTop: 2 }}>
                   GSTIN / VAT: {profile.taxRegistrationNumber}

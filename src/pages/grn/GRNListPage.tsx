@@ -17,6 +17,7 @@ import {
   ShoppingCart,
   CheckCircle2,
   Trash2,
+  Printer,
 } from 'lucide-react';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
 import { useAuth } from '../../context/AuthContext';
@@ -67,8 +68,7 @@ export default function GRNListPage() {
     String(user?.roleName || '').toLowerCase().includes('vendor') ||
     String(user?.roleName || '').toLowerCase().includes('supplier') ||
     !!(user as any)?.vendorId ||
-    !!(user as any)?.isVendor ||
-    Object.keys(permissions).length === 0;
+    !!(user as any)?.isVendor;
 
   const canCreateGRN =
     isVendor ||
@@ -87,6 +87,46 @@ export default function GRNListPage() {
   const [search, setSearch] = useState('');
   const [kpiFilter, setKpiFilter] = useState<'ALL' | 'PENDING' | 'GRN'>('ALL');
   const [selectedGrn, setSelectedGrn] = useState<GoodsReceivedNote | null>(null);
+  const [selectedInvoiceModal, setSelectedInvoiceModal] = useState<any>(null);
+
+  const handleViewInvoice = (po: any) => {
+    const targetPoId = String(po?.id || '').toLowerCase();
+    const targetPoNum = String(po?.poNumber || po?.purchaseOrder?.poNumber || '').toLowerCase();
+
+    const matchedInvoice = (invoicesList || []).find((inv: any) => {
+      const invPoId = String(inv.poId || '').toLowerCase();
+      const invPoNum = String(inv.poNumber || '').toLowerCase();
+      const invId = String(inv.id || '').toLowerCase();
+      const invNum = String(inv.invoiceNumber || '').toLowerCase();
+      return (
+        (targetPoId && (invPoId === targetPoId || invPoNum === targetPoId || invId === targetPoId)) ||
+        (targetPoNum && (invPoId === targetPoNum || invPoNum === targetPoNum || invNum === targetPoNum))
+      );
+    });
+
+    const rawItems = (po?.items && po.items.length > 0) ? po.items : (po?.purchaseOrder?.items || []);
+    const items = rawItems.length > 0 ? rawItems : [
+      {
+        id: 'inv_item_1',
+        itemName: po?.title || po?.poNumber || 'Purchased Materials / Services',
+        quantity: 1,
+        unitPrice: Number(po?.totalAmount || po?.amount || matchedInvoice?.amount || 0),
+        totalPrice: Number(po?.totalAmount || po?.amount || matchedInvoice?.amount || 0),
+      }
+    ];
+
+    setSelectedInvoiceModal({
+      invoiceNumber: matchedInvoice?.invoiceNumber || po?.dispatchNoteNumber || po?.vendorDispatchNoteNumber || `INV-${po?.poNumber || po?.id || '2026-001'}`,
+      poNumber: po?.poNumber || po?.purchaseOrder?.poNumber || matchedInvoice?.poNumber || '—',
+      vendorName: po?.vendor?.name || po?.vendorName || matchedInvoice?.vendorName || user?.fullName || 'Supplier',
+      amount: Number(matchedInvoice?.amount || po?.totalAmount || po?.grandTotal || 0),
+      dueDate: matchedInvoice?.dueDate || new Date().toISOString().slice(0, 10),
+      submittedAt: matchedInvoice?.submittedAt || (po?.createdAt ? String(po.createdAt).slice(0, 10) : new Date().toISOString().slice(0, 10)),
+      status: matchedInvoice?.status || 'INVOICED',
+      items,
+      po,
+    });
+  };
 
   // Column Customizer state for PO table and GRN table
   const PO_COLS = [
@@ -606,9 +646,20 @@ export default function GRNListPage() {
 
                               if (isAlreadyInvoiced) {
                                 return (
-                                  <Badge tone="success" className="h-8 text-xs font-medium gap-1.5 px-3 rounded-lg">
-                                    <CheckCircle2 className="size-3.5" /> Invoiced
-                                  </Badge>
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <Badge tone="success" className="h-8 text-xs font-medium gap-1.5 px-2.5 rounded-lg whitespace-nowrap">
+                                      <CheckCircle2 className="size-3.5" /> Invoiced
+                                    </Badge>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleViewInvoice(po)}
+                                      className="h-8 text-xs font-medium gap-1.5 px-2.5 rounded-lg border-primary/30 text-primary hover:bg-primary/10 whitespace-nowrap"
+                                      title="View Created Invoice / Dispatch Note"
+                                    >
+                                      <Eye className="size-3.5" /> View Invoice
+                                    </Button>
+                                  </div>
                                 );
                               }
 
@@ -618,9 +669,9 @@ export default function GRNListPage() {
                                   onClick={() => {
                                     const targetPoId = po.id || po.poNumber;
                                     if (isVendor) {
-                                      navigate(`/vendor/create-invoice?poId=${targetPoId}`);
+                                      navigate(`/vendor/create-invoice?poId=${targetPoId}`, { state: { po } });
                                     } else {
-                                      navigate(`/procurement/create-grn?poId=${targetPoId}`);
+                                      navigate(`/procurement/create-grn?poId=${targetPoId}`, { state: { po } });
                                     }
                                   }}
                                   className="h-8 text-xs font-medium gap-1.5 px-3 rounded-lg shadow-xs whitespace-nowrap"
@@ -762,9 +813,20 @@ export default function GRNListPage() {
                               <Trash2 className="size-3.5" />
                             </Button>
                             {isInvoiced ? (
-                              <Badge tone="success" className="h-8 text-xs font-medium gap-1.5 px-3 rounded-lg">
-                                <CheckCircle2 className="size-3.5" /> Invoiced
-                              </Badge>
+                              <div className="flex items-center justify-end gap-1.5">
+                                <Badge tone="success" className="h-8 text-xs font-medium gap-1.5 px-2.5 rounded-lg whitespace-nowrap">
+                                  <CheckCircle2 className="size-3.5" /> Invoiced
+                                </Badge>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 text-xs font-medium gap-1.5 px-2.5 rounded-lg border-primary/30 text-primary hover:bg-primary/10 whitespace-nowrap"
+                                  onClick={() => handleViewInvoice(poObj || grn)}
+                                  title="View Created Invoice"
+                                >
+                                  <Eye className="size-3.5" /> View Invoice
+                                </Button>
+                              </div>
                             ) : (
                               <Button
                                 variant="default"
@@ -891,6 +953,94 @@ export default function GRNListPage() {
                   </Button>
                 );
               })()}
+            </DialogFooter>
+          </DialogContent>
+        )}
+      </Dialog>
+
+      {/* View Invoice Modal */}
+      <Dialog open={!!selectedInvoiceModal} onOpenChange={(open) => { if (!open) setSelectedInvoiceModal(null); }}>
+        {selectedInvoiceModal && (
+          <DialogContent className="max-w-2xl">
+            <DialogHeader className="pr-10">
+              <div className="flex items-center gap-2">
+                <Receipt className="size-5 text-emerald-600 dark:text-emerald-400" />
+                <DialogTitle className="text-lg font-bold">
+                  Vendor Invoice Details — {selectedInvoiceModal.invoiceNumber}
+                </DialogTitle>
+              </div>
+              <DialogDescription>
+                Linked Purchase Order: <span className="font-bold text-foreground">{selectedInvoiceModal.poNumber}</span> | Supplier: <span className="font-bold text-foreground">{selectedInvoiceModal.vendorName}</span>
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2 text-sm">
+              {/* Invoice Summary Banner */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3.5 rounded-xl bg-muted/40 border border-border/70 text-xs">
+                <div>
+                  <span className="text-muted-foreground block font-medium">Total Amount:</span>
+                  <span className="font-bold text-sm text-emerald-600 dark:text-emerald-400">
+                    {formatAmount(selectedInvoiceModal.amount, companyDefaultCurrency)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block font-medium">Status:</span>
+                  <Badge tone="success" className="mt-0.5 text-[11px] font-semibold">
+                    <CheckCircle2 className="size-3 mr-1" /> {selectedInvoiceModal.status}
+                  </Badge>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block font-medium">Submitted Date:</span>
+                  <span className="font-semibold text-foreground">{selectedInvoiceModal.submittedAt}</span>
+                </div>
+              </div>
+
+              {/* Invoice Line Items Breakdown */}
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Invoiced Line Items Breakdown
+              </h4>
+              <div className="overflow-hidden rounded-xl border border-border/70">
+                <table className="w-full text-left text-xs">
+                  <thead className="border-b border-border/70 bg-muted/40 font-semibold text-muted-foreground">
+                    <tr>
+                      <th className="px-3.5 py-2.5">Item Description</th>
+                      <th className="px-3.5 py-2.5 text-center">Quantity</th>
+                      <th className="px-3.5 py-2.5 text-right">Unit Price</th>
+                      <th className="px-3.5 py-2.5 text-right">Total Price</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/50">
+                    {selectedInvoiceModal.items.map((it: any, idx: number) => {
+                      const qty = Number(it.quantity || it.orderedQty || 1);
+                      const price = Number(it.unitPrice || it.price || 0);
+                      const total = Number(it.totalPrice || (qty * price) || selectedInvoiceModal.amount);
+                      return (
+                        <tr key={it.id || idx}>
+                          <td className="px-3.5 py-2.5 font-medium text-foreground">
+                            {it.itemName || it.name || it.description || 'Line Item'}
+                          </td>
+                          <td className="px-3.5 py-2.5 text-center font-bold text-foreground">{qty}</td>
+                          <td className="px-3.5 py-2.5 text-right text-muted-foreground font-mono">
+                            {formatAmount(price, companyDefaultCurrency)}
+                          </td>
+                          <td className="px-3.5 py-2.5 text-right font-bold tabular-nums text-foreground">
+                            {formatAmount(total, companyDefaultCurrency)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2">
+              <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-1.5">
+                <Printer className="size-3.5" /> Print Invoice
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => setSelectedInvoiceModal(null)}>
+                Close
+              </Button>
             </DialogFooter>
           </DialogContent>
         )}

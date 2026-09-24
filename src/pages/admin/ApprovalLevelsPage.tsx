@@ -104,8 +104,8 @@ const MODULE_ALIAS_TO_KEY = MODULE_DEFS.reduce<Record<string, string>>((acc, mod
 }, {});
 
 const SYSTEM_LABELS: Record<SystemType, string> = {
-  rfq: 'RFQ System',
-  heliflow: 'Procnex System',
+  rfq: 'P2P Engine',
+  heliflow: 'Workflow Engine',
 };
 
 const TIME_LIMIT_PRESETS = [2, 4, 8, 12, 24, 48, 72];
@@ -392,7 +392,7 @@ export default function ApprovalLevelsPage() {
             onClick={() => setActiveSystem('rfq')}
           >
             <ShoppingCart size={15} />
-            RFQ System
+            P2P Engine
           </button>
           <button
             type="button"
@@ -400,7 +400,7 @@ export default function ApprovalLevelsPage() {
             onClick={() => setActiveSystem('heliflow')}
           >
             <Zap size={15} />
-            Procnex System
+            Workflow Engine
           </button>
         </div>
       </div>
@@ -435,7 +435,7 @@ export default function ApprovalLevelsPage() {
                   {isDisabled ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs font-semibold text-muted-foreground">
                       <Lock size={12} />
-                      {activeSystem === 'rfq' ? 'Procnex Only' : 'RFQ Only'}
+                      {activeSystem === 'rfq' ? 'Workflow Engine Only' : 'P2P Engine Only'}
                     </span>
                   ) : (
                     <button

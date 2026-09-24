@@ -75,7 +75,7 @@ import { getTenantCompanyCode } from '../utils/tenantResolver';
 
 export function authHeaders(extra?: Record<string, string>): HeadersInit {
   const token = localStorage.getItem(TOKEN_KEY) || localStorage.getItem('heliflow_vendor_token');
-  const companyCode = getTenantCompanyCode() || localStorage.getItem('vendor_company_code');
+  const companyCode = getTenantCompanyCode();
   return {
     'Content-Type': 'application/json',
     'X-Client-Instance-Id': getClientInstanceId(),
@@ -90,8 +90,8 @@ function methodOf(options: RequestInit): string {
 }
 
 function buildCacheKey(path: string, options: RequestInit): string {
-  const token = localStorage.getItem(TOKEN_KEY) || '';
-  const companyCode = getTenantCompanyCode() || localStorage.getItem('vendor_company_code') || '';
+  const token = localStorage.getItem(TOKEN_KEY) || localStorage.getItem('heliflow_vendor_token') || '';
+  const companyCode = getTenantCompanyCode() || '';
   return [methodOf(options), path, token, companyCode, getClientInstanceId()].join('|');
 }
 

@@ -37,9 +37,9 @@ function ensurePONumber(poNumber: string | null | undefined): string {
 }
 
 export default function PurchaseOrderDocument({ pr }: Props) {
-  const { companyName: brandingCompanyName, companyPhone: brandingPhone, companyEmail: brandingEmail, logoUrl } = useBranding();
+  const { companyName: brandingCompanyName, companyPhone: brandingPhone, companyEmail: brandingEmail, logoUrl, profile } = useBranding();
 
-  const finalCompanyName = pr.companyName || brandingCompanyName || 'Procnex Consulting';
+  const finalCompanyName = pr.companyName || profile?.companyName || brandingCompanyName || 'Procnex';
 
   const finalLogoUrl = logoUrl || (pr as any).companyLogoUrl || defaultHeliflowLogo;
 

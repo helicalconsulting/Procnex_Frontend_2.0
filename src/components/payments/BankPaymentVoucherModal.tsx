@@ -63,9 +63,9 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
   const { companyName, logoUrl, profile } = useBranding();
   const printableRef = useRef<HTMLDivElement>(null);
 
-  const displayCompanyName = companyName && companyName !== 'Procnex' ? companyName : (profile?.companyName || 'Procnex');
+  const displayCompanyName = profile?.companyName || companyName || 'Procnex';
   const companyAddress = profile?.companyAddress
-    ? [profile.companyAddress, profile.companyCity, profile.companyCountry].filter(Boolean).join(', ')
+    ? [profile.companyAddress, profile.companyCity, profile.companyState, profile.companyCountry].filter(Boolean).join(', ')
     : 'Corporate Finance & Treasury Division • Banking Operations';
 
   const currency = data.currency || 'INR';

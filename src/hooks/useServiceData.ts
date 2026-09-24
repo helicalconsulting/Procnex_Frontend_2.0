@@ -1,5 +1,6 @@
 import { useMemo, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getTenantCompanyCode } from '../utils/tenantResolver';
 
 export interface UseServiceDataResult<T> {
   data: T;
@@ -33,7 +34,7 @@ function hashKey(input: string): string {
 
 function getUserToken(): string {
   try {
-    return localStorage.getItem('heliflow_token') || 'no-token';
+    return localStorage.getItem('heliflow_token') || localStorage.getItem('heliflow_vendor_token') || 'no-token';
   } catch {
     return 'no-token';
   }
@@ -49,13 +50,14 @@ export function useServiceData<T>(
 
   const fetcherKey = useMemo(() => fetcher.toString(), [fetcher]);
   const userKey = useMemo(() => getUserToken(), []);
+  const companyKey = getTenantCompanyCode() || 'default';
   const depsHash = useMemo(() => JSON.stringify(deps), [deps]);
   const queryKey = useMemo(
     () => (options.cacheKey
-      ? ['svc', userKey, options.cacheKey]
-      : ['svc', userKey, hashKey(depsHash + '|' + fetcherKey)]
+      ? ['svc', userKey, companyKey, options.cacheKey]
+      : ['svc', userKey, companyKey, hashKey(depsHash + '|' + fetcherKey)]
     ),
-    [options.cacheKey, userKey, depsHash, fetcherKey]
+    [options.cacheKey, userKey, companyKey, depsHash, fetcherKey]
   );
 
   const cacheDisabled = options.cacheTtlMs === 0;

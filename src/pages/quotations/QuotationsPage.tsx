@@ -2584,7 +2584,7 @@ function ActionModal(props: {
 export default function QuotationsPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const rfqFromUrl = searchParams.get('rfq');
+  const rfqFromUrl = searchParams.get('rfq') || searchParams.get('search');
   const { formatAmount, convert, companyDefaultCurrency } = useCurrency();
   const [displayCurrency, setDisplayCurrency] = useState<string>('');
   const { user, roles, hasPermission } = useAuth();
