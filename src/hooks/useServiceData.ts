@@ -48,16 +48,18 @@ export function useServiceData<T>(
 ): UseServiceDataResult<T> {
   const queryClient = useQueryClient();
 
-  const fetcherKey = useMemo(() => fetcher.toString(), [fetcher]);
-  const userKey = useMemo(() => getUserToken(), []);
+  const fetcherStr = fetcher.toString();
+  const userKey = getUserToken();
   const companyKey = getTenantCompanyCode() || 'default';
   const depsHash = useMemo(() => JSON.stringify(deps), [deps]);
+  const cacheKey = options.cacheKey;
+
   const queryKey = useMemo(
-    () => (options.cacheKey
-      ? ['svc', userKey, companyKey, options.cacheKey]
-      : ['svc', userKey, companyKey, hashKey(depsHash + '|' + fetcherKey)]
+    () => (cacheKey
+      ? ['svc', userKey, companyKey, cacheKey]
+      : ['svc', userKey, companyKey, hashKey(depsHash + '|' + fetcherStr)]
     ),
-    [options.cacheKey, userKey, companyKey, depsHash, fetcherKey]
+    [cacheKey, userKey, companyKey, depsHash, fetcherStr]
   );
 
   const cacheDisabled = options.cacheTtlMs === 0;

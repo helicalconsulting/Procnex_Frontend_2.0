@@ -104,8 +104,11 @@ function bustRelatedCache(mutatedPath: string): void {
   let current = basePath;
   while (current.includes('/')) {
     current = current.replace(/\/[^/]+$/, '');
-    if (current) ancestors.push(current);
-    else break;
+    if (current && current !== '/admin' && current !== '/api' && current !== '/v1') {
+      ancestors.push(current);
+    } else {
+      break;
+    }
   }
 
   // Cross-invalidation for user/role mutations so counts update instantly

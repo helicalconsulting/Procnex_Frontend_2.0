@@ -119,6 +119,8 @@ function page(Component: ComponentType) {
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
+      staleTime: 60 * 1000, // 60s standard staleTime to prevent instant refetch on mount
+      gcTime: 5 * 60 * 1000, // 5m cache retention in memory
       refetchOnWindowFocus: false,
       retry: 2,
     },

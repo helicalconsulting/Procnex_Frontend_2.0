@@ -57,7 +57,7 @@ export function AuthLayout({
           <p className="mt-5 max-w-md text-[16px] leading-7 text-white/58">{tagline}</p>
 
           <ul className="mt-10 grid gap-4" aria-label="Platform capabilities">
-            {features.map((feature) => (
+            {(features || []).map((feature) => (
               <li key={feature} className="flex items-center gap-3 text-sm text-white/72">
                 <span className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-blue-400/15 text-blue-300 ring-1 ring-blue-300/15">
                   <Check size={14} strokeWidth={2.5} />

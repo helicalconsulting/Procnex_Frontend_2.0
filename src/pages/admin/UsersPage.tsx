@@ -202,27 +202,27 @@ export default function UsersPage() {
     () => adminService.listUsers().then((list) => list.map((u) => mapUser(u))),
     [] as MockUser[],
     [],
-    { cacheKey: 'users:list', cacheTtlMs: 0 }
+    { cacheKey: 'users:list' }
   );
   const { data: roleRecords } = useServiceData(
     () => adminService.listRoles(),
     [],
     [],
-    { cacheKey: 'users:roles', cacheTtlMs: 0 }
+    { cacheKey: 'users:roles' }
   );
 
   const { data: departments } = useServiceData(
     () => companySettingsService.listDepartments(),
     [],
     [],
-    { cacheKey: 'users:departments', cacheTtlMs: 0 }
+    { cacheKey: 'users:departments' }
   );
 
   const { data: positions } = useServiceData(
     () => companySettingsService.listPositions(),
     [],
     [],
-    { cacheKey: 'users:positions', cacheTtlMs: 0 }
+    { cacheKey: 'users:positions' }
   );
 
   // ── Company User Limit ──

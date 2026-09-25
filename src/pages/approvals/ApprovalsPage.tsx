@@ -212,8 +212,7 @@ export default function ApprovalsPage() {
       module: (moduleFilter !== 'ALL' && moduleFilter !== 'All') ? (CANONICAL_MODULE[moduleFilter] || moduleFilter) : undefined,
     }),
     [] as ApprovalTableRow[],
-    [moduleFilter],
-    { cacheTtlMs: 0 }
+    [moduleFilter]
   );
 
   useEffect(() => {

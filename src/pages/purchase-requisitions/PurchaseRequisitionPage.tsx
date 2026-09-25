@@ -36,12 +36,7 @@ function generatePONumber(): string {
 function calcItemTotal(item: Partial<PurchaseRequisitionItem>): number {
   const qty = item.quantity || 0;
   const price = item.unitPrice || 0;
-  const disc = item.discount || 0;
-  const tax = item.taxPercent || 0;
-  const netPrice = price * qty;
-  const discAmt = netPrice * (disc / 100);
-  const taxAmt = (netPrice - discAmt) * (tax / 100);
-  return netPrice - discAmt + taxAmt;
+  return price * qty;
 }
 
 function formatCurrency(amount: number, currency: string = 'INR'): string {
@@ -134,7 +129,18 @@ export default function PurchaseRequisitionPage() {
         if (!contractId) {
           const existing = await purchaseRequisitionService.getByRfqId(rfqId);
           if (existing) {
-            setPr(existing);
+            const items = (existing.items || []).map(i => ({ ...i, total: calcItemTotal(i) }));
+            const subtotal = items.reduce((s, i) => s + (i.quantity * i.unitPrice), 0);
+            setPr({
+              ...existing,
+              items,
+              subtotal,
+              taxTotal: 0,
+              discountTotal: 0,
+              shippingCharges: 0,
+              otherCharges: 0,
+              grandTotal: subtotal,
+            });
             setLoading(false);
             return;
           }
@@ -206,7 +212,7 @@ export default function PurchaseRequisitionPage() {
               quantity: ci.quantity || 1,
               unit: ci.unit || 'Pcs',
               unitPrice: Number(ci.unitPrice) || 0,
-              taxPercent: Number(ci.tax) > 0 ? Math.round((Number(ci.tax) / (Number(ci.unitPrice) * Number(ci.quantity))) * 100) : (contract?.taxPercentage || 18),
+              taxPercent: Number(ci.tax) > 0 ? Math.round((Number(ci.tax) / (Number(ci.unitPrice) * Number(ci.quantity))) * 100) : (contract?.taxPercentage || 0),
               discount: 0,
               total: 0,
             }))
@@ -218,7 +224,7 @@ export default function PurchaseRequisitionPage() {
                 quantity: ri.quantity || 0,
                 unit: ri.unit || 'Pcs',
                 unitPrice: qi ? Number(qi.unitPrice) : 0,
-                taxPercent: 18,
+                taxPercent: 0,
                 discount: 0,
                 total: 0,
               };
@@ -234,7 +240,7 @@ export default function PurchaseRequisitionPage() {
               quantity: 1,
               unit: 'Lot',
               unitPrice: availValue,
-              taxPercent: contract.taxPercentage || 18,
+              taxPercent: contract.taxPercentage || 0,
               discount: 0,
               total: 0,
             }
@@ -246,12 +252,8 @@ export default function PurchaseRequisitionPage() {
 
         const vendor = quotation?.vendor || rfqData.vendors?.[0] || contract?.vendor || {};
         const subtotal = items.reduce((s, i) => s + (i.quantity * i.unitPrice), 0);
-        const taxTotal = items.reduce((s, i) => {
-          const net = i.quantity * i.unitPrice;
-          const disc = net * (i.discount || 0) / 100;
-          return s + ((net - disc) * (i.taxPercent || 0) / 100);
-        }, 0);
-        const discountTotal = items.reduce((s, i) => s + ((i.quantity * i.unitPrice) * (i.discount || 0) / 100), 0);
+        const taxTotal = 0;
+        const discountTotal = 0;
 
         // Build internal notes with contract reference
         const internalNotes = contract 
@@ -287,16 +289,16 @@ export default function PurchaseRequisitionPage() {
           deliveryDate: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
           shippingTerms: contract?.deliveryTerms || contract?.freightTerms || 'FOB Destination',
           items: items.length > 0 ? items : [
-            { itemNo: 1, description: '', quantity: 1, unit: 'Pcs', unitPrice: 0, taxPercent: 18, discount: 0, total: 0 },
+            { itemNo: 1, description: '', quantity: 1, unit: 'Pcs', unitPrice: 0, taxPercent: 0, discount: 0, total: 0 },
           ],
           shippingCharges: 0,
           otherCharges: 0,
           internalNotes,
           specialInstructions: '',
           subtotal,
-          taxTotal,
-          discountTotal,
-          grandTotal: subtotal + taxTotal - discountTotal,
+          taxTotal: 0,
+          discountTotal: 0,
+          grandTotal: subtotal,
         });
       } catch (err: any) {
         setError(err?.message || 'Failed to load RFQ data');
@@ -333,18 +335,14 @@ export default function PurchaseRequisitionPage() {
     };
   }, [rfqId]);
 
-  // Recalculate totals whenever items or charges change
+  // Recalculate totals whenever items change
   const recalc = useCallback((draft: PurchaseRequisition): PurchaseRequisition => {
     const items = draft.items.map(i => ({ ...i, total: calcItemTotal(i) }));
     const subtotal = items.reduce((s, i) => s + (i.quantity * i.unitPrice), 0);
-    const discountTotal = items.reduce((s, i) => s + ((i.quantity * i.unitPrice) * (i.discount || 0) / 100), 0);
-    const taxTotal = items.reduce((s, i) => {
-      const net = i.quantity * i.unitPrice;
-      const disc = net * (i.discount || 0) / 100;
-      return s + ((net - disc) * (i.taxPercent || 0) / 100);
-    }, 0);
-    const grandTotal = subtotal - discountTotal + taxTotal + (draft.shippingCharges || 0) + (draft.otherCharges || 0);
-    return { ...draft, items, subtotal, taxTotal, discountTotal, grandTotal };
+    const discountTotal = 0;
+    const taxTotal = 0;
+    const grandTotal = subtotal;
+    return { ...draft, items, subtotal, taxTotal, discountTotal, grandTotal, shippingCharges: 0, otherCharges: 0 };
   }, []);
 
   // Update a field
@@ -395,7 +393,7 @@ export default function PurchaseRequisitionPage() {
       quantity: 1,
       unit: 'Pcs',
       unitPrice: 0,
-      taxPercent: 18,
+      taxPercent: 0,
       discount: 0,
       total: 0,
     }];
@@ -887,7 +885,7 @@ export default function PurchaseRequisitionPage() {
                   status: 'DRAFT',
                   // Reset items to one blank row — don't replicate previous PO items
                   items: [
-                    { itemNo: 1, description: '', quantity: 1, unit: 'Pcs', unitPrice: 0, taxPercent: 18, discount: 0, total: 0 },
+                    { itemNo: 1, description: '', quantity: 1, unit: 'Pcs', unitPrice: 0, taxPercent: 0, discount: 0, total: 0 },
                   ],
                   subtotal: 0,
                   taxTotal: 0,
@@ -1123,8 +1121,6 @@ export default function PurchaseRequisitionPage() {
                 <col className="pr-col--num" />
                 <col className="pr-col--unit" />
                 <col className="pr-col--price" />
-                <col className="pr-col--num" />
-                <col className="pr-col--num" />
                 <col className="pr-col--total" />
                 {!isReadOnly && <col className="pr-col--action" />}
               </colgroup>
@@ -1135,8 +1131,6 @@ export default function PurchaseRequisitionPage() {
                   <th className="pr-th--num">Qty {!isReadOnly && <span className="pr-required">*</span>}</th>
                   <th className="pr-th--unit">Unit</th>
                   <th className="pr-th--price">Unit Price {!isReadOnly && <span className="pr-required">*</span>}</th>
-                  <th className="pr-th--num">Tax %</th>
-                  <th className="pr-th--num">Disc %</th>
                   <th className="pr-th--total">Total</th>
                   {!isReadOnly && <th className="pr-th--action"></th>}
                 </tr>
@@ -1163,8 +1157,6 @@ export default function PurchaseRequisitionPage() {
                       />
                       {itemValidationErrors[idx]?.unitPrice && <span className="pr-field__error-msg">{itemValidationErrors[idx].unitPrice}</span>}
                     </td>
-                    <td className="pr-td--num"><input type="number" min="0" max="100" value={item.taxPercent} disabled={isFormDisabled} onChange={e => updateItem(idx, 'taxPercent', Math.max(0, Math.min(100, Number(e.target.value))))} /></td>
-                    <td className="pr-td--num"><input type="number" min="0" max="100" value={item.discount} disabled={isFormDisabled} onChange={e => updateItem(idx, 'discount', Math.max(0, Math.min(100, Number(e.target.value))))} /></td>
                     <td className="pr-td--total">{formatCurrency(item.total, pr.currency)}</td>
                     {!isReadOnly && (
                       <td className="pr-td--action">
@@ -1186,58 +1178,51 @@ export default function PurchaseRequisitionPage() {
           </div>
         </section>
 
-        {/* ── Totals ── */}
-        <section className="pr-section">
-          <div className="pr-section__header"><Calculator size={16} /> Totals</div>
-          <div className="pr-totals">
-            <div className="pr-totals__grid">
-              <div className="pr-total-row"><span>Subtotal</span><span>{formatCurrency(pr.subtotal, pr.currency)}</span></div>
-              <div className="pr-total-row"><span>Discount</span><span>-{formatCurrency(pr.discountTotal, pr.currency)}</span></div>
-              <div className="pr-total-row"><span>Tax</span><span>{formatCurrency(pr.taxTotal, pr.currency)}</span></div>
-              <div className="pr-total-row pr-total-row--charge">
-                <span>Shipping Charges</span>
-                <input type="number" min="0" value={pr.shippingCharges} disabled={isReadOnly} onChange={e => updateField('shippingCharges', Math.max(0, Number(e.target.value)))} />
+        {/* ── Notes & Totals Split Grid ── */}
+        <div className="pr-bottom-grid">
+          {/* ── Notes ── */}
+          <section className="pr-section">
+            <div className="pr-section__header"><FileText size={16} /> Notes</div>
+            <div className="pr-section__grid pr-section__grid--1col">
+              <div className="pr-field pr-field--wide">
+                <label>Internal Notes</label>
+                <textarea rows={3} value={pr.internalNotes} disabled={isReadOnly} onChange={e => updateField('internalNotes', e.target.value)} placeholder="Internal notes for procurement team..." />
               </div>
-              <div className="pr-total-row pr-total-row--charge">
-                <span>Other Charges</span>
-                <input type="number" min="0" value={pr.otherCharges} disabled={isReadOnly} onChange={e => updateField('otherCharges', Math.max(0, Number(e.target.value)))} />
-              </div>
-              <div className={`pr-total-row pr-total-row--grand ${contractBalance && pr.grandTotal > contractBalance.remainingValue ? 'pr-total-row--exceeded' : ''}`}>
-                <span>
-                  Grand Total
-                  {contractBalance && pr.grandTotal > contractBalance.remainingValue && (
-                    <span className="pr-total-row__limit-warning" style={{ display: 'block', fontSize: 12, fontWeight: 400, color: '#dc2626', marginTop: 2 }}>
-                      Exceeds remaining value by {formatCurrency(pr.grandTotal - contractBalance.remainingValue, contractBalance.currency || pr.currency)}
-                    </span>
-                  )}
-                </span>
-                <span>
-                  {formatCurrency(pr.grandTotal, pr.currency)}
-                  {contractBalance && (
-                    <span style={{ display: 'block', fontSize: 12, fontWeight: 400, color: (contractBalance.remainingValue - pr.grandTotal) >= 0 ? '#059669' : '#dc2626', marginTop: 2 }}>
-                      Remaining: {formatCurrency(Math.max(0, contractBalance.remainingValue - (pr.grandTotal > contractBalance.remainingValue ? 0 : pr.grandTotal)), contractBalance.currency || pr.currency)}
-                    </span>
-                  )}
-                </span>
+              <div className="pr-field pr-field--wide">
+                <label>Special Instructions</label>
+                <textarea rows={3} value={pr.specialInstructions} disabled={isReadOnly} onChange={e => updateField('specialInstructions', e.target.value)} placeholder="Special instructions for vendor..." />
               </div>
             </div>
-          </div>
-        </section>
+          </section>
 
-        {/* ── Notes ── */}
-        <section className="pr-section">
-          <div className="pr-section__header"><FileText size={16} /> Notes</div>
-          <div className="pr-section__grid pr-section__grid--2col">
-            <div className="pr-field pr-field--wide">
-              <label>Internal Notes</label>
-              <textarea rows={3} value={pr.internalNotes} disabled={isReadOnly} onChange={e => updateField('internalNotes', e.target.value)} placeholder="Internal notes for procurement team..." />
+          {/* ── Totals ── */}
+          <section className="pr-section pr-section--totals">
+            <div className="pr-section__header"><Calculator size={16} /> Totals</div>
+            <div className="pr-totals">
+              <div className="pr-totals__grid">
+                <div className="pr-total-row"><span>Subtotal</span><span>{formatCurrency(pr.subtotal, pr.currency)}</span></div>
+                <div className={`pr-total-row pr-total-row--grand ${contractBalance && pr.grandTotal > contractBalance.remainingValue ? 'pr-total-row--exceeded' : ''}`}>
+                  <span>
+                    Grand Total
+                    {contractBalance && pr.grandTotal > contractBalance.remainingValue && (
+                      <span className="pr-total-row__limit-warning" style={{ display: 'block', fontSize: 12, fontWeight: 400, color: '#dc2626', marginTop: 2 }}>
+                        Exceeds remaining value by {formatCurrency(pr.grandTotal - contractBalance.remainingValue, contractBalance.currency || pr.currency)}
+                      </span>
+                    )}
+                  </span>
+                  <span>
+                    {formatCurrency(pr.grandTotal, pr.currency)}
+                    {contractBalance && (
+                      <span style={{ display: 'block', fontSize: 12, fontWeight: 400, color: (contractBalance.remainingValue - pr.grandTotal) >= 0 ? '#059669' : '#dc2626', marginTop: 2 }}>
+                        Remaining: {formatCurrency(Math.max(0, contractBalance.remainingValue - (pr.grandTotal > contractBalance.remainingValue ? 0 : pr.grandTotal)), contractBalance.currency || pr.currency)}
+                      </span>
+                    )}
+                  </span>
+                </div>
+              </div>
             </div>
-            <div className="pr-field pr-field--wide">
-              <label>Special Instructions</label>
-              <textarea rows={3} value={pr.specialInstructions} disabled={isReadOnly} onChange={e => updateField('specialInstructions', e.target.value)} placeholder="Special instructions for vendor..." />
-            </div>
-          </div>
-        </section>
+          </section>
+        </div>
       </div>
 
       {/* ── Send to Vendor Modal ── */}

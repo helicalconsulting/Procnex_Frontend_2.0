@@ -377,7 +377,7 @@ export default function ContractDetailPage() {
     () => contractService.getContract(id!).then(r => r),
     null as { contract: Contract; activity: unknown[] } | null,
     [id],
-    { cacheKey: `contract:${id}`, cacheTtlMs: 0 }
+    { cacheKey: `contract:${id}` }
   );
 
   // Refresh contract data and balance instantly

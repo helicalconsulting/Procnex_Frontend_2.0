@@ -15,7 +15,7 @@ export default function PendingApprovalsWidget() {
     },
     [],
     [],
-    { cacheTtlMs: 0 }
+    { cacheKey: 'widget:pending-approvals' }
   );
 
   useEffect(() => {

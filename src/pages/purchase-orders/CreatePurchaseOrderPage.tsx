@@ -177,7 +177,7 @@ export default function CreatePurchaseOrderPage() {
 
   // Items Grid
   const [items, setItems] = useState<POItem[]>([
-    { id: '1', itemCode: 'ITEM-001', itemName: '', description: '', quantity: 1, unit: 'pcs', unitPrice: 0, taxPercent: 18 },
+    { id: '1', itemCode: 'ITEM-001', itemName: '', description: '', quantity: 1, unit: 'pcs', unitPrice: 0, taxPercent: 0 },
   ]);
 
   // Commercial Terms
@@ -371,7 +371,7 @@ export default function CreatePurchaseOrderPage() {
         quantity: 1,
         unit: 'pcs',
         unitPrice: 0,
-        taxPercent: 18,
+        taxPercent: 0,
       },
     ]);
   };
@@ -402,8 +402,8 @@ export default function CreatePurchaseOrderPage() {
   );
 
   const grandTotal = useMemo(
-    () => subtotal + taxTotal + (Number(shippingCharges) || 0) + (Number(otherCharges) || 0),
-    [subtotal, taxTotal, shippingCharges, otherCharges]
+    () => subtotal,
+    [subtotal]
   );
 
   // ── Submit / Save Draft Handler ──
@@ -1077,14 +1077,13 @@ export default function CreatePurchaseOrderPage() {
                   <th style={{ width: '90px' }}>Qty</th>
                   <th style={{ width: '80px' }}>Unit</th>
                   <th style={{ width: '130px' }}>Unit Price ({currency})</th>
-                  <th style={{ width: '90px' }}>Tax %</th>
                   <th style={{ width: '130px', textAlign: 'right' }}>Total</th>
                   <th style={{ width: '50px' }}></th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((item, index) => {
-                  const lineTotal = item.quantity * item.unitPrice * (1 + item.taxPercent / 100);
+                  const lineTotal = item.quantity * item.unitPrice * (1 + (item.taxPercent || 0) / 100);
                   return (
                     <tr key={item.id}>
                       <td style={{ textAlign: 'center', fontWeight: 600 }}>{index + 1}</td>
@@ -1157,16 +1156,6 @@ export default function CreatePurchaseOrderPage() {
                             const val = e.target.value;
                             handleItemChange(item.id, 'unitPrice', val === '' ? 0 : Number(val));
                           }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          className="cpo-table__input"
-                          value={item.taxPercent}
-                          onChange={(e) => handleItemChange(item.id, 'taxPercent', Number(e.target.value))}
                         />
                       </td>
                       <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-primary)' }}>
@@ -1242,30 +1231,6 @@ export default function CreatePurchaseOrderPage() {
               <div className="cpo-totals__row">
                 <span>Subtotal</span>
                 <span>{formatAmount(subtotal, currency)}</span>
-              </div>
-              <div className="cpo-totals__row">
-                <span>Estimated Taxes</span>
-                <span>{formatAmount(taxTotal, currency)}</span>
-              </div>
-              <div className="cpo-totals__row">
-                <span>Shipping Charges</span>
-                <input
-                  type="number"
-                  min="0"
-                  className="cpo-totals__input"
-                  value={shippingCharges}
-                  onChange={(e) => setShippingCharges(Number(e.target.value))}
-                />
-              </div>
-              <div className="cpo-totals__row">
-                <span>Other Charges</span>
-                <input
-                  type="number"
-                  min="0"
-                  className="cpo-totals__input"
-                  value={otherCharges}
-                  onChange={(e) => setOtherCharges(Number(e.target.value))}
-                />
               </div>
               <div className="cpo-totals__divider" />
               <div className="cpo-totals__grand">

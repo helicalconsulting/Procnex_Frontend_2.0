@@ -153,30 +153,30 @@ export default function GRNListPage() {
   const [showGrnColPanel, setShowGrnColPanel] = useState(false);
   const grnColBtnRef = useState<HTMLButtonElement | null>(null);
 
-  // Load GRNs (0ms cache TTL for instant fresh data)
+  // Load GRNs
   const { data: grnData, loading: grnLoading, forceRefresh: forceRefreshGRNs } = useServiceData(
     () => grnService.list({ search }),
     { grns: [], total: 0 },
     [search],
-    { cacheTtlMs: 0 }
+    { cacheKey: `grns:list:${search}` }
   );
   const grns = grnData.grns || [];
 
-  // Load Purchase Orders (0ms cache TTL)
+  // Load Purchase Orders
   const { data: poData, loading: poLoading, forceRefresh: forceRefreshPOs } = useServiceData(
     () => purchaseOrderService.list({ limit: 100 }),
     { orders: [], total: 0 },
     [],
-    { cacheTtlMs: 0 }
+    { cacheKey: 'pos:list' }
   );
   const poList = poData.orders || [];
 
-  // Load Invoices to check if GRN / PO is already invoiced (0ms cache TTL)
+  // Load Invoices to check if GRN / PO is already invoiced
   const { data: invoicesList, forceRefresh: forceRefreshInvoices } = useServiceData(
     () => invoiceService.list(),
     [],
     [],
-    { cacheTtlMs: 0 }
+    { cacheKey: 'invoices:list' }
   );
 
   useEffect(() => {

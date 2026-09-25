@@ -52,9 +52,9 @@ export default function AdminNotificationBell() {
     // Initial load
     void load();
 
-    // Polling fallback — SSE already handles real-time delivery,
-    // so polling at 15s is enough as a safety net.
-    const interval = setInterval(load, 15000);
+    // Polling fallback — SSE handles real-time delivery instantly,
+    // so a relaxed 3-minute safety net prevents network congestion.
+    const interval = setInterval(load, 180000);
 
     // SSE real-time listener — instant notification on vendor accept, etc.
     // SSE connection is managed centrally by AppLayout

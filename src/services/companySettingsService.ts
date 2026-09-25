@@ -302,10 +302,10 @@ async function mockGetCompanyProfile(): Promise<CompanyProfile> {
  * Company code defaults to 'HFL' for the public endpoint.
  */
 async function apiGetCompanyProfile(): Promise<CompanyProfile> {
-  const token = localStorage.getItem('heliflow_token');
+  const isBrowser = typeof window !== 'undefined' && typeof window.location !== 'undefined';
   
-  // If no token at all, go straight to public endpoint
-  if (!token) {
+  // If in browser and definitely no token, go straight to public endpoint
+  if (isBrowser && typeof localStorage !== 'undefined' && !localStorage.getItem('heliflow_token')) {
     return apiGetPublicCompanyProfile();
   }
   
@@ -316,7 +316,7 @@ async function apiGetCompanyProfile(): Promise<CompanyProfile> {
   } catch (err) {
     // On 401 (stale token), use public endpoint instead
     if (err instanceof ApiError && err.status === 401) {
-      localStorage.removeItem('heliflow_token'); // Clear stale token silently
+      if (typeof localStorage !== 'undefined') localStorage.removeItem('heliflow_token'); // Clear stale token silently
       return apiGetPublicCompanyProfile();
     }
     throw err;

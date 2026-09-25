@@ -37,7 +37,7 @@ async function mockList(): Promise<VendorTableRow[]> {
 }
 
 async function apiList(): Promise<VendorTableRow[]> {
-  const data = await apiRequest<{ vendors: Vendor[] }>('/vendors?limit=100', { cacheTtlMs: 0 });
+  const data = await apiRequest<{ vendors: Vendor[] }>('/vendors?limit=100');
   const vendors = pickList<Vendor>(data, ['vendors']);
   return vendors.map((v) => mapVendorToTableRow(v as Vendor & Record<string, unknown>));
 }
@@ -47,7 +47,7 @@ async function mockListTyped(): Promise<Vendor[]> {
 }
 
 async function apiListTyped(): Promise<Vendor[]> {
-  const data = await apiRequest<{ vendors: Vendor[] }>('/vendors?limit=100', { cacheTtlMs: 0 });
+  const data = await apiRequest<{ vendors: Vendor[] }>('/vendors?limit=100');
   return pickList<Vendor>(data, ['vendors']);
 }
 

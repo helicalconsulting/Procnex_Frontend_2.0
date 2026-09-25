@@ -115,7 +115,7 @@ export default function ContractsPage() {
     })),
     { rawContracts: [] as Contract[], total: 0 },
     [],
-    { cacheKey: 'contracts:list', cacheTtlMs: 0 }
+    { cacheKey: 'contracts:list' }
   );
 
   const contracts = useMemo(() => rawResult.rawContracts.map((c: Contract): ContractRow => ({

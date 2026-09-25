@@ -119,9 +119,7 @@ async function mockOnboardingQueue(): Promise<OnboardingVendor[]> {
 }
 
 async function apiOnboardingQueue(): Promise<OnboardingVendor[]> {
-  const data = await apiRequest<{ vendors: Vendor[] }>('/procurement/vendor-approval-queue', {
-    cacheTtlMs: 0,
-  });
+  const data = await apiRequest<{ vendors: Vendor[] }>('/procurement/vendor-approval-queue');
   const vendors = pickList<Vendor>(data, ['vendors']);
   return vendors.map((v) => {
     const extended = v as Vendor & {
@@ -211,8 +209,7 @@ async function mockListInvitations(): Promise<VendorInvitationRow[]> {
 
 async function apiListInvitations(): Promise<VendorInvitationRow[]> {
   const data = await apiRequest<{ invitations: VendorInvitationRow[] }>(
-    '/procurement/onboarding-invitations',
-    { cacheTtlMs: 0 }
+    '/procurement/onboarding-invitations'
   );
   return pickList<VendorInvitationRow>(data, ['invitations']);
 }

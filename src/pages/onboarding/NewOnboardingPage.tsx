@@ -136,7 +136,7 @@ export default function NewOnboardingPage() {
     () => procurementService.listInvitations(),
     [] as VendorInvitationRow[],
     [],
-    { cacheTtlMs: 0 }
+    { cacheKey: 'onboarding:invitations' }
   );
 
   // SSE listener — auto-refresh when vendor accepts invitation
@@ -195,7 +195,7 @@ export default function NewOnboardingPage() {
     () => companySettingsService.listFormFieldConfigs('vendor_onboarding'),
     [] as FormFieldConfig[],
     [],
-    { cacheTtlMs: 0 }
+    { cacheKey: 'form-configs:vendor_onboarding' }
   );
 
   const addOnboardingFlexiField = useCallback((fieldConfig?: FormFieldConfig) => {

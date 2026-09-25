@@ -500,8 +500,22 @@
   gap: 18px;
 }
 
+.pr-section__grid--1col { grid-template-columns: 1fr; }
 .pr-section__grid--2col { grid-template-columns: 1fr 1fr; }
 .pr-section__grid--3col { grid-template-columns: 1fr 1fr 1fr; }
+
+.pr-bottom-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 24px;
+  align-items: stretch;
+}
+
+@media (max-width: 1024px) {
+  .pr-bottom-grid {
+    grid-template-columns: 1fr;
+  }
+}
 
 /* ── SAP Fiori Form Inputs ────────────────────────────────── */
 
@@ -757,14 +771,15 @@
 
 .pr-totals {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  width: 100%;
 }
 
 .pr-totals__grid {
-  width: 400px;
+  width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .pr-total-row {

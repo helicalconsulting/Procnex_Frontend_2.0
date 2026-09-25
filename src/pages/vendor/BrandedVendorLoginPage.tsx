@@ -51,6 +51,8 @@ export const BrandedVendorLoginPage: React.FC = () => {
   const [tenantBranding, setTenantBranding] = useState<CompanyBranding | null>(() =>
     getCachedTenantBranding(resolvedCode)
   );
+  const [isInvalidCode, setIsInvalidCode] = useState(false);
+  const [invalidCodeError, setInvalidCodeError] = useState('');
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -77,10 +79,11 @@ export const BrandedVendorLoginPage: React.FC = () => {
       setCompanyCodeState(code);
       setTenantCompanyCode(code);
 
-      // Async fetch fresh branding and cache locally for zero-flash future loads
+      // Async fetch fresh branding and validate company code registration
       vendorPortalService
         .getCompanyBranding(code)
         .then((b) => {
+          setIsInvalidCode(false);
           setTenantBranding(b);
           setCachedTenantBranding(code, b);
           if (b.logoUrl) {
@@ -90,13 +93,10 @@ export const BrandedVendorLoginPage: React.FC = () => {
             applyTitle(`${b.companyName} — Vendor Portal`);
           }
         })
-        .catch(() => {
-          const fallback = {
-            companyCode: code,
-            companyName: `${code} Supplier Portal`,
-          };
-          setTenantBranding(fallback);
-          applyTitle(`${code} Supplier Portal — Vendor Portal`);
+        .catch((err: any) => {
+          const msg = err?.message || `Company code '${code}' is not registered.`;
+          setIsInvalidCode(true);
+          setInvalidCodeError(msg);
         });
     }
   }, [routeCompanyCode, searchParams, resolvedCode]);
@@ -124,6 +124,38 @@ export const BrandedVendorLoginPage: React.FC = () => {
       setIsSubmitting(false);
     }
   };
+
+  if (isInvalidCode) {
+    return (
+      <AuthLayout
+        companyName="ProcNex Enterprise"
+        tagline="Supplier Collaboration & Order Management"
+        features={[]}
+        portalLabel="Invalid URL"
+        title="Invalid Organization Code"
+        description={`Organization '${companyCodeState || resolvedCode}' is not registered in ProcNex.`}
+        isDark={isDark}
+        onThemeToggle={toggleTheme}
+      >
+        <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-6 text-center space-y-4">
+          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+            <AlertCircle size={24} />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-foreground">Invalid Organization URL</h3>
+            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+              {invalidCodeError || `Company code '${companyCodeState || resolvedCode}' is not registered.`}
+            </p>
+          </div>
+          <div className="pt-2 flex flex-col gap-2">
+            <Button variant="default" onClick={() => navigate('/login')} className="w-full">
+              Go to Employee / Buyer Login
+            </Button>
+          </div>
+        </div>
+      </AuthLayout>
+    );
+  }
 
   const activeCode = companyCodeState || resolvedCode || 'VENDOR';
   const companyName = tenantBranding?.companyName || (activeCode !== 'VENDOR' ? `${activeCode} Supplier Portal` : 'Supplier Portal');

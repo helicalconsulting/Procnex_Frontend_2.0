@@ -82,7 +82,7 @@ type VendorRfqApiRow = RFQ & {
 };
 
 async function apiVendorRfqs(): Promise<VendorRfqApiRow[]> {
-  const data = await vendorFetch<{ rfqs: VendorRfqApiRow[] }>('/rfqs', { cacheTtlMs: 0 });
+  const data = await vendorFetch<{ rfqs: VendorRfqApiRow[] }>('/rfqs');
   return data.rfqs || [];
 }
 
@@ -187,7 +187,7 @@ export interface VendorQuotationRow {
 }
 
 async function apiVendorQuotations(): Promise<VendorQuotationRow[]> {
-  const data = await vendorFetch<{ quotations: VendorQuotationRow[] }>('/quotations', { cacheTtlMs: 0 });
+  const data = await vendorFetch<{ quotations: VendorQuotationRow[] }>('/quotations');
   return data.quotations || [];
 }
 
@@ -457,7 +457,7 @@ async function mockOrders(): Promise<VendorOrderMock[]> {
 
 async function apiOrders(): Promise<VendorOrderMock[]> {
   try {
-    const data = await vendorFetch<{ orders?: VendorOrderMock[] }>('/orders', { cacheTtlMs: 0 });
+    const data = await vendorFetch<{ orders?: VendorOrderMock[] }>('/orders');
     return data.orders ?? [];
   } catch {
     return [];
@@ -470,7 +470,7 @@ async function mockInvoices(): Promise<VendorInvoiceMock[]> {
 
 async function apiInvoices(): Promise<VendorInvoiceMock[]> {
   try {
-    const data = await vendorFetch<{ invoices?: VendorInvoiceMock[] }>('/invoices', { cacheTtlMs: 0 });
+    const data = await vendorFetch<{ invoices?: VendorInvoiceMock[] }>('/invoices');
     return (data.invoices as VendorInvoiceMock[]) ?? [];
   } catch {
     return [];
@@ -667,7 +667,7 @@ export interface VendorWidgetPref {
 }
 
 async function apiGetWidgetPreferences(): Promise<VendorWidgetPref[]> {
-  const data = await vendorFetch<{ widgets: VendorWidgetPref[] }>('/widgets', { cacheTtlMs: 0 });
+  const data = await vendorFetch<{ widgets: VendorWidgetPref[] }>('/widgets');
   return data.widgets || [];
 }
 
@@ -700,14 +700,14 @@ export interface VendorAgreement {
 }
 
 async function apiListAgreements(): Promise<VendorAgreement[]> {
-  const data = await vendorFetch<{ agreements: VendorAgreement[]; total: number }>('/agreements', { cacheTtlMs: 0 });
+  const data = await vendorFetch<{ agreements: VendorAgreement[]; total: number }>('/agreements');
   return data.agreements || [];
 }
 
 // ─── Payment Plan API ────────────────────────────────────────────────────
 
 async function apiListPaymentPlans(): Promise<PaymentPlan[]> {
-  const data = await vendorFetch<{ paymentPlans: PaymentPlan[] }>('/payment-plans', { cacheTtlMs: 0 });
+  const data = await vendorFetch<{ paymentPlans: PaymentPlan[] }>('/payment-plans');
   return data.paymentPlans || [];
 }
 

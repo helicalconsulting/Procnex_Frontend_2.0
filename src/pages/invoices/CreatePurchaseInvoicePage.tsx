@@ -80,7 +80,7 @@ export default function CreatePurchaseInvoicePage() {
     hasPermission('Invoices', 'canCreate') ||
     hasPermission('Accounts Payable', 'canCreate');
   const { companyDefaultCurrency, formatAmount } = useCurrency();
-  const { companyName, companyPhone, companyEmail, logoUrl } = useBranding();
+  const { companyName, companyPhone, companyEmail, logoUrl, profile } = useBranding();
 
   // Vendor Role Redirect to Vendor Create Invoice Page
   useEffect(() => {
@@ -1488,14 +1488,14 @@ export default function CreatePurchaseInvoicePage() {
               <label>
                 INVOICE DATE <span className="required">*</span>
               </label>
-              <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
+              <input type="date" value={invoiceDate ? invoiceDate.slice(0, 10) : ''} onChange={(e) => setInvoiceDate(e.target.value)} />
             </div>
 
             <div className="cpi-field">
               <label>
                 DUE DATE <span className="required">*</span>
               </label>
-              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+              <input type="date" value={dueDate ? dueDate.slice(0, 10) : ''} onChange={(e) => setDueDate(e.target.value)} />
             </div>
 
             <div className="cpi-field">

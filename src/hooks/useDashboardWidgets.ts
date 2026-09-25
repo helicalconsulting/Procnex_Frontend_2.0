@@ -71,8 +71,7 @@ export function useDashboardWidgets(): UseDashboardWidgetsReturn {
     () =>
       user?.id
         ? apiRequest<{ widgets: BackendWidgetPref[] }>(
-            '/dashboard/widgets',
-            { cacheTtlMs: 0 }
+            '/dashboard/widgets'
           ).then((d) => d.widgets ?? [])
         : Promise.resolve([] as BackendWidgetPref[]),
     [] as BackendWidgetPref[],

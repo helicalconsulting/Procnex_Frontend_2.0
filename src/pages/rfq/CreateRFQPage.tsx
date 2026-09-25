@@ -154,7 +154,7 @@ export default function CreateRFQPage() {
     () => companySettingsService.listFormFieldConfigs('rfq_information'),
     [] as FormFieldConfig[],
     [],
-    { cacheTtlMs: 0 }
+    { cacheKey: 'form-configs:rfq_information' }
   );
 
   // Fallback if no units configured yet

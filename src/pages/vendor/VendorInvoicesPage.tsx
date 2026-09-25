@@ -35,7 +35,7 @@ export default function VendorInvoicesPage() {
     () => vendorPortalService.listInvoices(),
     [] as VendorInvoiceMock[],
     [],
-    { cacheTtlMs: 0 }
+    { cacheKey: 'vendor:invoices' }
   );
 
   useEffect(() => {

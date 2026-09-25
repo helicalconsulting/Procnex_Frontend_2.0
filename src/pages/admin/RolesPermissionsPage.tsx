@@ -259,7 +259,7 @@ export default function RolesPermissionsPage() {
     () => adminService.listRoles().then((list) => list.map(mapRole)),
     [] as RoleData[],
     [],
-    { cacheKey: 'roles:list', cacheTtlMs: 0 }
+    { cacheKey: 'roles:list' }
   );
 
   const [search, setSearch] = useState('');

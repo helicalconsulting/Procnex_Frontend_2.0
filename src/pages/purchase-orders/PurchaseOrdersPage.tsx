@@ -140,7 +140,7 @@ export default function PurchaseOrdersPage() {
     () => purchaseOrderService.list().then((r) => r.orders.map(mapPO)),
     [] as MockPO[],
     [],
-    { cacheTtlMs: 0 }
+    { cacheKey: 'po:list' }
   );
 
   useEffect(() => {

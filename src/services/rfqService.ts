@@ -126,8 +126,7 @@ async function apiList(params?: ListParams): Promise<RFQTableRow[]> {
   query.set('limit', String(params?.limit || 100));
   const qs = query.toString();
   const data = await apiRequest<{ rfqs: Record<string, unknown>[] }>(
-    `/rfqs${qs ? `?${qs}` : ''}`,
-    { cacheTtlMs: 0 }
+    `/rfqs${qs ? `?${qs}` : ''}`
   );
   let rows = (data.rfqs || [])
     .map(mapApiRfqToTableRow)
@@ -156,7 +155,7 @@ async function mockGetById(id: string): Promise<RFQTableRow | null> {
 
 async function apiGetById(id: string): Promise<RFQTableRow | null> {
   try {
-    const rfq = await apiRequest<Record<string, unknown>>(`/rfqs/${id}`, { cacheTtlMs: 0 });
+    const rfq = await apiRequest<Record<string, unknown>>(`/rfqs/${id}`);
     const mapped = mapApiRfqToTableRow(rfq);
     if (!mapped || isRfqDeleted(mapped.id, mapped.rfqNumber)) return null;
     return mapped;

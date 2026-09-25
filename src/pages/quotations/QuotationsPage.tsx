@@ -2606,7 +2606,7 @@ export default function QuotationsPage() {
     () => quotationService.list(false).then((list) => list.map(mapQuotationToRow)),
     [] as MockQuotation[],
     [],
-    { cacheTtlMs: 0 }
+    { cacheKey: 'quotations:list' }
   );
   const [quotations, setQuotations] = useState<MockQuotation[]>([]);
   const quotationsRef = useRef(quotations);
@@ -2634,7 +2634,7 @@ export default function QuotationsPage() {
     () => quotationService.listAll().then((list) => list.map(mapQuotationToRow)),
     [] as MockQuotation[],
     [],
-    { cacheTtlMs: 0 }
+    { cacheKey: 'quotations:all' }
   );
 
   const [allQuotations, setAllQuotations] = useState<MockQuotation[]>([]);
