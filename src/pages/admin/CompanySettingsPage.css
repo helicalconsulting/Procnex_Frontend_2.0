@@ -2912,33 +2912,126 @@
   color: var(--text-primary);
 }
 
-.cs-doc-placeholders__list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+.cs-doc-placeholders__header {
+  margin-bottom: 12px;
 }
 
-.cs-doc-placeholders__item {
-  font-size: 13px;
-  color: var(--text-secondary, #64748b);
-  line-height: 1.5;
-}
-
-.cs-doc-placeholders__code {
-  font-family: 'SF Mono', 'Fira Code', monospace;
+.cs-doc-placeholders__sub {
   font-size: 12px;
-  font-weight: 600;
-  background: var(--surface, #fff);
-  color: var(--primary-700, #074d96);
-  padding: 2px 6px;
-  border: 1px solid var(--border, #e2e8f0);
-  border-radius: 3px;
+  color: var(--text-secondary, #64748b);
+  margin-top: 2px;
 }
 
-[data-theme="dark"] .cs-doc-placeholders__code {
+.cs-doc-placeholders__tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.cs-doc-placeholders__tab {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 16px;
+  border: 1px solid var(--border, #cbd5e1);
+  background: var(--surface, #ffffff);
+  color: var(--text-secondary, #64748b);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.18s ease;
+}
+
+.cs-doc-placeholders__tab:hover {
+  border-color: var(--primary, #0a6ed1);
+  color: var(--primary, #0a6ed1);
+}
+
+.cs-doc-placeholders__tab--active {
+  background: rgba(10, 110, 209, 0.12);
+  border-color: var(--primary, #0a6ed1);
+  color: var(--primary, #0a6ed1);
+  font-weight: 600;
+}
+
+.cs-doc-placeholders__grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.cs-doc-placeholders__chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 7px 10px;
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  user-select: none;
+}
+
+.cs-doc-placeholders__chip:hover {
+  background: rgba(10, 110, 209, 0.08);
+  border-color: var(--primary, #0a6ed1);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(10, 110, 209, 0.15);
+}
+
+.cs-doc-placeholders__chip-code {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--primary, #0a6ed1);
+}
+
+.cs-doc-placeholders__chip-desc {
+  font-size: 12px;
+  color: var(--text-secondary, #475569);
+  font-weight: 500;
+}
+
+.cs-doc-placeholders__chip-add {
+  color: #94a3b8;
+  transition: color 0.18s;
+}
+
+.cs-doc-placeholders__chip:hover .cs-doc-placeholders__chip-add {
+  color: var(--primary, #0a6ed1);
+}
+
+.cs-doc-placeholders__notice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 6px 12px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 6px;
+  font-size: 12px;
+  color: #059669;
+}
+
+[data-theme="dark"] .cs-doc-placeholders__chip {
   background: var(--surface);
   border-color: var(--border);
-  color: #4db1ff;
+}
+
+[data-theme="dark"] .cs-doc-placeholders__chip-code {
+  color: #38bdf8;
+}
+
+[data-theme="dark"] .cs-doc-placeholders__chip-desc {
+  color: #cbd5e1;
 }
 
 .cs-doc-preview-note {
@@ -3665,8 +3758,8 @@
 
 /* Signature Block inside Detail Editor View */
 .cs-dt-signature-block {
-  margin-top: 24px;
-  padding: 20px;
+  margin-top: 0;
+  padding: 18px;
   background: var(--surface-card, #fff);
   border: 1px solid var(--border, #e2e8f0);
   border-radius: 10px;
@@ -3692,7 +3785,7 @@
 
 .cs-dt-signature-block__header h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text-primary, #1e293b);
 }
@@ -3702,13 +3795,15 @@
 }
 
 .cs-dt-signature-block__desc {
-  font-size: 14px;
+  font-size: 12.5px;
   color: var(--text-secondary, #64748b);
-  margin: 0 0 16px;
+  margin: 0 0 14px;
+  line-height: 1.4;
 }
 
 .cs-dt-signature-block__content {
-  max-width: 480px;
+  width: 100%;
+  max-width: 100%;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -3855,17 +3950,33 @@
   background: #38bdf8;
 }
 
-/* Detail Body & Name Input */
+/* Detail Body & Two-Column Layout */
 .cs-dt-detail__body {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 22px;
+  align-items: start;
+}
+
+@media (max-width: 1080px) {
+  .cs-dt-detail__body {
+    grid-template-columns: 1fr;
+  }
 }
 
 .cs-dt-detail__editor-col {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  min-width: 0;
+}
+
+.cs-dt-detail__sidebar-col {
+  position: sticky;
+  top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .cs-dt-detail__name-row {
@@ -4055,6 +4166,8 @@
   border-radius: 8px;
   overflow: hidden;
   background: var(--surface-card, #fff);
+  display: flex;
+  flex-direction: column;
 }
 
 [data-theme="dark"] .cs-dt-detail__editor-wrap {

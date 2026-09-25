@@ -45,6 +45,7 @@ import '../../components/shared/ColumnCustomizer.css';
 import { Input } from '../../components/ui/input';
 import { MetricCard, PageFrame, PageLead } from '../../components/ui/product';
 import { cn } from '../../lib/utils';
+import ActionSendingOverlay from '../../components/shared/ActionSendingOverlay';
 import '../../components/purchase-orders/PurchaseOrderDocument.css';
 import './CreatePurchaseInvoicePage.css';
 
@@ -200,6 +201,8 @@ export default function CreatePurchaseInvoicePage() {
   // UI state
   const [savingDraft, setSavingDraft] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [showSendingOverlay, setShowSendingOverlay] = useState(false);
+  const [overlayMode, setOverlayMode] = useState<'draft' | 'approval'>('approval');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -697,8 +700,14 @@ export default function CreatePurchaseInvoicePage() {
   const submitInvoiceToAPI = async (isDraft: boolean) => {
     if (!validateForm()) return;
 
-    if (isDraft) setSavingDraft(true);
-    else setSubmitting(true);
+    if (isDraft) {
+      setSavingDraft(true);
+      setOverlayMode('draft');
+    } else {
+      setSubmitting(true);
+      setOverlayMode('approval');
+    }
+    setShowSendingOverlay(true);
 
     setErrorMsg(null);
 
@@ -740,8 +749,12 @@ export default function CreatePurchaseInvoicePage() {
         // ignore
       }
 
-      setTimeout(() => navigate('/accounts-payable'), 1500);
+      setTimeout(() => {
+        setShowSendingOverlay(false);
+        navigate('/accounts-payable');
+      }, 2200);
     } catch (err: any) {
+      setShowSendingOverlay(false);
       setErrorMsg(err?.message || 'Failed to submit Purchase Invoice.');
     } finally {
       setSavingDraft(false);
@@ -2071,6 +2084,15 @@ export default function CreatePurchaseInvoicePage() {
           </div>
         </div>
       )}
+      <ActionSendingOverlay
+        isOpen={showSendingOverlay}
+        docType="invoice"
+        docNumber={invoiceNumber}
+        vendorName={vendorName}
+        amount={calculations.grandTotal}
+        currency={currency}
+        mode={overlayMode}
+      />
     </div>
   );
 }

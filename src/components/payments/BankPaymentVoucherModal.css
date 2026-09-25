@@ -454,15 +454,18 @@
 }
 
 .bpv-stamp-sig-img {
-  max-height: 28px;
-  max-width: 130px;
+  max-height: 60px;
+  min-height: 44px;
+  max-width: 220px;
+  width: auto;
   object-fit: contain;
+  margin: 2px 0;
 }
 
 .bpv-stamp-sig-svg-wrap {
   width: 100%;
-  max-width: 140px;
-  height: 26px;
+  max-width: 200px;
+  height: 48px;
 }
 
 .bpv-stamp-sig-svg {

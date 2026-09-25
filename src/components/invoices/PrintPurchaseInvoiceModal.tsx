@@ -309,25 +309,6 @@ export default function PrintPurchaseInvoiceModal({ data: dataProp, invoice: inv
             </div>
           </div>
 
-          {/* Info Summary Grid */}
-          <div className="ppi-sheet__info-grid">
-            <div className="ppi-sheet__info-item">
-              <span className="ppi-sheet__info-label">Invoice Number</span>
-              <span className="ppi-sheet__info-val">{data.invoiceNumber}</span>
-            </div>
-            <div className="ppi-sheet__info-item">
-              <span className="ppi-sheet__info-label">PO Reference</span>
-              <span className="ppi-sheet__info-val">{data.poNumber || '—'}</span>
-            </div>
-            <div className="ppi-sheet__info-item">
-              <span className="ppi-sheet__info-label">Department</span>
-              <span className="ppi-sheet__info-val">{data.department}</span>
-            </div>
-            <div className="ppi-sheet__info-item">
-              <span className="ppi-sheet__info-label">Approval Status</span>
-              <span className="ppi-sheet__info-val">{data.status}</span>
-            </div>
-          </div>
 
           {/* Table Breakdown */}
           <table className="ppi-sheet__items-table">
@@ -421,23 +402,23 @@ export default function PrintPurchaseInvoiceModal({ data: dataProp, invoice: inv
                           {app.signatureUrl ? (
                             <img src={app.signatureUrl} alt={`Signature of ${app.name}`} className="ppi-stamp-sig-img" />
                           ) : (
-                            <div className="ppi-stamp-sig-svg-wrap">
-                              <svg viewBox="0 0 170 32" style={{ width: '100%', height: '26px' }}>
+                            <div className="ppi-stamp-sig-svg-wrap" style={{ width: '100%', maxWidth: '200px', height: '48px' }}>
+                              <svg viewBox="0 0 170 32" style={{ width: '100%', height: '48px' }}>
                                 <path
                                   d="M 12 20 Q 30 5, 50 22 T 90 12 T 135 24 T 158 10"
                                   fill="none"
                                   stroke="#1e3a8a"
-                                  strokeWidth="2"
+                                  strokeWidth="2.5"
                                   strokeLinecap="round"
                                 />
                                 <text
                                   x="15"
                                   y="24"
                                   fontFamily="'Dancing Script', 'Brush Script MT', cursive, sans-serif"
-                                  fontSize="13"
+                                  fontSize="17"
                                   fill="#1e3a8a"
                                   fontStyle="italic"
-                                  opacity="0.85"
+                                  opacity="0.9"
                                 >
                                   {app.name}
                                 </text>

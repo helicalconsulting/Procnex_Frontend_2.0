@@ -42,13 +42,14 @@ import { procurementService } from '../../services/procurementService';
 import { vendorService } from '../../services/vendorService';
 import { useAuth } from '../../context/AuthContext';
 import { DigitalSignatureApprovalModal } from '../../components/shared/DigitalSignatureApprovalModal';
+import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
 import { signatureService } from '../../services/signatureService';
 import { apiRequest } from '../../api/client';
 import '../../components/shared/ColumnCustomizer.css';
 
 type PaymentStatus = 'COMPLETED' | 'PENDING' | 'PROCESSING' | 'FAILED' | 'CONFIRMED' | 'CANCELLED' | 'RETRIED';
 type PaymentMethod = 'NEFT' | 'RTGS' | 'IMPS' | 'Cheque' | 'UPI';
-type ActionType = 'confirm' | 'cancel' | 'retry';
+type ActionType = 'confirm' | 'cancel' | 'retry' | 'return';
 type Tone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
 
 interface Payment {
@@ -319,6 +320,7 @@ export default function PaymentsPage() {
   const [voucherApprovers, setVoucherApprovers] = useState<any[] | null>(null);
   const [vendorBankDetails, setVendorBankDetails] = useState<{ bankName?: string; accountNumber?: string; ifscCode?: string } | null>(null);
   const [chainModal, setChainModal] = useState<{ module: string; referenceId: string } | null>(null);
+  const [actionSuccessData, setActionSuccessData] = useState<ActionSuccessModalData | null>(null);
 
   const { formatAmount, companyDefaultCurrency } = useCurrency();
 
@@ -673,7 +675,24 @@ export default function PaymentsPage() {
       delete next[target.id];
       return next;
     });
-  }, [actionComment, actionModal, fetchPaymentsData]);
+    setActionSuccessData({
+      actionType: act === 'confirm' ? 'approve' : act === 'cancel' ? 'reject' : 'return',
+      module: 'Payment Voucher',
+      referenceNumber: target.paymentNumber || String(target.id),
+      title: `Payment Voucher for ${target.vendorName}`,
+      message: act === 'confirm'
+        ? 'Payment Voucher approved successfully.'
+        : act === 'cancel'
+        ? 'Payment Voucher rejected successfully.'
+        : 'Payment Voucher returned for revision successfully.',
+      comment: comment,
+      details: [
+        { label: 'Vendor / Beneficiary', value: target.vendorName },
+        { label: 'Net Disbursement', value: amount(target.amount) },
+        { label: 'Payment Method', value: target.method || 'NEFT' },
+      ],
+    });
+  }, [actionComment, actionModal, fetchPaymentsData, amount]);
 
   const handleSignatureConfirm = useCallback(
     async (signatureDataUrl: string, comment?: string) => {
@@ -788,8 +807,21 @@ export default function PaymentsPage() {
         delete next[target.id];
         return next;
       });
+      setActionSuccessData({
+        actionType: 'approve',
+        module: 'Payment Voucher',
+        referenceNumber: target.paymentNumber || String(target.id),
+        title: `Payment Voucher for ${target.vendorName}`,
+        message: 'Payment Voucher approved successfully with digital signature.',
+        comment: comment,
+        details: [
+          { label: 'Vendor / Beneficiary', value: target.vendorName },
+          { label: 'Net Disbursement', value: amount(target.amount) },
+          { label: 'Payment Method', value: target.method || 'NEFT' },
+        ],
+      });
     },
-    [actionModal, fetchPaymentsData]
+    [actionModal, fetchPaymentsData, amount]
   );
 
   const cardProps = (filter: PaymentStatus | 'ALL') => {
@@ -1044,7 +1076,7 @@ export default function PaymentsPage() {
                           >
                             <Printer className="size-4" />
                           </Button>
-                          {ACTIONABLE.includes(payment.status) && payment.canAct && (
+                          {ACTIONABLE.includes(payment.status) && (payment.canAct || isAdmin || canApprovePayment) && (
                             <>
                               <Button
                                 variant="ghost"
@@ -1069,9 +1101,9 @@ export default function PaymentsPage() {
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
-                                onClick={() => openAction(payment, 'retry')}
-                                aria-label={`Retry ${payment.paymentNumber}`}
-                                title="Retry payment"
+                                onClick={() => openAction(payment, 'return')}
+                                aria-label={`Return ${payment.paymentNumber}`}
+                                title="Return payment"
                               >
                                 <RotateCcw className="size-4" />
                               </Button>
@@ -1122,7 +1154,7 @@ export default function PaymentsPage() {
                   <Button variant="ghost" size="sm" onClick={() => setSelectedPrintVoucher(payment)}>
                     <Printer /> Print
                   </Button>
-                  {ACTIONABLE.includes(payment.status) && payment.canAct && (
+                  {ACTIONABLE.includes(payment.status) && (payment.canAct || isAdmin || canApprovePayment) && (
                     <>
                       <Button size="sm" onClick={() => openAction(payment, 'confirm')}>
                         <ThumbsUp /> Confirm
@@ -1130,8 +1162,8 @@ export default function PaymentsPage() {
                       <Button variant="ghost" size="sm" className="text-destructive" onClick={() => openAction(payment, 'cancel')}>
                         <Ban /> Cancel
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => openAction(payment, 'retry')}>
-                        <RotateCcw /> Retry
+                      <Button variant="ghost" size="sm" onClick={() => openAction(payment, 'return')}>
+                        <RotateCcw /> Return
                       </Button>
                     </>
                   )}
@@ -1315,7 +1347,46 @@ export default function PaymentsPage() {
               >
                 <Clock className="size-4" /> View Approval Chain
               </Button>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {ACTIONABLE.includes(detailPayment.status) && (detailPayment.canAct || isAdmin || canApprovePayment) && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-amber-600 hover:text-amber-700 border-amber-500/30 hover:bg-amber-500/10 rounded-full px-3.5"
+                      onClick={() => {
+                        const target = detailPayment;
+                        setDetailPayment(null);
+                        openAction(target, 'return');
+                      }}
+                    >
+                      <RotateCcw className="size-3.5 mr-1" /> Return
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="rounded-full px-3.5"
+                      onClick={() => {
+                        const target = detailPayment;
+                        setDetailPayment(null);
+                        openAction(target, 'cancel');
+                      }}
+                    >
+                      <Ban className="size-3.5 mr-1" /> Reject
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-full px-3.5"
+                      onClick={() => {
+                        const target = detailPayment;
+                        setDetailPayment(null);
+                        openAction(target, 'confirm');
+                      }}
+                    >
+                      <ThumbsUp className="size-3.5 mr-1" /> Confirm
+                    </Button>
+                  </>
+                )}
                 <Button
                   onClick={() => {
                     const target = detailPayment;
@@ -1365,6 +1436,14 @@ export default function PaymentsPage() {
           module={chainModal.module}
           referenceId={chainModal.referenceId}
           onClose={() => setChainModal(null)}
+        />
+      )}
+
+      {/* Success Modal */}
+      {actionSuccessData && (
+        <ActionSuccessModal
+          data={actionSuccessData}
+          onClose={() => setActionSuccessData(null)}
         />
       )}
     </PageFrame>

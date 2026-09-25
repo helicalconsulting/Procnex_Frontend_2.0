@@ -15,6 +15,7 @@ import { TableSkeleton } from '../../components/shared/Skeleton';
 import ColumnCustomizer, { type ColumnDef } from '../../components/shared/ColumnCustomizer';
 import PrintPurchaseInvoiceModal from '../../components/invoices/PrintPurchaseInvoiceModal';
 import { DigitalSignatureApprovalModal } from '../../components/shared/DigitalSignatureApprovalModal';
+import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
 import { signatureService } from '../../services/signatureService';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -154,6 +155,7 @@ export default function AccountsPayablePage() {
   const [actionModal, setActionModal] = useState<{ invoice: APInvoice; action: ActionType } | null>(null);
   const [actionComment, setActionComment] = useState('');
   const [actionSaving, setActionSaving] = useState(false);
+  const [actionSuccessData, setActionSuccessData] = useState<ActionSuccessModalData | null>(null);
   const [chainModal, setChainModal] = useState<{ module: string; referenceId: string } | null>(null);
   useBodyScrollLock(!!(actionModal || detailInvoice || printInvoice || chainModal));
 
@@ -442,13 +444,30 @@ export default function AccountsPayablePage() {
 
       window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
       await fetchInvoicesData();
+      setActionSuccessData({
+        actionType: act === 'approve' ? 'approve' : act === 'reject' ? 'reject' : 'return',
+        module: 'Purchase Invoice',
+        referenceNumber: targetInvoice.invoiceNumber,
+        title: `Invoice from ${targetInvoice.vendorName}`,
+        message: act === 'approve'
+          ? 'Purchase Invoice approved successfully.'
+          : act === 'reject'
+          ? 'Purchase Invoice rejected successfully.'
+          : 'Purchase Invoice returned for revision successfully.',
+        comment: comment,
+        details: [
+          { label: 'Vendor', value: targetInvoice.vendorName },
+          { label: 'Invoice Amount', value: formatAmount(targetInvoice.amount, companyDefaultCurrency) },
+          { label: 'Due Date', value: formatDate(targetInvoice.dueDate) },
+        ],
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Action failed');
       await fetchInvoicesData();
     } finally {
       setActionSaving(false);
     }
-  }, [actionModal, actionComment, fetchInvoicesData]);
+  }, [actionModal, actionComment, fetchInvoicesData, companyDefaultCurrency, formatAmount]);
 
   const handleSignatureConfirm = useCallback(
     async (signatureDataUrl: string, comment?: string) => {
@@ -535,6 +554,19 @@ export default function AccountsPayablePage() {
 
         window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
         await fetchInvoicesData();
+        setActionSuccessData({
+          actionType: 'approve',
+          module: 'Purchase Invoice',
+          referenceNumber: targetInvoice.invoiceNumber,
+          title: `Invoice from ${targetInvoice.vendorName}`,
+          message: 'Purchase Invoice approved successfully with digital signature.',
+          comment: comment,
+          details: [
+            { label: 'Vendor', value: targetInvoice.vendorName },
+            { label: 'Invoice Amount', value: formatAmount(targetInvoice.amount, companyDefaultCurrency) },
+            { label: 'Due Date', value: formatDate(targetInvoice.dueDate) },
+          ],
+        });
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Approval failed');
         await fetchInvoicesData();
@@ -542,7 +574,7 @@ export default function AccountsPayablePage() {
         setActionSaving(false);
       }
     },
-    [actionModal, fetchInvoicesData]
+    [actionModal, fetchInvoicesData, companyDefaultCurrency, formatAmount]
   );
 
   const openAction = useCallback((invoice: APInvoice, action: ActionType) => {
@@ -817,7 +849,7 @@ export default function AccountsPayablePage() {
                           >
                             <Printer className="size-4" />
                           </Button>
-                          {invoice.status === 'PENDING' && invoice.canAct ? (
+                          {invoice.status === 'PENDING' && (invoice.canAct || isAdmin || canApproveAP) ? (
                             <>
                               <Button
                                 variant="ghost"
@@ -901,13 +933,16 @@ export default function AccountsPayablePage() {
                       <Printer /> Print
                     </Button>
                   </div>
-                  {invoice.status === 'PENDING' && invoice.canAct && (
+                  {invoice.status === 'PENDING' && (invoice.canAct || isAdmin || canApproveAP) && (
                     <div className="flex gap-1">
                       <Button size="sm" onClick={() => openAction(invoice, 'approve')}>
                         <ThumbsUp /> Approve
                       </Button>
                       <Button variant="ghost" size="sm" className="text-destructive" onClick={() => openAction(invoice, 'reject')}>
-                        <ThumbsDown />
+                        <ThumbsDown /> Reject
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => openAction(invoice, 'return')}>
+                        <RotateCcw /> Return
                       </Button>
                     </div>
                   )}
@@ -1128,7 +1163,7 @@ export default function AccountsPayablePage() {
               </Button>
 
               <div className="flex items-center gap-2">
-                {detailInvoice.status === 'PENDING' && detailInvoice.canAct && canApproveAP ? (
+                {detailInvoice.status === 'PENDING' && (detailInvoice.canAct || isAdmin || canApproveAP) ? (
                   <>
                     <Button
                       variant="outline"
@@ -1193,6 +1228,14 @@ export default function AccountsPayablePage() {
           module={chainModal.module}
           referenceId={chainModal.referenceId}
           onClose={() => setChainModal(null)}
+        />
+      )}
+
+      {/* Success Modal */}
+      {actionSuccessData && (
+        <ActionSuccessModal
+          data={actionSuccessData}
+          onClose={() => setActionSuccessData(null)}
         />
       )}
     </PageFrame>

@@ -554,12 +554,12 @@ export default function CreateGRNPage() {
       }));
 
       await grnService.create({
-        poId: selectedPO?.id || selectedPoId || 'MANUAL-PO',
+        poId: selectedPO?.poNumber || selectedPO?.id || selectedPoId || 'MANUAL-PO',
         entryMode,
         dispatchNoteNumber: vendorDispatchNoteNumber || grnNumber,
         vendorInvoiceNumber: selectedInvoice?.invoiceNumber || vendorDispatchNoteNumber,
         invoiceId: selectedInvoice?.id,
-        vendorId: selectedPO?.vendorId || selectedInvoice?.vendorId,
+        vendorId: selectedPO?.vendorId || selectedPO?.vendor?.id || selectedInvoice?.vendorId,
         vendorName: selectedPO?.vendor?.name || selectedInvoice?.vendorName || 'Supplier',
         receivedDate,
         notes: `${notes} (Location: ${warehouseLocation})`,

@@ -41,6 +41,7 @@ import '../../components/shared/ColumnCustomizer.css';
 import { Input } from '../../components/ui/input';
 import { MetricCard, PageFrame, PageLead } from '../../components/ui/product';
 import { cn } from '../../lib/utils';
+import ActionSendingOverlay from '../../components/shared/ActionSendingOverlay';
 import './CreatePaymentVoucherPage.css';
 
 interface VendorOption {
@@ -160,7 +161,7 @@ export default function CreatePaymentVoucherPage() {
 
   // Amounts & TDS
   const [grossAmount, setGrossAmount] = useState<number | ''>('');
-  const [tdsPercent, setTdsPercent] = useState<number>(2);
+  const [tdsPercent, setTdsPercent] = useState<number>(0);
   const [purpose, setPurpose] = useState<string>('');
   const [remarks, setRemarks] = useState<string>('');
 
@@ -177,6 +178,7 @@ export default function CreatePaymentVoucherPage() {
   // UI state
   const [savingDraft, setSavingDraft] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [showSendingOverlay, setShowSendingOverlay] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -392,7 +394,7 @@ export default function CreatePaymentVoucherPage() {
   // Calculations
   const gross = typeof grossAmount === 'number' ? grossAmount : 0;
   const tdsAmount = useMemo(() => (gross * (tdsPercent || 0)) / 100, [gross, tdsPercent]);
-  const netPayable = useMemo(() => Math.max(0, gross - tdsAmount), [gross, tdsAmount]);
+  const netPayable = useMemo(() => gross, [gross]);
 
   // File Upload
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -430,6 +432,7 @@ export default function CreatePaymentVoucherPage() {
     if (!validateForm()) return;
 
     setSubmitting(true);
+    setShowSendingOverlay(true);
     setErrorMsg(null);
 
     const selectedInvoices = vendorInvoices.filter((i) => i.selected);
@@ -512,10 +515,12 @@ export default function CreatePaymentVoucherPage() {
       refetchVouchers();
 
       setTimeout(() => {
+        setShowSendingOverlay(false);
         setIsCreating(false);
         setSuccessMsg(null);
-      }, 1200);
+      }, 2200);
     } catch (err: any) {
+      setShowSendingOverlay(false);
       setErrorMsg(err?.message || 'Failed to submit payment voucher.');
     } finally {
       setSubmitting(false);
@@ -1542,10 +1547,6 @@ export default function CreatePaymentVoucherPage() {
                 <span>Gross Amount</span>
                 <span>{formatAmount(gross, currency)}</span>
               </div>
-              <div className="cpv-summary-row">
-                <span>TDS Deduction ({tdsPercent}%)</span>
-                <span style={{ color: '#ef4444' }}>- {formatAmount(tdsAmount, currency)}</span>
-              </div>
 
               <div className="cpv-summary-divider" />
 
@@ -1571,6 +1572,15 @@ export default function CreatePaymentVoucherPage() {
           </div>
         </div>
       </div>
+      <ActionSendingOverlay
+        isOpen={showSendingOverlay}
+        docType="payment_voucher"
+        docNumber={voucherNumber}
+        vendorName={vendorName}
+        amount={netPayable}
+        currency={currency}
+        mode="approval"
+      />
     </div>
   );
 }

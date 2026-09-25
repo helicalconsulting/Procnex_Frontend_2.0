@@ -176,8 +176,19 @@ export async function dispatchFormSubmissionEmail(sub: FormSubmissionInstance, a
   const cName = await getEffectiveCompanyName();
 
   if (!isWorkflow) {
+    const profile = await companySettingsService.getCompanyProfile().catch(() => null);
+    const targetCompCode = profile?.companyCode || '';
+    const allUsers = await adminService.listUsers().catch(() => []);
+    const adminUser = allUsers.find(
+      (u) =>
+        u.isActive !== false &&
+        (!targetCompCode || (u as any).companyCode === targetCompCode) &&
+        isRoleMatching('admin', u.role, String(u.id))
+    );
+    const targetAdminEmail = adminUser?.email || profile?.companyEmail || 'admin@procnex.com';
+
     const html = buildSystemEmailHtml({
-      recipientName: 'Administrator',
+      recipientName: adminUser?.fullName || 'Administrator',
       headline: `✅ Direct Form Submission Received`,
       messageText: `Employee <strong>${sub.assignedUserName}</strong> (${sub.assignedUserEmail}) has directly submitted response for <strong>"${sub.formTitle}"</strong>.`,
       formTitle: sub.formTitle,
@@ -190,16 +201,20 @@ export async function dispatchFormSubmissionEmail(sub: FormSubmissionInstance, a
       companyName: cName,
     });
 
-    sendSystemEmail('admin@procnex.com', `[${cName} Notification] Direct Submission Received: ${sub.formTitle} (${sub.assignedUserName})`, html).catch(() => {});
+    sendSystemEmail(targetAdminEmail, `[${cName} Notification] Direct Submission Received: ${sub.formTitle} (${sub.assignedUserName})`, html).catch(() => {});
     return 1;
   } else {
     const level1Step = sub.approvalLevels ? sub.approvalLevels[0] : null;
     const level1Role = level1Step ? level1Step.requiredRole : 'Procurement Manager';
 
+    const profile = await companySettingsService.getCompanyProfile().catch(() => null);
+    const targetCompCode = profile?.companyCode || '';
+
     const allUsers = await adminService.listUsers();
     const level1Approvers = allUsers.filter(
       (u) =>
         u.isActive !== false &&
+        (!targetCompCode || (u as any).companyCode === targetCompCode) &&
         (isRoleMatching(level1Role, u.role, String(u.id)) ||
           ((u as any).roles && (u as any).roles.some((r: string) => isRoleMatching(level1Role, r, String(u.id)))))
     );
@@ -259,10 +274,14 @@ export async function dispatchLevelApprovalEmail(
     const nextStep = sub.approvalLevels?.find((l) => l.levelNumber === nextLevelNum);
     const nextRole = nextStep ? nextStep.requiredRole : `Level ${nextLevelNum} Approver`;
 
+    const profile = await companySettingsService.getCompanyProfile().catch(() => null);
+    const targetCompCode = profile?.companyCode || '';
+
     const allUsers = await adminService.listUsers();
     const nextApprovers = allUsers.filter(
       (u) =>
         u.isActive !== false &&
+        (!targetCompCode || (u as any).companyCode === targetCompCode) &&
         (isRoleMatching(nextRole, u.role, String(u.id)) ||
           ((u as any).roles && (u as any).roles.some((r: string) => isRoleMatching(nextRole, r, String(u.id)))))
     );

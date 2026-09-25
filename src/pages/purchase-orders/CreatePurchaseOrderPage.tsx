@@ -14,6 +14,7 @@ import { useCurrency } from '../../components/shared/CurrencyMaster';
 import { useBranding } from '../../context/BrandingContext';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { useAuth } from '../../context/AuthContext';
+import ActionSendingOverlay from '../../components/shared/ActionSendingOverlay';
 import './CreatePurchaseOrderPage.css';
 
 interface VendorOption {
@@ -192,6 +193,8 @@ export default function CreatePurchaseOrderPage() {
 
   // Actions state
   const [submittingAction, setSubmittingAction] = useState<'draft' | 'submit' | null>(null);
+  const [showSendingOverlay, setShowSendingOverlay] = useState(false);
+  const [overlayMode, setOverlayMode] = useState<'draft' | 'approval'>('approval');
   const submittingRef = React.useRef(false); // Hard guard against concurrent submits
   const [msg, setMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
@@ -430,6 +433,8 @@ export default function CreatePurchaseOrderPage() {
 
     submittingRef.current = true;
     setSubmittingAction(targetStatus === 'Draft' ? 'draft' : 'submit');
+    setOverlayMode(targetStatus === 'Draft' ? 'draft' : 'approval');
+    setShowSendingOverlay(true);
     setMsg(null);
 
     const statusPayload = targetStatus === 'Pending Approval' ? 'PENDING_APPROVAL' : 'DRAFT';
@@ -560,10 +565,12 @@ export default function CreatePurchaseOrderPage() {
         type: 'success',
       });
       setTimeout(() => {
+        setShowSendingOverlay(false);
         // Redirect to PO Creation & Orders list page
         navigate('/procurement/purchase-requisitions');
-      }, 1200);
+      }, 2200);
     } catch (err) {
+      setShowSendingOverlay(false);
       setMsg({
         text: err instanceof Error ? err.message : 'Failed to save Purchase Order',
         type: 'error',
@@ -1262,6 +1269,15 @@ export default function CreatePurchaseOrderPage() {
           </div>
         </div>
       </div>
+      <ActionSendingOverlay
+        isOpen={showSendingOverlay}
+        docType="po"
+        docNumber={poNumber}
+        vendorName={supplierName}
+        amount={grandTotal}
+        currency={currency}
+        mode={overlayMode}
+      />
     </div>
   );
 }

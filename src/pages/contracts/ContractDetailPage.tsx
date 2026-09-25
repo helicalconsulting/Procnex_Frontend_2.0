@@ -479,10 +479,13 @@ export default function ContractDetailPage() {
 
   const handleCreatePO = useCallback(() => {
     if (!id || !data?.contract) return;
-    if (contractBalance && contractBalance.remainingValue <= 0) return;
+    if (contractBalance && contractBalance.remainingValue <= 0) {
+      setPageMsg(`⚠️ Contract limit reached! 100% of contract value (${formatAmount(contractBalance.contractValue, data.contract.currency || companyDefaultCurrency)}) has been consumed by existing Purchase Orders.`);
+      return;
+    }
     const targetRfqId = data.contract.rfqId || `contract-${id}`;
     navigate(`/procurement/purchase-requisition/${targetRfqId}?contractId=${id}`);
-  }, [id, data?.contract, contractBalance, navigate]);
+  }, [id, data?.contract, contractBalance, navigate, formatAmount, companyDefaultCurrency]);
 
   const handleSendToVendor = useCallback(async () => {
     if (!id) return;

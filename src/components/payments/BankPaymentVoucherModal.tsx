@@ -435,17 +435,17 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
                                   d="M 12 20 Q 30 5, 50 22 T 90 12 T 135 24 T 158 10"
                                   fill="none"
                                   stroke="#1e3a8a"
-                                  strokeWidth="2"
+                                  strokeWidth="2.5"
                                   strokeLinecap="round"
                                 />
                                 <text
                                   x="15"
                                   y="24"
                                   fontFamily="'Dancing Script', 'Brush Script MT', cursive, sans-serif"
-                                  fontSize="13"
+                                  fontSize="17"
                                   fill="#1e3a8a"
                                   fontStyle="italic"
-                                  opacity="0.85"
+                                  opacity="0.9"
                                 >
                                   {app.name}
                                 </text>

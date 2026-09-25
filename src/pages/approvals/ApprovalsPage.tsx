@@ -423,17 +423,19 @@ export default function ApprovalsPage() {
       ...(req.referenceNumber ? { [req.referenceNumber]: { status: newStatus, currentLevel: targetLevel } } : {}),
     }));
 
+    const moduleName = req.module || 'Approval Request';
+    const refText = req.referenceNumber ? ` (${req.referenceNumber})` : '';
     const defaultMsg = actionType === 'approve'
-      ? `${req.module || 'Purchase Order'} Approved`
+      ? `${moduleName}${refText} approved successfully.`
       : actionType === 'reject'
-      ? `${req.module || 'Purchase Order'} Rejected`
-      : `${req.module || 'Purchase Order'} Returned for Revision`;
+      ? `${moduleName}${refText} rejected successfully.`
+      : `${moduleName}${refText} returned for revision successfully.`;
 
     setActionSuccessData({
       actionType,
-      module: req.module || 'Approval Request',
+      module: moduleName,
       referenceNumber: req.referenceNumber,
-      title: req.title,
+      title: req.title || `${moduleName} Approval`,
       message: defaultMsg,
       comment,
       details: [
@@ -550,38 +552,7 @@ export default function ApprovalsPage() {
         })}
       </div>
 
-      {/* Module Selector Tabs */}
-      <div className="mb-4 flex flex-wrap items-center gap-1.5 p-1 rounded-xl bg-muted/40 border border-border/60">
-        {[
-          { key: 'All', label: 'All Modules', icon: <Layers size={14} /> },
-          { key: 'Purchase Order', label: 'Purchase Orders', icon: <ShoppingCart size={14} /> },
-          { key: 'RFQ', label: 'RFQs', icon: <FileText size={14} /> },
-          { key: 'Quotation', label: 'Quotations', icon: <ClipboardList size={14} /> },
-          { key: 'Contract', label: 'Contracts', icon: <FileSignature size={14} /> },
-          { key: 'Purchase Invoice', label: 'Invoices', icon: <Wallet size={14} /> },
-        ].map((tab) => {
-          const isSelected = moduleFilter === tab.key;
-          return (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => {
-                setModuleFilter(tab.key);
-                setCurrentPage(1);
-              }}
-              className={cn(
-                'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer',
-                isSelected
-                  ? 'bg-background text-foreground shadow-xs ring-1 ring-border/80 font-bold'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
-              )}
-            >
-              {tab.icon}
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
-      </div>
+
 
       {/* Toolbar: Search */}
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -675,6 +646,9 @@ export default function ApprovalsPage() {
                           <>
                             <Button variant="outline" size="sm" className="h-8 text-xs gap-1 text-emerald-600 hover:text-emerald-700" onClick={() => openAction(req, 'approve')}>
                               <ThumbsUp className="size-3.5" /> Approve
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 text-amber-600 hover:text-amber-700" onClick={() => openAction(req, 'return')}>
+                              <RotateCcw className="size-3.5" /> Return
                             </Button>
                             <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 text-destructive hover:text-destructive" onClick={() => openAction(req, 'reject')}>
                               <ThumbsDown className="size-3.5" /> Reject

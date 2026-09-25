@@ -26,6 +26,7 @@ import { TableSkeleton, CardSkeleton, PageSkeleton, Skeleton } from '../../compo
 import { useAuth } from '../../context/AuthContext';
 import PhoneInput from '../../components/shared/PhoneInput';
 import { COUNTRY_CODES } from '../../config/countryCodes';
+import { ALL_PLACEHOLDERS, PLACEHOLDER_CATEGORIES, resolvePlaceholders } from '../../utils/placeholderResolver';
 
 // ─── Predictive Match Analysis ──────────────────────────────
 interface PredictiveMatchResult {
@@ -391,7 +392,7 @@ function textToHtml(text: string): string {
 }
 
 // ─── Resolve dynamic placeholders ({YYYY} {YY} {MM} {DD}) ──────────────
-function resolvePlaceholders(template: string): string {
+function resolveSequencePlaceholders(template: string): string {
   const now = new Date();
   const yyyy = String(now.getFullYear());
   return template
@@ -784,8 +785,8 @@ export default function CompanySettingsPage() {
         CONTRACT: 'Contract Number',
         PAYMENT_VOUCHER: 'Payment Voucher No.',
       } as Record<string, string>;
-      const prefix = resolvePlaceholders(String(edit.prefix ?? ''));
-      const suffix = resolvePlaceholders(String(edit.suffix ?? ''));
+      const prefix = resolveSequencePlaceholders(String(edit.prefix ?? ''));
+      const suffix = resolveSequencePlaceholders(String(edit.suffix ?? ''));
       const num = Number(edit.nextNumber ?? 1);
       const pad = Number(edit.paddingLength ?? 4);
       const preview = `${prefix}${String(num).padStart(pad, '0')}${suffix ? '-' + suffix : ''}`;
@@ -852,10 +853,10 @@ export default function CompanySettingsPage() {
     if (!e) return '—';
     const num = Number(e.nextNumber ?? 1);
     const pad = Number(e.paddingLength ?? 4);
-    const prefix = resolvePlaceholders(String(e.prefix ?? ''));
-    const suffix = resolvePlaceholders(String(e.suffix ?? ''));
+    const prefix = resolveSequencePlaceholders(String(e.prefix ?? ''));
+    const suffix = resolveSequencePlaceholders(String(e.suffix ?? ''));
     return `${prefix}${String(num).padStart(pad, '0')}${suffix ? '-' + suffix : ''}`;
-  }, [seqEdits, resolvePlaceholders]);
+  }, [seqEdits, resolveSequencePlaceholders]);
 
 
   const ENTITY_LABELS: Record<string, { label: string; desc: string }> = {
@@ -1430,6 +1431,35 @@ export default function CompanySettingsPage() {
   const [contractSearchQuery, setContractSearchQuery] = useState('');
   const [contractFilterType, setContractFilterType] = useState('ALL');
   const ocrPollActiveRef = useRef(false);
+  const [selectedPlaceholderCategory, setSelectedPlaceholderCategory] = useState<string>('all');
+  const [insertedPlaceholderNotice, setInsertedPlaceholderNotice] = useState<string | null>(null);
+
+  // Dynamic Sidebar Height Auto-Lock for Rich Text Editor Alignment
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const [sidebarHeight, setSidebarHeight] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!sidebarRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.target === sidebarRef.current) {
+          setSidebarHeight(entry.target.clientHeight);
+        }
+      }
+    });
+    observer.observe(sidebarRef.current);
+    return () => observer.disconnect();
+  }, [selectedContractType, selectedPlaceholderCategory]);
+
+  const handleInsertPlaceholderTag = (tagCode: string) => {
+    setEditedContractContent((prev) => {
+      const spacePrefix = prev && !prev.endsWith(' ') && !prev.endsWith('>') ? ' ' : '';
+      return `${prev}${spacePrefix}${tagCode} `;
+    });
+    setContractTemplateDirty(true);
+    setInsertedPlaceholderNotice(tagCode);
+    setTimeout(() => setInsertedPlaceholderNotice(null), 2500);
+  };
 
   const filteredContractTemplates = useMemo(() => {
     return contractTemplates.filter(t => {
@@ -4805,15 +4835,6 @@ export default function CompanySettingsPage() {
 
                       <div className="cs-dt-detail__body">
                         <div className="cs-dt-detail__editor-col">
-                          <div className="cs-dt-detail__name-row">
-                            <label className="cs-dt-detail__name-label">Template Name</label>
-                            <input
-                              value={editedContractName || ''}
-                              onChange={(e) => handleContractNameChange(e.target.value)}
-                              placeholder="Template Name"
-                              className="cs-dt-detail__name-input"
-                            />
-                          </div>
 
                           <div className="cs-dt-upload-strip">
                             <div className="cs-dt-upload-strip__left">
@@ -4936,13 +4957,16 @@ export default function CompanySettingsPage() {
                                 {selectedContractTemplate?.ocrStatus === 'PROCESSING' ? (
                                   <><Loader2 size={13} className="cs-spin" /> Processing OCR…</>
                                 ) : (
-                                  <><Sparkles size={13} /> Run OCR & Insert Text</>
+                                  <><FileText size={13} /> Run OCR & Insert Text</>
                                 )}
                               </button>
                             </div>
                           </div>
 
-                          <div className="cs-dt-detail__editor-wrap">
+                          <div
+                            className="cs-dt-detail__editor-wrap"
+                            style={sidebarHeight ? { height: `${sidebarHeight}px` } : undefined}
+                          >
                             <div className="cs-dt-detail__editor-label">
                               <FileSignature size={14} /> Contract Template Content
                             </div>
@@ -4951,20 +4975,60 @@ export default function CompanySettingsPage() {
                               value={editedContractContent}
                               onChange={handleContractContentChange}
                               placeholder="Write contract template content here... Use {{contract_number}}, {{vendor_name}}, {{contract_value}}, etc."
-                              minHeight={320}
+                              maxHeight="100%"
                             />
                           </div>
+                        </div>
 
+                        {/* Right Sidebar Column: Interactive Placeholders & Company Signature */}
+                        <div className="cs-dt-detail__sidebar-col" ref={sidebarRef}>
                           <div className="cs-doc-placeholders">
-                            <div className="cs-doc-placeholders__title">Available Placeholders</div>
-                            <div className="cs-doc-placeholders__list">
-                              {Object.entries(CONTRACT_PLACEHOLDERS).map(([code, desc]) => (
-                                <span key={code} className="cs-doc-placeholders__item">
-                                  <code className="cs-doc-placeholders__code">{code}</code>
-                                  {' - '}{desc}
-                                </span>
+                            <div className="cs-doc-placeholders__header">
+                              <div className="cs-doc-placeholders__title">
+                                <Tag size={14} className="text-blue-500" /> Click-to-Insert Placeholders
+                              </div>
+                              <div className="cs-doc-placeholders__sub">
+                                Click any tag to insert it into your editor.
+                              </div>
+                            </div>
+
+                            {/* Category Filter Tabs */}
+                            <div className="cs-doc-placeholders__tabs">
+                              {PLACEHOLDER_CATEGORIES.map((cat) => (
+                                <button
+                                  key={cat.id}
+                                  type="button"
+                                  className={`cs-doc-placeholders__tab ${selectedPlaceholderCategory === cat.id ? 'cs-doc-placeholders__tab--active' : ''}`}
+                                  onClick={() => setSelectedPlaceholderCategory(cat.id)}
+                                >
+                                  {cat.label}
+                                </button>
                               ))}
                             </div>
+
+                            {/* Interactive Clickable Tags */}
+                            <div className="cs-doc-placeholders__grid">
+                              {ALL_PLACEHOLDERS.filter((ph) => selectedPlaceholderCategory === 'all' || ph.category === selectedPlaceholderCategory).map((ph) => (
+                                <button
+                                  key={ph.code}
+                                  type="button"
+                                  className="cs-doc-placeholders__chip"
+                                  onClick={() => handleInsertPlaceholderTag(ph.code)}
+                                  title={`Click to insert ${ph.code} (${ph.description})`}
+                                >
+                                  <code className="cs-doc-placeholders__chip-code">{ph.code}</code>
+                                  <span className="cs-doc-placeholders__chip-desc">{ph.label}</span>
+                                  <Plus size={12} className="cs-doc-placeholders__chip-add" />
+                                </button>
+                              ))}
+                            </div>
+
+                            {insertedPlaceholderNotice && (
+                              <div className="cs-doc-placeholders__notice">
+                                <CheckCircle2 size={13} className="text-emerald-500" />
+                                <span>Inserted <strong>{insertedPlaceholderNotice}</strong>!</span>
+                              </div>
+                            )}
                           </div>
 
                           <div className="cs-dt-signature-block">
@@ -5125,7 +5189,7 @@ export default function CompanySettingsPage() {
                                 {selectedDocTemplate?.ocrStatus === 'PROCESSING' ? (
                                   <><Loader2 size={13} className="cs-spin" /> Processing OCR…</>
                                 ) : (
-                                  <><Sparkles size={13} /> Run OCR & Insert Text</>
+                                  <><FileText size={13} /> Run OCR & Insert Text</>
                                 )}
                               </button>
                             </div>

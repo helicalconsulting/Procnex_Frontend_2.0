@@ -20,6 +20,7 @@ import PurchaseOrderDocument from '../../components/purchase-orders/PurchaseOrde
 import { toCanvas } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import { useAuth } from '../../context/AuthContext';
+import ActionSendingOverlay from '../../components/shared/ActionSendingOverlay';
 import './PurchaseRequisitionPage.css';
 
 // ─── Helper ─────────────────────────────────────────────────
@@ -146,16 +147,28 @@ export default function PurchaseRequisitionPage() {
           }
         }
 
-        // Fetch contract data if contractId provided (from Post-Contract PO flow)
+        // Fetch contract data if contractId provided or if RFQ is linked to a contract
         let contract: any = null;
-        if (contractId) {
+        let resolvedContractId = contractId;
+
+        if (!resolvedContractId && rfqId) {
           try {
-            const contractResp = await contractService.getContract(contractId);
+            const listRes = await contractService.listContracts({ search: rfqId, limit: 10 });
+            if (listRes.contracts && listRes.contracts.length > 0) {
+              const matched = listRes.contracts.find(c => c.rfqId === rfqId || c.rfq?.id === rfqId);
+              if (matched) resolvedContractId = matched.id;
+            }
+          } catch {}
+        }
+
+        if (resolvedContractId) {
+          try {
+            const contractResp = await contractService.getContract(resolvedContractId);
             contract = contractResp.contract;
             setContractData(contract);
             // Fetch contract balance for validation
             try {
-              const balance = await contractService.getContractBalance(contractId);
+              const balance = await contractService.getContractBalance(resolvedContractId);
               setContractBalance(balance);
             } catch {}
           } catch {}
@@ -584,9 +597,12 @@ export default function PurchaseRequisitionPage() {
     await executeSubmitForApproval(1);
   };
 
+  const [showSendingOverlay, setShowSendingOverlay] = useState(false);
+
   const executeSubmitForApproval = async (startLevelNumber?: number) => {
     if (!pr) return;
     setSaving(true);
+    setShowSendingOverlay(true);
     setError(null);
     try {
       const payload = {
@@ -622,8 +638,12 @@ export default function PurchaseRequisitionPage() {
         setToast({ message: 'Purchase Requisition submitted for approval. Redirecting to PO Creation page…', type: 'success' });
       }
 
-      setTimeout(() => navigate('/procurement/purchase-requisitions'), 1500);
+      setTimeout(() => {
+        setShowSendingOverlay(false);
+        navigate('/procurement/purchase-requisitions');
+      }, 2200);
     } catch (err: any) {
+      setShowSendingOverlay(false);
       setToast({ message: err?.message || 'Failed to submit for approval', type: 'error' });
     } finally {
       setSaving(false);
@@ -1271,6 +1291,15 @@ export default function PurchaseRequisitionPage() {
           </div>
         </div>
       )}
+      <ActionSendingOverlay
+        isOpen={showSendingOverlay}
+        docType="po"
+        docNumber={pr?.poNumber}
+        vendorName={pr?.vendorName}
+        amount={pr?.grandTotal}
+        currency={pr?.currency || 'INR'}
+        mode="approval"
+      />
     </div>
   );
 }

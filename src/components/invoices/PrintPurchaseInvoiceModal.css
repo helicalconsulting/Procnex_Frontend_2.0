@@ -421,13 +421,17 @@
   background: #ffffff;
   border: 1px dashed #cbd5e1;
   border-radius: 6px;
-  padding: 6px 8px;
-  margin-top: 2px;
+  padding: 8px 12px;
+  margin-top: 4px;
   text-align: center;
+  min-height: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .ppi-stamp-sig-pending {
-  font-size: 10.5px;
+  font-size: 11px;
   font-style: italic;
   color: #94a3b8;
 }
@@ -436,20 +440,24 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
+  width: 100%;
 }
 
 .ppi-stamp-sig-img {
-  max-height: 28px;
-  max-width: 130px;
+  max-height: 60px;
+  min-height: 44px;
+  max-width: 220px;
+  width: auto;
   object-fit: contain;
+  margin: 2px 0;
 }
 
 .ppi-stamp-sig-seal {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  font-size: 9.5px;
+  gap: 4px;
+  font-size: 10.5px;
   font-weight: 700;
   color: #0284c7;
 }

@@ -1,5 +1,6 @@
 import { USE_MOCK } from '../config/mock';
 import { apiRequest, ApiError } from '../api/client';
+import { resolvePlaceholders } from '../utils/placeholderResolver';
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -318,7 +319,37 @@ async function mockCreateContract(payload: ContractCreatePayload): Promise<Contr
     contractNumber: `CON-${new Date().getFullYear()}-${String(MOCK_CONTRACTS.length + 1).padStart(4, '0')}`,
     title: payload.title,
     contractType: payload.contractType,
-    contentSnapshot: '<h1>Contract</h1><p>Mock content</p>',
+    contentSnapshot: resolvePlaceholders(
+      `<h2>{{title}}</h2>
+<p>This Contract Agreement (Ref: <strong>{{contract_number}}</strong>) is entered into on <strong>{{effective_date}}</strong> by and between:</p>
+<p><strong>PARTY A:</strong> {{company_name}}, located at {{company_address}}.<br/>
+<strong>PARTY B:</strong> {{vendor_name}}, located at {{vendor_address}}.</p>
+
+<h3>1. PURPOSE & SCOPE</h3>
+<p>Party B agrees to provide products and services as described under RFQ reference <strong>{{rfq_number}}</strong> in accordance with agreed specifications and quality benchmarks.</p>
+
+<h3>2. COMMERCIAL TERMS</h3>
+<p>Total Contract Value: <strong>{{contract_value}}</strong>.<br/>
+Payment Terms: <strong>{{payment_terms}}</strong>.<br/>
+Delivery Terms: <strong>{{delivery_terms}}</strong>.</p>
+
+<h3>3. SIGNATURES</h3>
+<table style="width:100%; margin-top:24px;">
+  <tr>
+    <td style="width:50%;"><strong>For {{company_name}}:</strong><br/><br/>{{companySignature}}</td>
+    <td style="width:50%;"><strong>For {{vendor_name}}:</strong><br/><br/>{{vendor_signature}}</td>
+  </tr>
+</table>`,
+      {
+        contractNumber: `CON-${new Date().getFullYear()}-${String(MOCK_CONTRACTS.length + 1).padStart(4, '0')}`,
+        rfqNumber: payload.rfqId || 'RFQ-DIRECT',
+        effectiveDate: payload.effectiveDate || new Date().toLocaleDateString('en-GB'),
+        contractValue: payload.contractValue || 0,
+        currency: payload.currency || 'KES',
+        paymentTerms: payload.paymentTerms || 'Net 30',
+        deliveryTerms: payload.deliveryTerms || 'FOB Destination',
+      }
+    ),
     contractValue: payload.contractValue || 0,
     currency: payload.currency || 'KES',
     effectiveDate: payload.effectiveDate,

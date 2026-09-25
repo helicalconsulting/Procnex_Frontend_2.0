@@ -164,4 +164,16 @@ export const purchaseOrderService = {
     }
     await apiRequest(`/purchase-orders/${id}`, { method: 'DELETE' });
   },
+  async updateStatus(id: number | string, status: string, comments?: string): Promise<void> {
+    if (USE_MOCK) {
+      await new Promise(r => setTimeout(r, 200));
+      const found = MOCK_PURCHASE_ORDERS.find(p => String(p.id) === String(id) || p.poNumber === String(id));
+      if (found) found.status = status;
+      return;
+    }
+    await apiRequest(`/purchase-orders/${id}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status, comments }),
+    });
+  },
 };

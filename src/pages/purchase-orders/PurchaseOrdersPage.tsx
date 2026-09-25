@@ -23,8 +23,15 @@ import {
   SlidersHorizontal,
   LayoutList,
   LayoutGrid,
+  RotateCcw,
+  ThumbsUp,
+  ThumbsDown,
 } from 'lucide-react';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
+import { approvalService } from '../../services/approvalService';
+import { signatureService } from '../../services/signatureService';
+import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
+import { DigitalSignatureApprovalModal } from '../../components/shared/DigitalSignatureApprovalModal';
 import { sseClient } from '../../services/sseClient';
 import { downloadPurchaseOrderAsPdf } from '../../utils/pdfDownload';
 import { toNumber } from '../../api/normalize';
@@ -130,11 +137,23 @@ const ALL_COLUMNS: ColumnDef[] = [
 
 export default function PurchaseOrdersPage() {
   const navigate = useNavigate();
-  const { hasPermission } = useAuth();
+  const { roles: authRoles, hasPermission } = useAuth();
+  const isAdmin = useMemo(() => {
+    if (!authRoles || authRoles.length === 0) return false;
+    return authRoles.some((r) => r === 'Super Admin' || r === 'Administrator' || r.toLowerCase().includes('admin'));
+  }, [authRoles]);
+
   const canCreatePO =
     hasPermission('PO Creation', 'canCreate') ||
     hasPermission('Purchase Orders', 'canCreate') ||
     hasPermission('PO', 'canCreate');
+
+  const canApprovePO =
+    isAdmin ||
+    hasPermission('PO Approvals', 'canApprove') ||
+    hasPermission('PO Creation', 'canApprove') ||
+    hasPermission('Purchase Orders', 'canApprove') ||
+    hasPermission('PO', 'canApprove');
 
   const { data: poResult, loading, error, forceRefresh } = useServiceData(
     () => purchaseOrderService.list().then((r) => r.orders.map(mapPO)),
@@ -175,6 +194,177 @@ export default function PurchaseOrdersPage() {
   const [showBatchDeleteModal, setShowBatchDeleteModal] = useState(false);
   const [batchDeleting, setBatchDeleting] = useState(false);
   const [pageMsg, setPageMsg] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const [actionModal, setActionModal] = useState<{ order: MockPO; action: 'approve' | 'reject' | 'return' } | null>(null);
+  const [actionComment, setActionComment] = useState('');
+  const [actionSaving, setActionSaving] = useState(false);
+  const [actionSuccessData, setActionSuccessData] = useState<ActionSuccessModalData | null>(null);
+  const [chainModal, setChainModal] = useState<{ module: string; referenceId: string } | null>(null);
+
+  const openAction = useCallback((order: MockPO, action: 'approve' | 'reject' | 'return') => {
+    setActionModal({ order, action });
+    setActionComment('');
+  }, []);
+
+  const handleAction = useCallback(async () => {
+    if (!actionModal) return;
+    setActionSaving(true);
+    const targetOrder = actionModal.order;
+    const act = actionModal.action;
+    const comment = actionComment.trim() || undefined;
+
+    let approvalId = (targetOrder as any).approvalId;
+    if (!approvalId) {
+      try {
+        const list = await approvalService.listTable({ module: 'PurchaseOrders' }).catch(() => []);
+        const found = list.find(
+          (r: any) =>
+            r.referenceId === String(targetOrder.id) ||
+            r.referenceNumber === targetOrder.poNumber ||
+            r.referenceId === targetOrder.poNumber ||
+            (r.title && r.title.includes(targetOrder.poNumber))
+        );
+        if (found) {
+          approvalId = found.id;
+        } else {
+          await approvalService.resubmit('PurchaseOrders', targetOrder.poNumber || String(targetOrder.id), 1).catch(() => null);
+          const updatedList = await approvalService.listTable({ module: 'PurchaseOrders' }).catch(() => []);
+          const updatedFound = updatedList.find(
+            (r: any) =>
+              r.referenceId === String(targetOrder.id) ||
+              r.referenceNumber === targetOrder.poNumber ||
+              r.referenceId === targetOrder.poNumber
+          );
+          if (updatedFound) approvalId = updatedFound.id;
+        }
+      } catch {}
+    }
+
+    try {
+      if (approvalId) {
+        if (act === 'approve') {
+          await approvalService.approve(approvalId, comment);
+        } else if (act === 'reject') {
+          await approvalService.reject(approvalId, comment);
+        } else {
+          await approvalService.return(approvalId, comment, 'ORIGINATOR');
+        }
+      } else {
+        const statusToSet = act === 'approve' ? 'APPROVED' : act === 'reject' ? 'CANCELLED' : 'RETURNED';
+        await purchaseOrderService.updateStatus(targetOrder.id, statusToSet, comment);
+      }
+
+      setActionModal(null);
+      setActionComment('');
+      window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
+      window.dispatchEvent(new CustomEvent('heliflow:po-updated'));
+      await forceRefresh();
+
+      setActionSuccessData({
+        actionType: act === 'approve' ? 'approve' : act === 'reject' ? 'reject' : 'return',
+        module: 'Purchase Order',
+        referenceNumber: targetOrder.poNumber,
+        title: `Purchase Order ${targetOrder.poNumber}`,
+        message: act === 'approve'
+          ? 'Purchase Order approved successfully.'
+          : act === 'reject'
+          ? 'Purchase Order rejected successfully.'
+          : 'Purchase Order returned for revision successfully.',
+        comment: comment,
+        details: [
+          { label: 'Vendor Name', value: targetOrder.vendorName },
+          { label: 'Total Amount', value: formatAmount(targetOrder.totalAmountNum, companyDefaultCurrency) },
+          { label: 'Expected Delivery', value: formatDate(targetOrder.expectedDelivery) },
+        ],
+      });
+    } catch (err) {
+      await forceRefresh();
+    } finally {
+      setActionSaving(false);
+    }
+  }, [actionModal, actionComment, forceRefresh, formatAmount, companyDefaultCurrency]);
+
+  const handleSignatureConfirm = useCallback(
+    async (signatureDataUrl: string, comment?: string) => {
+      if (!actionModal) return;
+      setActionSaving(true);
+      const targetOrder = actionModal.order;
+      let approvalId = (targetOrder as any).approvalId;
+
+      if (!approvalId) {
+        try {
+          const list = await approvalService.listTable({ module: 'PurchaseOrders' }).catch(() => []);
+          const found = list.find(
+            (r: any) =>
+              r.referenceId === String(targetOrder.id) ||
+              r.referenceNumber === targetOrder.poNumber ||
+              r.referenceId === targetOrder.poNumber ||
+              (r.title && r.title.includes(targetOrder.poNumber))
+          );
+          if (found) {
+            approvalId = found.id;
+          } else {
+            await approvalService.resubmit('PurchaseOrders', targetOrder.poNumber || String(targetOrder.id), 1).catch(() => null);
+            const updatedList = await approvalService.listTable({ module: 'PurchaseOrders' }).catch(() => []);
+            const updatedFound = updatedList.find(
+              (r: any) =>
+                r.referenceId === String(targetOrder.id) ||
+                r.referenceNumber === targetOrder.poNumber ||
+                r.referenceId === targetOrder.poNumber
+            );
+            if (updatedFound) approvalId = updatedFound.id;
+          }
+        } catch {}
+      }
+
+      try {
+        await signatureService.signDocument({
+          module: 'PurchaseOrders',
+          referenceId: targetOrder.poNumber || String(targetOrder.id),
+          signatureId: 'digital_signature',
+          dataUrl: signatureDataUrl,
+          levelNumber: 1,
+          comments: comment,
+        });
+      } catch (sigErr) {
+        console.warn('Digital signature recording warning:', sigErr);
+      }
+
+      setActionModal(null);
+      setActionComment('');
+
+      try {
+        if (approvalId) {
+          await approvalService.approve(approvalId, comment);
+        } else {
+          await purchaseOrderService.updateStatus(targetOrder.id, 'APPROVED', comment);
+        }
+
+        window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
+        window.dispatchEvent(new CustomEvent('heliflow:po-updated'));
+        await forceRefresh();
+
+        setActionSuccessData({
+          actionType: 'approve',
+          module: 'Purchase Order',
+          referenceNumber: targetOrder.poNumber,
+          title: `Purchase Order ${targetOrder.poNumber}`,
+          message: 'Purchase Order approved successfully with digital signature.',
+          comment: comment,
+          details: [
+            { label: 'Vendor Name', value: targetOrder.vendorName },
+            { label: 'Total Amount', value: formatAmount(targetOrder.totalAmountNum, companyDefaultCurrency) },
+            { label: 'Expected Delivery', value: formatDate(targetOrder.expectedDelivery) },
+          ],
+        });
+      } catch (err) {
+        await forceRefresh();
+      } finally {
+        setActionSaving(false);
+      }
+    },
+    [actionModal, forceRefresh, formatAmount, companyDefaultCurrency]
+  );
 
   const perPage = 8;
 
@@ -591,6 +781,36 @@ export default function PurchaseOrdersPage() {
                             >
                               <Eye className="size-4" />
                             </Button>
+                            {['PENDING_APPROVAL', 'DRAFT', 'PENDING'].includes(order.status) && (canApprovePO || canCreatePO) && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  className="text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-700"
+                                  onClick={() => openAction(order, 'approve')}
+                                  title={`Approve ${order.poNumber}`}
+                                >
+                                  <ThumbsUp className="size-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                  onClick={() => openAction(order, 'reject')}
+                                  title={`Reject ${order.poNumber}`}
+                                >
+                                  <ThumbsDown className="size-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  onClick={() => openAction(order, 'return')}
+                                  title={`Return ${order.poNumber}`}
+                                >
+                                  <RotateCcw className="size-4" />
+                                </Button>
+                              </>
+                            )}
                             <Button
                               variant="ghost"
                               size="icon-sm"
@@ -656,7 +876,7 @@ export default function PurchaseOrdersPage() {
                     <dd className="mt-1 font-medium">{order.priority}</dd>
                   </div>
                 </dl>
-                <div className="mt-3 flex items-center justify-between border-t border-border/60 pt-3">
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-1.5 border-t border-border/60 pt-3">
                   <div className="flex gap-1.5">
                     <Button variant="ghost" size="sm" onClick={() => setDetailPO(order)}>
                       <Eye /> Details
@@ -665,6 +885,19 @@ export default function PurchaseOrdersPage() {
                       <Download /> PDF
                     </Button>
                   </div>
+                  {['PENDING_APPROVAL', 'DRAFT', 'PENDING'].includes(order.status) && (canApprovePO || canCreatePO) && (
+                    <div className="flex gap-1">
+                      <Button size="sm" onClick={() => openAction(order, 'approve')}>
+                        <ThumbsUp /> Approve
+                      </Button>
+                      <Button variant="ghost" size="sm" className="text-destructive" onClick={() => openAction(order, 'reject')}>
+                        <ThumbsDown /> Reject
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => openAction(order, 'return')}>
+                        <RotateCcw /> Return
+                      </Button>
+                    </div>
+                  )}
                   {canCreatePO && (
                     <Button variant="ghost" size="icon-sm" className="text-destructive" onClick={() => setDeleteTarget(order)}>
                       <Trash2 className="size-4" />
@@ -867,17 +1100,128 @@ export default function PurchaseOrdersPage() {
               )}
             </div>
 
-            <DialogFooter className="border-t border-border/60 bg-muted/20 p-4 px-6">
-              <Button variant="outline" onClick={() => setDetailPO(null)}>
-                Close
+            <DialogFooter className="border-t border-border/60 bg-muted/20 p-4 px-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <Button
+                variant="outline"
+                onClick={() => setChainModal({ module: 'PurchaseOrders', referenceId: detailPO.poNumber || String(detailPO.id) })}
+              >
+                <Clock className="size-4" /> View Approval Chain
               </Button>
-              <Button onClick={() => downloadPurchaseOrderAsPdf(detailPO, formatAmount, companyDefaultCurrency)}>
-                <Download className="size-4" /> Download PDF Document
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                {['PENDING_APPROVAL', 'DRAFT', 'PENDING'].includes(detailPO.status) && (canApprovePO || canCreatePO) && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-amber-600 hover:text-amber-700 border-amber-500/30 hover:bg-amber-500/10 rounded-full px-3.5"
+                      onClick={() => {
+                        const po = detailPO;
+                        setDetailPO(null);
+                        openAction(po, 'return');
+                      }}
+                    >
+                      <RotateCcw className="size-3.5 mr-1" /> Return
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="rounded-full px-3.5"
+                      onClick={() => {
+                        const po = detailPO;
+                        setDetailPO(null);
+                        openAction(po, 'reject');
+                      }}
+                    >
+                      <ThumbsDown className="size-3.5 mr-1" /> Reject
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-full px-3.5"
+                      onClick={() => {
+                        const po = detailPO;
+                        setDetailPO(null);
+                        openAction(po, 'approve');
+                      }}
+                    >
+                      <ThumbsUp className="size-3.5 mr-1" /> Approve
+                    </Button>
+                  </>
+                )}
+                <Button onClick={() => downloadPurchaseOrderAsPdf(detailPO, formatAmount, companyDefaultCurrency)}>
+                  <Download className="size-4" /> Download PDF Document
+                </Button>
+                <Button variant="outline" onClick={() => setDetailPO(null)}>
+                  Close
+                </Button>
+              </div>
             </DialogFooter>
           </DialogContent>
         )}
       </Dialog>
+
+      {/* Action Dialog */}
+      {actionModal && actionModal.action === 'approve' ? (
+        <DigitalSignatureApprovalModal
+          open={!!actionModal}
+          onClose={() => setActionModal(null)}
+          onConfirm={handleSignatureConfirm}
+          docTitle={`Purchase Order ${actionModal.order.poNumber}`}
+          docDetails={[
+            { label: 'PO Number', value: actionModal.order.poNumber },
+            { label: 'Vendor Name', value: actionModal.order.vendorName },
+            { label: 'Total Amount', value: formatAmount(actionModal.order.totalAmountNum, companyDefaultCurrency) },
+            { label: 'Expected Delivery', value: formatDate(actionModal.order.expectedDelivery) },
+          ]}
+        />
+      ) : (
+        <Dialog open={!!actionModal} onOpenChange={(open) => { if (!open && !actionSaving) setActionModal(null); }}>
+          {actionModal && (
+            <DialogContent>
+              <DialogHeader>
+                <div
+                  className={cn(
+                    'mb-2 grid size-11 place-items-center rounded-xl',
+                    actionModal.action === 'reject' ? 'bg-destructive/10 text-destructive' : 'bg-amber-500/10 text-amber-600'
+                  )}
+                >
+                  {actionModal.action === 'reject' ? <ThumbsDown className="size-5" /> : <RotateCcw className="size-5" />}
+                </div>
+                <DialogTitle>
+                  {actionModal.action === 'reject' ? `Reject PO ${actionModal.order.poNumber}?` : `Return PO ${actionModal.order.poNumber}?`}
+                </DialogTitle>
+                <DialogDescription>
+                  {actionModal.action === 'reject'
+                    ? 'Rejecting this purchase order will decline the request.'
+                    : 'Returning this purchase order will send it back to the originator for revision.'}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 py-2">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Comments / Reason (Optional)
+                </label>
+                <Input
+                  placeholder="Enter comment or reason for this decision..."
+                  value={actionComment}
+                  onChange={(e) => setActionComment(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleAction(); }}
+                />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setActionModal(null)} disabled={actionSaving}>
+                  Cancel
+                </Button>
+                <Button
+                  variant={actionModal.action === 'reject' ? 'destructive' : 'default'}
+                  loading={actionSaving}
+                  onClick={handleAction}
+                >
+                  Confirm {actionModal.action === 'reject' ? 'Rejection' : 'Return'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          )}
+        </Dialog>
+      )}
 
       {/* Delete Single Modal */}
       <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open && !deleting) setDeleteTarget(null); }}>
@@ -916,6 +1260,100 @@ export default function PurchaseOrdersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Chain Modal */}
+      {chainModal && (
+        <ApprovalChainView
+          module={chainModal.module}
+          referenceId={chainModal.referenceId}
+          onClose={() => setChainModal(null)}
+        />
+      )}
+
+      {/* Success Modal */}
+      {actionSuccessData && (
+        <ActionSuccessModal
+          data={actionSuccessData}
+          onClose={() => setActionSuccessData(null)}
+        />
+      )}
     </PageFrame>
+  );
+}
+
+function ApprovalChainView({ module, referenceId, onClose }: { module: string; referenceId: string; onClose: () => void }) {
+  const [chainData, setChainData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchChain = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await approvalService.getChain(module, referenceId);
+        if (!cancelled) setChainData(data);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load approval chain');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetchChain();
+    return () => {
+      cancelled = true;
+    };
+  }, [module, referenceId]);
+
+  const itemsToDisplay = chainData?.history && chainData.history.length > 0
+    ? chainData.history
+    : chainData?.timeline && chainData.timeline.length > 0
+    ? chainData.timeline
+    : chainData?.levels || [];
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Approval history & timeline</DialogTitle>
+          <DialogDescription>{module} · {referenceId}</DialogDescription>
+        </DialogHeader>
+
+        {loading ? (
+          <div className="py-8 text-center text-sm text-muted-foreground">Loading approval chain…</div>
+        ) : error ? (
+          <div className="py-8 text-center text-sm text-destructive">{error}</div>
+        ) : itemsToDisplay.length === 0 ? (
+          <div className="py-8 text-center text-sm text-muted-foreground">No approval history available.</div>
+        ) : (
+          <div className="space-y-4 py-2">
+            {itemsToDisplay.map((item: any, idx: number) => (
+              <div key={idx} className="flex gap-3 rounded-xl border border-border/70 bg-secondary/40 p-3.5 text-sm">
+                <div className="grid size-7 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                  {item.levelNumber || idx + 1}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold">
+                      {item.requiredRole ? item.requiredRole.replace(/_/g, ' ') : `Level ${idx + 1}`}
+                    </span>
+                    <Badge tone={item.status === 'APPROVED' ? 'success' : item.status === 'REJECTED' ? 'danger' : 'warning'}>
+                      {item.status}
+                    </Badge>
+                  </div>
+                  {item.approverName && <p className="mt-1 text-xs text-muted-foreground">By: {item.approverName}</p>}
+                  {item.comments && <p className="mt-1 rounded-lg bg-background p-2 text-xs italic">{item.comments}</p>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="secondary" onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
