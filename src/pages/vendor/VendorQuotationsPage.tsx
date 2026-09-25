@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { downloadDocument } from '../../utils/download';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
+import { TableSkeleton } from '../../components/shared/Skeleton';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { CurrencyBadge, CurrencySelector, useCurrency } from '../../components/shared/CurrencyMaster';
 import { Badge } from '../../components/ui/badge';
@@ -441,7 +442,9 @@ export default function VendorQuotationsPage() {
 
       {/* ── Quotation List Cards ────────────────────── */}
       {loading ? (
-        <Card className="p-8 text-center text-sm text-muted-foreground">Loading your quotation history…</Card>
+        <Card className="p-4">
+          <TableSkeleton rows={4} columns={6} />
+        </Card>
       ) : filtered.length > 0 ? (
         <div className="flex flex-col gap-3.5">
           {filtered.map((quot) => {

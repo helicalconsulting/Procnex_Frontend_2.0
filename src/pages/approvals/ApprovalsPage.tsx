@@ -282,6 +282,19 @@ export default function ApprovalsPage() {
     const s = searchParams.get('search');
     if (s !== null) setSearch(s);
   }, [searchParams]);
+
+  useEffect(() => {
+    const mod = searchParams.get('module');
+    if (mod) {
+      const m = mod.toLowerCase();
+      if (m.includes('invoice') || m.includes('ap') || m.includes('accounts')) setModuleFilter('Purchase Invoice');
+      else if (m.includes('rfq')) setModuleFilter('RFQ');
+      else if (m.includes('quotation')) setModuleFilter('Quotation');
+      else if (m.includes('contract')) setModuleFilter('Contract');
+      else if (m.includes('po') || m.includes('purchase')) setModuleFilter('Purchase Order');
+      else if (m.includes('all')) setModuleFilter('All');
+    }
+  }, [searchParams]);
   const [currentPage, setCurrentPage] = useState(1);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [actionSuccessData, setActionSuccessData] = useState<ActionSuccessModalData | null>(null);
@@ -533,6 +546,39 @@ export default function ApprovalsPage() {
                 }
               }}
             />
+          );
+        })}
+      </div>
+
+      {/* Module Selector Tabs */}
+      <div className="mb-4 flex flex-wrap items-center gap-1.5 p-1 rounded-xl bg-muted/40 border border-border/60">
+        {[
+          { key: 'All', label: 'All Modules', icon: <Layers size={14} /> },
+          { key: 'Purchase Order', label: 'Purchase Orders', icon: <ShoppingCart size={14} /> },
+          { key: 'RFQ', label: 'RFQs', icon: <FileText size={14} /> },
+          { key: 'Quotation', label: 'Quotations', icon: <ClipboardList size={14} /> },
+          { key: 'Contract', label: 'Contracts', icon: <FileSignature size={14} /> },
+          { key: 'Purchase Invoice', label: 'Invoices', icon: <Wallet size={14} /> },
+        ].map((tab) => {
+          const isSelected = moduleFilter === tab.key;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => {
+                setModuleFilter(tab.key);
+                setCurrentPage(1);
+              }}
+              className={cn(
+                'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer',
+                isSelected
+                  ? 'bg-background text-foreground shadow-xs ring-1 ring-border/80 font-bold'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
+              )}
+            >
+              {tab.icon}
+              <span>{tab.label}</span>
+            </button>
           );
         })}
       </div>

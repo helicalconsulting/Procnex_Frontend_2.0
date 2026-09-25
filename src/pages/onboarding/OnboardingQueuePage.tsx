@@ -194,11 +194,6 @@ export default function OnboardingQueuePage() {
   const perPage = 10;
 
   useEffect(() => {
-    reload();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
     sseClient.connect();
 
     const unsub1 = sseClient.on('notification', () => reload());

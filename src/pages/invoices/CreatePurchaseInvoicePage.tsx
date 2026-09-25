@@ -33,6 +33,7 @@ import {
   Pencil
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
+import { TableSkeleton } from '../../components/shared/Skeleton';
 import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyMaster';
 import { useBranding } from '../../context/BrandingContext';
 import defaultHeliflowLogo from '../../assets/heliflow.png';
@@ -927,18 +928,40 @@ export default function CreatePurchaseInvoicePage() {
         )}
 
         {/* Table Card */}
-        <Card className="overflow-hidden">
-          {invoicesList.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-12 text-center">
-              <div className="grid size-12 place-items-center rounded-xl bg-primary/10 text-primary mb-3">
-                <Receipt size={24} />
+        {invoicesLoading ? (
+          <Card className="overflow-hidden p-4">
+            <TableSkeleton rows={5} columns={6} />
+          </Card>
+        ) : (
+          <Card className="overflow-hidden">
+            {invoicesList.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-12 text-center">
+                <div className="grid size-12 place-items-center rounded-xl bg-primary/10 text-primary mb-3">
+                  <Receipt size={24} />
+                </div>
+                <h3 className="text-lg font-semibold text-foreground">No Purchase Invoices Found</h3>
+                <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                  Click the <strong>"+ New Invoice"</strong> button above to record a new vendor purchase invoice entry.
+                </p>
               </div>
-              <h3 className="text-lg font-semibold text-foreground">No Purchase Invoices Found</h3>
-              <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-                Click the <strong>"+ New Invoice"</strong> button above to record a new vendor purchase invoice entry.
-              </p>
-            </div>
-          ) : (
+            ) : filteredInvoices.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-12 text-center">
+                <div className="grid size-12 place-items-center rounded-xl bg-primary/10 text-primary mb-3">
+                  <Search size={24} />
+                </div>
+                <h3 className="text-lg font-semibold text-foreground">No matching invoices found</h3>
+                <p className="text-sm text-muted-foreground mt-1 max-w-sm mb-3">
+                  We couldn't find any invoices matching your search or filter criteria.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { setSearchTerm(''); setStatusFilter(null); }}
+                >
+                  <X size={14} /> Clear Filters
+                </Button>
+              </div>
+            ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1080px] border-collapse text-sm">
                 <thead>
@@ -1099,6 +1122,7 @@ export default function CreatePurchaseInvoicePage() {
             </div>
           )}
         </Card>
+      )}
 
         {/* Single Delete Confirmation Modal */}
         {deleteTarget && (

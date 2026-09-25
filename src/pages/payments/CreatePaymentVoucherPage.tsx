@@ -29,6 +29,7 @@ import {
   Layers
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
+import { TableSkeleton } from '../../components/shared/Skeleton';
 import BankPaymentVoucherModal, { type PaymentVoucherDocData } from '../../components/payments/BankPaymentVoucherModal';
 import { useAuth } from '../../context/AuthContext';
 import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyMaster';
@@ -761,18 +762,23 @@ export default function CreatePaymentVoucherPage() {
         )}
 
         {/* Table Card */}
-        <Card className="overflow-hidden">
-          {vouchersList.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-12 text-center">
-              <div className="grid size-12 place-items-center rounded-xl bg-primary/10 text-primary mb-3">
-                <Landmark size={28} />
+        {vouchersLoading ? (
+          <Card className="overflow-hidden p-4">
+            <TableSkeleton rows={5} columns={6} />
+          </Card>
+        ) : (
+          <Card className="overflow-hidden">
+            {vouchersList.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-12 text-center">
+                <div className="grid size-12 place-items-center rounded-xl bg-primary/10 text-primary mb-3">
+                  <Landmark size={28} />
+                </div>
+                <h3 className="text-lg font-semibold text-foreground">No Payment Vouchers Yet</h3>
+                <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                  Click "+ New Voucher" on the top right to create your first vendor payment disbursement voucher.
+                </p>
               </div>
-              <h3 className="text-lg font-semibold text-foreground">No Payment Vouchers Yet</h3>
-              <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-                Click "+ New Voucher" on the top right to create your first vendor payment disbursement voucher.
-              </p>
-            </div>
-          ) : filteredVouchers.length === 0 ? (
+            ) : filteredVouchers.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-12 text-center">
               <div className="grid size-12 place-items-center rounded-xl bg-primary/10 text-primary mb-3">
                 <Search size={28} />
@@ -944,6 +950,7 @@ export default function CreatePaymentVoucherPage() {
             </div>
           )}
         </Card>
+      )}
 
         {/* Single Voucher Delete Confirmation Modal */}
         {deleteTarget && (
@@ -1227,8 +1234,8 @@ export default function CreatePaymentVoucherPage() {
           </div>
 
           {loadingInvoices ? (
-            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '14px' }}>
-              Loading supplier invoices & 3-way match data...
+            <div style={{ padding: '16px' }}>
+              <TableSkeleton rows={3} columns={6} />
             </div>
           ) : (
             <div>

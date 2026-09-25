@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { downloadDocument } from '../../utils/download';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
+import { TableSkeleton, CardSkeleton } from '../../components/shared/Skeleton';
 import RFQDetailModal from '../../components/rfq/RFQDetailModal';
 import ViewPaymentPlanModal from '../../components/vendor/ViewPaymentPlanModal';
 import '../../components/shared/ColumnCustomizer.css';
@@ -37,6 +38,7 @@ import { useAuth } from '../../context/AuthContext';
 import { isL2OrHigherUser } from '../../utils/rbac';
 import { CreatorLevelPromptModal } from '../../components/shared/CreatorLevelPromptModal';
 import { Button } from '../../components/ui/button';
+import { Card } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { MetricCard, PageFrame, PageLead } from '../../components/ui/product';
 import { cn } from '../../lib/utils';
@@ -2661,13 +2663,6 @@ export default function QuotationsPage() {
     rejected: validQuotations.filter((q) => q.status === 'REJECTED').length,
   }), [validQuotations]);
 
-  // Force refetch on mount — bypass cache so all users see latest data & scores
-  useEffect(() => {
-    reload();
-    reloadAllQuotations();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // SSE real-time refresh — listen for quotation status changes & approval chain completion
   useEffect(() => {
     const refreshAll = () => {
@@ -4620,7 +4615,6 @@ export default function QuotationsPage() {
           {toast.message}
         </MessageStrip>
       )}
-      {loading && <div className="quot-page__loading">Loading quotations…</div>}
 
       {/* Header */}
       <PageLead
@@ -4733,7 +4727,11 @@ export default function QuotationsPage() {
         </div>
 
         {/* Grouped RFQs Accordion List */}
-        {paginatedRfqGroups.length > 0 ? (
+        {loading ? (
+          <Card className="p-4">
+            <TableSkeleton rows={5} columns={6} />
+          </Card>
+        ) : paginatedRfqGroups.length > 0 ? (
           <div>
             <div className="quot-rfq-groups">
               {paginatedRfqGroups.map((group) => {
@@ -4888,7 +4886,7 @@ export default function QuotationsPage() {
               </div>
             )}
           </div>
-        ) : !loading ? (
+        ) : (
           <div className="quot-listing-table-card">
             <div className="quot-listing__empty">
               <div className="quot-listing__empty-icon"><ClipboardList size={40}/></div>
@@ -4896,7 +4894,7 @@ export default function QuotationsPage() {
               <p>{search ? 'Try a different search term' : 'No quotations match the selected status filter'}</p>
             </div>
           </div>
-        ) : null}
+        )}
       </div>
 
       {/* Action Modal — Use enhanced ViewQuotationModal for 'view' type */}

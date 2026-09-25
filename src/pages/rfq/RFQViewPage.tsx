@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, FileText } from 'lucide-react';
 import RFQDetailModal from '../../components/rfq/RFQDetailModal';
+import { RfqSendingOverlay } from '../../components/rfq/RfqSendingOverlay';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
@@ -124,6 +125,14 @@ export default function RFQViewPage() {
           title="RFQ not found"
           description="The RFQ may have been deleted or you may not have access to it."
           action={<Button onClick={() => navigate('/rfq')}>Back to RFQs</Button>}
+        />
+      )}
+      {rfq && (
+        <RfqSendingOverlay
+          isOpen={sending}
+          rfqNumber={rfq.rfqNumber}
+          vendorCount={rfq.vendors?.length || rfq.vendorCount || 0}
+          mode="send"
         />
       )}
     </PageFrame>

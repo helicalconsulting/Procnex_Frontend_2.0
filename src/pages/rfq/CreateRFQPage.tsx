@@ -27,6 +27,7 @@ import { PageSkeleton, CardSkeleton } from '../../components/shared/Skeleton';
 import { useAuth } from '../../context/AuthContext';
 import { isL2OrHigherUser } from '../../utils/rbac';
 import { CreatorLevelPromptModal } from '../../components/shared/CreatorLevelPromptModal';
+import { RfqSendingOverlay } from '../../components/rfq/RfqSendingOverlay';
 import './CreateRFQPage.css';
 
 // ─── Types ──────────────────────────────────────────────────
@@ -2006,6 +2007,18 @@ export default function CreateRFQPage() {
         }}
       />
 
+      <RfqSendingOverlay
+        isOpen={sendingEmail}
+        rfqNumber={editId ? undefined : undefined}
+        vendorCount={selectedVendors.length}
+        mode={rfqApprovalStartPoint === 'ORIGINATOR' ? 'send' : 'approval'}
+      />
+
+      <RfqSendingOverlay
+        isOpen={savingDraft}
+        mode="draft"
+      />
+
       {approvalSubmittedRfq && (
         <div className="prompt-modal-backdrop" onClick={() => { setApprovalSubmittedRfq(null); navigate('/rfq'); }}>
           <div className="prompt-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460, textAlign: 'center', padding: '32px 28px' }}>
@@ -2040,9 +2053,13 @@ export default function CreateRFQPage() {
                   <button
                     className="create-rfq__btn create-rfq__btn--secondary"
                     style={{ minWidth: 130, justifyContent: 'center' }}
-                    onClick={() => { setApprovalSubmittedRfq(null); navigate('/approvals'); }}
+                    onClick={() => {
+                      const rfqNum = approvalSubmittedRfq.number;
+                      setApprovalSubmittedRfq(null);
+                      navigate(`/approvals?module=RFQ&search=${encodeURIComponent(rfqNum)}`);
+                    }}
                   >
-                    View Approvals
+                    View RFQ Approvals
                   </button>
                   <button
                     className="create-rfq__btn create-rfq__btn--primary"
