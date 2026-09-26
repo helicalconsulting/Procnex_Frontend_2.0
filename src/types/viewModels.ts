@@ -141,6 +141,8 @@ export interface ApprovalTableRow {
   comments?: string;
   department: string;
   canAct?: boolean;
+  isReturned?: boolean;
+  isReReview?: boolean;
 }
 
 export interface NotificationRow {

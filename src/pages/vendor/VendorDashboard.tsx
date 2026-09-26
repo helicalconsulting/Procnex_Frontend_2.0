@@ -15,6 +15,7 @@ import {
   GripVertical,
   LayoutGrid,
   Package,
+  Plus,
   Receipt,
   Sparkles,
   TrendingUp,
@@ -461,8 +462,9 @@ export default function VendorDashboard() {
     if (id === 'quicknav') {
       const actions = [
         { label: 'Submit quotation', description: 'Respond to open RFQs', icon: FileText, path: getVendorPath('/vendor/rfqs'), accent: '#0a6ed1' },
+        { label: 'Create invoice', description: 'Submit invoice against order', icon: Plus, path: getVendorPath('/vendor/create-invoice'), accent: '#10b981' },
         { label: 'Track orders', description: 'View fulfillment status', icon: Package, path: getVendorPath('/vendor/orders'), accent: '#8b5cf6' },
-        { label: 'Manage invoices', description: 'Upload and track invoices', icon: Receipt, path: getVendorPath('/procurement/grns'), accent: '#059669' },
+        { label: 'Manage invoices', description: 'Track payment and review status', icon: Receipt, path: getVendorPath('/vendor/invoices'), accent: '#059669' },
         { label: 'My contracts', description: 'Review active agreements', icon: CheckCircle2, path: getVendorPath('/vendor/contracts'), accent: '#0891b2' },
         { label: 'Company profile', description: 'Documents and compliance', icon: Building2, path: getVendorPath('/vendor/profile'), accent: '#ea580c' },
       ];

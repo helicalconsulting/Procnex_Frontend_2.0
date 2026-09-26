@@ -336,12 +336,22 @@ export default function VendorCreateInvoicePage() {
   // Handle File Uploads
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const newFiles = Array.from(e.target.files).map((file, idx) => ({
-        id: `att_${Date.now()}_${idx}`,
-        name: file.name,
-        size: `${(file.size / 1024).toFixed(1)} KB`,
-      }));
-      setAttachments((prev) => [...prev, ...newFiles]);
+      const files = Array.from(e.target.files);
+      files.forEach((file, idx) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result as string;
+          const newFile = {
+            id: `att_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}`,
+            name: file.name,
+            size: `${(file.size / 1024).toFixed(1)} KB`,
+            type: file.type,
+            dataUrl,
+          };
+          setAttachments((prev) => [...prev, newFile]);
+        };
+        reader.readAsDataURL(file);
+      });
     }
   };
 
@@ -404,9 +414,28 @@ export default function VendorCreateInvoicePage() {
         currency,
         amount: calculations.grandTotal,
         notes,
+        attachments,
+        lineItems,
+        items: lineItems,
         isDraft,
         isVendorSubmission: true,
       };
+
+      try {
+        if (lineItems && lineItems.length > 0) {
+          localStorage.setItem(`vendor_invoice_items_${invoiceNumber}`, JSON.stringify(lineItems));
+          localStorage.setItem(`invoice_items_${invoiceNumber}`, JSON.stringify(lineItems));
+          if (selectedPoId) {
+            localStorage.setItem(`vendor_invoice_items_${selectedPoId}`, JSON.stringify(lineItems));
+          }
+        }
+        if (attachments.length > 0) {
+          localStorage.setItem(`invoice_attachments_${invoiceNumber}`, JSON.stringify(attachments));
+          if (selectedPoId) {
+            localStorage.setItem(`invoice_attachments_${selectedPoId}`, JSON.stringify(attachments));
+          }
+        }
+      } catch {}
 
       const { apiRequest } = await import('../../api/client');
       await apiRequest('/invoices/manual', {

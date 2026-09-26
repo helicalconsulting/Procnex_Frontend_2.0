@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Printer, Download, X, CheckCircle2, ShieldCheck, Landmark, Building2, AlertCircle, Clock } from 'lucide-react';
+import { Printer, Download, X, CheckCircle2, ShieldCheck, Landmark, Building2, AlertCircle, Clock, Paperclip, Eye, FileText } from 'lucide-react';
 import { useCurrency } from '../shared/CurrencyMaster';
 import { useBranding } from '../../context/BrandingContext';
 import { signatureService } from '../../services/signatureService';
+import InvoiceDocumentViewerModal, { type DocumentAttachment } from '../invoices/InvoiceDocumentViewerModal';
 import './BankPaymentVoucherModal.css';
 
 export interface PaymentVoucherDocData {
@@ -42,6 +43,7 @@ export interface PaymentVoucherDocData {
   matchStatus?: 'MATCHED' | 'DISCREPANCY';
   discrepancyReason?: string;
   items?: PaymentVoucherItem[];
+  attachments?: DocumentAttachment[];
   approvers?: {
     level: string;
     name: string;
@@ -76,6 +78,35 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
   };
 
   const [approversList, setApproversList] = useState<any[]>(data.approvers || []);
+  const [resolvedAttachments, setResolvedAttachments] = useState<DocumentAttachment[]>([]);
+  const [viewDocModalOpen, setViewDocModalOpen] = useState<boolean>(false);
+  const [activeDocIndex, setActiveDocIndex] = useState<number>(0);
+
+  useEffect(() => {
+    let list: DocumentAttachment[] = [];
+    if (data.attachments && data.attachments.length > 0) {
+      list = [...data.attachments];
+    } else {
+      const keys = [
+        data.voucherNumber ? `payment_attachments_${data.voucherNumber}` : null,
+        data.invoiceRef ? `invoice_attachments_${data.invoiceRef}` : null,
+        data.invoiceRef ? `invoice_attachments_${data.invoiceRef.split('|')[0]?.trim()}` : null,
+      ].filter(Boolean) as string[];
+      for (const k of keys) {
+        try {
+          const saved = localStorage.getItem(k);
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              list = parsed;
+              break;
+            }
+          }
+        } catch {}
+      }
+    }
+    setResolvedAttachments(list);
+  }, [data.attachments, data.voucherNumber, data.invoiceRef]);
 
   useEffect(() => {
     if (data.approvers && data.approvers.length > 0) {
@@ -232,6 +263,30 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
             </span>
           </div>
           <div className="bpv-modal__topbar-actions">
+            {resolvedAttachments.length > 0 && (
+              <button
+                className="bpv-btn"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  background: '#f1f5f9',
+                  color: '#1e293b',
+                  border: '1px solid #cbd5e1',
+                  fontWeight: 600,
+                  padding: '8px 14px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                }}
+                onClick={() => {
+                  setActiveDocIndex(0);
+                  setViewDocModalOpen(true);
+                }}
+              >
+                <Paperclip size={15} style={{ color: '#2563eb' }} />
+                <span>View Attachments ({resolvedAttachments.length})</span>
+              </button>
+            )}
             <button className="bpv-btn bpv-btn--primary" onClick={handlePrint}>
               <Printer size={16} /> Print / Save PDF for Bank
             </button>
@@ -465,9 +520,85 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
             </div>
           </div>
 
+          {/* Section 4: Attached Documents & Bank Advice (if any) */}
+          {resolvedAttachments.length > 0 && (
+            <div className="bpv-section" style={{ marginTop: 18 }}>
+              <div className="bpv-section__title">
+                <Paperclip size={15} /> ATTACHED DOCUMENTS & BANK ADVICE ({resolvedAttachments.length})
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10, marginTop: 10 }}>
+                {resolvedAttachments.map((att, idx) => (
+                  <div
+                    key={att.id || idx}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      border: '1px solid #e2e8f0',
+                      background: '#f8fafc',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                      <FileText size={18} style={{ color: '#2563eb', flexShrink: 0 }} />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 125 }} title={att.name}>
+                          {att.name}
+                        </div>
+                        {att.size && <div style={{ fontSize: 11, color: '#64748b' }}>{att.size}</div>}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveDocIndex(idx);
+                        setViewDocModalOpen(true);
+                      }}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        padding: '4px 8px',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: '#2563eb',
+                        background: '#eff6ff',
+                        border: '1px solid #bfdbfe',
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        flexShrink: 0,
+                      }}
+                      title="Preview Document"
+                    >
+                      <Eye size={13} /> View
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* End of Printable Document Sheet */}
         </div>
       </div>
+
+      {/* Invoice & Payment Document Viewer Modal */}
+      {viewDocModalOpen && (
+        <InvoiceDocumentViewerModal
+          open={viewDocModalOpen}
+          onClose={() => setViewDocModalOpen(false)}
+          invoice={{
+            paymentNumber: data.voucherNumber,
+            invoiceNumber: data.invoiceRef,
+            vendorName: data.vendorName,
+            amount: data.netAmount,
+            currency: data.currency,
+          }}
+          attachments={resolvedAttachments}
+          initialDocIndex={activeDocIndex}
+        />
+      )}
     </div>
   );
 }

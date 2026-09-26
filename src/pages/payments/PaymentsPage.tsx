@@ -1,11 +1,13 @@
-import { useCallback, useMemo, useState, useEffect, useRef, type KeyboardEvent } from 'react';
+import React, { useCallback, useMemo, useState, useEffect, useRef, type KeyboardEvent } from 'react';
 import {
   Ban,
   Banknote,
   CheckCircle2,
   Clock,
   Eye,
+  FileText,
   MessageSquare,
+  Paperclip,
   Printer,
   RefreshCw,
   RotateCcw,
@@ -20,6 +22,7 @@ import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TableSkeleton } from '../../components/shared/Skeleton';
 import ColumnCustomizer, { type ColumnDef } from '../../components/shared/ColumnCustomizer';
 import BankPaymentVoucherModal from '../../components/payments/BankPaymentVoucherModal';
+import InvoiceDocumentViewerModal, { type DocumentAttachment } from '../../components/invoices/InvoiceDocumentViewerModal';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
@@ -47,7 +50,7 @@ import { signatureService } from '../../services/signatureService';
 import { apiRequest } from '../../api/client';
 import '../../components/shared/ColumnCustomizer.css';
 
-type PaymentStatus = 'COMPLETED' | 'PENDING' | 'PROCESSING' | 'FAILED' | 'CONFIRMED' | 'CANCELLED' | 'RETRIED';
+type PaymentStatus = 'COMPLETED' | 'PENDING' | 'PROCESSING' | 'FAILED' | 'CONFIRMED' | 'CANCELLED' | 'RETRIED' | 'RETURNED' | 'RE_REVIEW';
 type PaymentMethod = 'NEFT' | 'RTGS' | 'IMPS' | 'Cheque' | 'UPI';
 type ActionType = 'confirm' | 'cancel' | 'retry' | 'return';
 type Tone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
@@ -71,6 +74,7 @@ interface Payment {
   requiredRole?: string;
   canAct?: boolean;
   hasApprovedPriorLevel?: boolean;
+  attachments?: DocumentAttachment[];
 }
 
 const STATUS_CONFIG: Record<PaymentStatus, { label: string; tone: Tone; icon: typeof Clock }> = {
@@ -81,9 +85,11 @@ const STATUS_CONFIG: Record<PaymentStatus, { label: string; tone: Tone; icon: ty
   CONFIRMED: { label: 'Confirmed', tone: 'success', icon: CheckCircle2 },
   CANCELLED: { label: 'Cancelled', tone: 'danger', icon: X },
   RETRIED: { label: 'Retried', tone: 'neutral', icon: RotateCcw },
+  RETURNED: { label: 'Returned', tone: 'warning', icon: RotateCcw },
+  RE_REVIEW: { label: 'Returned (Re-Review)', tone: 'warning', icon: RotateCcw },
 };
 
-const ACTIONABLE: PaymentStatus[] = ['PENDING', 'PROCESSING'];
+const ACTIONABLE: PaymentStatus[] = ['PENDING', 'PROCESSING', 'RETURNED', 'RE_REVIEW'];
 
 const isRoleMatching = (requiredRole?: string, userRoles?: string[]): boolean => {
   if (!requiredRole || !userRoles || userRoles.length === 0) return false;
@@ -108,6 +114,39 @@ const isRoleMatching = (requiredRole?: string, userRoles?: string[]): boolean =>
   });
 };
 
+function resolvePaymentAttachments(paymentId?: string, invoiceRef?: string, rawAttachments?: any[]): DocumentAttachment[] {
+  let list: DocumentAttachment[] = [];
+  if (Array.isArray(rawAttachments) && rawAttachments.length > 0) {
+    list = [...rawAttachments];
+  } else if (typeof rawAttachments === 'string') {
+    try {
+      const parsed = JSON.parse(rawAttachments);
+      if (Array.isArray(parsed)) list = [...parsed];
+    } catch {}
+  }
+
+  if (list.length === 0) {
+    const keys = [
+      paymentId ? `payment_attachments_${paymentId}` : null,
+      invoiceRef ? `invoice_attachments_${invoiceRef}` : null,
+      invoiceRef ? `invoice_attachments_${invoiceRef.split('|')[0]?.trim()}` : null,
+    ].filter(Boolean) as string[];
+    for (const k of keys) {
+      try {
+        const saved = localStorage.getItem(k);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            list = parsed;
+            break;
+          }
+        }
+      } catch {}
+    }
+  }
+  return list;
+}
+
 function mapPayment(payment: ServicePayment): Payment {
   const statusMap: Record<string, PaymentStatus> = {
     COMPLETED: 'COMPLETED',
@@ -118,7 +157,10 @@ function mapPayment(payment: ServicePayment): Payment {
     PROCESSING: 'PROCESSING',
     FAILED: 'FAILED',
     CANCELLED: 'CANCELLED',
+    RETURNED: 'RETURNED',
   };
+  const atts = resolvePaymentAttachments(payment.paymentId, payment.invoiceRef, payment.attachments || (payment as any).attachments);
+
   return {
     id: payment.id,
     paymentNumber: payment.paymentId,
@@ -128,9 +170,10 @@ function mapPayment(payment: ServicePayment): Payment {
     amount: payment.amount,
     method: (payment.method as PaymentMethod) || 'NEFT',
     date: payment.paidAt,
-    status: statusMap[payment.status] || 'PENDING',
+    status: statusMap[payment.status] || (payment.status === 'RETURNED' ? 'RETURNED' : 'PENDING'),
     approvedBy: payment.approvedBy || '—',
     remarks: payment.remarks || '',
+    attachments: atts.length > 0 ? atts : undefined,
   };
 }
 
@@ -247,7 +290,8 @@ export default function PaymentsPage() {
 
         const pendingRow = rows.find((r) => r.status === 'PENDING');
         const rejectedRow = rows.find((r) => r.status === 'REJECTED');
-        const activeApp = pendingRow || rejectedRow || rows[rows.length - 1];
+        const returnedRow = rows.find((r) => r.status === 'RETURNED');
+        const activeApp = pendingRow || rejectedRow || returnedRow || rows[rows.length - 1];
 
         const hasApprovedPriorLevel = rows.some(
           (r) => r.status === 'APPROVED' && isRoleMatching(r.requiredRole, authRoles)
@@ -261,11 +305,11 @@ export default function PaymentsPage() {
             : currentLevel === 2
             ? 'Purchase Clerk'
             : 'Purchase Manager';
-          const isApproved = !pendingRow && !rejectedRow && (activeApp.status === 'APPROVED' || rows.some((r) => r.status === 'APPROVED'));
-          const status = pendingRow ? 'PENDING' : rejectedRow ? 'CANCELLED' : isApproved ? 'CONFIRMED' : base.status;
+          const isApproved = !pendingRow && !rejectedRow && !returnedRow && (activeApp.status === 'APPROVED' || rows.some((r) => r.status === 'APPROVED'));
+          const status = pendingRow ? 'PENDING' : rejectedRow ? 'CANCELLED' : returnedRow ? 'RETURNED' : isApproved ? 'CONFIRMED' : base.status;
 
           const canAct =
-            status === 'PENDING' &&
+            (status === 'PENDING' || status === 'RETURNED') &&
             (activeApp.canAct !== undefined ? Boolean(activeApp.canAct) : isRoleMatching(reqRole, authRoles));
 
           return {
@@ -321,10 +365,14 @@ export default function PaymentsPage() {
   const [vendorBankDetails, setVendorBankDetails] = useState<{ bankName?: string; accountNumber?: string; ifscCode?: string } | null>(null);
   const [chainModal, setChainModal] = useState<{ module: string; referenceId: string } | null>(null);
   const [actionSuccessData, setActionSuccessData] = useState<ActionSuccessModalData | null>(null);
+  const [viewerOpen, setViewerOpen] = useState<boolean>(false);
+  const [viewerAttachments, setViewerAttachments] = useState<DocumentAttachment[]>([]);
+  const [viewerIndex, setViewerIndex] = useState<number>(0);
+  const [viewerDocContext, setViewerDocContext] = useState<any>(null);
 
   const { formatAmount, companyDefaultCurrency } = useCurrency();
 
-  useBodyScrollLock(!!(actionModal || detailPayment || selectedPrintVoucher || chainModal));
+  useBodyScrollLock(!!(actionModal || detailPayment || selectedPrintVoucher || chainModal || viewerOpen));
 
   useEffect(() => {
     if (!selectedPrintVoucher) {
@@ -580,8 +628,9 @@ export default function PaymentsPage() {
     const isMultiLevel = (target.totalLevels || 2) > 1;
     const optimisticStatus: PaymentStatus = act === 'confirm'
       ? (isLevel1 && isMultiLevel ? 'PENDING' : 'CONFIRMED')
-      : act === 'cancel' ? 'CANCELLED' : 'RETRIED';
+      : act === 'cancel' ? 'CANCELLED' : act === 'return' ? 'RETURNED' : 'RETRIED';
 
+    // ⚡ INSTANT 0ms Optimistic UI & Success Modal Trigger
     setPendingActions((current) => ({
       ...current,
       [target.id]: {
@@ -595,86 +644,6 @@ export default function PaymentsPage() {
     setActionModal(null);
     setActionComment('');
 
-    let approvalIdToUse = target.approvalId;
-    if (!approvalIdToUse) {
-      try {
-        const [rowsPay, rowsAP] = await Promise.all([
-          approvalService.listTable({ module: 'Payments' }).catch(() => []),
-          approvalService.listTable({ module: 'AccountsPayable' }).catch(() => []),
-        ]);
-        const approvalRows = [...rowsPay, ...rowsAP];
-        const normalize = (str?: string | number) =>
-          String(str || '')
-            .toLowerCase()
-            .replace(/[\s_-]+/g, '');
-        const targetIdNorm = normalize(target.id);
-        const targetNumNorm = normalize(target.paymentNumber);
-        const targetInvNorm = normalize(target.invoiceRef);
-
-        const matched = approvalRows.find((a) => {
-          const aNum = normalize(a.referenceNumber);
-          const aRef = normalize(a.referenceId);
-          const aTitle = normalize(a.title);
-
-          return (
-            (targetNumNorm && (aNum === targetNumNorm || aRef === targetNumNorm || aTitle.includes(targetNumNorm))) ||
-            (targetIdNorm && (aNum === targetIdNorm || aRef === targetIdNorm)) ||
-            (targetInvNorm && targetInvNorm !== '—' && (aNum === targetInvNorm || aRef === targetInvNorm || aTitle.includes(targetInvNorm)))
-          );
-        });
-
-        if (matched) {
-          approvalIdToUse = matched.id;
-        } else {
-          const created = await approvalService.resubmit('Payments', target.paymentNumber || String(target.id), 1).catch(() => null);
-          if (created && (created as any).id) {
-            approvalIdToUse = (created as any).id;
-          }
-        }
-      } catch (_e) {
-        // ignore
-      }
-    }
-
-    let actionSucceeded = false;
-    if (approvalIdToUse) {
-      try {
-        if (act === 'confirm') {
-          await approvalService.approve(approvalIdToUse, comment);
-        } else if (act === 'cancel') {
-          await approvalService.reject(approvalIdToUse, comment);
-        } else {
-          await approvalService.return(approvalIdToUse, comment);
-        }
-        actionSucceeded = true;
-      } catch (err) {
-        console.warn('Payment voucher approval action via approvalService failed, trying status endpoint:', err);
-      }
-    }
-
-    if (!actionSucceeded) {
-      try {
-        const statusMap: Record<ActionType, string> = {
-          confirm: 'APPROVED',
-          cancel: 'CANCELLED',
-          retry: 'PENDING_APPROVAL',
-        };
-        await apiRequest(`/payments/${target.paymentNumber || target.id}/status`, {
-          method: 'PUT',
-          body: JSON.stringify({ status: statusMap[act] || 'APPROVED', comments: comment }),
-        });
-      } catch (statusErr) {
-        console.error('Payment status update fallback failed:', statusErr);
-      }
-    }
-
-    window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
-    await fetchPaymentsData();
-    setPendingActions((current) => {
-      const next = { ...current };
-      delete next[target.id];
-      return next;
-    });
     setActionSuccessData({
       actionType: act === 'confirm' ? 'approve' : act === 'cancel' ? 'reject' : 'return',
       module: 'Payment Voucher',
@@ -692,52 +661,8 @@ export default function PaymentsPage() {
         { label: 'Payment Method', value: target.method || 'NEFT' },
       ],
     });
-  }, [actionComment, actionModal, fetchPaymentsData, amount]);
 
-  const handleSignatureConfirm = useCallback(
-    async (signatureDataUrl: string, comment?: string) => {
-      if (!actionModal) return;
-      const target = actionModal.payment;
-
-      const levelNum = target.currentLevel || 1;
-      const isLevel1 = levelNum === 1;
-      const isMultiLevel = (target.totalLevels || 2) > 1;
-      try {
-        await signatureService.signDocument({
-          module: 'Payments',
-          referenceId: target.paymentNumber || String(target.id),
-          signatureId: 'digital_signature',
-          dataUrl: signatureDataUrl,
-          levelNumber: levelNum,
-          comments: comment,
-        });
-        if (target.invoiceRef && target.invoiceRef !== target.paymentNumber) {
-          await signatureService.signDocument({
-            module: 'Payments',
-            referenceId: target.invoiceRef,
-            signatureId: 'digital_signature',
-            dataUrl: signatureDataUrl,
-            levelNumber: levelNum,
-            comments: comment,
-          }).catch(() => {});
-        }
-      } catch (sigErr) {
-        console.warn('Digital signature recording warning:', sigErr);
-      }
-
-      setPendingActions((current) => ({
-        ...current,
-        [target.id]: {
-          ...target,
-          status: isLevel1 && isMultiLevel ? 'PENDING' : 'CONFIRMED',
-          currentLevel: isLevel1 && isMultiLevel ? 2 : target.currentLevel,
-          requiredRole: isLevel1 && isMultiLevel ? 'Purchase Clerk' : target.requiredRole,
-          comments: comment,
-        },
-      }));
-      setActionModal(null);
-      setActionComment('');
-
+    (async () => {
       let approvalIdToUse = target.approvalId;
       if (!approvalIdToUse) {
         try {
@@ -779,24 +704,35 @@ export default function PaymentsPage() {
         }
       }
 
-      let signActionSucceeded = false;
+      let actionSucceeded = false;
       if (approvalIdToUse) {
         try {
-          await approvalService.approve(approvalIdToUse, comment);
-          signActionSucceeded = true;
+          if (act === 'confirm') {
+            await approvalService.approve(approvalIdToUse, comment);
+          } else if (act === 'cancel') {
+            await approvalService.reject(approvalIdToUse, comment);
+          } else {
+            await approvalService.return(approvalIdToUse, comment);
+          }
+          actionSucceeded = true;
         } catch (err) {
-          console.warn('Payment voucher digital signature approval action failed, trying status endpoint:', err);
+          console.warn('Payment voucher approval action via approvalService failed, trying status endpoint:', err);
         }
       }
 
-      if (!signActionSucceeded) {
+      if (!actionSucceeded) {
         try {
+          const statusMap: Record<ActionType, string> = {
+            confirm: 'APPROVED',
+            cancel: 'CANCELLED',
+            retry: 'PENDING_APPROVAL',
+          };
           await apiRequest(`/payments/${target.paymentNumber || target.id}/status`, {
             method: 'PUT',
-            body: JSON.stringify({ status: 'APPROVED', comments: comment }),
+            body: JSON.stringify({ status: statusMap[act] || 'APPROVED', comments: comment }),
           });
         } catch (statusErr) {
-          console.error('Payment status update fallback after digital signature failed:', statusErr);
+          console.error('Payment status update fallback failed:', statusErr);
         }
       }
 
@@ -807,6 +743,32 @@ export default function PaymentsPage() {
         delete next[target.id];
         return next;
       });
+    })();
+  }, [actionComment, actionModal, fetchPaymentsData, amount]);
+
+  const handleSignatureConfirm = useCallback(
+    async (signatureDataUrl: string, comment?: string) => {
+      if (!actionModal) return;
+      const target = actionModal.payment;
+
+      const levelNum = target.currentLevel || 1;
+      const isLevel1 = levelNum === 1;
+      const isMultiLevel = (target.totalLevels || 2) > 1;
+
+      // ⚡ INSTANT 0ms Optimistic UI & Success Modal Trigger
+      setPendingActions((current) => ({
+        ...current,
+        [target.id]: {
+          ...target,
+          status: isLevel1 && isMultiLevel ? 'PENDING' : 'CONFIRMED',
+          currentLevel: isLevel1 && isMultiLevel ? 2 : target.currentLevel,
+          requiredRole: isLevel1 && isMultiLevel ? 'Purchase Clerk' : target.requiredRole,
+          comments: comment,
+        },
+      }));
+      setActionModal(null);
+      setActionComment('');
+
       setActionSuccessData({
         actionType: 'approve',
         module: 'Payment Voucher',
@@ -820,6 +782,109 @@ export default function PaymentsPage() {
           { label: 'Payment Method', value: target.method || 'NEFT' },
         ],
       });
+
+      // Background concurrent API execution
+      (async () => {
+        try {
+          const sigPromises = [
+            signatureService.signDocument({
+              module: 'Payments',
+              referenceId: target.paymentNumber || String(target.id),
+              signatureId: 'digital_signature',
+              dataUrl: signatureDataUrl,
+              levelNumber: levelNum,
+              comments: comment,
+            }).catch((sigErr) => console.warn('Digital signature recording warning:', sigErr)),
+          ];
+
+          if (target.invoiceRef && target.invoiceRef !== target.paymentNumber) {
+            sigPromises.push(
+              signatureService.signDocument({
+                module: 'Payments',
+                referenceId: target.invoiceRef,
+                signatureId: 'digital_signature',
+                dataUrl: signatureDataUrl,
+                levelNumber: levelNum,
+                comments: comment,
+              }).catch(() => {})
+            );
+          }
+
+          let approvalIdToUse = target.approvalId;
+          if (!approvalIdToUse) {
+            try {
+              const [rowsPay, rowsAP] = await Promise.all([
+                approvalService.listTable({ module: 'Payments' }).catch(() => []),
+                approvalService.listTable({ module: 'AccountsPayable' }).catch(() => []),
+              ]);
+              const approvalRows = [...rowsPay, ...rowsAP];
+              const normalize = (str?: string | number) =>
+                String(str || '')
+                  .toLowerCase()
+                  .replace(/[\s_-]+/g, '');
+              const targetIdNorm = normalize(target.id);
+              const targetNumNorm = normalize(target.paymentNumber);
+              const targetInvNorm = normalize(target.invoiceRef);
+
+              const matched = approvalRows.find((a) => {
+                const aNum = normalize(a.referenceNumber);
+                const aRef = normalize(a.referenceId);
+                const aTitle = normalize(a.title);
+
+                return (
+                  (targetNumNorm && (aNum === targetNumNorm || aRef === targetNumNorm || aTitle.includes(targetNumNorm))) ||
+                  (targetIdNorm && (aNum === targetIdNorm || aRef === targetIdNorm)) ||
+                  (targetInvNorm && targetInvNorm !== '—' && (aNum === targetInvNorm || aRef === targetInvNorm || aTitle.includes(targetInvNorm)))
+                );
+              });
+
+              if (matched) {
+                approvalIdToUse = matched.id;
+              } else {
+                const created = await approvalService.resubmit('Payments', target.paymentNumber || String(target.id), 1).catch(() => null);
+                if (created && (created as any).id) {
+                  approvalIdToUse = (created as any).id;
+                }
+              }
+            } catch (_e) {
+              // ignore
+            }
+          }
+
+          let signActionSucceeded = false;
+          if (approvalIdToUse) {
+            try {
+              await approvalService.approve(approvalIdToUse, comment);
+              signActionSucceeded = true;
+            } catch (err) {
+              console.warn('Payment voucher digital signature approval action failed, trying status endpoint:', err);
+            }
+          }
+
+          if (!signActionSucceeded) {
+            try {
+              await apiRequest(`/payments/${target.paymentNumber || target.id}/status`, {
+                method: 'PUT',
+                body: JSON.stringify({ status: 'APPROVED', comments: comment }),
+              });
+            } catch (statusErr) {
+              console.error('Payment status update fallback after digital signature failed:', statusErr);
+            }
+          }
+
+          await Promise.all(sigPromises);
+          window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
+          await fetchPaymentsData();
+        } catch (err) {
+          console.error('Background payment signature processing error:', err);
+        } finally {
+          setPendingActions((current) => {
+            const next = { ...current };
+            delete next[target.id];
+            return next;
+          });
+        }
+      })();
     },
     [actionModal, fetchPaymentsData, amount]
   );
@@ -847,6 +912,8 @@ export default function PaymentsPage() {
       ? 'Confirm payment'
       : actionModal?.action === 'cancel'
       ? 'Cancel payment'
+      : actionModal?.action === 'return'
+      ? 'Return payment voucher'
       : 'Retry payment';
   const destructive = actionModal?.action !== 'confirm';
 
@@ -1057,7 +1124,38 @@ export default function PaymentsPage() {
                         return <td key={col.key} className="px-4 py-3.5">-</td>;
                       })}
                       <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex justify-end gap-1">
+                        <div className="flex justify-end gap-1 items-center">
+                          {(() => {
+                            const atts = resolvePaymentAttachments(payment.paymentNumber, payment.invoiceRef, payment.attachments);
+                            if (atts.length > 0) {
+                              return (
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  className="text-primary hover:bg-primary/10 relative"
+                                  onClick={() => {
+                                    setViewerAttachments(atts);
+                                    setViewerIndex(0);
+                                    setViewerDocContext({
+                                      paymentNumber: payment.paymentNumber,
+                                      vendorName: payment.vendorName,
+                                      amount: payment.amount,
+                                      invoiceNumber: payment.invoiceRef,
+                                    });
+                                    setViewerOpen(true);
+                                  }}
+                                  aria-label={`View attachments for ${payment.paymentNumber}`}
+                                  title={`View ${atts.length} Attached Document(s)`}
+                                >
+                                  <Paperclip className="size-4" />
+                                  <span className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground px-0.5">
+                                    {atts.length}
+                                  </span>
+                                </Button>
+                              );
+                            }
+                            return null;
+                          })()}
                           <Button
                             variant="ghost"
                             size="icon-sm"
@@ -1148,6 +1246,32 @@ export default function PaymentsPage() {
                   </div>
                 </dl>
                 <div className="mt-3 flex flex-wrap gap-1.5 border-t border-border/60 pt-3">
+                  {(() => {
+                    const atts = resolvePaymentAttachments(payment.paymentNumber, payment.invoiceRef, payment.attachments);
+                    if (atts.length > 0) {
+                      return (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1 text-primary"
+                          onClick={() => {
+                            setViewerAttachments(atts);
+                            setViewerIndex(0);
+                            setViewerDocContext({
+                              paymentNumber: payment.paymentNumber,
+                              vendorName: payment.vendorName,
+                              amount: payment.amount,
+                              invoiceNumber: payment.invoiceRef,
+                            });
+                            setViewerOpen(true);
+                          }}
+                        >
+                          <Paperclip className="size-3.5" /> Docs ({atts.length})
+                        </Button>
+                      );
+                    }
+                    return null;
+                  })()}
                   <Button variant="ghost" size="sm" onClick={() => setDetailPayment(payment)}>
                     <Eye /> Details
                   </Button>
@@ -1196,7 +1320,11 @@ export default function PaymentsPage() {
                 <div
                   className={cn(
                     'mb-1 grid size-11 place-items-center rounded-xl',
-                    destructive ? 'bg-destructive/10 text-destructive' : 'bg-emerald-500/10 text-emerald-600'
+                    actionModal.action === 'cancel'
+                      ? 'bg-destructive/10 text-destructive'
+                      : actionModal.action === 'return'
+                      ? 'bg-amber-500/10 text-amber-600'
+                      : 'bg-emerald-500/10 text-emerald-600'
                   )}
                 >
                   {actionModal.action === 'cancel' ? (
@@ -1230,12 +1358,17 @@ export default function PaymentsPage() {
                   className="min-h-28 resize-y rounded-xl border border-input bg-background px-3.5 py-3 text-sm font-normal outline-none focus:border-primary/50 focus:ring-2 focus:ring-ring/30"
                   value={actionComment}
                   onChange={(event) => setActionComment(event.target.value)}
-                  placeholder={destructive ? 'Provide a reason…' : 'Optional comments…'}
+                  placeholder={actionModal.action === 'return' ? 'Provide a reason for return…' : destructive ? 'Provide a reason…' : 'Optional comments…'}
                 />
               </label>
               <DialogFooter>
                 <Button variant="secondary" onClick={() => setActionModal(null)}>Cancel</Button>
-                <Button variant={destructive ? 'destructive' : 'default'} disabled={destructive && !actionComment.trim()} onClick={handleAction}>
+                <Button
+                  variant={actionModal.action === 'cancel' ? 'destructive' : 'default'}
+                  className={actionModal.action === 'return' ? 'bg-amber-600 hover:bg-amber-700 text-white' : ''}
+                  disabled={destructive && !actionComment.trim()}
+                  onClick={handleAction}
+                >
                   {actionTitle}
                 </Button>
               </DialogFooter>
@@ -1338,6 +1471,104 @@ export default function PaymentsPage() {
                   <p className="mt-1.5 text-sm text-foreground">{detailPayment.comments}</p>
                 </div>
               )}
+
+              {/* Attached Documents & Bank Advice */}
+              {(() => {
+                const atts = resolvePaymentAttachments(detailPayment.paymentNumber, detailPayment.invoiceRef, detailPayment.attachments);
+                return (
+                  <div className="rounded-xl border border-border/70 bg-secondary/35 p-3.5 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-foreground">
+                        <Paperclip className="size-3.5 text-primary" />
+                        <span>Attached Documents & Bank Advice ({atts.length})</span>
+                      </div>
+                      {atts.length > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs px-2.5 gap-1.5 text-primary border-primary/30 hover:bg-primary/10"
+                          onClick={() => {
+                            setViewerAttachments(atts);
+                            setViewerIndex(0);
+                            setViewerDocContext({
+                              paymentNumber: detailPayment.paymentNumber,
+                              vendorName: detailPayment.vendorName,
+                              amount: detailPayment.amount,
+                              invoiceNumber: detailPayment.invoiceRef,
+                            });
+                            setViewerOpen(true);
+                          }}
+                        >
+                          <Eye className="size-3" /> View All ({atts.length})
+                        </Button>
+                      )}
+                    </div>
+
+                    {atts.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                        {atts.map((att, idx) => (
+                          <div
+                            key={att.id || idx}
+                            className="flex items-center justify-between gap-2 p-2 rounded-lg border border-border/60 bg-background/80 hover:bg-background transition-colors text-xs"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <FileText className="size-4 text-primary shrink-0" />
+                              <div className="min-w-0">
+                                <div className="font-semibold text-foreground truncate max-w-[130px]" title={att.name}>
+                                  {att.name}
+                                </div>
+                                {att.size && <div className="text-[10px] text-muted-foreground">{att.size}</div>}
+                              </div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              className="size-7 text-primary hover:bg-primary/10 rounded-md shrink-0"
+                              title="Preview Document"
+                              onClick={() => {
+                                setViewerAttachments(atts);
+                                setViewerIndex(idx);
+                                setViewerDocContext({
+                                  paymentNumber: detailPayment.paymentNumber,
+                                  vendorName: detailPayment.vendorName,
+                                  amount: detailPayment.amount,
+                                  invoiceNumber: detailPayment.invoiceRef,
+                                });
+                                setViewerOpen(true);
+                              }}
+                            >
+                              <Eye className="size-3.5" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between text-xs text-muted-foreground py-1">
+                        <span>No physical files attached directly. Linked to {detailPayment.invoiceRef || 'Vendor Invoice'}.</span>
+                        {detailPayment.invoiceRef && detailPayment.invoiceRef !== '—' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs px-2 gap-1 text-primary"
+                            onClick={() => {
+                              setViewerAttachments([]);
+                              setViewerDocContext({
+                                paymentNumber: detailPayment.paymentNumber,
+                                vendorName: detailPayment.vendorName,
+                                amount: detailPayment.amount,
+                                invoiceNumber: detailPayment.invoiceRef,
+                              });
+                              setViewerOpen(true);
+                            }}
+                          >
+                            <Eye className="size-3" /> View Linked Invoice
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             <DialogFooter className="mt-6 flex flex-col gap-2 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
@@ -1424,6 +1655,7 @@ export default function PaymentsPage() {
             currency: companyDefaultCurrency,
             matchStatus: selectedPrintVoucher.remarks.toLowerCase().includes('discrepancy') ? 'DISCREPANCY' : 'MATCHED',
             discrepancyReason: selectedPrintVoucher.remarks,
+            attachments: resolvePaymentAttachments(selectedPrintVoucher.paymentNumber, selectedPrintVoucher.invoiceRef, selectedPrintVoucher.attachments),
             approvers: voucherApprovers || undefined,
           }}
           onClose={() => setSelectedPrintVoucher(null)}
@@ -1444,6 +1676,17 @@ export default function PaymentsPage() {
         <ActionSuccessModal
           data={actionSuccessData}
           onClose={() => setActionSuccessData(null)}
+        />
+      )}
+
+      {/* Invoice & Payment Document Viewer Modal */}
+      {viewerOpen && (
+        <InvoiceDocumentViewerModal
+          open={viewerOpen}
+          onClose={() => setViewerOpen(false)}
+          invoice={viewerDocContext}
+          attachments={viewerAttachments}
+          initialDocIndex={viewerIndex}
         />
       )}
     </PageFrame>

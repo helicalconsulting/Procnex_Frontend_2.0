@@ -1,6 +1,6 @@
 // ─── Status Enums ───────────────────────────────────────────
 
-export type RFQStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'SENT' | 'IN_PROGRESS' | 'CLOSED' | 'CANCELLED' | 'REJECTED';
+export type RFQStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'SENT' | 'IN_PROGRESS' | 'CLOSED' | 'CANCELLED' | 'REJECTED' | 'RETURNED' | 'RE_REVIEW' | 'RETURN_FOR_RE_REVIEW';
 export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'RETURNED';
 
 // ─── User & Auth ────────────────────────────────────────────

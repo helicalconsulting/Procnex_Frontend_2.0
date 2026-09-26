@@ -6,6 +6,7 @@ import { localDataService, type Payment } from '../../services/localDataService'
 import { apiRequest } from '../../api/client';
 import { companySettingsService } from '../../services/companySettingsService';
 import { invoiceService, type APInvoice } from '../../services/invoiceService';
+import { grnService } from '../../services/grnService';
 import {
   ArrowLeft,
   CreditCard,
@@ -26,11 +27,15 @@ import {
   Clock,
   FileText,
   CheckSquare,
-  Layers
+  Layers,
+  RotateCcw,
+  Database,
+  Edit3
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TableSkeleton } from '../../components/shared/Skeleton';
 import BankPaymentVoucherModal, { type PaymentVoucherDocData } from '../../components/payments/BankPaymentVoucherModal';
+import InvoiceDocumentViewerModal, { type DocumentAttachment } from '../../components/invoices/InvoiceDocumentViewerModal';
 import { useAuth } from '../../context/AuthContext';
 import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyMaster';
 import { Badge } from '../../components/ui/badge';
@@ -64,9 +69,12 @@ interface VendorInvoiceItem {
   balanceDue: number;
   dueDate: string;
   invoiceDate: string;
-  threeWayMatch: 'MATCHED' | 'DISCREPANCY';
+  threeWayMatch: 'MATCHED' | 'DISCREPANCY' | 'NOT_MATCHED';
   selected: boolean;
   paymentAmount: number;
+  grnOrderedQty?: number;
+  grnReceivedQty?: number;
+  grnReceivedAmount?: number; // sum of GRN item (receivedQty × unitPrice)
 }
 
 export default function CreatePaymentVoucherPage() {
@@ -172,8 +180,12 @@ export default function CreatePaymentVoucherPage() {
   const [grnQty, setGrnQty] = useState<number>(100);
   const [invoicedQty, setInvoicedQty] = useState<number>(100);
 
-  // Attachments
-  const [attachments, setAttachments] = useState<{ id: string; name: string; size: string }[]>([]);
+  // Attachments & Document Viewer
+  const [attachments, setAttachments] = useState<DocumentAttachment[]>([]);
+  const [viewerOpen, setViewerOpen] = useState<boolean>(false);
+  const [viewerAttachments, setViewerAttachments] = useState<DocumentAttachment[]>([]);
+  const [viewerIndex, setViewerIndex] = useState<number>(0);
+  const [viewerDocContext, setViewerDocContext] = useState<any>(null);
 
   // UI state
   const [savingDraft, setSavingDraft] = useState(false);
@@ -186,38 +198,146 @@ export default function CreatePaymentVoucherPage() {
   const [selectionMode, setSelectionMode] = useState<'single' | 'multiple'>('multiple');
   const [vendorInvoices, setVendorInvoices] = useState<VendorInvoiceItem[]>([]);
   const [loadingInvoices, setLoadingInvoices] = useState<boolean>(false);
+  // Invoice Entry Mode: null = not selected yet, 'AUTO_FILL' = fetch from DB, 'MANUAL' = user types manually
+  const [invoiceEntryMode, setInvoiceEntryMode] = useState<'AUTO_FILL' | 'MANUAL' | null>(
+    () => (vendorParam || invoiceRefParam || amountParam) ? 'AUTO_FILL' : null
+  );
 
-  // Load invoices when vendor is selected or creation starts
+  // Load invoices & GRNs when vendor is selected or creation starts (only when AUTO_FILL mode)
   useEffect(() => {
-    if (!isCreating) return;
+    if (!isCreating || invoiceEntryMode !== 'AUTO_FILL') return;
 
     let isMounted = true;
     setLoadingInvoices(true);
 
-    const fetchInvoices = async () => {
+    const fetchInvoicesAndGRNs = async () => {
       try {
-        const fetched = await invoiceService.list(selectedVendorId ? { vendorId: selectedVendorId } : undefined);
+        const qInvoiceRef = searchParams.get('invoiceRef');
+        const qAmount = searchParams.get('amount');
+        const qVendorName = searchParams.get('vendorName');
+
+        const [fetchedInvoices, grnResponse] = await Promise.all([
+          invoiceService.list(selectedVendorId ? { vendorId: selectedVendorId } : undefined),
+          grnService.list(selectedVendorId ? { vendorId: selectedVendorId, limit: 100 } : { limit: 100 }).catch(() => ({ grns: [], total: 0 })),
+        ]);
         if (!isMounted) return;
 
-        if (fetched && fetched.length > 0) {
-          const mapped: VendorInvoiceItem[] = fetched.map((inv, idx) => ({
-            id: inv.id,
-            invoiceNumber: inv.invoiceNumber,
-            poNumber: inv.poNumber || `PO-2026-${3710 + idx}`,
-            grnNumber: inv.grnNumber || `GRN-2026-0${40 + idx}`,
-            amount: inv.amount,
-            paidAmount: inv.paidAmount || 0,
-            balanceDue: Math.max(0, inv.amount - (inv.paidAmount || 0)),
-            dueDate: inv.dueDate || new Date().toISOString().slice(0, 10),
-            invoiceDate: inv.submittedAt || new Date().toISOString().slice(0, 10),
-            threeWayMatch: (inv.threeWayMatch === 'MISMATCH' || inv.threeWayMatch === 'DISCREPANCY') ? 'DISCREPANCY' : 'MATCHED',
-            selected: idx === 0,
-            paymentAmount: Math.max(0, inv.amount - (inv.paidAmount || 0)),
-          }));
-          setVendorInvoices(mapped);
-          updateTotalsFromInvoices(mapped);
-        } else {
-          setVendorInvoices([]);
+        const allGrns = grnResponse?.grns || [];
+        let mappedInvoices: VendorInvoiceItem[] = [];
+
+        if (fetchedInvoices && fetchedInvoices.length > 0) {
+          // If a vendor is selected or passed by name, filter to that vendor's invoices if needed
+          const filteredInvs = (selectedVendorId || vendorName)
+            ? fetchedInvoices.filter((inv) => {
+                const vNameMatch = vendorName && inv.vendorName && inv.vendorName.toLowerCase().includes(vendorName.toLowerCase());
+                const invRefMatch = qInvoiceRef && (inv.invoiceNumber === qInvoiceRef || qInvoiceRef.includes(inv.invoiceNumber));
+                return !selectedVendorId ? (vNameMatch || invRefMatch) : true;
+              })
+            : fetchedInvoices;
+
+          const baseInvoices = filteredInvs.length > 0 ? filteredInvs : fetchedInvoices;
+
+          mappedInvoices = baseInvoices.map((inv, idx) => {
+            const poNum = inv.poNumber || `PO-2026-${3710 + idx}`;
+            const cleanPo = poNum.toLowerCase();
+
+            // Find matching GRNs for this invoice — multiple match strategies
+            const matchedGrn = allGrns.find(
+              (g) =>
+                // Direct GRN number match
+                (inv.grnNumber && g.grnNumber.toLowerCase() === inv.grnNumber.toLowerCase()) ||
+                // PO number match
+                (g.purchaseOrder?.poNumber && g.purchaseOrder.poNumber.toLowerCase() === cleanPo) ||
+                // PO id match
+                (g.poId && String(g.poId) === String(inv.poId)) ||
+                // GRN's vendorInvoiceNumber matches invoice number
+                (g.vendorInvoiceNumber && inv.invoiceNumber && g.vendorInvoiceNumber.toLowerCase() === inv.invoiceNumber.toLowerCase()) ||
+                // Same vendor and close creation date (fallback)
+                (g.vendorId && g.vendorId === selectedVendorId)
+            );
+
+            // Compute GRN received qty vs ordered qty from items
+            let totalOrdered = 0;
+            let totalReceived = 0;
+            let grnItemsAmount = 0; // sum of GRN received value
+            if (matchedGrn && Array.isArray(matchedGrn.items) && matchedGrn.items.length > 0) {
+              matchedGrn.items.forEach((gi) => {
+                totalOrdered += Number(gi.orderedQty || 0);
+                totalReceived += Number(gi.acceptedQty ?? gi.receivedQty ?? 0);
+                // Also compute GRN received monetary value
+                if (gi.unitPrice && gi.unitPrice > 0) {
+                  const recvQty = Number(gi.acceptedQty ?? gi.receivedQty ?? 0);
+                  grnItemsAmount += recvQty * Number(gi.unitPrice);
+                }
+              });
+            }
+
+            // ─── Discrepancy checks ───────────────────────────────────────
+            // 1. GRN qty shortfall: received < ordered by >2%
+            const hasQtyShortfall = totalOrdered > 0 && totalReceived < totalOrdered &&
+              (totalOrdered - totalReceived) / totalOrdered > 0.02;
+            // 2. GRN amount shortfall: if we have item prices, GRN value < invoice amount by >2%
+            const hasAmountShortfall = grnItemsAmount > 0 && inv.amount > 0 &&
+              grnItemsAmount < inv.amount * 0.98;
+            const hasShortfall = hasQtyShortfall || hasAmountShortfall;
+            // 3. Backend three-way-match result (DISCREPANCY/MISMATCH = bad, NOT_MATCHED = unverified)
+            const isBackendMismatch = inv.threeWayMatch === 'MISMATCH' || inv.threeWayMatch === 'DISCREPANCY';
+            const isBackendUnverified = inv.threeWayMatch === 'NOT_MATCHED';
+            const isDiscrepant = isBackendMismatch || hasShortfall;
+            // Unverified (NOT_MATCHED) = not confirmed MATCHED but not confirmed DISCREPANCY either
+            // We treat it as DISCREPANCY only if we also have a GRN shortfall
+            const finalMatch = isDiscrepant ? 'DISCREPANCY' : (isBackendUnverified && matchedGrn ? 'NOT_MATCHED' : 'MATCHED');
+
+            const grnDisplayNumber = matchedGrn?.grnNumber || inv.grnNumber || `GRN-2026-0${40 + idx}`;
+
+            const isMatchingParam = qInvoiceRef && (inv.invoiceNumber === qInvoiceRef || qInvoiceRef.includes(inv.invoiceNumber));
+
+            return {
+              id: inv.id,
+              invoiceNumber: inv.invoiceNumber,
+              poNumber: poNum,
+              grnNumber: grnDisplayNumber,
+              amount: inv.amount,
+              paidAmount: inv.paidAmount || 0,
+              balanceDue: Math.max(0, inv.amount - (inv.paidAmount || 0)),
+              dueDate: inv.dueDate || new Date().toISOString().slice(0, 10),
+              invoiceDate: inv.submittedAt || new Date().toISOString().slice(0, 10),
+              threeWayMatch: finalMatch,
+              selected: isMatchingParam || idx === 0,
+              paymentAmount: Math.max(0, inv.amount - (inv.paidAmount || 0)),
+              // Store GRN qty and amount for Section 03 discrepancy detection
+              grnOrderedQty: totalOrdered > 0 ? totalOrdered : undefined,
+              grnReceivedQty: totalOrdered > 0 ? totalReceived : undefined,
+              grnReceivedAmount: grnItemsAmount > 0 ? grnItemsAmount : undefined,
+            };
+          });
+        }
+
+        // If no invoices returned from API but invoiceRef or amount was passed in URL / params
+        if (mappedInvoices.length === 0 && (qInvoiceRef || qAmount || invoiceRef)) {
+          const invNum = qInvoiceRef || invoiceRef || 'INV-2026-001';
+          const invAmt = Number(qAmount || grossAmount || 1000);
+          mappedInvoices = [
+            {
+              id: `param_inv_${Date.now()}`,
+              invoiceNumber: invNum,
+              poNumber: `PO-2026-3710`,
+              grnNumber: `GRN-2026-040`,
+              amount: invAmt,
+              paidAmount: 0,
+              balanceDue: invAmt,
+              dueDate: new Date().toISOString().slice(0, 10),
+              invoiceDate: new Date().toISOString().slice(0, 10),
+              threeWayMatch: 'MATCHED',
+              selected: true,
+              paymentAmount: invAmt,
+            },
+          ];
+        }
+
+        setVendorInvoices(mappedInvoices);
+        if (mappedInvoices.length > 0) {
+          updateTotalsFromInvoices(mappedInvoices);
         }
       } catch (_err) {
         if (isMounted) setVendorInvoices([]);
@@ -226,12 +346,12 @@ export default function CreatePaymentVoucherPage() {
       }
     };
 
-    fetchInvoices();
+    fetchInvoicesAndGRNs();
 
     return () => {
       isMounted = false;
     };
-  }, [isCreating, selectedVendorId]);
+  }, [isCreating, selectedVendorId, vendorName, invoiceEntryMode]);
 
   // Recalculate totals, invoice references, and 3-way multi-matching from invoice selection
   const updateTotalsFromInvoices = (list: VendorInvoiceItem[], mode: 'single' | 'multiple' = selectionMode) => {
@@ -244,15 +364,31 @@ export default function CreatePaymentVoucherPage() {
       setInvoiceRef(refText);
 
       // 3-Way Multi-Matching Check
-      const hasDiscrepancy = selected.some((i) => i.threeWayMatch === 'DISCREPANCY');
+      const discrepantList = selected.filter((i) => i.threeWayMatch === 'DISCREPANCY' || i.paymentAmount > i.amount);
+      const hasDiscrepancy = discrepantList.length > 0;
       if (hasDiscrepancy) {
         setMatchStatus('DISCREPANCY');
-        setDiscrepancyReason('Discrepancy detected in 3-Way Multi-Match for selected invoices (PO / GRN / Invoice mismatch). Mandatory approval required.');
+        const discNames = discrepantList.map((i) => i.invoiceNumber).join(', ');
+        setDiscrepancyReason(`Discrepancy detected in 3-Way Match for invoice(s): ${discNames} (Quantity / Rate variance between PO, GRN, and Invoice). Flagged for mandatory Manager & Finance approval.`);
       } else {
         setMatchStatus('MATCHED');
         setDiscrepancyReason('');
       }
     }
+  };
+
+  const handleToggleInvoiceMatch = (invId: string) => {
+    setVendorInvoices((prev) => {
+      const updated = prev.map((item) => {
+        if (item.id === invId) {
+          const nextMatch: 'MATCHED' | 'DISCREPANCY' = item.threeWayMatch === 'MATCHED' ? 'DISCREPANCY' : 'MATCHED';
+          return { ...item, threeWayMatch: nextMatch };
+        }
+        return item;
+      });
+      updateTotalsFromInvoices(updated);
+      return updated;
+    });
   };
 
   const handleToggleSelectInvoice = (invId: string) => {
@@ -325,6 +461,33 @@ export default function CreatePaymentVoucherPage() {
     });
   };
 
+  // Switch invoice entry mode — resets table and either triggers DB fetch or starts with blank row
+  const handleSelectInvoiceMode = (mode: 'AUTO_FILL' | 'MANUAL') => {
+    setVendorInvoices([]);
+    setGrossAmount('');
+    setInvoiceRef('');
+    setInvoiceEntryMode(mode);
+    if (mode === 'MANUAL') {
+      // Add one blank row immediately so user can start typing
+      const newInv: VendorInvoiceItem = {
+        id: `custom_inv_${Date.now()}`,
+        invoiceNumber: '',
+        poNumber: '',
+        grnNumber: '',
+        amount: 0,
+        paidAmount: 0,
+        balanceDue: 0,
+        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+        invoiceDate: new Date().toISOString().slice(0, 10),
+        threeWayMatch: 'MATCHED',
+        selected: true,
+        paymentAmount: 0,
+      };
+      setVendorInvoices([newInv]);
+    }
+    // AUTO_FILL: setting invoiceEntryMode to 'AUTO_FILL' triggers the useEffect to fetch
+  };
+
   const handleInvoiceFieldChange = (invId: string, field: keyof VendorInvoiceItem, val: any) => {
     setVendorInvoices((prev) => {
       const updated = prev.map((item) => {
@@ -366,13 +529,24 @@ export default function CreatePaymentVoucherPage() {
     if (qVendor) {
       setVendorName(qVendor);
       setBeneficiaryName(qBeneficiary || qVendor);
+      if (vendorsList && vendorsList.length > 0) {
+        const found = vendorsList.find(
+          (v) => v.name.toLowerCase() === qVendor.toLowerCase() || v.id === qVendor || v.name.toLowerCase().includes(qVendor.toLowerCase())
+        );
+        if (found) {
+          setSelectedVendorId(found.id);
+          if (!qBankName && found.bankName) setBankName(found.bankName);
+          if (!qAccount && found.bankAccountNumber) setAccountNumber(found.bankAccountNumber);
+          if (!qIfsc && found.bankIfscCode) setIfscCode(found.bankIfscCode);
+        }
+      }
     }
     if (qInvoiceRef) setInvoiceRef(qInvoiceRef);
     if (qAmount && !isNaN(Number(qAmount))) setGrossAmount(Number(qAmount));
     if (qBankName) setBankName(qBankName);
     if (qAccount) setAccountNumber(qAccount);
     if (qIfsc) setIfscCode(qIfsc);
-  }, [searchParams]);
+  }, [searchParams, vendorsList]);
 
   // Handle vendor selection change
   const handleVendorSelect = (vId: string) => {
@@ -396,19 +570,31 @@ export default function CreatePaymentVoucherPage() {
   const tdsAmount = useMemo(() => (gross * (tdsPercent || 0)) / 100, [gross, tdsPercent]);
   const netPayable = useMemo(() => gross, [gross]);
 
-  // File Upload
+  // File Upload with Base64 encoding for document preview and persistence
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const newFiles = Array.from(e.target.files).map((file, idx) => ({
-        id: `att_${Date.now()}_${idx}`,
-        name: file.name,
-        size: `${(file.size / 1024).toFixed(1)} KB`,
-      }));
-      setAttachments((prev) => [...prev, ...newFiles]);
+      const files = Array.from(e.target.files);
+      files.forEach((file, idx) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result as string;
+          const newDoc: DocumentAttachment = {
+            id: `att_${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 7)}`,
+            name: file.name,
+            size: `${(file.size / 1024).toFixed(1)} KB`,
+            type: file.type || (file.name.endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream'),
+            dataUrl,
+          };
+          setAttachments((prev) => [...prev, newDoc]);
+        };
+        reader.readAsDataURL(file);
+      });
+      // Clear input so user can re-upload if needed
+      e.target.value = '';
     }
   };
 
-  const handleRemoveAttachment = (attId: string) => {
+  const handleRemoveAttachment = (attId: string | number) => {
     setAttachments((prev) => prev.filter((a) => a.id !== attId));
   };
 
@@ -481,13 +667,26 @@ export default function CreatePaymentVoucherPage() {
             accountNumber,
             ifscCode,
             beneficiaryName,
+            attachments: attachments.length > 0 ? attachments : undefined,
           }),
         });
         if (res?.paymentNumber) {
           setVoucherNumber(res.paymentNumber);
+          if (attachments.length > 0) {
+            try {
+              localStorage.setItem(`payment_attachments_${res.paymentNumber}`, JSON.stringify(attachments));
+            } catch {}
+          }
         }
       } catch (apiErr) {
         console.warn('Backend API notice:', apiErr);
+      }
+
+      // Save to localStorage cache for offline/instant access
+      if (attachments.length > 0) {
+        try {
+          localStorage.setItem(`payment_attachments_${voucherNumber}`, JSON.stringify(attachments));
+        } catch {}
       }
 
       // 2. Local fallback sync for offline support
@@ -509,9 +708,11 @@ export default function CreatePaymentVoucherPage() {
         grossAmount: gross,
         tdsAmount: tdsAmount,
         items: itemsList.length > 0 ? itemsList : undefined,
+        attachments: attachments.length > 0 ? attachments : undefined,
       });
 
       setSuccessMsg(`Payment Voucher #${voucherNumber} saved to Database & submitted for payment workflow approval!`);
+      refetchVouchers();
       refetchVouchers();
 
       setTimeout(() => {
@@ -584,6 +785,7 @@ export default function CreatePaymentVoucherPage() {
       matchStatus: voucher.remarks?.toLowerCase().includes('discrepancy') ? 'DISCREPANCY' : 'MATCHED',
       discrepancyReason: voucher.remarks,
       items: voucher.items || undefined,
+      attachments: voucher.attachments || undefined,
     });
   };
 
@@ -1048,6 +1250,17 @@ export default function CreatePaymentVoucherPage() {
             onClose={() => setSelectedVoucherForModal(null)}
           />
         )}
+
+        {/* Attached Document Viewer Modal */}
+        {viewerOpen && (
+          <InvoiceDocumentViewerModal
+            open={viewerOpen}
+            onClose={() => setViewerOpen(false)}
+            invoice={viewerDocContext}
+            attachments={viewerAttachments}
+            initialDocIndex={viewerIndex}
+          />
+        )}
       </PageFrame>
     );
   }
@@ -1212,32 +1425,119 @@ export default function CreatePaymentVoucherPage() {
               <span className="cpv-section__title">Select Invoices for Payment (Single & Multiple Invoices)</span>
             </div>
             <div className="cpv-invoice-mode-toggle" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleAddCustomInvoice}
-                className="h-8 gap-1 text-xs border-primary/40 text-primary hover:bg-primary/10"
-              >
-                <Plus size={14} /> Add Invoice Line
-              </Button>
-              <button
-                type="button"
-                className={`cpv-mode-btn ${selectionMode === 'multiple' ? 'cpv-mode-btn--active' : ''}`}
-                onClick={() => handleModeChange('multiple')}
-              >
-                <CheckSquare size={14} /> Multiple Invoices
-              </button>
-              <button
-                type="button"
-                className={`cpv-mode-btn ${selectionMode === 'single' ? 'cpv-mode-btn--active' : ''}`}
-                onClick={() => handleModeChange('single')}
-              >
-                <FileText size={14} /> Single Invoice
-              </button>
+              {invoiceEntryMode !== null && (
+                <>
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)', borderRight: '1px solid var(--border-color)', paddingRight: 8, marginRight: 4 }}>
+                    {invoiceEntryMode === 'AUTO_FILL' ? '🔗 Auto-Fill' : '✏️ Manual'}
+                  </span>
+                  <button
+                    type="button"
+                    className="cpv-mode-btn"
+                    onClick={() => { setInvoiceEntryMode(null); setVendorInvoices([]); setGrossAmount(''); setInvoiceRef(''); }}
+                    style={{ fontSize: 11, color: 'var(--text-secondary)' }}
+                  >
+                    ↩ Change Mode
+                  </button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddCustomInvoice}
+                    className="h-8 gap-1 text-xs border-primary/40 text-primary hover:bg-primary/10"
+                  >
+                    <Plus size={14} /> Add Invoice Line
+                  </Button>
+                  <button
+                    type="button"
+                    className={`cpv-mode-btn ${selectionMode === 'multiple' ? 'cpv-mode-btn--active' : ''}`}
+                    onClick={() => handleModeChange('multiple')}
+                  >
+                    <CheckSquare size={14} /> Multiple Invoices
+                  </button>
+                  <button
+                    type="button"
+                    className={`cpv-mode-btn ${selectionMode === 'single' ? 'cpv-mode-btn--active' : ''}`}
+                    onClick={() => handleModeChange('single')}
+                  >
+                    <FileText size={14} /> Single Invoice
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
+
+          {/* Mode Selection Cards — shown when no mode is selected yet */}
+          {invoiceEntryMode === null && (
+            <div style={{ padding: '28px 24px' }}>
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20, textAlign: 'center' }}>
+                How would you like to add invoices for this payment?
+              </p>
+              <div style={{ display: 'flex', gap: 20, justifyContent: 'center', flexWrap: 'wrap' }}>
+                {/* Auto-Fill Card */}
+                <button
+                  type="button"
+                  onClick={() => handleSelectInvoiceMode('AUTO_FILL')}
+                  style={{
+                    flex: '1 1 240px', maxWidth: 300, padding: '24px 20px',
+                    background: 'var(--surface-secondary, rgba(255,255,255,0.04))',
+                    border: '1.5px solid var(--border-color, rgba(255,255,255,0.1))',
+                    borderRadius: 12, cursor: 'pointer', textAlign: 'left',
+                    transition: 'border-color 0.15s, box-shadow 0.15s',
+                    color: 'inherit',
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--primary, #6366f1)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 0 0 3px rgba(99,102,241,0.15)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border-color, rgba(255,255,255,0.1))'; (e.currentTarget as HTMLButtonElement).style.boxShadow = 'none'; }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(99,102,241,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Database size={20} style={{ color: 'var(--primary, #6366f1)' }} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>Auto-Fill from Database</div>
+                      <div style={{ fontSize: 11, color: 'var(--primary, #6366f1)', fontWeight: 500 }}>Recommended</div>
+                    </div>
+                  </div>
+                  <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
+                    Automatically fetch open invoices for the selected supplier from the database. Includes PO &amp; GRN references and 3-Way Match status.
+                  </p>
+                </button>
+
+                {/* Manual Entry Card */}
+                <button
+                  type="button"
+                  onClick={() => handleSelectInvoiceMode('MANUAL')}
+                  style={{
+                    flex: '1 1 240px', maxWidth: 300, padding: '24px 20px',
+                    background: 'var(--surface-secondary, rgba(255,255,255,0.04))',
+                    border: '1.5px solid var(--border-color, rgba(255,255,255,0.1))',
+                    borderRadius: 12, cursor: 'pointer', textAlign: 'left',
+                    transition: 'border-color 0.15s, box-shadow 0.15s',
+                    color: 'inherit',
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#22c55e'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 0 0 3px rgba(34,197,94,0.15)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border-color, rgba(255,255,255,0.1))'; (e.currentTarget as HTMLButtonElement).style.boxShadow = 'none'; }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(34,197,94,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Edit3 size={20} style={{ color: '#22c55e' }} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>Manual Entry</div>
+                      <div style={{ fontSize: 11, color: '#22c55e', fontWeight: 500 }}>For unlinked invoices</div>
+                    </div>
+                  </div>
+                  <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
+                    Manually enter invoice number, PO reference, amount and due date. Use this for invoices not yet recorded in the system.
+                  </p>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Invoice Table — shown after mode is selected */}
+          {invoiceEntryMode !== null && (
+          <>
           {loadingInvoices ? (
             <div style={{ padding: '16px' }}>
               <TableSkeleton rows={3} columns={6} />
@@ -1246,7 +1546,9 @@ export default function CreatePaymentVoucherPage() {
             <div>
               {vendorInvoices.length === 0 ? (
                 <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '14px' }}>
-                  <p>{selectedVendorId ? 'No open database invoices found for this supplier.' : 'Select a supplier above or click below to add invoice lines manually.'}</p>
+                  <p>{invoiceEntryMode === 'AUTO_FILL'
+                    ? (selectedVendorId ? 'No open database invoices found for this supplier.' : 'Select a supplier above to auto-load invoices.')
+                    : 'Click "Add Invoice Line" above to add a row.'}</p>
                   <Button
                     type="button"
                     variant="outline"
@@ -1327,10 +1629,29 @@ export default function CreatePaymentVoucherPage() {
                               style={{ width: '120px' }}
                             />
                           </td>
-                          <td>
-                            <span className={`cpv-match-tag cpv-match-tag--${inv.threeWayMatch === 'MATCHED' ? 'matched' : 'discrepancy'}`}>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleInvoiceMatch(inv.id)}
+                              className={`cpv-match-tag cpv-match-tag--${inv.threeWayMatch === 'MATCHED' ? 'matched' : 'discrepancy'}`}
+                              style={{
+                                cursor: 'pointer',
+                                border: 'none',
+                                background: inv.threeWayMatch === 'MATCHED' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                                color: inv.threeWayMatch === 'MATCHED' ? '#10b981' : '#ef4444',
+                                padding: '4px 8px',
+                                borderRadius: '6px',
+                                fontWeight: 600,
+                                fontSize: '11px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                transition: 'all 0.15s ease',
+                              }}
+                              title="Click to toggle 3-Way Match status (MATCHED / DISCREPANCY)"
+                            >
                               {inv.threeWayMatch === 'MATCHED' ? '✅ MATCHED' : '⚠️ DISCREPANCY'}
-                            </span>
+                            </button>
                           </td>
                           <td>{inv.invoiceDate}</td>
                           <td>{inv.dueDate}</td>
@@ -1376,73 +1697,206 @@ export default function CreatePaymentVoucherPage() {
               </div>
             </div>
           )}
+          </>
+          )}
         </div>
 
         {/* Section 03: Automated 3-Way Multi-Match Verification Engine */}
-        <div className={`cpv-section cpv-match-card ${matchStatus === 'DISCREPANCY' ? 'cpv-match-card--discrepancy' : ''}`}>
-          <div className="cpv-section__header" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span className="cpv-section__num">03</span>
-              <span className="cpv-section__title">
-                3-Way Multi-Match Engine ({vendorInvoices.filter(i => i.selected).length} Selected Invoices)
-              </span>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                type="button"
-                className={`cpv-btn cpv-btn--sm ${matchStatus === 'MATCHED' ? 'cpv-btn--success' : 'cpv-btn--outline'}`}
-                onClick={() => { setMatchStatus('MATCHED'); setPoQty(100); setGrnQty(100); setInvoicedQty(100); setDiscrepancyReason(''); }}
-              >
-                Simulate 3-Way Match
-              </button>
-              <button
-                type="button"
-                className={`cpv-btn cpv-btn--sm ${matchStatus === 'DISCREPANCY' ? 'cpv-btn--danger' : 'cpv-btn--outline'}`}
-                onClick={() => { setMatchStatus('DISCREPANCY'); setPoQty(100); setGrnQty(80); setInvoicedQty(100); setDiscrepancyReason('Billed Qty exceeds GRN Received Qty'); }}
-              >
-                Simulate Discrepancy
-              </button>
-            </div>
-          </div>
+        {(() => {
+          const selectedInvs = vendorInvoices.filter((i) => i.selected);
+          const billedTotal = selectedInvs.reduce((sum, i) => sum + (i.paymentAmount || 0), 0);
 
-          <div className={`cpv-match-banner ${matchStatus === 'MATCHED' ? 'cpv-match-banner--matched' : 'cpv-match-banner--discrepancy'}`}>
-            <div className={`cpv-match-banner-title ${matchStatus === 'MATCHED' ? 'cpv-match-banner-title--matched' : 'cpv-match-banner-title--discrepancy'}`}>
-              {matchStatus === 'MATCHED' ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
-              <span>
-                {matchStatus === 'MATCHED'
-                  ? `3-Way Multi-Match Verified (${vendorInvoices.filter(i => i.selected).length || 1} Invoice(s): PO = GRN = Invoice)`
-                  : '3-Way Multi-Match Discrepancy Detected'}
-              </span>
-            </div>
-            <p style={{ margin: 0, fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-              {matchStatus === 'MATCHED'
-                ? `Quantities & unit rates across Purchase Orders, GRN Dispatches, and ${vendorInvoices.filter(i => i.selected).length || 1} selected Supplier Invoice(s) align perfectly. Sent for formal bank payment approval.`
-                : (discrepancyReason || 'Discrepancy detected: Invoiced quantity / value does not match GRN received quantities or PO agreed rates. Flagged for mandatory Manager & Finance approval!')}
-            </p>
-          </div>
+          // Always compute real GRN delivery % from actual qty data
+          let totalOrd = 0;
+          let totalRec = 0;
+          let totalGrnAmt = 0; // sum of GRN received amounts (from item prices)
+          selectedInvs.forEach((i) => {
+            if (i.grnOrderedQty && i.grnOrderedQty > 0) {
+              totalOrd += i.grnOrderedQty;
+              totalRec += i.grnReceivedQty ?? i.grnOrderedQty;
+            }
+            if (i.grnReceivedAmount && i.grnReceivedAmount > 0) {
+              totalGrnAmt += i.grnReceivedAmount;
+            }
+          });
 
-          <div className="cpv-grid cpv-grid--3">
-            <div className="cpv-match-box">
-              <span className="cpv-match-box-label">a. Purchase Order (PO)</span>
-              <div className="cpv-match-box-value">PO Agreed Total: {formatAmount(gross, currency)}</div>
-              <span className="cpv-match-box-sub cpv-match-box-sub--ok">PO Rates & Terms Verified</span>
+          // grnPercent: prefer qty-based, fallback to amount-based
+          let grnPercent = 100;
+          if (totalOrd > 0) {
+            grnPercent = Math.min(100, Math.round((totalRec / totalOrd) * 100));
+          } else if (totalGrnAmt > 0 && billedTotal > 0) {
+            grnPercent = Math.min(100, Math.round((totalGrnAmt / billedTotal) * 100));
+          }
+
+          // GRN shortfall checks
+          const hasGrnQtyShortfall = totalOrd > 0 && totalRec < totalOrd && (totalOrd - totalRec) / totalOrd > 0.02;
+          const hasGrnAmtShortfall = totalGrnAmt > 0 && billedTotal > 0 && totalGrnAmt < billedTotal * 0.98;
+          const hasGrnShortfall = hasGrnQtyShortfall || hasGrnAmtShortfall;
+
+          // Backend-flagged discrepancy or NOT_MATCHED invoices
+          const backendDiscrepantInvs = selectedInvs.filter(
+            (i) => i.threeWayMatch === 'DISCREPANCY' || (i.threeWayMatch as string) === 'MISMATCH'
+          );
+          const notMatchedInvs = selectedInvs.filter((i) => i.threeWayMatch === 'NOT_MATCHED');
+          // Invoice amount mismatch: paying more than the invoice face value
+          const overBilledInvs = selectedInvs.filter((i) => i.paymentAmount > i.amount);
+
+          const discrepantInvs = [...new Set([...backendDiscrepantInvs, ...overBilledInvs])];
+          const isDiscrepant = discrepantInvs.length > 0 || matchStatus === 'DISCREPANCY' || hasGrnShortfall ||
+            (notMatchedInvs.length > 0 && notMatchedInvs.length === selectedInvs.length); // all NOT_MATCHED = flag
+
+          const poAgreedTotal = isDiscrepant
+            ? selectedInvs.reduce((sum, i) => {
+                const isInvDisc = i.threeWayMatch === 'DISCREPANCY' || (i.threeWayMatch as string) === 'MISMATCH';
+                return sum + (isInvDisc ? i.amount * 0.9 : i.amount);
+              }, 0)
+            : billedTotal;
+
+          // ── Build specific discrepancy reason lines ──────────────────────
+          const reasonLines: string[] = [];
+          if (hasGrnQtyShortfall) {
+            const shortfallUnits = totalOrd - totalRec;
+            const shortfallPct = Math.round((shortfallUnits / totalOrd) * 100);
+            reasonLines.push(`📦 GRN Quantity Shortfall: Only ${totalRec} of ${totalOrd} ordered units received (${shortfallPct}% shortfall — ${shortfallUnits} units pending delivery)`);
+          }
+          if (hasGrnAmtShortfall) {
+            const diff = billedTotal - totalGrnAmt;
+            reasonLines.push(`💰 GRN Amount Mismatch: GRN received value ${formatAmount(totalGrnAmt, currency)} is less than invoice billed amount ${formatAmount(billedTotal, currency)} (gap: ${formatAmount(diff, currency)})`);
+          }
+          if (backendDiscrepantInvs.length > 0) {
+            reasonLines.push(`🔴 Backend 3-Way Match Failed: Invoice(s) ${backendDiscrepantInvs.map(i => i.invoiceNumber).join(', ')} — PO rates or GRN accepted quantities do not match the billed invoice`);
+          }
+          if (overBilledInvs.length > 0) {
+            overBilledInvs.forEach(i => {
+              const excess = i.paymentAmount - i.amount;
+              reasonLines.push(`💸 Overbilled: Payment amount ${formatAmount(i.paymentAmount, currency)} exceeds invoice ${i.invoiceNumber} face value ${formatAmount(i.amount, currency)} (excess: ${formatAmount(excess, currency)})`);
+            });
+          }
+          if (notMatchedInvs.length > 0 && notMatchedInvs.length === selectedInvs.length) {
+            reasonLines.push(`⚠️ Unverified: Invoice(s) ${notMatchedInvs.map(i => i.invoiceNumber).join(', ')} have not been verified by the 3-Way Match system yet`);
+          }
+          if (matchStatus === 'DISCREPANCY' && reasonLines.length === 0) {
+            reasonLines.push('⚠️ Manual discrepancy flag: Finance team has flagged this payment for review');
+          }
+
+          const poRefs = Array.from(new Set(selectedInvs.map((i) => i.poNumber).filter(Boolean))).join(', ') || 'PO-2026';
+          const grnRefs = Array.from(new Set(selectedInvs.map((i) => i.grnNumber).filter(Boolean))).join(', ') || 'GRN-2026';
+
+          return (
+            <div className={`cpv-section cpv-match-card ${isDiscrepant ? 'cpv-match-card--discrepancy' : ''}`}>
+              <div className="cpv-section__header" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span className="cpv-section__num">03</span>
+                  <span className="cpv-section__title">
+                    3-Way Multi-Match Engine ({selectedInvs.length} Selected Invoice{selectedInvs.length !== 1 ? 's' : ''})
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 5,
+                      padding: '4px 10px',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      background: !isDiscrepant ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                      color: !isDiscrepant ? '#10b981' : '#ef4444',
+                      border: !isDiscrepant ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
+                    }}
+                  >
+                    {!isDiscrepant ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} />}
+                    <span>{!isDiscrepant ? 'PO = GRN = Invoice Verified' : 'Discrepancy Detected'}</span>
+                  </span>
+                  <button
+                    type="button"
+                    className="cpv-btn cpv-btn--sm cpv-btn--outline"
+                    onClick={() => updateTotalsFromInvoices(vendorInvoices)}
+                    title="Re-verify 3-Way Match across selected invoices"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, height: 28 }}
+                  >
+                    <RotateCcw size={12} />
+                    <span>Re-Verify</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className={`cpv-match-banner ${!isDiscrepant ? 'cpv-match-banner--matched' : 'cpv-match-banner--discrepancy'}`}>
+                <div className={`cpv-match-banner-title ${!isDiscrepant ? 'cpv-match-banner-title--matched' : 'cpv-match-banner-title--discrepancy'}`}>
+                  {!isDiscrepant ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
+                  <span>
+                    {!isDiscrepant
+                      ? `3-Way Multi-Match Verified (${selectedInvs.length || 1} Invoice(s): PO = GRN = Invoice)`
+                      : `3-Way Match Discrepancy Detected (${discrepantInvs.length || 1} Invoice(s))`
+                    }
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                  {!isDiscrepant
+                    ? `Quantities & unit rates across Purchase Orders (${poRefs}), GRN Delivery Dispatches (${grnRefs}), and ${selectedInvs.length || 1} selected Supplier Invoice(s) align 100%. Sent for formal bank payment approval.`
+                    : null}
+                  {isDiscrepant && (
+                    <div style={{ marginTop: 4 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#ef4444', marginBottom: 4 }}>Reasons for Discrepancy:</div>
+                      <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                        {reasonLines.length > 0
+                          ? reasonLines.map((r, idx) => (
+                              <li key={idx} style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, paddingLeft: 4 }}>
+                                {r}
+                              </li>
+                            ))
+                          : <li style={{ fontSize: 13, color: 'var(--text-secondary)', paddingLeft: 4 }}>
+                              Discrepancy in invoice(s) {discrepantInvs.map(i => i.invoiceNumber).join(', ') || 'selected'} — please verify PO, GRN and invoice details manually.
+                            </li>
+                        }
+                      </ul>
+                      <div style={{ fontSize: 12, color: '#f59e0b', marginTop: 8, fontWeight: 500 }}>
+                        ⚠️ Flagged for mandatory Manager &amp; Finance approval before payment release.
+                      </div>
+                    </div>
+                  )}
+                </p>
+              </div>
+
+              <div className="cpv-grid cpv-grid--3">
+                <div className="cpv-match-box">
+                  <span className="cpv-match-box-label">a. Purchase Order (PO: {poRefs})</span>
+                  <div className="cpv-match-box-value">PO Agreed Total: {formatAmount(poAgreedTotal, currency)}</div>
+                  <span className={`cpv-match-box-sub ${!isDiscrepant ? 'cpv-match-box-sub--ok' : 'cpv-match-box-sub--warn'}`}>
+                    {!isDiscrepant
+                      ? 'PO Rates & Terms Verified'
+                      : backendDiscrepantInvs.length > 0
+                        ? '⚠️ PO Rate / Quantity Variance'
+                        : overBilledInvs.length > 0
+                          ? '⚠️ Payment Exceeds Invoice Amount'
+                          : '⚠️ GRN Delivery Shortfall'}
+                  </span>
+                </div>
+                <div className="cpv-match-box">
+                  <span className="cpv-match-box-label">b. GRN / Dispatch Note ({grnRefs})</span>
+                  <div className="cpv-match-box-value">GRN Dispatches: {grnPercent}% Received</div>
+                  <span className={`cpv-match-box-sub ${!isDiscrepant ? 'cpv-match-box-sub--ok' : 'cpv-match-box-sub--warn'}`}>
+                    {!isDiscrepant
+                      ? 'Delivery Goods Verified (100%)'
+                      : hasGrnQtyShortfall
+                        ? `⚠️ Qty Shortfall: ${totalRec}/${totalOrd} units (${100 - grnPercent}% pending)`
+                        : hasGrnAmtShortfall
+                          ? `⚠️ Amount Shortfall: GRN value < Invoice amount`
+                          : `⚠️ GRN Mismatch Detected`}
+                  </span>
+                </div>
+                <div className="cpv-match-box">
+                  <span className="cpv-match-box-label">c. Selected Invoices ({selectedInvs.length})</span>
+                  <div className="cpv-match-box-value">Billed Total: {formatAmount(billedTotal, currency)}</div>
+                  <span className={`cpv-match-box-sub ${!isDiscrepant ? 'cpv-match-box-sub--ok' : 'cpv-match-box-sub--warn'}`}>
+                    {!isDiscrepant ? 'All Invoices 3-Way Matched' : `⚠️ ${discrepantInvs.length || 1} Discrepancy Flagged`}
+                  </span>
+                </div>
+              </div>
             </div>
-            <div className="cpv-match-box">
-              <span className="cpv-match-box-label">b. GRN / Dispatch Note</span>
-              <div className="cpv-match-box-value">GRN Dispatches: 100% Received</div>
-              <span className={`cpv-match-box-sub ${matchStatus === 'MATCHED' ? 'cpv-match-box-sub--ok' : 'cpv-match-box-sub--warn'}`}>
-                {matchStatus === 'MATCHED' ? 'Delivery Goods Verified' : 'Quantity Shortfall / Variance'}
-              </span>
-            </div>
-            <div className="cpv-match-box">
-              <span className="cpv-match-box-label">c. Selected Invoices ({vendorInvoices.filter(i => i.selected).length})</span>
-              <div className="cpv-match-box-value">Billed Total: {formatAmount(gross, currency)}</div>
-              <span className={`cpv-match-box-sub ${matchStatus === 'MATCHED' ? 'cpv-match-box-sub--ok' : 'cpv-match-box-sub--warn'}`}>
-                {matchStatus === 'MATCHED' ? 'All Invoices 3-Way Matched' : 'Discrepancy Flagged'}
-              </span>
-            </div>
-          </div>
-        </div>
+          );
+        })()}
 
         {/* Section 04: Purpose & Attachments & Section 05: Disbursement Summary Card */}
         <div className="cpv-grid cpv-grid--split">
@@ -1492,7 +1946,7 @@ export default function CreatePaymentVoucherPage() {
 
                 {attachments.length > 0 && (
                   <div className="cpv-attachments-list">
-                    {attachments.map((att) => (
+                    {attachments.map((att, idx) => (
                       <div key={att.id} className="cpv-attachment-item">
                         <div className="cpv-attachment-info">
                           <Paperclip size={16} style={{ color: 'var(--primary-500)' }} />
@@ -1501,14 +1955,35 @@ export default function CreatePaymentVoucherPage() {
                             <div className="cpv-attachment-size">{att.size}</div>
                           </div>
                         </div>
-                        <button
-                          type="button"
-                          className="cpv-action-btn cpv-action-btn--delete"
-                          onClick={() => handleRemoveAttachment(att.id)}
-                          title="Remove attachment"
-                        >
-                          <X size={14} />
-                        </button>
+                        <div className="cpv-attachment-actions">
+                          <button
+                            type="button"
+                            className="cpv-preview-btn"
+                            onClick={() => {
+                              setViewerAttachments(attachments);
+                              setViewerIndex(idx);
+                              setViewerDocContext({
+                                paymentNumber: voucherNumber,
+                                vendorName,
+                                amount: netPayable,
+                                currency,
+                              });
+                              setViewerOpen(true);
+                            }}
+                            title="Preview Document"
+                          >
+                            <Eye size={13} />
+                            <span>Preview</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="cpv-remove-btn"
+                            onClick={() => handleRemoveAttachment(att.id)}
+                            title="Remove attachment"
+                          >
+                            <X size={15} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1581,6 +2056,17 @@ export default function CreatePaymentVoucherPage() {
         currency={currency}
         mode="approval"
       />
+
+      {/* Invoice & Payment Voucher Document Viewer Modal */}
+      {viewerOpen && (
+        <InvoiceDocumentViewerModal
+          open={viewerOpen}
+          onClose={() => setViewerOpen(false)}
+          invoice={viewerDocContext}
+          attachments={viewerAttachments}
+          initialDocIndex={viewerIndex}
+        />
+      )}
     </div>
   );
 }

@@ -52,7 +52,6 @@ export function DigitalSignatureApprovalModal({
   const [selectedDataUrl, setSelectedDataUrl] = useState<string>('');
   const [comment, setComment] = useState(initialComment);
   const [submitting, setSubmitting] = useState(false);
-  const [saveForFuture, setSaveForFuture] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
 
   // Canvas State
@@ -239,22 +238,6 @@ export function DigitalSignatureApprovalModal({
     setErrorMsg('');
     setSubmitting(true);
     try {
-      // Option to save signature if drawn/uploaded
-      if ((activeTab === 'draw' || activeTab === 'upload') && saveForFuture && finalUrl) {
-        try {
-          const alreadyExists = savedSignatures.some((s) => s.dataUrl === finalUrl);
-          if (!alreadyExists) {
-            await signatureService.create({
-              name: `Signature ${savedSignatures.length + 1}`,
-              dataUrl: finalUrl,
-              type: activeTab === 'draw' ? 'drawn' : 'uploaded',
-            });
-          }
-        } catch {
-          // ignore save error
-        }
-      }
-
       await onConfirm(finalUrl, comment.trim() || undefined);
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Approval failed');
@@ -420,19 +403,6 @@ export function DigitalSignatureApprovalModal({
                 </div>
               )}
             </div>
-          )}
-
-          {/* Save checkbox for draw/upload */}
-          {(activeTab === 'draw' || activeTab === 'upload') && (
-            <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
-              <input
-                type="checkbox"
-                checked={saveForFuture}
-                onChange={(e) => setSaveForFuture(e.target.checked)}
-                className="rounded border-border text-primary focus:ring-primary/20"
-              />
-              <span>Save this signature to Signature Page for future use</span>
-            </label>
           )}
 
           {/* Comments input */}

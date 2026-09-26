@@ -30,7 +30,8 @@ import {
   Clock,
   Search,
   Eye,
-  Pencil
+  Pencil,
+  Download
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TableSkeleton } from '../../components/shared/Skeleton';
@@ -46,6 +47,7 @@ import { Input } from '../../components/ui/input';
 import { MetricCard, PageFrame, PageLead } from '../../components/ui/product';
 import { cn } from '../../lib/utils';
 import ActionSendingOverlay from '../../components/shared/ActionSendingOverlay';
+import InvoiceDocumentViewerModal from '../../components/invoices/InvoiceDocumentViewerModal';
 import '../../components/purchase-orders/PurchaseOrderDocument.css';
 import './CreatePurchaseInvoicePage.css';
 
@@ -196,7 +198,9 @@ export default function CreatePurchaseInvoicePage() {
   ]);
 
   // Attachments state
-  const [attachments, setAttachments] = useState<{ id: string; name: string; size: string }[]>([]);
+  const [attachments, setAttachments] = useState<{ id: string; name: string; size?: string; type?: string; dataUrl?: string; url?: string }[]>([]);
+  const [viewerModalOpen, setViewerModalOpen] = useState(false);
+  const [viewerDocIndex, setViewerDocIndex] = useState(0);
 
   // UI state
   const [savingDraft, setSavingDraft] = useState(false);
@@ -436,7 +440,7 @@ export default function CreatePurchaseInvoicePage() {
       if (foundPO.vendorId) setSelectedVendorId(String(foundPO.vendorId));
       if (foundPO.vendor?.name) setVendorName(foundPO.vendor.name);
 
-      if (foundPO.items && foundPO.items.length > 0) {
+      if (!selectedGrnId && foundPO.items && foundPO.items.length > 0) {
         const totalVal = Number(foundPO.totalAmount || 0);
         setLineItems(
           foundPO.items.map((item: any, idx: number) => {
@@ -475,8 +479,109 @@ export default function CreatePurchaseInvoicePage() {
     );
 
     const resolveItemsForSelection = (foundInv: any, foundGRN: any, poObj: any) => {
+      // ── PRIORITY 1: Direct Line Items from Vendor Invoice ──
+      let vendorItems = foundInv?.lineItems || foundInv?.items;
+      if (typeof vendorItems === 'string') {
+        try {
+          vendorItems = JSON.parse(vendorItems);
+        } catch {}
+      }
+
+      if (!vendorItems || !Array.isArray(vendorItems) || vendorItems.length === 0) {
+        const invNum = foundInv?.invoiceNumber || (typeof selectedGrnId === 'string' ? selectedGrnId.replace('inv_', '') : '');
+        const saved =
+          (invNum ? localStorage.getItem(`vendor_invoice_items_${invNum}`) : null) ||
+          (invNum ? localStorage.getItem(`invoice_items_${invNum}`) : null) ||
+          (poObj?.poNumber ? localStorage.getItem(`vendor_invoice_items_${poObj.poNumber}`) : null) ||
+          (foundInv?.id ? localStorage.getItem(`vendor_invoice_items_${foundInv.id}`) : null);
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              vendorItems = parsed;
+            }
+          } catch {}
+        }
+      }
+
+      if (vendorItems && Array.isArray(vendorItems) && vendorItems.length > 0) {
+        return vendorItems.map((vi: any, idx: number) => {
+          const poMatch = poObj?.items?.[idx] || poObj?.rfq?.items?.[idx];
+          const poQty = Number(vi.poQty ?? poMatch?.quantity ?? 1);
+          const grnQty = Number(vi.grnQty ?? vi.invoicedQty ?? vi.supplierQty ?? 1);
+          const supplierQty =
+            vi.invoicedQty !== undefined && vi.invoicedQty !== ''
+              ? Number(vi.invoicedQty)
+              : vi.supplierQty !== undefined && vi.supplierQty !== ''
+              ? Number(vi.supplierQty)
+              : Number(vi.quantity || 1);
+          const unitPrice =
+            vi.unitPrice !== undefined && vi.unitPrice !== ''
+              ? Number(vi.unitPrice)
+              : Number(poMatch?.unitPrice || 0);
+
+          return {
+            id: vi.id || `vendor_item_${idx}_${Date.now()}`,
+            itemCode: vi.itemCode || poMatch?.itemCode || `ITM-${String(idx + 1).padStart(3, '0')}`,
+            itemName: vi.itemName || vi.name || vi.description || poMatch?.itemName || `Line Item ${idx + 1}`,
+            description: vi.description || poMatch?.description || '',
+            poQty: poQty,
+            grnQty: grnQty,
+            supplierQty: supplierQty,
+            unitPrice: unitPrice,
+            taxPercent: Number(vi.taxPercent ?? 18),
+          };
+        });
+      }
+
+      // ── PRIORITY 1.5: If foundInv is selected with a known total amount (e.g. 47.2) ──
+      const invTotalAmount = Number(foundInv?.amount || 0);
       const activeGRN = foundGRN || (grnOptions && grnOptions.length > 0 ? grnOptions[0] : null);
-      const totalPOValue = Number(poObj?.totalAmount || foundInv?.amount || 0);
+      const totalPOValue = Number(poObj?.totalAmount || invTotalAmount || 0);
+
+      if (foundInv && invTotalAmount > 0) {
+        const baseItems = (activeGRN && activeGRN.items && activeGRN.items.length > 0)
+          ? activeGRN.items
+          : (poObj?.items || poObj?.rfq?.items || []);
+
+        if (baseItems.length > 0) {
+          return baseItems.map((item: any, idx: number) => {
+            const poMatch = poObj?.items?.[idx] || poObj?.rfq?.items?.[idx];
+            const poQty = Math.max(1, Number(item.quantity || item.orderedQty || poMatch?.quantity || 1));
+            const grnQty = Math.max(1, Number(item.receivedQty ?? item.acceptedQty ?? poQty));
+            const unitPrice = Number(item.unitPrice || poMatch?.unitPrice || 2);
+            const taxPercent = Number(item.taxPercent ?? poMatch?.taxPercent ?? 18);
+            const taxMultiplier = 1 + (taxPercent / 100);
+
+            let calculatedSupplierQty = grnQty;
+            if (baseItems.length === 1 && unitPrice > 0 && taxMultiplier > 0) {
+              const exactQty = invTotalAmount / (unitPrice * taxMultiplier);
+              if (Math.abs(Math.round(exactQty) - exactQty) < 0.05 || Math.abs((Math.round(exactQty) * unitPrice * taxMultiplier) - invTotalAmount) < 0.1) {
+                calculatedSupplierQty = Math.round(exactQty);
+              } else {
+                calculatedSupplierQty = Number(exactQty.toFixed(2));
+              }
+            }
+
+            let rawName = item.itemName || item.name || item.description || poMatch?.itemName || '';
+            if (!rawName || rawName.startsWith('Items for PO') || rawName.startsWith('Line Item')) {
+              rawName = poObj?.rfq?.title || `Line Item ${idx + 1}`;
+            }
+
+            return {
+              id: item.id || `inv_calc_item_${idx}_${Date.now()}`,
+              itemCode: item.itemCode || poMatch?.itemCode || `ITM-${String(idx + 1).padStart(3, '0')}`,
+              itemName: rawName,
+              description: item.description || item.remarks || '',
+              poQty: poQty,
+              grnQty: grnQty,
+              supplierQty: calculatedSupplierQty,
+              unitPrice: unitPrice,
+              taxPercent: taxPercent,
+            };
+          });
+        }
+      }
 
       if (activeGRN && activeGRN.items && activeGRN.items.length > 0) {
         return activeGRN.items.map((gi: any, idx: number) => {
@@ -574,6 +679,21 @@ export default function CreatePurchaseInvoicePage() {
         }
         if (foundInv.paymentTerms) setPaymentTerms(foundInv.paymentTerms);
         if (foundInv.department) setDepartment(foundInv.department);
+        if ((foundInv as any).currency) setCurrency((foundInv as any).currency);
+        if (foundInv.comments) setNotes(foundInv.comments);
+        let invAttachments = foundInv.attachments && Array.isArray(foundInv.attachments) ? foundInv.attachments : [];
+        if (!invAttachments.length && foundInv.invoiceNumber) {
+          try {
+            const cached = localStorage.getItem(`invoice_attachments_${foundInv.invoiceNumber}`);
+            if (cached) {
+              const parsed = JSON.parse(cached);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                invAttachments = parsed;
+              }
+            }
+          } catch (e) {}
+        }
+        setAttachments(invAttachments);
 
         const foundGRN =
           grnOptions.find((g) => String(g.id) === String(foundInv.grnId) || String(g.grnNumber) === String(foundInv.grnId)) ||
@@ -658,12 +778,50 @@ export default function CreatePurchaseInvoicePage() {
   // File Upload
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const newFiles = Array.from(e.target.files).map((file, idx) => ({
-        id: `att_${Date.now()}_${idx}`,
-        name: file.name,
-        size: `${(file.size / 1024).toFixed(1)} KB`,
-      }));
-      setAttachments((prev) => [...prev, ...newFiles]);
+      Array.from(e.target.files).forEach((file, idx) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const newDoc = {
+            id: `att_${Date.now()}_${idx}`,
+            name: file.name,
+            size: `${(file.size / 1024).toFixed(1)} KB`,
+            type: file.type || (file.name.endsWith('.pdf') ? 'application/pdf' : 'image/png'),
+            dataUrl: reader.result as string,
+          };
+          setAttachments((prev) => [...prev, newDoc]);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+  };
+
+  const handleDownloadAttachment = (att: { id?: string; name: string; size?: string; dataUrl?: string; url?: string }) => {
+    const src = att.dataUrl || att.url;
+    if (src) {
+      const link = document.createElement('a');
+      link.href = src;
+      link.download = att.name || 'invoice-document';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      try {
+        const cached = localStorage.getItem(`invoice_attachments_${invoiceNumber}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          const found = parsed.find((p: any) => p.name === att.name);
+          if (found?.dataUrl) {
+            const link = document.createElement('a');
+            link.href = found.dataUrl;
+            link.download = found.name || 'invoice-document';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            return;
+          }
+        }
+      } catch (e) {}
+      alert(`Downloading ${att.name}...`);
     }
   };
 
@@ -714,6 +872,10 @@ export default function CreatePurchaseInvoicePage() {
     try {
       const selectedPOObj = poList.find((p) => String(p.id) === String(selectedPoId));
 
+      try {
+        localStorage.setItem(`invoice_attachments_${invoiceNumber}`, JSON.stringify(attachments));
+      } catch (e) {}
+
       await apiRequest('/invoices/manual', {
         method: 'POST',
         body: JSON.stringify({
@@ -730,6 +892,7 @@ export default function CreatePurchaseInvoicePage() {
           comments: notes,
           isDraft,
           lineItems,
+          attachments,
         }),
       });
 
@@ -1039,18 +1202,31 @@ export default function CreatePurchaseInvoicePage() {
                   {filteredInvoices.map((inv) => {
                     const invIdStr = String(inv.id);
                     const isSelected = selectedInvoiceIds.includes(invIdStr);
-                    const statusKey = (inv.status || 'PENDING').toUpperCase();
+                    const statusKey = (inv.status || 'DRAFT').toUpperCase();
+                    const isDraft = statusKey === 'DRAFT' || statusKey === 'REGISTERED';
+                    const isApproved = statusKey === 'APPROVED' || statusKey === 'PAID';
+                    const isRejected = statusKey === 'REJECTED' || statusKey === 'CANCELLED';
+                    const isReturned = statusKey === 'RETURNED';
+
                     const tone =
-                      statusKey === 'APPROVED' || statusKey === 'PAID'
+                      isApproved
                         ? 'success'
-                        : statusKey === 'REJECTED' || statusKey === 'CANCELLED'
+                        : isRejected
                         ? 'danger'
+                        : isDraft
+                        ? 'neutral'
+                        : isReturned
+                        ? 'warning'
                         : 'warning';
                     const statusLabel =
-                      statusKey === 'APPROVED' || statusKey === 'PAID'
+                      isApproved
                         ? 'Approved'
-                        : statusKey === 'REJECTED' || statusKey === 'CANCELLED'
+                        : isRejected
                         ? 'Rejected'
+                        : isReturned
+                        ? 'Returned / Re-Review'
+                        : isDraft
+                        ? 'Draft'
                         : 'Pending Approval';
 
                     return (
@@ -1697,44 +1873,230 @@ export default function CreatePurchaseInvoicePage() {
             </div>
 
             <div className="cpi-field">
-              <label>ATTACH VENDOR INVOICE PDF</label>
-              <label className="cpi-dropzone">
-                <Upload size={28} className="cpi-dropzone-icon" />
-                <div className="cpi-dropzone-title">CLICK TO UPLOAD PHYSICAL VENDOR BILL PDF</div>
-                <div className="cpi-dropzone-sub">Drag and drop your invoice PDF here, or click to browse files</div>
-                <input type="file" multiple accept=".pdf,.png,.jpg" onChange={handleFileUpload} hidden />
-              </label>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <label style={{ margin: 0, fontWeight: 700, fontSize: 12, letterSpacing: '0.04em', color: 'var(--text-secondary)' }}>
+                  VENDOR PHYSICAL BILL / ATTACHED DOCUMENTS
+                </label>
+                {attachments.length > 0 && (
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      padding: '2px 8px',
+                      borderRadius: 12,
+                      background: 'rgba(37, 99, 235, 0.1)',
+                      color: '#2563eb',
+                    }}
+                  >
+                    {attachments.length} {attachments.length === 1 ? 'Document' : 'Documents'}
+                  </span>
+                )}
+              </div>
 
-              {attachments.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
-                  {attachments.map((att) => (
+              {attachments.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {attachments.map((att, idx) => (
                     <div
-                      key={att.id}
+                      key={att.id || idx}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        padding: '10px 14px',
-                        background: 'var(--surface-elevated)',
-                        border: '1px solid var(--border)',
-                        borderRadius: 10,
-                        fontSize: 14,
+                        padding: '12px 14px',
+                        background: 'var(--surface-elevated, #f8fafc)',
+                        border: '1.5px solid var(--border, #e2e8f0)',
+                        borderRadius: 12,
+                        gap: 12,
+                        flexWrap: 'wrap',
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Paperclip size={15} style={{ color: 'var(--primary-500, #0a6ed1)' }} />
-                        <span style={{ fontWeight: 600 }}>{att.name}</span>
-                        <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>({att.size})</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
+                        <div
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 8,
+                            background: 'rgba(37, 99, 235, 0.1)',
+                            color: '#2563eb',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                          }}
+                        >
+                          <FileText size={18} />
+                        </div>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)', wordBreak: 'break-all' }}>
+                              {att.name}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: 10,
+                                padding: '2px 6px',
+                                borderRadius: 4,
+                                background: '#ecfdf5',
+                                color: '#059669',
+                                fontWeight: 700,
+                                border: '1px solid #a7f3d0',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.02em',
+                              }}
+                            >
+                              Physical Bill
+                            </span>
+                          </div>
+                          {att.size && (
+                            <div style={{ color: 'var(--text-secondary)', fontSize: 11, marginTop: 2 }}>
+                              Size: {att.size}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveAttachment(att.id)}
-                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center' }}
-                      >
-                        <X size={15} />
-                      </button>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setViewerDocIndex(idx);
+                            setViewerModalOpen(true);
+                          }}
+                          style={{
+                            padding: '6px 10px',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            borderRadius: 6,
+                            background: '#2563eb',
+                            color: '#ffffff',
+                            border: 'none',
+                            cursor: 'pointer',
+                          }}
+                          title="View / Preview Document"
+                        >
+                          <Eye size={13} /> View
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadAttachment(att)}
+                          style={{
+                            padding: '6px 10px',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            borderRadius: 6,
+                            background: 'var(--surface-elevated, #ffffff)',
+                            color: 'var(--text-primary, #334155)',
+                            border: '1px solid var(--border, #cbd5e1)',
+                            cursor: 'pointer',
+                          }}
+                          title="Download Document"
+                        >
+                          <Download size={13} /> Download
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setViewerDocIndex(idx);
+                            setViewerModalOpen(true);
+                          }}
+                          style={{
+                            padding: '6px 10px',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            borderRadius: 6,
+                            background: 'var(--surface-elevated, #ffffff)',
+                            color: 'var(--text-primary, #334155)',
+                            border: '1px solid var(--border, #cbd5e1)',
+                            cursor: 'pointer',
+                          }}
+                          title="Print Document"
+                        >
+                          <Printer size={13} /> Print
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveAttachment(att.id)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#94a3b8',
+                            cursor: 'pointer',
+                            padding: 4,
+                            display: 'flex',
+                            alignItems: 'center',
+                          }}
+                          title="Remove"
+                        >
+                          <X size={15} />
+                        </button>
+                      </div>
                     </div>
                   ))}
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+                    <label
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: 'var(--primary-500, #0a6ed1)',
+                        cursor: 'pointer',
+                        padding: '4px 8px',
+                      }}
+                    >
+                      <Plus size={13} /> Attach additional supporting file
+                      <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg" onChange={handleFileUpload} hidden />
+                    </label>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    padding: '14px 16px',
+                    borderRadius: 10,
+                    background: 'var(--surface-elevated, #f8fafc)',
+                    border: '1px dashed var(--border, #cbd5e1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Paperclip size={16} style={{ color: 'var(--text-secondary, #64748b)' }} />
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary, #64748b)' }}>
+                      No physical invoice document attached by vendor yet.
+                    </span>
+                  </div>
+                  <label
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 5,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: 'var(--primary-600, #2563eb)',
+                      cursor: 'pointer',
+                      padding: '5px 10px',
+                      background: 'rgba(37, 99, 235, 0.08)',
+                      borderRadius: 6,
+                    }}
+                  >
+                    <Upload size={13} /> + Attach Supporting Document (Optional)
+                    <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg" onChange={handleFileUpload} hidden />
+                  </label>
                 </div>
               )}
             </div>
@@ -2092,6 +2454,18 @@ export default function CreatePurchaseInvoicePage() {
         amount={calculations.grandTotal}
         currency={currency}
         mode={overlayMode}
+      />
+      <InvoiceDocumentViewerModal
+        open={viewerModalOpen}
+        onClose={() => setViewerModalOpen(false)}
+        invoice={{
+          invoiceNumber,
+          poNumber: selectedPoId,
+          vendorName,
+          attachments,
+        }}
+        attachments={attachments}
+        initialDocIndex={viewerDocIndex}
       />
     </div>
   );

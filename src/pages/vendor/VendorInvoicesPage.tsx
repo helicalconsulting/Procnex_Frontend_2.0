@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Calendar, CheckCircle2, Clock, FileText, Receipt, Search, XCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { AlertTriangle, Calendar, CheckCircle2, Clock, FileText, Plus, Receipt, Search, XCircle } from 'lucide-react';
 import { CurrencyBadge, CurrencySelector, useCurrency } from '../../components/shared/CurrencyMaster';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -10,6 +11,7 @@ import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui
 import { useServiceData } from '../../hooks/useServiceData';
 import type { VendorInvoiceMock } from '../../mocks/vendorPortal.mock';
 import { vendorPortalService } from '../../services/vendorPortalService';
+import { getVendorPath } from '../../utils/tenantResolver';
 
 type InvStatus = 'PENDING' | 'APPROVED' | 'PAID' | 'REJECTED' | 'OVERDUE';
 type Tone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
@@ -29,6 +31,7 @@ function StatusBadge({ status }: { status: InvStatus }) {
 }
 
 export default function VendorInvoicesPage() {
+  const navigate = useNavigate();
   const { formatAmount, companyDefaultCurrency } = useCurrency();
   const [displayCurrency, setDisplayCurrency] = useState(companyDefaultCurrency);
   const { data: invoices, loading, error, forceRefresh } = useServiceData(
@@ -77,7 +80,21 @@ export default function VendorInvoicesPage() {
 
   return (
     <PageFrame>
-      <PageLead title="My Invoices" description="Track invoice review, due dates, and payment status." actions={<CurrencySelector value={displayCurrency} onChange={setDisplayCurrency} size="sm" />} />
+      <PageLead
+        title="My Invoices"
+        description="Track invoice review, due dates, and payment status."
+        actions={
+          <div className="flex items-center gap-2">
+            <CurrencySelector value={displayCurrency} onChange={setDisplayCurrency} size="sm" />
+            <Button
+              onClick={() => navigate(getVendorPath('/vendor/create-invoice'))}
+              className="gap-1.5 shadow-xs"
+            >
+              <Plus size={16} /> Create Invoice
+            </Button>
+          </div>
+        }
+      />
       {error && <Card className="mb-4 border-destructive/25 bg-destructive/8 p-4 text-sm text-destructive">{error}</Card>}
       <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Total invoiced" value={amount(summary.totalAmount)} detail={`${(invoices || []).length} invoices`} icon={Receipt} aria-pressed={true} />
@@ -112,7 +129,20 @@ export default function VendorInvoicesPage() {
       {loading ? (
         <Card className="grid min-h-64 place-items-center text-sm text-muted-foreground">Loading invoices…</Card>
       ) : filtered.length === 0 ? (
-        <EmptyState icon={Receipt} title="No invoices found" description={search ? 'Try another search term.' : 'Your first submitted invoice will appear here.'} action={search ? <Button variant="secondary" onClick={() => setSearch('')}>Clear search</Button> : undefined} />
+        <EmptyState
+          icon={Receipt}
+          title="No invoices found"
+          description={search ? 'Try another search term.' : 'Your first submitted invoice will appear here.'}
+          action={
+            search ? (
+              <Button variant="secondary" onClick={() => setSearch('')}>Clear search</Button>
+            ) : (
+              <Button onClick={() => navigate(getVendorPath('/vendor/create-invoice'))} className="gap-1.5">
+                <Plus size={16} /> Create Invoice
+              </Button>
+            )
+          }
+        />
       ) : (
         <>
           <Card className="hidden overflow-hidden lg:block">

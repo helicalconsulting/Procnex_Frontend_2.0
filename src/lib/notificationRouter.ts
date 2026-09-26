@@ -18,6 +18,30 @@ export function getNotificationTargetUrl(
   const contractMatch = combined.match(/\b(cnt|ctr|cont|con)-[a-z0-9_-]+\b/i);
   const qtnMatch = combined.match(/\bqtn-[a-z0-9_-]+\b/i);
 
+  // Special: Returned for Revision (Direct to Creator edit page)
+  if (lower.includes('returned for revision') || (lower.includes('returned') && !lower.includes('re-review'))) {
+    if (lower.includes('quotation') || qtnMatch) {
+      if (rfqMatch) return `/quotations?rfq=${encodeURIComponent(rfqMatch[0])}`;
+      return '/quotations';
+    }
+    if (lower.includes('rfq') || rfqMatch) {
+      if (rfqMatch) return `/rfq?search=${encodeURIComponent(rfqMatch[0])}`;
+      return '/rfq';
+    }
+    if (lower.includes('purchase order') || lower.includes('po ') || poMatch) {
+      if (poMatch) return `/procurement/purchase-orders?search=${encodeURIComponent(poMatch[0])}`;
+      return '/procurement/purchase-orders';
+    }
+    if (lower.includes('purchase invoice') || lower.includes('invoice') || lower.includes('accounts payable') || piMatch) {
+      if (piMatch) return `/accounts-payable?search=${encodeURIComponent(piMatch[0])}`;
+      return '/accounts-payable';
+    }
+    if (lower.includes('payment') || lower.includes('voucher') || payMatch) {
+      if (payMatch) return `/payments?search=${encodeURIComponent(payMatch[0])}`;
+      return '/payments';
+    }
+  }
+
   // 1. Quotations & Quotation Approvals (Quotation Approval Module -> /quotations)
   if (
     lower.includes('quotation') ||

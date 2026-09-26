@@ -2048,45 +2048,20 @@ export default function CreateRFQPage() {
               )}
             </p>
             <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-              {approvalSubmittedRfq.isApprovalChain ? (
-                <>
-                  <button
-                    className="create-rfq__btn create-rfq__btn--secondary"
-                    style={{ minWidth: 130, justifyContent: 'center' }}
-                    onClick={() => {
-                      const rfqNum = approvalSubmittedRfq.number;
-                      setApprovalSubmittedRfq(null);
-                      navigate(`/approvals?module=RFQ&search=${encodeURIComponent(rfqNum)}`);
-                    }}
-                  >
-                    View RFQ Approvals
-                  </button>
-                  <button
-                    className="create-rfq__btn create-rfq__btn--primary"
-                    style={{ minWidth: 130, justifyContent: 'center' }}
-                    onClick={() => { setApprovalSubmittedRfq(null); navigate('/rfq'); }}
-                  >
-                    Go to RFQ List
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    className="create-rfq__btn create-rfq__btn--secondary"
-                    style={{ minWidth: 130, justifyContent: 'center' }}
-                    onClick={() => { setApprovalSubmittedRfq(null); window.location.reload(); }}
-                  >
-                    Create Another RFQ
-                  </button>
-                  <button
-                    className="create-rfq__btn create-rfq__btn--primary"
-                    style={{ minWidth: 130, justifyContent: 'center' }}
-                    onClick={() => { setApprovalSubmittedRfq(null); navigate('/rfq'); }}
-                  >
-                    Go to RFQ List
-                  </button>
-                </>
-              )}
+              <button
+                className="create-rfq__btn create-rfq__btn--secondary"
+                style={{ minWidth: 130, justifyContent: 'center' }}
+                onClick={() => { setApprovalSubmittedRfq(null); window.location.reload(); }}
+              >
+                Create Another RFQ
+              </button>
+              <button
+                className="create-rfq__btn create-rfq__btn--primary"
+                style={{ minWidth: 130, justifyContent: 'center' }}
+                onClick={() => { setApprovalSubmittedRfq(null); navigate('/rfq'); }}
+              >
+                Go to RFQ List
+              </button>
             </div>
           </div>
         </div>

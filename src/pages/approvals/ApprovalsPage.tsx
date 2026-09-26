@@ -17,6 +17,9 @@ import {
   ThumbsDown,
   X,
   FileText,
+  Paperclip,
+  Download,
+  Printer,
   ShoppingCart,
   ClipboardList,
   MessageSquare,
@@ -34,6 +37,7 @@ import '../../components/shared/ColumnCustomizer.css';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TableSkeleton } from '../../components/shared/Skeleton';
 import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
+import InvoiceDocumentViewerModal from '../../components/invoices/InvoiceDocumentViewerModal';
 import { apiRequest } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { PageFrame, PageLead, MetricCard, EmptyState } from '../../components/ui/product';
@@ -66,6 +70,8 @@ const STATUS_LABELS: Record<string, string> = {
   APPROVED_L1: 'L1 Approved',
   REJECTED: 'Rejected',
   RETURNED: 'Returned',
+  RE_REVIEW: 'Returned (Re-Review)',
+  RETURNED_RE_REVIEW: 'Returned (Re-Review)',
   AUTO_FORWARDED: 'Auto Forwarded',
 };
 
@@ -75,6 +81,8 @@ const STATUS_TONES: Record<string, string> = {
   APPROVED_L1: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-300',
   REJECTED: 'bg-rose-500/10 text-rose-600 border-rose-500/20 dark:text-rose-300',
   RETURNED: 'bg-orange-500/10 text-orange-600 border-orange-500/20 dark:text-orange-300',
+  RE_REVIEW: 'bg-orange-500/15 text-orange-600 border-orange-500/30 dark:text-orange-300',
+  RETURNED_RE_REVIEW: 'bg-orange-500/15 text-orange-600 border-orange-500/30 dark:text-orange-300',
   AUTO_FORWARDED: 'bg-violet-500/10 text-violet-600 border-violet-500/20 dark:text-violet-300',
 };
 
@@ -156,18 +164,29 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
     },
   },
   {
-    key: 'status', label: 'Status', defaultVisible: true, width: '170px', align: 'left',
+    key: 'status', label: 'Status', defaultVisible: true, width: '190px', align: 'left',
     render: (req) => {
       let effectiveStatus = req.status;
-      if (req.status === 'PENDING') {
+      const isReturnedReReview = Boolean(
+        (req as any).isReturned ||
+        (req as any).isReReview ||
+        req.status === 'RETURNED' ||
+        req.status === 'RE_REVIEW' ||
+        req.status === 'RETURNED_RE_REVIEW' ||
+        (req.comments && /return/i.test(req.comments))
+      );
+      if (req.status === 'PENDING' || req.status === 'RETURNED' || req.status === 'RE_REVIEW') {
         if (req.canAct) {
-          effectiveStatus = 'PENDING';
-        } else if ((req.currentLevel || 1) > 1) {
+          effectiveStatus = isReturnedReReview ? 'RE_REVIEW' : 'PENDING';
+        } else if ((req.currentLevel || 1) > 1 && !isReturnedReReview) {
           effectiveStatus = 'APPROVED';
+        } else if (isReturnedReReview) {
+          effectiveStatus = 'RE_REVIEW';
         }
       }
       return (
-        <Badge variant="outline" className={cn('font-semibold', STATUS_TONES[effectiveStatus] || 'bg-muted/50 text-muted-foreground')}>
+        <Badge variant="outline" className={cn('font-semibold gap-1', STATUS_TONES[effectiveStatus] || 'bg-muted/50 text-muted-foreground')}>
+          {isReturnedReReview && <RotateCcw size={12} className="text-orange-500 shrink-0" />}
           {STATUS_LABELS[effectiveStatus] || effectiveStatus.replace(/_/g, ' ')}
         </Badge>
       );
@@ -186,6 +205,38 @@ const CANONICAL_MODULE: Record<string, string> = {
   'Contract': 'Contracts',
   'RFQ': 'RFQ',
 };
+
+function getInvoiceAttachments(req: any): any[] {
+  if (!req) return [];
+  if (req.attachments) {
+    if (Array.isArray(req.attachments)) return req.attachments;
+    if (typeof req.attachments === 'string') {
+      try {
+        const parsed = JSON.parse(req.attachments);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {}
+    }
+  }
+  if (req.data?.attachments) {
+    if (Array.isArray(req.data.attachments)) return req.data.attachments;
+  }
+  const keys = [
+    req.referenceNumber ? `invoice_attachments_${req.referenceNumber}` : null,
+    req.referenceId ? `invoice_attachments_${req.referenceId}` : null,
+    req.id ? `invoice_attachments_${req.id}` : null,
+  ].filter(Boolean) as string[];
+
+  for (const k of keys) {
+    try {
+      const saved = localStorage.getItem(k);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+  }
+  return [];
+}
 
 export default function ApprovalsPage() {
   const [searchParams] = useSearchParams();
@@ -302,8 +353,9 @@ export default function ApprovalsPage() {
   const [actionComment, setActionComment] = useState('');
   const [actionReturnTarget, setActionReturnTarget] = useState<'ORIGINATOR' | 'LEVEL_1' | 'VENDOR'>('ORIGINATOR');
   const [detailRequest, setDetailRequest] = useState<ApprovalRequest | null>(null);
+  const [viewerInvoice, setViewerInvoice] = useState<any | null>(null);
   const [chainModal, setChainModal] = useState<{ module: string; referenceId: string } | null>(null);
-  useBodyScrollLock(!!(actionModal || detailRequest || actionSuccessData || chainModal));
+  useBodyScrollLock(!!(actionModal || detailRequest || actionSuccessData || chainModal || viewerInvoice));
   const perPage = 8;
 
   const defaultOrder = ALL_COLUMNS.map((c) => c.key);
@@ -702,7 +754,13 @@ export default function ApprovalsPage() {
           <DialogContent className="sm:max-w-[440px]">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                {actionModal.action === 'approve' ? <ThumbsUp className="size-5 text-emerald-600" /> : <ThumbsDown className="size-5 text-destructive" />}
+                {actionModal.action === 'approve' ? (
+                  <ThumbsUp className="size-5 text-emerald-600" />
+                ) : actionModal.action === 'return' ? (
+                  <RotateCcw className="size-5 text-amber-600" />
+                ) : (
+                  <ThumbsDown className="size-5 text-destructive" />
+                )}
                 {actionModal.action === 'approve' ? 'Approve Request' : actionModal.action === 'reject' ? 'Reject Request' : 'Return Request'}
               </DialogTitle>
               <DialogDescription>
@@ -717,13 +775,49 @@ export default function ApprovalsPage() {
                 <div className="flex justify-between"><span className="text-muted-foreground">Requested By:</span> <strong className="text-foreground">{actionModal.request.requestedBy}</strong></div>
               </div>
 
+              {actionModal.action === 'return' && (
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-foreground">Return Destination</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      className={cn(
+                        "rounded-md border p-2 text-left text-xs font-medium transition-colors",
+                        actionReturnTarget === 'ORIGINATOR' || actionReturnTarget === 'VENDOR'
+                          ? "border-amber-500 bg-amber-500/10 text-amber-700 dark:text-amber-400 font-semibold"
+                          : "border-border bg-background hover:bg-accent/40"
+                      )}
+                      onClick={() => setActionReturnTarget((actionModal.request.module === 'Quotation' || actionModal.request.module === 'Quotations') ? 'VENDOR' : 'ORIGINATOR')}
+                    >
+                      <div className="font-semibold">{(actionModal.request.module === 'Quotation' || actionModal.request.module === 'Quotations') ? 'Vendor' : 'Originator'}</div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">Send back for revision</div>
+                    </button>
+                    {(actionModal.request.currentLevel || 1) > 1 && (
+                      <button
+                        type="button"
+                        className={cn(
+                          "rounded-md border p-2 text-left text-xs font-medium transition-colors",
+                          actionReturnTarget === 'LEVEL_1'
+                            ? "border-amber-500 bg-amber-500/10 text-amber-700 dark:text-amber-400 font-semibold"
+                            : "border-border bg-background hover:bg-accent/40"
+                        )}
+                        onClick={() => setActionReturnTarget('LEVEL_1')}
+                      >
+                        <div className="font-semibold">Level 1 Approver</div>
+                        <div className="text-[10px] text-muted-foreground mt-0.5">Restart chain at L1</div>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-1.5">
                 <label className="font-semibold text-foreground flex items-center gap-1">
-                  <MessageSquare className="size-3.5" /> Comments
+                  <MessageSquare className="size-3.5" /> Comments {actionModal.action === 'return' && <span className="text-destructive">*</span>}
                 </label>
                 <textarea
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring min-h-[80px]"
-                  placeholder="Optional comments or notes..."
+                  placeholder={actionModal.action === 'return' ? "Please provide reason for return..." : "Optional comments or notes..."}
                   value={actionComment}
                   onChange={(e) => setActionComment(e.target.value)}
                 />
@@ -734,9 +828,10 @@ export default function ApprovalsPage() {
               <Button variant="outline" onClick={() => setActionModal(null)}>Cancel</Button>
               <Button
                 variant={actionModal.action === 'reject' ? 'destructive' : 'default'}
+                className={actionModal.action === 'return' ? 'bg-amber-600 hover:bg-amber-700 text-white' : ''}
                 onClick={handleAction}
               >
-                Confirm Decision
+                {actionModal.action === 'approve' ? 'Confirm Approval' : actionModal.action === 'reject' ? 'Confirm Rejection' : 'Confirm Return'}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -752,22 +847,29 @@ export default function ApprovalsPage() {
                 <DialogTitle className="text-xl font-bold tracking-tight text-foreground font-mono">
                   {detailRequest.referenceNumber}
                 </DialogTitle>
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    "px-2.5 py-1 text-xs font-semibold uppercase tracking-wider gap-1.5",
-                    STATUS_TONES[detailRequest.status] || STATUS_TONES.PENDING
-                  )}
-                >
-                  <span className={cn(
-                    "inline-block size-2 rounded-full",
-                    detailRequest.status === 'APPROVED' || detailRequest.status === 'APPROVED_L1' ? "bg-emerald-500" :
-                    detailRequest.status === 'REJECTED' ? "bg-rose-500" :
-                    detailRequest.status === 'RETURNED' ? "bg-orange-500" :
-                    "bg-amber-500/80"
-                  )} />
-                  {STATUS_LABELS[detailRequest.status] || detailRequest.status}
-                </Badge>
+                {(() => {
+                  const isReturnedReReview = (detailRequest as any).isReturned || Boolean(detailRequest.comments && /return/i.test(detailRequest.comments));
+                  const displayStatus = isReturnedReReview && detailRequest.status === 'PENDING' ? 'RE_REVIEW' : detailRequest.status;
+                  return (
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "px-2.5 py-1 text-xs font-semibold uppercase tracking-wider gap-1.5",
+                        STATUS_TONES[displayStatus] || STATUS_TONES.PENDING
+                      )}
+                    >
+                      {isReturnedReReview && <RotateCcw size={12} className="text-orange-500 shrink-0" />}
+                      <span className={cn(
+                        "inline-block size-2 rounded-full",
+                        detailRequest.status === 'APPROVED' || detailRequest.status === 'APPROVED_L1' ? "bg-emerald-500" :
+                        detailRequest.status === 'REJECTED' ? "bg-rose-500" :
+                        detailRequest.status === 'RETURNED' || isReturnedReReview ? "bg-orange-500" :
+                        "bg-amber-500/80"
+                      )} />
+                      {STATUS_LABELS[displayStatus] || detailRequest.status}
+                    </Badge>
+                  );
+                })()}
               </div>
               <DialogDescription className="text-sm font-medium text-muted-foreground">
                 {detailRequest.requestedBy} · <span className="font-bold text-foreground font-mono">{detailRequest.amount}</span>
@@ -775,6 +877,15 @@ export default function ApprovalsPage() {
             </DialogHeader>
 
             <div className="mt-4 space-y-4">
+              {Boolean((detailRequest as any).isReturned || (detailRequest.comments && /return/i.test(detailRequest.comments))) && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2.5">
+                  <RotateCcw className="size-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+                  <div>
+                    <div className="font-semibold">Returned for Re-Review</div>
+                    <div className="mt-0.5 text-muted-foreground">{detailRequest.comments || 'This item was returned by a previous approver for re-review and correction.'}</div>
+                  </div>
+                </div>
+              )}
               <div className="border-t border-border/60 pt-4">
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
                   {detailRequest.module.toUpperCase()} DETAILS
@@ -852,6 +963,127 @@ export default function ApprovalsPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Attached Vendor Documents / Physical Invoice PDF */}
+              {(() => {
+                const attList = getInvoiceAttachments(detailRequest);
+                const isInvoiceOrPO = /invoice|payable|order|po/i.test(detailRequest.module);
+                if (!isInvoiceOrPO && attList.length === 0) return null;
+
+                return (
+                  <div className="rounded-xl border border-border/70 bg-card p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Paperclip className="size-4 text-primary" />
+                        <span className="text-xs font-bold uppercase tracking-wider text-foreground">
+                          Attached Documents ({attList.length})
+                        </span>
+                      </div>
+                      {attList.length > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs gap-1.5"
+                          onClick={() => setViewerInvoice({
+                            invoiceNumber: detailRequest.referenceNumber,
+                            poNumber: detailRequest.referenceId,
+                            vendorName: detailRequest.requestedBy,
+                            attachments: attList,
+                          })}
+                        >
+                          <Eye className="size-3.5" /> View All ({attList.length})
+                        </Button>
+                      )}
+                    </div>
+
+                    {attList.length > 0 ? (
+                      <div className="space-y-2">
+                        {attList.map((att: any, idx: number) => (
+                          <div
+                            key={att.id || idx}
+                            className="flex items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/30 p-2.5 text-xs transition-colors hover:bg-muted/50"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <FileText className="size-4 text-primary shrink-0" />
+                              <span className="font-semibold text-foreground truncate">{att.name}</span>
+                              {att.size && <span className="text-muted-foreground shrink-0">({att.size})</span>}
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                title="View Document"
+                                onClick={() => setViewerInvoice({
+                                  invoiceNumber: detailRequest.referenceNumber,
+                                  poNumber: detailRequest.referenceId,
+                                  vendorName: detailRequest.requestedBy,
+                                  attachments: attList,
+                                })}
+                              >
+                                <Eye className="size-3.5 text-primary" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                title="Download Document"
+                                onClick={() => {
+                                  if (att.dataUrl) {
+                                    const link = document.createElement('a');
+                                    link.href = att.dataUrl;
+                                    link.download = att.name || 'document';
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+                                  } else if (att.url) {
+                                    window.open(att.url, '_blank');
+                                  }
+                                }}
+                              >
+                                <Download className="size-3.5 text-muted-foreground hover:text-foreground" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                title="Print Document"
+                                onClick={() => {
+                                  setViewerInvoice({
+                                    invoiceNumber: detailRequest.referenceNumber,
+                                    poNumber: detailRequest.referenceId,
+                                    vendorName: detailRequest.requestedBy,
+                                    attachments: attList,
+                                  });
+                                }}
+                              >
+                                <Printer className="size-3.5 text-muted-foreground hover:text-foreground" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between rounded-lg border border-dashed border-border/70 p-3 text-xs text-muted-foreground bg-muted/10">
+                        <div className="flex items-center gap-2">
+                          <FileText className="size-4 text-muted-foreground/60" />
+                          <span>Digital record (No physical PDF file attached by submitter)</span>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs gap-1.5"
+                          onClick={() => setViewerInvoice({
+                            invoiceNumber: detailRequest.referenceNumber,
+                            poNumber: detailRequest.referenceId,
+                            vendorName: detailRequest.requestedBy,
+                            comments: detailRequest.comments,
+                          })}
+                        >
+                          <Eye className="size-3.5" /> View Digital Copy
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             <DialogFooter className="mt-6 flex flex-col gap-2 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
@@ -917,6 +1149,13 @@ export default function ApprovalsPage() {
           </DialogContent>
         )}
       </Dialog>
+
+      {/* Document Viewer Modal */}
+      <InvoiceDocumentViewerModal
+        open={!!viewerInvoice}
+        invoice={viewerInvoice}
+        onClose={() => setViewerInvoice(null)}
+      />
 
       {/* Success Modal */}
       {actionSuccessData && (

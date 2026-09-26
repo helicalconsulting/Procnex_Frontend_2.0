@@ -13,6 +13,10 @@ const BACKEND_TO_UI_RFQ_STATUS: Record<string, RFQStatus> = {
   PENDING_APPROVAL: 'PENDING_APPROVAL',
   APPROVED: 'APPROVED',
   REJECTED: 'REJECTED',
+  RETURNED: 'RETURNED',
+  RE_REVIEW: 'RETURNED',
+  RETURN_FOR_RE_REVIEW: 'RETURNED',
+  RETURNED_TO_ORIGINATOR: 'RETURNED',
   SENT: 'ACCEPTED',
   QUOTATIONS_RECEIVED: 'ACCEPTED',
   UNDER_EVALUATION: 'ACCEPTED',
@@ -70,21 +74,28 @@ export function mapApiRfqToTableRow(rfq: Record<string, unknown>): RFQTableRow {
     };
   });
 
+  const rawStatus = String(rfq.status || '');
+  const isDocReturned = rawStatus === 'RETURNED' || rawStatus === 'RE_REVIEW' || rawStatus === 'RETURN_FOR_RE_REVIEW' || rawStatus === 'RETURNED_TO_ORIGINATOR' || Boolean(rfq.isReturnedByMe) || rfq.userAction === 'RETURNED';
+  const isDocRejected = rawStatus === 'REJECTED' || Boolean(rfq.isRejectedByMe) || rfq.userAction === 'REJECTED';
+  const isDocApproved = !isDocReturned && !isDocRejected && (rawStatus === 'APPROVED' || rawStatus === 'SENT' || rawStatus === 'ACCEPTED' || Boolean(rfq.isApprovedByMe) || rfq.userAction === 'APPROVED');
+
+  const finalStatus: RFQStatus = isDocReturned
+    ? 'RETURNED'
+    : isDocRejected
+    ? 'REJECTED'
+    : isDocApproved
+    ? 'APPROVED'
+    : mapBackendRfqStatus(rawStatus);
+
   return {
     id: String(rfq.id),
     rfqNumber: String(rfq.rfqNumber),
     title: String(rfq.title),
     description: String(rfq.description || ''),
-    status: rfq.isApprovedByMe || rfq.userAction === 'APPROVED'
-      ? 'APPROVED'
-      : rfq.isRejectedByMe || rfq.userAction === 'REJECTED'
-      ? 'REJECTED'
-      : rfq.isReturnedByMe || rfq.userAction === 'RETURNED'
-      ? 'RETURNED'
-      : mapBackendRfqStatus(String(rfq.status)),
-    _isApprovedByMe: Boolean(rfq.isApprovedByMe || rfq.userAction === 'APPROVED'),
-    _isReturnedByMe: Boolean(rfq.isReturnedByMe || rfq.userAction === 'RETURNED'),
-    _isRejectedByMe: Boolean(rfq.isRejectedByMe || rfq.userAction === 'REJECTED'),
+    status: finalStatus,
+    _isApprovedByMe: Boolean(isDocApproved && (rfq.isApprovedByMe || rfq.userAction === 'APPROVED')),
+    _isReturnedByMe: Boolean(isDocReturned),
+    _isRejectedByMe: Boolean(isDocRejected),
     canUserAct: Boolean(rfq.canUserAct),
     createdAt: String(rfq.createdAt).slice(0, 10),
     creator: creator?.fullName || 'Unknown',
@@ -196,11 +207,10 @@ export function mapVendorToTableRow(v: Vendor & Record<string, unknown>): Vendor
     isActive: Boolean(raw.isActive),
     isMobileAccessEnabled: Boolean(raw.isMobileAccessEnabled),
     initials: initials(name),
-    avatarMod: String((Math.abs(Number(idStr) || 1) % 6) + 1),
-    avgQuality: perf?.avgQuality ?? 0,
-    avgDelivery: perf?.avgDelivery ?? 0,
-    avgPriceScore: perf?.avgPriceScore ?? 0,
-    overallScore: perf?.overallScore ?? 0,
+    avgQuality: perf?.avgQuality ?? (typeof raw.avgQuality === 'number' ? raw.avgQuality : 0),
+    avgDelivery: perf?.avgDelivery ?? (typeof raw.avgDelivery === 'number' ? raw.avgDelivery : 0),
+    avgPriceScore: perf?.avgPriceScore ?? (typeof raw.avgPriceScore === 'number' ? raw.avgPriceScore : 0),
+    overallScore: perf?.overallScore ?? (typeof raw.overallScore === 'number' ? raw.overallScore : 0),
     totalOrders: Number(raw.totalOrders || 0),
     createdAt: safeString(raw.createdAt, new Date().toISOString()).slice(0, 10),
     hasPortalCredentials: Boolean(raw.hasPortalCredentials),
@@ -292,6 +302,7 @@ export function mapApprovalToTableRow(a: Record<string, unknown>): ApprovalTable
     comments: a.comments ? String(a.comments) : undefined,
     department: String(a.department || '—'),
     canAct: Boolean(a.canAct ?? false),
+    isReturned: Boolean(a.isReturned || (a as any).isReReview || a.status === 'RETURNED' || (a.comments && /return/i.test(String(a.comments)))),
   };
 }
 

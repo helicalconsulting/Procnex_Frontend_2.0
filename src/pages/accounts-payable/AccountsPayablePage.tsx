@@ -14,6 +14,7 @@ import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TableSkeleton } from '../../components/shared/Skeleton';
 import ColumnCustomizer, { type ColumnDef } from '../../components/shared/ColumnCustomizer';
 import PrintPurchaseInvoiceModal from '../../components/invoices/PrintPurchaseInvoiceModal';
+import InvoiceDocumentViewerModal from '../../components/invoices/InvoiceDocumentViewerModal';
 import { DigitalSignatureApprovalModal } from '../../components/shared/DigitalSignatureApprovalModal';
 import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
 import { signatureService } from '../../services/signatureService';
@@ -36,10 +37,12 @@ import {
   ArrowRight,
   CheckCircle2,
   Clock,
+  Download,
   Eye,
   FileText,
   IndianRupee,
   MessageSquare,
+  Paperclip,
   Printer,
   RotateCcw,
   Search,
@@ -51,7 +54,7 @@ import {
 } from 'lucide-react';
 import '../../components/shared/ColumnCustomizer.css';
 
-type APStatus = 'DRAFT' | 'PENDING' | 'OVERDUE' | 'PAID' | 'PARTIAL' | 'APPROVED' | 'REJECTED' | 'RETURNED';
+type APStatus = 'DRAFT' | 'PENDING' | 'OVERDUE' | 'PAID' | 'PARTIAL' | 'APPROVED' | 'REJECTED' | 'RETURNED' | 'RE_REVIEW';
 type ActionType = 'approve' | 'reject' | 'return';
 type Tone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
 
@@ -75,7 +78,37 @@ interface APInvoice {
   requiredRole: string;
   canAct: boolean;
   comments?: string;
+  attachments?: any[];
   hasApprovedPriorLevel?: boolean;
+}
+
+export function getInvoiceAttachments(invoice: any): any[] {
+  if (!invoice) return [];
+  if (invoice.attachments) {
+    if (Array.isArray(invoice.attachments)) return invoice.attachments;
+    if (typeof invoice.attachments === 'string') {
+      try {
+        const parsed = JSON.parse(invoice.attachments);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {}
+    }
+  }
+  const keys = [
+    invoice.invoiceNumber ? `invoice_attachments_${invoice.invoiceNumber}` : null,
+    invoice.poNumber ? `invoice_attachments_${invoice.poNumber}` : null,
+    invoice.id ? `invoice_attachments_${invoice.id}` : null,
+  ].filter(Boolean) as string[];
+
+  for (const k of keys) {
+    try {
+      const saved = localStorage.getItem(k);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+  }
+  return [];
 }
 
 const STATUS_CONFIG: Record<APStatus, { label: string; tone: Tone; icon: typeof Clock }> = {
@@ -86,7 +119,8 @@ const STATUS_CONFIG: Record<APStatus, { label: string; tone: Tone; icon: typeof 
   PARTIAL: { label: 'Partial', tone: 'info', icon: IndianRupee },
   APPROVED: { label: 'Approved', tone: 'success', icon: CheckCircle2 },
   REJECTED: { label: 'Rejected', tone: 'danger', icon: X },
-  RETURNED: { label: 'Returned', tone: 'neutral', icon: RotateCcw },
+  RETURNED: { label: 'Returned', tone: 'warning', icon: RotateCcw },
+  RE_REVIEW: { label: 'Returned (Re-Review)', tone: 'warning', icon: RotateCcw },
 };
 
 function StatusBadge({ status }: { status: APStatus }) {
@@ -152,12 +186,13 @@ export default function AccountsPayablePage() {
   const [statusFilter, setStatusFilter] = useState<APStatus | 'ALL'>('ALL');
   const [detailInvoice, setDetailInvoice] = useState<APInvoice | null>(null);
   const [printInvoice, setPrintInvoice] = useState<APInvoice | null>(null);
+  const [viewerInvoice, setViewerInvoice] = useState<APInvoice | null>(null);
   const [actionModal, setActionModal] = useState<{ invoice: APInvoice; action: ActionType } | null>(null);
   const [actionComment, setActionComment] = useState('');
   const [actionSaving, setActionSaving] = useState(false);
   const [actionSuccessData, setActionSuccessData] = useState<ActionSuccessModalData | null>(null);
   const [chainModal, setChainModal] = useState<{ module: string; referenceId: string } | null>(null);
-  useBodyScrollLock(!!(actionModal || detailInvoice || printInvoice || chainModal));
+  useBodyScrollLock(!!(actionModal || detailInvoice || printInvoice || chainModal || viewerInvoice));
 
   const [generatedVoucherBanner, setGeneratedVoucherBanner] = useState<{
     voucherNumber: string;
@@ -226,39 +261,41 @@ export default function AccountsPayablePage() {
         const vName = matchingRaw?.vendorName || activeApp.requestedBy || 'Vendor';
         const initials = vName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() || 'VN';
 
-        const statusMap: Record<string, APStatus> = {
-          PENDING_APPROVAL: 'PENDING',
-          PENDING: 'PENDING',
-          APPROVED: 'APPROVED',
-          PAID: 'PAID',
-          PARTIAL: 'PARTIAL',
-          OVERDUE: 'OVERDUE',
-          REJECTED: 'REJECTED',
-          RETURNED: 'RETURNED',
-          AUTO_FORWARDED: 'PENDING',
-        };
+        const isReturnedChain = Boolean(returnedRow) || matchingRaw?.status === 'RETURNED';
 
-        const rawDocStatus = matchingRaw?.status ? statusMap[matchingRaw.status] : undefined;
-        let status: APStatus = pendingRow
-          ? 'PENDING'
-          : rejectedRow
-          ? 'REJECTED'
-          : returnedRow
-          ? 'RETURNED'
-          : 'APPROVED';
-
-        if (rawDocStatus && ['PAID', 'PARTIAL', 'OVERDUE'].includes(rawDocStatus)) {
-          status = rawDocStatus;
+        let status: APStatus;
+        if (matchingRaw?.status && ['PAID', 'PARTIAL', 'OVERDUE'].includes(matchingRaw.status)) {
+          status = matchingRaw.status as APStatus;
+        } else if (pendingRow) {
+          status = isReturnedChain ? 'RETURNED' : 'PENDING';
+        } else if (rejectedRow) {
+          status = 'REJECTED';
+        } else if (returnedRow) {
+          status = 'RETURNED';
+        } else {
+          status = 'APPROVED';
         }
 
         const amt =
           typeof activeApp.amount === 'number'
             ? activeApp.amount
             : parseFloat(String(activeApp.amount).replace(/[^0-9.]/g, '')) || matchingRaw?.amount || 0;
-        const reqRole = activeApp.requiredRole || 'Purchase Manager';
-        const effectiveCanAct =
-          status === 'PENDING' &&
-          (activeApp.canAct !== undefined ? Boolean(activeApp.canAct) : isRoleMatching(reqRole, authRoles));
+
+        const currentLevel = pendingRow?.currentLevel || (status === 'RETURNED' ? 1 : (activeApp.currentLevel || 1));
+        const totalLevels = activeApp.totalLevels || 2;
+        const reqRole = pendingRow?.requiredRole || (status === 'RETURNED' ? 'Purchase Manager' : (activeApp.requiredRole || 'Purchase Manager'));
+
+        // Approver permissions:
+        // - If pendingRow exists: ONLY users with pendingRow.requiredRole (e.g. Purchase Manager at Level 1) or admin can act.
+        // - If Approver 2 returned it and it is pending at Level 1, Approver 2 (Finance/Director) CANNOT act (canAct = false).
+        let effectiveCanAct = false;
+        if (status === 'PENDING' || status === 'RETURNED') {
+          if (pendingRow) {
+            effectiveCanAct = isRoleMatching(pendingRow.requiredRole, authRoles) || isAdmin || canApproveAP;
+          } else if (status === 'RETURNED') {
+            effectiveCanAct = isRoleMatching('Purchase Manager', authRoles) || isAdmin || canApproveAP;
+          }
+        }
 
         const hasApprovedPriorLevel = rows.some(
           (r) => r.status === 'APPROVED' && isRoleMatching(r.requiredRole, authRoles)
@@ -266,7 +303,7 @@ export default function AccountsPayablePage() {
 
         merged.push({
           id: matchingRaw?.id || activeApp.referenceId || activeApp.id,
-          approvalId: activeApp.id,
+          approvalId: pendingRow ? pendingRow.id : activeApp.id,
           invoiceNumber: invNo,
           poNumber: matchingRaw?.poNumber || (activeApp.title ? activeApp.title.split('(PO: ')[1]?.replace(')', '') : '') || '—',
           vendorName: vName,
@@ -279,11 +316,12 @@ export default function AccountsPayablePage() {
           status,
           paymentTerms: matchingRaw?.paymentTerms || 'Net 30',
           department: activeApp.department || matchingRaw?.department || 'Finance',
-          currentLevel: activeApp.currentLevel || 1,
-          totalLevels: activeApp.totalLevels || 1,
+          currentLevel,
+          totalLevels,
           requiredRole: reqRole,
           canAct: effectiveCanAct,
           comments: activeApp.comments,
+          attachments: matchingRaw?.attachments || (activeApp as any)?.attachments || (activeApp as any)?.data?.attachments,
           hasApprovedPriorLevel,
         });
       });
@@ -309,8 +347,8 @@ export default function AccountsPayablePage() {
             REGISTERED: 'DRAFT',
           };
           const status = statusMap[inv.status] || (inv.status === 'DRAFT' ? 'DRAFT' : 'PENDING');
-          const isPendingApproval = status === 'PENDING';
-          const effectiveCanAct = isPendingApproval && isRoleMatching('Purchase Manager', authRoles);
+          const isActionable = status === 'PENDING' || status === 'RETURNED';
+          const effectiveCanAct = isActionable && (isRoleMatching('Purchase Manager', authRoles) || isAdmin || canApproveAP);
 
           merged.push({
             id: inv.id,
@@ -326,10 +364,12 @@ export default function AccountsPayablePage() {
             status,
             paymentTerms: inv.paymentTerms || 'Net 30',
             department: inv.department || 'Finance',
-            currentLevel: isPendingApproval ? 1 : 0,
-            totalLevels: isPendingApproval ? 1 : 0,
-            requiredRole: isPendingApproval ? 'Purchase Manager' : '',
+            currentLevel: isActionable ? 1 : 0,
+            totalLevels: isActionable ? 2 : 0,
+            requiredRole: isActionable ? 'Purchase Manager' : '',
             canAct: effectiveCanAct,
+            comments: inv.comments,
+            attachments: inv.attachments,
             hasApprovedPriorLevel: false,
           });
         }
@@ -361,7 +401,7 @@ export default function AccountsPayablePage() {
     () => ({
       totalPayable: invoicesList.reduce((sum, invoice) => sum + invoice.amount - invoice.paidAmount, 0),
       overdue: invoicesList.filter((invoice) => invoice.status === 'OVERDUE').length,
-      pending: invoicesList.filter((invoice) => invoice.status === 'PENDING' && (isAdmin || invoice.canAct || invoice.hasApprovedPriorLevel)).length,
+      pending: invoicesList.filter((invoice) => (invoice.status === 'PENDING' || invoice.status === 'RETURNED') && (isAdmin || invoice.canAct || invoice.hasApprovedPriorLevel)).length,
       completed: invoicesList.filter((invoice) => ['PAID', 'APPROVED'].includes(invoice.status)).length,
     }),
     [invoicesList, isAdmin]
@@ -371,7 +411,7 @@ export default function AccountsPayablePage() {
     const list = invoicesList;
     const query = search.trim().toLowerCase();
     return list.filter((invoice) => {
-      if (invoice.status === 'PENDING' && !isAdmin && !invoice.canAct && !invoice.hasApprovedPriorLevel) {
+      if ((invoice.status === 'PENDING' || invoice.status === 'RETURNED') && !isAdmin && !invoice.canAct && !invoice.hasApprovedPriorLevel) {
         return false;
       }
       return (
@@ -386,27 +426,12 @@ export default function AccountsPayablePage() {
 
   const handleAction = useCallback(async () => {
     if (!actionModal) return;
-    setActionSaving(true);
     const targetInvoice = actionModal.invoice;
     let approvalId = targetInvoice.approvalId;
     const comment = actionComment.trim() || undefined;
     const act = actionModal.action;
 
-    if (!approvalId) {
-      try {
-        const list = await approvalService.listTable({ module: 'AccountsPayable' }).catch(() => []);
-        const found = list.find(
-          (r: any) =>
-            r.referenceId === String(targetInvoice.id) ||
-            r.referenceNumber === targetInvoice.invoiceNumber ||
-            r.referenceId === targetInvoice.invoiceNumber ||
-            (r.title && r.title.includes(targetInvoice.invoiceNumber))
-        );
-        if (found) approvalId = found.id;
-      } catch {}
-    }
-
-    // ⚡ INSTANT (0ms) Optimistic local state update
+    // ⚡ INSTANT (0ms) Optimistic local state update & Instant Success Modal Trigger
     const newStatus: APStatus = act === 'approve' ? 'APPROVED' : act === 'reject' ? 'REJECTED' : 'RETURNED';
     setInvoicesList((prev) =>
       prev.map((inv) =>
@@ -418,113 +443,95 @@ export default function AccountsPayablePage() {
     setActionModal(null);
     setActionComment('');
 
-    try {
-      if (approvalId) {
-        if (act === 'approve') {
-          const res = await approvalService.approve(approvalId, comment);
-          const isFinal = res?.nextLevel === false || targetInvoice.currentLevel >= targetInvoice.totalLevels;
+    setActionSuccessData({
+      actionType: act === 'approve' ? 'approve' : act === 'reject' ? 'reject' : 'return',
+      module: 'Purchase Invoice',
+      referenceNumber: targetInvoice.invoiceNumber,
+      title: `Invoice from ${targetInvoice.vendorName}`,
+      message: act === 'approve'
+        ? 'Purchase Invoice approved successfully.'
+        : act === 'reject'
+        ? 'Purchase Invoice rejected successfully.'
+        : 'Purchase Invoice returned for revision successfully.',
+      comment: comment,
+      details: [
+        { label: 'Vendor', value: targetInvoice.vendorName },
+        { label: 'Invoice Amount', value: formatAmount(targetInvoice.amount, companyDefaultCurrency) },
+        { label: 'Due Date', value: formatDate(targetInvoice.dueDate) },
+      ],
+    });
 
-          if (isFinal) {
-            setGeneratedVoucherBanner({
-              voucherNumber: targetInvoice.invoiceNumber,
-              invoiceNumber: targetInvoice.invoiceNumber,
-              vendorName: targetInvoice.vendorName,
-              amount: targetInvoice.amount,
-            });
+    (async () => {
+      try {
+        try {
+          const list = await approvalService.listTable({ module: 'AccountsPayable' }).catch(() => []);
+          const pendingRow = list.find(
+            (r: any) =>
+              r.status === 'PENDING' &&
+              (r.referenceId === String(targetInvoice.id) ||
+                r.referenceNumber === targetInvoice.invoiceNumber ||
+                r.referenceId === targetInvoice.invoiceNumber ||
+                (r.title && r.title.includes(targetInvoice.invoiceNumber)))
+          );
+          if (pendingRow) {
+            approvalId = pendingRow.id;
+          } else {
+            const created = await approvalService.resubmit('AccountsPayable', targetInvoice.invoiceNumber || String(targetInvoice.id), 1).catch(() => null);
+            if (created && (created as any).id) {
+              approvalId = (created as any).id;
+            } else {
+              const updatedList = await approvalService.listTable({ module: 'AccountsPayable' }).catch(() => []);
+              const updatedPending = updatedList.find(
+                (r: any) =>
+                  r.status === 'PENDING' &&
+                  (r.referenceId === String(targetInvoice.id) ||
+                    r.referenceNumber === targetInvoice.invoiceNumber ||
+                    r.referenceId === targetInvoice.invoiceNumber)
+              );
+              if (updatedPending) approvalId = updatedPending.id;
+            }
           }
-        } else if (act === 'reject') {
-          await approvalService.reject(approvalId, comment);
-        } else {
-          await approvalService.return(approvalId, comment, 'ORIGINATOR');
-        }
-      } else {
-        const statusToSet = act === 'approve' ? 'APPROVED' : act === 'reject' ? 'REJECTED' : 'RETURNED';
-        await invoiceService.updateStatus(targetInvoice.id, statusToSet);
-      }
+        } catch {}
 
-      window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
-      await fetchInvoicesData();
-      setActionSuccessData({
-        actionType: act === 'approve' ? 'approve' : act === 'reject' ? 'reject' : 'return',
-        module: 'Purchase Invoice',
-        referenceNumber: targetInvoice.invoiceNumber,
-        title: `Invoice from ${targetInvoice.vendorName}`,
-        message: act === 'approve'
-          ? 'Purchase Invoice approved successfully.'
-          : act === 'reject'
-          ? 'Purchase Invoice rejected successfully.'
-          : 'Purchase Invoice returned for revision successfully.',
-        comment: comment,
-        details: [
-          { label: 'Vendor', value: targetInvoice.vendorName },
-          { label: 'Invoice Amount', value: formatAmount(targetInvoice.amount, companyDefaultCurrency) },
-          { label: 'Due Date', value: formatDate(targetInvoice.dueDate) },
-        ],
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Action failed');
-      await fetchInvoicesData();
-    } finally {
-      setActionSaving(false);
-    }
+        if (approvalId) {
+          if (act === 'approve') {
+            const res = await approvalService.approve(approvalId, comment);
+            const isFinal = res?.nextLevel === false || targetInvoice.currentLevel >= targetInvoice.totalLevels;
+
+            if (isFinal) {
+              setGeneratedVoucherBanner({
+                voucherNumber: targetInvoice.invoiceNumber,
+                invoiceNumber: targetInvoice.invoiceNumber,
+                vendorName: targetInvoice.vendorName,
+                amount: targetInvoice.amount,
+              });
+            }
+          } else if (act === 'reject') {
+            await approvalService.reject(approvalId, comment);
+          } else {
+            await approvalService.return(approvalId, comment, 'ORIGINATOR');
+          }
+        } else {
+          const statusToSet = act === 'approve' ? 'APPROVED' : act === 'reject' ? 'REJECTED' : 'RETURNED';
+          await invoiceService.updateStatus(targetInvoice.id, statusToSet);
+        }
+
+        window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
+        fetchInvoicesData().catch(() => {});
+      } catch (err) {
+        console.error('Action failed in background:', err);
+        fetchInvoicesData().catch(() => {});
+      }
+    })();
   }, [actionModal, actionComment, fetchInvoicesData, companyDefaultCurrency, formatAmount]);
 
   const handleSignatureConfirm = useCallback(
     async (signatureDataUrl: string, comment?: string) => {
       if (!actionModal) return;
-      setActionSaving(true);
       const targetInvoice = actionModal.invoice;
       let approvalId = targetInvoice.approvalId;
 
-      if (!approvalId) {
-        try {
-          const list = await approvalService.listTable({ module: 'AccountsPayable' }).catch(() => []);
-          const found = list.find(
-            (r: any) =>
-              r.referenceId === String(targetInvoice.id) ||
-              r.referenceNumber === targetInvoice.invoiceNumber ||
-              r.referenceId === targetInvoice.invoiceNumber ||
-              (r.title && r.title.includes(targetInvoice.invoiceNumber))
-          );
-          if (found) {
-            approvalId = found.id;
-          } else {
-            await approvalService.resubmit('AccountsPayable', targetInvoice.id, 1).catch(() => null);
-            const updatedList = await approvalService.listTable({ module: 'AccountsPayable' }).catch(() => []);
-            const updatedFound = updatedList.find(
-              (r: any) =>
-                r.referenceId === String(targetInvoice.id) ||
-                r.referenceNumber === targetInvoice.invoiceNumber ||
-                r.referenceId === targetInvoice.invoiceNumber
-            );
-            if (updatedFound) approvalId = updatedFound.id;
-          }
-        } catch {}
-      }
-
-      try {
-        await signatureService.signDocument({
-          module: 'AccountsPayable',
-          referenceId: targetInvoice.invoiceNumber || String(targetInvoice.id),
-          signatureId: 'digital_signature',
-          dataUrl: signatureDataUrl,
-          levelNumber: targetInvoice.currentLevel || 1,
-          comments: comment,
-        });
-        if (targetInvoice.id && targetInvoice.id !== targetInvoice.invoiceNumber) {
-          await signatureService.signDocument({
-            module: 'AccountsPayable',
-            referenceId: String(targetInvoice.id),
-            signatureId: 'digital_signature',
-            dataUrl: signatureDataUrl,
-            levelNumber: targetInvoice.currentLevel || 1,
-            comments: comment,
-          }).catch(() => {});
-        }
-      } catch (sigErr) {
-        console.warn('Digital signature recording warning:', sigErr);
-      }
-
+      // ⚡ INSTANT 0ms Optimistic UI & Success Modal Trigger
       setInvoicesList((prev) =>
         prev.map((inv) =>
           inv.id === targetInvoice.id || inv.invoiceNumber === targetInvoice.invoiceNumber || (approvalId && inv.approvalId === approvalId)
@@ -535,44 +542,89 @@ export default function AccountsPayablePage() {
       setActionModal(null);
       setActionComment('');
 
-      try {
-        if (approvalId) {
-          const res = await approvalService.approve(approvalId, comment);
-          const isFinal = res?.nextLevel === false || targetInvoice.currentLevel >= targetInvoice.totalLevels;
+      setActionSuccessData({
+        actionType: 'approve',
+        module: 'Purchase Invoice',
+        referenceNumber: targetInvoice.invoiceNumber,
+        title: `Invoice from ${targetInvoice.vendorName}`,
+        message: 'Purchase Invoice approved successfully with digital signature.',
+        comment: comment,
+        details: [
+          { label: 'Vendor', value: targetInvoice.vendorName },
+          { label: 'Invoice Amount', value: formatAmount(targetInvoice.amount, companyDefaultCurrency) },
+          { label: 'Due Date', value: formatDate(targetInvoice.dueDate) },
+        ],
+      });
 
-          if (isFinal) {
-            setGeneratedVoucherBanner({
-              voucherNumber: targetInvoice.invoiceNumber,
-              invoiceNumber: targetInvoice.invoiceNumber,
-              vendorName: targetInvoice.vendorName,
-              amount: targetInvoice.amount,
+      // Background concurrent API execution
+      (async () => {
+        try {
+          try {
+            const list = await approvalService.listTable({ module: 'AccountsPayable' }).catch(() => []);
+            const pendingRow = list.find(
+              (r: any) =>
+                r.status === 'PENDING' &&
+                (r.referenceId === String(targetInvoice.id) ||
+                  r.referenceNumber === targetInvoice.invoiceNumber ||
+                  r.referenceId === targetInvoice.invoiceNumber ||
+                  (r.title && r.title.includes(targetInvoice.invoiceNumber)))
+            );
+            if (pendingRow) {
+              approvalId = pendingRow.id;
+            } else {
+              const created = await approvalService.resubmit('AccountsPayable', targetInvoice.invoiceNumber || String(targetInvoice.id), 1).catch(() => null);
+              if (created && (created as any).id) {
+                approvalId = (created as any).id;
+              } else {
+                const updatedList = await approvalService.listTable({ module: 'AccountsPayable' }).catch(() => []);
+                const updatedPending = updatedList.find(
+                  (r: any) =>
+                    r.status === 'PENDING' &&
+                    (r.referenceId === String(targetInvoice.id) ||
+                      r.referenceNumber === targetInvoice.invoiceNumber ||
+                      r.referenceId === targetInvoice.invoiceNumber)
+                );
+                if (updatedPending) approvalId = updatedPending.id;
+              }
+            }
+          } catch {}
+
+          const signPromise = signatureService.signDocument({
+            module: 'AccountsPayable',
+            referenceId: targetInvoice.invoiceNumber || String(targetInvoice.id),
+            signatureId: 'digital_signature',
+            dataUrl: signatureDataUrl,
+            levelNumber: targetInvoice.currentLevel || 1,
+            comments: comment,
+          }).catch((sigErr) => console.warn('Digital signature warning:', sigErr));
+
+          let approvePromise;
+          if (approvalId) {
+            approvePromise = approvalService.approve(approvalId, comment).then((res) => {
+              const isFinal = res?.nextLevel === false || targetInvoice.currentLevel >= targetInvoice.totalLevels;
+              if (isFinal) {
+                setGeneratedVoucherBanner({
+                  voucherNumber: targetInvoice.invoiceNumber,
+                  invoiceNumber: targetInvoice.invoiceNumber,
+                  vendorName: targetInvoice.vendorName,
+                  amount: targetInvoice.amount,
+                });
+              }
             });
+          } else {
+            approvePromise = invoiceService.updateStatus(targetInvoice.id, 'APPROVED');
           }
-        } else {
-          await invoiceService.updateStatus(targetInvoice.id, 'APPROVED');
-        }
 
-        window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
-        await fetchInvoicesData();
-        setActionSuccessData({
-          actionType: 'approve',
-          module: 'Purchase Invoice',
-          referenceNumber: targetInvoice.invoiceNumber,
-          title: `Invoice from ${targetInvoice.vendorName}`,
-          message: 'Purchase Invoice approved successfully with digital signature.',
-          comment: comment,
-          details: [
-            { label: 'Vendor', value: targetInvoice.vendorName },
-            { label: 'Invoice Amount', value: formatAmount(targetInvoice.amount, companyDefaultCurrency) },
-            { label: 'Due Date', value: formatDate(targetInvoice.dueDate) },
-          ],
-        });
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Approval failed');
-        await fetchInvoicesData();
-      } finally {
-        setActionSaving(false);
-      }
+          await Promise.all([signPromise, approvePromise]);
+          window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
+          fetchInvoicesData().catch(() => {});
+        } catch (err) {
+          console.error('Background approval sync error:', err);
+          fetchInvoicesData().catch(() => {});
+        } finally {
+          setActionSaving(false);
+        }
+      })();
     },
     [actionModal, fetchInvoicesData, companyDefaultCurrency, formatAmount]
   );
@@ -849,7 +901,7 @@ export default function AccountsPayablePage() {
                           >
                             <Printer className="size-4" />
                           </Button>
-                          {invoice.status === 'PENDING' && (invoice.canAct || isAdmin || canApproveAP) ? (
+                          {['PENDING', 'RETURNED', 'RE_REVIEW', 'PENDING_APPROVAL'].includes(invoice.status) && (invoice.canAct || isAdmin || canApproveAP || isRoleMatching(invoice.requiredRole || 'Purchase Manager', authRoles)) ? (
                             <>
                               <Button
                                 variant="ghost"
@@ -933,7 +985,7 @@ export default function AccountsPayablePage() {
                       <Printer /> Print
                     </Button>
                   </div>
-                  {invoice.status === 'PENDING' && (invoice.canAct || isAdmin || canApproveAP) && (
+                  {['PENDING', 'RETURNED', 'RE_REVIEW', 'PENDING_APPROVAL'].includes(invoice.status) && (invoice.canAct || isAdmin || canApproveAP || isRoleMatching(invoice.requiredRole || 'Purchase Manager', authRoles)) && (
                     <div className="flex gap-1">
                       <Button size="sm" onClick={() => openAction(invoice, 'approve')}>
                         <ThumbsUp /> Approve
@@ -975,7 +1027,11 @@ export default function AccountsPayablePage() {
                 <div
                   className={cn(
                     'mb-2 grid size-11 place-items-center rounded-xl',
-                    destructive ? 'bg-destructive/10 text-destructive' : 'bg-emerald-500/10 text-emerald-600'
+                    actionModal.action === 'reject'
+                      ? 'bg-destructive/10 text-destructive'
+                      : actionModal.action === 'return'
+                      ? 'bg-amber-500/10 text-amber-600'
+                      : 'bg-emerald-500/10 text-emerald-600'
                   )}
                 >
                   {actionModal.action === 'reject' ? (
@@ -1012,7 +1068,7 @@ export default function AccountsPayablePage() {
                   className="min-h-28 resize-y rounded-xl border border-input bg-background px-3.5 py-3 text-sm font-normal outline-none focus:border-primary/50 focus:ring-2 focus:ring-ring/30"
                   value={actionComment}
                   onChange={(event) => setActionComment(event.target.value)}
-                  placeholder={destructive ? 'Provide a reason…' : 'Optional comments…'}
+                  placeholder={actionModal.action === 'return' ? 'Provide a reason for return…' : destructive ? 'Provide a reason…' : 'Optional comments…'}
                 />
               </label>
 
@@ -1021,7 +1077,8 @@ export default function AccountsPayablePage() {
                   Cancel
                 </Button>
                 <Button
-                  variant={destructive ? 'destructive' : 'default'}
+                  variant={actionModal.action === 'reject' ? 'destructive' : 'default'}
+                  className={actionModal.action === 'return' ? 'bg-amber-600 hover:bg-amber-700 text-white' : ''}
                   loading={actionSaving}
                   disabled={destructive && !actionComment.trim()}
                   onClick={handleAction}
@@ -1147,6 +1204,104 @@ export default function AccountsPayablePage() {
                   <p className="mt-1.5 text-sm text-foreground">{detailInvoice.comments}</p>
                 </div>
               )}
+
+              {/* Attached Vendor Documents / Physical Invoice PDF */}
+              {(() => {
+                const attList = getInvoiceAttachments(detailInvoice);
+                return (
+                  <div className="rounded-xl border border-border/70 bg-card p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Paperclip className="size-4 text-primary" />
+                        <span className="text-xs font-bold uppercase tracking-wider text-foreground">
+                          Attached Vendor Documents ({attList.length})
+                        </span>
+                      </div>
+                      {attList.length > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs gap-1.5"
+                          onClick={() => setViewerInvoice(detailInvoice)}
+                        >
+                          <Eye className="size-3.5" /> View All ({attList.length})
+                        </Button>
+                      )}
+                    </div>
+
+                    {attList.length > 0 ? (
+                      <div className="space-y-2">
+                        {attList.map((att: any, idx: number) => (
+                          <div
+                            key={att.id || idx}
+                            className="flex items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/30 p-2.5 text-xs transition-colors hover:bg-muted/50"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <FileText className="size-4 text-primary shrink-0" />
+                              <span className="font-semibold text-foreground truncate">{att.name}</span>
+                              {att.size && <span className="text-muted-foreground shrink-0">({att.size})</span>}
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                title="View Document"
+                                onClick={() => setViewerInvoice(detailInvoice)}
+                              >
+                                <Eye className="size-3.5 text-primary" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                title="Download Document"
+                                onClick={() => {
+                                  if (att.dataUrl) {
+                                    const link = document.createElement('a');
+                                    link.href = att.dataUrl;
+                                    link.download = att.name || 'invoice-document';
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+                                  } else if (att.url) {
+                                    window.open(att.url, '_blank');
+                                  }
+                                }}
+                              >
+                                <Download className="size-3.5 text-muted-foreground hover:text-foreground" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                title="Print Document"
+                                onClick={() => {
+                                  setViewerInvoice(detailInvoice);
+                                }}
+                              >
+                                <Printer className="size-3.5 text-muted-foreground hover:text-foreground" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between rounded-lg border border-dashed border-border/70 p-3 text-xs text-muted-foreground bg-muted/10">
+                        <div className="flex items-center gap-2">
+                          <FileText className="size-4 text-muted-foreground/60" />
+                          <span>Digital invoice record (No physical PDF file attached by vendor)</span>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs gap-1.5"
+                          onClick={() => setViewerInvoice(detailInvoice)}
+                        >
+                          <Eye className="size-3.5" /> View Digital Bill
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             <DialogFooter className="mt-6 flex flex-col gap-2 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
@@ -1163,7 +1318,7 @@ export default function AccountsPayablePage() {
               </Button>
 
               <div className="flex items-center gap-2">
-                {detailInvoice.status === 'PENDING' && (detailInvoice.canAct || isAdmin || canApproveAP) ? (
+                {['PENDING', 'RETURNED', 'RE_REVIEW', 'PENDING_APPROVAL'].includes(detailInvoice.status) && (detailInvoice.canAct || isAdmin || canApproveAP || isRoleMatching(detailInvoice.requiredRole || 'Purchase Manager', authRoles)) ? (
                   <>
                     <Button
                       variant="outline"
@@ -1212,6 +1367,13 @@ export default function AccountsPayablePage() {
           </DialogContent>
         )}
       </Dialog>
+
+      {/* Document Viewer Modal */}
+      <InvoiceDocumentViewerModal
+        open={!!viewerInvoice}
+        invoice={viewerInvoice}
+        onClose={() => setViewerInvoice(null)}
+      />
 
       {/* Print Purchase Invoice Modal */}
       {printInvoice && (

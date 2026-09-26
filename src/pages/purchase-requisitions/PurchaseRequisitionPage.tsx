@@ -943,16 +943,6 @@ export default function PurchaseRequisitionPage() {
         </div>
 
         <div className="pr-kpi-card">
-          <div className="pr-kpi-icon"><Percent size={20} /></div>
-          <div className="pr-kpi-info">
-            <span className="pr-kpi-label">Tax & Charges</span>
-            <span className="pr-kpi-value">
-              {formatAmount(pr.taxTotal + (pr.shippingCharges || 0) + (pr.otherCharges || 0), pr.currency || companyDefaultCurrency)}
-            </span>
-          </div>
-        </div>
-
-        <div className="pr-kpi-card">
           <div className="pr-kpi-icon pr-kpi-icon--grand"><Calculator size={20} /></div>
           <div className="pr-kpi-info">
             <span className="pr-kpi-label">Grand Total</span>

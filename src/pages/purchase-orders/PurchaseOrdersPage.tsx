@@ -57,7 +57,7 @@ import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui
 import { cn } from '../../lib/utils';
 import '../../components/shared/ColumnCustomizer.css';
 
-type POStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'DISPATCHED' | 'DELIVERED' | 'CANCELLED';
+type POStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'DISPATCHED' | 'DELIVERED' | 'CANCELLED' | 'RETURNED' | 'RE_REVIEW';
 type Tone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
 
 interface MockPO {
@@ -85,6 +85,8 @@ const STATUS_CONFIG: Record<POStatus, { label: string; tone: Tone; icon: typeof 
   DISPATCHED: { label: 'Dispatched', tone: 'info', icon: Truck },
   DELIVERED: { label: 'Delivered', tone: 'success', icon: Package },
   CANCELLED: { label: 'Cancelled', tone: 'danger', icon: XCircle },
+  RETURNED: { label: 'Returned', tone: 'warning', icon: RotateCcw as any },
+  RE_REVIEW: { label: 'Returned (Re-Review)', tone: 'warning', icon: RotateCcw as any },
 };
 
 const PROGRESS_STEPS: POStatus[] = ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'DISPATCHED', 'DELIVERED'];
@@ -182,6 +184,15 @@ export default function PurchaseOrdersPage() {
     };
   }, [forceRefresh]);
 
+  const [optimisticOverrides, setOptimisticOverrides] = useState<Record<string | number, POStatus>>({});
+
+  const effectivePOResult = useMemo(() => {
+    return poResult.map((p) => {
+      const override = optimisticOverrides[p.id] || (p.poNumber ? optimisticOverrides[p.poNumber] : undefined);
+      return override ? { ...p, status: override } : p;
+    });
+  }, [poResult, optimisticOverrides]);
+
   const { formatAmount, companyDefaultCurrency } = useCurrency();
   const [search, setSearch] = useState('');
   const [view, setView] = useState<'table' | 'card'>('table');
@@ -208,89 +219,41 @@ export default function PurchaseOrdersPage() {
 
   const handleAction = useCallback(async () => {
     if (!actionModal) return;
-    setActionSaving(true);
     const targetOrder = actionModal.order;
     const act = actionModal.action;
     const comment = actionComment.trim() || undefined;
 
-    let approvalId = (targetOrder as any).approvalId;
-    if (!approvalId) {
-      try {
-        const list = await approvalService.listTable({ module: 'PurchaseOrders' }).catch(() => []);
-        const found = list.find(
-          (r: any) =>
-            r.referenceId === String(targetOrder.id) ||
-            r.referenceNumber === targetOrder.poNumber ||
-            r.referenceId === targetOrder.poNumber ||
-            (r.title && r.title.includes(targetOrder.poNumber))
-        );
-        if (found) {
-          approvalId = found.id;
-        } else {
-          await approvalService.resubmit('PurchaseOrders', targetOrder.poNumber || String(targetOrder.id), 1).catch(() => null);
-          const updatedList = await approvalService.listTable({ module: 'PurchaseOrders' }).catch(() => []);
-          const updatedFound = updatedList.find(
-            (r: any) =>
-              r.referenceId === String(targetOrder.id) ||
-              r.referenceNumber === targetOrder.poNumber ||
-              r.referenceId === targetOrder.poNumber
-          );
-          if (updatedFound) approvalId = updatedFound.id;
-        }
-      } catch {}
-    }
+    // ⚡ INSTANT 0ms Optimistic Status Update & Success Modal Trigger
+    const statusToSet: POStatus = act === 'approve' ? 'APPROVED' : act === 'reject' ? 'CANCELLED' : 'RETURNED';
+    setOptimisticOverrides((prev) => ({
+      ...prev,
+      [targetOrder.id]: statusToSet,
+      ...(targetOrder.poNumber ? { [targetOrder.poNumber]: statusToSet } : {}),
+    }));
 
-    try {
-      if (approvalId) {
-        if (act === 'approve') {
-          await approvalService.approve(approvalId, comment);
-        } else if (act === 'reject') {
-          await approvalService.reject(approvalId, comment);
-        } else {
-          await approvalService.return(approvalId, comment, 'ORIGINATOR');
-        }
-      } else {
-        const statusToSet = act === 'approve' ? 'APPROVED' : act === 'reject' ? 'CANCELLED' : 'RETURNED';
-        await purchaseOrderService.updateStatus(targetOrder.id, statusToSet, comment);
-      }
+    setActionModal(null);
+    setActionComment('');
 
-      setActionModal(null);
-      setActionComment('');
-      window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
-      window.dispatchEvent(new CustomEvent('heliflow:po-updated'));
-      await forceRefresh();
+    setActionSuccessData({
+      actionType: act === 'approve' ? 'approve' : act === 'reject' ? 'reject' : 'return',
+      module: 'Purchase Order',
+      referenceNumber: targetOrder.poNumber,
+      title: `Purchase Order ${targetOrder.poNumber}`,
+      message: act === 'approve'
+        ? 'Purchase Order approved successfully.'
+        : act === 'reject'
+        ? 'Purchase Order rejected successfully.'
+        : 'Purchase Order returned for revision successfully.',
+      comment: comment,
+      details: [
+        { label: 'Vendor Name', value: targetOrder.vendorName },
+        { label: 'Total Amount', value: formatAmount(targetOrder.totalAmountNum, companyDefaultCurrency) },
+        { label: 'Expected Delivery', value: formatDate(targetOrder.expectedDelivery) },
+      ],
+    });
 
-      setActionSuccessData({
-        actionType: act === 'approve' ? 'approve' : act === 'reject' ? 'reject' : 'return',
-        module: 'Purchase Order',
-        referenceNumber: targetOrder.poNumber,
-        title: `Purchase Order ${targetOrder.poNumber}`,
-        message: act === 'approve'
-          ? 'Purchase Order approved successfully.'
-          : act === 'reject'
-          ? 'Purchase Order rejected successfully.'
-          : 'Purchase Order returned for revision successfully.',
-        comment: comment,
-        details: [
-          { label: 'Vendor Name', value: targetOrder.vendorName },
-          { label: 'Total Amount', value: formatAmount(targetOrder.totalAmountNum, companyDefaultCurrency) },
-          { label: 'Expected Delivery', value: formatDate(targetOrder.expectedDelivery) },
-        ],
-      });
-    } catch (err) {
-      await forceRefresh();
-    } finally {
-      setActionSaving(false);
-    }
-  }, [actionModal, actionComment, forceRefresh, formatAmount, companyDefaultCurrency]);
-
-  const handleSignatureConfirm = useCallback(
-    async (signatureDataUrl: string, comment?: string) => {
-      if (!actionModal) return;
-      setActionSaving(true);
-      const targetOrder = actionModal.order;
+    (async () => {
       let approvalId = (targetOrder as any).approvalId;
-
       if (!approvalId) {
         try {
           const list = await approvalService.listTable({ module: 'PurchaseOrders' }).catch(() => []);
@@ -318,50 +281,111 @@ export default function PurchaseOrdersPage() {
       }
 
       try {
-        await signatureService.signDocument({
-          module: 'PurchaseOrders',
-          referenceId: targetOrder.poNumber || String(targetOrder.id),
-          signatureId: 'digital_signature',
-          dataUrl: signatureDataUrl,
-          levelNumber: 1,
-          comments: comment,
-        });
-      } catch (sigErr) {
-        console.warn('Digital signature recording warning:', sigErr);
-      }
-
-      setActionModal(null);
-      setActionComment('');
-
-      try {
         if (approvalId) {
-          await approvalService.approve(approvalId, comment);
+          if (act === 'approve') {
+            await approvalService.approve(approvalId, comment);
+          } else if (act === 'reject') {
+            await approvalService.reject(approvalId, comment);
+          } else {
+            await approvalService.return(approvalId, comment, 'ORIGINATOR');
+          }
         } else {
-          await purchaseOrderService.updateStatus(targetOrder.id, 'APPROVED', comment);
+          await purchaseOrderService.updateStatus(targetOrder.id, statusToSet, comment);
         }
 
         window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
         window.dispatchEvent(new CustomEvent('heliflow:po-updated'));
-        await forceRefresh();
-
-        setActionSuccessData({
-          actionType: 'approve',
-          module: 'Purchase Order',
-          referenceNumber: targetOrder.poNumber,
-          title: `Purchase Order ${targetOrder.poNumber}`,
-          message: 'Purchase Order approved successfully with digital signature.',
-          comment: comment,
-          details: [
-            { label: 'Vendor Name', value: targetOrder.vendorName },
-            { label: 'Total Amount', value: formatAmount(targetOrder.totalAmountNum, companyDefaultCurrency) },
-            { label: 'Expected Delivery', value: formatDate(targetOrder.expectedDelivery) },
-          ],
-        });
+        forceRefresh().catch(() => {});
       } catch (err) {
-        await forceRefresh();
-      } finally {
-        setActionSaving(false);
+        console.error('PO action failed in background:', err);
+        forceRefresh().catch(() => {});
       }
+    })();
+  }, [actionModal, actionComment, forceRefresh, formatAmount, companyDefaultCurrency]);
+
+  const handleSignatureConfirm = useCallback(
+    async (signatureDataUrl: string, comment?: string) => {
+      if (!actionModal) return;
+      const targetOrder = actionModal.order;
+
+      // ⚡ INSTANT 0ms Optimistic Status Update & Success Modal Trigger
+      setOptimisticOverrides((prev) => ({
+        ...prev,
+        [targetOrder.id]: 'APPROVED',
+        ...(targetOrder.poNumber ? { [targetOrder.poNumber]: 'APPROVED' } : {}),
+      }));
+
+      setActionModal(null);
+      setActionComment('');
+
+      setActionSuccessData({
+        actionType: 'approve',
+        module: 'Purchase Order',
+        referenceNumber: targetOrder.poNumber,
+        title: `Purchase Order ${targetOrder.poNumber}`,
+        message: 'Purchase Order approved successfully with digital signature.',
+        comment: comment,
+        details: [
+          { label: 'Vendor Name', value: targetOrder.vendorName },
+          { label: 'Total Amount', value: formatAmount(targetOrder.totalAmountNum, companyDefaultCurrency) },
+          { label: 'Expected Delivery', value: formatDate(targetOrder.expectedDelivery) },
+        ],
+      });
+
+      (async () => {
+        let approvalId = (targetOrder as any).approvalId;
+        if (!approvalId) {
+          try {
+            const list = await approvalService.listTable({ module: 'PurchaseOrders' }).catch(() => []);
+            const found = list.find(
+              (r: any) =>
+                r.referenceId === String(targetOrder.id) ||
+                r.referenceNumber === targetOrder.poNumber ||
+                r.referenceId === targetOrder.poNumber ||
+                (r.title && r.title.includes(targetOrder.poNumber))
+            );
+            if (found) {
+              approvalId = found.id;
+            } else {
+              await approvalService.resubmit('PurchaseOrders', targetOrder.poNumber || String(targetOrder.id), 1).catch(() => null);
+              const updatedList = await approvalService.listTable({ module: 'PurchaseOrders' }).catch(() => []);
+              const updatedFound = updatedList.find(
+                (r: any) =>
+                  r.referenceId === String(targetOrder.id) ||
+                  r.referenceNumber === targetOrder.poNumber ||
+                  r.referenceId === targetOrder.poNumber
+              );
+              if (updatedFound) approvalId = updatedFound.id;
+            }
+          } catch {}
+        }
+
+        try {
+          const signPromise = signatureService.signDocument({
+            module: 'PurchaseOrders',
+            referenceId: targetOrder.poNumber || String(targetOrder.id),
+            signatureId: 'digital_signature',
+            dataUrl: signatureDataUrl,
+            levelNumber: 1,
+            comments: comment,
+          }).catch((sigErr) => console.warn('Digital signature recording warning:', sigErr));
+
+          let approvePromise;
+          if (approvalId) {
+            approvePromise = approvalService.approve(approvalId, comment);
+          } else {
+            approvePromise = purchaseOrderService.updateStatus(targetOrder.id, 'APPROVED', comment);
+          }
+
+          await Promise.all([signPromise, approvePromise]);
+          window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
+          window.dispatchEvent(new CustomEvent('heliflow:po-updated'));
+          forceRefresh().catch(() => {});
+        } catch (err) {
+          console.error('Background PO approval sync error:', err);
+          forceRefresh().catch(() => {});
+        }
+      })();
     },
     [actionModal, forceRefresh, formatAmount, companyDefaultCurrency]
   );
@@ -383,19 +407,19 @@ export default function PurchaseOrdersPage() {
 
   const summary = useMemo(
     () => ({
-      total: poResult.length,
-      pending: poResult.filter((p) => ['PENDING_APPROVAL', 'DRAFT'].includes(p.status)).length,
-      active: poResult.filter((p) => ['APPROVED', 'DISPATCHED'].includes(p.status)).length,
-      totalValue: poResult.reduce((sum, p) => sum + p.totalAmountNum, 0),
+      total: effectivePOResult.length,
+      pending: effectivePOResult.filter((p) => ['PENDING_APPROVAL', 'DRAFT', 'RETURNED', 'RE_REVIEW'].includes(p.status)).length,
+      active: effectivePOResult.filter((p) => ['APPROVED', 'DISPATCHED'].includes(p.status)).length,
+      totalValue: effectivePOResult.reduce((sum, p) => sum + p.totalAmountNum, 0),
     }),
-    [poResult]
+    [effectivePOResult]
   );
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return poResult.filter((p) => {
+    return effectivePOResult.filter((p) => {
       if (statusFilter !== 'ALL') {
-        if (statusFilter === 'PENDING_APPROVAL' && !['PENDING_APPROVAL', 'DRAFT'].includes(p.status)) return false;
+        if (statusFilter === 'PENDING_APPROVAL' && !['PENDING_APPROVAL', 'DRAFT', 'RETURNED', 'RE_REVIEW'].includes(p.status)) return false;
         if (statusFilter === 'APPROVED' && !['APPROVED', 'DISPATCHED'].includes(p.status)) return false;
         if (statusFilter !== 'PENDING_APPROVAL' && statusFilter !== 'APPROVED' && p.status !== statusFilter) return false;
       }
@@ -404,7 +428,7 @@ export default function PurchaseOrdersPage() {
         (field || '').toLowerCase().includes(query)
       );
     });
-  }, [poResult, search, statusFilter]);
+  }, [effectivePOResult, search, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
   const safePage = Math.min(currentPage, totalPages);
@@ -781,7 +805,7 @@ export default function PurchaseOrdersPage() {
                             >
                               <Eye className="size-4" />
                             </Button>
-                            {['PENDING_APPROVAL', 'DRAFT', 'PENDING'].includes(order.status) && (canApprovePO || canCreatePO) && (
+                            {['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW'].includes(order.status) && (canApprovePO || canCreatePO) && (
                               <>
                                 <Button
                                   variant="ghost"
@@ -885,7 +909,7 @@ export default function PurchaseOrdersPage() {
                       <Download /> PDF
                     </Button>
                   </div>
-                  {['PENDING_APPROVAL', 'DRAFT', 'PENDING'].includes(order.status) && (canApprovePO || canCreatePO) && (
+                  {['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW'].includes(order.status) && (canApprovePO || canCreatePO) && (
                     <div className="flex gap-1">
                       <Button size="sm" onClick={() => openAction(order, 'approve')}>
                         <ThumbsUp /> Approve
@@ -1108,7 +1132,7 @@ export default function PurchaseOrdersPage() {
                 <Clock className="size-4" /> View Approval Chain
               </Button>
               <div className="flex flex-wrap items-center gap-2">
-                {['PENDING_APPROVAL', 'DRAFT', 'PENDING'].includes(detailPO.status) && (canApprovePO || canCreatePO) && (
+                {['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW'].includes(detailPO.status) && (canApprovePO || canCreatePO) && (
                   <>
                     <Button
                       variant="outline"

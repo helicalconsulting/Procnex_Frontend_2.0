@@ -47,6 +47,14 @@ export interface Payment {
     tdsAmount?: number;
     netAmount: number;
   }[];
+  attachments?: {
+    id: string | number;
+    name: string;
+    size?: string;
+    type?: string;
+    dataUrl?: string;
+    url?: string;
+  }[];
 }
 
 export interface SalesOrder {

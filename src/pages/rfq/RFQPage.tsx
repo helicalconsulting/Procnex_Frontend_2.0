@@ -100,22 +100,24 @@ const ALL_COLUMNS: ColumnDef[] = [
     label: 'Status',
     defaultVisible: true,
     render: (rfq) => {
+      const isReturnedByMe = (rfq as any)._isReturnedByMe || rfq.status === 'RETURNED' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW';
+      const isRejectedByMe = (rfq as any)._isRejectedByMe || rfq.status === 'REJECTED';
       const isApprovedByMe = (rfq as any)._isApprovedByMe;
-      const isReturnedByMe = (rfq as any)._isReturnedByMe;
-      const isRejectedByMe = (rfq as any)._isRejectedByMe;
-      let displayStatus: string = (rfq.status === 'SENT' || rfq.status === 'IN_PROGRESS' || rfq.status === 'ACCEPTED' || rfq.status === 'APPROVED' || isApprovedByMe)
-        ? 'APPROVED'
+
+      let displayStatus: string = isReturnedByMe
+        ? 'RETURNED'
         : (isRejectedByMe || rfq.status === 'REJECTED')
         ? 'REJECTED'
-        : (isReturnedByMe || rfq.status === 'RETURNED')
-        ? 'RETURNED'
+        : (rfq.status === 'SENT' || rfq.status === 'IN_PROGRESS' || rfq.status === 'ACCEPTED' || rfq.status === 'APPROVED' || isApprovedByMe)
+        ? 'APPROVED'
         : rfq.status;
-      const label = (displayStatus === 'APPROVED' || displayStatus === 'SENT')
+
+      const label = displayStatus === 'RETURNED'
+        ? 'Returned for Revision'
+        : (displayStatus === 'APPROVED' || displayStatus === 'SENT')
         ? 'Approved'
         : displayStatus === 'ACCEPTED'
         ? 'Accepted'
-        : displayStatus === 'RETURNED'
-        ? 'Returned'
         : displayStatus === 'REJECTED'
         ? 'Rejected'
         : (STATUS_LABELS[displayStatus as RFQStatus] || STATUS_LABELS[rfq.status as RFQStatus] || displayStatus);
@@ -231,13 +233,16 @@ const STATUS_LABELS: Record<string, string> = {
   CLOSED: 'Closed',
   CANCELLED: 'Cancelled',
   REJECTED: 'Rejected',
-  RETURNED: 'Returned',
+  RETURNED: 'Returned for Revision',
+  RE_REVIEW: 'Returned for Revision',
+  RETURN_FOR_RE_REVIEW: 'Returned for Revision',
 };
 
 function statusTone(status: string): 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info' {
+  if (status === 'RETURNED' || status === 'RE_REVIEW' || status === 'RETURN_FOR_RE_REVIEW') return 'warning';
+  if (['REJECTED', 'CANCELLED'].includes(status)) return 'danger';
   if (['APPROVED', 'SENT', 'IN_PROGRESS', 'ACCEPTED'].includes(status)) return 'success';
   if (status === 'PENDING_APPROVAL') return 'warning';
-  if (['REJECTED', 'CANCELLED', 'RETURNED'].includes(status)) return 'danger';
   if (status === 'CLOSED') return 'info';
   return 'neutral';
 }
@@ -483,13 +488,16 @@ export default function RFQPage() {
       const overrideStatus = localStatusMap.get(idStr) || (rfq.rfqNumber && localStatusMap.get(rfq.rfqNumber));
       const effectiveStatus = overrideStatus || rfq.status;
 
-      const isApproved = effectiveStatus === 'APPROVED' || effectiveStatus === 'SENT' || effectiveStatus === 'ACCEPTED' || myApprovedMap.has(idStr) || (rfq.rfqNumber && myApprovedMap.has(rfq.rfqNumber));
-      const isReturned = effectiveStatus === 'RETURNED' || myReturnedMap.has(idStr) || (rfq.rfqNumber && myReturnedMap.has(rfq.rfqNumber));
-      const isRejected = effectiveStatus === 'REJECTED' || myRejectedMap.has(idStr) || (rfq.rfqNumber && myRejectedMap.has(rfq.rfqNumber));
+      const isReturned = effectiveStatus === 'RETURNED' || effectiveStatus === 'RE_REVIEW' || effectiveStatus === 'RETURN_FOR_RE_REVIEW' || myReturnedMap.has(idStr) || (rfq.rfqNumber && myReturnedMap.has(rfq.rfqNumber));
+      const isRejected = !isReturned && (effectiveStatus === 'REJECTED' || myRejectedMap.has(idStr) || (rfq.rfqNumber && myRejectedMap.has(rfq.rfqNumber)));
+      const isApproved = !isReturned && !isRejected && (effectiveStatus === 'APPROVED' || effectiveStatus === 'SENT' || effectiveStatus === 'ACCEPTED' || myApprovedMap.has(idStr) || (rfq.rfqNumber && myApprovedMap.has(rfq.rfqNumber)));
+
+      const finalStatus = isReturned ? 'RETURNED' : isRejected ? 'REJECTED' : isApproved ? 'APPROVED' : effectiveStatus;
+
       return {
         ...rfq,
-        status: effectiveStatus,
-        _isApprovedByMe: Boolean(isApproved),
+        status: finalStatus,
+        _isApprovedByMe: Boolean(isApproved && (myApprovedMap.has(idStr) || (rfq.rfqNumber && myApprovedMap.has(rfq.rfqNumber)) || rfq._isApprovedByMe)),
         _isReturnedByMe: Boolean(isReturned),
         _isRejectedByMe: Boolean(isRejected),
       };
@@ -502,8 +510,8 @@ export default function RFQPage() {
       total: cleanList.length,
       draft: cleanList.filter((r) => r.status === 'DRAFT').length,
       pendingApproval: cleanList.filter((r) => r.status === 'PENDING_APPROVAL' && !r._isApprovedByMe && !r._isReturnedByMe && !r._isRejectedByMe).length,
-      draftOrPending: cleanList.filter((r) => (r.status === 'DRAFT' || r.status === 'PENDING_APPROVAL') && !r._isApprovedByMe && !r._isReturnedByMe && !r._isRejectedByMe).length,
-      approved: cleanList.filter((r) => r.status === 'APPROVED' || r.status === 'SENT' || r.status === 'IN_PROGRESS' || r.status === 'ACCEPTED' || r._isApprovedByMe).length,
+      draftOrPending: cleanList.filter((r) => (r.status === 'DRAFT' || r.status === 'PENDING_APPROVAL' || r.status === 'RETURNED') && !r._isApprovedByMe && !r._isRejectedByMe).length,
+      approved: cleanList.filter((r) => (r.status === 'APPROVED' || r.status === 'SENT' || r.status === 'IN_PROGRESS' || r.status === 'ACCEPTED' || r._isApprovedByMe) && !r._isReturnedByMe && !r._isRejectedByMe && r.status !== 'RETURNED' && r.status !== 'REJECTED').length,
       rejected: cleanList.filter((r) => r.status === 'REJECTED' || r._isRejectedByMe).length,
     };
   }, [enrichedRfqList]);
@@ -596,12 +604,14 @@ export default function RFQPage() {
     let list = enrichedRfqList.filter((r) => r.title !== 'Direct PO Master' && !r.rfqNumber?.startsWith('RFQ-DIRECT'));
     if (statusFilter !== 'ALL') {
       if (statusFilter === 'APPROVED') {
-        list = list.filter((r) => r.status === 'APPROVED' || r.status === 'SENT' || r.status === 'IN_PROGRESS' || r.status === 'ACCEPTED' || r._isApprovedByMe);
+        list = list.filter((r) => (r.status === 'APPROVED' || r.status === 'SENT' || r.status === 'IN_PROGRESS' || r.status === 'ACCEPTED' || r._isApprovedByMe) && !r._isReturnedByMe && !r._isRejectedByMe && r.status !== 'RETURNED' && r.status !== 'REJECTED');
       } else if (statusFilter === 'DRAFT_OR_PENDING') {
-        list = list.filter((r) => (r.status === 'DRAFT' || r.status === 'PENDING_APPROVAL') && !r._isApprovedByMe);
+        list = list.filter((r) => (r.status === 'DRAFT' || r.status === 'PENDING_APPROVAL' || r.status === 'RETURNED') && !r._isApprovedByMe);
+      } else if (statusFilter === 'RETURNED') {
+        list = list.filter((r) => r.status === 'RETURNED' || r._isReturnedByMe);
       } else {
         list = list.filter((r) => {
-          const effective = r._isApprovedByMe ? 'APPROVED' : r._isReturnedByMe ? 'RETURNED' : r.status;
+          const effective = r._isReturnedByMe ? 'RETURNED' : r._isRejectedByMe ? 'REJECTED' : r._isApprovedByMe ? 'APPROVED' : r.status;
           return effective === statusFilter;
         });
       }

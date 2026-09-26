@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertCircle, Calendar, CheckCircle2, ChevronDown, Clock, Download, FileText,
-  IndianRupee, MapPin, Package, Receipt, Search, Truck, XCircle,
+  IndianRupee, MapPin, Package, Plus, Receipt, Search, Truck, XCircle,
 } from 'lucide-react';
 import { CurrencyBadge, CurrencySelector, useCurrency } from '../../components/shared/CurrencyMaster';
 import { Badge } from '../../components/ui/badge';
@@ -365,12 +365,20 @@ export default function VendorOrdersPage() {
 
                     {/* 6. Action Footer (Download PO & Invoices) */}
                     <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
+                      {!['CANCELLED', 'REJECTED'].includes((order.status || '').toUpperCase()) && (
+                        <Link
+                          to={getVendorPath(`/vendor/create-invoice?poId=${order.id || order.poNumber}`)}
+                          className={buttonVariants({ variant: 'default', size: 'sm' })}
+                        >
+                          <Plus className="size-3.5" /> Create Invoice
+                        </Link>
+                      )}
                       {['DELIVERED', 'COMPLETED'].includes((order.status || '').toUpperCase()) && (
                         <Link to={getVendorPath('/vendor/invoices')} className={buttonVariants({ variant: 'secondary', size: 'sm' })}>
                           <Receipt className="size-3.5" /> View Invoices
                         </Link>
                       )}
-                      <Button size="sm" onClick={() => downloadPurchaseOrderAsPdf(order, formatAmount, displayCurrency)}>
+                      <Button size="sm" variant="outline" onClick={() => downloadPurchaseOrderAsPdf(order, formatAmount, displayCurrency)}>
                         <Download className="size-3.5" /> Download PO
                       </Button>
                     </div>
