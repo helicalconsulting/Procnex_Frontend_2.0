@@ -1,0 +1,14 @@
+/* Layout and contrast only: retain the application's existing type scale. */
+.contract-workspace { --muted-foreground: #59677c; min-width: 0; }
+[data-theme="dark"] .contract-workspace { --muted-foreground: #9ba9b9; }
+.contract-workspace .contract-metrics > [aria-pressed] { box-shadow: none !important; transform: none !important; }
+.contract-workspace .contract-metrics > [aria-pressed="true"] { border-color: var(--primary) !important; background: var(--accent) !important; }
+.contract-register table { min-width: 940px; border-collapse: collapse; }
+.contract-register th, .contract-register td { padding: 18px 20px; vertical-align: middle; }
+.contract-register th { padding-top: 12px; padding-bottom: 12px; font-weight: 600; }
+.contract-register tbody tr { border-top: 1px solid var(--border); }
+.contract-register tbody tr:hover { background: color-mix(in srgb, var(--muted) 35%, transparent); }
+.contract-register th:first-child { width: 32%; }
+.contract-register td:first-child { overflow-wrap: anywhere; }
+.contract-register td:not(:first-child) { white-space: nowrap; }
+.contract-workspace dd { overflow-wrap: anywhere; white-space: pre-wrap; }

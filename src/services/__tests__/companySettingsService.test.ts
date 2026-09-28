@@ -104,3 +104,29 @@ describe('companySettingsService', () => {
     expect(companySettingsService.updateCompanyProfile).toBeDefined();
   });
 });
+
+describe('settings workspace persistence', () => {
+  beforeEach(() => mockApiRequest.mockReset());
+  it('propagates sequence loading errors instead of returning invented counters', async () => {
+    mockApiRequest.mockRejectedValueOnce(new Error('Network unavailable'));
+    await expect(companySettingsService.listSequenceSettings()).rejects.toThrow('Network unavailable');
+  });
+  it('preserves every returned counter and configuration field', async () => {
+    const settings = [{ entityType: 'RFQ', prefix: 'RFQ-', suffix: 'X', nextNumber: 120, paddingLength: 6, resetFrequency: 'YEARLY', periodStartDate: '2026-04-01', periodEndDate: '2027-03-31' }];
+    mockApiRequest.mockResolvedValueOnce({ settings });
+    expect(await companySettingsService.listSequenceSettings()).toEqual(settings);
+    mockApiRequest.mockResolvedValueOnce({ setting: settings[0] });
+    expect(await companySettingsService.updateSequenceSetting(settings[0])).toEqual(settings[0]);
+    expect(mockApiRequest).toHaveBeenLastCalledWith('/company-settings/sequences', { method: 'PUT', body: JSON.stringify(settings[0]) });
+  });
+  it('sends disabled tracking flags and zero-day alerts without coercion', async () => {
+    const payload = { name: 'Certificate', trackIssueDate: false, trackExpirationDate: false, trackIssuingAuthority: false, expirationAlertDays: 0 };
+    mockApiRequest.mockResolvedValueOnce({ id: 'doc', ...payload });
+    await companySettingsService.updateRequiredDocument('doc', payload);
+    expect(mockApiRequest).toHaveBeenCalledWith('/company-settings/required-documents/doc', { method: 'PUT', body: JSON.stringify(payload) });
+  });
+  it('propagates write failures so the editor can retain its draft', async () => {
+    mockApiRequest.mockRejectedValueOnce(new Error('Save failed'));
+    await expect(companySettingsService.updateSequenceSetting({ entityType: 'RFQ', prefix: 'RFQ-', nextNumber: 1, paddingLength: 4, resetFrequency: 'NEVER' })).rejects.toThrow('Save failed');
+  });
+});

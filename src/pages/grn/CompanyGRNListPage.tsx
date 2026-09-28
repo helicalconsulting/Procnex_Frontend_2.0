@@ -1,3 +1,4 @@
+import LandingTable, { type LandingColumn } from '../../components/shared/LandingTable';
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
@@ -410,7 +411,11 @@ export default function CompanyGRNListPage() {
         title="Goods Receipt Note (GRN) Management"
         description="Record physical goods receipts against POs or auto-fill from Vendor Invoices with direct posting & 3-way matching."
         action={
-          <Button onClick={() => navigate('/procurement/create-company-grn')} className="gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold">
+          <Button
+            type="button"
+            disabled={!canCreateGRN}
+            onClick={() => navigate('/procurement/create-company-grn')}
+          >
             <Plus className="size-4" /> New GRN Entry
           </Button>
         }
@@ -507,7 +512,7 @@ export default function CompanyGRNListPage() {
             />
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[800px] border-collapse text-left text-sm">
+              <LandingTable key="company-grn-orders" preferenceKey="company-grn-orders" columns={COMPANY_GRN_ORDERS_COLUMNS} className="w-full min-w-[800px] border-collapse text-left text-sm">
                 <thead className="border-b border-border/70 bg-muted/40 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   <tr>
                     <th className="px-5 py-3.5">PO Number</th>
@@ -557,13 +562,11 @@ export default function CompanyGRNListPage() {
                               </Button>
                             ) : (
                               <Button
-                                variant="default"
-                                size="sm"
-                                className="gap-1.5 shadow-xs"
+                                type="button"
                                 disabled={!canCreateGRN}
                                 onClick={() => navigate(`/procurement/create-company-grn?poId=${po.id || po.poNumber}`, { state: { po } })}
                               >
-                                <PackageCheck className="size-3.5" /> Create GRN
+                                <Plus className="size-4" /> Create GRN
                               </Button>
                             )}
                           </div>
@@ -572,7 +575,7 @@ export default function CompanyGRNListPage() {
                     );
                   })}
                 </tbody>
-              </table>
+              </LandingTable>
             </div>
           )}
         </Card>
@@ -591,7 +594,7 @@ export default function CompanyGRNListPage() {
             />
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[850px] border-collapse text-left text-sm">
+              <LandingTable key="company-grn-records" preferenceKey="company-grn-records" columns={COMPANY_GRN_RECORDS_COLUMNS} className="w-full min-w-[850px] border-collapse text-left text-sm">
                 <thead className="border-b border-border/70 bg-muted/40 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   <tr>
                     <th className="px-5 py-3.5">GRN Number</th>
@@ -644,7 +647,7 @@ export default function CompanyGRNListPage() {
                     );
                   })}
                 </tbody>
-              </table>
+              </LandingTable>
             </div>
           )}
         </Card>
@@ -705,3 +708,20 @@ export default function CompanyGRNListPage() {
     </PageFrame>
   );
 }
+
+const COMPANY_GRN_ORDERS_COLUMNS: LandingColumn[] = [
+  { key: 'po', label: 'PO number', defaultVisible: true, required: true },
+  { key: 'supplier', label: 'Supplier / Vendor', defaultVisible: true },
+  { key: 'value', label: 'Total value', defaultVisible: true },
+  { key: 'date', label: 'Order date', defaultVisible: true },
+  { key: 'actions', label: 'Actions', defaultVisible: true, pinned: 'end' },
+];
+
+const COMPANY_GRN_RECORDS_COLUMNS: LandingColumn[] = [
+  { key: 'grn', label: 'GRN number', defaultVisible: true, required: true },
+  { key: 'po', label: 'Linked PO number', defaultVisible: true },
+  { key: 'supplier', label: 'Supplier / Vendor', defaultVisible: true },
+  { key: 'date', label: 'Received date', defaultVisible: true },
+  { key: 'items', label: 'Items count', defaultVisible: true },
+  { key: 'actions', label: 'Actions', defaultVisible: true, pinned: 'end' },
+];

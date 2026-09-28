@@ -6,6 +6,7 @@ import { approvalService } from '../../../services/approvalService';
 import { sseClient } from '../../../services/sseClient';
 import { WidgetHeader, WidgetBody, WidgetLoading, WidgetEmpty } from './WidgetShell';
 import { Badge } from '../../../components/ui/badge';
+import { SkeletonList } from '../../../components/shared/Skeleton';
 
 export default function PendingApprovalsWidget() {
   const { data: approvals, loading, error, forceRefresh } = useServiceData(
@@ -33,7 +34,7 @@ export default function PendingApprovalsWidget() {
       <WidgetHeader icon={<Clock size={16} />} title="Pending Approvals" href="/approvals" />
       <WidgetBody>
         {error && <MessageStrip type="error">{error}</MessageStrip>}
-        {loading && <WidgetLoading>Loading approvals…</WidgetLoading>}
+        {loading && <SkeletonList items={3} hasAvatar={false} />}
         {!loading && !error && (
           <div className="grid gap-2">
             {approvals.map((item) => (

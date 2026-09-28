@@ -44,7 +44,8 @@ import { useAuth } from '../../hooks/useAuth';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
-import { Input } from '../../components/ui/input';
+import { Input, Select, Textarea } from '../../components/ui/input';
+import OnboardingFieldSelector, { type OnboardingField } from './OnboardingFieldSelector';
 import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
 import { cn } from '../../lib/utils';
 import './NewOnboardingPage.css';
@@ -187,55 +188,15 @@ export default function NewOnboardingPage() {
   const [notes, setNotes] = useState('');
   const [items, setItems] = useState<Array<{ itemCode: string; itemName: string }>>([]);
 
-  // ── Flexi Fields state for Vendor Onboarding ──
-  const [onboardingFlexiFields, setOnboardingFlexiFields] = useState<Array<{ id: string; fieldKey?: string; label: string; fieldType: string; value: string }>>([]);
-  const [showInfoFieldMenu, setShowInfoFieldMenu] = useState(false);
-
-  const { data: preconfiguredOnboardingFields } = useServiceData(
+  // Selected configured fields become requirements on the supplier registration form.
+  const [onboardingFlexiFields, setOnboardingFlexiFields] = useState<OnboardingField[]>([]);
+  const { data: preconfiguredOnboardingFields, loading: fieldsLoading, error: fieldsError, reload: reloadFields } = useServiceData(
     () => companySettingsService.listFormFieldConfigs('vendor_onboarding'),
     [] as FormFieldConfig[],
     [],
-    { cacheKey: 'form-configs:vendor_onboarding' }
+    { cacheKey: 'form-configs:vendor_onboarding', cacheTtlMs: 0 }
   );
 
-  const addOnboardingFlexiField = useCallback((fieldConfig?: FormFieldConfig) => {
-    setOnboardingFlexiFields((prev) => [
-      ...prev,
-      {
-        id: `ff_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-        fieldKey: fieldConfig ? fieldConfig.fieldKey : '',
-        label: fieldConfig ? fieldConfig.label : '',
-        fieldType: fieldConfig ? fieldConfig.fieldType : 'alphabetical',
-        value: '',
-      },
-    ]);
-  }, []);
-
-  // Close the Add Field menu when clicking outside
-  useEffect(() => {
-    if (!showInfoFieldMenu) return;
-    const handler = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest('.onb-add-field-container')) {
-        setShowInfoFieldMenu(false);
-      }
-    };
-    const timer = setTimeout(() => {
-      document.addEventListener('click', handler);
-    }, 0);
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener('click', handler);
-    };
-  }, [showInfoFieldMenu]);
-
-  const removeOnboardingFlexiField = useCallback((id: string) => {
-    setOnboardingFlexiFields((prev) => prev.filter((f) => f.id !== id));
-  }, []);
-
-  const updateOnboardingFlexiField = useCallback((id: string, key: 'label' | 'value', val: string) => {
-    setOnboardingFlexiFields((prev) => prev.map((f) => f.id === id ? { ...f, [key]: val } : f));
-  }, []);
   const [sending, setSending] = useState(false);
   const [sentSuccess, setSentSuccess] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
@@ -861,7 +822,7 @@ export default function NewOnboardingPage() {
     } finally {
       setSending(false);
     }
-  }, [companyName, contactEmail, contactPerson, contactPhone, contactCountryCode, notes, items, selectedDocIds, ndaRequired, mndaRequired, ndaTemplateId, mndaTemplateId, reload]);
+  }, [companyName, contactEmail, contactPerson, contactPhone, contactCountryCode, notes, items, selectedCategory, selectedCategoryId, selectedDocIds, onboardingFlexiFields, ndaRequired, mndaRequired, anyOtherRequired, ndaTemplateId, mndaTemplateId, anyOtherTemplateId, reload]);
 
   const handleCopyCode = useCallback((code: string) => {
     navigator.clipboard.writeText(code).catch(() => {});
@@ -1028,7 +989,7 @@ export default function NewOnboardingPage() {
   );
 
   return (
-    <PageFrame>
+    <PageFrame className="new-onboarding-workspace">
       {(error || formError) && (
         <MessageStrip type="error" onClose={() => setFormError(null)}>
           {formError || error}
@@ -1084,13 +1045,14 @@ export default function NewOnboardingPage() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {/* Company Name */}
                 <div className="sm:col-span-2 onb-form-field">
-                  <label className="onb-form-field__label">
-                    Company Name <span>*</span>
+                  <label className="onb-form-field__label" htmlFor="onb-company">
+                    Company Name <span className="onb-required" aria-hidden="true">*</span>
                     {searchLoading && <span className="onb-search-spinner" />}
                   </label>
                   <div className="onb-form-field__input-wrap">
                     <Building2 size={16} className="onb-form-field__icon" />
-                    <input
+                    <Input
+                      id="onb-company"
                       ref={companyNameRef}
                       type="text"
                       value={companyName}
@@ -1128,10 +1090,11 @@ export default function NewOnboardingPage() {
 
                 {/* Vendor Email */}
                 <div className="sm:col-span-2 onb-form-field">
-                  <label className="onb-form-field__label">Vendor Email <span>*</span></label>
+                  <label className="onb-form-field__label" htmlFor="onb-email">Vendor Email <span className="onb-required" aria-hidden="true">*</span></label>
                   <div className="onb-form-field__input-wrap">
                     <Mail size={16} className="onb-form-field__icon" />
-                    <input
+                    <Input
+                      id="onb-email"
                       ref={emailRef}
                       type="email"
                       value={contactEmail}
@@ -1142,11 +1105,12 @@ export default function NewOnboardingPage() {
                       placeholder="vendor@company.com"
                       required
                       className={`onb-form-field__input ${isEmailInvalid ? 'onb-form-field__input--error' : ''}`}
-                      style={isEmailInvalid ? { borderColor: '#ef4444' } : undefined}
+                      aria-invalid={isEmailInvalid}
+                      aria-describedby={isEmailInvalid ? "onb-email-error" : undefined}
                     />
                   </div>
                   {isEmailInvalid && (
-                    <span style={{ fontSize: '13px', color: '#ef4444', marginTop: '4px', display: 'block', fontWeight: 500 }}>
+                    <span id="onb-email-error" className="onb-field-error" role="alert">
                       Please enter a valid email address with domain extension (e.g. name@domain.com)
                     </span>
                   )}
@@ -1154,10 +1118,11 @@ export default function NewOnboardingPage() {
 
                 {/* Contact Person */}
                 <div className="onb-form-field">
-                  <label className="onb-form-field__label">Contact Person</label>
+                  <label className="onb-form-field__label" htmlFor="onb-contact">Contact Person</label>
                   <div className="onb-form-field__input-wrap">
                     <Users size={16} className="onb-form-field__icon" />
-                    <input
+                    <Input
+                      id="onb-contact"
                       type="text"
                       value={contactPerson}
                       onChange={(e) => setContactPerson(e.target.value)}
@@ -1172,8 +1137,9 @@ export default function NewOnboardingPage() {
 
                 {/* Phone Number */}
                 <div className="onb-form-field">
-                  <label className="onb-form-field__label">Phone Number</label>
+                  <label className="onb-form-field__label" htmlFor="onb-phone">Phone Number</label>
                   <PhoneInput
+                    id="onb-phone"
                     countryCode={contactCountryCode}
                     onCountryCodeChange={setContactCountryCode}
                     value={contactPhone}
@@ -1182,7 +1148,7 @@ export default function NewOnboardingPage() {
                     placeholder="Type your mobile number"
                   />
                   {isPhoneInvalid && (
-                    <span style={{ fontSize: '13px', color: '#ef4444', marginTop: '4px', display: 'block' }}>
+                    <span className="onb-field-error" role="alert">
                       Please enter a valid phone number (7 to 15 digits)
                     </span>
                   )}
@@ -1200,10 +1166,11 @@ export default function NewOnboardingPage() {
               <div className="space-y-4">
                 {/* Vendor Category */}
                 <div className="onb-form-field">
-                  <label className="onb-form-field__label">Vendor Category</label>
+                  <label className="onb-form-field__label" htmlFor="onb-category">Vendor Category</label>
                   <div className="onb-form-field__input-wrap">
                     <Tag size={16} className="onb-form-field__icon" />
-                    <select
+                    <Select
+                      id="onb-category"
                       value={selectedCategoryId || (categories.some((c) => c.name === selectedCategory) ? categories.find((c) => c.name === selectedCategory)?.id : '')}
                       onChange={(e) => {
                         const val = e.target.value;
@@ -1225,14 +1192,15 @@ export default function NewOnboardingPage() {
                           {cat.name}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
                 </div>
 
                 {/* Notes */}
                 <div className="onb-form-field">
-                  <label className="onb-form-field__label">Notes</label>
-                  <textarea
+                  <label className="onb-form-field__label" htmlFor="onb-notes">Notes</label>
+                  <Textarea
+                    id="onb-notes"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     rows={2}
@@ -1241,222 +1209,15 @@ export default function NewOnboardingPage() {
                   />
                 </div>
 
-                {/* Custom Flexi Fields */}
-                <div className="onb-form-field" style={{ marginTop: 8 }}>
-                  <label className="onb-form-field__label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>Custom Flexi Fields</span>
-                  </label>
-
-                  {onboardingFlexiFields.map((field) => (
-                    <div
-                      key={field.id}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: 12,
-                        padding: '8px 12px',
-                        marginBottom: 6,
-                        background: 'var(--surface-card, #1e2530)',
-                        border: '1px solid var(--border, #2d3748)',
-                        borderRadius: 'var(--radius-md, 6px)',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary, #fff)' }}>
-                          {field.label}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: 11,
-                            fontWeight: 600,
-                            color: 'var(--primary-500, #0a6ed1)',
-                            background: 'rgba(10,110,209,0.12)',
-                            padding: '2px 8px',
-                            borderRadius: 10,
-                            textTransform: 'capitalize',
-                          }}
-                        >
-                          {field.fieldType}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}
-                        onClick={() => removeOnboardingFlexiField(field.id)}
-                        title="Remove field"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  ))}
-
-                  <div style={{ marginTop: 8 }}>
-                    <div className="onb-add-field-container" style={{ position: 'relative', display: 'inline-block' }}>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowInfoFieldMenu((v) => !v);
-                        }}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 6,
-                          padding: '6px 0',
-                          border: 'none',
-                          background: 'transparent',
-                          color: 'var(--primary-500, #0a6ed1)',
-                          fontSize: 14,
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          fontFamily: 'inherit',
-                          outline: 'none',
-                        }}
-                        onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.75')}
-                        onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
-                      >
-                        <Plus size={14} />
-                        Add Field
-                      </button>
-
-                      {showInfoFieldMenu && (
-                        <div
-                          onClick={(e) => e.stopPropagation()}
-                          style={{
-                            position: 'absolute',
-                            top: 'calc(100% + 6px)',
-                            left: 0,
-                            zIndex: 1000,
-                            background: 'var(--surface-card, #1e2530)',
-                            border: '1px solid var(--border, #2d3748)',
-                            borderRadius: 'var(--radius-md, 8px)',
-                            boxShadow: '0 12px 36px rgba(0,0,0,0.4)',
-                            minWidth: 280,
-                            maxHeight: 320,
-                            overflowY: 'auto',
-                          }}
-                        >
-                          {preconfiguredOnboardingFields.length === 0 ? (
-                            <div
-                              style={{
-                                padding: '24px 18px',
-                                textAlign: 'center',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                gap: 10,
-                              }}
-                            >
-                              <div
-                                style={{
-                                  width: 40,
-                                  height: 40,
-                                  borderRadius: '50%',
-                                  background: 'var(--surface-elevated, #1a2029)',
-                                  border: '1px solid var(--border, #2d3748)',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                }}
-                              >
-                                <Plus size={18} style={{ color: 'var(--text-placeholder, #64748b)' }} />
-                              </div>
-                              <div>
-                                <p style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 700, color: 'var(--text-primary, #fff)' }}>
-                                  No field is created yet
-                                </p>
-                                <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary, #94a3b8)', lineHeight: 1.4 }}>
-                                  Go to <strong>Settings → Form Fields</strong> to create fields for Vendor Onboarding.
-                                </p>
-                              </div>
-                            </div>
-                          ) : (
-                            <>
-                              <div
-                                style={{
-                                  padding: '10px 14px 8px',
-                                  fontSize: 12,
-                                  fontWeight: 700,
-                                  color: 'var(--text-placeholder, #64748b)',
-                                  textTransform: 'uppercase',
-                                  letterSpacing: '0.5px',
-                                  borderBottom: '1px solid var(--border, #2d3748)',
-                                }}
-                              >
-                                Form Settings Fields
-                              </div>
-                              {preconfiguredOnboardingFields
-                                .filter((f) => !onboardingFlexiFields.some((ef) => ef.fieldKey === f.fieldKey || ef.label === f.label))
-                                .map((f) => (
-                                  <button
-                                    type="button"
-                                    key={f.fieldKey || f.id}
-                                    onClick={() => {
-                                      addOnboardingFlexiField(f);
-                                      setShowInfoFieldMenu(false);
-                                    }}
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: 10,
-                                      width: '100%',
-                                      padding: '10px 14px',
-                                      border: 'none',
-                                      borderBottom: '1px solid var(--border, #2d3748)',
-                                      background: 'transparent',
-                                      color: 'var(--text-primary, #fff)',
-                                      fontSize: 14,
-                                      cursor: 'pointer',
-                                      textAlign: 'left',
-                                      fontFamily: 'inherit',
-                                      transition: 'background 0.15s',
-                                    }}
-                                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-hover, rgba(255,255,255,0.06))')}
-                                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                                  >
-                                    <span
-                                      style={{
-                                        width: 26,
-                                        height: 26,
-                                        borderRadius: 'var(--radius-sm, 6px)',
-                                        background: 'rgba(10,110,209,0.12)',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        flexShrink: 0,
-                                      }}
-                                    >
-                                      <Plus size={13} style={{ color: 'var(--primary-500, #0a6ed1)' }} />
-                                    </span>
-                                    <span style={{ flex: 1, fontWeight: 500 }}>{f.label}</span>
-                                    <span
-                                      style={{
-                                        fontSize: 11,
-                                        fontWeight: 600,
-                                        color: 'var(--primary-500, #0a6ed1)',
-                                        background: 'rgba(10,110,209,0.12)',
-                                        padding: '2px 7px',
-                                        borderRadius: 10,
-                                        textTransform: 'capitalize',
-                                      }}
-                                    >
-                                      {f.fieldType}
-                                    </span>
-                                  </button>
-                                ))}
-                              {preconfiguredOnboardingFields.filter((f) => !onboardingFlexiFields.some((ef) => ef.fieldKey === f.fieldKey || ef.label === f.label)).length === 0 && (
-                                <div style={{ padding: '14px', fontSize: 13, color: 'var(--text-secondary, #94a3b8)', textAlign: 'center' }}>
-                                  All configured settings fields have been added.
-                                </div>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                <OnboardingFieldSelector
+                  fields={preconfiguredOnboardingFields}
+                  selected={onboardingFlexiFields}
+                  onChange={setOnboardingFlexiFields}
+                  loading={fieldsLoading}
+                  error={fieldsError}
+                  onRetry={reloadFields}
+                  disabled={!canCreateOnboarding || sending}
+                />
               </div>
             </Card>
 

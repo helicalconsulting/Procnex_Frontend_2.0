@@ -4,6 +4,7 @@ import { dashboardService } from '../../../services/dashboardService';
 import { useCurrency } from '../../../components/shared/CurrencyMaster';
 import { WidgetHeader, WidgetBody, WidgetLoading } from './WidgetShell';
 import { cn } from '../../../lib/utils';
+import { SkeletonChart } from '../../../components/shared/Skeleton';
 
 export default function SpendOverviewWidget() {
   const { formatAmount, companyDefaultCurrency } = useCurrency();
@@ -20,7 +21,9 @@ export default function SpendOverviewWidget() {
       <WidgetHeader icon={<TrendingUp size={16} />} title="Spend Overview" subtitle="Monthly Trend & Breakdown" />
       <WidgetBody className="grid gap-6">
         {loading ? (
-          <WidgetLoading />
+          <WidgetLoading>
+            <SkeletonChart type="bar" height={220} />
+          </WidgetLoading>
         ) : (
           <>
             {/* Bar chart */}

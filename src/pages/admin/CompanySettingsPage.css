@@ -780,7 +780,7 @@
   color: var(--text-primary, #1e293b);
 }
 
-.company-settings__field label span {
+.company-settings__field label .settings-required {
   color: #dc2626;
 }
 
@@ -1079,7 +1079,7 @@
   color: var(--text-primary);
 }
 
-[data-theme="dark"] .company-settings__field label span {
+[data-theme="dark"] .company-settings__field label .settings-required {
   color: var(--danger-500);
 }
 

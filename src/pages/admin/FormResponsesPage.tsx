@@ -1,19 +1,19 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import LandingTable, { type LandingColumn } from '../../components/shared/LandingTable';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
+import { cn } from '../../lib/utils';
 import {
   formWorkflowService,
   type FormSubmissionInstance,
 } from '../../services/formWorkflowService';
 import {
-  BarChart3,
   Users,
   CheckCircle2,
   Clock,
   TrendingUp,
   Search,
   Eye,
-  History,
   Building,
   UserCheck,
   X,
@@ -26,9 +26,12 @@ import {
   CheckSquare,
   AlertTriangle,
   Check,
-  Download,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import { Input, Select } from '../../components/ui/input';
+import { Button } from '../../components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../../components/ui/dialog';
+import { FormResponseFields } from '../../components/admin/FormResponseFields';
 
 export default function FormResponsesPage() {
   const { hasPermission } = useAuth();
@@ -41,263 +44,23 @@ export default function FormResponsesPage() {
   const [audienceFilter, setAudienceFilter] = useState<string>('ALL');
 
   const [selectedResponse, setSelectedResponse] = useState<FormSubmissionInstance | null>(null);
-  const [selectedTimeline, setSelectedTimeline] = useState<FormSubmissionInstance | null>(null);
+  const responseTrigger = useRef<HTMLButtonElement | null>(null);
   const [selectedSubmissionIds, setSelectedSubmissionIds] = useState<string[]>([]);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const [viewingImage, setViewingImage] = useState<{ title: string; src: string; fileName: string } | null>(null);
 
   // Lock background scroll when drawer/modal is active
-  useBodyScrollLock(Boolean(selectedResponse) || Boolean(selectedTimeline) || showDeleteConfirmModal || Boolean(viewingImage));
+  useBodyScrollLock(showDeleteConfirmModal);
 
-  const loadAllSubmissions = useCallback(async () => {
-    setLoading(true);
-    try {
-      const list = await formWorkflowService.listAllSubmissions();
-      setSubmissions(list);
-    } catch (e) {
-      console.error('Error loading form responses:', e);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const loadAllSubmissions = useCallback(() => formWorkflowService.listAllSubmissions()
+    .then(setSubmissions)
+    .catch(e => console.error('Error loading form responses:', e))
+    .finally(() => setLoading(false)), []);
 
   useEffect(() => {
     loadAllSubmissions();
   }, [loadAllSubmissions]);
-
-  const createImageCanvasPreview = useCallback((fileName: string) => {
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width = 900;
-      canvas.height = 650;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return '';
-
-      ctx.fillStyle = '#1e293b';
-      ctx.fillRect(0, 0, 900, 650);
-
-      ctx.strokeStyle = '#0a6ed1';
-      ctx.lineWidth = 4;
-      ctx.strokeRect(16, 16, 868, 618);
-
-      ctx.fillStyle = '#0a6ed1';
-      ctx.fillRect(16, 16, 868, 64);
-
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 20px system-ui, sans-serif';
-      ctx.textAlign = 'left';
-      ctx.fillText('📷 ATTACHED IMAGE FILE PREVIEW', 40, 56);
-
-      ctx.font = 'bold 13px monospace';
-      ctx.textAlign = 'right';
-      ctx.fillText(fileName, 860, 56);
-
-      ctx.fillStyle = '#0f172a';
-      ctx.strokeStyle = '#334155';
-      ctx.lineWidth = 1;
-      ctx.fillRect(60, 110, 780, 460);
-      ctx.strokeRect(60, 110, 780, 460);
-
-      ctx.fillStyle = '#38bdf8';
-      ctx.beginPath();
-      ctx.arc(450, 240, 48, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#0f172a';
-      ctx.font = 'bold 36px system-ui';
-      ctx.textAlign = 'center';
-      ctx.fillText('🖼️', 450, 252);
-
-      ctx.fillStyle = '#f8fafc';
-      ctx.font = 'bold 22px Georgia, serif';
-      ctx.fillText(fileName, 450, 330);
-
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = '14px system-ui, sans-serif';
-      ctx.fillText('High-Resolution Scanned Document Image Record', 450, 360);
-
-      ctx.fillStyle = '#1e293b';
-      ctx.fillRect(160, 400, 580, 120);
-      ctx.strokeStyle = '#334155';
-      ctx.strokeRect(160, 400, 580, 120);
-
-      ctx.fillStyle = '#4ade80';
-      ctx.font = 'bold 14px system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('✓ AUTHENTICATED ATTACHMENT RECORD', 450, 435);
-
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = '12px monospace';
-      ctx.fillText(`File: ${fileName}  ·  Format: JPG/PNG Image`, 450, 465);
-      ctx.fillText('Heliflow Enterprise Security Engine', 450, 490);
-
-      ctx.fillStyle = '#64748b';
-      ctx.font = '12px system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('Heliflow Secure Image Vault · Verified Record', 450, 615);
-
-      return canvas.toDataURL('image/png');
-    } catch {
-      return '';
-    }
-  }, []);
-
-  const handleAttachRealFile = useCallback(async (fieldId: string, file: File) => {
-    if (!selectedResponse || !file) return;
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const dataUrl = e.target?.result as string;
-      const updatedResponseData = {
-        ...selectedResponse.responseData,
-        [fieldId]: {
-          fileName: file.name,
-          fileType: file.type,
-          fileSize: file.size,
-          fileDataUrl: dataUrl,
-        },
-      };
-
-      try {
-        const raw = localStorage.getItem('heliflow_form_submissions_v1');
-        if (raw) {
-          const subs = JSON.parse(raw);
-          const idx = subs.findIndex((s: any) => s.id === selectedResponse.id);
-          if (idx !== -1) {
-            subs[idx].responseData = updatedResponseData;
-            localStorage.setItem('heliflow_form_submissions_v1', JSON.stringify(subs));
-          }
-        }
-      } catch (err) {
-        console.error('Failed to update submission data in localStorage:', err);
-      }
-
-      const updatedSub = { ...selectedResponse, responseData: updatedResponseData };
-      setSelectedResponse(updatedSub);
-      await loadAllSubmissions();
-    };
-    reader.readAsDataURL(file);
-  }, [selectedResponse, loadAllSubmissions]);
-
-  const renderFieldValue = useCallback((field: any, val: any) => {
-    if (!val) return <span className="italic text-muted-foreground">Not answered</span>;
-
-    let fileName = '';
-    let fileDataUrl = '';
-    let isImage = false;
-
-    if (typeof val === 'object' && val !== null) {
-      fileName = val.fileName || 'uploaded_file';
-      fileDataUrl = val.fileDataUrl || val.url || '';
-      isImage = Boolean(val.fileType?.startsWith('image/') || fileDataUrl.startsWith('data:image/') || fileName.match(/\.(jpeg|jpg|png|webp|gif|svg)$/i));
-    } else if (typeof val === 'string') {
-      const strVal = val.trim();
-      if (strVal.startsWith('data:image/')) {
-        isImage = true;
-        fileDataUrl = strVal;
-        fileName = `${field.label || 'attachment'}.png`;
-      } else if (strVal.match(/\.(jpeg|jpg|png|webp|gif|svg)$/i)) {
-        isImage = true;
-        fileName = strVal;
-      } else if (field.type === 'file' || field.type === 'file_upload' || field.label?.toLowerCase().includes('certificate') || field.label?.toLowerCase().includes('proof') || field.label?.toLowerCase().includes('upload') || field.label?.toLowerCase().includes('attachment')) {
-        fileName = strVal;
-      }
-    }
-
-    const isFileField =
-      field.type === 'file' ||
-      field.type === 'file_upload' ||
-      Boolean(fileName) ||
-      Boolean(fileDataUrl);
-
-    if (isFileField) {
-      const displayImageSrc =
-        fileDataUrl && (isImage || fileDataUrl.startsWith('data:image/'))
-          ? fileDataUrl
-          : isImage
-          ? createImageCanvasPreview(fileName || String(val))
-          : fileDataUrl || '';
-
-      return (
-        <div className="rounded-xl border border-border bg-muted/20 p-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <FileText size={18} className="shrink-0 text-primary" />
-            <span className="truncate text-sm font-semibold text-foreground">{fileName || String(val)}</span>
-          </div>
-
-          {displayImageSrc && (isImage || displayImageSrc.startsWith('data:image/')) && (
-            <div
-              className="group relative my-2 cursor-pointer overflow-hidden rounded-xl border border-border bg-background"
-              onClick={() => setViewingImage({ title: field.label || 'Image Preview', src: displayImageSrc, fileName: fileName || String(val) })}
-              title="Click to view full image"
-            >
-              <img src={displayImageSrc} alt={fileName || field.label} className="mx-auto max-h-36 object-contain" />
-              <div className="absolute inset-0 flex items-center justify-center gap-1.5 bg-slate-950/55 text-xs font-semibold text-white opacity-0 transition group-hover:opacity-100">
-                <Eye size={16} /> View Image
-              </div>
-            </div>
-          )}
-
-          <div className="mt-2 flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground"
-              onClick={() => {
-                setViewingImage({
-                  title: field.label || 'Document View',
-                  src: displayImageSrc,
-                  fileName: fileName || String(val),
-                });
-              }}
-            >
-              <Eye size={14} /> View File
-            </button>
-
-            {displayImageSrc ? (
-              <a
-                href={displayImageSrc}
-                download={fileName || 'document'}
-                className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground hover:bg-muted"
-              >
-                <Download size={14} /> Download File
-              </a>
-            ) : (
-              <button
-                type="button"
-                className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground hover:bg-muted"
-                onClick={() => {
-                  alert(`Document attachment "${fileName || String(val)}" recorded with form submission.`);
-                }}
-              >
-                <Download size={14} /> Download File
-              </button>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    if (field.type === 'currency') {
-      const selectedCurr = (sub.responseData && sub.responseData[`${field.id}_currency`]) || field.currency || 'USD';
-      return (
-        <span className="font-semibold text-foreground">
-          {selectedCurr} {val ? Number(val).toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}
-        </span>
-      );
-    }
-
-    if (field.type === 'signature') {
-      return (
-        <div className="flex flex-col gap-1 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3 text-sm text-foreground">
-          <span>✍️ {String(val)}</span>
-          <span className="text-[12px] font-semibold text-emerald-700 dark:text-emerald-300">✓ Digital Signature</span>
-        </div>
-      );
-    }
-
-    return String(val);
-  }, [createImageCanvasPreview, handleAttachRealFile]);
 
   // Analytics Metrics
   const metrics = useMemo(() => {
@@ -381,7 +144,7 @@ export default function FormResponsesPage() {
     }
   };
 
-  const renderFormApprovalLevel = (sub: any) => {
+  const renderFormApprovalLevel = (sub: FormSubmissionInstance) => {
     if (!sub.workflowAttached || !sub.approvalLevels || sub.approvalLevels.length === 0) {
       return (
         <span className="text-xs text-muted-foreground">
@@ -392,7 +155,7 @@ export default function FormResponsesPage() {
 
     const total = sub.totalLevels || sub.approvalLevels.length || 1;
     const isAllCompleted = sub.status === 'completed';
-    const isRejected = sub.status === 'rejected';
+    const isRejected = String(sub.status) === 'rejected';
 
     let current = sub.currentLevelNumber || 1;
     if (isAllCompleted) current = total + 1;
@@ -452,7 +215,13 @@ export default function FormResponsesPage() {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <button
           type="button"
-          className={`flex min-h-24 items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${statusFilter === 'ALL' ? 'border-primary/40 ring-2 ring-primary/10' : 'border-border/70'}`}
+          aria-pressed={statusFilter === 'ALL'}
+          className={cn(
+            'flex min-h-24 items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 duration-200',
+            statusFilter === 'ALL'
+              ? 'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)] -translate-y-0.5'
+              : 'border-border/70'
+          )}
           onClick={() => setStatusFilter('ALL')}
           title="Click to view all assigned user submissions"
         >
@@ -467,7 +236,13 @@ export default function FormResponsesPage() {
 
         <button
           type="button"
-          className={`flex min-h-24 items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${statusFilter === 'submitted' ? 'border-primary/40 ring-2 ring-primary/10' : 'border-border/70'}`}
+          aria-pressed={statusFilter === 'submitted'}
+          className={cn(
+            'flex min-h-24 items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 duration-200',
+            statusFilter === 'submitted'
+              ? 'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)] -translate-y-0.5'
+              : 'border-border/70'
+          )}
           onClick={() => setStatusFilter('submitted')}
           title="Click to view submitted responses"
         >
@@ -482,7 +257,13 @@ export default function FormResponsesPage() {
 
         <button
           type="button"
-          className={`flex min-h-24 items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${statusFilter === 'pending' ? 'border-primary/40 ring-2 ring-primary/10' : 'border-border/70'}`}
+          aria-pressed={statusFilter === 'pending'}
+          className={cn(
+            'flex min-h-24 items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 duration-200',
+            statusFilter === 'pending'
+              ? 'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)] -translate-y-0.5'
+              : 'border-border/70'
+          )}
           onClick={() => setStatusFilter('pending')}
           title="Click to view pending responses"
         >
@@ -497,7 +278,13 @@ export default function FormResponsesPage() {
 
         <button
           type="button"
-          className={`flex min-h-24 items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${statusFilter === 'completed' ? 'border-primary/40 ring-2 ring-primary/10' : 'border-border/70'}`}
+          aria-pressed={statusFilter === 'completed'}
+          className={cn(
+            'flex min-h-24 items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 duration-200',
+            statusFilter === 'completed'
+              ? 'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)] -translate-y-0.5'
+              : 'border-border/70'
+          )}
           onClick={() => setStatusFilter('completed')}
           title="Click to view completed workflows"
         >
@@ -515,9 +302,10 @@ export default function FormResponsesPage() {
       <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div className="relative min-w-0 flex-1 sm:max-w-xl">
           <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            className="min-h-11 w-full rounded-xl border border-input bg-background pl-10 pr-3 text-sm outline-none placeholder:text-muted-foreground focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+          <Input
+            type="search"
+            aria-label="Search form responses"
+            className="pl-10 pr-3"
             placeholder="Search by form title, employee name, or email..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -525,16 +313,15 @@ export default function FormResponsesPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <label className="text-xs font-semibold text-muted-foreground">Audience:</label>
-          <select
-            className="min-h-11 rounded-xl border border-input bg-background px-3 text-sm outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+          <label htmlFor="response-audience" className="text-xs font-semibold text-muted-foreground">Audience:</label>
+          <Select id="response-audience" className="w-48"
             value={audienceFilter}
             onChange={(e) => setAudienceFilter(e.target.value)}
           >
             <option value="ALL">All Audiences</option>
             <option value="specific_users">Specific Users</option>
             <option value="whole_org">Whole Organization</option>
-          </select>
+          </Select>
         </div>
       </div>
 
@@ -581,7 +368,7 @@ export default function FormResponsesPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1000px] border-collapse text-left text-sm">
+            <LandingTable key="form-responses" preferenceKey="form-responses" columns={FORM_RESPONSES_COLUMNS} className="w-full min-w-[1000px] border-collapse text-left text-sm">
               <thead>
                 <tr className="border-b border-border/70 bg-muted/35 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">
                   <th className="w-12 px-4 py-3 text-center">
@@ -629,11 +416,11 @@ export default function FormResponsesPage() {
                       </td>
                       <td className="px-4 py-3">
                         {sub.audienceType === 'whole_org' ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 px-2.5 py-1 text-[12px] font-semibold text-violet-700 dark:text-violet-300">
+                          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-violet-500/10 px-2.5 py-1 text-[12px] font-semibold text-violet-700 dark:text-violet-300">
                             <Building size={12} /> Whole Organization
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2.5 py-1 text-[12px] font-semibold text-blue-700 dark:text-blue-300">
+                          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-blue-500/10 px-2.5 py-1 text-[12px] font-semibold text-blue-700 dark:text-blue-300">
                             <UserCheck size={12} /> Specific Users
                           </span>
                         )}
@@ -656,7 +443,7 @@ export default function FormResponsesPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold ${sub.status === 'completed' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : sub.status === 'returned' || sub.status === 'rejected' ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300' : sub.status === 'submitted' ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300' : sub.status === 'pending' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'bg-muted text-muted-foreground'}`}>
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold ${sub.status === 'completed' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : sub.status === 'returned' || String(sub.status) === 'rejected' ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300' : sub.status === 'submitted' ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300' : sub.status === 'pending' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'bg-muted text-muted-foreground'}`}>
                           {sub.status === 'completed' && <CheckCircle2 size={12} />}
                           {sub.status === 'returned' && <RotateCcw size={12} />}
                           {sub.status === 'submitted' && <Send size={12} />}
@@ -671,20 +458,19 @@ export default function FormResponsesPage() {
                       <td className="px-4 py-3">{new Date(sub.createdAt).toLocaleDateString()}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <button
-                            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold text-muted-foreground transition hover:bg-primary/10 hover:text-primary"
+                          <Button type="button" variant="ghost" size="sm"
                             title="View Response Data"
-                            onClick={() => setSelectedResponse(sub)}
+                            onClick={event => { responseTrigger.current = event.currentTarget; setSelectedResponse(sub); }}
                           >
-                            <Eye size={14} /> Response
-                          </button>
+                            <Eye size={14} /> View Response
+                          </Button>
                         </div>
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
-            </table>
+            </LandingTable>
           </div>
         )}
       </div>
@@ -695,18 +481,16 @@ export default function FormResponsesPage() {
         const retReason = selectedResponse.returnComments || retEntry?.comments || (selectedResponse.status === 'returned' ? 'Form returned for updates and resubmission.' : null);
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setSelectedResponse(null)}>
-            <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <Dialog open onOpenChange={open => { if (!open) setSelectedResponse(null); }}>
+            <DialogContent hideClose className="max-w-4xl overflow-hidden p-0" onCloseAutoFocus={event => { event.preventDefault(); responseTrigger.current?.focus(); }}>
               <div className="flex items-center justify-between border-b border-border/70 px-6 py-4">
                 <div>
-                  <h2 className="text-lg font-semibold text-foreground">{selectedResponse.formTitle}</h2>
-                  <p className="text-xs text-muted-foreground">
-                    Submitted Response by <strong>{selectedResponse.assignedUserName}</strong> ({selectedResponse.assignedUserEmail})
-                  </p>
+                  <DialogTitle>{selectedResponse.formTitle}</DialogTitle>
+                  <DialogDescription className="mt-1 text-xs">
+                    Response by <strong>{selectedResponse.assignedUserName}</strong> {selectedResponse.assignedUserEmail && `(${selectedResponse.assignedUserEmail})`}
+                  </DialogDescription>
                 </div>
-                <button type="button" className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted" onClick={() => setSelectedResponse(null)}>
-                  <X size={18} />
-                </button>
+                <Button type="button" variant="ghost" size="icon-sm" aria-label="Close response" onClick={() => setSelectedResponse(null)}><X size={18}/></Button>
               </div>
 
               <div className="flex-1 overflow-y-auto p-6 space-y-4">
@@ -720,22 +504,11 @@ export default function FormResponsesPage() {
                   </div>
                 )}
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {selectedResponse.fields.map((f) => (
-                    <div key={f.id} className="rounded-xl border border-border/70 bg-background p-3.5">
-                      <label className="text-xs font-semibold text-muted-foreground">{f.label}</label>
-                      <div className="mt-1 text-sm font-medium text-foreground">
-                        {renderFieldValue(f, selectedResponse.responseData[f.id])}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <FormResponseFields fields={selectedResponse.fields} responseData={selectedResponse.responseData}/>
               </div>
 
               <div className="flex items-center justify-end gap-3 border-t border-border/70 bg-muted/20 px-6 py-4">
-                <button type="button" className="min-h-11 rounded-xl border border-input bg-background px-5 text-sm font-semibold text-foreground hover:bg-muted" onClick={() => setSelectedResponse(null)}>
-                  Close
-                </button>
+                <Button type="button" variant="outline" onClick={() => setSelectedResponse(null)}>Close</Button>
                 {selectedResponse.workflowAttached && selectedResponse.status !== 'completed' && (
                   <button
                     type="button"
@@ -761,7 +534,7 @@ export default function FormResponsesPage() {
                         }
                       } catch (err) {
                         console.error('Approve error:', err);
-                        alert('Error approving level: ' + (err as any)?.message);
+                        alert('Error approving level: ' + (err instanceof Error ? err.message : 'Please try again.'));
                       }
                     }}
                   >
@@ -769,8 +542,8 @@ export default function FormResponsesPage() {
                   </button>
                 )}
               </div>
-            </div>
-          </div>
+            </DialogContent>
+          </Dialog>
         );
       })()}
 
@@ -797,3 +570,14 @@ export default function FormResponsesPage() {
     </div>
   );
 }
+
+const FORM_RESPONSES_COLUMNS: LandingColumn[] = [
+  { key: 'selection', label: 'Selection', defaultVisible: true, pinned: 'start' },
+  { key: 'form', label: 'Form name', defaultVisible: true, required: true },
+  { key: 'audience', label: 'Audience', defaultVisible: true },
+  { key: 'user', label: 'Assigned user', defaultVisible: true },
+  { key: 'status', label: 'Workflow status', defaultVisible: true },
+  { key: 'progress', label: 'Level progress', defaultVisible: true },
+  { key: 'assigned', label: 'Date assigned', defaultVisible: true },
+  { key: 'actions', label: 'Actions', defaultVisible: true, pinned: 'end' },
+];

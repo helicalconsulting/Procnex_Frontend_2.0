@@ -1,3 +1,4 @@
+import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -1106,7 +1107,7 @@ export default function CreatePurchaseInvoicePage() {
         {/* Table Card */}
         {invoicesLoading ? (
           <Card className="overflow-hidden p-4">
-            <TableSkeleton rows={5} columns={6} />
+            <TableSkeleton rows={5} columnWidths={['42px', '160px', '200px', '140px', '110px', '150px', '160px', '130px']} />
           </Card>
         ) : (
           <Card className="overflow-hidden">
@@ -1161,16 +1162,7 @@ export default function CreatePurchaseInvoicePage() {
                       <div className="flex items-center justify-end gap-2">
                         <span>ACTIONS</span>
                         <div className="relative">
-                          <Button
-                            variant={showInvColPanel ? 'secondary' : 'ghost'}
-                            size="icon-sm"
-                            onClick={() => setShowInvColPanel((v) => !v)}
-                            title="Customize columns"
-                            aria-label="Customize columns"
-                            aria-expanded={showInvColPanel}
-                          >
-                            <span className="flex gap-0.5"><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /></span>
-                          </Button>
+                          <ColumnSettingsButton open={showInvColPanel} onClick={() => setShowInvColPanel((v) => !v)} />
 
                           {showInvColPanel && (
                             <ColumnCustomizer

@@ -5,6 +5,10 @@ import { COUNTRY_CODES } from '../../config/countryCodes';
 import './PhoneInput.css';
 
 interface PhoneInputProps {
+  id?: string;
+  /** Keep the picker inside a containing dialog focus boundary. */
+  portalWithinDialog?: boolean;
+  disabled?: boolean;
   /** Current country dial code (e.g. '+254') */
   countryCode: string;
   /** Called when user selects a different country code */
@@ -20,6 +24,9 @@ interface PhoneInputProps {
 }
 
 export default function PhoneInput({
+  id,
+  portalWithinDialog = false,
+  disabled = false,
   countryCode,
   onCountryCodeChange,
   value,
@@ -154,7 +161,7 @@ export default function PhoneInput({
   };
 
   // Arrow key navigation within the dropdown list
-  const handleDropdownKeyDown = (e: KeyboardEvent<HTMLDivElement>, index: number) => {
+  const handleDropdownKeyDown = (e: KeyboardEvent<HTMLButtonElement>, index: number) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       const next = index + 1;
@@ -181,6 +188,7 @@ export default function PhoneInput({
       {/* Country code trigger button */}
       <button
         ref={triggerRef}
+        disabled={disabled}
         type="button"
         className={`phone-input-trigger ${dropdownOpen ? 'phone-input-trigger--open' : ''}`}
         onClick={() => setDropdownOpen((v) => !v)}
@@ -218,6 +226,7 @@ export default function PhoneInput({
               type="text"
               className="phone-input-search"
               placeholder="Search country..."
+              aria-label="Search countries"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={handleSearchKeyDown}
@@ -249,11 +258,14 @@ export default function PhoneInput({
             )}
           </div>
         </div>,
-        document.body
+        (portalWithinDialog && triggerRef.current?.closest('[role="dialog"]')) || document.body
       )}
 
       {/* Phone number input */}
       <input
+        id={id}
+        aria-label={id ? undefined : "Phone number"}
+        disabled={disabled}
         type="tel"
         className={`phone-input-field ${hasError ? 'phone-input-field--error' : ''}`}
         value={value}

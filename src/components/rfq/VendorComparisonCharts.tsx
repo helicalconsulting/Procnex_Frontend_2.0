@@ -379,9 +379,8 @@ export default function VendorComparisonCharts({
                 >
                   <span style={{ fontWeight: 700, color: 'var(--primary-500)' }}>{v.code}:</span>
                   <span>{v.name}</span>
-                  <span style={{
+                  <span className={v.overallScore >= 75 ? 'text-emerald-700 dark:text-emerald-300' : 'text-primary'} style={{
                     fontSize: 12, fontWeight: 700,
-                    color: v.overallScore >= 75 ? '#107e3e' : 'var(--primary-500)',
                     background: v.overallScore >= 75 ? 'rgba(16, 126, 62, 0.12)' : 'rgba(10, 110, 209, 0.12)',
                     padding: '1px 6px', borderRadius: 10,
                   }}>

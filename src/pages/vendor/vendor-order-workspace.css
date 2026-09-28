@@ -1,0 +1,40 @@
+/* Layout and surfaces only: retain the existing application type scale. */
+.order-workspace { --muted-foreground: #59677c; min-width: 0; }
+[data-theme="dark"] .order-workspace { --muted-foreground: #9ba9b9; }
+.order-metrics [aria-pressed="true"] { box-shadow: none !important; border-color: var(--primary); }
+.order-detail-focus { outline: none; }
+.order-register-scroll { overflow-x: auto; }
+.order-register { min-width: 1080px; table-layout: fixed; }
+.order-workspace .order-register :is(th, td) { padding: 16px; border-inline: 0; }
+.order-register thead, .order-items-table thead { background: var(--card); }
+.order-register th, .order-items-table th { font-weight: 600; border-bottom: 1px solid var(--border); }
+.order-register tbody tr + tr, .order-items-table tbody tr + tr { border-top: 1px solid var(--border); }
+.order-register tbody tr:hover, .order-items-table tbody tr:hover { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.order-register td { vertical-align: middle; }
+.order-number { color: var(--foreground); }
+.order-number:hover { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }
+.order-number:focus-visible, .order-register-scroll:focus-visible, .order-items-scroll:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; border-radius: 4px; }
+.order-progress { display: grid; grid-template-columns: minmax(240px, .65fr) minmax(0, 1.35fr); column-gap: 32px; align-items: center; }
+.order-progress__summary { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; }
+.order-progress__steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
+.order-progress__step { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--muted-foreground); }
+.order-progress__step:not(:last-child)::after { content: ''; position: absolute; top: 12px; left: calc(50% + 20px); right: calc(-50% + 20px); height: 1px; background: var(--border); }
+.order-progress__marker { display: grid; width: 24px; height: 24px; place-items: center; border: 1px solid var(--border); border-radius: 50%; background: var(--card); }
+.order-progress__step[data-reached="true"] { color: var(--foreground); }
+.order-progress__step[data-reached="true"] .order-progress__marker { color: var(--primary); background: var(--accent); border-color: var(--primary); }
+.order-progress__step[aria-current="step"] .order-progress__marker { outline: 3px solid color-mix(in srgb, var(--primary) 18%, transparent); outline-offset: 2px; }
+.order-progress__step[aria-current="step"] > span { font-weight: 700; }
+.order-progress__note { display: flex; align-items: start; gap: 8px; grid-column: 1 / -1; margin: 16px 0 0; padding-top: 12px; border-top: 1px solid var(--border); }
+.order-progress--no-stages .order-progress__note { grid-column: auto; margin: 0; padding: 0; border: 0; }
+.order-overview { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.order-overview > section + section { border-left: 1px solid var(--border); padding-left: 24px; }
+.order-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 24px; }
+.order-facts dt { color: var(--muted-foreground); }
+.order-facts dd { margin: 4px 0 0; font-weight: 600; overflow-wrap: anywhere; }
+.order-facts__wide { grid-column: 1 / -1; }
+.order-items-scroll { max-height: 480px; overflow: auto; }
+.order-items-table { min-width: 640px; table-layout: fixed; }
+.order-items-table thead { position: sticky; top: 0; z-index: 1; }
+.order-workspace .order-items-table :is(th, td) { padding: 14px 20px; border-inline: 0; }
+.order-items-table td { background: transparent; }
+.order-items-footer { background: var(--card); }

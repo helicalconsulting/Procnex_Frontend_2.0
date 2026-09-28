@@ -196,14 +196,24 @@
   box-shadow: 0 12px 36px 0 rgba(0, 0, 0, 0.45), inset 0 1px 0 0 rgba(255, 255, 255, 0.18);
 }
 
+.quotation-workspace .quotation-metric[aria-pressed="true"],
+.quotation-metric[aria-pressed="true"],
 .quot-summary-card--active,
-[data-theme="dark"] .quot-summary-card--active,
-.quot-summary-card.active,
-[data-theme="dark"] .quot-summary-card.active {
+.quot-summary-card.active {
   border: 1.5px solid #2563eb !important;
   box-shadow: 0 4px 14px rgba(37, 99, 235, 0.15) !important;
   background: rgba(37, 99, 235, 0.08) !important;
   transform: translateY(-2px) !important;
+}
+
+[data-theme="dark"] .quotation-workspace .quotation-metric[aria-pressed="true"],
+[data-theme="dark"] .quotation-metric[aria-pressed="true"],
+[data-theme="dark"] .quot-summary-card--active,
+[data-theme="dark"] .quot-summary-card.active {
+  border: 1.5px solid #388bfd !important;
+  background: rgba(56, 139, 253, 0.2) !important;
+  box-shadow: 0 0 0 1.5px #388bfd, 0 0 25px rgba(56, 139, 253, 0.75), 0 0 10px rgba(56, 139, 253, 0.9), inset 0 0 15px rgba(56, 139, 253, 0.2) !important;
+  transform: translateY(-3px) !important;
 }
 
 .quot-summary-card::before {
@@ -5182,7 +5192,7 @@ td.quot-compare__col--actions,
 }
 
 /* Fixed & Big View Quotation Modal */
-.rfq-modal.rfq-modal--open {
+.quotation-detail-window.rfq-modal--open {
   width: min(960px, calc(100vw - 32px)) !important;
   height: min(720px, calc(100vh - 48px)) !important;
   max-height: calc(100vh - 48px) !important;
@@ -5191,12 +5201,12 @@ td.quot-compare__col--actions,
   border-radius: 12px !important;
 }
 
-.rfq-modal.rfq-modal--open .rfq-modal__body {
+.quotation-detail-window.rfq-modal--open .rfq-modal__body {
   flex: 1 !important;
   overflow-y: auto !important;
 }
 
-.rfq-modal.rfq-modal--expanded {
+.quotation-detail-window.rfq-modal--expanded {
   width: 98vw !important;
   height: 96vh !important;
   max-height: 96vh !important;

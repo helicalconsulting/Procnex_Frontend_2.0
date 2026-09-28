@@ -1,12 +1,13 @@
 export interface VendorOrderMock {
-  id: number;
+  id: number | string;
   poNumber: string;
   rfqNumber: string;
   buyerName: string;
   buyerCompany: string;
   items: { name: string; quantity: number; unit: string; unitPrice: number }[];
   totalAmount: number;
-  status: 'CONFIRMED' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED';
+  status: string;
+  currency?: string;
   orderDate: string;
   expectedDelivery: string;
   deliveredDate?: string;

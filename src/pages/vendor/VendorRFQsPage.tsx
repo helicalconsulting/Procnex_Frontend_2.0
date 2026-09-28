@@ -1,32 +1,33 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
 import { useServiceData } from '../../hooks/useServiceData';
 import { sseClient } from '../../services/sseClient';
 import { vendorPortalService, type PaymentPlan } from '../../services/vendorPortalService';
 import { companySettingsService, type PaymentTerm } from '../../services/companySettingsService';
-import type { RFQ, RFQCustomField } from '../../types';
+import type { RFQ, RFQCustomField, QuotationBidSecurity } from '../../types';
 import CustomPaymentPlanModal from '../../components/vendor/CustomPaymentPlanModal';
-import ViewPaymentPlanModal from '../../components/vendor/ViewPaymentPlanModal';
+import QuotationDetails from '../../components/vendor/QuotationDetails';
+import { quoteDate } from '../../components/vendor/quotationFormatting';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 import {
-  FileText, Search, ChevronDown, Clock, Send, X, Calendar,
-  CheckCircle2, AlertTriangle, RotateCcw, Plus, Check,
+  FileText, Search, ChevronDown, Clock, Send, X,
+  CheckCircle2, AlertTriangle, RotateCcw, Plus,
   Minus, Maximize2, Minimize2, ChevronUp, ChevronRight, Eye,
   Trash2, Pencil, Shield, Upload, Sliders, ClipboardList,
 } from 'lucide-react';
-import { CurrencySelector, CurrencyAmountInput, CurrencyBadge, useCurrency } from '../../components/shared/CurrencyMaster';
+import { CurrencySelector, CurrencyAmountInput, useCurrency } from '../../components/shared/CurrencyMaster';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
+import { FormSkeleton } from '../../components/shared/Skeleton';
 import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
 import { cn } from '../../lib/utils';
-import { quotationService } from '../../services/quotationService';
-import { rfqService } from '../../services/rfqService';
-import { PREDEFINED_EVAL_CATEGORIES } from '../../mocks/rfqEvaluation.mock';
+
 import '../../styles/vendor-portal.css';
+import '../../components/vendor/vendor-rfq-workspace.css';
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -51,7 +52,7 @@ interface EvalCategoryInfo {
 }
 
 interface RFQItem {
-  id: number;
+  id: string;
   name: string;
   description: string;
   quantity: number;
@@ -60,7 +61,7 @@ interface RFQItem {
 }
 
 interface VendorRFQ {
-  id: number;
+  id: string;
   rfqNumber: string;
   title: string;
   description: string;
@@ -70,10 +71,10 @@ interface VendorRFQ {
   items: RFQItem[];
   buyerCompany: string;
   department: string;
-  rfqType?: 'RFQ' | 'TENDER';
+  rfqType?: 'RFQ' | 'TENDER' | 'CUSTOM';
   needsResubmit?: boolean;
-  latestQuotationId?: number | null;
-  customFields?: RFQCustomField[];
+  latestQuotationId?: string | null;
+  customFields?: (Pick<RFQCustomField, 'id' | 'fieldName' | 'fieldType' | 'required'> & { weightage?: number })[];
   evaluationCategories?: EvalCategoryInfo[];
   // Bid Security fields (from RFQ)
   bidSecurityRequired?: boolean;
@@ -94,9 +95,9 @@ interface VendorRFQ {
 function mapVendorRfq(r: RFQ & {
   hasSubmittedQuotation?: boolean;
   needsResubmit?: boolean;
-  latestQuotationId?: number | null;
+  latestQuotationId?: string | null;
   latestQuotationStatus?: string | null;
-  rfqType?: 'RFQ' | 'TENDER';
+  rfqType?: 'RFQ' | 'TENDER' | 'CUSTOM';
   evaluationCategories?: EvalCategoryInfo[];
   bidSecurityRequired?: boolean;
   bidBondRequired?: boolean;
@@ -196,10 +197,12 @@ const STATUS_MAP: Record<RFQStatus, { label: string; tone: 'neutral' | 'primary'
   RETURNED: { label: 'Returned', tone: 'danger' },
 };
 
+const deadlineTime = (date: string) => new Date(`${date}T23:59:59`).getTime();
+const dueSoon = (rfq: VendorRFQ) => ['OPEN', 'RETURNED'].includes(rfq.status) && deadlineTime(rfq.deadline) >= Date.now() && deadlineTime(rfq.deadline) <= Date.now() + 3 * 86400000;
+
 // ─── Component ──────────────────────────────────────────────
 
 export default function VendorRFQsPage() {
-  useAuth();
   const [searchParams] = useSearchParams();
   const { data: rfqs, loading, error, reload } = useServiceData(
     () => vendorPortalService.listRfqs().then((list) => list.map(mapVendorRfq)),
@@ -209,18 +212,26 @@ export default function VendorRFQsPage() {
   useEffect(() => {
     const rfqParam = searchParams.get('rfq');
     if (!rfqParam || rfqs.length === 0) return;
-    const id = parseInt(rfqParam, 10);
-    if (Number.isNaN(id)) return;
-    setExpandedRFQ(id);
-    const el = document.getElementById(`vrfq-card-${id}`);
+    const match = rfqs.find(rfq => String(rfq.id) === rfqParam || rfq.rfqNumber === rfqParam);
+    if (!match) return;
+    setExpandedRFQ(match.id);
+    setPage(Math.floor(rfqs.indexOf(match) / 10) + 1);
+    const el = document.getElementById(`vrfq-card-${match.id}`);
     el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [searchParams, rfqs]);
 
   const { formatAmount, companyDefaultCurrency, convert } = useCurrency();
 
   const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState('newest');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quoteLoadError, setQuoteLoadError] = useState<string | null>(null);
+  const quoteRequest = useRef(0);
+  const quotePanelRef = useRef<HTMLDivElement>(null);
   const [kpiFilter, setKpiFilter] = useState<RFQStatus | 'DEADLINE_SOON' | null>(null);
-  const [expandedRFQ, setExpandedRFQ] = useState<number | null>(null);
+  const [expandedRFQ, setExpandedRFQ] = useState<string | null>(null);
   const [returnToast, setReturnToast] = useState<string | null>(null);
   const [quotModal, setQuotModal] = useState<VendorRFQ | null>(null);
   const [quotPrices, setQuotPrices] = useState<Record<number, number>>({});
@@ -243,6 +254,7 @@ export default function VendorRFQsPage() {
   // ── Custom Payment Plans ──
   const [customPlans, setCustomPlans] = useState<PaymentPlan[]>([]);
   const [showCustomPlanModal, setShowCustomPlanModal] = useState(false);
+  const [planSaving, setPlanSaving] = useState(false);
   const [editPlan, setEditPlan] = useState<PaymentPlan | null>(null);
   const [showViewPlanModal, setShowViewPlanModal] = useState(false);
   const [selectedPaymentPlanId, setSelectedPaymentPlanId] = useState<string | null>(null);
@@ -309,44 +321,10 @@ export default function VendorRFQsPage() {
   const [previousQuotationsList, setPreviousQuotationsList] = useState<any[]>([]);
   const [selectedPrevVersionId, setSelectedPrevVersionId] = useState<string | number | null>(null);
   const [showPreviousQuoteDetails, setShowPreviousQuoteDetails] = useState(false);
-  const [isSnapshotFullScreen, setIsSnapshotFullScreen] = useState(false);
-  const [allSectionsExpanded, setAllSectionsExpanded] = useState(true);
-  const [collapsedSnapshotSections, setCollapsedSnapshotSections] = useState<Record<string, boolean>>({});
-
-  const toggleSnapshotSection = (key: string) => {
-    setCollapsedSnapshotSections((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
-  };
-
-  const toggleAllSnapshotSections = (expand: boolean) => {
-    setAllSectionsExpanded(expand);
-    if (expand) {
-      setCollapsedSnapshotSections({});
-    } else {
-      const collapsed: Record<string, boolean> = {
-        'items': true,
-        'security': true,
-        'custom': true,
-        'eval': true,
-      };
-      if (quotModal?.evaluationCategories) {
-        quotModal.evaluationCategories.forEach((c: any, i: number) => {
-          collapsed[`eval_cat_${c.id || i}`] = true;
-        });
-      }
-      PREDEFINED_EVAL_CATEGORIES.forEach((c, i) => {
-        collapsed[`eval_cat_${c.id || i}`] = true;
-      });
-      setCollapsedSnapshotSections(collapsed);
-    }
-  };
-
   // ── Bid Security — per-RFQ state to support multiple RFQ cards ──
-  const [bidSecurityUploadingRfqId, setBidSecurityUploadingRfqId] = useState<number | null>(null);
-  const [bidSecurityDocs, setBidSecurityDocs] = useState<Record<number, QuotationBidSecurity>>({});
-  const [bidSecurityErrors, setBidSecurityErrors] = useState<Record<number, string>>({});
+  const [, setBidSecurityUploadingRfqId] = useState<string | null>(null);
+  const [, setBidSecurityDocs] = useState<Record<string, QuotationBidSecurity>>({});
+  const [, setBidSecurityErrors] = useState<Record<string, string>>({});
 
   // ── Bid Security — vendor input fields for modal ──
   const [bidSecValueType, setBidSecValueType] = useState<'FIXED_AMOUNT' | 'PERCENTAGE'>('FIXED_AMOUNT');
@@ -397,43 +375,52 @@ export default function VendorRFQsPage() {
     }
   }, [rfqs]);
 
+
   // Summary
   const summary = useMemo(() => ({
     total: rfqs.length,
     open: rfqs.filter(r => r.status === 'OPEN').length,
     submitted: rfqs.filter(r => r.status === 'SUBMITTED').length,
     returned: rfqs.filter(r => r.status === 'RETURNED').length,
-    deadlineSoon: rfqs.filter(r => r.status === 'OPEN' && new Date(r.deadline) < new Date(Date.now() + 3 * 86400000)).length,
+    deadlineSoon: rfqs.filter(dueSoon).length,
   }), [rfqs]);
 
   // Filter
   const filtered = useMemo(() => {
     let list = rfqs;
     if (kpiFilter === 'DEADLINE_SOON') {
-      list = list.filter(r => r.status === 'OPEN' && new Date(r.deadline) < new Date(Date.now() + 3 * 86400000));
+      list = list.filter(dueSoon);
     } else if (kpiFilter) {
       list = list.filter(r => r.status === kpiFilter);
     }
     if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(r => r.rfqNumber.toLowerCase().includes(q) || r.title.toLowerCase().includes(q));
+      const q = search.trim().toLowerCase();
+      list = list.filter(r => [r.rfqNumber, r.title, r.buyerCompany, ...r.items.map(item => item.name)].some(value => value.toLowerCase().includes(q)));
     }
-    return list;
-  }, [rfqs, kpiFilter, search]);
+    return [...list].sort((a, b) => sortBy === 'deadline' ? deadlineTime(a.deadline) - deadlineTime(b.deadline) : sortBy === 'action' ? Number(!['OPEN', 'RETURNED'].includes(a.status)) - Number(!['OPEN', 'RETURNED'].includes(b.status)) || deadlineTime(a.deadline) - deadlineTime(b.deadline) : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [rfqs, kpiFilter, search, sortBy]);
+  const currentPage = Math.min(page, Math.max(1, Math.ceil(filtered.length / PAGE_SIZE)));
+  const visibleRfqs = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   // Deadline helper
   const getDeadlineInfo = (deadline: string) => {
-    const diff = new Date(deadline).getTime() - Date.now();
+    const diff = deadlineTime(deadline) - Date.now();
     const days = Math.ceil(diff / 86400000);
-    if (days < 0) return { text: 'Expired', cls: 'urgent' };
-    if (days <= 2) return { text: `${days}d left`, cls: 'urgent' };
+    if (diff < 0) return { text: 'Expired', cls: 'urgent' };
+    if (days <= 1) return { text: 'Closes today', cls: 'urgent' };
     if (days <= 5) return { text: `${days}d left`, cls: 'soon' };
     return { text: `${days}d left`, cls: 'normal' };
   };
 
   // Open quotation modal
   const openQuotModal = useCallback(async (rfq: VendorRFQ) => {
+    const requestId = ++quoteRequest.current;
     let currentRfq = rfq;
+    setQuoteLoading(true); setQuoteLoadError(null); setSubmitError(null);
+    setQuotModalTitle(rfq.status === 'SUBMITTED' ? 'View Quotation' : rfq.needsResubmit ? 'Resubmit Quotation' : 'Submit Quotation');
+    setVquotModalState('open');
+    setShowCustomPlanModal(false); setShowViewPlanModal(false); setEditPlan(null); setDeleteConfirmPlanId(null);
+    setPreviousQuotationsList([]);
     setQuotModal(currentRfq);
     setPreviousQuotation(null);
     setShowPreviousQuoteDetails(false);
@@ -443,6 +430,11 @@ export default function VendorRFQsPage() {
     let allMyQuotes: any[] = [];
     try {
       const res = await vendorPortalService.getRfq(String(rfq.id));
+      if (requestId !== quoteRequest.current) return;
+      if (res?.rfq) {
+        currentRfq = { ...mapVendorRfq(res.rfq), status: rfq.status, needsResubmit: rfq.needsResubmit };
+        setQuotModal(currentRfq);
+      }
       if (res?.myQuotation) {
         myQuot = res.myQuotation;
         setPreviousQuotation(myQuot);
@@ -457,24 +449,47 @@ export default function VendorRFQsPage() {
           const qRfqNum = String(q.rfqNumber || q.rfq?.rfqNumber || '').toLowerCase().trim().replace(/^rfq-?/i, '');
           return (
             (cleanRfqId && qRfqId === cleanRfqId) ||
-            (cleanRfqNum && qRfqNum === cleanRfqNum) ||
-            (qRfqId && cleanRfqNum.includes(qRfqId)) ||
-            (qRfqNum && cleanRfqId.includes(qRfqNum))
+            (cleanRfqNum && qRfqNum === cleanRfqNum)
           );
         });
 
         if (rfqQuots.length > 0) {
           allMyQuotes = [...rfqQuots].sort((a, b) => (b.versionNumber || 1) - (a.versionNumber || 1));
+          if (myQuot) {
+            const enriched = allMyQuotes.find(q => String(q.id) === String(myQuot.id));
+            if (enriched) myQuot = { ...enriched, ...myQuot, items: enriched.items?.length ? enriched.items : myQuot.items };
+          }
         } else if (myQuot) {
           allMyQuotes = [myQuot];
         }
       } catch {
         if (myQuot) allMyQuotes = [myQuot];
       }
-    } catch (err) {
-      console.warn('Failed to fetch existing quotation for pre-fill:', err);
+    } catch {
+      if (requestId !== quoteRequest.current) return;
+      setQuoteLoadError('Unable to load quotation details. Please close this window and try again.');
+      setQuoteLoading(false);
+      return;
     }
 
+    if (requestId !== quoteRequest.current) return;
+    // Bid documents use a separate vendor endpoint. Keep the submitted values together
+    // for the read view and pre-fill, without borrowing them for historical snapshots.
+    if (myQuot?.id && (currentRfq.bidSecurityRequired || currentRfq.bidBondRequired)) {
+      const security = await vendorPortalService.getBidSecurity(String(myQuot.id));
+      if (requestId !== quoteRequest.current) return;
+      if (security) myQuot = {
+        ...myQuot,
+        bidSecurityValueType: security.bidSecurityValueType, bidSecurityValue: security.bidSecurityValue,
+        bidSecurityCurrency: security.bidSecurityCurrency, bidSecurityValidityValue: security.bidSecurityValidityValue,
+        bidSecurityValidityUnit: security.bidSecurityValidityUnit, bidSecurityBondNumber: security.bondNumber,
+        bidSecurityIssuer: security.issuer, bidSecurityDocumentUrl: security.publicUrl,
+        bidBondNumber: security.bondNumber, bidBondIssuer: security.issuer, bidBondAmount: security.bondAmount,
+        bidBondCurrency: security.bondCurrency, bidBondIssueDate: security.issueDate, bidBondExpiryDate: security.expiryDate,
+        bidBondValidityValue: security.bidBondValidityValue, bidBondValidityUnit: security.bidBondValidityUnit,
+        bidBondDocumentUrl: security.publicUrl,
+      };
+    }
     const fullList: any[] = [];
     if (allMyQuotes.length > 0 || myQuot) {
       const baseQuot = myQuot || allMyQuotes[0] || {};
@@ -485,6 +500,7 @@ export default function VendorRFQsPage() {
           const vNum = vh.versionNumber || (idx + 1);
           fullList.push({
             ...vh,
+            snapshotKey: `history-${vNum}-${idx}`,
             versionNumber: vNum,
             qNo: `Q${vNum}`,
           });
@@ -495,16 +511,17 @@ export default function VendorRFQsPage() {
 
         fullList.push({
           ...baseQuot,
+          snapshotKey: 'latest',
           versionNumber: latestReturnedVer,
           qNo: `Q${latestReturnedVer}`,
         });
       } else {
-        // Only 1 quotation submitted so far by vendor, which was returned!
-        // That single returned quotation is ALWAYS Q1!
+        // Preserve the version reported by the service, even without stored history.
         fullList.push({
           ...baseQuot,
-          versionNumber: 1,
-          qNo: 'Q1',
+          snapshotKey: 'latest',
+          versionNumber: baseQuot.versionNumber || 1,
+          qNo: `Q${baseQuot.versionNumber || 1}`,
         });
       }
 
@@ -514,12 +531,14 @@ export default function VendorRFQsPage() {
 
     setPreviousQuotationsList(fullList);
     if (fullList.length > 0) {
-      setSelectedPrevVersionId(fullList[0].id);
+      setSelectedPrevVersionId(fullList[0].snapshotKey);
     } else {
       setSelectedPrevVersionId(null);
     }
 
     const matchingQuot = myQuot || (allMyQuotes.length > 0 ? allMyQuotes[0] : null);
+    if (matchingQuot) setPreviousQuotation(matchingQuot);
+    if (!matchingQuot && rfq.status === 'SUBMITTED') setQuoteLoadError('The submitted quotation could not be retrieved. Please close this window and try again.');
     const prevCustomValues = matchingQuot?.customFieldValues || {};
 
     const prices: Record<number, number> = {};
@@ -527,7 +546,7 @@ export default function VendorRFQsPage() {
     currentRfq.items.forEach((item, idx) => {
       const qItem = matchingQuot?.items?.find((qi: any) => qi.rfqItemId === item.id || qi.id === item.id) || matchingQuot?.items?.[idx] || matchingQuot?.lineItems?.[idx];
       prices[idx] = qItem?.unitPrice ?? 0;
-      initCurrencies[idx] = matchingQuot?.currency || companyDefaultCurrency;
+      initCurrencies[idx] = qItem?.currency || matchingQuot?.currency || companyDefaultCurrency;
     });
     setQuotPrices(prices);
     setItemCurrencies(initCurrencies);
@@ -536,7 +555,7 @@ export default function VendorRFQsPage() {
     setVendorQuotationNumber(matchingQuot?.vendorQuotationNumber || `QTN-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
     setSelectedPaymentPlanId(matchingQuot?.paymentPlanId || null);
     setQuotNotes(matchingQuot?.notes || matchingQuot?.vendorNotes || '');
-    if (matchingQuot?.currency) setCurrency(matchingQuot.currency);
+    setCurrency(matchingQuot?.currency || companyDefaultCurrency);
     setAttachments([]);
 
     // Initialize custom field values
@@ -595,8 +614,7 @@ export default function VendorRFQsPage() {
     } else {
       setQuotModalTitle('Submit Quotation');
     }
-    setVquotModalState('open');
-    setVquotModalState('open');
+    setQuoteLoading(false);
   }, [companyDefaultCurrency, defaultPayTerm]);
 
   // Calculate total — convert each item from its per-item currency to the quotation currency before summing
@@ -611,57 +629,22 @@ export default function VendorRFQsPage() {
 
   const isQuotReadOnly = Boolean(quotModal?.status === 'SUBMITTED' && !quotModal?.needsResubmit);
 
-  const activePrevQuote = useMemo(() => {
-    let target = previousQuotation;
-    if (selectedPrevVersionId && previousQuotationsList.length > 0) {
-      const found = previousQuotationsList.find((q) => String(q.id) === String(selectedPrevVersionId));
-      if (found) target = found;
-    }
-    if (!target && quotModal && (quotModal.status === 'SUBMITTED' || isQuotReadOnly || (quotModal as any).quotationId || (quotModal as any).myQuotation)) {
-      const mq = (quotModal as any).myQuotation || quotModal;
-      target = {
-        id: mq.quotationId || mq.id || String(quotModal.id),
-        vendorQuotationNumber: vendorQuotationNumber || mq.vendorQuotationNumber || `QTN-${quotModal.rfqNumber?.replace(/^RFQ-?/i, '') || 'SUBMITTED'}`,
-        currency: currency || mq.currency || 'KES',
-        totalPrice: quotTotal || mq.totalPrice || mq.totalAmount || 0,
-        totalAmount: quotTotal || mq.totalPrice || mq.totalAmount || 0,
-        leadTimeDays: quotLeadTime || mq.leadTimeDays || mq.leadTime || 0,
-        paymentTerms: quotPayTerms || mq.paymentTerms || 'Advance',
-        submittedAt: mq.submittedAt || Date.now(),
-        status: mq.status || 'SUBMITTED',
-        items: quotModal.items?.map((item, idx) => ({
-          name: item.name,
-          description: item.description,
-          quantity: item.quantity,
-          unit: item.unit,
-          unitPrice: quotPrices[idx] !== undefined ? quotPrices[idx] : (item.unitPrice || 0),
-          totalPrice: ((quotPrices[idx] !== undefined ? quotPrices[idx] : (item.unitPrice || 0)) * (item.quantity || 1)),
-        })) || [],
-        customFieldValues: { ...customFieldValues, ...evalParamValues },
-        bidSecurityBondNumber: bidSecBondNumber || mq.bidSecurityBondNumber,
-        bidSecurityIssuer: bidSecIssuer || mq.bidSecurityIssuer,
-        bidSecurityValue: bidSecValue || mq.bidSecurityValue,
-        bidSecurityCurrency: bidSecCurrency || mq.bidSecurityCurrency,
-        bidSecurityValidityValue: bidSecValidityValue || mq.bidSecurityValidityValue,
-      };
-    }
-    if (!target) return null;
-    if (previousQuotationsList.length <= 1) {
-      return {
-        ...target,
-        versionNumber: target.versionNumber || 1,
-        qNo: target.qNo || `Q${target.versionNumber || 1}`,
-      };
-    }
-    return target;
-  }, [selectedPrevVersionId, previousQuotationsList, previousQuotation, quotModal, isQuotReadOnly, vendorQuotationNumber, currency, quotTotal, quotLeadTime, quotPayTerms, quotPrices, customFieldValues, evalParamValues, bidSecBondNumber, bidSecIssuer, bidSecValue, bidSecCurrency, bidSecValidityValue]);
+  const activePrevQuote = previousQuotationsList.find(q => q.snapshotKey === selectedPrevVersionId) || previousQuotation;
+  const closeQuote = () => { if (submitting || isDeleting || showCustomPlanModal) return; quoteRequest.current += 1; setQuotModal(null); };
+  useDialogFocus(quotePanelRef, Boolean(quotModal && !isVquotMinimized), () => {
+    if (submitting || isDeleting || planSaving) return;
+    if (showCustomPlanModal) { setShowCustomPlanModal(false); setEditPlan(null); }
+    else if (deleteConfirmPlanId) setDeleteConfirmPlanId(null);
+    else if (showViewPlanModal) setShowViewPlanModal(false);
+    else closeQuote();
+  });
 
   // Submit quotation (new or resubmit)
   const handleSubmitQuot = useCallback(async () => {
-    if (!quotModal) return;
+    if (!quotModal || submitting || isQuotReadOnly || quoteLoading || quoteLoadError) return;
     setSubmitError(null);
-    const leadDays = parseInt(quotLeadTime, 10);
-    if (!leadDays || leadDays < 1) {
+    const leadDays = Number(quotLeadTime);
+    if (!Number.isInteger(leadDays) || leadDays < 1) {
       setSubmitError('Enter a valid lead time in days.');
       return;
     }
@@ -677,7 +660,7 @@ export default function VendorRFQsPage() {
         totalPrice: convertedLineTotal,
       };
     });
-    if (items.some((i) => i.unitPrice <= 0)) {
+    if (items.some((i) => !Number.isFinite(i.unitPrice) || i.unitPrice <= 0)) {
       setSubmitError('Enter a unit price for every line item.');
       return;
     }
@@ -828,10 +811,10 @@ export default function VendorRFQsPage() {
     } finally {
       setSubmitting(false);
     }
-  }, [quotModal, quotLeadTime, quotPrices, itemCurrencies, companyDefaultCurrency, convert, quotTotal, quotPayTerms, selectedPaymentPlanId, currency, reload, attachments, customFieldValues, evalParamValues, bidSecValueType, bidSecValue, bidSecCurrency, bidSecValidityValue, bidSecFile, bidSecBondNumber, bidSecIssuer, bidBondFile, bidBondNumber, bidBondIssuer, bidBondAmount, bidBondCurrency, bidBondIssueDate, bidBondExpiryDate, bidBondValidityValue, bidBondValidityUnit]);
+  }, [vendorQuotationNumber, submitting, isQuotReadOnly, quoteLoading, quoteLoadError, quotModal, quotLeadTime, quotPrices, itemCurrencies, companyDefaultCurrency, convert, quotTotal, quotPayTerms, selectedPaymentPlanId, currency, reload, attachments, customFieldValues, evalParamValues, bidSecValueType, bidSecValue, bidSecCurrency, bidSecValidityValue, bidSecFile, bidSecBondNumber, bidSecIssuer, bidBondFile, bidBondNumber, bidBondIssuer, bidBondAmount, bidBondCurrency, bidBondIssueDate, bidBondExpiryDate, bidBondValidityValue, bidBondValidityUnit]);
 
   return (
-    <PageFrame>
+    <PageFrame className="rfq-workspace">
       {error && <MessageStrip type="error">{error}</MessageStrip>}
       {returnToast && (
         <MessageStrip type="warning" onClose={() => setReturnToast(null)} autoHideMs={8000}>
@@ -846,7 +829,7 @@ export default function VendorRFQsPage() {
       />
 
       {/* ── KPI Metric Cards ────────────────────────── */}
-      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="rfq-metrics mb-5 grid grid-cols-2 gap-3 xl:grid-cols-5">
         {[
           { icon: ClipboardList, tone: 'primary' as const, value: summary.total, label: 'Total Assigned', detail: 'All time', filter: null as RFQStatus | 'DEADLINE_SOON' | null },
           { icon: Clock, tone: 'warning' as const, value: summary.open, label: 'Pending Response', detail: 'Awaiting quotation', filter: 'OPEN' as RFQStatus },
@@ -868,402 +851,80 @@ export default function VendorRFQsPage() {
                 isActive &&
                   'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
               )}
-              onClick={() => setKpiFilter(isActive ? null : c.filter)}
+              onClick={() => { setKpiFilter(isActive ? null : c.filter); setPage(1); }}
               role="button"
               tabIndex={0}
               aria-pressed={isActive}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiFilter(isActive ? null : c.filter); } }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiFilter(isActive ? null : c.filter); setPage(1); } }}
             />
           );
         })}
       </div>
 
-      {/* ── Search Toolbar ──────────────────────────── */}
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative w-full max-w-xl">
+      <div className="rfq-toolbar">
+        <div className="rfq-toolbar__search">
           <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            className="h-11 rounded-xl pl-10"
-            type="text"
-            placeholder="Search by RFQ number, title, or buyer..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+          <Input className="h-11 rounded-xl pl-10" type="search" aria-label="Search RFQs" placeholder="Search RFQ, title, buyer, or item…" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
+        </div>
+        <div className="rfq-toolbar__actions text-sm">
+          <span className="rfq-muted" role="status">{filtered.length} of {rfqs.length} RFQs</span>
+          {(search || kpiFilter) && <button className="rfq-details-link" onClick={() => { setSearch(''); setKpiFilter(null); setPage(1); }}>Clear filters</button>}
+          <label className="rfq-muted" htmlFor="rfq-sort">Sort by</label>
+          <select id="rfq-sort" value={sortBy} onChange={e => { setSortBy(e.target.value); setPage(1); }}><option value="newest">Newest first</option><option value="deadline">Closing date</option><option value="action">Needs response</option></select>
         </div>
       </div>
-
-      {/* ── RFQ List Cards ──────────────────────────── */}
-      {loading ? (
-        <Card className="p-8 text-center text-sm text-muted-foreground">Loading RFQs…</Card>
-      ) : filtered.length > 0 ? (
-        <div className="flex flex-col gap-3.5">
-          {filtered.map(rfq => {
-            const isExpanded = expandedRFQ === rfq.id;
-            const dl = getDeadlineInfo(rfq.deadline);
-            const statusCfg = STATUS_MAP[rfq.status];
-
-            return (
-              <Card
-                id={`vrfq-card-${rfq.id}`}
-                key={rfq.id}
-                className={cn(
-                  'overflow-hidden transition-all duration-200 border-border/80 hover:border-primary/30',
-                  isExpanded && 'ring-1 ring-primary/20 shadow-md'
-                )}
-              >
-                {/* Header */}
-                <div
-                  className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between cursor-pointer hover:bg-accent/25 transition-colors"
-                  onClick={() => setExpandedRFQ(isExpanded ? null : rfq.id)}
-                >
-                  <div className="flex flex-col gap-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-bold text-foreground text-base">{rfq.rfqNumber}</span>
-                      <Badge tone={statusCfg.tone}>
-                        <span className="size-1.5 rounded-full bg-current" />
-                        {statusCfg.label}
-                      </Badge>
-                      {rfq.rfqType === 'TENDER' && (
-                        <Badge tone="info">Tender</Badge>
-                      )}
-                    </div>
-                    <div className="text-sm font-medium text-muted-foreground truncate">
-                      {rfq.title} <span className="text-muted-foreground/50">·</span> {rfq.buyerCompany}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                    {rfq.status === 'OPEN' && !rfq.needsResubmit && (
-                      <Button
-                        size="sm"
-                        onClick={() => openQuotModal(rfq)}
-                      >
-                        <Send size={14} /> Submit Quote
-                      </Button>
-                    )}
-                    {rfq.status === 'SUBMITTED' && !rfq.needsResubmit && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openQuotModal(rfq)}
-                      >
-                        <Eye size={14} /> View Quote
-                      </Button>
-                    )}
-                    {rfq.status === 'RETURNED' && (
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={() => openQuotModal(rfq)}
-                      >
-                        <RotateCcw size={14} /> Resubmit Quote
-                      </Button>
-                    )}
-                    {rfq.status === 'OPEN' && (
-                      <span className={cn('inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-md', dl.cls === 'urgent' ? 'bg-destructive/10 text-destructive' : dl.cls === 'soon' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'bg-secondary text-muted-foreground')}>
-                        <Clock size={13} /> {dl.text}
-                      </span>
-                    )}
-                    <span className="text-xs font-medium text-muted-foreground bg-muted/60 px-2.5 py-1 rounded-md">
-                      {rfq.items.length} {rfq.items.length === 1 ? 'item' : 'items'}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => setExpandedRFQ(isExpanded ? null : rfq.id)}
-                      aria-label="Toggle RFQ details"
-                    >
-                      <ChevronDown className={cn('size-4 transition-transform duration-200', isExpanded && 'rotate-180')} />
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Expanded Body */}
-                {isExpanded && (
-                  <div className="border-t border-border/60 bg-card p-4 flex flex-col gap-4 text-sm">
-                    {rfq.description && (
-                      <p className="text-muted-foreground leading-relaxed">{rfq.description}</p>
-                    )}
-
-                    {/* Dates Highlight Card */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl bg-muted/30 border border-border/70">
-                      <div className="flex items-center gap-3">
-                        <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
-                          <Calendar size={18} />
-                        </div>
-                        <div>
-                          <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Created Date</div>
-                          <div className="text-sm font-bold text-foreground">
-                            {new Date(rfq.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                        <div className="flex size-9 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0">
-                          <Clock size={18} />
-                        </div>
-                        <div>
-                          <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Closing / Deadline Date</div>
-                          <div className="text-sm font-bold text-amber-600 dark:text-amber-400">
-                            {new Date(rfq.deadline).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Required Items Modern Card Grid */}
-                    <div className="flex flex-col gap-2.5">
-                      <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                        Required Items ({rfq.items.length})
-                      </div>
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        {rfq.items.map((item, idx) => (
-                          <div key={idx} className="flex flex-col justify-between p-3.5 rounded-xl border border-border/70 bg-background/60 shadow-xs hover:border-primary/30 transition-all gap-2">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="font-semibold text-foreground text-sm leading-snug">{item.name}</div>
-                              <Badge tone="primary" className="tabular-nums font-bold text-xs shrink-0">
-                                {item.quantity} {item.unit}
-                              </Badge>
-                            </div>
-                            {item.description && (
-                              <div className="text-xs text-muted-foreground leading-relaxed line-clamp-2">{item.description}</div>
-                            )}
-                            <div className="pt-2 border-t border-border/40 flex items-center justify-between mt-auto">
-                              <span className="text-[11px] font-medium text-muted-foreground">Expected Delivery:</span>
-                              {item.expectedDate ? (
-                                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-md">
-                                  <Calendar size={12} />
-                                  {new Date(item.expectedDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                                </span>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">—</span>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* ── Bid Security Required (Buyer requires it) ── */}
-                    {rfq.bidSecurityRequired && (
-                      <div className="p-3 rounded-xl bg-primary/[0.04] border border-primary/15 flex items-center gap-3">
-                        <Shield size={16} className="text-primary shrink-0" />
-                        <div>
-                          <div className="text-sm font-semibold text-foreground">
-                            Bid Security Required
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            Vendor must provide: amount, type, validity & document when submitting quotation
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ── Bid Bond Required (Buyer requires it) ── */}
-                    {rfq.bidBondRequired && (
-                      <div className="p-3 rounded-xl bg-primary/[0.04] border border-primary/15 flex items-center gap-3">
-                        <Shield size={16} className="text-primary shrink-0" />
-                        <div>
-                          <div className="text-sm font-semibold text-foreground">
-                            Bid Bond Required
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            Vendor must provide: bond number, issuer, amount, dates & document when submitting quotation
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-end gap-3 pt-2 border-t border-border/50">
-                      {rfq.status === 'OPEN' && !rfq.needsResubmit && (
-                        <Button onClick={() => openQuotModal(rfq)}>
-                          <Send size={14} /> Submit Quotation
-                        </Button>
-                      )}
-                      {rfq.status === 'RETURNED' && (
-                        <div className="flex items-center gap-3">
-                          <Badge tone="warning">
-                            <RotateCcw size={13} /> Returned for Revision — Resubmit Required
-                          </Badge>
-                          <Button onClick={() => openQuotModal(rfq)}>
-                            <RotateCcw size={14} /> Resubmit Quotation
-                          </Button>
-                        </div>
-                      )}
-                      {rfq.status === 'SUBMITTED' && !rfq.needsResubmit && (
-                        <div className="flex items-center gap-3">
-                          <Badge tone="success">
-                            <CheckCircle2 size={13} /> Quotation Already Submitted
-                          </Badge>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </Card>
-            );
-          })}
-        </div>
-      ) : (
-        <EmptyState
-          icon={FileText}
-          title="No RFQs Found"
-          description={search ? "Try adjusting your search criteria." : "No RFQs have been assigned to your company yet."}
-          action={search ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>Clear search</Button> : undefined}
-        />
-      )}
-
-        {/* ── Custom Payment Plan Modal ── */}
-        {showCustomPlanModal && (
-          <CustomPaymentPlanModal
-            editPlan={editPlan}
-            onClose={() => {
-              setShowCustomPlanModal(false);
-              setEditPlan(null);
-            }}
-            onSaved={(plan) => {
-              // If editing, replace the existing plan in the list; if creating, prepend
-              setCustomPlans(prev => {
-                const exists = prev.find(p => p.id === plan.id);
-                if (exists) {
-                  return prev.map(p => p.id === plan.id ? plan : p);
-                }
-                return [plan, ...prev];
-              });
-              setSelectedPaymentPlanId(plan.id);
-              setQuotPayTerms(plan.name);
-              setEditPlan(null);
-            }}
-          />
-        )}
-
-        {/* ── View Payment Plan Modal (read-only) ── */}
-        {showViewPlanModal && selectedCustomPlan && (
-          <ViewPaymentPlanModal
-            plan={{
-              name: selectedCustomPlan.name,
-              milestones: selectedCustomPlan.milestones.map(m => ({
-                id: m.id,
-                title: m.title,
-                percentage: m.percentage,
-              })),
-            }}
-            onClose={() => setShowViewPlanModal(false)}
-          />
-        )}
-
-        {/* ── Delete Payment Plan Confirmation ── */}
-        {deleteConfirmPlanId && (() => {
-          const planToDelete = customPlans.find(p => p.id === deleteConfirmPlanId);
-          if (!planToDelete) return null;
-          return createPortal(
-            <div className="vquot-modal-backdrop custom-plan-modal-backdrop" onClick={() => !isDeleting && setDeleteConfirmPlanId(null)} style={{ zIndex: 999998 }}>
-              <div
-                className="custom-plan-modal"
-                style={{
-                  position: 'fixed',
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  width: 400,
-                  maxWidth: 'calc(100vw - 40px)',
-                  background: 'var(--surface-card)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 'var(--radius-xl, 16px)',
-                  boxShadow: '0 24px 80px rgba(0,0,0,0.3)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  zIndex: 999999,
-                }}
-                onClick={e => e.stopPropagation()}
-              >
-                <div className="vquot-modal__header" style={{ cursor: 'default' }}>
-                  <div className="vquot-modal__header-left">
-                    <span style={{ color: 'var(--danger-500, #bb0000)', display: 'flex' }}><Trash2 size={14} /></span>
-                    <span className="vquot-modal__header-title">Delete Payment Plan</span>
-                  </div>
-                  <div className="vquot-modal__window-controls">
-                    <button type="button" className="vquot-modal__wc-btn vquot-modal__wc-btn--close" title="Close" onClick={() => !isDeleting && setDeleteConfirmPlanId(null)} disabled={isDeleting}>
-                      <X size={14} />
-                    </button>
-                  </div>
-                </div>
-                <div style={{ padding: '20px 24px' }}>
-                  <p style={{ fontSize: 15, color: 'var(--text-primary)', margin: 0 }}>
-                    Are you sure you want to delete <strong>{planToDelete.name}</strong>?
-                  </p>
-                  <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '8px 0 0' }}>
-                    This action cannot be undone. The payment plan will be removed from your account.
-                  </p>
-                  {deleteError && (
-                    <div style={{
-                      marginTop: 12, padding: '8px 12px', borderRadius: 6,
-                      background: 'rgba(187,0,0,0.08)', border: '1px solid rgba(187,0,0,0.2)',
-                      color: '#bb0000', fontSize: 14,
-                    }}>
-                      {deleteError}
-                    </div>
-                  )}
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 24px', borderTop: '1px solid var(--border)' }}>
-                  <button
-                    className="vendor-btn vendor-btn--secondary"
-                    onClick={() => setDeleteConfirmPlanId(null)}
-                    disabled={isDeleting}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className="vendor-btn vendor-btn--primary"
-                    style={{ background: isDeleting ? undefined : 'linear-gradient(135deg, #bb0000, #dc2626)' }}
-                    disabled={isDeleting}
-                    onClick={async () => {
-                      setIsDeleting(true);
-                      setDeleteError(null);
-                      try {
-                        await vendorPortalService.deletePaymentPlan(deleteConfirmPlanId);
-                        setCustomPlans(prev => prev.filter(p => p.id !== deleteConfirmPlanId));
-                        if (selectedPaymentPlanId === deleteConfirmPlanId) {
-                          setSelectedPaymentPlanId(null);
-                          setQuotPayTerms(paymentTerms.length > 0 ? paymentTerms[0].name : '');
-                        }
-                        setDeleteConfirmPlanId(null);
-                      } catch (e) {
-                        setDeleteError(e instanceof Error ? e.message : 'Failed to delete payment plan');
-                      } finally {
-                        setIsDeleting(false);
-                      }
-                    }}
-                  >
-                    <Trash2 size={14} /> {isDeleting ? 'Deleting…' : 'Delete'}
-                  </button>
+      {loading ? <Card className="p-8 text-center text-sm text-muted-foreground" role="status">Loading RFQs…</Card> : filtered.length ? (
+        <section className="rfq-register" aria-label="RFQ assignments">
+          <div className="rfq-register__head text-xs" aria-hidden="true"><span>RFQ / Buyer</span><span>Status</span><span>Required items</span><span>Closing date</span><span>Actions</span></div>
+          {visibleRfqs.map(rfq => {
+            const expanded = expandedRFQ === rfq.id;
+            const status = STATUS_MAP[rfq.status];
+            const deadline = getDeadlineInfo(rfq.deadline);
+            return <article className="rfq-register__entry" id={`vrfq-card-${rfq.id}`} key={rfq.id} data-expanded={expanded} aria-label={rfq.rfqNumber}>
+              <div className="rfq-register__row">
+                <div className="rfq-register__identity"><span className="text-base font-bold">{rfq.rfqNumber}</span><span className="text-sm font-medium">{rfq.title}</span><span className="text-xs rfq-muted">{rfq.buyerCompany}{rfq.rfqType === 'TENDER' ? ' · Tender' : ''}</span></div>
+                <div><Badge className="rfq-status-badge" data-rfq-status={rfq.status} tone={status.tone}><span className="size-1.5 rounded-full bg-current" />{status.label}</Badge></div>
+                <div className="rfq-register__items"><strong className="text-sm">{rfq.items.length} {rfq.items.length === 1 ? 'item' : 'items'}</strong><span className="text-xs rfq-muted" title={rfq.items.map(item => item.name).join(', ')}>{rfq.items.slice(0, 2).map(item => item.name).join(', ')}{rfq.items.length > 2 ? ` +${rfq.items.length - 2} more` : ''}</span></div>
+                <div className="rfq-register__dates"><span className="text-sm font-semibold">{quoteDate(rfq.deadline)}</span><span className={cn('text-xs', ['OPEN', 'RETURNED'].includes(rfq.status) ? `rfq-deadline--${deadline.cls}` : 'rfq-muted')}>{['OPEN', 'RETURNED'].includes(rfq.status) ? deadline.text : `Created ${quoteDate(rfq.createdAt)}`}</span></div>
+                <div className="rfq-register__actions">
+                  {rfq.status === 'OPEN' && <Button size="sm" onClick={() => openQuotModal(rfq)}><Send size={14} /> Submit Quote</Button>}
+                  {rfq.status === 'SUBMITTED' && <Button variant="outline" size="sm" onClick={() => openQuotModal(rfq)}><Eye size={14} /> View Quote</Button>}
+                  {rfq.status === 'RETURNED' && <Button size="sm" onClick={() => openQuotModal(rfq)}><RotateCcw size={14} /> Resubmit Quote</Button>}
+                  <button className="rfq-details-link text-xs" aria-expanded={expanded} aria-controls={`rfq-details-${rfq.id}`} onClick={() => setExpandedRFQ(expanded ? null : rfq.id)}>{expanded ? 'Hide requirements' : 'View requirements'}<ChevronDown size={14} style={{ transform: expanded ? 'rotate(180deg)' : undefined }} /></button>
                 </div>
               </div>
-            </div>,
-            document.body
-          );
-        })()}
+              {expanded && <div className="rfq-register__details text-sm" id={`rfq-details-${rfq.id}`}>
+                <div className="rfq-section-heading"><strong>Requirements · {rfq.title}</strong><span className="text-xs rfq-muted">Created {quoteDate(rfq.createdAt)}</span></div>
+                {rfq.description && <p className="rfq-muted">{rfq.description}</p>}
+                <div className="rfq-table-scroll" tabIndex={0} role="region" aria-label={`Required items for ${rfq.rfqNumber}`}><table className="rfq-pricing-table"><thead><tr><th scope="col">Item / Description</th><th scope="col">Quantity</th><th scope="col">Expected delivery</th></tr></thead><tbody>{rfq.items.map(item => <tr key={item.id}><td><strong>{item.name}</strong>{item.description && <p className="text-xs rfq-muted">{item.description}</p>}</td><td>{item.quantity} {item.unit}</td><td>{quoteDate(item.expectedDate)}</td></tr>)}</tbody></table></div>
+                {(rfq.bidSecurityRequired || rfq.bidBondRequired) && <div className="flex items-center gap-2 rfq-muted"><Shield size={16} />{[rfq.bidSecurityRequired && 'Bid security required', rfq.bidBondRequired && 'Bid bond required'].filter(Boolean).join(' · ')}</div>}
+              </div>}
+            </article>;
+          })}
+          <div className="rfq-register__footer text-xs"><span className="rfq-muted">Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length}</span><div className="rfq-register__pagination"><Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>Previous</Button><Button variant="outline" size="sm" disabled={currentPage * PAGE_SIZE >= filtered.length} onClick={() => setPage(currentPage + 1)}>Next</Button></div></div>
+        </section>
+      ) : <EmptyState icon={FileText} title="No RFQs Found" description={search || kpiFilter ? 'No assignments match these filters.' : 'No RFQs have been assigned to your company yet.'} action={search || kpiFilter ? <Button variant="outline" size="sm" onClick={() => { setSearch(''); setKpiFilter(null); setPage(1); }}>Clear filters</Button> : undefined} />}
 
         {/* ── Submit Quotation Modal (Gmail-style) ──── */}
 
-        {quotModal && (
+        {quotModal && createPortal(
           <>
             {/* Backdrop only when not minimized */}
             {!isVquotMinimized && (
               <div
                 className={`vquot-modal-backdrop ${isVquotExpanded ? 'vquot-modal-backdrop--expanded' : ''}`}
-                onClick={() => setQuotModal(null)}
+                onClick={closeQuote}
               />
             )}
 
             <div
               className={[
-                'vquot-modal',
+                'vquot-modal rfq-quote-window',
                 isVquotOpen ? 'vquot-modal--open' : '',
                 isVquotExpanded ? 'vquot-modal--expanded' : '',
                 isVquotMinimized ? 'vquot-modal--minimized' : '',
               ].filter(Boolean).join(' ')}
+              ref={quotePanelRef} role="dialog" aria-modal={!isVquotMinimized || undefined} aria-labelledby="quotation-window-title" tabIndex={-1}
               onClick={e => e.stopPropagation()}
             >
               {/* Header with Gmail-style window controls */}
@@ -1274,7 +935,7 @@ export default function VendorRFQsPage() {
               >
                 <div className="vquot-modal__header-left">
                   <span className="vquot-modal__header-icon"><Send size={14} /></span>
-                  <span className="vquot-modal__header-title">{quotModalTitle}</span>
+                  <span id="quotation-window-title" className="vquot-modal__header-title">{quotModalTitle}</span>
                   {!isVquotMinimized && (
                     <span className="vquot-modal__header-rfq">{quotModal.rfqNumber}</span>
                   )}
@@ -1288,6 +949,7 @@ export default function VendorRFQsPage() {
                     type="button"
                     className="vquot-modal__wc-btn"
                     title={isVquotMinimized ? 'Restore' : 'Minimize'}
+                    disabled={planSaving}
                     onClick={() => setVquotModalState(isVquotMinimized ? 'open' : 'minimized')}
                   >
                     {isVquotMinimized ? <ChevronUp size={14} /> : <Minus size={14} />}
@@ -1307,7 +969,8 @@ export default function VendorRFQsPage() {
                     type="button"
                     className="vquot-modal__wc-btn vquot-modal__wc-btn--close"
                     title="Close"
-                    onClick={() => setQuotModal(null)}
+                    disabled={submitting || isDeleting || showCustomPlanModal}
+                    onClick={closeQuote}
                   >
                     <X size={14} />
                   </button>
@@ -1317,544 +980,23 @@ export default function VendorRFQsPage() {
               {/* Body — hidden when minimized */}
               {!isVquotMinimized && (
                 <div className="vquot-modal__body">
-                  {/* RFQ Title in Bold at Top */}
-                  <div style={{
-                    fontSize: 17,
-                    fontWeight: 700,
-                    color: 'var(--text-primary)',
-                    padding: '0 0 12px',
-                    marginBottom: 12,
-                    borderBottom: '1px solid var(--border)',
-                    lineHeight: 1.4,
-                  }}>
-                    {quotModal.title}
-                  </div>
-
-                  {/* ── Submitted Quotation Read-Only Banner ── */}
-                  {isQuotReadOnly && (
-                    <div className="vquot-modal__previous-banner" style={{ borderLeftColor: '#107e3e', background: 'rgba(16,126,62,0.06)' }}>
-                      <div className="vquot-modal__previous-banner-header" style={{ alignItems: 'center' }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div className="vquot-modal__previous-banner-title" style={{ color: '#107e3e' }}>
-                            <CheckCircle2 size={16} />
-                            <span>Quotation Submitted (Ref #{vendorQuotationNumber || 'SUBMITTED'})</span>
-                          </div>
-                          <div className="vquot-modal__previous-banner-hint" style={{ color: 'var(--text-secondary)' }}>
-                            This quotation has been submitted to the buyer and is read-only.
-                          </div>
-                        </div>
-                        {activePrevQuote && (
-                          <button
-                            type="button"
-                            className="vquot-modal__previous-toggle-btn"
-                            onClick={() => setShowPreviousQuoteDetails(true)}
-                          >
-                            <Eye size={13} />
-                            View Snapshot
-                          </button>
-                        )}
+                  <div className="rfq-quote-context"><strong className="text-base">{quotModal.title}</strong><span className="text-xs rfq-muted">{quotModal.buyerCompany} · Closes {quoteDate(quotModal.deadline)}</span></div>
+                  {quoteLoading ? <FormSkeleton fields={4} /> : quoteLoadError ? <MessageStrip type="error">{quoteLoadError}</MessageStrip> : <>
+                  {isQuotReadOnly && previousQuotation && <>
+                    <div className={cn("rfq-quote-status", previousQuotation.status === 'REJECTED' && "rfq-quote-status--rejected")}>{previousQuotation.status === 'REJECTED' ? <X size={18} /> : <CheckCircle2 size={18} />}<div><strong className="vquot-modal__item-name">Quotation submitted · {previousQuotation.status || 'Submitted'}</strong><p className="text-xs">Submitted {quoteDate(previousQuotation.submittedAt)} · This quotation is read-only.</p></div></div>
+                  </>}
+                  {quotModal.needsResubmit && activePrevQuote && <div className="rfq-quote-status rfq-quote-status--returned"><RotateCcw size={18} /><div><strong>Revision requested</strong><p className="text-sm">{activePrevQuote.returnComment || activePrevQuote.returnReason || 'Review the previous submission and update your quotation below.'}</p></div></div>}
+                  {activePrevQuote && <details className="rfq-inline-snapshot" open={showPreviousQuoteDetails} onToggle={event => setShowPreviousQuoteDetails(event.currentTarget.open)}>
+                    <summary className="vquot-modal__label"><span className="flex items-center gap-2"><Eye size={15} />{showPreviousQuoteDetails ? 'Hide Snapshot' : 'View Snapshot'} · Submission history</span><ChevronDown size={16} /></summary>
+                    <div className="rfq-inline-snapshot__body">
+                      <div className="rfq-section-heading"><div><strong className="vquot-modal__item-name">Quotation Snapshot — {activePrevQuote.qNo || 'Q1'}</strong><p className="text-xs rfq-muted">Submitted {quoteDate(activePrevQuote.submittedAt)} · {activePrevQuote.status || 'Submitted'}</p></div>
+                        {previousQuotationsList.length > 1 && <label className="vquot-modal__label">Version <select className="vquot-modal__input" aria-label="Snapshot version" value={selectedPrevVersionId || ''} onChange={e => setSelectedPrevVersionId(e.target.value)}>{previousQuotationsList.map(pq => <option key={pq.snapshotKey} value={pq.snapshotKey}>{pq.qNo} · {pq.vendorQuotationNumber || 'Submitted quotation'}</option>)}</select></label>}
                       </div>
+                      <QuotationDetails key={activePrevQuote.snapshotKey || activePrevQuote.id} quote={activePrevQuote} rfq={quotModal} formatAmount={formatAmount} />
                     </div>
-                  )}
-
-                  {/* ── SAP Fiori Style Revision Request & Previous Submission Snapshot ── */}
-                  {activePrevQuote && quotModal.needsResubmit && (
-                    <div className="vquot-modal__previous-banner">
-                      <div className="vquot-modal__previous-banner-header" style={{ alignItems: 'flex-start' }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div className="vquot-modal__previous-banner-title">
-                            <RotateCcw size={16} />
-                            <span>
-                              Quotation Revision Request (SAP Reference #{activePrevQuote.vendorQuotationNumber || activePrevQuote.id?.slice?.(-6)?.toUpperCase() || 'PREV'})
-                            </span>
-                          </div>
-
-                          {(activePrevQuote.returnComment || activePrevQuote.returnReason) && (
-                            <div className="vquot-modal__previous-banner-comment">
-                              <strong>💬 Buyer Feedback / Return Reason:</strong> "{activePrevQuote.returnComment || activePrevQuote.returnReason}"
-                            </div>
-                          )}
-
-                          <div className="vquot-modal__previous-banner-hint">
-                            ✓ Viewing returned <strong>Q{activePrevQuote.versionNumber || 1} reference values</strong> ({activePrevQuote.currency || 'KES'} {Number(activePrevQuote.totalPrice || 0).toLocaleString()}). Update parameter values below to submit <strong>Q{(activePrevQuote.versionNumber || 1) + 1}</strong>.
-                          </div>
-                        </div>
-
-                        {/* Dropdown Selector for Previous Versions */}
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0 }}>
-                          {previousQuotationsList.length > 0 && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <label style={{ fontSize: 12, fontWeight: 700, color: '#0284c7', whiteSpace: 'nowrap' }}>
-                                Version:
-                              </label>
-                              <select
-                                value={selectedPrevVersionId || activePrevQuote.id || ''}
-                                onChange={(e) => setSelectedPrevVersionId(e.target.value)}
-                                style={{
-                                  padding: '4px 10px',
-                                  fontSize: 13,
-                                  fontWeight: 700,
-                                  borderRadius: 6,
-                                  border: '1px solid rgba(14, 165, 233, 0.4)',
-                                  background: 'var(--surface-card, #1e293b)',
-                                  color: 'var(--text-primary, #f8fafc)',
-                                  cursor: 'pointer',
-                                  outline: 'none',
-                                }}
-                              >
-                                {previousQuotationsList.map((pq, idx) => {
-                                  const vNum = (previousQuotationsList.length === 1) ? 1 : (pq.versionNumber || (previousQuotationsList.length - idx));
-                                  const qPill = `Q${vNum}`;
-                                  const refStr = pq.vendorQuotationNumber ? ` (${pq.vendorQuotationNumber})` : '';
-                                  const isLatest = idx === 0;
-                                  return (
-                                    <option key={pq.id || idx} value={pq.id}>
-                                      {qPill}{refStr} {isLatest ? '— Latest Returned' : `— Version ${vNum}`}
-                                    </option>
-                                  );
-                                })}
-                              </select>
-                            </div>
-                          )}
-
-                          <button
-                            type="button"
-                            className="vquot-modal__previous-toggle-btn"
-                            onClick={() => setShowPreviousQuoteDetails(true)}
-                          >
-                            <Eye size={13} />
-                            View Snapshot
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ── Separate Popup Overlay Modal for Version Snapshot (Portaled to document.body) ── */}
-                  {showPreviousQuoteDetails && activePrevQuote && createPortal(
-                        <div
-                          className={`vquot-snapshot-modal-overlay ${isSnapshotFullScreen ? 'vquot-snapshot-modal-overlay--fullscreen' : ''}`}
-                          style={{ zIndex: 999990 }}
-                          onClick={() => setShowPreviousQuoteDetails(false)}
-                        >
-                          <div
-                            className={`vquot-snapshot-modal-content ${isSnapshotFullScreen ? 'vquot-snapshot-modal-content--fullscreen' : ''}`}
-                            style={{ zIndex: 999995 }}
-                            onClick={e => e.stopPropagation()}
-                          >
-                            {/* Popup Header */}
-                            <div className="vquot-snapshot-modal-header">
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                <div style={{
-                                  width: 38, height: 38, borderRadius: 8,
-                                  background: 'rgba(14, 165, 233, 0.18)', color: '#38bdf8',
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  fontWeight: 800, fontSize: 15, border: '1px solid rgba(14, 165, 233, 0.3)',
-                                }}>
-                                  {activePrevQuote.qNo || `Q${activePrevQuote.versionNumber || 1}`}
-                                </div>
-                                <div>
-                                  <div style={{ fontSize: 17, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    Quotation Snapshot — {activePrevQuote.qNo || `Q${activePrevQuote.versionNumber || 1}`}
-                                    {activePrevQuote.vendorQuotationNumber && (
-                                      <span style={{ fontSize: 13, fontWeight: 500, opacity: 0.75 }}>
-                                        (Ref: {activePrevQuote.vendorQuotationNumber})
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div style={{ fontSize: 13, opacity: 0.7, marginTop: 2 }}>
-                                    Submitted: {new Date(activePrevQuote.submittedAt || Date.now()).toLocaleDateString('en-IN')}
-                                    {activePrevQuote.status && ` · Status: ${activePrevQuote.status}`}
-                                  </div>
-                                </div>
-                              </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <button
-                                  type="button"
-                                  onClick={() => toggleAllSnapshotSections(!allSectionsExpanded)}
-                                  style={{
-                                    background: 'rgba(14, 165, 233, 0.15)', border: '1px solid rgba(14, 165, 233, 0.3)', color: '#38bdf8',
-                                    cursor: 'pointer', padding: '5px 12px', borderRadius: 6,
-                                    display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600,
-                                    transition: 'all 0.15s ease'
-                                  }}
-                                  title={allSectionsExpanded ? "Collapse All Sections" : "Expand All Sections"}
-                                >
-                                  <span>{allSectionsExpanded ? '▲ Collapse All' : '▼ Expand All'}</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setShowPreviousQuoteDetails(false)}
-                                  style={{
-                                    background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444',
-                                    cursor: 'pointer', width: 28, height: 28, borderRadius: 6,
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  }}
-                                  title="Close Snapshot"
-                                >
-                                  ✕
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Popup Body */}
-                            <div className="vquot-snapshot-modal-body">
-                              {/* Buyer Revision Feedback Notice */}
-                              {(activePrevQuote.returnReason || activePrevQuote.returnComment) && (
-                                <div style={{
-                                  padding: '12px 16px', borderRadius: 10,
-                                  background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.12) 0%, rgba(14, 165, 233, 0.04) 100%)',
-                                  border: '1px solid rgba(14, 165, 233, 0.35)', color: '#38bdf8', fontSize: 14,
-                                  display: 'flex', gap: 10, alignItems: 'flex-start'
-                                }}>
-                                  <span style={{ fontSize: 17, marginTop: 1 }}>💬</span>
-                                  <div>
-                                    <strong style={{ display: 'block', marginBottom: 2 }}>Buyer Revision Request Feedback:</strong>
-                                    "{activePrevQuote.returnReason || activePrevQuote.returnComment}"
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* 📦 Section 1: Item Pricing Matrix & Commercial Summary */}
-                              {(() => {
-                                const isCollapsed = !!collapsedSnapshotSections['items'];
-                                const rawItems = (activePrevQuote?.items && activePrevQuote.items.length > 0)
-                                  ? activePrevQuote.items
-                                  : (activePrevQuote?.lineItems && activePrevQuote.lineItems.length > 0)
-                                  ? activePrevQuote.lineItems
-                                  : (quotModal?.items && quotModal.items.length > 0)
-                                  ? quotModal.items
-                                  : [];
-                                const displayItems = rawItems.length > 0
-                                  ? rawItems
-                                  : [{ name: quotModal?.title || 'Primary Line Item', quantity: 1, unit: 'pcs', unitPrice: Number(activePrevQuote?.totalPrice || 3), totalPrice: Number(activePrevQuote?.totalPrice || 3) }];
-                                const displayTotalPrice = activePrevQuote?.totalPrice ?? activePrevQuote?.totalAmount ?? quotModal?.totalPrice ?? quotTotal ?? 3;
-                                const displayLeadTime = activePrevQuote?.leadTimeDays ?? activePrevQuote?.leadTime ?? quotModal?.leadTimeDays ?? quotLeadTime ?? 6;
-                                const displayPaymentTerms = activePrevQuote?.paymentTerms ?? quotModal?.paymentTerms ?? quotPayTerms ?? 'Advance';
-                                const displayPaymentPlan = activePrevQuote?.paymentPlanSnapshot || activePrevQuote?.paymentPlan;
-
-                                return (
-                                  <div className="vquot-snapshot-section">
-                                    <div 
-                                      className="vquot-snapshot-section-title"
-                                      onClick={() => toggleSnapshotSection('items')}
-                                      style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                                    >
-                                      <span>Item Pricing Matrix</span>
-                                      <span style={{ fontSize: 12, opacity: 0.8, fontWeight: 'normal' }}>
-                                        {isCollapsed ? '▼ Show Details' : '▲ Hide Details'}
-                                      </span>
-                                    </div>
-                                    {!isCollapsed && (
-                                      <>
-                                        <div className="vquot-snapshot-summary-bar" style={{ borderTop: 'none', borderBottom: '1px solid var(--border, #e2e8f0)', padding: 14 }}>
-                                          <div className="vquot-snapshot-summary-item">
-                                            <span className="vquot-snapshot-summary-label">Total Quotation Value</span>
-                                            <span className="vquot-snapshot-summary-val" style={{ color: '#0a6ed1', fontFamily: 'monospace', fontSize: 16 }}>
-                                              {activePrevQuote?.currency || 'KES'} {Number(displayTotalPrice).toLocaleString()}
-                                            </span>
-                                          </div>
-                                          <div className="vquot-snapshot-summary-item">
-                                            <span className="vquot-snapshot-summary-label">Lead Time</span>
-                                            <span className="vquot-snapshot-summary-val">{displayLeadTime} Days</span>
-                                          </div>
-                                          <div className="vquot-snapshot-summary-item">
-                                            <span className="vquot-snapshot-summary-label">Payment Terms</span>
-                                            <span className="vquot-snapshot-summary-val">{displayPaymentTerms}</span>
-                                            {displayPaymentPlan && Array.isArray(displayPaymentPlan) && displayPaymentPlan.length > 0 && (
-                                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
-                                                {displayPaymentPlan.map((m: any, i: number) => (
-                                                  <span key={i} className="vquot-snapshot-badge-val" style={{ fontSize: 12, padding: '2px 8px' }}>
-                                                    {m.title || m.name || `Milestone ${i+1}`}: {m.percentage}%
-                                                  </span>
-                                                ))}
-                                              </div>
-                                            )}
-                                          </div>
-                                        </div>
-
-                                        <div className="vquot-snapshot-modal-table-wrap" style={{ border: 'none', borderRadius: 0 }}>
-                                          <table className="vquot-snapshot-modal-table">
-                                            <thead>
-                                              <tr>
-                                                <th style={{ textAlign: 'left', padding: '10px 14px' }}>Item</th>
-                                                <th style={{ textAlign: 'center', padding: '10px 14px' }}>Qty</th>
-                                                <th style={{ textAlign: 'right', padding: '10px 14px' }}>Unit Price</th>
-                                                <th style={{ textAlign: 'right', padding: '10px 14px' }}>Line Total</th>
-                                              </tr>
-                                            </thead>
-                                            <tbody>
-                                              {displayItems.map((line: any, idx: number) => {
-                                                const itemName = line.name || line.itemName || quotModal?.items?.[idx]?.name || `Line Item ${idx+1}`;
-                                                const itemQty = line.quantity || quotModal?.items?.[idx]?.quantity || 1;
-                                                const itemUnit = line.unit || quotModal?.items?.[idx]?.unit || '';
-                                                const uPrice = Number(line.unitPrice ?? quotPrices[idx] ?? line.totalPrice ?? displayTotalPrice) || 0;
-                                                const lTotal = Number(line.totalPrice || line.lineTotal || uPrice * itemQty) || uPrice;
-                                                return (
-                                                  <tr key={line.id || idx}>
-                                                    <td style={{ fontWeight: '500', padding: '10px 14px' }}>{itemName}</td>
-                                                    <td style={{ textAlign: 'center', padding: '10px 14px' }}>{itemQty} {itemUnit}</td>
-                                                    <td style={{ textAlign: 'right', fontFamily: 'monospace', padding: '10px 14px' }}>{activePrevQuote?.currency || 'KES'} {uPrice.toLocaleString()}</td>
-                                                    <td style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: '700', color: '#10b981', padding: '10px 14px' }}>{activePrevQuote?.currency || 'KES'} {lTotal.toLocaleString()}</td>
-                                                  </tr>
-                                                );
-                                              })}
-                                            </tbody>
-                                          </table>
-                                        </div>
-                                      </>
-                                    )}
-                                  </div>
-                                );
-                              })()}
-
-                              {/* 🛡️ Section 2: Bid Security & Bid Bond Details (Only rendered if required in RFQ or provided by vendor) */}
-                              {(() => {
-                                const isBidSecurityRequired =
-                                  quotModal?.bidSecurityRequired === true ||
-                                  activePrevQuote?.bidSecurityRequired === true ||
-                                  (quotModal?.rfq && (quotModal.rfq as any)?.bidSecurityRequired === true);
-
-                                const hasBidSecurityValues = !!(
-                                  (activePrevQuote?.bidSecurityValue !== undefined && activePrevQuote?.bidSecurityValue !== null) ||
-                                  activePrevQuote?.bidSecurityBondNumber ||
-                                  activePrevQuote?.bidSecurityIssuer ||
-                                  activePrevQuote?.bidBondNumber ||
-                                  activePrevQuote?.bidBondIssuer ||
-                                  activePrevQuote?.bidSecurityValidityValue
-                                );
-
-                                if (!isBidSecurityRequired && !hasBidSecurityValues) return null;
-
-                                const isCollapsed = !!collapsedSnapshotSections['security'];
-                                const valType = activePrevQuote?.bidSecurityValueType || quotModal?.bidSecurityValueType || 'FIXED_AMOUNT';
-                                const val = activePrevQuote?.bidSecurityValue ?? quotModal?.bidSecurityValue ?? quotModal?.bidSecurityMinValue;
-                                const valCurr = activePrevQuote?.bidSecurityCurrency || activePrevQuote?.currency || quotModal?.bidSecurityCurrency || 'KES';
-                                const valDays = activePrevQuote?.bidSecurityValidityValue ?? quotModal?.bidSecurityValidityValue ?? quotModal?.bidSecurityMinValidity;
-                                const bondNo = activePrevQuote?.bidSecurityBondNumber || activePrevQuote?.bidBondNumber || '—';
-                                const issuer = activePrevQuote?.bidSecurityIssuer || activePrevQuote?.bidBondIssuer || '—';
-
-                                return (
-                                  <div className="vquot-snapshot-section">
-                                    <div 
-                                      className="vquot-snapshot-section-title vquot-snapshot-section-title--security"
-                                      onClick={() => toggleSnapshotSection('security')}
-                                      style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                                    >
-                                      <span>🛡️ Bid Security & Guarantees ({activePrevQuote?.qNo || 'Previous Version'})</span>
-                                      <span style={{ fontSize: 12, opacity: 0.8, fontWeight: 'normal' }}>
-                                        {isCollapsed ? '▼ Show Details' : '▲ Hide Details'}
-                                      </span>
-                                    </div>
-                                    {!isCollapsed && (
-                                      <div className="vquot-snapshot-grid">
-                                        <div className="vquot-snapshot-kv-card">
-                                          <div className="vquot-snapshot-kv-label">
-                                            <span className="vquot-snapshot-kv-cat-tag">Bid Security</span>
-                                            Value Type
-                                          </div>
-                                          <div className="vquot-snapshot-kv-val">
-                                            {valType === 'PERCENTAGE' ? 'Percentage' : 'Fixed Amount'}
-                                          </div>
-                                        </div>
-                                        <div className="vquot-snapshot-kv-card">
-                                          <div className="vquot-snapshot-kv-label">
-                                            <span className="vquot-snapshot-kv-cat-tag">Bid Security</span>
-                                            Value / Amount
-                                          </div>
-                                          <div className="vquot-snapshot-kv-val" style={{ fontFamily: 'monospace', color: '#10b981' }}>
-                                            {val !== undefined && val !== null ? `${valCurr} ${Number(val).toLocaleString()}` : '—'}
-                                          </div>
-                                        </div>
-                                        <div className="vquot-snapshot-kv-card">
-                                          <div className="vquot-snapshot-kv-label">
-                                            <span className="vquot-snapshot-kv-cat-tag">Bid Security</span>
-                                            Validity Period
-                                          </div>
-                                          <div className="vquot-snapshot-kv-val">
-                                            {valDays !== undefined && valDays !== null ? `${valDays} Days` : '—'}
-                                          </div>
-                                        </div>
-                                        <div className="vquot-snapshot-kv-card">
-                                          <div className="vquot-snapshot-kv-label">
-                                            <span className="vquot-snapshot-kv-cat-tag">Bid Security</span>
-                                            Bond # / Ref
-                                          </div>
-                                          <div className="vquot-snapshot-kv-val">
-                                            {bondNo}
-                                          </div>
-                                        </div>
-                                        <div className="vquot-snapshot-kv-card">
-                                          <div className="vquot-snapshot-kv-label">
-                                            <span className="vquot-snapshot-kv-cat-tag">Bid Security</span>
-                                            Issuer / Bank
-                                          </div>
-                                          <div className="vquot-snapshot-kv-val">
-                                            {issuer}
-                                          </div>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })()}
-
-                              {/* 📋 Section 3: Additional Information / Custom Fields */}
-                              {((quotModal.customFields && quotModal.customFields.length > 0) || (activePrevQuote.customFieldValues && Object.keys(activePrevQuote.customFieldValues).length > 0)) && (() => {
-                                const isCollapsed = !!collapsedSnapshotSections['custom'];
-                                const allCfMap = new Map<string, { label: string; value: any }>();
-                                (quotModal.customFields || []).forEach((cf: any) => {
-                                  const k = cf.id || cf.fieldName || cf.name;
-                                  const label = cf.fieldName || cf.name || cf.label || k;
-                                  const val = activePrevQuote.customFieldValues?.[cf.id] ?? activePrevQuote.customFieldValues?.[cf.fieldName] ?? activePrevQuote.customFieldValues?.[cf.name] ?? activePrevQuote[cf.id] ?? activePrevQuote[cf.fieldName] ?? activePrevQuote[cf.name];
-                                  if (val !== undefined && val !== null && val !== '') {
-                                    allCfMap.set(k, { label, value: val });
-                                  }
-                                });
-                                if (activePrevQuote.customFieldValues) {
-                                  Object.entries(activePrevQuote.customFieldValues).forEach(([k, val]) => {
-                                    if (!k.startsWith('eval_') && !allCfMap.has(k) && val !== undefined && val !== null && val !== '') {
-                                      const fieldObj = (quotModal.customFields || []).find((cf: any) => cf.id === k || cf.name === k || cf.fieldName === k);
-                                      const label = fieldObj?.fieldName || fieldObj?.name || (fieldObj as any)?.label || k;
-                                      allCfMap.set(k, { label, value: val });
-                                    }
-                                  });
-                                }
-
-                                if (allCfMap.size === 0) return null;
-
-                                return (
-                                  <div className="vquot-snapshot-section">
-                                    <div 
-                                      className="vquot-snapshot-section-title vquot-snapshot-section-title--custom"
-                                      onClick={() => toggleSnapshotSection('custom')}
-                                      style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                                    >
-                                      <span>📋 Custom Parameters Snapshot</span>
-                                      <span style={{ fontSize: 12, opacity: 0.8, fontWeight: 'normal' }}>
-                                        {isCollapsed ? '▼ Show Details' : '▲ Hide Details'}
-                                      </span>
-                                    </div>
-                                    {!isCollapsed && (
-                                      <div className="vquot-snapshot-grid">
-                                        {Array.from(allCfMap.entries()).map(([k, item]) => {
-                                          const strVal = String(item.value);
-                                          const isMuted = strVal === '—' || strVal === 'null' || strVal === 'undefined';
-                                          return (
-                                            <div key={k} className="vquot-snapshot-kv-card">
-                                              <div className="vquot-snapshot-kv-label">
-                                                {item.label}
-                                              </div>
-                                              <div className="vquot-snapshot-kv-val">
-                                                <span className={`vquot-snapshot-badge-val ${isMuted ? 'vquot-snapshot-badge-val--muted' : ''}`}>
-                                                  {strVal}
-                                                </span>
-                                              </div>
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })()}
-
-                              {/* 📊 Section 4: Tender Evaluation Categories & Parameters (Only rendered if defined on RFQ or submitted) */}
-                              {(() => {
-                                const customEvalCats = quotModal.evaluationCategories || (quotModal.rfq as any)?.evaluationCategories || [];
-                                const evalVals = activePrevQuote.evalParamValues || activePrevQuote.customFieldValues || activePrevQuote.evaluationParamValues || activePrevQuote;
-
-                                let evalCategoriesToRender: any[] = [];
-                                if (Array.isArray(customEvalCats) && customEvalCats.length > 0) {
-                                  evalCategoriesToRender = customEvalCats;
-                                } else if (evalVals && typeof evalVals === 'object') {
-                                  evalCategoriesToRender = PREDEFINED_EVAL_CATEGORIES.map((c) => {
-                                    const activeSubParams = c.subParameters.filter((sp: any) => {
-                                      const val = evalVals[sp.id] ?? evalVals[`eval_${sp.id}`] ?? evalVals[sp.name] ?? evalVals[`eval_${sp.name}`];
-                                      return val !== undefined && val !== null && val !== '' && val !== '—';
-                                    });
-                                    return { ...c, subParameters: activeSubParams };
-                                  }).filter((c) => c.subParameters.length > 0);
-                                }
-
-                                if (evalCategoriesToRender.length === 0) return null;
-
-                                const renderedSpIds = new Set<string>();
-
-                                const catIconMap: Record<string, string> = {
-                                  'business requirements': '💼',
-                                  'supplier prequalification': '🔍',
-                                  'technical evaluation': '⚙️',
-                                  'commercial parameters': '💰',
-                                  'delivery parameters': '🚚',
-                                  'quality parameters': '🛡️',
-                                  'contractual parameters': '📜',
-                                  'esg parameters': '🌱',
-                                  'vendor performance history': '⭐',
-                                };
-
-                                return (
-                                  <>
-                                    {evalCategoriesToRender.filter((cat: any) => cat.enabled !== false).map((cat: any, catIdx: number) => {
-                                      const catKey = `eval_cat_${cat.id || catIdx}`;
-                                      const isCatCollapsed = !!collapsedSnapshotSections[catKey];
-                                      const icon = catIconMap[cat.name?.toLowerCase?.()?.trim?.() || ''] || '📊';
-                                      const subParams = (cat.subParameters || []).filter((sp: any) => sp.enabled !== false);
-                                      if (subParams.length === 0) return null;
-
-                                      return (
-                                        <div key={cat.id || catIdx} className="vquot-snapshot-section">
-                                          <div 
-                                            className="vquot-snapshot-section-title vquot-snapshot-section-title--eval"
-                                            onClick={() => toggleSnapshotSection(catKey)}
-                                            style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                                          >
-                                            <span>{icon} {cat.name} ({subParams.length} Parameters)</span>
-                                            <span style={{ fontSize: 12, opacity: 0.8, fontWeight: 'normal' }}>
-                                              {isCatCollapsed ? '▼ Show Category' : '▲ Hide Category'}
-                                            </span>
-                                          </div>
-                                          {!isCatCollapsed && (
-                                            <div className="vquot-snapshot-grid">
-                                              {subParams.map((sp: any, spIdx: number) => {
-                                                renderedSpIds.add(sp.id);
-                                                renderedSpIds.add(`eval_${sp.id}`);
-                                                if (sp.name) {
-                                                  renderedSpIds.add(sp.name);
-                                                  renderedSpIds.add(`eval_${sp.name}`);
-                                                }
-                                                const val = evalVals[sp.id] ?? evalVals[`eval_${sp.id}`] ?? evalVals[sp.name] ?? evalVals[`eval_${sp.name}`] ?? '—';
-                                                const strVal = String(val);
-                                                const isMuted = strVal === '—' || strVal === 'null' || strVal === 'undefined';
-
-                                                return (
-                                                  <div key={sp.id || spIdx} className="vquot-snapshot-kv-card">
-                                                    <div className="vquot-snapshot-kv-label">
-                                                      <span className="vquot-snapshot-kv-cat-tag">{cat.name}</span>
-                                                      <span>{sp.name || sp.id}</span>
-                                                    </div>
-                                                    <div className="vquot-snapshot-kv-val">
-                                                      <span className={`vquot-snapshot-badge-val ${isMuted ? 'vquot-snapshot-badge-val--muted' : ''}`}>
-                                                        {strVal}
-                                                      </span>
-                                                    </div>
-                                                  </div>
-                                                );
-                                              })}
-                                            </div>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                  </>
-                                );
-                              })()}
-                            </div>
-                          </div>
-                        </div>,
-                        document.body
-                      )}
-
+                  </details>}
+                  {isQuotReadOnly && previousQuotation && <QuotationDetails quote={previousQuotation} rfq={quotModal} formatAmount={formatAmount} />}
+                  {!isQuotReadOnly && <>
                   <div className="vrfq-card__items-title">Item Pricing</div>
                   <div className="vquot-modal__items">
                     {quotModal.items.map((item, idx) => (
@@ -1885,176 +1027,55 @@ export default function VendorRFQsPage() {
                     <span className="vquot-modal__total-value">{formatAmount(quotTotal, currency)}</span>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+                  <div className="rfq-commercial-fields">
                     <div className="vquot-modal__field">
-                      <label className="vquot-modal__label">Vendor Quote Ref No</label>
-                      <input className="vquot-modal__input" type="text" placeholder="e.g. QTN-2026-001" value={vendorQuotationNumber} onChange={e => setVendorQuotationNumber(e.target.value)} disabled={isQuotReadOnly} />
+                      <label className="vquot-modal__label" htmlFor="quote-reference">Vendor Quote Ref No</label>
+                      <input id="quote-reference" className="vquot-modal__input" value={vendorQuotationNumber} onChange={e => setVendorQuotationNumber(e.target.value)} />
                     </div>
                     <div className="vquot-modal__field">
-                      <label className="vquot-modal__label">Lead Time (days) *</label>
-                      <input className="vquot-modal__input" type="number" placeholder="e.g. 14" value={quotLeadTime} onChange={e => setQuotLeadTime(e.target.value)} disabled={isQuotReadOnly} />
+                      <label className="vquot-modal__label" htmlFor="quote-lead-time">Lead Time (days) *</label>
+                      <input id="quote-lead-time" className="vquot-modal__input" type="number" min="1" step="1" placeholder="e.g. 14" value={quotLeadTime} onChange={e => setQuotLeadTime(e.target.value)} />
                     </div>
-                    <div className="vquot-modal__field">
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                        <label className="vquot-modal__label" style={{ marginBottom: 0 }}>Payment Terms</label>
-                        {!isQuotReadOnly && (
-                          <button
-                            type="button"
-                            onClick={() => setShowCustomPlanModal(true)}
-                            style={{
-                              display: 'inline-flex', alignItems: 'center', gap: 4,
-                              background: 'none', border: 'none',
-                              color: 'var(--vendor-primary, #0a6ed1)', fontSize: 13, fontWeight: 600,
-                              cursor: 'pointer', padding: '2px 6px', borderRadius: 4,
-                            }}
-                          >
-                            <Plus size={12} /> Custom Payment Plan
-                          </button>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
-                        <select
-                          className="vquot-modal__input"
-                          value={selectedPaymentPlanId ? `custom_${selectedPaymentPlanId}` : quotPayTerms}
-                          disabled={isQuotReadOnly}
-                          onChange={e => {
-                            const val = e.target.value;
-                            if (val.startsWith('custom_')) {
-                              const planId = val.replace('custom_', '');
-                              const plan = customPlans.find((p) => p.id === planId);
-                              if (plan) {
-                                setSelectedPaymentPlanId(plan.id);
-                                setQuotPayTerms(plan.name);
-                              }
-                            } else {
-                              setSelectedPaymentPlanId(null);
-                              setQuotPayTerms(val);
-                            }
-                          }}
-                          style={{ flex: 1, minWidth: 0 }}
-                        >
-                          {/* Standard Terms */}
-                          <optgroup label="Standard Terms">
-                            {paymentTerms.map((term) => (
-                              <option key={term.id} value={term.name}>{term.name}</option>
-                            ))}
-                          </optgroup>
-                          {/* Custom Payment Plans */}
-                          {customPlans.length > 0 && (
-                            <optgroup label="Custom Payment Plans">
-                              {customPlans.map((plan) => (
-                                <option key={plan.id} value={`custom_${plan.id}`}>{plan.name}</option>
-                              ))}
-                            </optgroup>
-                          )}
+                    <div className="vquot-modal__field rfq-payment-field">
+                      <label className="vquot-modal__label" htmlFor="quote-payment-terms">Payment Terms</label>
+                      <div className="rfq-payment-controls">
+                        <select id="quote-payment-terms" disabled={planSaving} className="vquot-modal__input" value={selectedPaymentPlanId ? `custom_${selectedPaymentPlanId}` : quotPayTerms} onChange={e => {
+                          const value = e.target.value;
+                          setShowViewPlanModal(false); setDeleteConfirmPlanId(null); setShowCustomPlanModal(false);
+                          if (value.startsWith('custom_')) {
+                            const plan = customPlans.find(p => p.id === value.slice(7));
+                            if (plan) { setSelectedPaymentPlanId(plan.id); setQuotPayTerms(plan.name); }
+                          } else { setSelectedPaymentPlanId(null); setQuotPayTerms(value); }
+                        }}>
+                          {!quotPayTerms && <option value="">Select payment terms</option>}
+                          <optgroup label="Standard Terms">{paymentTerms.map(term => <option key={term.id} value={term.name}>{term.name}</option>)}</optgroup>
+                          {!!customPlans.length && <optgroup label="Custom Payment Plans">{customPlans.map(plan => <option key={plan.id} value={`custom_${plan.id}`}>{plan.name}</option>)}</optgroup>}
                         </select>
-                        {/* Eye icon — only for custom plans */}
-                        {selectedCustomPlan && (
-                          <>
-                            {/* Edit button */}
-                            <button
-                              type="button"
-                              title="Edit payment plan"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                setEditPlan(selectedCustomPlan);
-                                setShowCustomPlanModal(true);
-                              }}
-                              style={{
-                                flexShrink: 0,
-                                background: 'none',
-                                border: 'none',
-                                cursor: 'pointer',
-                                color: 'var(--text-secondary)',
-                                padding: '2px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                borderRadius: 3,
-                                transition: 'color 0.15s, background 0.15s',
-                              }}
-                              onMouseOver={e => {
-                                e.currentTarget.style.color = 'var(--vendor-primary)';
-                                e.currentTarget.style.background = 'rgba(10,110,209,0.08)';
-                              }}
-                              onMouseOut={e => {
-                                e.currentTarget.style.color = 'var(--text-secondary)';
-                                e.currentTarget.style.background = 'none';
-                              }}
-                            >
-                              <Pencil size={14} />
-                            </button>
-                            {/* View button */}
-                            <button
-                              type="button"
-                              title="View payment plan"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                setShowViewPlanModal(true);
-                              }}
-                              style={{
-                                flexShrink: 0,
-                                background: 'none',
-                                border: 'none',
-                                cursor: 'pointer',
-                                color: 'var(--text-secondary)',
-                                padding: '2px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                borderRadius: 3,
-                                transition: 'color 0.15s, background 0.15s',
-                              }}
-                              onMouseOver={e => {
-                                e.currentTarget.style.color = 'var(--vendor-primary)';
-                                e.currentTarget.style.background = 'rgba(10,110,209,0.08)';
-                              }}
-                              onMouseOut={e => {
-                                e.currentTarget.style.color = 'var(--text-secondary)';
-                                e.currentTarget.style.background = 'none';
-                              }}
-                            >
-                              <Eye size={14} />
-                            </button>
-                            <span style={{ width: 1, height: 16, background: 'var(--border)', margin: '0 4px', flexShrink: 0 }} />
-                            {/* Delete button */}
-                            <button
-                              type="button"
-                              title="Delete payment plan"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                setDeleteConfirmPlanId(selectedCustomPlan.id);
-                              }}
-                              style={{
-                                flexShrink: 0,
-                                background: 'none',
-                                border: 'none',
-                                cursor: 'pointer',
-                                color: 'var(--text-secondary)',
-                                padding: '2px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                borderRadius: 3,
-                                transition: 'color 0.15s, background 0.15s',
-                              }}
-                              onMouseOver={e => {
-                                e.currentTarget.style.color = 'var(--danger-500, #bb0000)';
-                                e.currentTarget.style.background = 'rgba(187,0,0,0.08)';
-                              }}
-                              onMouseOut={e => {
-                                e.currentTarget.style.color = 'var(--text-secondary)';
-                                e.currentTarget.style.background = 'none';
-                              }}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </>
-                        )}
+                        {selectedCustomPlan && <div className="rfq-plan-actions">
+                          <button type="button" className="rfq-icon-button" disabled={planSaving} title="Edit payment plan" aria-label="Edit payment plan" onClick={() => { setEditPlan(selectedCustomPlan); setShowCustomPlanModal(true); setShowViewPlanModal(false); setDeleteConfirmPlanId(null); }}><Pencil size={14} /></button>
+                          <button type="button" className="rfq-icon-button" disabled={planSaving} title="View payment plan" aria-label="View payment plan" aria-expanded={showViewPlanModal} onClick={() => { setShowViewPlanModal(!showViewPlanModal); setShowCustomPlanModal(false); setDeleteConfirmPlanId(null); }}><Eye size={14} /></button>
+                          <button type="button" className="rfq-icon-button rfq-icon-button--danger" disabled={planSaving} title="Delete payment plan" aria-label="Delete payment plan" onClick={() => { setDeleteConfirmPlanId(selectedCustomPlan.id); setShowCustomPlanModal(false); setShowViewPlanModal(false); }}><Trash2 size={14} /></button>
+                        </div>}
+                        <button type="button" className="rfq-secondary-action text-xs" disabled={planSaving} aria-expanded={showCustomPlanModal} onClick={() => { setEditPlan(null); setShowCustomPlanModal(true); setShowViewPlanModal(false); setDeleteConfirmPlanId(null); }}><Plus size={14} /> Create Custom Payment Plan</button>
                       </div>
+                      {showCustomPlanModal && <CustomPaymentPlanModal key={editPlan?.id || 'new'} embedded onSavingChange={setPlanSaving} editPlan={editPlan} onClose={() => { setShowCustomPlanModal(false); setEditPlan(null); }} onSaved={plan => {
+                        setCustomPlans(plans => plans.some(p => p.id === plan.id) ? plans.map(p => p.id === plan.id ? plan : p) : [plan, ...plans]);
+                        setSelectedPaymentPlanId(plan.id); setQuotPayTerms(plan.name);
+                      }} />}
+                      {showViewPlanModal && selectedCustomPlan && <section className="rfq-read-section" aria-label="Payment plan details"><div className="rfq-read-section__body"><div className="rfq-section-heading"><strong className="vquot-modal__label">{selectedCustomPlan.name}</strong><button type="button" className="rfq-icon-button" aria-label="Close payment plan details" onClick={() => setShowViewPlanModal(false)}><X size={14} /></button></div><ol className="rfq-payment-milestones text-sm">{selectedCustomPlan.milestones.map(m => <li key={m.id}><span>{m.title}</span><strong>{m.percentage}%</strong></li>)}</ol></div></section>}
+                      {deleteConfirmPlanId && <section className="rfq-delete-confirm text-sm" aria-label="Delete payment plan confirmation">
+                        <strong>Delete {selectedCustomPlan?.name}?</strong><span className="rfq-muted">This removes the saved plan from your account and cannot be undone.</span>
+                        {deleteError && <p className="rfq-error" role="alert">{deleteError}</p>}
+                        <div className="flex justify-end gap-2"><button className="vendor-btn vendor-btn--secondary" disabled={isDeleting} onClick={() => setDeleteConfirmPlanId(null)}>Keep plan</button><button className="vendor-btn vendor-btn--secondary" disabled={isDeleting} onClick={async () => {
+                          setIsDeleting(true); setDeleteError(null);
+                          try {
+                            await vendorPortalService.deletePaymentPlan(deleteConfirmPlanId);
+                            setCustomPlans(plans => plans.filter(p => p.id !== deleteConfirmPlanId));
+                            setSelectedPaymentPlanId(null); setQuotPayTerms(defaultPayTerm); setDeleteConfirmPlanId(null);
+                          } catch (e) { setDeleteError(e instanceof Error ? e.message : 'Failed to delete payment plan'); }
+                          finally { setIsDeleting(false); }
+                        }}>{isDeleting ? 'Deleting…' : 'Delete plan'}</button></div>
+                      </section>}
                     </div>
                   </div>
 
@@ -2178,8 +1199,8 @@ export default function VendorRFQsPage() {
                   )}
 
                   <div className="vquot-modal__field">
-                    <label className="vquot-modal__label">Notes / Remarks</label>
-                    <textarea className="vquot-modal__textarea" placeholder="Any additional notes, conditions, or remarks..." value={quotNotes} onChange={e => setQuotNotes(e.target.value)} disabled={isQuotReadOnly} />
+                    <label className="vquot-modal__label" htmlFor="quote-notes">Notes / Remarks</label>
+                    <textarea id="quote-notes" className="vquot-modal__textarea" placeholder="Any additional notes, conditions, or remarks..." value={quotNotes} onChange={e => setQuotNotes(e.target.value)} disabled={isQuotReadOnly} />
                   </div>
 
                   {/* ── Bid Security Section (Vendor Inputs) ── */}
@@ -2246,7 +1267,7 @@ export default function VendorRFQsPage() {
                               <CurrencySelector
                                 value={bidSecCurrency}
                                 onChange={setBidSecCurrency}
-                                size="sm"
+                                size="md"
                                 disabled={isQuotReadOnly}
                                 style={{ minWidth: 150 }}
                               />
@@ -2462,7 +1483,7 @@ export default function VendorRFQsPage() {
                               <CurrencySelector
                                 value={bidBondCurrency}
                                 onChange={setBidBondCurrency}
-                                size="xs"
+                                size="md"
                                 disabled={isQuotReadOnly}
                               />
                             </div>
@@ -2644,6 +1665,8 @@ export default function VendorRFQsPage() {
                       )}
                     </div>
                   </div>
+                  </>}
+                  </>}
                 </div>
               )}
 
@@ -2652,12 +1675,12 @@ export default function VendorRFQsPage() {
                   {submitError}
                 </MessageStrip>
               )}
-              {!isVquotMinimized && !isQuotReadOnly && (
+              {!isVquotMinimized && !quoteLoading && !quoteLoadError && !isQuotReadOnly && !showCustomPlanModal && (
                 <div className="vquot-modal__footer">
-                  <button className="vendor-btn vendor-btn--secondary" onClick={() => setQuotModal(null)}>Cancel</button>
+                  <button className="vendor-btn vendor-btn--secondary" disabled={submitting || isDeleting || showCustomPlanModal} onClick={closeQuote}>Cancel</button>
                   <button
                     className="vendor-btn vendor-btn--primary"
-                    disabled={submitting || quotTotal <= 0 || !quotLeadTime}
+                    disabled={submitting || quotTotal <= 0 || !quotLeadTime || showCustomPlanModal || !!deleteConfirmPlanId}
                     onClick={handleSubmitQuot}
                   >
                     <Send size={15} /> {submitting ? 'Submitting…' : (quotModal.needsResubmit ? 'Resubmit Quotation' : 'Submit Quotation')}
@@ -2665,7 +1688,7 @@ export default function VendorRFQsPage() {
                 </div>
               )}
             </div>
-          </>
+          </>, document.body
         )}
     </PageFrame>
   );

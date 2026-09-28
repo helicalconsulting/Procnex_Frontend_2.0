@@ -1,9 +1,13 @@
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, type SetStateAction } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getTenantCompanyCode } from '../utils/tenantResolver';
 
 export interface UseServiceDataResult<T> {
   data: T;
+  /** Update the scoped query cache without replacing the page with a loader. */
+  setData: (next: SetStateAction<T>) => void;
+  /** Stop an older refetch before applying an optimistic mutation. */
+  cancelRefresh: () => Promise<void>;
   loading: boolean;
   error: string | null;
   /** Invalidates the query and triggers a background refetch */
@@ -107,8 +111,17 @@ export function useServiceData<T>(
     await queryClient.refetchQueries({ queryKey, exact: false, type: 'active' });
   }, [queryKey, queryClient]);
 
+  const setData = useCallback((next: SetStateAction<T>) => {
+    queryClient.setQueryData<T>(queryKey, previous => typeof next === 'function'
+      ? (next as (value: T) => T)(previous ?? initial) : next);
+  }, [queryClient, queryKey, initial]);
+
+  const cancelRefresh = useCallback(() => queryClient.cancelQueries({ queryKey }), [queryClient, queryKey]);
+
   return {
     data,
+    setData,
+    cancelRefresh,
     loading,
     error: error ? (error instanceof Error ? error.message : 'Failed to load data') : null,
     reload,

@@ -102,8 +102,14 @@ function CurrencyProviderWithAuth({ children }: { children: React.ReactNode }) {
   return <CurrencyProvider>{children}</CurrencyProvider>;
 }
 
+import { PageSkeleton } from "./components/shared/Skeleton";
+
 function RouteFallback() {
-  return <div className="route-fallback" aria-label="Loading page" />;
+  return (
+    <div className="p-4 sm:p-6 w-full max-w-7xl mx-auto">
+      <PageSkeleton />
+    </div>
+  );
 }
 
 function page(Component: ComponentType) {

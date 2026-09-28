@@ -1,0 +1,22 @@
+/* Shared controls inherit their surrounding surface in both themes. */
+.form-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.form-field > label:first-child { display: block; }
+.ui-select option, .ui-select optgroup { background-color: var(--card); color: var(--foreground); }
+.ui-input:is([type="date"], [type="datetime-local"], [type="time"]) {
+  display: block;
+  position: relative;
+  padding-inline-end: 2.75rem;
+  min-width: 0;
+}
+.ui-input:is([type="date"], [type="datetime-local"], [type="time"])::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset-inline-end: .875rem;
+  top: 50%;
+  transform: translateY(-50%);
+  margin: 0;
+  padding: 2px;
+  cursor: pointer;
+  opacity: .85;
+}
+.ui-input:is([type="date"], [type="datetime-local"], [type="time"])::-webkit-datetime-edit { padding: 0; }
+.ui-input:is([type="date"], [type="datetime-local"], [type="time"])::-webkit-date-and-time-value { text-align: start; }

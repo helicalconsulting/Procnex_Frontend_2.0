@@ -1,3 +1,4 @@
+import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
 import React from 'react';
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useServiceData } from '../../hooks/useServiceData';
@@ -627,7 +628,7 @@ export default function ApprovalsPage() {
       {/* Content Table */}
       <Card className="overflow-hidden">
         {loading ? (
-          <TableSkeleton rows={5} columns={7} />
+          <TableSkeleton rows={5} columnWidths={visibleColumns.map((c) => c.width || '130px').concat(['120px'])} />
         ) : paginated.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1000px] border-collapse text-sm">
@@ -642,17 +643,7 @@ export default function ApprovalsPage() {
                     <div className="flex items-center justify-end gap-2">
                       <span>Actions</span>
                       <div className="relative">
-                        <Button
-                          ref={colBtnRef}
-                          variant={showColPanel ? 'secondary' : 'ghost'}
-                          size="icon-sm"
-                          onClick={() => setShowColPanel((v) => !v)}
-                          title="Customize columns"
-                          aria-label="Customize columns"
-                          aria-expanded={showColPanel}
-                        >
-                          <span className="flex gap-0.5"><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /></span>
-                        </Button>
+                        <ColumnSettingsButton ref={colBtnRef} open={showColPanel} onClick={() => setShowColPanel((v) => !v)} />
 
                         {showColPanel && (
                           <ColumnCustomizer

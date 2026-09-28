@@ -1,3 +1,4 @@
+import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { rfqService } from '../../services/rfqService';
 import { approvalService } from '../../services/approvalService';
@@ -835,7 +836,7 @@ export default function RFQPage() {
       {/* Table Card */}
       <Card className="overflow-hidden">
         {loading ? (
-          <TableSkeleton rows={5} columns={6} />
+          <TableSkeleton rows={5} columnWidths={['42px', ...visibleColumns.map((col) => COL_WIDTHS[col.key] || '120px'), '160px']} />
         ) : paginated.length > 0 ? (
           <>
             <div className="hidden overflow-x-auto lg:block">
@@ -875,17 +876,7 @@ export default function RFQPage() {
                       <div className="flex items-center justify-center gap-2">
                         <span>Actions</span>
                         <div className="relative">
-                          <Button
-                            ref={colBtnRef}
-                            variant={showColPanel ? 'secondary' : 'ghost'}
-                            size="icon-sm"
-                            onClick={() => setShowColPanel((v) => !v)}
-                            title="Customize columns"
-                            aria-label="Customize columns"
-                            aria-expanded={showColPanel}
-                          >
-                            <span className="flex gap-0.5"><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /></span>
-                          </Button>
+                          <ColumnSettingsButton ref={colBtnRef} open={showColPanel} onClick={() => setShowColPanel((v) => !v)} />
 
                           {showColPanel && (
                             <ColumnCustomizer

@@ -1,3 +1,5 @@
+import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
+import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams, useNavigate } from 'react-router-dom';
@@ -16,7 +18,7 @@ import {
   Crown, GitCompareArrows, ArrowDownNarrowWide, X, RotateCcw,
   MessageSquare, AlertTriangle, ArrowRightLeft, Shield, Check, X as XIcon,
   Maximize2, Minimize2, Minus, ChevronUp, BarChart3, Loader2, LayoutGrid, LayoutList,
-  Download, FileCheck, ShoppingCart, GitBranch,
+  Download, FileCheck, ShoppingCart, GitBranch, Building2, Paperclip, History, Save,
 } from 'lucide-react';
 import { downloadDocument } from '../../utils/download';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
@@ -39,10 +41,16 @@ import { isL2OrHigherUser } from '../../utils/rbac';
 import { CreatorLevelPromptModal } from '../../components/shared/CreatorLevelPromptModal';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
-import { Input } from '../../components/ui/input';
+import { Input, Textarea } from '../../components/ui/input';
+import { Badge } from '../../components/ui/badge';
+import { DetailTabs, DetailTabPanel } from '../../components/ui/detail-tabs';
+import FloatingMenu from '../../components/shared/FloatingMenu';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
+import QuotationPaymentTerms from '../../components/vendor/QuotationPaymentTerms';
 import { MetricCard, PageFrame, PageLead } from '../../components/ui/product';
 import { cn } from '../../lib/utils';
 import './QuotationsPage.css';
+import './quotation-approval-workspace.css';
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -229,7 +237,7 @@ const ALL_LISTING_COLUMNS: ListingColumnDef[] = [
             <RotateCcw size={10} /> Returned
           </span>
         )}
-        <span className={`quot-badge quot-badge--${getDisplayStatus(q)}`}>{STATUS_LABELS[getDisplayStatus(q)]}</span>
+        <QuotationStatusBadge quotation={q}/>
       </div>
     ),
   },
@@ -464,6 +472,13 @@ function scoreQuotationGroup(group: MockQuotation[], customFields: any[] = []): 
   return scored.map((q, index) => ({ ...q, isRecommended: index === 0 && scored.length > 1 }));
 }
 
+function QuotationStatusBadge({ quotation }: { quotation: MockQuotation }) {
+  const status = getDisplayStatus(quotation);
+  const tone = status === 'ACCEPTED' ? 'success' : status === 'REJECTED' ? 'danger' : status === 'RETURNED' ? 'warning' : 'info';
+  const Icon = status === 'ACCEPTED' ? CheckCircle2 : status === 'REJECTED' ? XCircle : status === 'RETURNED' ? RotateCcw : Clock;
+  return <Badge tone={tone} className={`quotation-status quotation-status--${tone}`}><Icon size={13}/>{STATUS_LABELS[status] || status}</Badge>;
+}
+
 // ─── Action Modal Types ───────────────────────────────────────
 
 type ModalType = 'view' | 'accept' | 'reject' | 'return' | null;
@@ -515,6 +530,8 @@ function ViewQuotationModal({
   const isExpanded = modalViewState === 'expanded';
   const isMinimized = modalViewState === 'minimized';
 
+  const detailDialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(detailDialogRef, !isMinimized, onClose);
   const [activeTab, setActiveTab] = useState<ViewTab>('vendor');
   const [fullQuot, setFullQuot] = useState<any>(null);
   const [evalTabState, setEvalTabState] = useState<EvalTabState>({ loading: false, error: null, data: null });
@@ -1052,25 +1069,26 @@ function ViewQuotationModal({
     fetchBidSecurity();
   }, [fullQuot, q.id]);
 
-  const tabs: { key: ViewTab; label: string }[] = [
-    { key: 'vendor', label: 'Vendor Details' },
-    { key: 'paymentTerms', label: 'Payment Terms' },
-    { key: 'authorization', label: 'Authorization' },
-    { key: 'items', label: `Items (${items.length})` },
-    { key: 'documents', label: `Documents (${combinedDocs.length})` },
-    { key: 'evaluation', label: 'Evaluation' },
-    { key: 'history', label: 'Vendor History' },
+  const tabs = [
+    { id: 'vendor', label: 'Vendor Details', icon: Building2 },
+    { id: 'paymentTerms', label: 'Payment Terms', icon: FileText },
+    { id: 'authorization', label: 'Authorization', icon: Shield },
+    { id: 'items', label: 'Items', count: items.length, icon: ClipboardList },
+    { id: 'documents', label: 'Documents', count: combinedDocs.length, icon: Paperclip },
+    { id: 'evaluation', label: 'Evaluation', icon: BarChart3 },
+    { id: 'history', label: 'Vendor History', icon: History },
   ];
 
   return (
     <>
       {(isOpen || isExpanded) && (
-        <div className="rfq-modal-backdrop" onClick={onClose} />
+        <div className="rfq-modal-backdrop quotation-detail-backdrop" onClick={onClose} />
       )}
 
       <div
+        ref={detailDialogRef} role="dialog" aria-modal={!isMinimized} aria-label={`Quotation ${q.rfqNumber} · ${q.vendorName}`} tabIndex={-1}
         className={[
-          'rfq-modal',
+          'rfq-modal quotation-detail-window',
           isOpen ? 'rfq-modal--open' : '',
           isExpanded ? 'rfq-modal--expanded' : '',
           isMinimized ? 'rfq-modal--minimized' : '',
@@ -1147,63 +1165,37 @@ function ViewQuotationModal({
 
         {!isMinimized && (
           <>
-            {/* Tabs */}
-            <div className="rfq-modal__tabs">
-              {tabs.map(t => (
-                <button
-                  key={t.key}
-                  className={`rfq-modal__tab ${activeTab === t.key ? 'rfq-modal__tab--active' : ''}`}
-                  onClick={() => setActiveTab(t.key)}
-                >
-                  <span>{t.label}</span>
-                </button>
-              ))}
+            <div className="quotation-detail-tabs">
+              <DetailTabs id="approval-quotation" label="Quotation details" tabs={tabs} activeTab={activeTab} onChange={id => setActiveTab(id as ViewTab)}/>
             </div>
-
-            <div className="rfq-modal__body">
+            <DetailTabPanel id="approval-quotation" tabId={activeTab} className="rfq-modal__body">
               {/* ── Tab 1: Vendor Details ── */}
               {activeTab === 'vendor' && (
                 <div className="rfq-modal__info-panel">
-                  <div className="rfq-modal__info-grid quot-view-modal__info-grid">
-                    {[
-                      { label: 'Company Name', value: vendor.name },
-                      { label: 'Email', value: vendor.email },
-                      { label: 'RFQ Number', value: rfq.rfqNumber },
-                      { label: 'RFQ Title', value: rfq.title || '—' },
-                      { label: 'Description', value: rfq.description || '—', fullWidth: true },
-                      { label: 'Priority', value: rfq.priority || '—' },
-                      { label: 'Department', value: rfq.department || '—' },
-                      { label: 'Lead Time', value: `${q.leadTimeDays} days` },
-                      { label: 'Submitted', value: formatDate(q.submittedAt) },
-                      { label: 'Status', value: STATUS_LABELS[getDisplayStatus(q)] || q.status },
-                    ].map(row => (
-                      <div
-                        key={row.label}
-                        className="rfq-modal__info-item"
-                        style={row.fullWidth ? { gridColumn: '1 / -1' } : undefined}
-                      >
-                        <span className="rfq-modal__info-label">{row.label}</span>
-                        <span className="rfq-modal__info-value">{row.value}</span>
-                      </div>
-                    ))}
-                    {/* Submitted Currency row */}
-                    <div className="rfq-modal__info-item">
-                      <span className="rfq-modal__info-label">Submitted in</span>
-                      <span className="rfq-modal__info-value">
-                        <CurrencyBadge currency={defCur} size="sm" />
-                      </span>
+                  <div className="quotation-overview-header">
+                    <div className="quotation-overview-vendor">
+                      <div className="quotation-overview-avatar"><Building2 size={24}/></div>
+                      <div><h2>{vendor.name}</h2><p>{vendor.email || 'Email not provided'}</p><QuotationStatusBadge quotation={q}/></div>
                     </div>
-                    {/* Total Price row — rendered separately to avoid JSX-in-array parsing issue */}
-                    <div className="rfq-modal__info-item quot-view-modal__info-item--highlight">
-                      <span className="rfq-modal__info-label">Total Price</span>
-                      <span className="rfq-modal__info-value">
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                          {formatAmount(selectedTotal, defCur)}
-                          <CurrencyBadge currency={defCur} size="sm" />
-                        </span>
-                      </span>
+                    <div className="quotation-overview-amount">
+                      <span>Total price</span>
+                      <strong>{formatAmount(isConverting ? convert(selectedTotal, defCur, displayCur) : selectedTotal, displayCur)}</strong>
+                      <CurrencyBadge currency={displayCur} size="sm"/>
+                      {isConverting && <small>Submitted: {formatAmount(selectedTotal, defCur)}</small>}
                     </div>
                   </div>
+                  <dl className="quotation-overview-facts">
+                    {[
+                      { label: 'RFQ number', value: rfq.rfqNumber },
+                      { label: 'RFQ title', value: rfq.title || '—' },
+                      { label: 'Priority', value: rfq.priority || '—' },
+                      { label: 'Department', value: rfq.department || '—' },
+                      { label: 'Lead time', value: `${q.leadTimeDays} days` },
+                      { label: 'Submitted', value: formatDate(q.submittedAt) },
+                    ].map(row => <div key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}
+                    <div><dt>Submitted in</dt><dd><CurrencyBadge currency={defCur} size="sm"/></dd></div>
+                    <div className="quotation-overview-description"><dt>Description</dt><dd>{rfq.description || '—'}</dd></div>
+                  </dl>
 
                   {/* ── Custom RFQ Details / Custom Fields Section ── */}
                   {(() => {
@@ -1260,70 +1252,10 @@ function ViewQuotationModal({
                 </div>
               )}
 
-              {/* ── Tab 2: Payment Terms ── */}
               {activeTab === 'paymentTerms' && (
-                <div className="rfq-modal__info-panel">
-                  <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 15, fontWeight: 700 }}>
-                    <span>Payment Terms</span>
-                  </div>
-                  {q.paymentTerms && q.paymentTerms !== '—' ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '12px 14px', background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-primary)' }}>
-                        <FileText size={16} style={{ color: 'var(--primary-500)' }} />
-                        <span style={{ fontSize: 15, fontWeight: 700 }}>{q.paymentTerms}</span>
-                      </div>
-                      {q.paymentPlanSnapshot && q.paymentPlanSnapshot.length > 0 && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                            Milestone Breakdown
-                          </div>
-                          {q.paymentPlanSnapshot.map((milestone, mi) => (
-                            <div
-                              key={mi}
-                              style={{
-                                display: 'flex', alignItems: 'center', gap: 12,
-                                padding: '8px 12px',
-                                background: 'var(--surface-card)',
-                                border: '1px solid var(--border)',
-                                borderRadius: 'var(--radius-sm)',
-                              }}
-                            >
-                              <div style={{
-                                width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontSize: 14, fontWeight: 700, color: '#fff',
-                                background: '#107e3e',
-                              }}>
-                                {mi + 1}
-                              </div>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
-                                  {milestone.title}
-                                </div>
-                              </div>
-                              <div style={{
-                                padding: '3px 10px',
-                                background: 'rgba(16,126,62,0.08)',
-                                border: '1px solid rgba(16,126,62,0.15)',
-                                borderRadius: 999,
-                                fontSize: 13,
-                                fontWeight: 600,
-                                color: '#107e3e',
-                                whiteSpace: 'nowrap',
-                              }}>
-                                {milestone.percentage}%
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="quot-view-modal__empty">
-                      No payment terms provided with this quotation.
-                    </div>
-                  )}
-                </div>
+                <QuotationPaymentTerms terms={q.paymentTerms} milestones={q.paymentPlanSnapshot}
+                  totalPrice={isConverting ? convert(q.totalPriceNum, defCur, displayCur) : q.totalPriceNum}
+                  currency={displayCur} formatAmount={formatAmount}/>
               )}
 
               {/* ── Tab 3: Authorization Documents ── */}
@@ -1335,7 +1267,7 @@ function ViewQuotationModal({
 
                   {/* Bid Security Required (buyer's requirement) */}
                   {(rfq as any).bidSecurityRequired && (
-                    <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
+                    <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
                       <Shield size={16} style={{ color: 'var(--primary-500)', flexShrink: 0 }} />
                       <div style={{ flex: 1 }}>
                         <strong style={{ fontSize: 14, color: 'var(--text-primary)' }}>Bid Security Required</strong>
@@ -1420,7 +1352,7 @@ function ViewQuotationModal({
 
                       {/* Bid Bond Card */}
                       {(bidSecurityDoc.bondNumber || bidSecurityDoc.issuer || bidSecurityDoc.publicUrl || bidSecurityDoc.bidBondValidityValue != null) && (
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 14px', background: 'var(--surface-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 14px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
                           <div style={{
                             width: 36, height: 36, borderRadius: 8, flexShrink: 0,
                             background: 'rgba(16,126,62,0.08)',
@@ -1478,7 +1410,7 @@ function ViewQuotationModal({
 
                       {/* Rejection reason */}
                       {bidSecurityDoc.status === 'REJECTED' && bidSecurityDoc.rejectionReason && (
-                        <div style={{ padding: '8px 12px', background: 'rgba(187,0,0,0.06)', border: '1px solid rgba(187,0,0,0.15)', borderRadius: 'var(--radius-sm)', fontSize: 13, color: '#bb0000' }}>
+                        <div style={{ padding: '8px 12px', background: 'rgba(187,0,0,0.06)', border: '1px solid rgba(187,0,0,0.15)', borderRadius: 'var(--radius-sm)', fontSize: 13, color: 'var(--quotation-danger)' }}>
                           <strong>Rejection Reason:</strong> {bidSecurityDoc.rejectionReason}
                         </div>
                       )}
@@ -1493,7 +1425,7 @@ function ViewQuotationModal({
               {activeTab === 'items' && (
                 <div className="rfq-modal__info-panel">
                   <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 15 }}>
-                    <span>📋</span>
+                    <ClipboardList size={18}/>
                     <span>Quotation Items</span>
                     <CurrencyBadge currency={defCur} size="sm" />
                     <span style={{ marginLeft: 4, fontSize: 13, color: 'var(--text-secondary)' }}>
@@ -1527,6 +1459,7 @@ function ViewQuotationModal({
                               <span className="quot-view-modal__items-col--sel">
                                 <button
                                   className={`quot-view-modal__sel-btn ${isSelected ? 'quot-view-modal__sel-btn--on' : 'quot-view-modal__sel-btn--off'}`}
+                                  type="button" role="checkbox" aria-checked={isSelected} aria-label={`Include ${itemName}`}
                                   onClick={() => toggleItem(item.id)}
                                   title={isSelected ? 'Click to deselect' : 'Click to select'}
                                 >
@@ -1580,9 +1513,7 @@ function ViewQuotationModal({
                         </div>
                       </div>
                       <div className="quot-view-modal__save-row">
-                        <button className="quot-view-modal__save-btn" onClick={saveSelection} disabled={savingSelection}>
-                          {savingSelection ? 'Saving...' : '💾 Save Selection'}
-                        </button>
+                        <Button type="button" onClick={saveSelection} disabled={savingSelection}><Save size={16}/>{savingSelection ? 'Saving...' : 'Save Selection'}</Button>
                         {saveMsg && (
                           <span className={`quot-view-modal__save-msg ${saveMsg.includes('success') ? 'quot-view-modal__save-msg--ok' : 'quot-view-modal__save-msg--err'}`}>
                             {saveMsg}
@@ -1598,7 +1529,7 @@ function ViewQuotationModal({
               {activeTab === 'documents' && (
                 <div className="rfq-modal__info-panel">
                   <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 15 }}>
-                    <span>📎</span>
+                    <Paperclip size={18}/>
                     <span>Attachments ({combinedDocs.length})</span>
                     {(rfq as any).bidSecurityRequired && (
                       <span style={{ fontSize: 12, color: 'var(--text-placeholder)', fontWeight: 400, marginLeft: 4 }}>
@@ -1668,7 +1599,7 @@ function ViewQuotationModal({
                     {evalTabState.data && (
                       <div className="quot-eval-sap__kpi-chips">
                         <div className="quot-eval-sap__kpi-chip">
-                          <span className="quot-eval-sap__kpi-chip-val" style={{ color: '#ffffff' }}>
+                          <span className="quot-eval-sap__kpi-chip-val" style={{ color: 'var(--foreground)' }}>
                             {Math.round(evalTabState.data.finalScore)}%
                           </span>
                           <span className="quot-eval-sap__kpi-chip-label">Overall Score</span>
@@ -1681,7 +1612,7 @@ function ViewQuotationModal({
                         <div className="quot-eval-sap__kpi-divider" />
                         <div className="quot-eval-sap__kpi-chip">
                           <span className={`quot-eval-sap__status-badge ${evalTabState.data.isRecommended ? 'quot-eval-sap__status-badge--positive' : 'quot-eval-sap__status-badge--neutral'}`}>
-                            {evalTabState.data.isRecommended ? '✓ Recommended' : '○ Reviewed'}
+                            {evalTabState.data.isRecommended ? <CheckCircle2 size={13}/> : <Check size={13}/>} {evalTabState.data.isRecommended ? 'Recommended' : 'Reviewed'}
                           </span>
                         </div>
                       </div>
@@ -1697,7 +1628,7 @@ function ViewQuotationModal({
 
                   {evalTabState.error && !evalTabState.loading && (
                     <div className="quot-eval-sap__message-strip quot-eval-sap__message-strip--error">
-                      <span>⚠</span> {evalTabState.error}
+                      <AlertTriangle size={16}/> {evalTabState.error}
                     </div>
                   )}
 
@@ -1706,7 +1637,7 @@ function ViewQuotationModal({
                       <div className="quot-eval-sap__overall-bar-section">
                         <div className="quot-eval-sap__overall-bar-label">
                           <span>Overall Weighted Score</span>
-                          <span className="quot-eval-sap__overall-bar-pct" style={{ color: evalTabState.data.finalScore >= 80 ? '#107e3e' : evalTabState.data.finalScore >= 60 ? '#e9730c' : '#bb0000' }}>
+                          <span className="quot-eval-sap__overall-bar-pct" style={{ color: evalTabState.data.finalScore >= 80 ? 'var(--quotation-success)' : evalTabState.data.finalScore >= 60 ? 'var(--quotation-warning)' : 'var(--quotation-danger)' }}>
                             {Math.round(evalTabState.data.finalScore)}%
                           </span>
                         </div>
@@ -1728,7 +1659,7 @@ function ViewQuotationModal({
                           </div>
                           <div className="quot-eval-sap__table">
                             {evalTabState.data.categoryScores.map((cs: any, ci: number) => {
-                              const catColor = cs.percentage >= 80 ? '#107e3e' : cs.percentage >= 60 ? '#e9730c' : '#bb0000';
+                              const catColor = cs.percentage >= 80 ? 'var(--quotation-success)' : cs.percentage >= 60 ? 'var(--quotation-warning)' : 'var(--quotation-danger)';
                               return (
                                 <div key={ci} className="quot-eval-sap__cat-block">
                                   <div className="quot-eval-sap__cat-header">
@@ -1756,7 +1687,7 @@ function ViewQuotationModal({
                                             </div>
                                             <div className="quot-eval-sap__sub-row-right">
                                               {sp.value && sp.value !== 'Not provided' && (
-                                                <span className="quot-eval-sap__sub-value">{sp.value.length > 28 ? sp.value.slice(0, 28) + '…' : sp.value}</span>
+                                                <span className="quot-eval-sap__sub-value">{sp.value}</span>
                                               )}
                                               <span className={`quot-eval-sap__sub-score ${filled ? 'quot-eval-sap__sub-score--full' : 'quot-eval-sap__sub-score--zero'}`}>
                                                 {sp.score}/{sp.maxScore}
@@ -1781,7 +1712,7 @@ function ViewQuotationModal({
 
                   {!evalTabState.loading && !evalTabState.error && !evalTabState.data && (
                     <div className="quot-eval-sap__no-data">
-                      <div className="quot-eval-sap__no-data-score" style={{ color: getScoreClass(q.score) === 'high' ? '#107e3e' : getScoreClass(q.score) === 'mid' ? '#e9730c' : '#bb0000' }}>
+                      <div className="quot-eval-sap__no-data-score" style={{ color: getScoreClass(q.score) === 'high' ? 'var(--quotation-success)' : getScoreClass(q.score) === 'mid' ? 'var(--quotation-warning)' : 'var(--quotation-danger)' }}>
                         {q.score}%
                       </div>
                       <div className="quot-eval-sap__no-data-msg">Detailed evaluation breakdown not available for this RFQ type.</div>
@@ -1794,7 +1725,7 @@ function ViewQuotationModal({
               {activeTab === 'history' && (
                 <ApprovalHistoryView quotationId={q.id} rfqNumber={q.rfqNumber} vendorName={q.vendorName} />
               )}
-            </div>
+            </DetailTabPanel>
           </>
         )}
       </div>
@@ -1864,7 +1795,7 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
     return (
       <div className="rfq-modal__info-panel">
         <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 15 }}>
-          <span>📜</span>
+          <History size={18}/>
           <span>Vendor History — {vendorName}</span>
         </div>
         <div className="quot-view-modal__empty">Loading approval history…</div>
@@ -1876,7 +1807,7 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
     return (
       <div className="rfq-modal__info-panel">
         <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 15 }}>
-          <span>📜</span>
+          <History size={18}/>
           <span>Vendor History — {vendorName}</span>
         </div>
         <div className="quot-view-modal__empty">{historyError}</div>
@@ -1888,7 +1819,7 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
     return (
       <div className="rfq-modal__info-panel">
         <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 15 }}>
-          <span>📜</span>
+          <History size={18}/>
           <span>Vendor History — {vendorName}</span>
         </div>
         <div className="quot-view-modal__empty">No approval history available for this quotation.</div>
@@ -1906,12 +1837,12 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
 
   const statusIcon = (status: string) => {
     switch (status) {
-      case 'APPROVED': return <CheckCircle2 size={14} style={{ color: '#107e3e' }} />;
-      case 'REJECTED': return <XCircle size={14} style={{ color: '#bb0000' }} />;
-      case 'AUTO_REJECTED': return <XCircle size={14} style={{ color: '#bb0000' }} />;
-      case 'RETURNED': return <RotateCcw size={14} style={{ color: '#e9730c' }} />;
-      case 'PENDING': return <Clock size={14} style={{ color: '#e9730c' }} />;
-      case 'AUTO_FORWARDED': return <AlertTriangle size={14} style={{ color: '#8b5cf6' }} />;
+      case 'APPROVED': return <CheckCircle2 size={14} style={{ color: 'var(--quotation-success)' }} />;
+      case 'REJECTED': return <XCircle size={14} style={{ color: 'var(--quotation-danger)' }} />;
+      case 'AUTO_REJECTED': return <XCircle size={14} style={{ color: 'var(--quotation-danger)' }} />;
+      case 'RETURNED': return <RotateCcw size={14} style={{ color: 'var(--quotation-warning)' }} />;
+      case 'PENDING': return <Clock size={14} style={{ color: 'var(--quotation-warning)' }} />;
+      case 'AUTO_FORWARDED': return <AlertTriangle size={14} style={{ color: 'var(--primary)' }} />;
       case 'NOT_STARTED': return <Minus size={14} style={{ color: 'var(--text-secondary)' }} />;
       default: return <Minus size={14} style={{ color: 'var(--text-secondary)' }} />;
     }
@@ -1932,12 +1863,12 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
 
   const statusColor = (status: string) => {
     switch (status) {
-      case 'APPROVED': return '#107e3e';
-      case 'REJECTED': return '#bb0000';
-      case 'AUTO_REJECTED': return '#bb0000';
-      case 'RETURNED': return '#e9730c';
-      case 'PENDING': return '#e9730c';
-      case 'AUTO_FORWARDED': return '#8b5cf6';
+      case 'APPROVED': return 'var(--quotation-success)';
+      case 'REJECTED': return 'var(--quotation-danger)';
+      case 'AUTO_REJECTED': return 'var(--quotation-danger)';
+      case 'RETURNED': return 'var(--quotation-warning)';
+      case 'PENDING': return 'var(--quotation-warning)';
+      case 'AUTO_FORWARDED': return 'var(--primary)';
       default: return 'var(--text-secondary)';
     }
   };
@@ -1949,17 +1880,13 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
   return (
     <div className="rfq-modal__info-panel">
       <div className="quot-view-modal__section-header" style={{ marginBottom: 16, fontSize: 15 }}>
-        <span>📜</span>
+        <History size={18}/>
         <span>Vendor History — {vendorName}</span>
-        {historyData.isComplete && (
-          <span className="quot-badge quot-badge--ACCEPTED" style={{ marginLeft: 'auto', fontSize: 12 }}>Chain Complete</span>
-        )}
-        {historyData.isRejected && (
-          <span className="quot-badge quot-badge--REJECTED" style={{ marginLeft: 'auto', fontSize: 12 }}>Rejected</span>
-        )}
-        {historyData.isReturned && (
-          <span className="quot-badge quot-badge--RETURNED" style={{ marginLeft: 'auto', fontSize: 12, background: 'rgba(233,115,12,0.1)', color: '#e9730c' }}>Returned</span>
-        )}
+        <div className="ml-auto flex items-center gap-2">
+          {historyData.isComplete && <Badge tone="success" className="quotation-status quotation-status--success"><CheckCircle2 size={13}/>Chain Complete</Badge>}
+          {historyData.isRejected && <Badge tone="danger" className="quotation-status quotation-status--danger"><XCircle size={13}/>Rejected</Badge>}
+          {historyData.isReturned && <Badge tone="warning" className="quotation-status quotation-status--warning"><RotateCcw size={13}/>Returned</Badge>}
+        </div>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
@@ -1982,33 +1909,33 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
                 <div style={{
                   position: 'absolute', left: 11, top: 20, bottom: 0, width: 2,
                   background: level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED'
-                    ? '#107e3e' : isRejected ? '#bb0000' : 'var(--border)',
+                    ? 'var(--quotation-success)' : isRejected ? 'var(--quotation-danger)' : 'var(--border)',
                 }} />
               )}
               {/* Timeline dot */}
               <div style={{
                 position: 'absolute', left: 4, top: 4, width: 16, height: 16,
                 borderRadius: '50%',
-                background: isActive ? '#e9730c' : level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED'
-                  ? '#107e3e' : isRejected ? '#bb0000' : 'var(--surface-card)',
+                background: isActive ? 'var(--quotation-warning)' : level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED'
+                  ? 'var(--quotation-success)' : isRejected ? 'var(--quotation-danger)' : 'var(--surface-card)',
                 border: `2px solid ${
-                  isActive ? '#e9730c' : level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED'
-                    ? '#107e3e' : isRejected ? '#bb0000' : 'var(--border)'
+                  isActive ? 'var(--quotation-warning)' : level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED'
+                    ? 'var(--quotation-success)' : isRejected ? 'var(--quotation-danger)' : 'var(--border)'
                 }`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
                 {level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED' ? (
-                  <CheckCircle2 size={10} style={{ color: '#fff' }} />
+                  <CheckCircle2 size={10} style={{ color: 'var(--card)' }} />
                 ) : isRejected ? (
-                  <XCircle size={10} style={{ color: '#fff' }} />
+                  <XCircle size={10} style={{ color: 'var(--card)' }} />
                 ) : (
-                  <span style={{ fontSize: 10, fontWeight: 700, color: isActive ? '#fff' : 'var(--text-secondary)' }}>{level.levelNumber}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: isActive ? 'var(--card)' : 'var(--text-secondary)' }}>{level.levelNumber}</span>
                 )}
               </div>
               {/* Content card */}
               <div style={{
                 padding: '12px 14px',
-                background: isActive ? 'rgba(233,115,12,0.06)' : 'var(--surface-elevated)',
+                background: isActive ? 'rgba(233,115,12,0.06)' : 'var(--card)',
                 border: `1px solid ${
                   isActive ? 'rgba(233,115,12,0.2)' : level.status === 'APPROVED' ? 'rgba(16,126,62,0.15)' : isRejected ? 'rgba(187,0,0,0.15)' : 'var(--border)'
                 }`,
@@ -2041,7 +1968,7 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
                     "{level.comments}"
                   </div>
                 )}
-                <div style={{ fontSize: 12, color: 'var(--text-placeholder)', marginTop: 6 }}>
+                <div style={{ fontSize: 12, color: 'var(--muted-foreground)', marginTop: 6 }}>
                   {level.actionAt ? `Acted: ${formatDt(level.actionAt)}` : `Created: ${formatDt(level.createdAt)}`}
                 </div>
               </div>
@@ -2293,6 +2220,8 @@ function ActionModalInner({
   onConfirm: (type: ModalType, comment: string, returnTarget?: 'LEVEL_1' | 'VENDOR') => void;
   onViewPlan?: (plan: { name: string; milestones: Array<{ id: string; title: string; percentage: number }> }) => void;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef, true, onClose);
   const [comment, setComment] = useState('');
   const { type, quotation: q } = modal;
   const isOriginatorStart = (q as any).rfqApprovalStartPoint === 'ORIGINATOR' || (q as any).rfq?.rfqApprovalStartPoint === 'ORIGINATOR';
@@ -2348,7 +2277,7 @@ function ActionModalInner({
 
   return (
     <div className="quot-action-modal-backdrop" onClick={onClose}>
-      <div className="quot-action-modal" onClick={e => e.stopPropagation()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={config.title} tabIndex={-1} className="quot-action-modal" onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div className={`quot-action-modal__header ${config.headerClass}`}>
@@ -2358,7 +2287,7 @@ function ActionModalInner({
             </span>
             <span className="quot-action-modal__title">{config.title}</span>
           </div>
-          <button className="quot-action-modal__close" onClick={onClose}>
+          <button type="button" aria-label="Close quotation action" className="quot-action-modal__close" onClick={onClose}>
             <X size={18} />
           </button>
         </div>
@@ -2428,15 +2357,15 @@ function ActionModalInner({
           {/* Status badge */}
           <div className="quot-action-modal__status-row">
             <span className="quot-action-modal__info-label">Current Status</span>
-            <span className={`quot-badge quot-badge--${getDisplayStatus(q)}`}>{STATUS_LABELS[getDisplayStatus(q)] || q.status}</span>
+            <QuotationStatusBadge quotation={q}/>
           </div>
 
           {/* Attachments */}
           {q.attachments && q.attachments.length > 0 && (
             <div className="quot-action-modal__attachments">
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                <FileText size={14} style={{ color: '#0a6ed1' }} />
-                <span style={{ fontSize: 14, fontWeight: 600, color: '#32363a' }}>
+                <FileText size={14} style={{ color: 'var(--primary)' }} />
+                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--foreground)' }}>
                   Attachments ({q.attachments.length})
                 </span>
               </div>
@@ -2449,19 +2378,19 @@ function ActionModalInner({
                     rel="noopener noreferrer"
                     style={{
                       display: 'flex', alignItems: 'center', gap: 8,
-                      padding: '8px 12px', background: '#f7f9fa',
-                      border: '1px solid #e5e5e5', borderRadius: 4,
+                      padding: '8px 12px', background: 'var(--card)',
+                      border: '1px solid var(--border)', borderRadius: 4,
                       textDecoration: 'none', fontSize: 14,
                       transition: 'background 0.2s',
                     }}
-                    onMouseOver={e => (e.currentTarget.style.background = '#eef2f6')}
-                    onMouseOut={e => (e.currentTarget.style.background = '#f7f9fa')}
+                    onMouseOver={e => (e.currentTarget.style.background = 'var(--accent)')}
+                    onMouseOut={e => (e.currentTarget.style.background = 'var(--card)')}
                   >
-                    <FileText size={14} style={{ color: '#0070c0', flexShrink: 0 }} />
-                    <span style={{ color: '#0070c0', fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <FileText size={14} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                    <span style={{ color: 'var(--primary)', fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {a.originalName}
                     </span>
-                    <span style={{ color: '#6a6d70', fontSize: 12, flexShrink: 0 }}>
+                    <span style={{ color: 'var(--muted-foreground)', fontSize: 12, flexShrink: 0 }}>
                       {a.fileSize > 1024 * 1024
                         ? (a.fileSize / (1024 * 1024)).toFixed(1) + ' MB'
                         : (a.fileSize / 1024).toFixed(0) + ' KB'}
@@ -2486,37 +2415,37 @@ function ActionModalInner({
 
           {/* Return Target Selection — only show if not Originator mode */}
           {type === 'return' && !isOriginatorStart && (
-            <div style={{ margin: '14px 0', padding: 12, background: '#f7f9fa', border: '1px solid #d9d9d9', borderRadius: 6 }}>
-              <label style={{ fontSize: 13, fontWeight: 700, color: '#32363a', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <div style={{ margin: '14px 0', padding: 12, background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 6 }}>
+              <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--foreground)', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 Return Destination
               </label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 14, color: '#32363a' }}>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 14, color: 'var(--foreground)' }}>
                   <input
                     type="radio"
                     name="returnTarget"
                     value="LEVEL_1"
                     checked={returnTarget === 'LEVEL_1'}
                     onChange={() => setReturnTarget('LEVEL_1')}
-                    style={{ marginTop: 3, accentColor: '#0a6ed1' }}
+                    style={{ marginTop: 3, accentColor: 'var(--primary)' }}
                   />
                   <div>
-                    <div style={{ fontWeight: 600, color: '#0070c0' }}>Return to Level 1</div>
-                    <div style={{ fontSize: 12, color: '#6a6d70', marginTop: 2 }}>Restart approval chain starting at Level 1 (Clerk review first)</div>
+                    <div style={{ fontWeight: 600, color: 'var(--primary)' }}>Return to Level 1</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted-foreground)', marginTop: 2 }}>Restart approval chain starting at Level 1 (Clerk review first)</div>
                   </div>
                 </label>
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 14, color: '#32363a' }}>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 14, color: 'var(--foreground)' }}>
                   <input
                     type="radio"
                     name="returnTarget"
                     value="VENDOR"
                     checked={returnTarget === 'VENDOR'}
                     onChange={() => setReturnTarget('VENDOR')}
-                    style={{ marginTop: 3, accentColor: '#0a6ed1' }}
+                    style={{ marginTop: 3, accentColor: 'var(--primary)' }}
                   />
                   <div>
-                    <div style={{ fontWeight: 600, color: '#bb0000' }}>Return to Vendor for Resubmission</div>
-                    <div style={{ fontSize: 12, color: '#6a6d70', marginTop: 2 }}>Send feedback email & notification to Vendor so they can revise and resubmit</div>
+                    <div style={{ fontWeight: 600, color: 'var(--foreground)' }}>Return to Vendor for Resubmission</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted-foreground)', marginTop: 2 }}>Send feedback email & notification to Vendor so they can revise and resubmit</div>
                   </div>
                 </label>
               </div>
@@ -2526,12 +2455,12 @@ function ActionModalInner({
           {/* Comment box for non-view modals */}
           {type !== 'view' && (
             <div className="quot-action-modal__comment">
-              <label className="quot-action-modal__comment-label">
+              <label htmlFor="quotation-action-comment" className="quot-action-modal__comment-label">
                 <MessageSquare size={14} /> Comments
                 {type === 'return' && <span className="quot-action-modal__comment-required"> *</span>}
                 {type !== 'return' && <span className="quot-action-modal__comment-optional"> (optional)</span>}
               </label>
-              <textarea
+              <Textarea id="quotation-action-comment" required={type === 'return'}
                 className="quot-action-modal__textarea"
                 placeholder={
                   type === 'accept' ? 'Add any acceptance notes...' :
@@ -2548,18 +2477,15 @@ function ActionModalInner({
 
         {/* Footer */}
         <div className="quot-action-modal__footer">
-          <button className="quot-action-modal__btn quot-action-modal__btn--cancel" onClick={onClose}>
-            Cancel
-          </button>
+          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
           {config.confirmLabel && (
-            <button
-              className={`quot-action-modal__btn ${config.confirmClass}`}
+            <Button type="button" variant={type === 'reject' ? 'destructive' : 'default'}
               onClick={() => onConfirm(type, comment, type === 'return' ? returnTarget : undefined)}
               disabled={type === 'return' && !comment.trim()}
             >
               {config.icon}
               {config.confirmLabel}
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -2727,6 +2653,8 @@ export default function QuotationsPage() {
 
   const handleCloseCompareModal = useCallback(() => {
     setCompareExpanded(false);
+    setCompareDropdownOpen(false);
+    setCompareSearch('');
     setCompareModalOpen(false);
   }, []);
   const [activeModal, setActiveModal]                 = useState<ActiveModal | null>(null);
@@ -2760,28 +2688,9 @@ export default function QuotationsPage() {
   useBodyScrollLock(!!(compareModalOpen || activeModal || detailRfq || postAwardQuotation || pendingApprovalQuotation || showTemplateSelect || acceptedModalData || actionSuccessModalData));
   const confirmCallbackRef = useRef<{ type: ModalType; comment: string } | null>(null);
   const activeModalRef = useRef<ActiveModal | null>(null);
-  const compareDropdownRef = useRef<HTMLDivElement>(null);
+  const compareDialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(compareDialogRef, compareModalOpen, handleCloseCompareModal);
   const compareDropdownBtnRef = useRef<HTMLButtonElement>(null);
-  const compareDropdownMenuRef = useRef<HTMLDivElement>(null);
-
-  // Close dropdown on click outside
-  useEffect(() => {
-    if (!compareDropdownOpen) return;
-    const handleClick = (e: MouseEvent) => {
-      if (
-        compareDropdownMenuRef.current &&
-        !compareDropdownMenuRef.current.contains(e.target as Node) &&
-        compareDropdownBtnRef.current &&
-        !compareDropdownBtnRef.current.contains(e.target as Node)
-      ) {
-        setCompareDropdownOpen(false);
-        setCompareSearch('');
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [compareDropdownOpen, setCompareSearch]);
-
   const defaultOrder   = ALL_QUOT_COLS.map(c => c.key);
   const defaultVisible = new Set(ALL_QUOT_COLS.map(c => c.key));
   const [colOrder,    setColOrder]    = useState<string[]>(defaultOrder);
@@ -2790,12 +2699,12 @@ export default function QuotationsPage() {
   const colBtnRef = useRef<HTMLButtonElement>(null);
 
   // Listing table column state (separate from compare modal)
-  const listingDefaultOrder = ALL_LISTING_COLUMNS.map((c) => c.key);
-  const listingDefaultVisible = new Set(ALL_LISTING_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key));
-  const [listingColumnOrder, setListingColumnOrder] = useState<string[]>(listingDefaultOrder);
-  const [listingVisibleKeys, setListingVisibleKeys] = useState<Set<string>>(listingDefaultVisible);
-  const [listingShowColPanel, setListingShowColPanel] = useState(false);
-  const listingColBtnRef = useRef<HTMLButtonElement>(null);
+  const {
+    columnOrder: listingColumnOrder, visibleKeys: listingVisibleKeys,
+    handleToggle: handleListingToggleColumn, handleReorder: setListingColumnOrder,
+    handleReset: handleListingResetColumns,
+  } = useColumnPreferences('quotation-approval-listing', ALL_LISTING_COLUMNS);
+  const [listingColumnGroup, setListingColumnGroup] = useState<string | null>(null);
 
   const visibleCols = useMemo(() => colOrder.filter(k => visibleKeys.has(k)), [colOrder, visibleKeys]);
   const listingVisibleColumns = useMemo(
@@ -2835,18 +2744,6 @@ export default function QuotationsPage() {
   };
   const handleReset = () => { setColOrder(defaultOrder); setVisibleKeys(new Set(defaultVisible)); };
 
-  const handleListingToggleColumn = (key: string) => {
-    setListingVisibleKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
-  const handleListingResetColumns = () => {
-    setListingColumnOrder(listingDefaultOrder);
-    setListingVisibleKeys(new Set(listingDefaultVisible));
-  };
 
   useEffect(() => {
     if (!rfqFromUrl) return;
@@ -3131,7 +3028,7 @@ export default function QuotationsPage() {
     if (simpleEvalCategories.length > 0) {
       return simpleEvalCategories;
     }
-    
+
     // Default Standard RFQ Parameters
     const baseCats: EvalCategory[] = [
       { id: 'param_pricing', name: 'Pricing Score', weightage: 45, enabled: true, expanded: true, subParameters: [{ id: 'sp_pricing', name: 'Pricing Score', source: 'predefined' as const, enabled: true, required: false, weightage: 100, maxScore: 100 }] },
@@ -4065,11 +3962,12 @@ export default function QuotationsPage() {
       <>
         {/* RFQ Dropdown */}
         <div className="quot-compare__search-area" style={inModal ? { border: 'none', background: 'transparent', padding: '0 0 16px' } : {}}>
-          <div className="quot-compare__dropdown" ref={compareDropdownRef}>
+          <div className="quot-compare__dropdown">
             <button
               ref={compareDropdownBtnRef}
               className="quot-compare__dropdown-trigger"
               onClick={() => setCompareDropdownOpen(p => !p)}
+              type="button" aria-haspopup="dialog" aria-controls="quotation-rfq-options" aria-label="Choose RFQ to compare"
               aria-expanded={compareDropdownOpen}
             >
               <Search size={15}/>
@@ -4090,12 +3988,22 @@ export default function QuotationsPage() {
             </button>
             {/* Compare RFQ dropdown */}
             {compareDropdownOpen && (
-              <div className="quot-compare__dropdown-menu" ref={compareDropdownMenuRef}>
+              <FloatingMenu open anchorRef={compareDropdownBtnRef} ariaLabel="Choose an RFQ" width={460} zIndex={100040}
+                onClose={() => { setCompareDropdownOpen(false); setCompareSearch(''); compareDropdownBtnRef.current?.focus(); }}
+                className="quotation-rfq-picker" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <div id="quotation-rfq-options" className="quotation-rfq-picker__content" onKeyDown={event => {
+                if (event.key !== 'Tab') return;
+                const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), input'));
+                const first = controls[0]; const last = controls[controls.length - 1];
+                if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+                else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+              }}>
                 {/* Active / Inactive Filter Tabs */}
                 <div className="quot-compare__dropdown-filter-tabs">
                   <button
                     type="button"
                     className={`quot-compare__filter-tab ${rfqFilterStatus === 'ALL' ? 'quot-compare__filter-tab--active' : ''}`}
+                    aria-pressed={rfqFilterStatus === 'ALL'}
                     onClick={(e) => { e.stopPropagation(); setRfqFilterStatus('ALL'); }}
                   >
                     All ({rfqCounts.all})
@@ -4103,6 +4011,7 @@ export default function QuotationsPage() {
                   <button
                     type="button"
                     className={`quot-compare__filter-tab ${rfqFilterStatus === 'ACTIVE' ? 'quot-compare__filter-tab--active' : ''}`}
+                    aria-pressed={rfqFilterStatus === 'ACTIVE'}
                     onClick={(e) => { e.stopPropagation(); setRfqFilterStatus('ACTIVE'); }}
                   >
                     <span className="quot-compare__filter-dot quot-compare__filter-dot--active" />
@@ -4111,6 +4020,7 @@ export default function QuotationsPage() {
                   <button
                     type="button"
                     className={`quot-compare__filter-tab ${rfqFilterStatus === 'INACTIVE' ? 'quot-compare__filter-tab--active' : ''}`}
+                    aria-pressed={rfqFilterStatus === 'INACTIVE'}
                     onClick={(e) => { e.stopPropagation(); setRfqFilterStatus('INACTIVE'); }}
                   >
                     <span className="quot-compare__filter-dot quot-compare__filter-dot--inactive" />
@@ -4119,8 +4029,8 @@ export default function QuotationsPage() {
                 </div>
 
                 <div className="quot-compare__dropdown-search">
-                  <Search size={13}/>
-                  <input type="text" placeholder="Search by RFQ number, title or vendor name..." value={compareSearch}
+                  <Search size={15}/>
+                  <Input type="search" aria-label="Search RFQs" placeholder="Search RFQ, title or vendor..." value={compareSearch}
                     onChange={e => setCompareSearch(e.target.value)} autoFocus/>
                 </div>
                 <div className="quot-compare__dropdown-list">
@@ -4133,7 +4043,8 @@ export default function QuotationsPage() {
                     return (
                       <button key={rfq}
                         className={`quot-compare__dropdown-item ${selectedRFQ === rfq ? 'quot-compare__dropdown-item--active' : ''}`}
-                        onClick={() => { setSelectedRFQ(rfq); setCompareDropdownOpen(false); setCompareSearch(''); }}
+                        type="button" aria-pressed={selectedRFQ === rfq}
+                        onClick={() => { setSelectedRFQ(rfq); setCompareDropdownOpen(false); setCompareSearch(''); compareDropdownBtnRef.current?.focus(); }}
                       >
                         <span className="quot-compare__dropdown-item-left">
                           <span className="quot-compare__dropdown-rfq-row">
@@ -4162,16 +4073,17 @@ export default function QuotationsPage() {
                   )}
                 </div>
               </div>
+              </FloatingMenu>
             )}
           </div>
           {selectedRFQ && (
             <div className="quot-compare__rfq-badge">
-              <span className="font-semibold text-foreground">{selectedRFQ}</span>
+
               <span className={`quot-compare__rfq-status-tag ${isRfqInactive(selectedRFQ) ? 'quot-compare__rfq-status-tag--inactive' : 'quot-compare__rfq-status-tag--active'}`}>
                 {isRfqInactive(selectedRFQ) ? 'INACTIVE (VENDOR CHOSEN)' : 'ACTIVE'}
               </span>
               <span className="quot-compare__rfq-count text-muted-foreground">
-                {vendorGroups.length || evaluatedSuppliers.length} suppliers
+                {vendorGroups.length || evaluatedSuppliers.length} {(vendorGroups.length || evaluatedSuppliers.length) === 1 ? 'supplier' : 'suppliers'}
               </span>
               <div className="quot-compare__view-toggle">
                 <button
@@ -4205,7 +4117,7 @@ export default function QuotationsPage() {
               <thead>
                 <tr>
                   {visibleCols.map(key => {
-                    const colClass = key === 'vendor' ? 'quot-compare__col--vendor' : 
+                    const colClass = key === 'vendor' ? 'quot-compare__col--vendor' :
                       key === 'qNo' ? 'quot-compare__col--qno' :
                       key === 'totalPrice' ? 'quot-compare__col--price' :
                       key === 'leadTime' ? 'quot-compare__col--lead' :
@@ -4444,23 +4356,13 @@ export default function QuotationsPage() {
           </td>
         );
       case 'paymentTerms':
-        return (
-          <td key={key} className="text-left">
-            <span className="inline-flex items-center gap-1.5 text-sm text-foreground font-medium whitespace-nowrap">
-              <span>{s.paymentTerms}</span>
-              {s.paymentPlanSnapshot && s.paymentPlanSnapshot.length > 0 && (
-                <button
-                  type="button"
-                  title="View payment plan"
-                  onClick={(e) => { e.stopPropagation(); setViewPlanQuotation({ name: s.paymentTerms, milestones: s.paymentPlanSnapshot!.map((m, i) => ({ id: `snap_${i}`, title: m.title, percentage: m.percentage })) }); }}
-                  className="text-muted-foreground hover:text-primary transition-colors"
-                >
-                  <Eye size={14} />
-                </button>
-              )}
-            </span>
-          </td>
-        );
+        return <td key={key} className="text-left">
+          {s.paymentPlanSnapshot?.length ? <Button type="button" variant="ghost" size="sm" className="quotation-plan-link"
+            aria-label={`View payment plan ${s.paymentTerms}`}
+            onClick={() => setViewPlanQuotation({ name: s.paymentTerms, milestones: s.paymentPlanSnapshot!.map((m, i) => ({ id: `snap_${i}`, ...m })) })}>
+            <span>{s.paymentTerms}</span><Eye size={15}/>
+          </Button> : <span className="quotation-plan-name">{s.paymentTerms}</span>}
+        </td>;
       case 'score':
         return (
           <td key={key} className="text-center">
@@ -4481,7 +4383,7 @@ export default function QuotationsPage() {
       case 'status':
         return (
           <td key={key} className="text-center whitespace-nowrap">
-            <span className={`quot-badge quot-badge--${getDisplayStatus(s)}`}>{STATUS_LABELS[getDisplayStatus(s)]}</span>
+            <QuotationStatusBadge quotation={s}/>
           </td>
         );
       case 'submittedAt':
@@ -4603,7 +4505,7 @@ export default function QuotationsPage() {
   };
 
   return (
-    <PageFrame>
+    <PageFrame className="quotation-workspace">
       {error && <MessageStrip type="error">{error}</MessageStrip>}
       {toast && (
         <MessageStrip
@@ -4674,7 +4576,7 @@ export default function QuotationsPage() {
               label={c.label}
               detail={c.detail}
               className={cn(
-                'cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-all duration-200',
+                'quotation-metric cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-all duration-200',
                 isActive &&
                   'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
               )}
@@ -4729,7 +4631,7 @@ export default function QuotationsPage() {
         {/* Grouped RFQs Accordion List */}
         {loading ? (
           <Card className="p-4">
-            <TableSkeleton rows={5} columns={6} />
+            <TableSkeleton rows={5} columnWidths={listingVisibleColumns.map((col) => col.width || '120px').concat(['116px'])} />
           </Card>
         ) : paginatedRfqGroups.length > 0 ? (
           <div>
@@ -4742,16 +4644,13 @@ export default function QuotationsPage() {
                     {/* RFQ Group Header */}
                     <div
                       className="quot-rfq-card__header"
-                      onClick={() => toggleRfqExpand(group.rfqNumber)}
                     >
-                      <div className="quot-rfq-card__header-left">
-                        <button
-                          type="button"
+                      <button type="button" className="quot-rfq-card__header-left" aria-expanded={isExpanded} aria-controls={`quotation-group-${group.rfqNumber}`} onClick={() => toggleRfqExpand(group.rfqNumber)}>
+                        <span
                           className={`quot-rfq-card__chevron ${isExpanded ? 'quot-rfq-card__chevron--expanded' : ''}`}
-                          aria-label={isExpanded ? 'Collapse' : 'Expand'}
                         >
                           <ChevronRight size={15} />
-                        </button>
+                        </span>
                         <div className="quot-rfq-card__title-block">
                           <div className="quot-rfq-card__badge-wrap">
                             <span className="quot-rfq-card__rfq-num">{group.rfqNumber}</span>
@@ -4762,7 +4661,7 @@ export default function QuotationsPage() {
                             <h3 className="quot-rfq-card__title">{group.rfqTitle}</h3>
                           )}
                         </div>
-                      </div>
+                      </button>
 
                       <div className="quot-rfq-card__header-right">
                         <div className="quot-rfq-card__stat-group">
@@ -4793,9 +4692,8 @@ export default function QuotationsPage() {
                         </div>
 
                         <div className="quot-rfq-card__actions" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            type="button"
-                            className="quot-rfq-card__compare-btn"
+                          <Button
+                            type="button" variant="outline" size="sm"
                             title="Open Side-by-Side Comparison for this RFQ"
                             onClick={() => {
                               setSelectedRFQ(group.rfqNumber);
@@ -4804,28 +4702,33 @@ export default function QuotationsPage() {
                           >
                             <GitCompareArrows size={14} />
                             <span>Compare</span>
-                          </button>
+                          </Button>
                         </div>
                       </div>
                     </div>
 
                     {/* Collapsible Quotations Sub-Table */}
                     {isExpanded && (
-                      <div className="quot-rfq-card__body">
+                      <div id={`quotation-group-${group.rfqNumber}`} className="quot-rfq-card__body">
                         <div className="quot-listing-table-wrap">
                           <table className="quot-listing-table" style={{ width: '100%', tableLayout: 'auto' }}>
                             <colgroup>
                               {listingVisibleColumns.map((col) => (
                                 <col key={col.key} style={{ width: col.width || 'auto' }} />
                               ))}
-                              <col style={{ width: '80px' }} />
+                              <col style={{ width: '116px' }} />
                             </colgroup>
                             <thead>
                               <tr>
                                 {listingVisibleColumns.map((col) => (
                                   <th key={col.key} style={{ textAlign: col.align || 'left' }}>{col.label}</th>
                                 ))}
-                                <th style={{ textAlign: 'center' }}>Actions</th>
+                                <th scope="col" style={{ textAlign: 'right' }}>
+                                  <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+                                    Actions
+                                    <ColumnSettingsButton open={listingColumnGroup === group.rfqNumber} onClick={() => setListingColumnGroup(group.rfqNumber)} />
+                                  </div>
+                                </th>
                               </tr>
                             </thead>
                             <tbody>
@@ -4859,6 +4762,16 @@ export default function QuotationsPage() {
               })}
             </div>
 
+            {listingColumnGroup && <ColumnCustomizer
+              columnOrder={listingColumnOrder}
+              visibleKeys={listingVisibleKeys}
+              allColumns={ALL_LISTING_COLUMNS}
+              onToggle={handleListingToggleColumn}
+              onReorder={setListingColumnOrder}
+              onReset={handleListingResetColumns}
+              onClose={() => setListingColumnGroup(null)}
+            />}
+
             {rfqGroups.length > listingPerPage && (
               <div className="quot-listing-pagination" style={{ marginTop: 16, borderRadius: 'var(--radius-md)' }}>
                 <span className="quot-listing-pagination__info">
@@ -4866,7 +4779,7 @@ export default function QuotationsPage() {
                 </span>
                 <div className="quot-listing-pagination__btns">
                   <button
-                    className="quot-listing-pagination__btn"
+                    className="quot-listing-pagination__btn" aria-label="Previous RFQ page"
                     disabled={listingPage === 1}
                     onClick={() => setListingPage((p) => p - 1)}
                   >
@@ -4876,7 +4789,7 @@ export default function QuotationsPage() {
                     {listingPage} / {listingTotalPages}
                   </span>
                   <button
-                    className="quot-listing-pagination__btn"
+                    className="quot-listing-pagination__btn" aria-label="Next RFQ page"
                     disabled={listingPage >= listingTotalPages}
                     onClick={() => setListingPage((p) => p + 1)}
                   >
@@ -4958,7 +4871,8 @@ export default function QuotationsPage() {
       {compareModalOpen && (
         <div className={`quot-compare-modal-backdrop ${compareExpanded ? 'quot-compare-modal-backdrop--expanded' : ''}`} onClick={handleCloseCompareModal}>
           <div
-            className={`quot-compare-modal ${compareExpanded ? 'quot-compare-modal--expanded' : 'quot-compare-modal--open'}`}
+            ref={compareDialogRef} role="dialog" aria-modal="true" aria-label="Quotation comparison" tabIndex={-1}
+            className={`quot-compare-modal quotation-compare-window ${compareExpanded ? 'quot-compare-modal--expanded' : 'quot-compare-modal--open'}`}
             onClick={e => e.stopPropagation()}
           >
             {/* Modal Header — window controls like RFQ modal */}
@@ -4967,7 +4881,7 @@ export default function QuotationsPage() {
                 <span className="quot-compare-modal__header-icon-bg">
                   <GitCompareArrows size={18} />
                 </span>
-                <span className="quot-compare-modal__header-title">Active Quotation Comparison</span>
+                <span className="quot-compare-modal__header-title">Quotation Comparison</span>
               </div>
 
               <div className="quot-compare-modal__window-controls">
@@ -5010,7 +4924,6 @@ export default function QuotationsPage() {
 
             {/* Hero section */}
             <div className="quot-compare-modal__hero">
-              <h2 className="quot-compare-modal__hero-title">Active Quotation Comparison</h2>
               <p className="quot-compare-modal__hero-desc">
                 Select an RFQ to compare all supplier quotations side-by-side
               </p>

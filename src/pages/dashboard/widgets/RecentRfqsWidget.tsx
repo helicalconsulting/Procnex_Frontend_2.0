@@ -1,3 +1,4 @@
+import LandingTable, { type LandingColumn } from '../../../components/shared/LandingTable';
 import { FileText } from 'lucide-react';
 import { useServiceData } from '../../../hooks/useServiceData';
 import { dashboardService } from '../../../services/dashboardService';
@@ -5,6 +6,7 @@ import { MessageStrip } from '../../../components/shared/MessageStrip';
 import type { DashboardRecentRfq } from '../../../types/viewModels';
 import { WidgetHeader, WidgetBody, WidgetLoading } from './WidgetShell';
 import { Badge } from '../../../components/ui/badge';
+import { SkeletonTable } from '../../../components/shared/Skeleton';
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: 'Draft',
@@ -39,10 +41,10 @@ export default function RecentRfqsWidget() {
       <WidgetHeader icon={<FileText size={16} />} title="Recent RFQs" href="/rfq" />
       <WidgetBody className="p-0">
         {error && <div className="p-4"><MessageStrip type="error">{error}</MessageStrip></div>}
-        {loading && <WidgetLoading>Loading RFQs…</WidgetLoading>}
+        {loading && <SkeletonTable rows={4} columns={5} showToolbar={false} />}
         {!loading && !error && (
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left text-xs">
+            <LandingTable key="dashboard-recent-rfqs" preferenceKey="dashboard-recent-rfqs" columns={DASHBOARD_RECENT_RFQS_COLUMNS} className="w-full border-collapse text-left text-xs">
               <thead>
                 <tr className="border-b border-border/80 bg-muted/40 font-semibold text-muted-foreground">
                   <th className="px-4 py-2.5">RFQ #</th>
@@ -67,10 +69,18 @@ export default function RecentRfqsWidget() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </LandingTable>
           </div>
         )}
       </WidgetBody>
     </>
   );
 }
+
+const DASHBOARD_RECENT_RFQS_COLUMNS: LandingColumn[] = [
+  { key: 'rfq', label: 'RFQ number', defaultVisible: true, required: true },
+  { key: 'title', label: 'Title', defaultVisible: true },
+  { key: 'status', label: 'Status', defaultVisible: true },
+  { key: 'date', label: 'Date', defaultVisible: true },
+  { key: 'quotes', label: 'Quotes', defaultVisible: true },
+];

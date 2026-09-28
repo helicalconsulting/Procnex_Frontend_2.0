@@ -9,7 +9,7 @@ import {
   LogIn, Edit3, Trash2, Plus, Download, Filter, RotateCcw,
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
-import { TableSkeleton } from '../../components/shared/Skeleton';
+import { TableSkeleton, SkeletonList } from '../../components/shared/Skeleton';
 import { AuditExportModal } from './AuditExportModal';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -624,7 +624,7 @@ export default function AuditTrailPage() {
 
       {/* Log Feed Card */}
       {loading ? (
-        <TableSkeleton rows={6} columns={4} />
+        <SkeletonList items={6} hasAvatar={true} />
       ) : paginated.length > 0 ? (
         <Card className="overflow-hidden">
           <div className="divide-y divide-border/60">

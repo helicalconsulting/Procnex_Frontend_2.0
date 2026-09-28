@@ -21,6 +21,7 @@ import { toCanvas } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import { useAuth } from '../../context/AuthContext';
 import ActionSendingOverlay from '../../components/shared/ActionSendingOverlay';
+import { DetailSkeleton } from '../../components/shared/Skeleton';
 import './PurchaseRequisitionPage.css';
 
 // ─── Helper ─────────────────────────────────────────────────
@@ -669,7 +670,7 @@ export default function PurchaseRequisitionPage() {
   if (loading) {
     return (
       <div className="pr-page">
-        <div className="pr-page__loading"><Loader2 size={32} className="pr-page__spinner" /> Loading RFQ data…</div>
+        <DetailSkeleton />
       </div>
     );
   }

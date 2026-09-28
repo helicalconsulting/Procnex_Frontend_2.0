@@ -1,0 +1,35 @@
+/* Layout and contrast only: preserve the application's existing type scale. */
+.vendor-quotation-modal.rfq-modal--open {
+  width: min(960px, calc(100vw - 48px)) !important;
+  height: auto !important;
+  min-height: 0;
+  max-height: 88vh !important;
+}
+.vendor-quotation-modal.rfq-modal--open .rfq-modal__body { min-height: 0; flex: 0 1 auto !important; }
+.vendor-quotation-modal.rfq-modal--expanded .rfq-modal__body { flex: 1 !important; }
+.vendor-quotation-modal .rfq-modal__header-left { min-width: 0; }
+.vendor-quotation-modal .dash-kpi-modal__header-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.quotation-overview { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, .45fr); gap: 24px; }
+.quotation-overview__identity { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.quotation-overview__total { padding: 16px; border-left: 3px solid var(--primary-500); background: var(--surface-elevated); border-radius: 10px; }
+.quotation-overview__facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 24px; padding-top: 20px; border-top: 1px solid var(--border); }
+.quotation-overview__facts dd { margin: 6px 0 0; overflow-wrap: anywhere; }
+.quotation-overview__description { padding-top: 16px; border-top: 1px solid var(--border); }
+.quotation-overview__description p { overflow-wrap: anywhere; }
+.quotation-payment { display: flex; flex-direction: column; gap: 16px; }
+.quotation-payment__summary { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 20px; background: var(--surface-elevated); border: 1px solid var(--border); border-radius: 12px; }
+.quotation-payment__identity { display: flex; align-items: flex-start; gap: 14px; min-width: 0; overflow-wrap: anywhere; }
+.quotation-detail-icon { display: flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 12px; border: 1px solid var(--border); border-radius: 10px; color: var(--primary-500); background: var(--surface-card); }
+.quotation-payment__value { flex-shrink: 0; text-align: right; }
+.quotation-payment__note { padding: 16px 20px; border-left: 3px solid var(--border-strong); background: var(--surface-card); }
+.quotation-detail-table { border: 1px solid var(--border); border-radius: 10px; overflow: auto; }
+.quotation-detail-table td { overflow-wrap: anywhere; }
+.quotation-detail-table td:not(:first-child) { white-space: nowrap; }
+.quotation-allocation--complete { color: #047857; }
+.quotation-allocation--incomplete { color: #9a3412; }
+[data-theme="dark"] .quotation-allocation--complete { color: #6ee7b7; }
+[data-theme="dark"] .quotation-allocation--incomplete { color: #fdba74; }
+.vendor-quotation-modal [role="tabpanel"] { outline-offset: -3px; }
+
+[data-theme="dark"] .vendor-quotation-modal .rfq-modal__rfq-num,
+[data-theme="dark"] .quotation-detail-icon { color: #93c5fd; }

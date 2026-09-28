@@ -1,3 +1,4 @@
+import LandingTable, { type LandingColumn } from '../../components/shared/LandingTable';
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useServiceData } from '../../hooks/useServiceData';
@@ -13,7 +14,6 @@ import { API_BASE } from '../../api/client';
 import {
   CheckCircle2,
   XCircle,
-  Filter,
   Building2,
   ChevronLeft,
   ChevronRight,
@@ -335,7 +335,7 @@ export default function OnboardingQueuePage() {
       />
 
       {/* Metric Cards Grid matching RFQ Page style */}
-      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" role="group" aria-label="Filter requests by status">
         {[
           { icon: Clock, tone: 'warning' as const, value: counts.pending, label: 'Pending Review', detail: 'Awaiting review', filter: 'pending' as const },
           { icon: CheckCircle2, tone: 'success' as const, value: counts.approved, label: 'Approved', detail: 'Accounts activated', filter: 'approved' as const },
@@ -371,7 +371,7 @@ export default function OnboardingQueuePage() {
         })}
       </div>
 
-      {/* Search & Filter Toolbar matching RFQ Page */}
+      {/* Search combines with the selected metric-card status filter. */}
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative w-full max-w-xl">
           <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -389,6 +389,7 @@ export default function OnboardingQueuePage() {
           {search && (
             <button
               type="button"
+              aria-label="Clear search"
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               onClick={() => {
                 setSearch('');
@@ -399,37 +400,16 @@ export default function OnboardingQueuePage() {
             </button>
           )}
         </div>
-
-        <div className="flex items-center gap-2.5 justify-end shrink-0 sm:ml-auto">
-          <div className="flex items-center gap-1.5 rounded-xl border border-input bg-card p-1.5 h-11 shadow-xs">
-            <Filter size={14} className="ml-1.5 text-muted-foreground shrink-0" />
-            {(['all', 'pending', 'approved', 'rejected'] as const).map((f) => (
-              <button
-                key={f}
-                type="button"
-                className={cn(
-                  'px-3 py-1 text-xs font-semibold rounded-lg transition-colors',
-                  activeFilter === f
-                    ? 'bg-primary text-primary-foreground shadow-xs'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
-                )}
-                onClick={() => setActiveFilter(f)}
-              >
-                {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
 
       {/* Table Card matching RFQ Page */}
       <Card className="overflow-hidden">
         {loading ? (
-          <TableSkeleton rows={5} columns={5} />
+          <TableSkeleton rows={5} columnWidths={['220px', '200px', '140px', '120px', '120px']} />
         ) : paginated.length > 0 ? (
           <>
             <div className="hidden overflow-x-auto lg:block">
-              <table className="w-full min-w-[900px] border-collapse text-sm">
+              <LandingTable key="onboarding-queue" preferenceKey="onboarding-queue" columns={ONBOARDING_QUEUE_COLUMNS} className="w-full min-w-[900px] border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-border/75 bg-muted/45 text-left text-[12px] font-bold uppercase tracking-wide text-muted-foreground">
                     <th className="px-5 py-3.5">Vendor</th>
@@ -590,7 +570,7 @@ export default function OnboardingQueuePage() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </LandingTable>
             </div>
 
             {/* Mobile View matching RFQ Page */}
@@ -675,7 +655,7 @@ export default function OnboardingQueuePage() {
             title="No onboarding requests found"
             description={search ? 'Try adjusting your search query or clear the active filter.' : `No ${activeFilter === 'all' ? '' : activeFilter} vendors in the queue.`}
             action={
-              (search || activeFilter !== 'pending') ? (
+              (search || activeFilter !== 'all') ? (
                 <Button variant="outline" onClick={() => { setSearch(''); setActiveFilter('all'); }}>
                   <X className="size-4" /> Clear filters
                 </Button>
@@ -1229,3 +1209,11 @@ export default function OnboardingQueuePage() {
   );
 }
 
+
+const ONBOARDING_QUEUE_COLUMNS: LandingColumn[] = [
+  { key: 'vendor', label: 'Vendor', defaultVisible: true, required: true },
+  { key: 'email', label: 'Email', defaultVisible: true },
+  { key: 'submitted', label: 'Submitted', defaultVisible: true },
+  { key: 'status', label: 'Status', defaultVisible: true },
+  { key: 'actions', label: 'Actions', defaultVisible: true, pinned: 'end' },
+];

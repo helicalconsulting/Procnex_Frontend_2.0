@@ -1,3 +1,4 @@
+import LandingTable, { type LandingColumn } from '../../components/shared/LandingTable';
 import { useState, useMemo, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useServiceData } from '../../hooks/useServiceData';
@@ -283,14 +284,22 @@ export default function DocumentsPage() {
 
       {/* Content */}
       {loading ? (
-        <Card className="p-6">
-          <TableSkeleton rows={4} columns={5} />
-        </Card>
+        view === 'table' ? (
+          <Card className="p-6">
+            <TableSkeleton rows={4} columnWidths={['240px', '120px', '140px', '80px', '140px', '110px', '100px']} />
+          </Card>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <CardSkeleton key={i} />
+            ))}
+          </div>
+        )
       ) : paginated.length > 0 ? (
         view === 'table' ? (
           <Card className="overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <LandingTable key="documents" preferenceKey="documents" columns={DOCUMENTS_COLUMNS} className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b border-border/70 bg-muted/40 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">
                     <th className="px-5 py-3.5">File</th>
@@ -354,7 +363,7 @@ export default function DocumentsPage() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </LandingTable>
             </div>
 
             {filtered.length > perPage && (
@@ -563,3 +572,13 @@ export default function DocumentsPage() {
     </PageFrame>
   );
 }
+
+const DOCUMENTS_COLUMNS: LandingColumn[] = [
+  { key: 'file', label: 'File', defaultVisible: true, required: true },
+  { key: 'category', label: 'Category', defaultVisible: true },
+  { key: 'reference', label: 'Reference', defaultVisible: true },
+  { key: 'size', label: 'Size', defaultVisible: true },
+  { key: 'uploader', label: 'Uploaded by', defaultVisible: true },
+  { key: 'date', label: 'Date', defaultVisible: true },
+  { key: 'actions', label: 'Actions', defaultVisible: true, pinned: 'end' },
+];

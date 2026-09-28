@@ -1,11 +1,15 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
 import { contractService, type Contract } from '../../services/contractService';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
-import { Badge } from '../../components/ui/badge';
-import { Button, buttonVariants } from '../../components/ui/button';
+import { ContractTermsSections } from '@/components/contracts/ContractTermsSections';
+import { RecordStatusBadge } from '@/components/shared/RecordStatusBadge';
+import { DocumentPreview } from '@/components/shared/DocumentPreview';
+import { DetailTabs, DetailTabPanel } from '@/components/ui/detail-tabs';
+import { quoteDate } from '@/components/vendor/quotationFormatting';
+import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
@@ -13,8 +17,8 @@ import { cn } from '../../lib/utils';
 import {
   ChevronLeft, Download, FileSignature, CheckCircle2,
   Clock, AlertTriangle, Trash2, FileText,
-  DollarSign, PieChart, Package, Shield, Calendar, IndianRupee,
-  Printer, Check, X, Building2, User, PenLine, Upload
+  ReceiptText, PieChart, Package, Shield, Calendar, Wallet,
+  Check, X, Building2, User, PenLine, Upload
 } from 'lucide-react';
 import { downloadContractAsPdf } from '../../utils/pdfDownload';
 import { cleanDuplicateSignatures } from '../../utils/cleanSignatures';
@@ -22,26 +26,9 @@ import { sseClient } from '../../services/sseClient';
 import { getVendorPath } from '../../utils/tenantResolver';
 import { signatureService, type SavedSignature } from '../../services/signatureService';
 import { useAuth } from '../../context/AuthContext';
+import { DetailSkeleton } from '../../components/shared/Skeleton';
 import './VendorContractDetailPage.css';
-
-// ─── Status Badge Mappings ───────────────────────────────────
-
-type Tone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
-
-const STATUS_CONFIG: Record<string, { label: string; tone: Tone }> = {
-  DRAFT: { label: 'Draft', tone: 'neutral' },
-  PENDING_VENDOR_SIGNATURE: { label: 'Awaiting Your Signature', tone: 'warning' },
-  AWAITING_VENDOR_SIGNATURE: { label: 'Awaiting Your Signature', tone: 'warning' },
-  AWAITING_CUSTOMER_SIGNATURE: { label: 'Awaiting Buyer Signature', tone: 'info' },
-  VENDOR_SIGNED: { label: 'Vendor Signed', tone: 'success' },
-  ACCEPTED: { label: 'Active', tone: 'success' },
-  COMPLETED: { label: 'Completed', tone: 'success' },
-  ACTIVE: { label: 'Active', tone: 'success' },
-  EXPIRING_SOON: { label: 'Expiring Soon', tone: 'warning' },
-  EXPIRED: { label: 'Expired', tone: 'danger' },
-  CANCELLED: { label: 'Cancelled', tone: 'danger' },
-  TERMINATED: { label: 'Terminated', tone: 'danger' },
-};
+import './vendor-contract-workspace.css';
 
 const INK_COLORS = [
   { id: 'black', color: '#000000', label: 'Black Ink' },
@@ -57,7 +44,7 @@ export default function VendorContractDetailPage() {
   const { formatAmount } = useCurrency();
 
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<string>('overview');
+  const [activeTab, setActiveTab] = useState<string>(() => searchParams.get('action') === 'sign' ? 'signature' : 'overview');
   const [signerName, setSignerName] = useState(user?.fullName || '');
   const [signerTitle, setSignerTitle] = useState('');
   const [signing, setSigning] = useState(false);
@@ -114,20 +101,20 @@ export default function VendorContractDetailPage() {
       remainingValue: Math.max(0, (c.contractValue || 0) - consumedValue),
       totalPOs: pos.length,
     };
-  }, [data?.contract?.purchaseOrders, data?.contract?.contractValue, data?.contract?.currency]);
+  }, [data?.contract]);
 
   // Auto-open sign mode from query param
   useEffect(() => {
-    if (searchParams.get('action') === 'sign' && data && !signed) {
-      setActiveTab('signature');
-      setTimeout(() => {
+    if (searchParams.get('action') === 'sign' && activeTab === 'signature' && data && !signed) {
+      const timeout = setTimeout(() => {
         document.getElementById('vcd-sign-section')?.scrollIntoView({ behavior: 'smooth' });
       }, 300);
+      return () => clearTimeout(timeout);
     }
-  }, [searchParams, data, signed]);
+  }, [searchParams, activeTab, data, signed]);
 
   // SSE real-time refresh
-  const poTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const poTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
     if (!id) return;
     const unsub = sseClient.on('po_created', (payload: unknown) => {
@@ -219,7 +206,7 @@ export default function VendorContractDetailPage() {
     return null;
   };
 
-  const handleSign = useCallback(async () => {
+  const handleSign = async () => {
     if (!signerName.trim()) { setError('Please enter your name.'); return; }
     const sig = getSignatureDataUrl();
     if (!sig) { setError('Please draw, upload, or select your saved signature.'); return; }
@@ -235,7 +222,7 @@ export default function VendorContractDetailPage() {
     } finally {
       setSigning(false);
     }
-  }, [id, signerName, signerTitle, mode, selectedSigUrl, uploadedImage, reload]);
+  };
 
   const handleDownload = () => {
     if (!data) return;
@@ -246,26 +233,17 @@ export default function VendorContractDetailPage() {
     );
   };
 
-  const handlePrint = () => {
-    if (!data?.contract?.contentSnapshot) return;
-    const win = window.open('', '_blank');
-    if (!win) return;
-    win.document.write(data.contract.contentSnapshot);
-    win.document.close();
-    win.print();
-  };
-
   if (loading) {
     return (
-      <PageFrame>
-        <Card className="p-12 text-center text-sm text-muted-foreground">Loading contract details…</Card>
+      <PageFrame className="contract-workspace">
+        <DetailSkeleton />
       </PageFrame>
     );
   }
 
   if (fetchError) {
     return (
-      <PageFrame>
+      <PageFrame className="contract-workspace">
         <Button variant="ghost" size="sm" onClick={() => navigate(getVendorPath('/vendor/contracts'))} className="mb-4 gap-1.5">
           <ChevronLeft className="size-4" /> Back to Contracts
         </Button>
@@ -287,10 +265,7 @@ export default function VendorContractDetailPage() {
   const status = contract.status;
   const canSign = status === 'AWAITING_VENDOR_SIGNATURE' || status === 'PENDING_VENDOR_SIGNATURE';
   const isSigned = signed || ['VENDOR_SIGNED', 'ACCEPTED', 'COMPLETED', 'ACTIVE'].includes(status);
-  const formatDate = (d: string | null | undefined) =>
-    d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
-
-  const statusCfg = STATUS_CONFIG[status] || { label: status, tone: 'neutral' as Tone };
+  const formatDate = (date?: string | null) => quoteDate(date || undefined);
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: FileText },
@@ -301,7 +276,7 @@ export default function VendorContractDetailPage() {
   ];
 
   return (
-    <PageFrame>
+    <PageFrame className="contract-workspace">
       {pageMsg && (
         <MessageStrip type={inferMessageType(pageMsg)} onClose={() => setPageMsg(null)} autoHideMs={6000}>
           {pageMsg}
@@ -326,10 +301,7 @@ export default function VendorContractDetailPage() {
         description={`Contract Ref: ${contract.contractNumber} · Awarded to your company`}
         action={
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={statusCfg.tone} className="py-1 px-2.5 text-xs font-semibold">
-              <span className="size-1.5 rounded-full bg-current mr-1" />
-              {statusCfg.label}
-            </Badge>
+            <RecordStatusBadge kind="contract" status={status} className="py-1 px-2.5 text-xs font-semibold" />
 
             {canSign && (
               <Button size="sm" onClick={() => setActiveTab('signature')} className="gap-1.5">
@@ -341,9 +313,6 @@ export default function VendorContractDetailPage() {
               <Download className="size-4" /> Download PDF
             </Button>
 
-            <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5">
-              <Printer className="size-4" /> Print
-            </Button>
           </div>
         }
       />
@@ -352,18 +321,18 @@ export default function VendorContractDetailPage() {
       {isSigned && contractBalance ? (
         <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <MetricCard
-            icon={IndianRupee}
+            icon={Wallet}
             tone="primary"
             value={formatAmount(contractBalance.contractValue, contractBalance.currency)}
             label="Contract Value"
             detail="Total awarded amount"
           />
           <MetricCard
-            icon={DollarSign}
-            tone="info"
+            icon={ReceiptText}
+            tone="cyan"
             value={formatAmount(contractBalance.consumedValue, contractBalance.currency)}
             label="Consumed by POs"
-            detail={`Across ${contractBalance.totalPOs} orders`}
+            detail={`Across ${contractBalance.totalPOs} ${contractBalance.totalPOs === 1 ? 'order' : 'orders'}`}
           />
           <MetricCard
             icon={PieChart}
@@ -384,7 +353,7 @@ export default function VendorContractDetailPage() {
         /* Standalone Contract Overview Cards when not yet active */
         <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <MetricCard
-            icon={IndianRupee}
+            icon={Wallet}
             tone="primary"
             value={formatAmount(contract.contractValue, contract.currency)}
             label="Contract Value"
@@ -392,14 +361,14 @@ export default function VendorContractDetailPage() {
           />
           <MetricCard
             icon={Building2}
-            tone="info"
+            tone="cyan"
             value={contract.contractOwner?.fullName || 'Buyer Team'}
             label="Buyer Representative"
             detail={contract.contractOwner?.email || '—'}
           />
           <MetricCard
             icon={Calendar}
-            tone="neutral"
+            tone="primary"
             value={formatDate(contract.effectiveDate)}
             label="Effective Date"
             detail={`Expires: ${formatDate(contract.expirationDate)}`}
@@ -414,38 +383,9 @@ export default function VendorContractDetailPage() {
         </div>
       )}
 
-      {/* Tab Navigation */}
-      <Card className="mb-4 p-1.5 bg-muted/40">
-        <div className="flex flex-wrap items-center gap-1">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={cn(
-                  'flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all duration-150 outline-none',
-                  isActive
-                    ? 'bg-background text-foreground shadow-xs'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/40'
-                )}
-              >
-                <Icon className="size-4" />
-                <span>{tab.label}</span>
-                {tab.count !== undefined && tab.count > 0 && (
-                  <Badge tone="neutral" className="ml-1 text-[10px] px-1.5 py-0.2">
-                    {tab.count}
-                  </Badge>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </Card>
+      <DetailTabs id="contract-detail" label="Contract details" tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
 
-      {/* Tab Content Panels */}
-      <div className="space-y-4">
+      <DetailTabPanel id="contract-detail" tabId={activeTab} className="space-y-4">
         {/* ── OVERVIEW TAB ── */}
         {activeTab === 'overview' && (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -453,148 +393,148 @@ export default function VendorContractDetailPage() {
               <div className="flex items-center gap-2 border-b border-border/60 pb-3 font-semibold text-foreground text-sm">
                 <Building2 className="size-4 text-primary" /> Contract Information
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                 <div>
-                  <div className="text-muted-foreground font-medium mb-1">Title</div>
-                  <div className="font-semibold text-foreground">{contract.title}</div>
+                  <dt className="text-muted-foreground font-medium mb-1">Title</dt>
+                  <dd className="font-semibold text-foreground break-words">{contract.title}</dd>
                 </div>
                 <div>
-                  <div className="text-muted-foreground font-medium mb-1">Contract Number</div>
-                  <div className="font-semibold text-primary">{contract.contractNumber}</div>
+                  <dt className="text-muted-foreground font-medium mb-1">Contract Number</dt>
+                  <dd className="font-semibold text-primary break-words">{contract.contractNumber}</dd>
                 </div>
                 <div>
-                  <div className="text-muted-foreground font-medium mb-1">Contract Type</div>
-                  <div className="font-medium text-foreground">{contract.contractType?.replace(/_/g, ' ') || 'General Agreement'}</div>
+                  <dt className="text-muted-foreground font-medium mb-1">Contract Type</dt>
+                  <dd className="font-medium text-foreground break-words">{contract.contractType?.replace(/_/g, ' ') || 'Not specified'}</dd>
                 </div>
                 <div>
-                  <div className="text-muted-foreground font-medium mb-1">Priority</div>
-                  <div className="font-medium text-foreground">{contract.priority || 'Standard'}</div>
+                  <dt className="text-muted-foreground font-medium mb-1">Priority</dt>
+                  <dd className="font-medium text-foreground break-words">{contract.priority || 'Not specified'}</dd>
                 </div>
-              </div>
+              </dl>
             </Card>
 
             <Card className="p-5 space-y-4">
               <div className="flex items-center gap-2 border-b border-border/60 pb-3 font-semibold text-foreground text-sm">
                 <User className="size-4 text-primary" /> Buyer & Reference
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                 <div>
-                  <div className="text-muted-foreground font-medium mb-1">Buyer Representative</div>
-                  <div className="font-semibold text-foreground">{contract.contractOwner?.fullName || 'Procurement Team'}</div>
+                  <dt className="text-muted-foreground font-medium mb-1">Buyer Representative</dt>
+                  <dd className="font-semibold text-foreground break-words">{contract.contractOwner?.fullName || 'Not specified'}</dd>
                 </div>
                 <div>
-                  <div className="text-muted-foreground font-medium mb-1">Buyer Email</div>
-                  <div className="font-medium text-foreground">{contract.contractOwner?.email || '—'}</div>
+                  <dt className="text-muted-foreground font-medium mb-1">Buyer Email</dt>
+                  <dd className="font-medium text-foreground break-words">{contract.contractOwner?.email || '—'}</dd>
                 </div>
                 <div>
-                  <div className="text-muted-foreground font-medium mb-1">Source RFQ</div>
-                  <div className="font-semibold text-foreground">{contract.rfq?.rfqNumber || '—'}</div>
+                  <dt className="text-muted-foreground font-medium mb-1">Source RFQ</dt>
+                  <dd className="font-semibold text-foreground break-words">{contract.rfq?.rfqNumber || '—'}</dd>
                 </div>
                 <div>
-                  <div className="text-muted-foreground font-medium mb-1">RFQ Title</div>
-                  <div className="font-medium text-foreground">{contract.rfq?.title || '—'}</div>
+                  <dt className="text-muted-foreground font-medium mb-1">RFQ Title</dt>
+                  <dd className="font-medium text-foreground break-words">{contract.rfq?.title || '—'}</dd>
                 </div>
-              </div>
+              </dl>
             </Card>
 
             <Card className="p-5 space-y-4">
               <div className="flex items-center gap-2 border-b border-border/60 pb-3 font-semibold text-foreground text-sm">
-                <IndianRupee className="size-4 text-primary" /> Commercial Terms
+                <Wallet className="size-4 text-primary" /> Commercial Terms
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                 <div>
-                  <div className="text-muted-foreground font-medium mb-1">Contract Value</div>
-                  <div className="font-semibold text-foreground">{formatAmount(contract.contractValue, contract.currency)}</div>
+                  <dt className="text-muted-foreground font-medium mb-1">Contract Value</dt>
+                  <dd className="font-semibold text-foreground break-words">{formatAmount(contract.contractValue, contract.currency)}</dd>
                 </div>
                 <div>
-                  <div className="text-muted-foreground font-medium mb-1">Currency</div>
-                  <div className="font-medium text-foreground">{contract.currency || 'KES'}</div>
+                  <dt className="text-muted-foreground font-medium mb-1">Currency</dt>
+                  <dd className="font-medium text-foreground break-words">{contract.currency || 'KES'}</dd>
                 </div>
                 <div>
-                  <div className="text-muted-foreground font-medium mb-1">Payment Terms</div>
-                  <div className="font-medium text-foreground">{contract.paymentTerms || 'Net 30'}</div>
+                  <dt className="text-muted-foreground font-medium mb-1">Payment Terms</dt>
+                  <dd className="font-medium text-foreground break-words">{contract.paymentTerms || 'Not specified'}</dd>
                 </div>
                 <div>
-                  <div className="text-muted-foreground font-medium mb-1">Delivery Terms</div>
-                  <div className="font-medium text-foreground">{contract.deliveryTerms || 'FOB Destination'}</div>
+                  <dt className="text-muted-foreground font-medium mb-1">Delivery Terms</dt>
+                  <dd className="font-medium text-foreground break-words">{contract.deliveryTerms || 'Not specified'}</dd>
                 </div>
-              </div>
+              </dl>
             </Card>
 
             <Card className="p-5 space-y-4">
               <div className="flex items-center gap-2 border-b border-border/60 pb-3 font-semibold text-foreground text-sm">
                 <Calendar className="size-4 text-primary" /> Key Timeline Dates
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                 <div>
-                  <div className="text-muted-foreground font-medium mb-1">Effective Date</div>
-                  <div className="font-semibold text-foreground">{formatDate(contract.effectiveDate)}</div>
+                  <dt className="text-muted-foreground font-medium mb-1">Effective Date</dt>
+                  <dd className="font-semibold text-foreground break-words">{formatDate(contract.effectiveDate)}</dd>
                 </div>
                 <div>
-                  <div className="text-muted-foreground font-medium mb-1">Expiration Date</div>
-                  <div className="font-semibold text-foreground">{formatDate(contract.expirationDate)}</div>
+                  <dt className="text-muted-foreground font-medium mb-1">Expiration Date</dt>
+                  <dd className="font-semibold text-foreground break-words">{formatDate(contract.expirationDate)}</dd>
                 </div>
                 <div>
-                  <div className="text-muted-foreground font-medium mb-1">Created Date</div>
-                  <div className="font-semibold text-foreground">{formatDate(contract.createdAt)}</div>
+                  <dt className="text-muted-foreground font-medium mb-1">Created Date</dt>
+                  <dd className="font-semibold text-foreground break-words">{formatDate(contract.createdAt)}</dd>
                 </div>
                 {contract.signedByVendorAt && (
                   <div>
-                    <div className="text-muted-foreground font-medium mb-1">Signed by You</div>
-                    <div className="font-semibold text-emerald-600">{formatDate(contract.signedByVendorAt)}</div>
+                    <dt className="text-muted-foreground font-medium mb-1">Signed by You</dt>
+                  <dd className="font-semibold text-emerald-700 dark:text-emerald-300 break-words">{formatDate(contract.signedByVendorAt)}</dd>
                   </div>
                 )}
-              </div>
+              </dl>
             </Card>
           </div>
         )}
 
         {/* ── TERMS & CLAUSES TAB ── */}
         {activeTab === 'terms' && (
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <Card className="p-6 space-y-4">
-              <div className="flex items-center gap-2 border-b border-border/60 pb-3.5 font-semibold text-foreground text-sm">
-                <IndianRupee className="size-4 text-primary" /> Payment & Billing
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <Card className="p-5 space-y-4">
+              <div className="flex items-center gap-2 border-b border-border/60 pb-3 font-semibold text-foreground text-sm">
+                <Wallet className="size-4 text-primary" /> Payment & Billing
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+              <dl className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
                 <div>
-                  <div className="text-muted-foreground font-medium mb-1">Payment Terms</div>
-                  <div className="font-semibold text-foreground">{contract.paymentTerms || '—'}</div>
+                  <dt className="text-muted-foreground font-medium mb-1">Payment Terms</dt>
+                  <dd className="font-semibold text-foreground break-words">{contract.paymentTerms || '—'}</dd>
                 </div>
                 <div>
-                  <div className="text-muted-foreground font-medium mb-1">Payment Schedule</div>
-                  <div className="font-semibold text-foreground">{contract.paymentSchedule || '—'}</div>
+                  <dt className="text-muted-foreground font-medium mb-1">Payment Schedule</dt>
+                  <dd className="font-semibold text-foreground break-words">{contract.paymentSchedule || '—'}</dd>
                 </div>
                 <div>
-                  <div className="text-muted-foreground font-medium mb-1">Tax / VAT</div>
-                  <div className="font-semibold text-foreground">{contract.taxPercentage ? `${contract.taxPercentage}%` : 'Standard'}</div>
+                  <dt className="text-muted-foreground font-medium mb-1">Tax / VAT</dt>
+                  <dd className="font-semibold text-foreground break-words">{contract.taxPercentage != null ? `${contract.taxPercentage}%` : 'Not specified'}</dd>
                 </div>
-              </div>
+              </dl>
             </Card>
 
-            <Card className="p-6 space-y-4">
-              <div className="flex items-center gap-2 border-b border-border/60 pb-3.5 font-semibold text-foreground text-sm">
+            <Card className="p-5 space-y-4">
+              <div className="flex items-center gap-2 border-b border-border/60 pb-3 font-semibold text-foreground text-sm">
                 <Package className="size-4 text-primary" /> Delivery & Logistics
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+              <dl className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
                 <div>
-                  <div className="text-muted-foreground font-medium mb-1">Delivery Terms</div>
-                  <div className="font-semibold text-foreground">{contract.deliveryTerms || '—'}</div>
+                  <dt className="text-muted-foreground font-medium mb-1">Delivery Terms</dt>
+                  <dd className="font-semibold text-foreground break-words">{contract.deliveryTerms || '—'}</dd>
                 </div>
                 <div>
-                  <div className="text-muted-foreground font-medium mb-1">Location</div>
-                  <div className="font-semibold text-foreground">{contract.deliveryLocation || '—'}</div>
+                  <dt className="text-muted-foreground font-medium mb-1">Location</dt>
+                  <dd className="font-semibold text-foreground break-words">{contract.deliveryLocation || '—'}</dd>
                 </div>
                 <div>
-                  <div className="text-muted-foreground font-medium mb-1">Lead Time</div>
-                  <div className="font-semibold text-foreground">{contract.leadTime || '—'}</div>
+                  <dt className="text-muted-foreground font-medium mb-1">Lead Time</dt>
+                  <dd className="font-semibold text-foreground break-words">{contract.leadTime || '—'}</dd>
                 </div>
-              </div>
+              </dl>
             </Card>
 
-            <Card className="p-6 space-y-4 lg:col-span-2">
-              <div className="flex items-center gap-2 border-b border-border/60 pb-3.5 font-semibold text-foreground text-sm">
-                <Shield className="size-4 text-primary" /> Compliance & Warranties
+            <Card className="p-5 space-y-4 lg:col-span-2">
+              <div className="flex items-center gap-2 border-b border-border/60 pb-3 font-semibold text-foreground text-sm">
+                <Shield className="size-4 text-primary" /> Compliance
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
                 {[
@@ -618,6 +558,7 @@ export default function VendorContractDetailPage() {
                 ))}
               </div>
             </Card>
+            <ContractTermsSections contract={contract} />
           </div>
         )}
 
@@ -626,25 +567,18 @@ export default function VendorContractDetailPage() {
           <Card className="overflow-hidden">
             <div className="flex items-center justify-between border-b border-border/60 bg-muted/20 px-4 py-3">
               <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
-                <FileText className="size-4 text-primary" /> Executed Contract Document
+                <FileText className="size-4 text-primary" /> {isSigned ? 'Executed Contract Document' : 'Contract Document'}
               </div>
-              <Button size="sm" variant="outline" onClick={handleDownload} className="gap-1.5 text-xs">
-                <Download className="size-3.5" /> Download PDF
-              </Button>
+<span className="text-xs text-muted-foreground">Read-only preview</span>
             </div>
-            <div className="p-4 sm:p-8 bg-muted/30 min-h-[400px] flex justify-center">
+            <div className="p-4 bg-muted/30">
               {contract.contentSnapshot ? (
-                <div className="vcd-doc-preview w-full max-w-4xl bg-white shadow-lg rounded-xl border border-slate-200">
-                  <div
-                    className="vcd-doc-preview__body p-6 sm:p-12 text-sm leading-relaxed"
-                    dangerouslySetInnerHTML={{ __html: cleanDuplicateSignatures(contract.contentSnapshot) }}
-                  />
-                </div>
+                <DocumentPreview html={cleanDuplicateSignatures(contract.contentSnapshot)} title={`Document preview for ${contract.contractNumber}`} />
               ) : (
                 <EmptyState
                   icon={FileText}
                   title="Document content unavailable"
-                  description="The text payload for this contract is not formatted for browser preview."
+                  description="No document content has been provided for this contract."
                 />
               )}
             </div>
@@ -659,13 +593,13 @@ export default function VendorContractDetailPage() {
             </div>
             {contract.purchaseOrders && contract.purchaseOrders.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full text-xs">
+                <table className="w-full text-xs" aria-label="Contract purchase orders">
                   <thead>
                     <tr className="border-b border-border/60 bg-muted/20 text-left font-semibold text-muted-foreground">
-                      <th className="p-3">PO Number</th>
-                      <th className="p-3">Issue Date</th>
-                      <th className="p-3">Amount</th>
-                      <th className="p-3">Status</th>
+                      <th scope="col" className="p-3">PO Number</th>
+                      <th scope="col" className="p-3">Issue Date</th>
+                      <th scope="col" className="p-3 text-right">Amount</th>
+                      <th scope="col" className="p-3">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/50">
@@ -673,9 +607,9 @@ export default function VendorContractDetailPage() {
                       <tr key={po.id} className="hover:bg-accent/20">
                         <td className="p-3 font-semibold text-primary">{po.poNumber}</td>
                         <td className="p-3 text-muted-foreground">{formatDate(po.createdAt)}</td>
-                        <td className="p-3 tabular-nums font-semibold text-foreground">{formatAmount(po.totalAmount, contract.currency)}</td>
+                        <td className="p-3 text-right tabular-nums font-semibold text-foreground">{formatAmount(po.totalAmount, contract.currency)}</td>
                         <td className="p-3">
-                          <Badge tone="primary">{po.status.replace(/_/g, ' ')}</Badge>
+                          <RecordStatusBadge kind="order" status={po.status} />
                         </td>
                       </tr>
                     ))}
@@ -925,7 +859,7 @@ export default function VendorContractDetailPage() {
             )}
           </Card>
         )}
-      </div>
+      </DetailTabPanel>
     </PageFrame>
   );
 }

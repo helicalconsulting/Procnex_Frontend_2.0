@@ -1,0 +1,12 @@
+/* Invoice layout only; shared controls provide the same surface and type scale. */
+.invoice-workspace { --muted-foreground: #59677c; min-width: 0; }
+[data-theme="dark"] .invoice-workspace { --muted-foreground: #9ba9b9; }
+.invoice-line-table { max-height: 560px; }
+.invoice-line-table table { min-width: 920px; table-layout: fixed; }
+.invoice-line-table thead { position: sticky; top: 0; z-index: 1; background: var(--card); }
+.invoice-line-table tbody tr:hover { background: color-mix(in srgb, var(--muted) 20%, transparent); }
+.invoice-line-table :is(th, td) { border-inline: none; }
+.invoice-line-reference { padding-inline-start: 20px; }
+.invoice-currency .cur-selector__trigger { min-height: 40px; border-color: var(--input); border-radius: 12px; }
+.invoice-dropzone:focus-within { outline: 2px solid var(--ring); outline-offset: 3px; border-color: var(--ring); }
+.invoice-dropzone--dragging { background: var(--accent); border-color: var(--primary); }

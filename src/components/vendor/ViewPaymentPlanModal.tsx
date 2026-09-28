@@ -1,4 +1,7 @@
+import { useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { Button } from '../ui/button';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 import { X, Check, Eye } from 'lucide-react';
 
 // ─── Types ──────────────────────────────────────────────────
@@ -37,7 +40,7 @@ const dialogStyle: React.CSSProperties = {
   position: 'relative',
   width: 'min(520px, calc(100vw - 32px))',
   maxHeight: 'calc(100vh - 80px)',
-  background: 'var(--surface-card)',
+  background: 'var(--card)',
   border: '1px solid var(--border)',
   borderRadius: 'var(--radius-xl, 16px)',
   boxShadow: '0 24px 80px rgba(0,0,0,0.3)',
@@ -67,21 +70,6 @@ const headerTitleStyle: React.CSSProperties = {
   fontSize: 15,
   fontWeight: 700,
   color: 'var(--text-primary)',
-};
-
-const closeBtnStyle: React.CSSProperties = {
-  width: 28,
-  height: 28,
-  borderRadius: 6,
-  border: '1px solid var(--border)',
-  background: 'var(--surface-elevated)',
-  color: 'var(--text-secondary)',
-  cursor: 'pointer',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  fontFamily: 'inherit',
-  transition: 'background 0.15s, color 0.15s, border-color 0.15s',
 };
 
 const bodyStyle: React.CSSProperties = {
@@ -153,26 +141,11 @@ const footerStyle: React.CSSProperties = {
   flexShrink: 0,
 };
 
-const footerBtnStyle: React.CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: 6,
-  padding: '8px 20px',
-  border: '1px solid var(--border)',
-  borderRadius: 8,
-  fontSize: 14,
-  fontWeight: 600,
-  cursor: 'pointer',
-  fontFamily: 'inherit',
-  background: 'var(--surface-elevated)',
-  color: 'var(--text-primary)',
-  transition: 'background 0.15s, border-color 0.15s, color 0.15s',
-};
-
 // ─── Component ──────────────────────────────────────────────
 
 function ViewPaymentPlanModalInner({ plan, onClose }: ViewPaymentPlanModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef, true, onClose);
   const totalAllocation = plan.milestones.reduce((sum, m) => sum + m.percentage, 0);
   const isTotalValid = Math.abs(totalAllocation - 100) < 0.01;
 
@@ -180,7 +153,8 @@ function ViewPaymentPlanModalInner({ plan, onClose }: ViewPaymentPlanModalProps)
     <div className="vquot-modal-backdrop view-plan-modal-backdrop" style={backdropStyle} onClick={onClose}>
       {/* Dialog */}
       <div
-        className="vquot-modal view-plan-modal"
+        ref={dialogRef} tabIndex={-1}
+        className="vquot-modal view-plan-modal outline-none"
         style={dialogStyle}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
@@ -193,25 +167,7 @@ function ViewPaymentPlanModalInner({ plan, onClose }: ViewPaymentPlanModalProps)
             <Eye size={14} style={{ color: 'var(--vendor-primary, #0a6ed1)', flexShrink: 0 }} />
             <span style={headerTitleStyle}>Payment Plan Details</span>
           </div>
-          <button
-            type="button"
-            style={closeBtnStyle}
-            onClick={onClose}
-            title="Close"
-            aria-label="Close"
-            onMouseOver={e => {
-              e.currentTarget.style.background = 'rgba(187,0,0,0.1)';
-              e.currentTarget.style.color = 'var(--danger-500, #bb0000)';
-              e.currentTarget.style.borderColor = 'rgba(187,0,0,0.2)';
-            }}
-            onMouseOut={e => {
-              e.currentTarget.style.background = 'var(--surface-elevated)';
-              e.currentTarget.style.color = 'var(--text-secondary)';
-              e.currentTarget.style.borderColor = 'var(--border)';
-            }}
-          >
-            <X size={14} />
-          </button>
+          <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close payment plan"><X size={16}/></Button>
         </div>
 
         {/* Body */}
@@ -246,14 +202,10 @@ function ViewPaymentPlanModalInner({ plan, onClose }: ViewPaymentPlanModalProps)
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Total</span>
               {isTotalValid && (
-                <Check size={14} style={{ color: '#107e3e', flexShrink: 0 }} />
+                <Check size={14} className="shrink-0 text-emerald-700 dark:text-emerald-300"/>
               )}
             </div>
-            <span style={{
-              fontSize: 16,
-              fontWeight: 800,
-              color: isTotalValid ? '#107e3e' : '#bb0000',
-            }}>
+            <span className={`text-base font-semibold ${isTotalValid ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300'}`}>
               {totalAllocation.toFixed(1)}%
             </span>
           </div>
@@ -261,23 +213,7 @@ function ViewPaymentPlanModalInner({ plan, onClose }: ViewPaymentPlanModalProps)
 
         {/* Footer */}
         <div style={footerStyle}>
-          <button
-            type="button"
-            style={footerBtnStyle}
-            onClick={onClose}
-            onMouseOver={e => {
-              e.currentTarget.style.background = 'var(--surface-hover)';
-              e.currentTarget.style.borderColor = 'var(--vendor-primary, #0a6ed1)';
-              e.currentTarget.style.color = 'var(--vendor-primary, #0a6ed1)';
-            }}
-            onMouseOut={e => {
-              e.currentTarget.style.background = 'var(--surface-elevated)';
-              e.currentTarget.style.borderColor = 'var(--border)';
-              e.currentTarget.style.color = 'var(--text-primary)';
-            }}
-          >
-            Close
-          </button>
+          <Button type="button" variant="outline" onClick={onClose}>Close</Button>
         </div>
       </div>
     </div>

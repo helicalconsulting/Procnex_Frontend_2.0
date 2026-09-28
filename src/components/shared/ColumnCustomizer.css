@@ -398,3 +398,25 @@
   transform: translateY(0);
 }
 
+
+/* Keep glyphs legible when legacy page styles override button backgrounds. */
+.col-btn-wrap .col-btn span,
+.col-btn-wrap .col-btn:hover span,
+.col-btn-wrap .col-btn--active span { background: currentColor; }
+.col-btn-wrap .col-btn:hover,
+.col-btn-wrap .col-btn--active { color: var(--text-primary); }
+.col-modal .col-modal__toggle--on { color: var(--text-primary); box-shadow: none; }
+.col-modal .col-modal__toggle--required { opacity: 1; cursor: default; }
+.col-modal .col-modal__action-btn:disabled { opacity: .6; cursor: default; }
+
+.col-modal .col-modal__count,
+.col-modal .col-modal__status-badge--visible { color: var(--text-primary); }
+.col-modal .col-modal__required-badge { color: var(--text-secondary); background: var(--surface-elevated); border-color: var(--border); }
+
+.col-modal__reorder { display: flex; gap: 2px; flex-shrink: 0; }
+.col-modal__reorder-btn { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 6px; background: transparent; color: var(--text-secondary); cursor: pointer; }
+.col-modal__reorder-btn:hover:not(:disabled) { background: var(--surface-hover); color: var(--text-primary); }
+.col-modal__reorder-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.col-modal__reorder-btn:disabled { opacity: .35; cursor: default; }
+/* One placement for every landing register, irrespective of its old table skin. */
+th:has(.column-settings-button) > div { justify-content: flex-end; }

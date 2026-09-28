@@ -1,5 +1,8 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
+import { quoteDate } from '../../components/vendor/quotationFormatting';
+import QuotationPaymentTerms from '../../components/vendor/QuotationPaymentTerms';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useColumnPreferences, type ColumnDef } from '../../hooks/useColumnPreferences';
 import {
@@ -7,6 +10,7 @@ import {
   type VendorQuotationRow,
 } from '../../services/vendorPortalService';
 import type { QuotationBidSecurity } from '../../types';
+import type { RFQTableRow } from '../../types/viewModels';
 import { rfqService } from '../../services/rfqService';
 import { API_BASE } from '../../api/client';
 import { authService } from '../../services/authService';
@@ -23,7 +27,7 @@ import { TableSkeleton } from '../../components/shared/Skeleton';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { CurrencyBadge, CurrencySelector, useCurrency } from '../../components/shared/CurrencyMaster';
 import { Badge } from '../../components/ui/badge';
-import { Button, buttonVariants } from '../../components/ui/button';
+import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
@@ -33,6 +37,7 @@ import '../../styles/vendor-portal.css';
 import '../../styles/vendor-orders.css';
 import '../../pages/rfq/RFQPage.css';
 import '../../pages/quotations/QuotationsPage.css';
+import './vendor-quotations.css';
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -78,14 +83,14 @@ interface VendorQuotation {
 // ─── Column Definitions for Items Table ───────────────────────
 
 const ITEMS_TABLE_COLUMNS: ColumnDef[] = [
-  { key: 'status',       label: 'Status',         defaultVisible: true },
-  { key: 'item',         label: 'Item',           defaultVisible: true },
-  { key: 'qty',           label: 'Qty',            defaultVisible: true },
-  { key: 'unitPrice',     label: 'Unit Price',     defaultVisible: true },
-  { key: 'lineTotal',     label: 'Line Total',     defaultVisible: true },
+  { key: 'status',       label: 'Status',         defaultVisible: true, required: true },
+  { key: 'item',         label: 'Item',           defaultVisible: true, required: true },
+  { key: 'qty',           label: 'Qty',            defaultVisible: true, required: true },
+  { key: 'unitPrice',     label: 'Unit Price',     defaultVisible: true, required: true },
+  { key: 'lineTotal',     label: 'Line Total',     defaultVisible: true, required: true },
   { key: 'leadTime',      label: 'Lead Time',      defaultVisible: true },
   { key: 'paymentTerms',  label: 'Payment Terms',  defaultVisible: true },
-  { key: 'grandTotal',    label: 'Grand Total',    defaultVisible: true },
+  { key: 'grandTotal',    label: 'Grand Total (footer)',    defaultVisible: true },
 ];
 
 const ITEMS_COLUMN_HEADERS: Record<string, string> = {
@@ -175,9 +180,9 @@ function StatusBadge({ status }: { status: QuotStatus | string }) {
   return (
     <span className={cn(
       "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border",
-      cfg.tone === 'success' && "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
-      cfg.tone === 'warning' && "bg-amber-500/10 text-amber-600 border-amber-500/20",
-      cfg.tone === 'danger' && "bg-rose-500/10 text-rose-600 border-rose-500/20",
+      cfg.tone === 'success' && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20",
+      cfg.tone === 'warning' && "bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/20",
+      cfg.tone === 'danger' && "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20",
       cfg.tone === 'neutral' && "bg-muted text-muted-foreground border-border"
     )}>
       {cfg.icon}
@@ -190,7 +195,7 @@ function StatusBadge({ status }: { status: QuotStatus | string }) {
 
 export default function VendorQuotationsPage() {
   useAuth();
-  const { data: quotations, loading, error, reload } = useServiceData(
+  const { data: quotations, loading, error } = useServiceData(
     () => vendorPortalService.listQuotations().then((list) => list.map(mapRow)),
     [] as VendorQuotation[]
   );
@@ -201,20 +206,16 @@ export default function VendorQuotationsPage() {
 
   // ── View Quotation Modal state ──────────────────────────
   const [viewQuot, setViewQuot] = useState<VendorQuotation | null>(null);
-  const [viewModalState, setViewModalState] = useState<'open' | 'expanded' | 'minimized'>('open');
-  const [viewRfqData, setViewRfqData] = useState<Record<string, unknown> | null>(null);
+  const [viewRfqData, setViewRfqData] = useState<RFQTableRow | null>(null);
 
   // ── Bid Security Docs ───────────────────────────────────
   const [bidSecurityDocs, setBidSecurityDocs] = useState<Record<string, QuotationBidSecurity | null>>({});
-  const [bidSecurityLoading, setBidSecurityLoading] = useState(false);
+  const bidSecurityLoading = quotations.some(q => !(String(q.id) in bidSecurityDocs));
 
   // Fetch bid security documents for all quotations
   useEffect(() => {
-    if (quotations.length === 0) {
-      setBidSecurityLoading(false);
-      return;
-    }
-    setBidSecurityLoading(true);
+    if (quotations.length === 0) return;
+    let cancelled = false;
     const fetchDocs = async () => {
       const results: Record<string, QuotationBidSecurity | null> = {};
       await Promise.all(
@@ -227,10 +228,10 @@ export default function VendorQuotationsPage() {
           }
         })
       );
-      setBidSecurityDocs(prev => ({ ...prev, ...results }));
-      setBidSecurityLoading(false);
+      if (!cancelled) setBidSecurityDocs(prev => ({ ...prev, ...results }));
     };
     fetchDocs();
+    return () => { cancelled = true; };
   }, [quotations]);
 
   // ── Column preferences for items table ──
@@ -277,8 +278,7 @@ export default function VendorQuotationsPage() {
   const [displayCurrency, setDisplayCurrency] = useState<string>(companyDefaultCurrency);
 
   const defCur = companyDefaultCurrency;
-  const fmtDate = (d: string) =>
-    new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  const fmtDate = quoteDate;
 
   // Determine which items-table columns are visible (grandTotal is footer-only)
   const visibleDataCols = useMemo(
@@ -296,19 +296,7 @@ export default function VendorQuotationsPage() {
   ) => {
     switch (key) {
       case 'status':
-        return (
-          <td key={key} className="p-3">
-            {item.isSelected ? (
-              <Badge tone="success" className="gap-1 text-xs">
-                <CheckCircle2 size={12} /> Selected
-              </Badge>
-            ) : (
-              <Badge tone="neutral" className="gap-1 text-xs text-muted-foreground">
-                <XCircle size={12} /> Not Selected
-              </Badge>
-            )}
-          </td>
-        );
+        return <td key={key} className="p-3"><StatusBadge status={quot.status} /></td>;
       case 'item':
         return <td key={key} className="p-3 font-medium text-foreground">{item.name}</td>;
       case 'qty':
@@ -339,16 +327,19 @@ export default function VendorQuotationsPage() {
   };
 
   // ── Open view quotation modal ────────────────────────────
-  const openViewQuot = useCallback(async (quot: VendorQuotation) => {
+  const openViewQuot = useCallback((quot: VendorQuotation) => {
     setViewQuot(quot);
-    setViewModalState('open');
-    try {
-      const rfqData = await rfqService.getById(quot.rfqId);
-      setViewRfqData(rfqData as Record<string, unknown>);
-    } catch {
-      setViewRfqData(null);
-    }
+    setViewRfqData(null);
   }, []);
+
+  useEffect(() => {
+    if (!viewQuot) return;
+    let cancelled = false;
+    rfqService.getById(viewQuot.rfqId).then(data => {
+      if (!cancelled) setViewRfqData(data);
+    }).catch(() => { if (!cancelled) setViewRfqData(null); });
+    return () => { cancelled = true; };
+  }, [viewQuot]);
 
   // ── Download Excel button handler ──
   const [downloadingExcel, setDownloadingExcel] = useState<string | number | null>(null);
@@ -443,7 +434,7 @@ export default function VendorQuotationsPage() {
       {/* ── Quotation List Cards ────────────────────── */}
       {loading ? (
         <Card className="p-4">
-          <TableSkeleton rows={4} columns={6} />
+          <TableSkeleton rows={4} columnWidths={['140px', '180px', '140px', '120px', '120px', '100px']} />
         </Card>
       ) : filtered.length > 0 ? (
         <div className="flex flex-col gap-3.5">
@@ -451,10 +442,6 @@ export default function VendorQuotationsPage() {
             const isExpanded = String(expandedQuot) === String(quot.id);
             const statusCfg = STATUS_CONFIG[quot.status] || { label: quot.status || 'Submitted', tone: 'neutral' as const, icon: null };
 
-            // Compute total of selected items only
-            const selectedTotal = quot.items
-              .filter(i => i.isSelected)
-              .reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
             const selectedCount = quot.items.filter(i => i.isSelected).length;
             const allSelected = selectedCount === quot.items.length;
 
@@ -504,12 +491,12 @@ export default function VendorQuotationsPage() {
                   <div className="flex flex-wrap items-center gap-3 shrink-0" onClick={(e) => e.stopPropagation()}>
                     <div className="text-right">
                       <div className="text-base font-bold text-foreground flex items-center gap-1.5 tabular-nums justify-end">
-                        {formatAmount(convert(selectedTotal, quot.currency || defCur, displayCurrency), displayCurrency)}
+                        {formatAmount(convert(quot.totalPrice, quot.currency || defCur, displayCurrency), displayCurrency)}
                         <CurrencyBadge currency={displayCurrency} size="sm" />
                       </div>
-                      {!allSelected && selectedCount > 0 && (
+                      {quot.status === 'ACCEPTED' && !allSelected && selectedCount > 0 && (
                         <div className="text-xs text-muted-foreground">
-                          ({selectedCount}/{quot.items.length} items)
+                          {selectedCount} of {quot.items.length} items selected
                         </div>
                       )}
                     </div>
@@ -526,6 +513,7 @@ export default function VendorQuotationsPage() {
                       variant="ghost"
                       size="icon-sm"
                       onClick={() => setExpandedQuot(isExpanded ? null : quot.id)}
+                      aria-expanded={isExpanded}
                       aria-label="Toggle quotation details"
                     >
                       <ChevronDown className={cn('size-4 transition-transform duration-200', isExpanded && 'rotate-180')} />
@@ -593,37 +581,28 @@ export default function VendorQuotationsPage() {
                         <table className="w-full border-collapse text-sm">
                           <thead>
                             <tr className="border-b border-border/60 bg-muted/20 text-left text-xs font-semibold text-muted-foreground">
-                              <th className="p-3">Status</th>
                               {visibleDataCols.map((key) => (
-                                <th key={key} className="p-3">{ITEMS_COLUMN_HEADERS[key]}</th>
+                                <th key={key} scope="col" className="p-3">{ITEMS_COLUMN_HEADERS[key]}</th>
                               ))}
-                              {dataColCount > 0 && <th className="p-3 w-10" />}
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-border/60">
+                            {quot.items.length === 0 && <tr><td colSpan={dataColCount} className="p-4 text-muted-foreground">No line items recorded for this quotation.</td></tr>}
                             {quot.items.map((item, idx) => (
                               <tr key={idx} className="hover:bg-accent/20 transition-colors">
-                                {renderTableCell('status', item, quot)}
                                 {visibleDataCols.map((key) => renderTableCell(key, item, quot))}
-                                {dataColCount > 0 && <td className="p-3" />}
                               </tr>
                             ))}
                           </tbody>
                           {showGrandTotal && dataColCount > 0 && (
                             <tfoot>
                               <tr className="border-t-2 border-border bg-muted/30 font-semibold">
-                                <td colSpan={dataColCount} className="p-3 text-right text-muted-foreground">
-                                  {allSelected ? 'Total:' : 'Selected Items Total:'}
+                                <td colSpan={dataColCount - 1} className="p-3 text-right text-muted-foreground">
+                                  Quotation total:
                                 </td>
                                 <td className="p-3 text-foreground font-bold tabular-nums">
-                                  {formatAmount(convert(selectedTotal, quot.currency || defCur, displayCurrency), displayCurrency)}
-                                  {!allSelected && (
-                                    <span className="text-xs text-muted-foreground font-normal">
-                                      {' '}of {formatAmount(convert(quot.totalPrice, quot.currency || defCur, displayCurrency), displayCurrency)}
-                                    </span>
-                                  )}
+                                  {formatAmount(convert(quot.totalPrice, quot.currency || defCur, displayCurrency), displayCurrency)}
                                 </td>
-                                <td className="p-3" />
                               </tr>
                             </tfoot>
                           )}
@@ -686,6 +665,7 @@ export default function VendorQuotationsPage() {
       {/* ── View Quotation Modal (same layout as admin side, no Evaluation) ── */}
       {viewQuot && (
         <ViewVendorQuotationModal
+          key={viewQuot.id}
           quotation={viewQuot}
           rfqData={viewRfqData}
           bidSecurityDoc={bidSecurityDocs[String(viewQuot.id)] || null}
@@ -706,26 +686,6 @@ type VendorViewTab = 'vendor' | 'items' | 'paymentTerms' | 'authorization' | 'do
 
 // ─── File type helpers ───────────────────────────────────────
 
-const FILE_ICON_MAP: Record<string, { icon: string; color: string }> = {
-  pdf: { icon: '📄', color: '#e74c3c' },
-  doc: { icon: '📝', color: '#2b5797' },
-  docx: { icon: '📝', color: '#2b5797' },
-  xls: { icon: '📊', color: '#217346' },
-  xlsx: { icon: '📊', color: '#217346' },
-  csv: { icon: '📊', color: '#217346' },
-  jpg: { icon: '🖼️', color: '#e67e22' },
-  jpeg: { icon: '🖼️', color: '#e67e22' },
-  png: { icon: '🖼️', color: '#e67e22' },
-  gif: { icon: '🖼️', color: '#e67e22' },
-  webp: { icon: '🖼️', color: '#e67e22' },
-  txt: { icon: '📄', color: '#6a6d70' },
-};
-
-function getFileIcon(fileName: string): { icon: string; color: string } {
-  const ext = fileName.split('.').pop()?.toLowerCase() || '';
-  return FILE_ICON_MAP[ext] || { icon: '📎', color: '#6a6d70' };
-}
-
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -740,20 +700,17 @@ function ViewVendorQuotationModal({
   onClose,
 }: {
   quotation: VendorQuotation;
-  rfqData: Record<string, unknown> | null;
+  rfqData: RFQTableRow | null;
   bidSecurityDoc: QuotationBidSecurity | null;
   attachments: VendorQuotation['attachments'];
   onClose: () => void;
 }) {
   const [modalState, setModalState] = useState<'open' | 'expanded' | 'minimized'>('open');
   const [activeTab, setActiveTab] = useState<VendorViewTab>('vendor');
-  const [bidSecurityDoc, setBidSecurityDoc] = useState<QuotationBidSecurity | null>(initialBidSecurityDoc);
+  const [fetchedBidSecurityDoc, setFetchedBidSecurityDoc] = useState<QuotationBidSecurity | null>(null);
+  const bidSecurityDoc = initialBidSecurityDoc || fetchedBidSecurityDoc;
   const { formatAmount, convert, companyDefaultCurrency } = useCurrency();
   const defCur = q.currency || companyDefaultCurrency || 'KES';
-
-  useEffect(() => {
-    setBidSecurityDoc(initialBidSecurityDoc);
-  }, [initialBidSecurityDoc]);
 
   useEffect(() => {
     if (bidSecurityDoc) return;
@@ -761,7 +718,7 @@ function ViewVendorQuotationModal({
     (async () => {
       try {
         const doc = await vendorPortalService.getBidSecurity(String(q.id));
-        if (!cancelled && doc) setBidSecurityDoc(doc);
+        if (!cancelled && doc) setFetchedBidSecurityDoc(doc);
       } catch {
         // Ignored
       }
@@ -769,12 +726,14 @@ function ViewVendorQuotationModal({
     return () => { cancelled = true; };
   }, [q.id, bidSecurityDoc]);
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef, modalState !== 'minimized', onClose);
+
   const isOpen = modalState === 'open';
   const isExpanded = modalState === 'expanded';
   const isMinimized = modalState === 'minimized';
 
-  const fmtDate = (d: string) =>
-    new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  const fmtDate = quoteDate;
 
   const tabs: { key: VendorViewTab; label: string; icon: React.ReactNode }[] = [
     { key: 'vendor', label: 'Vendor Details', icon: <Building className="size-4" /> },
@@ -791,8 +750,13 @@ function ViewVendorQuotationModal({
       )}
 
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal={!isMinimized}
+        aria-label={`Quotation ${q.rfqNumber}`}
+        tabIndex={-1}
         className={[
-          'rfq-modal',
+          'rfq-modal vendor-quotation-modal',
           isOpen ? 'rfq-modal--open' : '',
           isExpanded ? 'rfq-modal--expanded' : '',
           isMinimized ? 'rfq-modal--minimized' : '',
@@ -850,10 +814,25 @@ function ViewVendorQuotationModal({
         {!isMinimized && (
           <>
             {/* Tabs */}
-            <div className="flex items-center gap-1 px-6 border-b border-border/60 bg-muted/20 overflow-x-auto">
+            <div role="tablist" aria-label="Quotation details" className="flex items-center gap-1 px-6 border-b border-border/60 bg-muted/20 overflow-x-auto">
               {tabs.map(t => (
                 <button
                   key={t.key}
+                  role="tab"
+                  tabIndex={activeTab === t.key ? 0 : -1}
+                  onKeyDown={event => {
+                    const index = tabs.findIndex(tab => tab.key === t.key);
+                    const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length
+                      : event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length
+                      : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : -1;
+                    if (next < 0) return;
+                    event.preventDefault();
+                    setActiveTab(tabs[next].key);
+                    dialogRef.current?.querySelector<HTMLButtonElement>(`#quotation-tab-${tabs[next].key}`)?.focus();
+                  }}
+                  aria-selected={activeTab === t.key}
+                  aria-controls={`quotation-panel-${t.key}`}
+                  id={`quotation-tab-${t.key}`}
                   type="button"
                   className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-colors whitespace-nowrap ${
                     activeTab === t.key
@@ -868,61 +847,45 @@ function ViewVendorQuotationModal({
               ))}
             </div>
 
-            <div className="rfq-modal__body">
+            <div className="rfq-modal__body" role="tabpanel" id={`quotation-panel-${activeTab}`} aria-labelledby={`quotation-tab-${activeTab}`} tabIndex={0}>
               {/* ── Tab 1: Vendor Details ── */}
               {activeTab === 'vendor' && (
                 <div className="p-6 space-y-6">
-                  {/* Clean 2-column key-value layout (no cards) */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-5 gap-x-8">
-                    <div>
-                      <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">RFQ Number</div>
-                      <div className="text-sm font-semibold text-foreground">{q.rfqNumber}</div>
+                  <div className="quotation-overview">
+                    <div className="quotation-overview__identity">
+                      <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{q.rfqNumber}</div>
+                      <div className="text-sm font-semibold text-foreground">{q.rfqTitle || 'Untitled RFQ'}</div>
+                      <div><StatusBadge status={q.status} /></div>
                     </div>
-                    <div>
-                      <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">RFQ Title</div>
-                      <div className="text-sm font-semibold text-foreground">{q.rfqTitle || '—'}</div>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">Description</div>
-                      <div className="text-sm text-foreground/90 whitespace-pre-line">{(rfqData?.description as string) || '—'}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">Lead Time</div>
-                      <div className="text-sm font-semibold text-foreground">{q.leadTimeDays} days</div>
-                    </div>
-                    <div>
-                      <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">Submitted Date</div>
-                      <div className="text-sm font-semibold text-foreground">{fmtDate(q.submittedAt)}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">Status</div>
-                      <div className="text-sm">
-                        <StatusBadge status={q.status} />
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">Submitted In</div>
-                      <div className="text-sm">
-                        <CurrencyBadge currency={defCur} size="sm" />
-                      </div>
+                    <div className="quotation-overview__total">
+                      <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Total quotation value</div>
+                      <div className="text-2xl font-bold text-foreground mt-1">{formatAmount(q.totalPrice, defCur)}</div>
+                      <div className="mt-2"><CurrencyBadge currency={defCur} size="sm" /></div>
                     </div>
                   </div>
-
-                  {/* Highlighted Total Price Banner */}
-                  <div className="flex items-center justify-between p-4 rounded-xl bg-primary/[0.04] border border-primary/15">
-                    <div>
-                      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Price</div>
-                      <div className="text-2xl font-bold text-foreground mt-0.5">
-                        {formatAmount(q.totalPrice, defCur)}
-                      </div>
-                    </div>
-                    <CurrencyBadge currency={defCur} size="md" />
-                  </div>
+                  <dl className="quotation-overview__facts">
+                    {[
+                      ['Quote reference', q.vendorQuotationNumber || `QTN-${String(q.id).slice(-6).toUpperCase()}`],
+                      ['Submitted date', fmtDate(q.submittedAt)],
+                      ['Lead time', q.leadTimeDays ? `${q.leadTimeDays} ${q.leadTimeDays === 1 ? 'day' : 'days'}` : 'Not specified'],
+                      ['Version', q.versionNumber && q.versionNumber > 1 ? `Q${q.versionNumber}` : q.qNo || (q.versionNumber ? `Q${q.versionNumber}` : '—')],
+                      ['Line items', String(q.items.length)],
+                      ['Payment terms', q.paymentTerms || 'Not provided'],
+                    ].map(([label, value]) => <div key={label}>
+                      <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</dt>
+                      <dd className="text-sm font-semibold text-foreground">{value}</dd>
+                    </div>)}
+                  </dl>
+                  {typeof rfqData?.description === 'string' && rfqData.description.trim() && <div className="quotation-overview__description">
+                    <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Description</div>
+                    <p className="text-sm text-foreground whitespace-pre-line mt-2">{rfqData.description}</p>
+                  </div>}
+                  {q.returnReason && <div className="p-3 rounded-lg bg-destructive/10 text-sm text-destructive"><strong>Return reason:</strong> {q.returnReason}</div>}
 
                   {/* ── Custom Field Values Section ── */}
                   {(() => {
-                    const rfqDataCustomFields = (rfqData as any)?.customFields;
-                    const customFields = Array.isArray(rfqDataCustomFields) ? rfqDataCustomFields : [];
+                    const rfqDataCustomFields = rfqData?.customFields;
+                    const customFields = Array.isArray(rfqDataCustomFields) ? rfqDataCustomFields.filter((cf): cf is { id: string; fieldName: string; active?: boolean } => !!cf && typeof cf === 'object' && typeof cf.id === 'string' && typeof cf.fieldName === 'string') : [];
                     const cfValues = q.customFieldValues || {};
                     const hasCustomFields = customFields.length > 0;
                     const hasCfValues = typeof cfValues === 'object' && !Array.isArray(cfValues) && Object.keys(cfValues).length > 0;
@@ -933,7 +896,7 @@ function ViewVendorQuotationModal({
                       <div className="pt-4 border-t border-border/60">
                         <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">Additional Information</h4>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-8">
-                          {customFields.filter((cf: any) => cf.active !== false).map((cf: any) => {
+                          {customFields.filter((cf) => cf.active !== false).map((cf) => {
                             const val = cfValues[cf.id];
                             if (val == null || val === '') return null;
                             return (
@@ -952,54 +915,8 @@ function ViewVendorQuotationModal({
 
               {/* ── Tab 2: Payment Terms ── */}
               {activeTab === 'paymentTerms' && (
-                <div className="p-6 space-y-5">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                    <FileText className="size-4 text-primary" />
-                    <span>Payment Terms & Schedule</span>
-                  </div>
-                  {q.paymentTerms && q.paymentTerms !== '—' ? (
-                    <div className="space-y-4">
-                      {/* Payment Term Name */}
-                      <div className="flex items-center gap-3 p-3.5 rounded-lg bg-muted/30 border border-border/60">
-                        <FileText className="size-4 text-primary shrink-0" />
-                        <span className="text-sm font-semibold text-foreground">{q.paymentTerms}</span>
-                      </div>
-
-                      {/* Milestone Details */}
-                      {q.paymentPlanSnapshot && q.paymentPlanSnapshot.length > 0 && (
-                        <div className="rounded-lg border border-border/60 overflow-hidden">
-                          <table className="w-full text-left text-xs">
-                            <thead className="bg-muted/40 text-muted-foreground font-semibold border-b border-border/60">
-                              <tr>
-                                <th className="py-2.5 px-4">Milestone</th>
-                                <th className="py-2.5 px-4 text-right">Allocation</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border/60 text-sm">
-                              {q.paymentPlanSnapshot.map((m, idx) => (
-                                <tr key={idx} className="hover:bg-muted/20">
-                                  <td className="py-3 px-4 text-foreground">{m.title}</td>
-                                  <td className="py-3 px-4 text-right font-semibold text-foreground">{m.percentage}%</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                            <tfoot className="bg-muted/30 border-t border-border/60 font-semibold text-sm">
-                              <tr>
-                                <td className="py-3 px-4 text-foreground">Total</td>
-                                <td className="py-3 px-4 text-right text-emerald-600 font-bold">
-                                  {q.paymentPlanSnapshot.reduce((sum, m) => sum + m.percentage, 0).toFixed(1)}%
-                                </td>
-                              </tr>
-                            </tfoot>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="text-center py-10 text-xs text-muted-foreground">
-                      No payment terms provided with this quotation.
-                    </div>
-                  )}
+                <div className="p-6">
+                  <QuotationPaymentTerms terms={q.paymentTerms} milestones={q.paymentPlanSnapshot} totalPrice={q.totalPrice} currency={defCur} formatAmount={formatAmount} />
                 </div>
               )}
 
@@ -1115,13 +1032,9 @@ function ViewVendorQuotationModal({
                           {q.items.map((item, idx) => {
                             const lineTotal = item.quantity * item.unitPrice;
                             return (
-                              <tr key={idx} className={`hover:bg-muted/20 ${!item.isSelected ? 'opacity-60 bg-muted/10' : ''}`}>
+                              <tr key={idx} className="hover:bg-muted/20">
                                 <td className="py-3 px-3 text-center">
-                                  {item.isSelected ? (
-                                    <CheckCircle2 className="size-4 text-emerald-600 inline-block" />
-                                  ) : (
-                                    <XCircle className="size-4 text-destructive inline-block" />
-                                  )}
+                                  <StatusBadge status={q.status} />
                                 </td>
                                 <td className="py-3 px-4">
                                   <div className="font-medium text-foreground">{item.name}</div>
@@ -1142,11 +1055,11 @@ function ViewVendorQuotationModal({
                     </div>
                     <div className="flex items-center justify-between p-3.5 bg-muted/30 border-t border-border/60 text-xs font-semibold">
                       <span className="text-muted-foreground">
-                        {q.items.filter(i => i.isSelected).length} of {q.items.length} items selected
+                        {q.items.length} line items{q.status === 'ACCEPTED' && ` · ${q.items.filter(i => i.isSelected).length} selected by buyer`}
                       </span>
                       <span className="text-foreground text-sm font-bold">
                         Total: {formatAmount(convert(
-                          q.items.filter(i => i.isSelected).reduce((sum, i) => sum + i.quantity * i.unitPrice, 0),
+                          q.totalPrice,
                           q.currency || defCur,
                           defCur
                         ), defCur)}

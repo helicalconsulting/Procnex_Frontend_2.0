@@ -1,0 +1,13 @@
+/* Preserve the application type scale; adjust layout, surfaces and contrast only. */
+.profile-workspace { --muted-foreground: #59677c; }
+[data-theme="dark"] .profile-workspace { --muted-foreground: #9ba9b9; }
+.profile-columns { display: grid; gap: 24px; align-items: start; }
+@media (min-width: 1024px) { .profile-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.profile-column { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.profile-section { min-width: 0; }
+.profile-facts dd { margin-left: 0; overflow-wrap: anywhere; }
+.profile-contact { display: grid; gap: 12px; }
+@media (min-width: 640px) { .profile-contact { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.profile-contact > div { align-items: flex-start; }
+.profile-error { color: #b42318; }
+[data-theme="dark"] .profile-error { color: #fda29b; }

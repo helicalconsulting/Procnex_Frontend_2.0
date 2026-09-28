@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { cn } from '../../../lib/utils';
+import { SkeletonText } from '../../../components/shared/Skeleton';
 
 interface WidgetHeaderProps {
   icon: ReactNode;
@@ -33,8 +34,13 @@ export function WidgetBody({ children, className }: { children: ReactNode; class
   return <div className={cn('p-4 sm:p-5', className)}>{children}</div>;
 }
 
-export function WidgetLoading({ children = 'Loading…' }: { children?: ReactNode }) {
-  return <p className="py-6 text-center text-sm text-muted-foreground">{children}</p>;
+export function WidgetLoading({ children, height = 120 }: { children?: ReactNode; height?: number }) {
+  if (children) return <>{children}</>;
+  return (
+    <div className="py-2 w-full" aria-busy="true">
+      <SkeletonText lines={3} widths={['90%', '75%', '50%']} height={14} gap={10} />
+    </div>
+  );
 }
 
 export function WidgetEmpty({ children }: { children: ReactNode }) {

@@ -1,0 +1,167 @@
+/* RFQ workspace: retain the application's existing type scale and font families. */
+.rfq-workspace, .rfq-quote-window, .rfq-plan-editor {
+  --text-secondary: #59677c;
+  --muted-foreground: #59677c;
+  --rfq-success: #087344;
+  --rfq-warning: #945000;
+  --rfq-link: #0866bf;
+}
+[data-theme="dark"] :is(.rfq-workspace, .rfq-quote-window, .rfq-plan-editor) {
+  --text-secondary: #9ba9b9;
+  --muted-foreground: #9ba9b9;
+  --rfq-success: #6ee7b7;
+  --rfq-warning: #fcd086;
+  --rfq-link: #85bbff;
+}
+.rfq-workspace { min-width: 0; }
+.rfq-workspace .rfq-metrics { gap: 12px; }
+.rfq-workspace .rfq-metrics > div { box-shadow: none; transform: none; }
+.rfq-workspace .rfq-metrics > [aria-pressed="true"] { border-color: var(--primary); background: var(--accent); box-shadow: none; }
+.rfq-toolbar, .rfq-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.rfq-toolbar { margin-bottom: 16px; }
+.rfq-toolbar__search { position: relative; flex: 1 1 300px; max-width: 560px; }
+.rfq-toolbar__actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.rfq-toolbar select { min-height: 40px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-card); color: var(--text-primary); padding: 8px 30px 8px 10px; }
+.rfq-register { border: 1px solid var(--border); border-radius: 14px; background: var(--surface-card); overflow: hidden; }
+.rfq-register__head, .rfq-register__row { display: grid; grid-template-columns: minmax(180px, 1.35fr) minmax(140px, 1fr) minmax(135px, .85fr) minmax(140px, .95fr) minmax(145px, .85fr); gap: 20px; align-items: center; padding: 18px 20px; }
+.rfq-register__head { background: var(--surface-elevated); color: var(--text-secondary); padding-block: 12px; font-weight: 600; }
+.rfq-register__entry + .rfq-register__entry { border-top: 1px solid var(--border); }
+.rfq-register__entry[data-expanded="true"] { background: color-mix(in srgb, var(--accent) 30%, var(--surface-card)); }
+.rfq-register__row > * { min-width: 0; }
+.rfq-register__identity { display: flex; flex-direction: column; gap: 5px; overflow-wrap: anywhere; }
+.rfq-register__items { display: flex; flex-direction: column; gap: 5px; }
+.rfq-register__items > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rfq-register__dates { display: flex; flex-direction: column; gap: 5px; }
+.rfq-register__actions { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+.rfq-register__actions button { white-space: nowrap; }
+.rfq-register__details { padding: 20px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 16px; }
+.rfq-register__details p { margin: 0; }
+.rfq-register__footer { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.rfq-register__pagination { display: flex; gap: 8px; }
+.rfq-muted, .rfq-plan-help { color: var(--text-secondary); }
+.rfq-deadline--urgent { color: var(--error-text); }
+.rfq-deadline--soon { color: var(--rfq-warning); }
+.rfq-details-link { display: inline-flex; justify-content: center; align-items: center; gap: 6px; color: var(--rfq-link); border: 0; background: transparent; padding: 8px; cursor: pointer; font-weight: 600; }
+.rfq-details-link:hover { background: var(--surface-hover); border-radius: 8px; }
+.rfq-quote-window.vquot-modal--open { width: min(1020px, calc(100vw - 40px)); max-height: 90dvh; }
+.rfq-quote-window { background: var(--card); }
+.rfq-quote-window .vquot-modal__header { flex-shrink: 0; background: var(--card); }
+.rfq-quote-window .vquot-modal__header-left { flex-wrap: wrap; min-width: 0; }
+.rfq-quote-window .vquot-modal__header-rfq { overflow-wrap: anywhere; }
+.rfq-quote-window .vquot-modal__body { min-height: 0; overscroll-behavior: contain; padding: 24px; }
+.rfq-quote-window .vquot-modal__footer { flex-shrink: 0; background: var(--card); }
+.rfq-quote-window .vquot-modal__total-value { color: var(--rfq-link); }
+.rfq-quote-context { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; border-bottom: 1px solid var(--border); padding-bottom: 16px; }
+.rfq-quote-status { display: flex; align-items: flex-start; gap: 10px; color: var(--rfq-success); background: color-mix(in srgb, var(--rfq-success) 7%, var(--card)); border: 1px solid color-mix(in srgb, var(--rfq-success) 22%, var(--border)); border-radius: 10px; padding: 14px 16px; }
+.rfq-quote-status p { color: var(--text-secondary); margin: 4px 0 0; }
+.rfq-quote-status svg { flex-shrink: 0; margin-top: 2px; }
+.rfq-quote-status--returned { color: var(--rfq-warning); background: var(--surface-elevated); border-color: var(--border); }
+.rfq-quote-details { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.rfq-quote-summary { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; background: var(--surface-elevated); padding: 18px 20px; border-radius: 12px; border: 1px solid var(--border); }
+.rfq-quote-summary .vquot-modal__total-value { margin-top: 5px; }
+.rfq-facts { margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.rfq-facts > div { min-width: 0; }
+.rfq-facts dt { margin-bottom: 7px; }
+.rfq-facts dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.rfq-section-heading .vrfq-card__items-title { margin: 0; }
+.rfq-table-scroll { overflow: auto; max-height: 360px; border: 1px solid var(--border); border-radius: 10px; margin-top: 12px; overscroll-behavior: contain; }
+.rfq-pricing-table { width: 100%; border-collapse: collapse; min-width: 540px; }
+.rfq-pricing-table th { position: sticky; top: 0; background: var(--surface-elevated); color: var(--text-secondary); z-index: 1; }
+.rfq-pricing-table :is(th, td) { padding: 13px 16px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+.rfq-pricing-table tr:last-child td { border-bottom: 0; }
+.rfq-pricing-table :is(th, td):not(:first-child) { text-align: right; white-space: nowrap; }
+.rfq-pricing-table td:first-child { min-width: 160px; max-width: 360px; overflow-wrap: anywhere; }
+.rfq-pricing-table .rfq-item-description { margin-top: 4px; }
+.rfq-quote-notes p { margin: 7px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-weight: 400; }
+.rfq-read-section, .rfq-inline-snapshot { border: 1px solid var(--border); border-radius: 10px; }
+.rfq-read-section summary, .rfq-inline-snapshot > summary { list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 16px; cursor: pointer; }
+:is(.rfq-read-section, .rfq-inline-snapshot) > summary::-webkit-details-marker { display: none; }
+:is(.rfq-read-section, .rfq-inline-snapshot)[open] > summary { border-bottom: 1px solid var(--border); }
+:is(.rfq-read-section, .rfq-inline-snapshot)[open] > summary > svg { transform: rotate(180deg); }
+.rfq-read-section__body, .rfq-inline-snapshot__body { padding: 18px; }
+.rfq-inline-snapshot { background: var(--surface-elevated); }
+.rfq-inline-snapshot > summary { color: var(--rfq-link); }
+.rfq-inline-snapshot__body { background: var(--card); border-radius: 0 0 10px 10px; display: flex; flex-direction: column; gap: 18px; }
+.rfq-payment-milestones { margin: 0; padding: 0; list-style: none; }
+.rfq-payment-milestones li { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.rfq-payment-milestones li:last-child { border-bottom: 0; }
+.rfq-document-list { padding: 0; list-style: none; display: flex; flex-direction: column; gap: 12px; }
+.rfq-document-link { display: inline-flex; align-items: center; gap: 6px; color: var(--rfq-link); text-decoration: underline; overflow-wrap: anywhere; }
+.rfq-commercial-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.rfq-payment-field { grid-column: 1 / -1; border-top: 1px solid var(--border); padding-top: 18px; }
+.rfq-payment-controls { display: flex; align-items: stretch; gap: 10px; flex-wrap: wrap; }
+.rfq-payment-controls select { flex: 1 1 230px; width: auto; min-width: 0; }
+.rfq-secondary-action { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 9px 12px; border: 1px solid var(--border-strong); border-radius: 8px; color: var(--rfq-link); background: var(--surface-card); font-weight: 600; cursor: pointer; }
+.rfq-secondary-action:hover { background: var(--surface-hover); }
+.rfq-plan-actions { display: flex; align-items: center; gap: 4px; }
+.rfq-icon-button { width: 40px; min-height: 40px; flex-shrink: 0; display: inline-flex; justify-content: center; align-items: center; border: 1px solid var(--border); background: var(--surface-card); color: var(--text-secondary); border-radius: 8px; cursor: pointer; }
+.rfq-icon-button:hover { background: var(--surface-hover); color: var(--text-primary); }
+.rfq-icon-button--danger:hover { color: var(--error-text); }
+.rfq-plan-editor { border: 1px solid var(--border-strong); background: var(--card); border-radius: 12px; color: var(--text-primary); overflow: hidden; }
+.rfq-plan-editor > .rfq-section-heading { padding: 14px 18px; border-bottom: 1px solid var(--border); }
+.rfq-plan-editor .vquot-modal__header-title { display: flex; gap: 8px; align-items: center; white-space: normal; }
+.rfq-plan-editor__body { padding: 18px; display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto; }
+.rfq-plan-editor__footer { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--border); }
+.rfq-plan-editor--modal { width: min(620px, calc(100vw - 32px)); max-height: 90dvh; z-index: 999999; }
+.rfq-plan-backdrop { z-index: 999998; }
+.rfq-plan-help { margin: 0; }
+.rfq-milestone-head, .rfq-milestone-row { display: grid; grid-template-columns: minmax(0, 1fr) 110px 40px; gap: 10px; align-items: center; }
+.rfq-milestone-head { color: var(--text-secondary); font-weight: 600; }
+.rfq-percentage-input { position: relative; }
+.rfq-percentage-input input { padding-right: 30px; text-align: right; }
+.rfq-percentage-input > span { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); pointer-events: none; }
+.rfq-add-milestone { align-self: flex-start; }
+.rfq-allocation { background: var(--surface-elevated); padding: 14px; border-radius: 10px; display: flex; flex-direction: column; gap: 8px; color: var(--rfq-warning); }
+.rfq-allocation[data-valid="true"] { color: var(--rfq-success); }
+.rfq-allocation progress { width: 100%; height: 7px; accent-color: var(--rfq-success); }
+.rfq-allocation .text-xs { display: flex; align-items: center; gap: 6px; }
+.rfq-error { color: var(--error-text); padding: 12px; background: var(--error-bg); border-radius: 8px; }
+.rfq-delete-confirm { border: 1px solid var(--border); background: var(--surface-elevated); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+:is(.rfq-workspace, .rfq-quote-window, .rfq-plan-editor) :is(button, summary, a, [tabindex="0"], input, select):focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+:is(.rfq-secondary-action, .rfq-icon-button):disabled { opacity: .5; cursor: not-allowed; }
+@media (max-width: 1100px) {
+  .rfq-register__head { display: none; }
+  .rfq-register__row { grid-template-columns: minmax(180px, 1.4fr) minmax(140px, 1fr) minmax(140px, 1fr); gap: 16px; }
+  .rfq-register__items { grid-row: 2; grid-column: 1; }
+  .rfq-register__dates { grid-row: 2; grid-column: 2; }
+  .rfq-register__actions { grid-row: 1 / 3; grid-column: 3; }
+}
+@media (max-width: 640px) {
+  .rfq-register__row { grid-template-columns: 1fr 1fr; padding: 16px; }
+  .rfq-register__identity { grid-column: 1 / -1; }
+  .rfq-register__items { grid-row: 3; grid-column: 1; }
+  .rfq-register__dates { grid-row: 3; grid-column: 2; }
+  .rfq-register__actions { grid-row: 4; grid-column: 1 / -1; flex-direction: row; align-items: center; }
+  .rfq-register__actions > button { flex: 1; }
+  .rfq-register__details { padding: 16px; }
+  .rfq-quote-window.vquot-modal--open { width: calc(100vw - 16px); max-height: calc(100dvh - 20px); top: 50%; left: 50%; bottom: auto; transform: translate(-50%, -50%); animation: none; border-radius: 12px; }
+  .rfq-quote-window .vquot-modal__body { padding: 16px; }
+  .rfq-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .rfq-commercial-fields { grid-template-columns: 1fr; }
+  .rfq-payment-controls select { flex-basis: 100%; }
+  .rfq-milestone-head, .rfq-milestone-row { grid-template-columns: minmax(0, 1fr) 90px 36px; gap: 6px; }
+  .rfq-milestone-row .rfq-icon-button { width: 36px; }
+  .rfq-plan-editor__body, .rfq-inline-snapshot__body { padding: 14px; }
+  .rfq-register__footer { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) { .rfq-quote-window { animation: none; transition: none; } }
+
+/* These scopes override legacy global glass and snapshot theme rules. */
+.rfq-workspace .rfq-metrics > div { box-shadow: none !important; }
+.rfq-workspace .rfq-metrics > [aria-pressed="true"] { box-shadow: none !important; }
+.rfq-quote-window .vquot-modal__header-rfq, .rfq-quote-window .vquot-modal__header-icon { color: var(--rfq-link); }
+.rfq-quote-window .rfq-quote-details .rfq-pricing-table th { background: var(--surface-elevated); color: var(--text-secondary); border-color: var(--border); }
+.rfq-quote-window .rfq-quote-details .rfq-pricing-table td { color: var(--text-primary); border-color: var(--border); }
+.rfq-plan-editor, .rfq-milestone-row > *, .rfq-commercial-fields > * { min-width: 0; }
+.rfq-milestone-row .vquot-modal__input { width: 100%; min-width: 0; font-size: 14px; }
+.rfq-percentage-input > span { font-size: 13px; }
+.rfq-plan-editor__body { overflow-x: hidden; }
+
+.rfq-workspace .rfq-status-badge[data-rfq-status="SUBMITTED"] { color: var(--rfq-success); }
+.rfq-workspace .rfq-status-badge[data-rfq-status="OPEN"] { color: var(--rfq-warning); }
+.rfq-workspace .rfq-status-badge[data-rfq-status="CLOSED"] { color: var(--rfq-link); }
+.rfq-workspace .rfq-status-badge:is([data-rfq-status="RETURNED"], [data-rfq-status="CANCELLED"]) { color: var(--error-text); }
+
+.rfq-quote-status--rejected { color: var(--error-text); background: var(--error-bg); border-color: var(--border); }
+
+:is(.rfq-workspace, .rfq-quote-window, .rfq-plan-editor) :is(input, textarea)::placeholder { color: var(--text-secondary); opacity: 1; }

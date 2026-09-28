@@ -1,3 +1,4 @@
+import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
 import React from 'react';
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
@@ -12,7 +13,8 @@ import {
   Plus, Search, Eye, Edit3, Trash2, Users, Shield, UserCheck, UserX,
   ChevronLeft, ChevronRight, X, UserPlus, Mail, Phone, Building2,
   Zap, LayoutList, LayoutGrid, CheckSquare, Smartphone, Clock,
-  ShoppingCart, CheckCircle2, ArrowRight, ArrowLeft, Upload, FileText
+  ShoppingCart, CheckCircle2, ArrowRight, ArrowLeft, Upload, FileText,
+  BarChart3, GitBranch, ClipboardList, History, Award, Wallet, LayoutDashboard, Check
 } from 'lucide-react';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
@@ -28,11 +30,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../../components/ui/dialog';
-import { Input } from '../../components/ui/input';
+import { Input, Select } from '../../components/ui/input';
 import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
 import { cn } from '../../lib/utils';
 import '../../components/shared/ColumnCustomizer.css';
 import './UsersPage.css';
+import './users-workspace.css';
+import UserAccessControls, { AccessSwitch } from './UserAccessControls';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -54,6 +59,7 @@ interface MockUser {
   createdAt: string;
   avatarMod: string;
   initials: string;
+  accessBusy?: boolean;
 }
 
 function mapUser(
@@ -77,47 +83,33 @@ function mapUser(
     isMobileAccessEnabled: u.isMobileAccessEnabled ?? false,
     lastLoginAt: u.lastLoginAt || null,
     createdAt: u.createdAt.slice(0, 10),
-    avatarMod: String((u.id % 6) + 1),
+    avatarMod: String((Array.from(String(u.id)).reduce((sum, char) => sum + char.charCodeAt(0), 0) % 6) + 1),
     initials,
   };
 }
 
-const ALL_ROLES: string[] = ['Super Admin', 'Administrator', 'Procurement Manager', 'Manager', 'Finance Approver', 'Purchase Clerk', 'Staff'];
-
-const ROLE_CLASS_MAP: Record<string, string> = {
-  'Super Admin': 'super-admin',
-  Administrator: 'administrator',
-  'Procurement Manager': 'manager',
-  Manager: 'manager',
-  'Finance Approver': 'finance-approver',
-  'Finance Manager': 'finance-approver',
-  'Purchase Clerk': 'manager',
-  Staff: 'staff',
-  Vendor: 'staff',
-};
-
-// ─── Widget Registry (inline — no extra import needed) ──────
+// ─── Widget Registry ──────
 const WIDGET_LIST = [
-  { id: 'kpi-stats', name: 'KPI Statistics', icon: '📊', description: 'Key metrics overview' },
-  { id: 'quick-actions', name: 'Quick Actions', icon: '⚡', description: 'One-click shortcuts' },
-  { id: 'procurement-pipeline', name: 'Procurement Pipeline', icon: '🔄', description: 'RFQ status breakdown' },
-  { id: 'pending-approvals', name: 'Pending Approvals', icon: '⏰', description: 'Items awaiting approval' },
-  { id: 'recent-rfqs', name: 'Recent RFQs', icon: '📋', description: 'Latest RFQ activity' },
-  { id: 'activity-timeline', name: 'Activity Timeline', icon: '📅', description: 'Recent actions feed' },
-  { id: 'top-vendors', name: 'Top Vendors', icon: '🏆', description: 'Best performing vendors' },
-  { id: 'spend-overview', name: 'Spend Overview', icon: '💰', description: 'Monthly spend breakdown' },
+  { id: 'kpi-stats', name: 'KPI Statistics', icon: BarChart3, description: 'Key metrics overview' },
+  { id: 'quick-actions', name: 'Quick Actions', icon: Zap, description: 'One-click shortcuts' },
+  { id: 'procurement-pipeline', name: 'Procurement Pipeline', icon: GitBranch, description: 'RFQ status breakdown' },
+  { id: 'pending-approvals', name: 'Pending Approvals', icon: Clock, description: 'Items awaiting approval' },
+  { id: 'recent-rfqs', name: 'Recent RFQs', icon: ClipboardList, description: 'Latest RFQ activity' },
+  { id: 'activity-timeline', name: 'Activity Timeline', icon: History, description: 'Recent actions feed' },
+  { id: 'top-vendors', name: 'Top Vendors', icon: Award, description: 'Best performing vendors' },
+  { id: 'spend-overview', name: 'Spend Overview', icon: Wallet, description: 'Monthly spend breakdown' },
 ];
 
 // ─── Column Definitions ─────────────────────────────────────
 
 interface UserColumnDef {
   key: string; label: string; defaultVisible: boolean; required?: boolean;
-  width?: string;  render: (u: MockUser, fmtDate: (d: string) => string, fmtDT: (d: string | null) => string, toggle: (id: string) => void, toggleMobile?: (id: string) => void, canCreate?: boolean) => React.ReactNode;
+  width?: string; render?: (u: MockUser, fmtDate: (d: string) => string, fmtDT: (d: string | null) => string) => React.ReactNode;
 }
 
 const ALL_COLUMNS: UserColumnDef[] = [
   {
-    key: 'user', label: 'User', defaultVisible: true, required: true, width: '220px',
+    key: 'user', label: 'User', defaultVisible: true, required: true, width: '330px',
     render: (u) => (
       <div className="users-table__user">
         <div className={`users-table__avatar users-table__avatar--${u.avatarMod}`}>
@@ -125,70 +117,30 @@ const ALL_COLUMNS: UserColumnDef[] = [
           <span className={`users-table__avatar-status users-table__avatar-status--${u.isActive ? 'active' : 'inactive'}`} />
         </div>
         <div className="users-table__user-info">
-          <span className="users-table__user-name">{u.fullName}</span>
-          <span className="users-table__user-username">@{u.username}</span>
+          <span className="users-table__user-name" title={u.fullName}>{u.fullName}</span>
+          <span className="users-table__email" title={u.email}>{u.email}</span>
+          {u.username !== u.email && <span className="users-table__user-username" title={`@${u.username}`}>@{u.username}</span>}
         </div>
       </div>
     ),
   },
-  { key: 'email', label: 'Email', defaultVisible: true, width: '200px', render: (u) => <span className="users-table__email">{u.email}</span> },
+  { key: 'email', label: 'Email', defaultVisible: false, width: '200px', render: (u) => <span className="users-table__email">{u.email}</span> },
   {
-    key: 'role', label: 'Role', defaultVisible: true, width: '140px',
+    key: 'role', label: 'Role', defaultVisible: true, required: true, width: '195px',
     render: (u) => {
       let tone: 'primary' | 'info' | 'warning' | 'neutral' | 'success' | 'danger' = 'neutral';
       if (u.role === 'Super Admin' || u.role === 'Administrator') tone = 'primary';
       else if (u.role.includes('Manager')) tone = 'info';
       else if (u.role.includes('Finance')) tone = 'warning';
-      else tone = 'neutral';
-      return <Badge tone={tone}>{u.role}</Badge>;
+      return <Badge tone={tone} className="users-role-pill" title={u.role}>{u.role}</Badge>;
     },
   },
-  { key: 'department', label: 'Department', defaultVisible: true, width: '110px', render: (u) => <span className="users-table__dept">{u.department}</span> },
+  { key: 'department', label: 'Department', defaultVisible: true, width: '130px', render: (u) => <span className="users-table__dept">{u.department}</span> },
   {
-    key: 'status', label: 'Status', defaultVisible: true, width: '110px',
-    render: (u, _fd, _fdt, toggle, _toggleMobile, canCreate = true) => {
-      const isSuperAdmin = u.role === 'Super Admin' || u.apiRoleName === 'Super Admin';
-      const isDisabled = isSuperAdmin || !canCreate;
-      return (
-        <div
-          className={`users-status-toggle ${isDisabled ? 'users-status-toggle--disabled' : ''}`}
-          onClick={() => !isDisabled && toggle(u.id)}
-          title={!canCreate ? 'Admin has not allowed this action. You do not have permission to modify user status.' : isSuperAdmin ? 'Super Admin status cannot be changed' : ''}
-          style={!canCreate ? { opacity: 0.6, cursor: 'not-allowed', pointerEvents: 'auto' } : {}}
-        >
-          <div className={`users-status-toggle__track ${u.isActive ? 'users-status-toggle__track--active' : ''}`}>
-            <div className="users-status-toggle__knob" />
-          </div>
-          <span className={`users-status-toggle__label users-status-toggle__label--${u.isActive ? 'active' : 'inactive'}`}>
-            {u.isActive ? 'Active' : 'Inactive'}
-          </span>
-        </div>
-      );
-    },
+    key: 'access', label: 'Access', defaultVisible: true, required: true, width: '190px',
   },
-  {
-    key: 'mobileAccess', label: 'Mobile App Access', defaultVisible: true, width: '150px',
-    render: (u, _fd, _fdt, _toggle, toggleMobile, canCreate = true) => {
-      return (
-        <div
-          className={`users-status-toggle ${!canCreate ? 'users-status-toggle--disabled' : ''}`}
-          onClick={() => canCreate && toggleMobile && toggleMobile(u.id)}
-          title={!canCreate ? 'Admin has not allowed this action. You do not have permission to modify mobile access.' : 'Toggle Mobile App Access'}
-          style={{ cursor: canCreate ? 'pointer' : 'not-allowed', opacity: canCreate ? 1 : 0.6, pointerEvents: 'auto' }}
-        >
-          <div className={`users-status-toggle__track ${u.isMobileAccessEnabled ? 'users-status-toggle__track--active' : ''}`}>
-            <div className="users-status-toggle__knob" />
-          </div>
-          <span className={`users-status-toggle__label users-status-toggle__label--${u.isMobileAccessEnabled ? 'active' : 'inactive'}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600 }}>
-            <Smartphone size={16} strokeWidth={2.2} style={{ flexShrink: 0 }} />
-            {u.isMobileAccessEnabled ? 'Enabled' : 'Disabled'}
-          </span>
-        </div>
-      );
-    },
-  },
-  { key: 'lastLogin', label: 'Last Login', defaultVisible: true, width: '130px', render: (u, _fd, fmtDT) => <span className="users-table__date">{fmtDT(u.lastLoginAt)}</span> },
-  { key: 'joined', label: 'Joined', defaultVisible: true, width: '110px', render: (u, fmtDate) => <span className="users-table__date">{fmtDate(u.createdAt)}</span> },
+  { key: 'lastLogin', label: 'Last Login', defaultVisible: true, width: '160px', render: (u, _fd, fmtDT) => <span className="users-table__date">{fmtDT(u.lastLoginAt)}</span> },
+  { key: 'joined', label: 'Joined', defaultVisible: false, width: '110px', render: (u, fmtDate) => <span className="users-table__date">{fmtDate(u.createdAt)}</span> },
   { key: 'phone', label: 'Phone', defaultVisible: false, width: '140px', render: (u) => <span className="users-table__date">{u.phone}</span> },
   { key: 'companyCode', label: 'Company Code', defaultVisible: false, width: '110px', render: (u) => <span className="users-table__date">{u.companyCode}</span> },
 ];
@@ -196,7 +148,8 @@ const ALL_COLUMNS: UserColumnDef[] = [
 // ─── Component ──────────────────────────────────────────────
 
 export default function UsersPage() {
-  const { hasPermission, companyCode: userCompanyCode } = useAuth();
+  const { hasPermission, user: signedInUser } = useAuth();
+  const userCompanyCode = signedInUser?.companyCode;
 
   const { data: users, loading, error, reload, forceRefresh } = useServiceData(
     () => adminService.listUsers().then((list) => list.map((u) => mapUser(u))),
@@ -241,6 +194,7 @@ export default function UsersPage() {
   }, []);
 
   // ── Optimistic status toggle state ──────────────────────────
+  const accessRequests = useRef(new Set<string>());
   const [pendingStatus, setPendingStatus] = useState<Map<string, boolean>>(new Map());
   const [pendingMobileStatus, setPendingMobileStatus] = useState<Map<string, boolean>>(new Map());
 
@@ -275,18 +229,7 @@ export default function UsersPage() {
     selectedWidgets: string[];
   } | null>(null);
   const [widgetSaving, setWidgetSaving] = useState(false);
-
-  // ── Mobile Access Success Modal state ──
-  const [mobileSuccessModal, setMobileSuccessModal] = useState<{
-    visible: boolean;
-    userName: string;
-    isEnabled: boolean;
-  } | null>(null);
-
-  const assignableRoles = useMemo(
-    () => roleRecords.map((r) => r.roleName).sort(),
-    [roleRecords]
-  );
+  const [widgetError, setWidgetError] = useState('');
 
   // Combine roles from DB (Roles & Permissions) with active company positions from DB
   const positionRoleOptions = useMemo(() => {
@@ -301,8 +244,14 @@ export default function UsersPage() {
 
   const perPage = 8;
 
-  const anyModalOpen = !!(showModal || editingUser || deleteTarget || viewUser || sapToast?.visible || showBatchDeleteModal || mobileSuccessModal?.visible);
+  const anyModalOpen = !!(showModal || editingUser || deleteTarget || viewUser || sapToast?.visible || showBatchDeleteModal);
   useBodyScrollLock(anyModalOpen);
+  const createDialogRef = useRef<HTMLDivElement>(null);
+  const editDialogRef = useRef<HTMLDivElement>(null);
+  const viewDialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(createDialogRef, showModal, () => { if (!actionLoading) setShowModal(false); });
+  useDialogFocus(editDialogRef, Boolean(editingUser), () => { if (!actionLoading) setEditingUser(null); });
+  useDialogFocus(viewDialogRef, Boolean(viewUser), () => setViewUser(null));
 
   // ── Column state ────────────────────────────────────────────
   const defaultOrder = ALL_COLUMNS.map((c) => c.key);
@@ -312,7 +261,7 @@ export default function UsersPage() {
   const [showColPanel, setShowColPanel] = useState(false);
   const colBtnRef = useRef<HTMLButtonElement>(null);
   const visibleColumns = useMemo(() => columnOrder.map((k) => ALL_COLUMNS.find((c) => c.key === k)!).filter((c) => c && visibleKeys.has(c.key)), [columnOrder, visibleKeys]);
-  const handleToggleColumn = (key: string) => { setVisibleKeys((prev) => { const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next; }); };
+  const handleToggleColumn = (key: string) => { if (ALL_COLUMNS.find(col => col.key === key)?.required) return; setVisibleKeys((prev) => { const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next; }); };
   const handleResetColumns = () => { setColumnOrder(defaultOrder); setVisibleKeys(new Set(defaultVisible)); };
 
   // Multi-step modal state
@@ -349,6 +298,7 @@ export default function UsersPage() {
         const mobileOverride = pendingMobileStatus.get(u.id);
         return {
           ...u,
+          accessBusy: pendingStatus.has(u.id) || pendingMobileStatus.has(u.id),
           isActive: activeOverride !== undefined ? activeOverride : u.isActive,
           isMobileAccessEnabled: mobileOverride !== undefined ? mobileOverride : u.isMobileAccessEnabled,
         };
@@ -370,13 +320,14 @@ export default function UsersPage() {
     else if (statusFilter === 'inactive') list = list.filter((u) => !u.isActive);
     else if (statusFilter === 'admins') list = list.filter((u) => u.role === 'Super Admin' || u.role === 'Administrator');
     if (search.trim()) {
-      const q = search.toLowerCase();
+      const q = search.trim().toLowerCase();
       list = list.filter(
         (u) =>
           u.fullName.toLowerCase().includes(q) ||
           u.username.toLowerCase().includes(q) ||
           u.email.toLowerCase().includes(q) ||
-          u.department.toLowerCase().includes(q)
+          u.department.toLowerCase().includes(q) ||
+          u.role.toLowerCase().includes(q)
       );
     }
     return list;
@@ -430,7 +381,7 @@ export default function UsersPage() {
     setPageMsg(null);
     // Find current user and compute the new status BEFORE the API call
     const user = users.find((u) => u.id === id);
-    if (!user) return;
+    if (!user || !hasPermission('User Management', 'canCreate') || accessRequests.current.has(id)) return;
 
     // Prevent toggling Super Admin
     if (user.role === 'Super Admin' || user.apiRoleName === 'Super Admin') {
@@ -438,6 +389,7 @@ export default function UsersPage() {
       return;
     }
 
+    accessRequests.current.add(id);
     const newStatus = !user.isActive;
 
     // Instantly flip the toggle in local state (zero delay — before API call)
@@ -449,60 +401,34 @@ export default function UsersPage() {
 
     try {
       await adminService.toggleUserStatus(id);
-      // Clean up pending state — the background reload will pick up the real data
-      setPendingStatus((prev) => {
-        const next = new Map(prev);
-        next.delete(id);
-        return next;
-      });
-      reload();
+      await forceRefresh();
+      setPageMsg(`Account access ${newStatus ? 'enabled' : 'disabled'} for ${user.fullName}.`);
     } catch (err) {
-      // API failed — revert the optimistic toggle
-      setPendingStatus((prev) => {
-        const next = new Map(prev);
-        next.delete(id);
-        return next;
-      });
       setPageMsg(err instanceof Error ? err.message : 'Could not update user status');
+    } finally {
+      accessRequests.current.delete(id);
+      setPendingStatus(prev => { const next = new Map(prev); next.delete(id); return next; });
     }
-  }, [reload, users]);
+  }, [forceRefresh, users, hasPermission]);
 
   const toggleMobileActive = useCallback(async (id: string) => {
     setPageMsg(null);
-    const user = users.find((u) => u.id === id);
-    if (!user) return;
-
+    const user = users.find(u => u.id === id);
+    if (!user || !user.isActive || !hasPermission('User Management', 'canCreate') || accessRequests.current.has(id)) return;
+    accessRequests.current.add(id);
     const newStatus = !user.isMobileAccessEnabled;
-
-    // Set optimistic status immediately - no flicker!
-    setPendingMobileStatus((prev) => {
-      const next = new Map(prev);
-      next.set(id, newStatus);
-      return next;
-    });
-
+    setPendingMobileStatus(prev => new Map(prev).set(id, newStatus));
     try {
       await adminService.toggleUserMobileAccess(id);
-
-      // Show Success Modal Box instead of toast
-      setMobileSuccessModal({
-        visible: true,
-        userName: user.fullName,
-        isEnabled: newStatus,
-      });
-
-      // Reload in background (pendingMobileStatus keeps override until server data arrives)
-      await reload();
+      await forceRefresh();
+      setPageMsg(`Mobile app access ${newStatus ? 'enabled' : 'disabled'} for ${user.fullName}.`);
     } catch (err) {
-      // Revert optimistic override on error
-      setPendingMobileStatus((prev) => {
-        const next = new Map(prev);
-        next.delete(id);
-        return next;
-      });
-      setPageMsg(err instanceof Error ? err.message : 'Could not update mobile access status');
+      setPageMsg(err instanceof Error ? err.message : 'Could not update mobile access');
+    } finally {
+      accessRequests.current.delete(id);
+      setPendingMobileStatus(prev => { const next = new Map(prev); next.delete(id); return next; });
     }
-  }, [reload, users]);
+  }, [forceRefresh, users, hasPermission]);
 
   const openAddModal = useCallback(() => {
     setModalStep(1);
@@ -538,12 +464,9 @@ export default function UsersPage() {
 
   // ── handleCreateUser — shows SAP toast after creation ───────
   const handleCreateUser = useCallback(async () => {
-    const roleName =
-      selectedUserType === 'rfq'
-        ? (newRole || newPosition || 'Purchase Clerk')
-        : (newRole || 'Staff');
+    const roleName = selectedUserType === 'rfq' ? newPosition : newRole;
 
-    if (!newFullName.trim() || !newUsername.trim() || !newPassword.trim() || !newEmail.trim()) return;
+    if (actionLoading || !hasPermission('User Management', 'canCreate') || !selectedUserType || !newFullName.trim() || !newUsername.trim() || newPassword.length < 8 || !newEmail.trim()) return;
     if (isNewEmailInvalid) {
       setCreateModalError('Please enter a complete valid email address (e.g. user@domain.com)');
       return;
@@ -579,7 +502,8 @@ export default function UsersPage() {
       setShowModal(false);
       await reload();
 
-      // ✅ SAP Toast — widget permissions configure karo
+      // Configure widgets after the user has been created.
+      setWidgetError('');
       setSapToast({
         visible: true,
         userName: created.fullName,
@@ -597,7 +521,7 @@ export default function UsersPage() {
   }, [
     selectedUserType, newFullName, newUsername, newPassword, newEmail,
     newPhone, newCountryCode, newRole, newDepartment, newPosition, docAadhaar, docPan, docOffer,
-    newMobileAccess, userCompanyCode, reload,
+    newMobileAccess, userCompanyCode, reload, actionLoading, hasPermission, isNewEmailInvalid,
   ]);
 
   const openViewUser = useCallback((user: MockUser) => { setViewUser(user); }, []);
@@ -623,7 +547,7 @@ export default function UsersPage() {
   }, []);
 
   const handleSaveEdit = useCallback(async () => {
-    if (!editingUser) return;
+    if (!editingUser || actionLoading || !hasPermission('User Management', 'canCreate')) return;
     if (!editFullName.trim() || !editEmail.trim()) return;
     if (isEditEmailInvalid) {
       setPageMsg('Please enter a complete valid email address (e.g. user@domain.com)');
@@ -650,7 +574,7 @@ export default function UsersPage() {
     }
   }, [
     editingUser, editFullName, editEmail, isEditEmailInvalid, editPhone, editCountryCode,
-    editDepartment, editRoleName, editMobileAccess, forceRefresh,
+    editDepartment, editRoleName, editMobileAccess, forceRefresh, actionLoading, hasPermission,
   ]);
 
   const handleConfirmDelete = useCallback(async () => {
@@ -686,8 +610,9 @@ export default function UsersPage() {
   // ── Open widget config for existing user ──────────────────────
   const openWidgetConfig = useCallback(async (user: MockUser) => {
     setPageMsg(null);
+    setWidgetError('');
     try {
-      const prefs =                    await adminService.getUserWidgets(user.id);
+      const prefs = await adminService.getUserWidgets(user.id);
       const enabledWidgetIds = prefs
         .filter((p) => p.isEnabled)
         .map((p) => p.widgetId);
@@ -697,19 +622,13 @@ export default function UsersPage() {
         userId: user.id,
         selectedWidgets: enabledWidgetIds,
       });
-    } catch {
-      // Fall back to empty selection on error
-      setSapToast({
-        visible: true,
-        userName: user.fullName,
-        userId: user.id,
-        selectedWidgets: [],
-      });
+    } catch (err) {
+      setPageMsg(err instanceof Error ? err.message : 'Could not load widget settings. Please try again.');
     }
   }, []);
 
   const handleSaveWidgets = useCallback(async () => {
-    if (!sapToast) return;
+    if (!sapToast || widgetSaving) return;
     setWidgetSaving(true);
     try {
       await adminService.saveUserWidgets(
@@ -721,18 +640,19 @@ export default function UsersPage() {
       );
       setPageMsg(`Dashboard widgets configured for "${sapToast.userName}" ✓`);
       setSapToast(null);
-    } catch {
-      setPageMsg('User created. Widget preferences can be set later.');
-      setSapToast(null);
+    } catch (err) {
+      setWidgetError(err instanceof Error ? err.message : 'Could not save widget settings. Please try again.');
     } finally {
       setWidgetSaving(false);
     }
-  }, [sapToast]);
+  }, [sapToast, widgetSaving]);
 
   const canCreateUser =
     newFullName.trim() &&
     newUsername.trim() &&
-    newPassword.trim().length >= 8 &&
+    newPassword.length >= 8 &&
+    !isNewEmailInvalid &&
+    selectedUserType !== null &&
     newEmail.trim() &&
     (selectedUserType === 'rfq' ? !!newPosition : !!newRole);
 
@@ -740,7 +660,7 @@ export default function UsersPage() {
     const missing: string[] = [];
     if (!newFullName.trim()) missing.push('Full name');
     if (!newUsername.trim()) missing.push('Username');
-    if (newPassword.trim().length < 8) missing.push('Password (minimum 8 characters)');
+    if (newPassword.length < 8) missing.push('Password (minimum 8 characters)');
     if (!newEmail.trim()) {
       missing.push('Email');
     } else if (isNewEmailInvalid) {
@@ -767,7 +687,7 @@ export default function UsersPage() {
   }, [summary.active, maxUsersAllowed]);
 
   return (
-    <PageFrame>
+    <PageFrame className="users-workspace">
       {error && <MessageStrip type="error">{error}</MessageStrip>}
       {pageMsg && (
         <MessageStrip
@@ -806,18 +726,18 @@ export default function UsersPage() {
       {isUserLimitReached && (
         <div className="mb-4">
           <MessageStrip type="warning">
-            ⚠️ <strong>Company User Limit Reached:</strong> Your organization has reached its maximum active user limit ({summary.active} / {maxUsersAllowed} active users). Please contact your service provider (Procnex Support) to upgrade your user limit.
+            <strong>Company User Limit Reached:</strong> Your organization has reached its maximum active user limit ({summary.active} / {maxUsersAllowed} active users). Please contact your service provider (Procnex Support) to upgrade your user limit.
           </MessageStrip>
         </div>
       )}
 
       {/* ── Summary KPI Cards ──────────────────────────────────── */}
-      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="users-metrics mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           { icon: Users, tone: 'primary' as const, value: summary.total, label: 'TOTAL USERS', detail: 'All registered users', mode: 'all' as const },
           { icon: UserCheck, tone: 'success' as const, value: summary.active, label: 'ACTIVE', detail: 'Active user accounts', mode: 'active' as const },
           { icon: UserX, tone: 'danger' as const, value: summary.inactive, label: 'INACTIVE', detail: 'Deactivated accounts', mode: 'inactive' as const },
-          { icon: Shield, tone: 'info' as const, value: summary.admins, label: 'ADMINS', detail: 'Admin & Super Admin', mode: 'admins' as const },
+          { icon: Shield, tone: 'violet' as const, value: summary.admins, label: 'ADMINS', detail: 'Admin & Super Admin', mode: 'admins' as const },
         ].map((c) => {
           const isActive = statusFilter === c.mode;
           return (
@@ -831,12 +751,13 @@ export default function UsersPage() {
               className={cn(
                 'cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-all duration-200',
                 isActive &&
-                  'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
+                  'border-primary bg-primary/[0.08] dark:bg-primary/20'
               )}
               onClick={() => {
                 setStatusFilter((prev) => prev === c.mode ? 'all' : c.mode);
                 setCurrentPage(1);
               }}
+              onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setStatusFilter(prev => prev === c.mode ? 'all' : c.mode); setCurrentPage(1); } }}
               role="button"
               tabIndex={0}
               aria-pressed={isActive}
@@ -852,7 +773,8 @@ export default function UsersPage() {
           <Input
             className="h-11 rounded-xl pl-10"
             type="text"
-            placeholder="Search by name, username, email, or department..."
+            aria-label="Search users"
+            placeholder="Search by name, username, email, department, or role..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
           />
@@ -867,7 +789,7 @@ export default function UsersPage() {
                 view === 'table' ? "bg-primary text-primary-foreground shadow-xs" : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
               )}
               onClick={() => setView('table')}
-              title="Table view"
+              title="Table view" aria-label="Table view" aria-pressed={view === 'table'}
             >
               <LayoutList size={15} />
             </button>
@@ -878,7 +800,7 @@ export default function UsersPage() {
                 view === 'card' ? "bg-primary text-primary-foreground shadow-xs" : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
               )}
               onClick={() => setView('card')}
-              title="Card view"
+              title="Card view" aria-label="Card view" aria-pressed={view === 'card'}
             >
               <LayoutGrid size={15} />
             </button>
@@ -921,24 +843,33 @@ export default function UsersPage() {
 
       {/* ── Content ────────────────────────────────────────── */}
       {loading ? (
-        <Card className="overflow-hidden">
-          <TableSkeleton rows={4} columns={5} />
-        </Card>
+        view === 'table' ? (
+          <Card className="overflow-hidden p-4">
+            <TableSkeleton rows={5} columnWidths={['44px', ...visibleColumns.map((col) => col.width || '140px'), '164px']} />
+          </Card>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <CardSkeleton key={i} />
+            ))}
+          </div>
+        )
       ) : paginated.length > 0 ? (
         view === 'table' ? (
           <Card className="overflow-hidden">
-            <div className="users-table-wrap">
-              <table className="users-table" style={{ tableLayout: 'fixed', minWidth: '800px' }}>
+            <div className="users-table-wrap" role="region" aria-label="Users register" tabIndex={0}>
+              <table className="users-table" style={{ tableLayout: 'fixed', minWidth: `${44 + 164 + visibleColumns.reduce((sum, col) => sum + parseInt(col.width || '140'), 0)}px` }}>
                 <colgroup>
                   <col style={{ width: '44px' }} />
                   {visibleColumns.map((col) => (<col key={col.key} style={{ width: col.width || 'auto' }} />))}
-                  <col style={{ width: '130px' }} />
+                  <col style={{ width: '164px' }} />
                 </colgroup>
                 <thead>
                   <tr>
                     <th style={{ width: 44, textAlign: 'center' }}>
                       <input
                         type="checkbox"
+                        aria-label="Select all eligible users on this page"
                         checked={isAllSelected}
                         disabled={!hasPermission('User Management', 'canCreate')}
                         onChange={hasPermission('User Management', 'canCreate') ? handleToggleSelectAll : undefined}
@@ -951,9 +882,7 @@ export default function UsersPage() {
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                         <span>Actions</span>
                         <div className="col-btn-wrap">
-                          <button ref={colBtnRef} className={`col-btn ${showColPanel ? 'col-btn--active' : ''}`} onClick={() => setShowColPanel((v) => !v)} title="Customize columns" aria-label="Customize columns" aria-expanded={showColPanel}>
-                            <span /><span /><span />
-                          </button>
+                          <ColumnSettingsButton ref={colBtnRef} open={showColPanel} onClick={() => setShowColPanel((v) => !v)} />
                           {showColPanel && (
                             <ColumnCustomizer columnOrder={columnOrder} visibleKeys={visibleKeys} allColumns={ALL_COLUMNS} onToggle={handleToggleColumn} onReorder={setColumnOrder} onReset={handleResetColumns} onClose={() => setShowColPanel(false)} anchorRef={colBtnRef} />
                           )}
@@ -969,6 +898,7 @@ export default function UsersPage() {
                         {user.role !== 'Super Admin' && (
                           <input
                             type="checkbox"
+                            aria-label={`Select ${user.fullName}`}
                             checked={selectedUserIds.includes(user.id)}
                             disabled={!hasPermission('User Management', 'canCreate')}
                             onChange={() => hasPermission('User Management', 'canCreate') && handleToggleSelect(user.id)}
@@ -977,13 +907,21 @@ export default function UsersPage() {
                           />
                         )}
                       </td>
-                      {visibleColumns.map((col) => (<td key={col.key}>{col.render(user, formatDate, formatDateTime, toggleActive, toggleMobileActive, hasPermission('User Management', 'canCreate'))}</td>))}
+                      {visibleColumns.map((col) => (
+                        <td key={col.key}>
+                          {col.key === 'access' ? (
+                            <UserAccessControls user={user} canManage={hasPermission('User Management', 'canCreate')} busy={user.accessBusy}
+                              onAccountChange={() => toggleActive(user.id)} onMobileChange={() => toggleMobileActive(user.id)} />
+                          ) : col.render?.(user, formatDate, formatDateTime)}
+                        </td>
+                      ))}
                       <td>
                         <div className="users-table__actions">
-                          <button type="button" className="users-table__action-btn" title="View" onClick={() => openViewUser(user)}><Eye size={15} /></button>
+                          <button type="button" className="users-table__action-btn" aria-label={`View ${user.fullName}`} title="View" onClick={() => openViewUser(user)}><Eye size={15} /></button>
                           <button
                             type="button"
                             className="users-table__action-btn"
+                            aria-label={`Edit ${user.fullName}`}
                             title={hasPermission('User Management', 'canCreate') ? "Edit" : "Admin has not allowed this action. You do not have permission to edit users."}
                             onClick={() => hasPermission('User Management', 'canCreate') && openEditUser(user)}
                             disabled={!hasPermission('User Management', 'canCreate')}
@@ -994,18 +932,18 @@ export default function UsersPage() {
                           <button
                             type="button"
                             className="users-table__action-btn"
-                            title={hasPermission('User Management', 'canCreate') ? "Widgets" : "Admin has not allowed this action. You do not have permission to configure widgets."}
+                            aria-label={`Configure widgets for ${user.fullName}`} title={hasPermission('User Management', 'canCreate') ? "Widgets" : "Admin has not allowed this action. You do not have permission to configure widgets."}
                             onClick={() => hasPermission('User Management', 'canCreate') && openWidgetConfig(user)}
                             disabled={!hasPermission('User Management', 'canCreate')}
                             style={!hasPermission('User Management', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : {}}
                           >
-                            <Zap size={15} />
+                            <LayoutDashboard size={15} />
                           </button>
                           {user.role !== 'Super Admin' && (
                             <button
                               type="button"
                               className="users-table__action-btn users-table__action-btn--danger"
-                              title={hasPermission('User Management', 'canCreate') ? "Delete" : "Admin has not allowed this action. You do not have permission to delete users."}
+                              aria-label={`Delete ${user.fullName}`} title={hasPermission('User Management', 'canCreate') ? "Delete" : "Admin has not allowed this action. You do not have permission to delete users."}
                               onClick={() => hasPermission('User Management', 'canCreate') && setDeleteTarget(user)}
                               disabled={!hasPermission('User Management', 'canCreate')}
                               style={!hasPermission('User Management', 'canCreate') ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : {}}
@@ -1073,7 +1011,7 @@ export default function UsersPage() {
                       </div>
 
                       <div className="mb-4">
-                        <Badge tone={roleTone} className="text-[10px] px-2 py-0.5 max-w-full truncate">
+                        <Badge tone={roleTone} className="users-role-pill text-[10px] px-2 py-0.5 max-w-full truncate" title={user.role}>
                           {user.role}
                         </Badge>
                       </div>
@@ -1096,6 +1034,9 @@ export default function UsersPage() {
                       </div>
                     </div>
 
+                    <div className="mb-4" onClick={event => event.stopPropagation()}>
+                      <UserAccessControls user={user} canManage={hasPermission('User Management', 'canCreate')} busy={user.accessBusy} onAccountChange={() => toggleActive(user.id)} onMobileChange={() => toggleMobileActive(user.id)} />
+                    </div>
                     <div className="flex items-center justify-between pt-3 border-t border-border/60 text-xs text-muted-foreground">
                       <div className="flex flex-col">
                         <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/70">Last login</span>
@@ -1105,7 +1046,7 @@ export default function UsersPage() {
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          title="View"
+                          aria-label={`View ${user.fullName}`} title="View"
                           onClick={() => openViewUser(user)}
                         >
                           <Eye size={14} />
@@ -1113,7 +1054,7 @@ export default function UsersPage() {
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          title={hasPermission('User Management', 'canCreate') ? "Edit" : "No permission"}
+                          aria-label={`Edit ${user.fullName}`} title={hasPermission('User Management', 'canCreate') ? "Edit" : "No permission"}
                           disabled={!hasPermission('User Management', 'canCreate')}
                           onClick={() => hasPermission('User Management', 'canCreate') && openEditUser(user)}
                         >
@@ -1122,18 +1063,18 @@ export default function UsersPage() {
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          title={hasPermission('User Management', 'canCreate') ? "Widgets" : "No permission"}
+                          aria-label={`Configure widgets for ${user.fullName}`} title={hasPermission('User Management', 'canCreate') ? "Widgets" : "No permission"}
                           disabled={!hasPermission('User Management', 'canCreate')}
                           onClick={() => hasPermission('User Management', 'canCreate') && openWidgetConfig(user)}
                         >
-                          <Zap size={14} />
+                          <LayoutDashboard size={14} />
                         </Button>
                         {user.role !== 'Super Admin' && (
                           <Button
                             variant="ghost"
                             size="icon-sm"
                             className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                            title={hasPermission('User Management', 'canCreate') ? "Delete" : "No permission"}
+                            aria-label={`Delete ${user.fullName}`} title={hasPermission('User Management', 'canCreate') ? "Delete" : "No permission"}
                             disabled={!hasPermission('User Management', 'canCreate')}
                             onClick={() => hasPermission('User Management', 'canCreate') && setDeleteTarget(user)}
                           >
@@ -1184,24 +1125,24 @@ export default function UsersPage() {
 
       {/* ── Add User Modal ─────────────────────────────────── */}
       {showModal && (
-        <div className="users-modal-backdrop" onClick={() => setShowModal(false)}>
-          <div className={`users-modal ${modalStep === 2 ? 'users-modal--create' : ''}`} onClick={(e) => e.stopPropagation()}>
+        <div className="users-modal-backdrop" onClick={() => { if (!actionLoading) setShowModal(false); }}>
+          <div ref={createDialogRef} role="dialog" aria-modal="true" aria-labelledby="users-create-title" tabIndex={-1} className={`users-modal ${modalStep === 2 ? 'users-modal--create' : ''}`} onClick={(e) => e.stopPropagation()}>
             <div className="users-modal__header">
-              <span className="users-modal__title">
+              <span id="users-create-title" className="users-modal__title">
                 <UserPlus size={20} />
                 {modalStep === 1 ? 'Select User Type' : 'Add New User'}
               </span>
-              <button className="users-modal__close" onClick={() => setShowModal(false)}><X size={18} /></button>
+              <button aria-label="Close dialog" className="users-modal__close" onClick={() => { if (!actionLoading) setShowModal(false); }}><X size={18} /></button>
             </div>
 
             {/* Step Indicator */}
-            <div className="users-modal__steps">
-              <div className={`users-modal__step ${modalStep >= 1 ? 'users-modal__step--active' : ''}`}>
+            <div className="users-modal__steps" aria-label={`Create user: step ${modalStep} of 2`}>
+              <div aria-current={modalStep === 1 ? 'step' : undefined} className={`users-modal__step ${modalStep >= 1 ? 'users-modal__step--active' : ''}`}>
                 <div className="users-modal__step-dot">1</div>
                 <span>User Type</span>
               </div>
               <div className="users-modal__step-line" />
-              <div className={`users-modal__step ${modalStep >= 2 ? 'users-modal__step--active' : ''}`}>
+              <div aria-current={modalStep === 2 ? 'step' : undefined} className={`users-modal__step ${modalStep >= 2 ? 'users-modal__step--active' : ''}`}>
                 <div className="users-modal__step-dot">2</div>
                 <span>Details</span>
               </div>
@@ -1213,22 +1154,22 @@ export default function UsersPage() {
                 <div className="users-modal__body">
                   <p className="users-modal__subtitle">Select the type of user you want to create</p>
                   <div className="users-modal__type-cards">
-                    <div className={`users-modal__type-card ${selectedUserType === 'rfq' ? 'users-modal__type-card--selected' : ''}`} onClick={() => setSelectedUserType('rfq')}>
+                    <button type="button" aria-pressed={selectedUserType === 'rfq'} className={`users-modal__type-card ${selectedUserType === 'rfq' ? 'users-modal__type-card--selected' : ''}`} onClick={() => setSelectedUserType('rfq')}>
                       <div className="users-modal__type-card-icon users-modal__type-card-icon--rfq"><ShoppingCart size={28} /></div>
                       <div className="users-modal__type-card-check">{selectedUserType === 'rfq' && <CheckCircle2 size={22} />}</div>
                       <h3>P2P User</h3>
                       <p>Create a user for company positions like Purchase Clerk, Store Keeper, etc.</p>
-                    </div>
-                    <div className={`users-modal__type-card ${selectedUserType === 'heliflow' ? 'users-modal__type-card--selected' : ''}`} onClick={() => setSelectedUserType('heliflow')}>
+                    </button>
+                    <button type="button" aria-pressed={selectedUserType === 'heliflow'} className={`users-modal__type-card ${selectedUserType === 'heliflow' ? 'users-modal__type-card--selected' : ''}`} onClick={() => setSelectedUserType('heliflow')}>
                       <div className="users-modal__type-card-icon users-modal__type-card-icon--heliflow"><Zap size={28} /></div>
                       <div className="users-modal__type-card-check">{selectedUserType === 'heliflow' && <CheckCircle2 size={22} />}</div>
                       <h3>Workflow User</h3>
-                      <p>Platform user with full access. Requires document verification.</p>
-                    </div>
+                      <p>Create a workflow user with access determined by their assigned role.</p>
+                    </button>
                   </div>
                 </div>
                 <div className="users-modal__footer">
-                  <button className="users-modal__btn users-modal__btn--secondary" onClick={() => setShowModal(false)}>Cancel</button>
+                  <button className="users-modal__btn users-modal__btn--secondary" onClick={() => { if (!actionLoading) setShowModal(false); }}>Cancel</button>
                   <button className="users-modal__btn users-modal__btn--primary" disabled={!canProceedStep1} onClick={() => setModalStep(2)}>
                     Continue <ArrowRight size={16} />
                   </button>
@@ -1244,23 +1185,23 @@ export default function UsersPage() {
                     <MessageStrip type="error" compact className="sap-message-strip--flush">{createModalError}</MessageStrip>
                   )}
                   <div className="users-modal__type-badge">
-                    {selectedUserType === 'rfq' ? <ShoppingCart size={14} /> : <Zap size={14} />}
+                    {selectedUserType === 'rfq' ? <ShoppingCart size={14} /> : <LayoutDashboard size={14} />}
                     {selectedUserType === 'rfq' ? 'P2P User' : 'Workflow User'}
                   </div>
                   <div className="users-modal__field">
-                    <label className="users-modal__label">Full Name <span>*</span></label>
-                    <input className="users-modal__input" type="text" placeholder="e.g. Rahul Sharma" value={newFullName} onChange={(e) => setNewFullName(e.target.value)} />
+                    <label htmlFor="users-newFullName" className="users-modal__label">Full Name <span className="users-required" aria-hidden="true">*</span></label>
+                    <Input id="users-newFullName" disabled={actionLoading} className="users-modal__input" type="text" placeholder="e.g. Rahul Sharma" required value={newFullName} onChange={(e) => setNewFullName(e.target.value)} />
                   </div>
                   <div className="users-modal__row">
                     <div className="users-modal__field">
-                      <label className="users-modal__label">Username <span>*</span></label>
-                      <input className="users-modal__input" type="text" placeholder="e.g. rahul.sharma" value={newUsername} onChange={(e) => setNewUsername(e.target.value)} />
+                      <label htmlFor="users-newUsername" className="users-modal__label">Username <span className="users-required" aria-hidden="true">*</span></label>
+                      <Input id="users-newUsername" disabled={actionLoading} className="users-modal__input" type="text" placeholder="e.g. rahul.sharma" required value={newUsername} onChange={(e) => setNewUsername(e.target.value)} />
                     </div>
                     <div className="users-modal__field">
-                      <label className="users-modal__label">Password <span>*</span></label>
-                      <input
+                      <label htmlFor="users-newPassword" className="users-modal__label">Password <span className="users-required" aria-hidden="true">*</span></label>
+                      <Input id="users-newPassword" disabled={actionLoading}
                         className={`users-modal__input ${newPassword && newPassword.length < 8 ? 'users-modal__input--invalid' : ''}`}
-                        type="password" placeholder="Min 8 characters" value={newPassword}
+                        autoComplete="new-password" minLength={8} type="password" placeholder="Min 8 characters" required value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                       />
                       {newPassword && newPassword.length < 8 && (
@@ -1270,23 +1211,25 @@ export default function UsersPage() {
                   </div>
                   <div className="users-modal__row">
                     <div className="users-modal__field">
-                      <label className="users-modal__label"><Mail size={13} style={{ marginRight: 4 }} />Email <span>*</span></label>
-                      <input
+                      <label htmlFor="users-newEmail" className="users-modal__label"><Mail size={13} style={{ marginRight: 4 }} />Email <span className="users-required" aria-hidden="true">*</span></label>
+                      <Input id="users-newEmail" disabled={actionLoading} aria-invalid={isNewEmailInvalid} aria-describedby={isNewEmailInvalid ? 'users-newEmail-error' : undefined}
                         className={`users-modal__input ${isNewEmailInvalid ? 'users-modal__input--invalid' : ''}`}
                         type="email"
                         placeholder="user@procnex.com"
-                        value={newEmail}
+                        required value={newEmail}
                         onChange={(e) => setNewEmail(e.target.value)}
                       />
                       {isNewEmailInvalid && (
-                        <p className="users-modal__field-hint" style={{ color: '#ef4444' }}>
+                        <p id="users-newEmail-error" className="users-modal__field-hint">
                           Please enter a complete valid email (e.g. name@domain.com)
                         </p>
                       )}
                     </div>
                     <div className="users-modal__field">
-                      <label className="users-modal__label"><Phone size={13} style={{ marginRight: 4 }} />Phone</label>
+                      <label htmlFor="users-newPhone" className="users-modal__label"><Phone size={13} style={{ marginRight: 4 }} />Phone</label>
                       <PhoneInput
+                        id="users-newPhone"
+                        disabled={actionLoading}
                         countryCode={newCountryCode}
                         onCountryCodeChange={setNewCountryCode}
                         value={newPhone}
@@ -1298,72 +1241,65 @@ export default function UsersPage() {
                   {selectedUserType === 'rfq' && (
                     <div className="users-modal__row">
                       <div className="users-modal__field">
-                        <label className="users-modal__label"><Shield size={13} style={{ marginRight: 4 }} />Position <span>*</span></label>
-                        <select className="users-modal__select" value={newPosition} onChange={(e) => setNewPosition(e.target.value)}>
+                        <label htmlFor="users-newPosition" className="users-modal__label"><Shield size={13} style={{ marginRight: 4 }} />Position <span className="users-required" aria-hidden="true">*</span></label>
+                        <Select id="users-newPosition" disabled={actionLoading} className="users-modal__select" required value={newPosition} onChange={(e) => setNewPosition(e.target.value)}>
                           <option value="">Select position</option>
                           {positionRoleOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
-                        </select>
+                        </Select>
                       </div>
                       <div className="users-modal__field">
-                        <label className="users-modal__label"><Building2 size={13} style={{ marginRight: 4 }} />Department</label>
-                        <select className="users-modal__select" value={newDepartment} onChange={(e) => setNewDepartment(e.target.value)}>
+                        <label htmlFor="users-newDepartment" className="users-modal__label"><Building2 size={13} style={{ marginRight: 4 }} />Department</label>
+                        <Select id="users-newDepartment" disabled={actionLoading} className="users-modal__select" value={newDepartment} onChange={(e) => setNewDepartment(e.target.value)}>
                           <option value="">Select department</option>
                           {departments.filter((d) => d.isActive).map((d) => (<option key={d.id} value={d.name}>{d.name}</option>))}
-                        </select>
+                        </Select>
                       </div>
                     </div>
                   )}
                   {selectedUserType === 'heliflow' && (
                     <div className="users-modal__row">
                       <div className="users-modal__field">
-                        <label className="users-modal__label"><Shield size={13} style={{ marginRight: 4 }} />Role <span>*</span></label>
-                        <select className="users-modal__select" value={newRole} onChange={(e) => setNewRole(e.target.value)}>
+                        <label htmlFor="users-newRole" className="users-modal__label"><Shield size={13} style={{ marginRight: 4 }} />Role <span className="users-required" aria-hidden="true">*</span></label>
+                        <Select id="users-newRole" disabled={actionLoading} className="users-modal__select" required value={newRole} onChange={(e) => setNewRole(e.target.value)}>
                           <option value="">Select role</option>
                           {positionRoleOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
-                        </select>
+                        </Select>
                       </div>
                       <div className="users-modal__field">
-                        <label className="users-modal__label"><Building2 size={13} style={{ marginRight: 4 }} />Department</label>
-                        <select className="users-modal__select" value={newDepartment} onChange={(e) => setNewDepartment(e.target.value)}>
+                        <label htmlFor="users-newDepartment" className="users-modal__label"><Building2 size={13} style={{ marginRight: 4 }} />Department</label>
+                        <Select id="users-newDepartment" disabled={actionLoading} className="users-modal__select" value={newDepartment} onChange={(e) => setNewDepartment(e.target.value)}>
                           <option value="">Select department</option>
                           {departments.filter((d) => d.isActive).map((d) => (<option key={d.id} value={d.name}>{d.name}</option>))}
-                        </select>
+                        </Select>
                       </div>
                     </div>
                   )}
-                  <div className="users-modal__field" style={{ marginTop: 12, padding: '10px 14px', background: 'var(--surface-elevated, #f8fafc)', borderRadius: 8, border: '1px solid var(--border, #e2e8f0)' }}>
-                    <label className="users-modal__label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', margin: 0 }}>
-                      <span style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 8 }}><Smartphone size={18} strokeWidth={2} style={{ color: 'var(--primary-500, #0a6ed1)' }} /> Allow Mobile App Access</span>
-                      <input
-                        type="checkbox"
-                        checked={newMobileAccess}
-                        onChange={(e) => setNewMobileAccess(e.target.checked)}
-                        style={{ width: 18, height: 18, cursor: 'pointer' }}
-                      />
-                    </label>
-                    <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>
-                      Allow this user to log in to the Mobile App.
-                    </p>
+                  <div className="users-mobile-setting">
+                    <div className="users-mobile-setting__heading">
+                      <span className="users-modal__label"><Smartphone size={18} /> Allow Mobile App Access</span>
+                      <AccessSwitch checked={newMobileAccess} disabled={actionLoading} label="Allow Mobile App Access" onChange={() => setNewMobileAccess(value => !value)} />
+                    </div>
+                    <p>Allow this user to sign in from the mobile app.</p>
                   </div>
                   <div className="users-modal__docs-section">
                     <h4 className="users-modal__docs-title"><FileText size={15} /> Optional Documents</h4>
                     <p className="users-modal__docs-hint">Upload if available; this is not required to create the user.</p>
                     <div className="users-modal__docs-grid">
-                      <div className={`users-modal__doc-card ${docAadhaar ? 'users-modal__doc-card--uploaded' : ''}`} onClick={() => aadhaarRef.current?.click()}>
-                        <input ref={aadhaarRef} type="file" accept=".pdf,.jpg,.jpeg,.png" hidden onChange={(e) => setDocAadhaar(e.target.files?.[0] || null)} />
+                      <label className={`users-modal__doc-card ${docAadhaar ? 'users-modal__doc-card--uploaded' : ''}`}>
+                        <input ref={aadhaarRef} type="file" accept=".pdf,.jpg,.jpeg,.png" aria-label="Attach Aadhaar Card" disabled={actionLoading} className="sr-only" onChange={(e) => setDocAadhaar(e.target.files?.[0] || null)} />
                         {docAadhaar ? <CheckCircle2 size={22} /> : <Upload size={22} />}
                         <span className="users-modal__doc-card-label" title={docAadhaar ? docAadhaar.name : 'Aadhaar Card'}>{docAadhaar ? docAadhaar.name : 'Aadhaar Card'}</span>
-                      </div>
-                      <div className={`users-modal__doc-card ${docPan ? 'users-modal__doc-card--uploaded' : ''}`} onClick={() => panRef.current?.click()}>
-                        <input ref={panRef} type="file" accept=".pdf,.jpg,.jpeg,.png" hidden onChange={(e) => setDocPan(e.target.files?.[0] || null)} />
+                      </label>
+                      <label className={`users-modal__doc-card ${docPan ? 'users-modal__doc-card--uploaded' : ''}`}>
+                        <input ref={panRef} type="file" accept=".pdf,.jpg,.jpeg,.png" aria-label="Attach PAN Card" disabled={actionLoading} className="sr-only" onChange={(e) => setDocPan(e.target.files?.[0] || null)} />
                         {docPan ? <CheckCircle2 size={22} /> : <Upload size={22} />}
                         <span className="users-modal__doc-card-label" title={docPan ? docPan.name : 'PAN Card'}>{docPan ? docPan.name : 'PAN Card'}</span>
-                      </div>
-                      <div className={`users-modal__doc-card ${docOffer ? 'users-modal__doc-card--uploaded' : ''}`} onClick={() => offerRef.current?.click()}>
-                        <input ref={offerRef} type="file" accept=".pdf,.jpg,.jpeg,.png" hidden onChange={(e) => setDocOffer(e.target.files?.[0] || null)} />
+                      </label>
+                      <label className={`users-modal__doc-card ${docOffer ? 'users-modal__doc-card--uploaded' : ''}`}>
+                        <input ref={offerRef} type="file" accept=".pdf,.jpg,.jpeg,.png" aria-label="Attach Offer Letter" disabled={actionLoading} className="sr-only" onChange={(e) => setDocOffer(e.target.files?.[0] || null)} />
                         {docOffer ? <CheckCircle2 size={22} /> : <Upload size={22} />}
                         <span className="users-modal__doc-card-label" title={docOffer ? docOffer.name : 'Offer Letter'}>{docOffer ? docOffer.name : 'Offer Letter'}</span>
-                      </div>
+                      </label>
                     </div>
                   </div>
                 </div>
@@ -1371,7 +1307,7 @@ export default function UsersPage() {
                   {!canCreateUser && createUserMissingFields.length > 0 && (
                     <p className="users-modal__footer-hint">Complete: <strong>{createUserMissingFields.join(', ')}</strong></p>
                   )}
-                  <button className="users-modal__btn users-modal__btn--secondary" onClick={() => setModalStep(1)}>
+                  <button className="users-modal__btn users-modal__btn--secondary" disabled={actionLoading} onClick={() => setModalStep(1)}>
                     <ArrowLeft size={16} /> Back
                   </button>
                   <button
@@ -1393,10 +1329,10 @@ export default function UsersPage() {
       {/* ── View User Modal ─────────────────────────────────── */}
       {viewUser && (
         <div className="users-modal-backdrop" onClick={() => setViewUser(null)}>
-          <div className="users-modal" onClick={(e) => e.stopPropagation()}>
+          <div ref={viewDialogRef} role="dialog" aria-modal="true" aria-labelledby="users-view-title" tabIndex={-1} className="users-modal" onClick={(e) => e.stopPropagation()}>
             <div className="users-modal__header">
-              <span className="users-modal__title"><Eye size={20} /> User Details</span>
-              <button type="button" className="users-modal__close" onClick={() => setViewUser(null)}><X size={18} /></button>
+              <span id="users-view-title" className="users-modal__title"><Eye size={20} /> User Details</span>
+              <button type="button" aria-label="Close dialog" className="users-modal__close" onClick={() => setViewUser(null)}><X size={18} /></button>
             </div>
             <div className="users-modal__body">
               <div className="users-modal__field"><label className="users-modal__label">Full Name</label><p style={{ margin: 0 }}>{viewUser.fullName}</p></div>
@@ -1418,7 +1354,7 @@ export default function UsersPage() {
               </div>
             </div>
             <div className="users-modal__footer" style={{ justifyContent: 'flex-end' }}>
-              <button type="button" className="users-modal__btn users-modal__btn--primary" onClick={() => { setViewUser(null); openEditUser(viewUser); }}>
+              <button type="button" className="users-modal__btn users-modal__btn--primary" disabled={!hasPermission('User Management', 'canCreate')} onClick={() => { setViewUser(null); openEditUser(viewUser); }}>
                 <Edit3 size={16} /> Edit User
               </button>
             </div>
@@ -1429,34 +1365,36 @@ export default function UsersPage() {
       {/* ── Edit User Modal ─────────────────────────────────── */}
       {editingUser && (
         <div key={editingUser.id} className="users-modal-backdrop" onClick={() => !actionLoading && setEditingUser(null)}>
-          <div className="users-modal" onClick={(e) => e.stopPropagation()}>
+          <div ref={editDialogRef} role="dialog" aria-modal="true" aria-labelledby="users-edit-title" tabIndex={-1} className="users-modal" onClick={(e) => e.stopPropagation()}>
             <div className="users-modal__header">
-              <span className="users-modal__title"><Edit3 size={20} /> Edit User</span>
-              <button type="button" className="users-modal__close" onClick={() => setEditingUser(null)}><X size={18} /></button>
+              <span id="users-edit-title" className="users-modal__title"><Edit3 size={20} /> Edit User</span>
+              <button type="button" aria-label="Close dialog" className="users-modal__close" onClick={() => { if (!actionLoading) setEditingUser(null); }}><X size={18} /></button>
             </div>
             <div className="users-modal__body">
               <div className="users-modal__field">
-                <label className="users-modal__label">Full Name <span>*</span></label>
-                <input className="users-modal__input" value={editFullName} onChange={(e) => setEditFullName(e.target.value)} />
+                <label htmlFor="users-editFullName" className="users-modal__label">Full Name <span className="users-required" aria-hidden="true">*</span></label>
+                <Input id="users-editFullName" disabled={actionLoading} className="users-modal__input" required value={editFullName} onChange={(e) => setEditFullName(e.target.value)} />
               </div>
               <div className="users-modal__row">
                 <div className="users-modal__field">
-                  <label className="users-modal__label">Email <span>*</span></label>
-                  <input
+                  <label htmlFor="users-editEmail" className="users-modal__label">Email <span className="users-required" aria-hidden="true">*</span></label>
+                  <Input id="users-editEmail" disabled={actionLoading} aria-invalid={isEditEmailInvalid} aria-describedby={isEditEmailInvalid ? 'users-editEmail-error' : undefined}
                     className={`users-modal__input ${isEditEmailInvalid ? 'users-modal__input--invalid' : ''}`}
                     type="email"
-                    value={editEmail}
+                    required value={editEmail}
                     onChange={(e) => setEditEmail(e.target.value)}
                   />
                   {isEditEmailInvalid && (
-                    <p className="users-modal__field-hint" style={{ color: '#ef4444' }}>
+                    <p id="users-editEmail-error" className="users-modal__field-hint">
                       Please enter a complete valid email (e.g. name@domain.com)
                     </p>
                   )}
                 </div>
                 <div className="users-modal__field">
-                  <label className="users-modal__label">Phone</label>
+                  <label htmlFor="users-editPhone" className="users-modal__label">Phone</label>
                   <PhoneInput
+                    id="users-editPhone"
+                    disabled={actionLoading}
                     countryCode={editCountryCode}
                     onCountryCodeChange={setEditCountryCode}
                     value={editPhone}
@@ -1467,41 +1405,35 @@ export default function UsersPage() {
               </div>
               <div className="users-modal__row">
                 <div className="users-modal__field">
-                  <label className="users-modal__label">Department</label>
-                  <select className="users-modal__select" value={editDepartment} onChange={(e) => setEditDepartment(e.target.value)}>
+                  <label htmlFor="users-editDepartment" className="users-modal__label">Department</label>
+                  <Select id="users-editDepartment" disabled={actionLoading} className="users-modal__select" value={editDepartment} onChange={(e) => setEditDepartment(e.target.value)}>
                     <option value="">Select department</option>
+                    {editDepartment && !departments.some(d => d.isActive && d.name === editDepartment) && <option value={editDepartment}>{editDepartment}</option>}
                     {departments.filter((d) => d.isActive).map((d) => (<option key={d.id} value={d.name}>{d.name}</option>))}
-                  </select>
+                  </Select>
                 </div>
                 <div className="users-modal__field">
-                  <label className="users-modal__label">Role</label>
-                  <select className="users-modal__select" value={editRoleName} onChange={(e) => setEditRoleName(e.target.value)}>
+                  <label htmlFor="users-editRoleName" className="users-modal__label">Role</label>
+                  <Select id="users-editRoleName" disabled={actionLoading} className="users-modal__select" value={editRoleName} onChange={(e) => setEditRoleName(e.target.value)}>
                     <option value="">Select role / position</option>
                     {positionRoleOptions.map((r) => (<option key={r} value={r}>{r}</option>))}
-                  </select>
+                  </Select>
                 </div>
               </div>
-              <div className="users-modal__field" style={{ marginTop: 12, padding: '10px 14px', background: 'var(--surface-elevated, #f8fafc)', borderRadius: 8, border: '1px solid var(--border, #e2e8f0)' }}>
-                <label className="users-modal__label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', margin: 0 }}>
-                  <span style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 8 }}><Smartphone size={18} strokeWidth={2} style={{ color: 'var(--primary-500, #0a6ed1)' }} /> Allow Mobile App Access</span>
-                  <input
-                    type="checkbox"
-                    checked={editMobileAccess}
-                    onChange={(e) => setEditMobileAccess(e.target.checked)}
-                    style={{ width: 18, height: 18, cursor: 'pointer' }}
-                  />
-                </label>
-                <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>
-                  When enabled, this user can log in to the Mobile App.
-                </p>
-              </div>
+              <div className="users-mobile-setting">
+                    <div className="users-mobile-setting__heading">
+                      <span className="users-modal__label"><Smartphone size={18} /> Allow Mobile App Access</span>
+                      <AccessSwitch checked={editMobileAccess} disabled={!editingUser.isActive || actionLoading} label="Allow Mobile App Access" onChange={() => setEditMobileAccess(value => !value)} />
+                    </div>
+                    <p>{editingUser.isActive ? 'Allow this user to sign in from the mobile app.' : 'This account is inactive. Mobile permission is retained and takes effect when the account is active.'}</p>
+                  </div>
               <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--text-placeholder)' }}>
                 Username: @{editingUser.username} (cannot be changed here)
               </p>
             </div>
             <div className="users-modal__footer">
-              <button type="button" className="users-modal__btn users-modal__btn--secondary" disabled={actionLoading} onClick={() => setEditingUser(null)}>Cancel</button>
-              <button type="button" className="users-modal__btn users-modal__btn--primary" disabled={actionLoading || !editFullName.trim() || !editEmail.trim()} onClick={handleSaveEdit}>
+              <button type="button" className="users-modal__btn users-modal__btn--secondary" disabled={actionLoading} onClick={() => { if (!actionLoading) setEditingUser(null); }}>Cancel</button>
+              <button type="button" className="users-modal__btn users-modal__btn--primary" disabled={actionLoading || !editFullName.trim() || !editEmail.trim() || isEditEmailInvalid} onClick={handleSaveEdit}>
                 {actionLoading ? 'Saving…' : 'Save Changes'}
               </button>
             </div>
@@ -1515,7 +1447,7 @@ export default function UsersPage() {
           <div className="users-modal" onClick={(e) => e.stopPropagation()}>
             <div className="users-modal__header">
               <span className="users-modal__title"><Trash2 size={20} /> Delete user?</span>
-              <button type="button" className="users-modal__close" onClick={() => setDeleteTarget(null)}><X size={18} /></button>
+              <button type="button" aria-label="Close dialog" className="users-modal__close" onClick={() => setDeleteTarget(null)}><X size={18} /></button>
             </div>
             <div className="users-modal__body">
               <p style={{ margin: 0 }}>Remove <strong>{deleteTarget.fullName}</strong> (@{deleteTarget.username})? This cannot be undone.</p>
@@ -1531,13 +1463,13 @@ export default function UsersPage() {
       )}
 
       {/* ── Widget Configuration Modal ────────────────────────────────── */}
-      <Dialog open={Boolean(sapToast?.visible)} onOpenChange={(open) => { if (!open) setSapToast(null); }}>
+      <Dialog open={Boolean(sapToast?.visible)} onOpenChange={(open) => { if (!open && !widgetSaving) setSapToast(null); }}>
         {sapToast?.visible && (
-          <DialogContent className="max-w-xl p-0 overflow-hidden sm:rounded-2xl">
+          <DialogContent className="users-workspace users-widget-dialog max-w-xl p-0 overflow-hidden sm:rounded-2xl">
             <DialogHeader className="p-6 pb-4 border-b border-border bg-muted/30">
               <div className="flex items-center gap-3">
                 <div className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary">
-                  <Zap size={20} />
+                  <LayoutDashboard size={20} />
                 </div>
                 <div>
                   <DialogTitle className="text-lg font-bold text-foreground">Configure Dashboard Widgets</DialogTitle>
@@ -1549,15 +1481,19 @@ export default function UsersPage() {
             </DialogHeader>
 
             <div className="p-6 max-h-[60vh] overflow-y-auto space-y-4">
+              {widgetError && <MessageStrip type="error">{widgetError}</MessageStrip>}
               <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                 Available Widgets
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {WIDGET_LIST.map((widget) => {
                   const active = sapToast.selectedWidgets.includes(widget.id);
+                  const Icon = widget.icon;
                   return (
                     <button
                       key={widget.id}
+                      aria-pressed={active}
+                      disabled={widgetSaving}
                       type="button"
                       onClick={() => toggleToastWidget(widget.id)}
                       className={cn(
@@ -1567,9 +1503,9 @@ export default function UsersPage() {
                           : "border-border/80 bg-card hover:border-border hover:bg-accent/40"
                       )}
                     >
-                      <span className="text-xl shrink-0 mt-0.5">{widget.icon}</span>
+                      <Icon className="size-5 shrink-0 mt-0.5 text-primary" aria-hidden="true" />
                       <div className="min-w-0 flex-1">
-                        <div className={cn("text-sm font-semibold truncate", active ? "text-primary" : "text-foreground")}>
+                        <div className={cn("text-sm font-semibold", active ? "text-primary" : "text-foreground")}>
                           {widget.name}
                         </div>
                         <div className="text-xs text-muted-foreground mt-0.5 leading-snug line-clamp-2">
@@ -1582,7 +1518,7 @@ export default function UsersPage() {
                           ? "border-primary bg-primary text-primary-foreground"
                           : "border-muted-foreground/30 bg-background"
                       )}>
-                        {active && <span className="text-xs font-bold">✓</span>}
+                        {active && <Check className="size-3.5" strokeWidth={3} />}
                       </div>
                     </button>
                   );
@@ -1598,7 +1534,7 @@ export default function UsersPage() {
                 <Button
                   type="button"
                   variant="secondary"
-                  onClick={() => setSapToast(null)}
+                  disabled={widgetSaving} onClick={() => setSapToast(null)}
                 >
                   Cancel
                 </Button>
@@ -1621,7 +1557,7 @@ export default function UsersPage() {
           <div className="users-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
             <div className="users-modal__header">
               <span className="users-modal__title"><Trash2 size={20} /> Delete {selectedUserIds.length} Selected User(s)?</span>
-              <button type="button" className="users-modal__close" onClick={() => setShowBatchDeleteModal(false)} disabled={batchDeleting}><X size={18} /></button>
+              <button type="button" aria-label="Close dialog" className="users-modal__close" onClick={() => setShowBatchDeleteModal(false)} disabled={batchDeleting}><X size={18} /></button>
             </div>
             <div className="users-modal__body">
               <p style={{ margin: 0 }}>
@@ -1639,117 +1575,6 @@ export default function UsersPage() {
         </div>
       )}
 
-      {/* ── Mobile Access Success Modal ────────────────────── */}
-      {mobileSuccessModal?.visible && (
-        <div className="users-modal-backdrop" onClick={() => setMobileSuccessModal(null)}>
-          <div
-            className="users-modal"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              maxWidth: 400,
-              padding: '28px 24px 24px',
-              textAlign: 'center',
-              borderRadius: 16,
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08)',
-              position: 'relative',
-            }}
-          >
-            {/* Header Close */}
-            <button
-              type="button"
-              onClick={() => setMobileSuccessModal(null)}
-              style={{
-                position: 'absolute',
-                top: 14,
-                right: 14,
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: '50%',
-                width: 28,
-                height: 28,
-                display: 'flex',
-                alignItems: 'center',
-                justify: 'center',
-                color: 'var(--text-secondary)',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-              }}
-            >
-              <X size={15} />
-            </button>
-
-            {/* Icon Badge */}
-            <div
-              style={{
-                width: 76,
-                height: 76,
-                borderRadius: '50%',
-                background: mobileSuccessModal.isEnabled
-                  ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.22), rgba(16, 185, 129, 0.1))'
-                  : 'linear-gradient(135deg, rgba(239, 68, 68, 0.22), rgba(225, 29, 72, 0.1))',
-                border: `1.5px solid ${mobileSuccessModal.isEnabled ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`,
-                boxShadow: `0 0 28px ${mobileSuccessModal.isEnabled ? 'rgba(34, 197, 94, 0.25)' : 'rgba(239, 68, 68, 0.25)'}`,
-                display: 'flex',
-                alignItems: 'center',
-                justify: 'center',
-                margin: '0 auto 20px',
-              }}
-            >
-              <Smartphone size={38} strokeWidth={2} color={mobileSuccessModal.isEnabled ? '#22c55e' : '#ef4444'} />
-            </div>
-
-            {/* Title */}
-            <h3
-              style={{
-                margin: '0 0 8px',
-                fontSize: 20,
-                fontWeight: 700,
-                color: 'var(--text-primary)',
-                letterSpacing: '-0.01em',
-              }}
-            >
-              Mobile Access {mobileSuccessModal.isEnabled ? 'Enabled' : 'Disabled'}
-            </h3>
-
-            {/* Subtitle */}
-            <p
-              style={{
-                margin: '0 0 24px',
-                fontSize: 15,
-                color: 'var(--text-secondary)',
-                lineHeight: 1.55,
-              }}
-            >
-              Mobile App access for <strong style={{ color: 'var(--text-primary)' }}>{mobileSuccessModal.userName}</strong> has been {mobileSuccessModal.isEnabled ? 'granted successfully.' : 'revoked.'}
-            </p>
-
-            {/* Button */}
-            <button
-              type="button"
-              onClick={() => setMobileSuccessModal(null)}
-              style={{
-                width: '100%',
-                padding: '11px 0',
-                borderRadius: 10,
-                border: 'none',
-                background: mobileSuccessModal.isEnabled
-                  ? 'linear-gradient(135deg, #16a34a, #15803d)'
-                  : 'linear-gradient(135deg, #dc2626, #b91c1c)',
-                color: '#ffffff',
-                fontSize: 15,
-                fontWeight: 600,
-                cursor: 'pointer',
-                boxShadow: mobileSuccessModal.isEnabled
-                  ? '0 4px 14px rgba(22, 163, 74, 0.35)'
-                  : '0 4px 14px rgba(220, 38, 38, 0.35)',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              Got it
-            </button>
-          </div>
-        </div>
-      )}
     </PageFrame>
   );
 }

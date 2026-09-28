@@ -928,7 +928,6 @@ img {
 }
 
 /* Master Active / Selected Card Glow Selector */
-[aria-pressed="true"],
 .card-glow,
 .card-selected,
 .card-active,

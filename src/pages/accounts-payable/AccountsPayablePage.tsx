@@ -1,3 +1,4 @@
+import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
@@ -12,7 +13,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TableSkeleton } from '../../components/shared/Skeleton';
-import ColumnCustomizer, { type ColumnDef } from '../../components/shared/ColumnCustomizer';
+import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
+import type { ColumnDef } from '../../hooks/columnPreferences';
 import PrintPurchaseInvoiceModal from '../../components/invoices/PrintPurchaseInvoiceModal';
 import InvoiceDocumentViewerModal from '../../components/invoices/InvoiceDocumentViewerModal';
 import { DigitalSignatureApprovalModal } from '../../components/shared/DigitalSignatureApprovalModal';
@@ -740,7 +742,7 @@ export default function AccountsPayablePage() {
 
       {loading ? (
         <Card className="p-4">
-          <TableSkeleton rows={5} columns={7} />
+          <TableSkeleton rows={5} columns={visibleColumns.length + 1} />
         </Card>
       ) : filtered.length === 0 ? (
         <EmptyState
@@ -784,17 +786,7 @@ export default function AccountsPayablePage() {
                       <div className="flex items-center justify-end gap-2">
                         <span>Actions</span>
                         <div className="relative">
-                          <Button
-                            ref={colBtnRef}
-                            variant={showColPanel ? 'secondary' : 'ghost'}
-                            size="icon-sm"
-                            onClick={() => setShowColPanel((v) => !v)}
-                            title="Customize columns"
-                            aria-label="Customize columns"
-                            aria-expanded={showColPanel}
-                          >
-                            <span className="flex gap-0.5"><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /></span>
-                          </Button>
+                          <ColumnSettingsButton ref={colBtnRef} open={showColPanel} onClick={() => setShowColPanel((v) => !v)} />
 
                           {showColPanel && (
                             <ColumnCustomizer

@@ -1,0 +1,7 @@
+.detail-tabs { border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+.detail-tabs__tab { white-space: nowrap; color: var(--muted-foreground); transition: background-color .15s, color .15s; }
+.detail-tabs__tab:hover { background: var(--muted); color: var(--foreground); }
+.detail-tabs__tab[aria-selected="true"] { background: var(--accent); color: var(--primary); border-color: color-mix(in srgb, var(--primary) 35%, var(--border)); box-shadow: none !important; }
+.detail-tabs__tab:focus-visible, .detail-tab-panel:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.detail-tabs__count { display: inline-flex; height: 20px; min-width: 20px; padding: 0 5px; align-items: center; justify-content: center; border-radius: 6px; background: var(--muted); color: var(--foreground); }
+.detail-tabs__tab[aria-selected="true"] .detail-tabs__count { background: var(--card); color: inherit; }

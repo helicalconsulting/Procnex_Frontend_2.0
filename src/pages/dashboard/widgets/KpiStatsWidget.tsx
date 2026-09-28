@@ -19,7 +19,7 @@ import { useCurrency } from '../../../components/shared/CurrencyMaster';
 import type { DashboardPipelineItem, DashboardRecentRfq, KpiItem } from '../../../types/viewModels';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../../components/ui/dialog';
 import { Badge } from '../../../components/ui/badge';
-import { WidgetLoading } from './WidgetShell';
+import { StatsSkeleton } from '../../../components/shared/Skeleton';
 import { cn } from '../../../lib/utils';
 
 interface DashboardOverview {
@@ -304,7 +304,7 @@ export default function KpiStatsWidget() {
   }
 
   if (loading) {
-    return <WidgetLoading>Loading KPIs…</WidgetLoading>;
+    return <StatsSkeleton count={6} />;
   }
 
   return (

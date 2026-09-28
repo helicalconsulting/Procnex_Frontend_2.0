@@ -1,3 +1,4 @@
+import { Button } from '../ui/button';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { X, ZoomIn, ZoomOut, Check, Image as ImageIcon } from 'lucide-react';
 import './ImageCropperModal.css';
@@ -175,14 +176,14 @@ export default function ImageCropperModal({
             <ImageIcon size={18} />
             {title || 'Crop Image'}
           </span>
-          <button className="icm-close" onClick={onClose}><X size={18} /></button>
+          <button type="button" aria-label="Close image cropper" className="icm-close" onClick={onClose}><X size={18} /></button>
         </div>
 
         {error ? (
           <div className="icm-error">
             <ImageIcon size={28} />
             <p>{error}</p>
-            <button className="icm-btn icm-btn--secondary" onClick={onClose}>Close</button>
+            <Button type="button" variant="outline" onClick={onClose}>Close</Button>
           </div>
         ) : !imgLoaded ? (
           <div className="icm-loading">
@@ -263,10 +264,10 @@ export default function ImageCropperModal({
 
             {/* Actions */}
             <div className="icm-actions">
-              <button className="icm-btn icm-btn--secondary" onClick={onClose}>Cancel</button>
-              <button className="icm-btn icm-btn--primary" onClick={handleConfirm}>
+              <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+              <Button type="button" onClick={handleConfirm}>
                 <Check size={16} /> Crop & Upload
-              </button>
+              </Button>
             </div>
           </>
         )}

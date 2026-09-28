@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useServiceData } from '../../hooks/useServiceData';
 import { profileService, type UserProfileDocument } from '../../services/profileService';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
+import { DetailSkeleton, SkeletonList } from '../../components/shared/Skeleton';
 import { authService } from '../../services/authService';
 import {
   User,
@@ -131,10 +132,8 @@ export default function MyProfilePage() {
 
   if (!user) {
     return (
-      <PageFrame className="flex items-center justify-center min-h-[400px]">
-        <div className="flex items-center gap-2 text-muted-foreground text-sm">
-          <Loader2 className="size-5 animate-spin text-primary" /> Loading profile…
-        </div>
+      <PageFrame>
+        <DetailSkeleton />
       </PageFrame>
     );
   }
@@ -300,9 +299,7 @@ export default function MyProfilePage() {
           </div>
 
           {docsLoading ? (
-            <div className="flex items-center justify-center py-8 text-xs text-muted-foreground gap-2">
-              <Loader2 className="size-4 animate-spin text-primary" /> Loading documents…
-            </div>
+            <SkeletonList items={3} hasAvatar={false} />
           ) : documents.length === 0 ? (
             <div className="py-8 text-center text-xs text-muted-foreground">
               No onboarding documents uploaded for this account.
@@ -366,9 +363,7 @@ export default function MyProfilePage() {
           </div>
 
           {sigsLoading ? (
-            <div className="flex items-center justify-center py-6 text-xs text-muted-foreground gap-2">
-              <Loader2 className="size-4 animate-spin text-primary" /> Loading saved signatures…
-            </div>
+            <SkeletonList items={2} hasAvatar={false} />
           ) : savedSignatures.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-6 text-center">
               <PenTool className="size-8 text-muted-foreground/50 mb-2" />

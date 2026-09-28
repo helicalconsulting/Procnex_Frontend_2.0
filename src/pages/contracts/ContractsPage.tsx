@@ -1,3 +1,4 @@
+import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -643,9 +644,17 @@ export default function ContractsPage() {
 
       {/* Content */}
       {loading ? (
-        <Card className="p-6">
-          <TableSkeleton rows={4} columns={6} />
-        </Card>
+        view === 'table' ? (
+          <Card className="p-6">
+            <TableSkeleton rows={4} columns={visibleColumns.length + 2} />
+          </Card>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <CardSkeleton key={i} />
+            ))}
+          </div>
+        )
       ) : paginated.length > 0 ? (
         view === 'table' ? (
           <Card className="overflow-hidden">
@@ -667,17 +676,7 @@ export default function ContractsPage() {
                       <div className="flex items-center justify-end gap-2">
                         <span>Actions</span>
                         <div className="relative">
-                          <Button
-                            ref={colBtnRef}
-                            variant={showColPanel ? 'secondary' : 'ghost'}
-                            size="icon-sm"
-                            onClick={() => setShowColPanel((v) => !v)}
-                            title="Customize columns"
-                            aria-label="Customize columns"
-                            aria-expanded={showColPanel}
-                          >
-                            <span className="flex gap-0.5"><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /></span>
-                          </Button>
+                          <ColumnSettingsButton ref={colBtnRef} open={showColPanel} onClick={() => setShowColPanel((v) => !v)} />
 
                           {showColPanel && (
                             <ColumnCustomizer

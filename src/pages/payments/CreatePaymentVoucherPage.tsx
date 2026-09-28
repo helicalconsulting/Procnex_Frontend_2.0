@@ -1,3 +1,4 @@
+import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
@@ -971,7 +972,7 @@ export default function CreatePaymentVoucherPage() {
         {/* Table Card */}
         {vouchersLoading ? (
           <Card className="overflow-hidden p-4">
-            <TableSkeleton rows={5} columns={6} />
+            <TableSkeleton rows={5} columnWidths={['44px', '170px', '220px', '140px', '100px', '170px', '160px', '120px']} />
           </Card>
         ) : (
           <Card className="overflow-hidden">
@@ -1026,16 +1027,7 @@ export default function CreatePaymentVoucherPage() {
                       <div className="flex items-center justify-end gap-2">
                         <span>ACTIONS</span>
                         <div className="relative">
-                          <Button
-                            variant={showVoucherColPanel ? 'secondary' : 'ghost'}
-                            size="icon-sm"
-                            onClick={() => setShowVoucherColPanel((v) => !v)}
-                            title="Customize columns"
-                            aria-label="Customize columns"
-                            aria-expanded={showVoucherColPanel}
-                          >
-                            <span className="flex gap-0.5"><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /></span>
-                          </Button>
+                          <ColumnSettingsButton open={showVoucherColPanel} onClick={() => setShowVoucherColPanel((v) => !v)} />
 
                           {showVoucherColPanel && (
                             <ColumnCustomizer
@@ -1540,7 +1532,7 @@ export default function CreatePaymentVoucherPage() {
           <>
           {loadingInvoices ? (
             <div style={{ padding: '16px' }}>
-              <TableSkeleton rows={3} columns={6} />
+              <TableSkeleton rows={3} columnWidths={['40px', '140px', '120px', '120px', '110px', '110px', '110px', '130px', '140px']} />
             </div>
           ) : (
             <div>

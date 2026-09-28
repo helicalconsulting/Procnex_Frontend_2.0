@@ -2,6 +2,7 @@ import { Users } from 'lucide-react';
 import { useServiceData } from '../../../hooks/useServiceData';
 import { dashboardService } from '../../../services/dashboardService';
 import { WidgetHeader, WidgetBody, WidgetLoading } from './WidgetShell';
+import { SkeletonList } from '../../../components/shared/Skeleton';
 
 interface TopVendor {
   name: string;
@@ -43,7 +44,7 @@ export default function TopVendorsWidget() {
     <>
       <WidgetHeader icon={<Users size={16} />} title="Top Performing Vendors" href="/vendors" />
       <WidgetBody>
-        {loading && <WidgetLoading>Loading vendors…</WidgetLoading>}
+        {loading && <SkeletonList items={3} hasAvatar={true} />}
         {!loading && (
           <div className="grid gap-4">
             {vendors.map((v) => (

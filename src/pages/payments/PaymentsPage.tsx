@@ -1,3 +1,4 @@
+import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
 import React, { useCallback, useMemo, useState, useEffect, useRef, type KeyboardEvent } from 'react';
 import {
   Ban,
@@ -12,7 +13,6 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
-  SlidersHorizontal,
   ThumbsUp,
   X,
   XCircle,
@@ -20,7 +20,8 @@ import {
 import { useCurrency } from '../../components/shared/CurrencyMaster';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TableSkeleton } from '../../components/shared/Skeleton';
-import ColumnCustomizer, { type ColumnDef } from '../../components/shared/ColumnCustomizer';
+import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
+import type { ColumnDef } from '../../hooks/columnPreferences';
 import BankPaymentVoucherModal from '../../components/payments/BankPaymentVoucherModal';
 import InvoiceDocumentViewerModal, { type DocumentAttachment } from '../../components/invoices/InvoiceDocumentViewerModal';
 import { Badge } from '../../components/ui/badge';
@@ -951,44 +952,12 @@ export default function PaymentsPage() {
           )}
         </div>
 
-        <div className="relative flex items-center gap-2.5 justify-end shrink-0 sm:ml-auto">
-          <Button
-            ref={colBtnRef}
-            variant="outline"
-            className="h-11 gap-2 rounded-xl px-4 border-input font-medium hover:bg-accent/50"
-            onClick={() => setShowColPanel((v) => !v)}
-            title="Customize columns"
-          >
-            <SlidersHorizontal size={16} /> Columns
-          </Button>
-          {showColPanel && (
-            <ColumnCustomizer
-              columnOrder={columnOrder}
-              visibleKeys={visibleKeys}
-              allColumns={ALL_COLUMNS}
-              onToggle={(key) => {
-                setVisibleKeys((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(key)) next.delete(key);
-                  else next.add(key);
-                  return next;
-                });
-              }}
-              onReorder={setColumnOrder}
-              onReset={() => {
-                setColumnOrder(defaultOrder);
-                setVisibleKeys(new Set(defaultVisible));
-              }}
-              onClose={() => setShowColPanel(false)}
-              anchorRef={colBtnRef}
-            />
-          )}
-        </div>
+
       </div>
 
       {loading ? (
         <Card className="p-4">
-          <TableSkeleton rows={5} columns={7} />
+          <TableSkeleton rows={5} columns={visibleColumns.length + 1} />
         </Card>
       ) : filtered.length === 0 ? (
         <EmptyState
@@ -1032,17 +1001,7 @@ export default function PaymentsPage() {
                       <div className="flex items-center justify-end gap-2">
                         <span>Actions</span>
                         <div className="relative">
-                          <Button
-                            ref={colBtnRef}
-                            variant={showColPanel ? 'secondary' : 'ghost'}
-                            size="icon-sm"
-                            onClick={() => setShowColPanel((v) => !v)}
-                            title="Customize columns"
-                            aria-label="Customize columns"
-                            aria-expanded={showColPanel}
-                          >
-                            <span className="flex gap-0.5"><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /></span>
-                          </Button>
+                          <ColumnSettingsButton ref={colBtnRef} open={showColPanel} onClick={() => setShowColPanel((v) => !v)} />
 
                           {showColPanel && (
                             <ColumnCustomizer

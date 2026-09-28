@@ -587,6 +587,7 @@ export function useCurrency() {
 // ─── Searchable Currency Selector Component ─────────────────
 
 interface CurrencySelectorProps {
+  id?: string;
   value: string;
   onChange: (code: string) => void;
   label?: string;
@@ -599,6 +600,7 @@ interface CurrencySelectorProps {
 }
 
 export function CurrencySelector({
+  id,
   value,
   onChange,
   label,
@@ -655,11 +657,13 @@ export function CurrencySelector({
 
   return (
     <div className={`cur-selector cur-selector--${size} ${className}`} style={style}>
-      {label && <label className="cur-selector__label">{label}</label>}
+      {label && <label htmlFor={id} className="cur-selector__label">{label}</label>}
       <div className="cur-selector__trigger-row">
         {/* Trigger Button */}
         <button
           ref={triggerRef}
+          id={id}
+          aria-expanded={open}
           type="button"
           className={`cur-selector__trigger ${open ? 'cur-selector__trigger--open' : ''}`}
           onClick={() => {

@@ -1,319 +1,127 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Plus, Trash2, Check, AlertTriangle, FileText } from 'lucide-react';
+import { X, Plus, Trash2, Check, WandSparkles, FileText } from 'lucide-react';
 import { vendorPortalService, type PaymentPlan } from '../../services/vendorPortalService';
+import { acceptPercentageInput, allocatePercentages, percentageUnits } from './paymentPlanAllocation';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
+import './vendor-rfq-workspace.css';
 
-// ─── Types ──────────────────────────────────────────────────
-
-interface MilestoneRow {
-  id: string;
-  title: string;
-  percentage: string; // string for controlled input
-}
-
+interface MilestoneRow { id: string; title: string; percentage: string; manual: boolean }
 interface CustomPaymentPlanModalProps {
   onClose: () => void;
   onSaved: (plan: PaymentPlan) => void;
-  /** If provided, the modal opens in edit mode with this plan's data pre-filled */
   editPlan?: PaymentPlan | null;
+  embedded?: boolean;
+  onSavingChange?: (saving: boolean) => void;
 }
+const emptyRow = (): MilestoneRow => ({ id: crypto.randomUUID(), title: '', percentage: '', manual: false });
 
-// ─── Helpers ────────────────────────────────────────────────
-
-function generateId(): string {
-  return Math.random().toString(36).substring(2, 10);
-}
-
-function createEmptyRow(): MilestoneRow {
-  return { id: generateId(), title: '', percentage: '' };
-}
-
-// ─── Component ──────────────────────────────────────────────
-
-
-export default function CustomPaymentPlanModal({ onClose, onSaved, editPlan }: CustomPaymentPlanModalProps) {
-  const isEditing = !!editPlan;
+export default function CustomPaymentPlanModal({ onClose, onSaved, editPlan, embedded = false, onSavingChange }: CustomPaymentPlanModalProps) {
   const [planName, setPlanName] = useState(editPlan?.name || '');
-  const [milestones, setMilestones] = useState<MilestoneRow[]>(
-    editPlan && editPlan.milestones.length > 0
-      ? editPlan.milestones.map((m) => ({
-          id: m.id,
-          title: m.title,
-          percentage: String(m.percentage),
-        }))
-      : [createEmptyRow()]
-  );
+  const [milestones, setMilestones] = useState<MilestoneRow[]>(() => editPlan?.milestones.length
+    ? editPlan.milestones.map(m => ({ id: m.id, title: m.title, percentage: String(m.percentage), manual: true }))
+    : [emptyRow()]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const nameInputRef = useRef<HTMLInputElement>(null);
-
-  // Focus plan name input on mount
+  const nameRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(panelRef, !embedded, () => { if (!saving) onClose(); });
   useEffect(() => {
-    nameInputRef.current?.focus();
-  }, []);
-
-  const totalAllocation = milestones.reduce((sum, m) => {
-    const val = parseFloat(m.percentage);
-    return sum + (isNaN(val) ? 0 : val);
-  }, 0);
-
-  const isTotalValid = Math.abs(totalAllocation - 100) < 0.01;
-  const remaining = 100 - totalAllocation;
-
-  // ── Validation ──
-  const validationErrors = useCallback((): string | null => {
-    if (!planName.trim()) return 'Plan name is required';
-    if (milestones.length < 1) return 'At least 1 payment milestone is required';
-    if (milestones.some((m) => !m.title.trim())) return 'All milestone titles must be filled';
-    const titles = milestones.map((m) => m.title.trim().toLowerCase());
-    if (new Set(titles).size !== titles.length) return 'Duplicate milestone names are not allowed';
-    if (milestones.some((m) => {
-      const val = parseFloat(m.percentage);
-      return isNaN(val) || val <= 0 || val > 100;
-    })) return 'Each percentage must be greater than 0 and not exceed 100';
-    if (!isTotalValid) return `Total allocation must equal exactly 100% (currently ${totalAllocation.toFixed(1)}%)`;
-    return null;
-  }, [planName, milestones, isTotalValid, totalAllocation]);
-
-  const canSave = !validationErrors();
-
-  // ── Add/Remove rows ──
-  const addMilestone = useCallback(() => {
-    setMilestones((prev) => [...prev, createEmptyRow()]);
-  }, []);
-
-  const removeMilestone = useCallback((id: string) => {
-    setMilestones((prev) => {
-      if (prev.length <= 1) return prev;
-      return prev.filter((m) => m.id !== id);
-    });
-  }, []);
-
-  const updateMilestone = useCallback((id: string, field: 'title' | 'percentage', value: string) => {
-    setMilestones((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, [field]: value } : m))
-    );
-  }, []);
-
-  // ── Save ──
-  const handleSave = useCallback(async () => {
-    const err = validationErrors();
-    if (err) { setError(err); return; }
-
-    setSaving(true);
-    setError(null);
-    try {
-      const milestoneData = milestones.map((m) => ({
-        title: m.title.trim(),
-        percentage: parseFloat(m.percentage),
-      }));
-
-      if (isEditing && editPlan) {
-        // Update existing plan
-        const plan = await vendorPortalService.updatePaymentPlan(editPlan.id, {
-          name: planName.trim(),
-          milestones: milestoneData,
-        });
-        onSaved(plan);
-      } else {
-        // Create new plan
-        const plan = await vendorPortalService.createPaymentPlan(
-          planName.trim(),
-          milestoneData,
-        );
-        onSaved(plan);
-      }
-      onClose();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save payment plan');
-    } finally {
-      setSaving(false);
+    const previous = document.activeElement as HTMLElement | null;
+    nameRef.current?.focus();
+    return () => { if (embedded && previous?.isConnected) previous.focus(); };
+  }, [embedded]);
+  const totalUnits = milestones.reduce((sum, m) => sum + (percentageUnits(m.percentage) ?? 0), 0);
+  const validPercentages = milestones.every(m => percentageUnits(m.percentage) !== null);
+  const titles = milestones.map(m => m.title.trim().toLowerCase());
+  const validation = !planName.trim() ? 'Enter a plan name.'
+    : !milestones.length ? 'Add at least one payment milestone.'
+    : titles.some(t => !t) ? 'Name each payment milestone.'
+    : new Set(titles).size !== titles.length ? 'Use a unique name for each milestone.'
+    : !validPercentages ? 'Each allocation must be greater than 0% and no more than 100%, with up to two decimal places.'
+    : totalUnits !== 10000 ? 'Allocations must total exactly 100%.' : null;
+  const allocated = allocatePercentages(milestones.map(m => m.percentage), milestones.map(m => m.manual));
+  const allocationChanges = allocated?.some((value, i) => value !== milestones[i].percentage) ?? false;
+  const hasFlexibleAllocation = milestones.some(m => !m.manual || m.percentage === '');
+  const allocationHint = !hasFlexibleAllocation && totalUnits !== 10000
+    ? 'All percentages were entered manually. Clear a percentage to let Auto Allocate fill the balance.'
+    : hasFlexibleAllocation && !allocated
+      ? 'Reduce an entered percentage to leave at least 0.01% for each unallocated milestone.'
+      : null;
+  const update = (id: string, field: 'title' | 'percentage', value: string) => {
+    if (field === 'percentage' && !acceptPercentageInput(value)) {
+      setError('Enter a percentage greater than 0 and no more than 100, with up to two decimal places.');
+      return;
     }
-  }, [planName, milestones, validationErrors, onSaved, onClose, isEditing, editPlan]);
-
-  return createPortal(
-    <div className="vquot-modal-backdrop custom-plan-modal-backdrop" onClick={onClose} style={{ zIndex: 999998 }}>
-      <div
-        className="vquot-modal vquot-modal--open custom-plan-modal"
-        style={{
-          position: 'fixed',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          width: 520,
-          maxWidth: 'calc(100vw - 40px)',
-          maxHeight: 'calc(100vh - 80px)',
-          display: 'flex',
-          flexDirection: 'column',
-          zIndex: 999999,
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* ── Header ── */}
-        <div className="vquot-modal__header" style={{ cursor: 'default' }}>
-          <div className="vquot-modal__header-left">
-            <span className="vquot-modal__header-icon"><FileText size={14} /></span>
-            <span className="vquot-modal__header-title">{isEditing ? 'Edit Custom Payment Plan' : 'Create Custom Payment Plan'}</span>
-          </div>
-          <div className="vquot-modal__window-controls">
-            <button type="button" className="vquot-modal__wc-btn vquot-modal__wc-btn--close" title="Close" onClick={onClose}>
-              <X size={14} />
-            </button>
-          </div>
-        </div>
-
-        {/* ── Body ── */}
-        <div className="vquot-modal__body" style={{ overflowY: 'auto', flex: 1, paddingBottom: 0 }}>
-          {/* Plan Name */}
-          <div className="vquot-modal__field" style={{ marginBottom: 16 }}>
-            <label className="vquot-modal__label">Plan Name *</label>
-            <input
-              ref={nameInputRef}
-              className="vquot-modal__input"
-              type="text"
-              placeholder="e.g. Machine Delivery Plan"
-              value={planName}
-              onChange={(e) => setPlanName(e.target.value)}
-            />
-          </div>
-
-          {/* Milestone Table Header */}
-          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
-            Payment Milestones
-          </div>
-
-          {/* Column Headers */}
-          <div style={{
-            display: 'grid', gridTemplateColumns: '1fr 80px 32px', gap: 8,
-            padding: '4px 0', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)',
-            textTransform: 'uppercase', letterSpacing: '0.04em',
-          }}>
-            <span>Payment Term / Milestone</span>
-            <span style={{ textAlign: 'right' }}>Value</span>
-            <span />
-          </div>
-
-          {/* Milestone Rows */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {milestones.map((m, idx) => (
-              <div key={m.id} style={{
-                display: 'grid', gridTemplateColumns: '1fr 80px 32px', gap: 8,
-                alignItems: 'center',
-              }}>
-                <input
-                  className="vquot-modal__input"
-                  type="text"
-                  placeholder={`Milestone ${idx + 1}`}
-                  value={m.title}
-                  onChange={(e) => updateMilestone(m.id, 'title', e.target.value)}
-                  style={{ padding: '8px 10px', fontSize: 14 }}
-                />
-                <div style={{ position: 'relative' }}>
-                  <input
-                    className="vquot-modal__input"
-                    type="number"
-                    placeholder="0"
-                    min={0}
-                    max={100}
-                    value={m.percentage}
-                    onChange={(e) => updateMilestone(m.id, 'percentage', e.target.value)}
-                    style={{ padding: '8px 10px', fontSize: 14, textAlign: 'right', paddingRight: 28 }}
-                  />
-                  <span style={{
-                    position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
-                    fontSize: 13, color: 'var(--text-secondary)', pointerEvents: 'none',
-                  }}>%</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeMilestone(m.id)}
-                  disabled={milestones.length <= 1}
-                  title="Remove milestone"
-                  style={{
-                    background: 'none', border: 'none', cursor: milestones.length <= 1 ? 'not-allowed' : 'pointer',
-                    color: 'var(--danger-500, #bb0000)', padding: 4, opacity: milestones.length <= 1 ? 0.3 : 1,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            ))}
-          </div>
-
-          {/* Add Row Button */}
-          <button
-            type="button"
-            onClick={addMilestone}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              padding: '8px 14px', marginTop: 8, marginBottom: 16,
-              background: 'var(--surface-hover, #f0f4f8)', border: '1px dashed var(--border, #d0d5dd)',
-              borderRadius: 6, color: 'var(--text-secondary, #6a6d70)',
-              fontSize: 14, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
-            }}
-          >
-            <Plus size={14} /> Add Payment Milestone
-          </button>
-
-          {/* ── Live Total Allocation ── */}
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '10px 14px', borderRadius: 6,
-            background: isTotalValid ? 'rgba(16,126,62,0.08)' : totalAllocation > 100 ? 'rgba(187,0,0,0.08)' : 'rgba(233,115,12,0.08)',
-            border: `1px solid ${
-              isTotalValid ? 'rgba(16,126,62,0.2)' : totalAllocation > 100 ? 'rgba(187,0,0,0.2)' : 'rgba(233,115,12,0.2)'
-            }`,
-            marginBottom: 16,
-          }}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Total Allocation</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {isTotalValid ? (
-                <span style={{ color: '#107e3e' }}><Check size={16} /></span>
-              ) : totalAllocation > 0 ? (
-                <span style={{ color: totalAllocation > 100 ? '#bb0000' : '#e9730c' }}>
-                  <AlertTriangle size={16} />
-                </span>
-              ) : null}
-              <span style={{
-                fontSize: 16, fontWeight: 800,
-                color: isTotalValid ? '#107e3e' : totalAllocation > 100 ? '#bb0000' : '#e9730c',
-              }}>
-                {totalAllocation.toFixed(1)}%
-              </span>
-              {!isTotalValid && (
-                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                  {totalAllocation > 100 ? `(exceeded by ${(totalAllocation - 100).toFixed(1)}%)` : `(remaining ${remaining.toFixed(1)}%)`}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* ── Error ── */}
-          {error && (
-            <div style={{
-              padding: '10px 14px', borderRadius: 6, marginBottom: 12,
-              background: 'rgba(187,0,0,0.08)', border: '1px solid rgba(187,0,0,0.2)',
-              color: '#bb0000', fontSize: 14,
-            }}>
-              {error}
-            </div>
-          )}
-        </div>
-
-        {/* ── Footer ── */}
-        <div className="vquot-modal__footer" style={{ borderTop: '1px solid var(--border)', padding: '12px 16px', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button className="vendor-btn vendor-btn--secondary" onClick={onClose}>Cancel</button>
-          <button
-            className="vendor-btn vendor-btn--primary"
-            disabled={!canSave || saving}
-            onClick={handleSave}
-          >
-            {saving ? 'Saving…' : isEditing ? 'Update Payment Plan' : 'Save Payment Plan'}
-          </button>
-        </div>
+    setError(null);
+    setMilestones(rows => rows.map(row => row.id === id ? { ...row, [field]: value, manual: field === 'percentage' ? value !== '' : row.manual } : row));
+  };
+  const save = async () => {
+    if (saving) return;
+    if (validation) { setError(validation); return; }
+    setSaving(true); onSavingChange?.(true); setError(null);
+    try {
+      const data = milestones.map(m => ({ title: m.title.trim(), percentage: percentageUnits(m.percentage)! / 100 }));
+      const plan = editPlan
+        ? await vendorPortalService.updatePaymentPlan(editPlan.id, { name: planName.trim(), milestones: data })
+        : await vendorPortalService.createPaymentPlan(planName.trim(), data);
+      onSaved(plan); onClose();
+    } catch (e) { setError(e instanceof Error ? e.message : 'Failed to save payment plan'); }
+    finally { setSaving(false); onSavingChange?.(false); }
+  };
+  const panel = (
+    <div ref={panelRef} className={embedded ? 'rfq-plan-editor' : 'vquot-modal vquot-modal--open rfq-plan-editor rfq-plan-editor--modal'}
+      role={embedded ? 'region' : 'dialog'} aria-modal={embedded ? undefined : true} aria-labelledby="payment-plan-title" tabIndex={-1}>
+      <div className="rfq-section-heading">
+        <span className="vquot-modal__header-title" id="payment-plan-title"><FileText size={14} /> {editPlan ? 'Edit Custom Payment Plan' : 'Create Custom Payment Plan'}</span>
+        <button type="button" className="rfq-icon-button" aria-label="Close payment plan editor" disabled={saving} onClick={onClose}><X size={16} /></button>
       </div>
-    </div>,
-    document.body
+      <div className="rfq-plan-editor__body">
+        <div className="vquot-modal__field">
+          <label className="vquot-modal__label" htmlFor="payment-plan-name">Plan Name *</label>
+          <input id="payment-plan-name" ref={nameRef} className="vquot-modal__input" placeholder="e.g. Machine Delivery Plan" value={planName} disabled={saving} onChange={e => setPlanName(e.target.value)} />
+        </div>
+        <div className="rfq-section-heading">
+          <span className="vquot-modal__label">Payment Milestones</span>
+          <button type="button" className="rfq-secondary-action" disabled={saving || !allocationChanges} onClick={() => {
+            if (allocated) { setMilestones(rows => rows.map((row, i) => ({ ...row, percentage: allocated[i] }))); setError(null); }
+          }}><WandSparkles size={14} /> Auto Allocate</button>
+        </div>
+        <p className="rfq-plan-help text-xs" id="allocation-help">Auto Allocate keeps percentages you enter and shares the remainder between blank or previously auto-filled milestones. Clear a percentage to include it again.</p>
+        {allocationHint && <p className="rfq-plan-help text-xs" role="status">{allocationHint}</p>}
+        <div className="rfq-milestone-head text-xs"><span>Payment term / milestone</span><span>Allocation</span><span /></div>
+        {milestones.map((m, i) => (
+          <div key={m.id} className="rfq-milestone-row">
+            <input className="vquot-modal__input" aria-label={`Milestone ${i + 1} name`} placeholder={`Milestone ${i + 1}`} value={m.title} disabled={saving} onChange={e => update(m.id, 'title', e.target.value)} />
+            <div className="rfq-percentage-input">
+              <input className="vquot-modal__input" type="text" inputMode="decimal" aria-label={`Milestone ${i + 1} percentage`} aria-describedby="allocation-help" aria-invalid={m.percentage !== '' && percentageUnits(m.percentage) === null} placeholder="0.00" value={m.percentage} disabled={saving}
+                onChange={e => update(m.id, 'percentage', e.target.value)} onBlur={() => {
+                  const normalized = m.percentage.endsWith('.') ? m.percentage.slice(0, -1) : m.percentage;
+                  if (normalized && percentageUnits(normalized) === null) {
+                    update(m.id, 'percentage', '');
+                    setError('Each allocation must be greater than 0% and no more than 100%.');
+                  } else if (normalized !== m.percentage) {
+                    update(m.id, 'percentage', normalized);
+                  }
+                }} /><span>%</span>
+            </div>
+            <button type="button" className="rfq-icon-button rfq-icon-button--danger" aria-label={`Remove milestone ${i + 1}`} disabled={saving || milestones.length <= 1} onClick={() => setMilestones(rows => rows.filter(row => row.id !== m.id))}><Trash2 size={14} /></button>
+          </div>
+        ))}
+        <button type="button" className="rfq-secondary-action rfq-add-milestone" disabled={saving} onClick={() => setMilestones(rows => [...rows, emptyRow()])}><Plus size={14} /> Add Payment Milestone</button>
+        <div className="rfq-allocation" data-valid={validPercentages && totalUnits === 10000}>
+          <div className="rfq-section-heading"><span className="vquot-modal__label">Total Allocation</span><strong>{(totalUnits / 100).toFixed(2)}%</strong></div>
+          <progress aria-label="Total payment allocation" max={10000} value={Math.min(totalUnits, 10000)} />
+          <div className="text-xs" aria-live="polite">{validPercentages && totalUnits === 10000 ? <><Check size={14} /> Fully allocated</> : totalUnits > 10000 ? `${((totalUnits - 10000) / 100).toFixed(2)}% over allocated` : `${((10000 - totalUnits) / 100).toFixed(2)}% remaining`}</div>
+        </div>
+        <p className="text-xs rfq-plan-help" aria-live="polite">{validation || 'Your payment plan is ready to save.'}</p>
+        {error && <p role="alert" className="rfq-error text-sm">{error}</p>}
+      </div>
+      <div className="rfq-plan-editor__footer">
+        <button type="button" className="vendor-btn vendor-btn--secondary" disabled={saving} onClick={onClose}>Cancel</button>
+        <button type="button" className="vendor-btn vendor-btn--primary" disabled={!!validation || saving} onClick={save}>{saving ? 'Saving…' : editPlan ? 'Update Payment Plan' : 'Save Payment Plan'}</button>
+      </div>
+    </div>
   );
+  return embedded ? panel : createPortal(<div className="vquot-modal-backdrop rfq-plan-backdrop" onClick={() => { if (!saving) onClose(); }}><div onClick={e => e.stopPropagation()}>{panel}</div></div>, document.body);
 }

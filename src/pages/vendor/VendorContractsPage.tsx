@@ -1,12 +1,14 @@
+import LandingTable, { type LandingColumn } from '../../components/shared/LandingTable';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  AlertTriangle, Ban, Building2, Calendar, CheckCircle2, ChevronDown, Clock,
-  Download, Eye, FileSignature, FileText, Search, XCircle, Shield,
+  CheckCircle2, ChevronLeft, ChevronRight, Download, Eye, FileSignature, FileText, Search, Wallet,
 } from 'lucide-react';
 import { useCurrency } from '@/components/shared/CurrencyMaster';
 import { MessageStrip } from '@/components/shared/MessageStrip';
-import { Badge } from '@/components/ui/badge';
+import { RecordStatusBadge } from '@/components/shared/RecordStatusBadge';
+import { quoteDate } from '@/components/vendor/quotationFormatting';
+import './vendor-contract-workspace.css';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -17,39 +19,13 @@ import { contractService, type Contract } from '@/services/contractService';
 import { sseClient } from '@/services/sseClient';
 import { downloadContractAsPdf } from '@/utils/pdfDownload';
 import { getVendorPath } from '@/utils/tenantResolver';
+import { TableSkeleton } from '@/components/shared/Skeleton';
 
-type Tone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
-type ContractFilter = 'PENDING_SIGNATURE' | 'ACTIVE' | 'TOTAL' | null;
-
-const STATUS: Record<string, { label: string; tone: Tone; icon: typeof FileText }> = {
-  DRAFT: { label: 'Draft', tone: 'neutral', icon: FileText },
-  PENDING_VENDOR_SIGNATURE: { label: 'Awaiting your signature', tone: 'warning', icon: Clock },
-  AWAITING_CUSTOMER_SIGNATURE: { label: 'Awaiting buyer signature', tone: 'info', icon: Clock },
-  AWAITING_VENDOR_SIGNATURE: { label: 'Awaiting your signature', tone: 'warning', icon: Clock },
-  VENDOR_SIGNED: { label: 'Vendor signed', tone: 'success', icon: CheckCircle2 },
-  ACCEPTED: { label: 'Accepted', tone: 'success', icon: CheckCircle2 },
-  COMPLETED: { label: 'Completed', tone: 'success', icon: CheckCircle2 },
-  ACTIVE: { label: 'Active', tone: 'success', icon: CheckCircle2 },
-  EXPIRING_SOON: { label: 'Expiring soon', tone: 'warning', icon: AlertTriangle },
-  EXPIRED: { label: 'Expired', tone: 'danger', icon: XCircle },
-  CANCELLED: { label: 'Cancelled', tone: 'danger', icon: Ban },
-  TERMINATED: { label: 'Terminated', tone: 'danger', icon: Ban },
-};
-
-function StatusBadge({ status }: { status: string }) {
-  const config = STATUS[status] ?? { label: status.replaceAll('_', ' '), tone: 'neutral' as Tone, icon: FileText };
-  const Icon = config.icon;
-  return (
-    <Badge tone={config.tone}>
-      <Icon className="size-3" />
-      {config.label}
-    </Badge>
-  );
-}
+type ContractFilter = 'PENDING_SIGNATURE' | 'ACTIVE' | null;
 
 export default function VendorContractsPage() {
   const navigate = useNavigate();
-  const { formatAmount, companyDefaultCurrency } = useCurrency();
+  const { formatAmount, companyDefaultCurrency, convert } = useCurrency();
   const { data: contracts, loading, error, reload } = useServiceData(
     () => contractService.listVendorContracts().then((result) => result.contracts),
     [] as Contract[],
@@ -59,7 +35,8 @@ export default function VendorContractsPage() {
 
   const [search, setSearch] = useState('');
   const [kpiFilter, setKpiFilter] = useState<ContractFilter>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
 
   useEffect(() => {
     const unsubscribeSigned = sseClient.on('contract_signed', reload);
@@ -79,9 +56,9 @@ export default function VendorContractsPage() {
       active: contracts.filter((contract) =>
         ['VENDOR_SIGNED', 'ACCEPTED', 'COMPLETED', 'ACTIVE'].includes(contract.status)
       ).length,
-      totalValue: contracts.reduce((sum, contract) => sum + contract.contractValue, 0),
+      totalValue: contracts.reduce((sum, contract) => sum + convert(contract.contractValue, contract.currency || companyDefaultCurrency, companyDefaultCurrency), 0),
     }),
-    [contracts]
+    [contracts, convert, companyDefaultCurrency]
   );
 
   const filtered = useMemo(() => {
@@ -96,22 +73,24 @@ export default function VendorContractsPage() {
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter((contract) =>
-        [contract.contractNumber, contract.title, contract.rfq?.rfqNumber ?? '', contract.contractOwner?.fullName ?? '']
+        [contract.contractNumber, contract.title, contract.rfq?.rfqNumber ?? '', contract.rfq?.title ?? '', contract.contractOwner?.fullName ?? '']
           .some((field) => field.toLowerCase().includes(q))
       );
     }
     return list;
   }, [contracts, kpiFilter, search]);
 
-  const formatDate = (date: string | null | undefined) =>
-    date ? new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+  const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, pages);
+  const visibleContracts = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const formatDate = (date?: string | null) => quoteDate(date || undefined);
   const formatCurrency = (value: number, currency?: string) =>
     formatAmount(value, currency || companyDefaultCurrency);
   const needsVendorSignature = (contract: Contract) =>
     ['AWAITING_VENDOR_SIGNATURE', 'PENDING_VENDOR_SIGNATURE'].includes(contract.status);
 
   return (
-    <PageFrame>
+    <PageFrame className="contract-workspace">
       {error && <MessageStrip type="error">{error}</MessageStrip>}
 
       {/* ── Page Lead Header ────────────────────────── */}
@@ -121,7 +100,7 @@ export default function VendorContractsPage() {
       />
 
       {/* ── KPI Metric Cards ────────────────────────── */}
-      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="contract-metrics mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           {
             icon: FileText,
@@ -148,11 +127,11 @@ export default function VendorContractsPage() {
             filter: 'ACTIVE' as ContractFilter,
           },
           {
-            icon: Building2,
+            icon: Wallet,
             tone: 'violet' as const,
             value: formatAmount(summary.totalValue, companyDefaultCurrency),
             label: 'Total value',
-            detail: 'Across all contracts',
+            detail: `Across all contracts · ${companyDefaultCurrency}`,
             filter: null as ContractFilter,
             isTotalValue: true,
           },
@@ -169,18 +148,19 @@ export default function VendorContractsPage() {
               className={cn(
                 !c.isTotalValue && 'cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-all duration-200',
                 isActive &&
-                  'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
+                  'border-primary/45 bg-primary/[0.08] dark:bg-primary/20'
               )}
               onClick={() => {
-                if (!c.isTotalValue) setKpiFilter(isActive ? null : c.filter);
+                if (!c.isTotalValue) { setKpiFilter(isActive ? null : c.filter); setPage(1); }
               }}
               role={c.isTotalValue ? undefined : 'button'}
               tabIndex={c.isTotalValue ? undefined : 0}
-              aria-pressed={isActive}
+              aria-pressed={c.isTotalValue ? undefined : isActive}
               onKeyDown={(e) => {
                 if (!c.isTotalValue && (e.key === 'Enter' || e.key === ' ')) {
                   e.preventDefault();
                   setKpiFilter(isActive ? null : c.filter);
+                  setPage(1);
                 }
               }}
             />
@@ -197,15 +177,19 @@ export default function VendorContractsPage() {
             type="text"
             placeholder="Search by contract number, title, RFQ, or buyer..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             aria-label="Search contracts"
           />
+        </div>
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <span role="status">{filtered.length} of {contracts.length} contracts</span>
+          {(search || kpiFilter) && <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setKpiFilter(null); setPage(1); }}>Clear filters</Button>}
         </div>
       </div>
 
       {/* ── Contracts List Cards ────────────────────── */}
       {loading ? (
-        <Card className="p-8 text-center text-sm text-muted-foreground">Loading contracts…</Card>
+        <TableSkeleton rows={5} columnWidths={['25%', '15%', '20%', '15%', '25%']} />
       ) : filtered.length === 0 ? (
         <EmptyState
           icon={FileText}
@@ -218,6 +202,7 @@ export default function VendorContractsPage() {
                 onClick={() => {
                   setSearch('');
                   setKpiFilter(null);
+                  setPage(1);
                 }}
               >
                 Clear filters
@@ -226,120 +211,77 @@ export default function VendorContractsPage() {
           }
         />
       ) : (
-        <div className="flex flex-col gap-3.5">
-          {filtered.map((contract) => {
-            const isExpanded = expandedId === contract.id;
-            return (
-              <Card
-                key={contract.id}
-                className={cn(
-                  'overflow-hidden transition-all duration-200 border-border/80 hover:border-primary/30',
-                  isExpanded && 'ring-1 ring-primary/20 shadow-md'
-                )}
-              >
-                {/* Header */}
-                <div
-                  className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between cursor-pointer hover:bg-accent/25 transition-colors"
-                  onClick={() => setExpandedId(isExpanded ? null : contract.id)}
-                >
-                  <div className="flex flex-col gap-1.5 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <FileText size={18} className="text-primary shrink-0" />
-                      <span className="font-bold text-foreground text-base tracking-tight">{contract.contractNumber}</span>
-                      <StatusBadge status={contract.status} />
-                    </div>
-                    <div className="text-xs font-medium text-muted-foreground truncate">
-                      {contract.title.replace(new RegExp(`\\s*[-·—]?\\s*${contract.rfq?.rfqNumber || ''}`, 'gi'), '').trim()}
-                      {contract.rfq?.rfqNumber && (
-                        <>
-                          <span className="mx-1.5 opacity-40">·</span>
-                          <span className="text-foreground/80 font-medium">RFQ: {contract.rfq.rfqNumber}</span>
-                        </>
+        <Card className="contract-register overflow-hidden">
+          <div className="overflow-x-auto">
+            <LandingTable key="vendor-contracts" preferenceKey="vendor-contracts" columns={VENDOR_CONTRACTS_COLUMNS} className="w-full text-left text-xs" aria-label="Contracts">
+              <thead>
+                <tr className="bg-muted/30 text-muted-foreground">
+                  <th scope="col">Contract & source</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Effective / expires</th>
+                  <th scope="col" className="text-right">Contract value</th>
+                  <th scope="col" className="text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleContracts.map((contract) => (
+                  <tr key={contract.id}>
+                    <td>
+                      <div className="flex items-center gap-2 font-bold text-base tracking-tight text-foreground">
+                        <FileText className="size-4 shrink-0 text-primary" aria-hidden="true" />{contract.contractNumber}
+                      </div>
+                      <div className="mt-1 font-medium text-foreground">{contract.rfq?.title || contract.title}</div>
+                      <div className="mt-1 text-muted-foreground">{contract.rfq?.rfqNumber || 'Direct contract'}{contract.contractOwner?.fullName && ` · ${contract.contractOwner.fullName}`}</div>
+                    </td>
+                    <td><RecordStatusBadge kind="contract" status={contract.status} /></td>
+                    <td>
+                      <div className="font-semibold">{formatDate(contract.effectiveDate)}</div>
+                      <div className="mt-1 text-muted-foreground">Expires {formatDate(contract.expirationDate)}</div>
+                    </td>
+                    <td className="text-right">
+                      <div className="text-lg font-bold tabular-nums whitespace-nowrap">{formatCurrency(contract.contractValue, contract.currency)}</div>
+                      <div className="mt-1 text-muted-foreground">{contract.currency || companyDefaultCurrency}</div>
+                    </td>
+                    <td>
+                      <div className="flex items-center justify-end gap-2">
+                        <Button size="sm" variant="outline" className="whitespace-nowrap" onClick={() => navigate(getVendorPath(`/vendor/contracts/${contract.id}`))}>
+                          <Eye className="size-4" /> View Details
+                        </Button>
+                        <Button size="icon" variant="ghost" aria-label={`Download PDF for ${contract.contractNumber}`} title="Download PDF" onClick={() => downloadContractAsPdf(contract.contentSnapshot, contract.contractNumber, contract.title)}>
+                          <Download className="size-4" />
+                        </Button>
+                      </div>
+                      {needsVendorSignature(contract) && (
+                        <Button size="sm" className="mt-2 w-full whitespace-nowrap" onClick={() => navigate(getVendorPath(`/vendor/contracts/${contract.id}?action=sign`))}>
+                          <FileSignature className="size-4" /> Sign Contract
+                        </Button>
                       )}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3 shrink-0" onClick={(e) => e.stopPropagation()}>
-                    {/* Prominent Price Display */}
-                    <div className="text-right mr-2">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">Contract Amount</div>
-                      <div className="text-lg font-bold tabular-nums text-foreground">
-                        {formatCurrency(contract.contractValue, contract.currency)}
-                      </div>
-                    </div>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => navigate(getVendorPath(`/vendor/contracts/${contract.id}`))}>
-                      <Eye size={14} /> View Details
-                    </Button>
-
-                    <Button
-                      size="sm"
-                      onClick={() => downloadContractAsPdf(contract.contentSnapshot, contract.contractNumber, contract.title)}>
-                      <Download size={14} /> Download
-                    </Button>
-
-                    {needsVendorSignature(contract) && (
-                      <Button
-                        size="sm"
-                        className="border-emerald-600 bg-emerald-600 hover:bg-emerald-700 text-white"
-                        onClick={() => navigate(getVendorPath(`/vendor/contracts/${contract.id}?action=sign`))}>
-                        <FileSignature size={14} /> Sign Contract
-                      </Button>
-                    )}
-
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => setExpandedId(isExpanded ? null : contract.id)}
-                      aria-label="Toggle contract details">
-                      <ChevronDown className={cn('size-4 transition-transform duration-200', isExpanded && 'rotate-180')} />
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Expanded Details Body */}
-                {isExpanded && (
-                  <div className="border-t border-border/60 bg-muted/10 p-5 space-y-4 text-sm">
-                    {/* Key Dates Badge Grid */}
-                    <div className="flex flex-wrap items-center gap-3 pb-3 border-b border-border/50 text-xs">
-                      <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-background px-3 py-1.5 font-medium text-foreground">
-                        <Calendar size={14} className="text-primary shrink-0" />
-                        <span>Effective Date: <strong>{formatDate(contract.effectiveDate)}</strong></span>
-                      </div>
-                      <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-background px-3 py-1.5 font-medium text-foreground">
-                        <Clock size={14} className="text-muted-foreground shrink-0" />
-                        <span>End Date: <strong>{formatDate(contract.endDate)}</strong></span>
-                      </div>
-                    </div>
-
-                    {/* Metadata Grid */}
-                    <div className="grid grid-cols-2 gap-y-3.5 gap-x-6 sm:grid-cols-4 text-xs">
-                      {[
-                        ['Contract Type', contract.contractType?.replaceAll('_', ' ') || '—'],
-                        ['Currency', contract.currency || companyDefaultCurrency],
-                        ['Priority', contract.priority || 'Medium'],
-                        ['Buyer Contact', contract.contractOwner?.fullName || '—'],
-                        ['Source RFQ', contract.rfq?.rfqNumber || '—'],
-                        ['RFQ Title', contract.rfq?.title || '—'],
-                        ['Payment Terms', contract.paymentTerms || '—'],
-                      ].map(([label, value]) => (
-                        <div key={label}>
-                          <div className="text-muted-foreground font-medium mb-0.5 text-[11px]">{label}</div>
-                          <div className="font-semibold text-foreground text-xs">{value}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </Card>
-            );
-          })}
-        </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </LandingTable>
+          </div>
+          {pages > 1 && (
+            <div className="flex items-center justify-between border-t border-border px-5 py-3 text-xs text-muted-foreground">
+              <span>Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filtered.length)} of {filtered.length}</span>
+              <div className="flex items-center gap-3">
+                <Button size="icon" variant="outline" aria-label="Previous page" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}><ChevronLeft className="size-4" /></Button>
+                <span>Page {currentPage} of {pages}</span>
+                <Button size="icon" variant="outline" aria-label="Next page" disabled={currentPage === pages} onClick={() => setPage(currentPage + 1)}><ChevronRight className="size-4" /></Button>
+              </div>
+            </div>
+          )}
+        </Card>
       )}
     </PageFrame>
   );
 }
 
+const VENDOR_CONTRACTS_COLUMNS: LandingColumn[] = [
+  { key: 'contract', label: 'Contract & source', defaultVisible: true, required: true },
+  { key: 'status', label: 'Status', defaultVisible: true },
+  { key: 'dates', label: 'Effective / expires', defaultVisible: true },
+  { key: 'value', label: 'Contract value', defaultVisible: true },
+  { key: 'actions', label: 'Actions', defaultVisible: true, pinned: 'end' },
+];

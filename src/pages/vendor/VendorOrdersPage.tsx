@@ -1,396 +1,143 @@
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import {
-  AlertCircle, Calendar, CheckCircle2, ChevronDown, Clock, Download, FileText,
-  IndianRupee, MapPin, Package, Plus, Receipt, Search, Truck, XCircle,
-} from 'lucide-react';
-import { CurrencyBadge, CurrencySelector, useCurrency } from '../../components/shared/CurrencyMaster';
-import { Badge } from '../../components/ui/badge';
-import { Button, buttonVariants } from '../../components/ui/button';
-import { Card } from '../../components/ui/card';
-import { Input } from '../../components/ui/input';
-import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
-import { useServiceData } from '../../hooks/useServiceData';
-import { cn } from '../../lib/utils';
-import type { VendorOrderMock } from '../../mocks/vendorPortal.mock';
-import { vendorPortalService } from '../../services/vendorPortalService';
-import { downloadPurchaseOrderAsPdf } from '../../utils/pdfDownload';
-import { getVendorPath } from '../../utils/tenantResolver';
-
-type Tone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
-
-const STATUS_CONFIG: Record<string, { label: string; tone: Tone; icon: typeof Truck }> = {
-  CONFIRMED: { label: 'Confirmed', tone: 'success', icon: CheckCircle2 },
-  APPROVED: { label: 'Approved', tone: 'success', icon: CheckCircle2 },
-  ISSUED: { label: 'Issued', tone: 'info', icon: FileText },
-  SENT: { label: 'Sent', tone: 'info', icon: Truck },
-  PROCESSING: { label: 'Processing', tone: 'warning', icon: Clock },
-  IN_PROGRESS: { label: 'In Progress', tone: 'warning', icon: Clock },
-  SHIPPED: { label: 'Shipped', tone: 'info', icon: Truck },
-  DELIVERED: { label: 'Delivered', tone: 'success', icon: CheckCircle2 },
-  COMPLETED: { label: 'Completed', tone: 'success', icon: CheckCircle2 },
-  CANCELLED: { label: 'Cancelled', tone: 'danger', icon: XCircle },
-  REJECTED: { label: 'Rejected', tone: 'danger', icon: XCircle },
-  PENDING: { label: 'Pending', tone: 'neutral', icon: Clock },
-};
-
-const STEPS = ['Confirmed', 'Processing', 'Shipped', 'Delivered'];
-const STATUS_INDEX: Record<string, number> = {
-  CONFIRMED: 0,
-  APPROVED: 0,
-  ISSUED: 0,
-  SENT: 0,
-  PROCESSING: 1,
-  IN_PROGRESS: 1,
-  SHIPPED: 2,
-  DELIVERED: 3,
-  COMPLETED: 3,
-  CANCELLED: -1,
-  REJECTED: -1,
-};
-
-function StatusBadge({ status }: { status?: string }) {
-  const normalized = (status || '').toUpperCase().trim();
-  const config = STATUS_CONFIG[normalized] || {
-    label: status ? status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Order',
-    tone: 'neutral' as Tone,
-    icon: Package,
-  };
-  return (
-    <Badge tone={config.tone}>
-      <span className="size-1.5 rounded-full bg-current" />
-      {config.label}
-    </Badge>
-  );
-}
+import LandingTable, { type LandingColumn } from '../../components/shared/LandingTable';
+import { useEffect, useMemo, useRef } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { CheckCircle2, ChevronLeft, ChevronRight, Eye, Package, Search, Truck, X, XCircle } from 'lucide-react';
+import { CurrencySelector, useCurrency } from '@/components/shared/CurrencyMaster';
+import { RecordStatusBadge } from '@/components/shared/RecordStatusBadge';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input, Select } from '@/components/ui/input';
+import { EmptyState, MetricCard, PageFrame, PageLead } from '@/components/ui/product';
+import { VendorOrderDetails } from '@/components/vendor/VendorOrderDetails';
+import { orderState, selectOrders, type OrderFilter, type OrderSort } from '@/components/vendor/orderPresentation';
+import { quoteDate } from '@/components/vendor/quotationFormatting';
+import { useServiceData } from '@/hooks/useServiceData';
+import { cn } from '@/lib/utils';
+import type { VendorOrderMock } from '@/mocks/vendorPortal.mock';
+import { vendorPortalService } from '@/services/vendorPortalService';
+import { DetailSkeleton, TableSkeleton } from '@/components/shared/Skeleton';
+import './vendor-order-workspace.css';
 
 export default function VendorOrdersPage() {
-  const { formatAmount, companyDefaultCurrency } = useCurrency();
-  const [displayCurrency, setDisplayCurrency] = useState(companyDefaultCurrency);
-  const { data: orders, loading, error } = useServiceData(
-    () => vendorPortalService.listOrders(), [] as VendorOrderMock[],
-  );
-  const [search, setSearch] = useState('');
-  const [kpiFilter, setKpiFilter] = useState<'ACTIVE' | 'DELIVERED' | 'CANCELLED' | null>(null);
-  const [expandedOrder, setExpandedOrder] = useState<number | null>(null);
-
+  const { formatAmount, companyDefaultCurrency, convert } = useCurrency();
+  const { data: orders, loading, error } = useServiceData(() => vendorPortalService.listOrders(), [] as VendorOrderMock[]);
+  const [params, setParams] = useSearchParams();
+  const search = params.get('q') || '';
+  const filterParam = params.get('filter');
+  const filter: OrderFilter = filterParam === 'ACTIVE' || filterParam === 'RECEIVED' || filterParam === 'CANCELLED' ? filterParam : null;
+  const sortParam = params.get('sort');
+  const sort: OrderSort = sortParam === 'delivery' || sortParam === 'value' ? sortParam : 'newest';
+  const currency = params.get('currency') || companyDefaultCurrency;
+  const selectedId = params.get('order');
+  const previousSelection = useRef<string | null>(null);
+  const detailHeading = useRef<HTMLDivElement>(null);
+  const selectedOrder = orders.find(order => String(order.id) === selectedId);
   const summary = useMemo(() => ({
     total: orders.length,
-    active: orders.filter((order) => ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'ISSUED', 'SENT', 'APPROVED', 'IN_PROGRESS'].includes((order.status || '').toUpperCase())).length,
-    delivered: orders.filter((order) => ['DELIVERED', 'COMPLETED'].includes((order.status || '').toUpperCase())).length,
-    cancelled: orders.filter((order) => ['CANCELLED', 'REJECTED'].includes((order.status || '').toUpperCase())).length,
+    active: orders.filter(order => orderState(order.status).active).length,
+    received: orders.filter(order => orderState(order.status).received).length,
+    cancelled: orders.filter(order => orderState(order.status).cancelled).length,
   }), [orders]);
+  const filtered = useMemo(() => selectOrders(orders, search, filter, sort, order => convert(order.totalAmount, order.currency || companyDefaultCurrency, currency)), [orders, search, filter, sort, convert, companyDefaultCurrency, currency]);
+  const pageSize = 10;
+  const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const parsedPage = Number(params.get('page') || 1);
+  const page = Number.isFinite(parsedPage) ? Math.min(pages, Math.max(1, Math.floor(parsedPage))) : 1;
+  const visibleOrders = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const selectedIndex = filtered.findIndex(order => String(order.id) === selectedId);
+  const amount = (order: VendorOrderMock) => formatAmount(convert(order.totalAmount, order.currency || companyDefaultCurrency, currency), currency);
 
-  const filtered = useMemo(() => {
-    let list = orders;
-    if (kpiFilter === 'ACTIVE') {
-      list = list.filter((order) => ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'ISSUED', 'SENT', 'APPROVED', 'IN_PROGRESS'].includes((order.status || '').toUpperCase()));
-    } else if (kpiFilter === 'DELIVERED') {
-      list = list.filter((order) => ['DELIVERED', 'COMPLETED'].includes((order.status || '').toUpperCase()));
-    } else if (kpiFilter === 'CANCELLED') {
-      list = list.filter((order) => ['CANCELLED', 'REJECTED'].includes((order.status || '').toUpperCase()));
+  const updateParams = (values: Record<string, string | null>, replace = true) => setParams(current => {
+    const next = new URLSearchParams(current);
+    Object.entries(values).forEach(([key, value]) => value ? next.set(key, value) : next.delete(key));
+    return next;
+  }, { replace });
+  const detailUrl = (order: VendorOrderMock) => {
+    const next = new URLSearchParams(params);
+    next.set('order', String(order.id));
+    return `?${next.toString()}`;
+  };
+
+  useEffect(() => {
+    if (loading) return;
+    if (selectedId) {
+      detailHeading.current?.focus();
+    } else if (previousSelection.current) {
+      document.getElementById(`view-order-${previousSelection.current}`)?.focus();
     }
+    previousSelection.current = selectedId;
+  }, [selectedId, loading]);
 
-    const query = search.trim().toLowerCase();
-    if (query) {
-      list = list.filter((order) =>
-        [order.poNumber, order.rfqNumber, order.buyerCompany || order.buyerName, ...order.items.map((item) => item.name)]
-          .some((field) => (field || '').toLowerCase().includes(query))
-      );
-    }
-    return list;
-  }, [orders, kpiFilter, search]);
-
-  const amount = (value: number) => formatAmount(value, displayCurrency);
-  const formatDate = (date: string) => new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-
-  return (
-    <PageFrame>
-      <PageLead
-        title="My Orders"
-        description="Track fulfilment milestones, delivery schedules, and purchase-order details."
-      />
-
-      {error && (
-        <Card className="mb-4 border-destructive/25 bg-destructive/8 p-4 text-sm text-destructive">
-          {error}
-        </Card>
-      )}
-
-      {/* ── KPI Metric Cards ────────────────────────── */}
-      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+  return <PageFrame className="order-workspace">
+    {error && <Card className="mb-4 border-destructive/25 p-4 text-sm text-destructive">{error}</Card>}
+    {selectedId ? <>
+      <div ref={detailHeading} tabIndex={-1} className="order-detail-focus" aria-label={selectedOrder ? `Order ${selectedOrder.poNumber}` : 'Order details'}>
+        {loading ? <DetailSkeleton />
+          : selectedOrder ? <VendorOrderDetails key={selectedOrder.id} order={selectedOrder} currency={currency}
+            onCurrencyChange={value => updateParams({ currency: value })}
+            onBack={() => updateParams({ order: null })}
+            position={selectedIndex >= 0 ? `${selectedIndex + 1} of ${filtered.length} orders` : undefined}
+            onPrevious={selectedIndex > 0 ? () => updateParams({ order: String(filtered[selectedIndex - 1].id) }) : undefined}
+            onNext={selectedIndex >= 0 && selectedIndex < filtered.length - 1 ? () => updateParams({ order: String(filtered[selectedIndex + 1].id) }) : undefined} />
+            : <EmptyState icon={Package} title="Order not available" description="This order is not in your current order list." action={<Button variant="outline" onClick={() => updateParams({ order: null })}>Back to orders</Button>} />}
+      </div>
+    </> : <>
+      <PageLead title="My Orders" description="Track fulfilment milestones, delivery schedules, and purchase-order details." />
+      <div className="order-metrics mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           { icon: Package, tone: 'primary' as const, value: summary.total, label: 'Total Orders', detail: 'All time', filter: null },
           { icon: Truck, tone: 'warning' as const, value: summary.active, label: 'Active Orders', detail: 'In progress', filter: 'ACTIVE' as const },
-          { icon: CheckCircle2, tone: 'success' as const, value: summary.delivered, label: 'Delivered', detail: 'Completed', filter: 'DELIVERED' as const },
-          { icon: XCircle, tone: 'danger' as const, value: summary.cancelled, label: 'Cancelled', detail: 'All time', filter: 'CANCELLED' as const },
-        ].map((c) => {
-          const isActive = c.filter === null ? !kpiFilter : kpiFilter === c.filter;
-          return (
-            <MetricCard
-              key={c.label}
-              icon={c.icon}
-              tone={c.tone}
-              value={c.value}
-              label={c.label}
-              detail={c.detail}
-              className={cn(
-                'cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-all duration-200',
-                isActive &&
-                  'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
-              )}
-              onClick={() => setKpiFilter(isActive ? null : c.filter)}
-              role="button"
-              tabIndex={0}
-              aria-pressed={isActive}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  setKpiFilter(isActive ? null : c.filter);
-                }
-              }}
-            />
-          );
-        })}
+          { icon: CheckCircle2, tone: 'success' as const, value: summary.received, label: 'Received / Completed', detail: 'Receipt recorded or delivered', filter: 'RECEIVED' as const },
+          { icon: XCircle, tone: 'danger' as const, value: summary.cancelled, label: 'Cancelled', detail: 'Cancelled or rejected', filter: 'CANCELLED' as const },
+        ].map(metric => <MetricCard key={metric.label} icon={metric.icon} tone={metric.tone} value={metric.value} label={metric.label} detail={metric.detail} className={cn('cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50', filter === metric.filter && 'border-primary/45 bg-primary/[0.08] dark:bg-primary/20')}
+          onClick={() => updateParams({ filter: filter === metric.filter ? null : metric.filter, page: null })} role="button" tabIndex={0} aria-pressed={filter === metric.filter}
+          onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); updateParams({ filter: filter === metric.filter ? null : metric.filter, page: null }); } }} />)}
       </div>
-
-      {/* ── Search & Currency Toolbar ──────────────── */}
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="relative w-full max-w-xl">
-          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            className="h-11 rounded-xl pl-10"
-            type="text"
-            placeholder="Search by PO number, RFQ number, buyer, or item..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input className="h-11 pl-10 pr-10" aria-label="Search orders" placeholder="Search by PO number, RFQ number, buyer, or item…" value={search} onChange={event => updateParams({ q: event.target.value, page: null })} />
+          {search && <Button variant="ghost" size="icon-sm" className="absolute right-1 top-1/2 -translate-y-1/2" aria-label="Clear order search" onClick={() => updateParams({ q: null, page: null })}><X className="size-4" /></Button>}
         </div>
-        <CurrencySelector value={displayCurrency} onChange={setDisplayCurrency} size="sm" />
+        <div className="flex items-center gap-3">
+          <label htmlFor="order-sort" className="text-xs text-muted-foreground">Sort by</label>
+          <Select id="order-sort" className="h-9 w-44" value={sort} onChange={event => updateParams({ sort: event.target.value, page: null })}><option value="newest">Newest first</option><option value="delivery">Delivery date</option><option value="value">Highest value</option></Select>
+          <CurrencySelector value={currency} onChange={value => updateParams({ currency: value })} size="sm" />
+        </div>
       </div>
-
-      {/* ── Orders List ────────────────────────────── */}
-      {loading ? (
-        <Card className="p-8 text-center text-sm text-muted-foreground">Loading orders…</Card>
-      ) : filtered.length === 0 ? (
-        <EmptyState
-          icon={Package}
-          title="No Orders Found"
-          description={search ? "Try adjusting your search criteria." : "Issued purchase orders will appear here once created."}
-          action={search ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>Clear search</Button> : undefined}
-        />
-      ) : (
-        <div className="flex flex-col gap-2.5">
-          {filtered.map((order) => {
-            const isExpanded = expandedOrder === order.id;
-            const currentStep = STATUS_INDEX[(order.status || '').toUpperCase()] ?? 0;
-            const isCancelled = ['CANCELLED', 'REJECTED'].includes((order.status || '').toUpperCase());
-
-            return (
-              <Card
-                id={`vorder-card-${order.id}`}
-                key={order.id}
-                className={cn(
-                  'overflow-hidden transition-all duration-200 border-border/80 hover:border-primary/30 bg-card',
-                  isExpanded && 'ring-1 ring-primary/20 shadow-xs'
-                )}
-              >
-                {/* ── COLLAPSED STATE ────────────────────────── */}
-                <div
-                  className="flex items-center justify-between gap-3 px-4 py-3.5 cursor-pointer hover:bg-accent/25 transition-colors"
-                  onClick={() => setExpandedOrder(isExpanded ? null : order.id)}
-                >
-                  <div className="flex flex-col gap-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2.5">
-                      <span className="font-bold text-foreground text-base tracking-tight">{order.poNumber}</span>
-                      <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20">
-                        {order.rfqNumber}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm text-muted-foreground">
-                      <span className="font-semibold text-foreground">{order.buyerCompany || order.buyerName || 'Procnex'}</span>
-                      <span className="text-muted-foreground/40">·</span>
-                      <span className="font-medium text-muted-foreground">{formatDate(order.orderDate)}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span className="font-bold text-primary text-base sm:text-lg tabular-nums">
-                      {amount(order.totalAmount)}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setExpandedOrder(isExpanded ? null : order.id);
-                      }}
-                      aria-label="Toggle Order details"
-                      className="size-8 rounded-lg"
-                    >
-                      <ChevronDown className={cn('size-4 text-muted-foreground transition-transform duration-200', isExpanded && 'rotate-180')} />
-                    </Button>
-                  </div>
-                </div>
-
-                {/* ── EXPANDED STATE ────────────────────────── */}
-                {isExpanded && (
-                  <div className="border-t border-border/60 bg-card p-4 sm:p-5 flex flex-col gap-5 text-sm">
-                    {/* 1. PO Overview & Status Tracker */}
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between pb-2 border-b border-border/50">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Order Status</span>
-                          <StatusBadge status={order.status} />
-                        </div>
-                      </div>
-
-                      {isCancelled ? (
-                        <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/8 p-3 text-xs font-medium text-destructive">
-                          <AlertCircle className="size-4 shrink-0" />
-                          This purchase order was cancelled or rejected.
-                        </div>
-                      ) : (
-                        <ol className="grid grid-cols-4 gap-1 py-1" aria-label="Order progress">
-                          {STEPS.map((step, index) => {
-                            const done = index <= currentStep;
-                            return (
-                              <li key={step} className="relative flex min-w-0 flex-col items-center text-center before:absolute before:left-[calc(50%+16px)] before:right-[calc(-50%+16px)] before:top-2.5 before:h-px before:bg-border last:before:hidden">
-                                <span className={cn('relative z-10 grid size-5 place-items-center rounded-full border bg-card text-[10px] transition-colors', done ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground')}>
-                                  {done ? <CheckCircle2 className="size-3" /> : <span className="size-1 rounded-full bg-current" />}
-                                </span>
-                                <span className={cn('mt-1.5 truncate text-[11px] font-medium', done ? 'text-foreground font-semibold' : 'text-muted-foreground')}>
-                                  {step}
-                                </span>
-                              </li>
-                            );
-                          })}
-                        </ol>
-                      )}
-                    </div>
-
-                    {/* 2 & 3. Order Summary and Delivery & Payment */}
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      {/* Order Summary */}
-                      <div className="rounded-lg border border-border/70 bg-muted/20 p-3.5">
-                        <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2.5">Order Summary</h4>
-                        <dl className="grid grid-cols-2 gap-y-2 gap-x-3 text-xs">
-                          <div>
-                            <dt className="text-muted-foreground">Buyer / Company</dt>
-                            <dd className="font-semibold text-foreground mt-0.5">{order.buyerCompany || order.buyerName || '—'}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-muted-foreground">RFQ Number</dt>
-                            <dd className="font-semibold text-foreground font-mono mt-0.5">{order.rfqNumber || '—'}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-muted-foreground">Order Date</dt>
-                            <dd className="font-semibold text-foreground mt-0.5">{formatDate(order.orderDate)}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-muted-foreground">Total Items</dt>
-                            <dd className="font-semibold text-foreground mt-0.5">{order.items.length} line item(s)</dd>
-                          </div>
-                        </dl>
-                      </div>
-
-                      {/* Delivery & Payment */}
-                      <div className="rounded-lg border border-border/70 bg-muted/20 p-3.5">
-                        <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2.5">Delivery & Payment</h4>
-                        <dl className="grid gap-2 text-xs">
-                          <div className="flex items-start gap-2">
-                            <MapPin className="size-3.5 text-primary shrink-0 mt-0.5" />
-                            <div>
-                              <dt className="text-muted-foreground text-[11px]">Delivery Address</dt>
-                              <dd className="font-medium text-foreground leading-snug">{order.shippingAddress || '—'}</dd>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-4 pt-1">
-                            <div className="flex items-center gap-1.5">
-                              <Calendar className="size-3.5 text-primary shrink-0" />
-                              <div>
-                                <dt className="text-muted-foreground text-[11px]">Expected Delivery</dt>
-                                <dd className="font-semibold text-foreground">{formatDate(order.expectedDelivery)}</dd>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-1.5 border-l border-border/60 pl-3">
-                              <IndianRupee className="size-3.5 text-primary shrink-0" />
-                              <div>
-                                <dt className="text-muted-foreground text-[11px]">Payment Terms</dt>
-                                <dd className="font-semibold text-foreground">{order.paymentTerms || '—'}</dd>
-                              </div>
-                            </div>
-                          </div>
-                        </dl>
-                      </div>
-                    </div>
-
-                    {/* 4 & 5. Items & Total */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Ordered Items</h4>
-                        <span className="text-xs text-muted-foreground">{order.items.length} item(s)</span>
-                      </div>
-                      <div className="rounded-lg border border-border/70 overflow-hidden bg-background">
-                        <table className="w-full border-collapse text-left text-xs">
-                          <thead>
-                            <tr className="border-b border-border/60 bg-muted/40 font-semibold text-muted-foreground">
-                              <th className="p-2.5">Item</th>
-                              <th className="p-2.5 text-right">Quantity</th>
-                              <th className="p-2.5 text-right">Unit Price</th>
-                              <th className="p-2.5 text-right">Total</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-border/50">
-                            {order.items.map((item, idx) => (
-                              <tr key={`${item.name}-${idx}`} className="hover:bg-accent/20 transition-colors">
-                                <td className="p-2.5 font-medium text-foreground">{item.name}</td>
-                                <td className="p-2.5 text-right tabular-nums text-foreground">{item.quantity} {item.unit}</td>
-                                <td className="p-2.5 text-right tabular-nums text-muted-foreground">{amount(item.unitPrice)}</td>
-                                <td className="p-2.5 text-right font-semibold tabular-nums text-foreground">{amount(item.quantity * item.unitPrice)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                          <tfoot className="border-t border-border/70 bg-muted/30">
-                            <tr>
-                              <td colSpan={3} className="p-2.5 text-right font-semibold text-foreground">Grand Total</td>
-                              <td className="p-2.5 text-right font-bold text-sm tabular-nums text-primary">
-                                {amount(order.totalAmount)} <CurrencyBadge currency={displayCurrency} size="sm" />
-                              </td>
-                            </tr>
-                          </tfoot>
-                        </table>
-                      </div>
-                    </div>
-
-                    {/* 6. Action Footer (Download PO & Invoices) */}
-                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
-                      {!['CANCELLED', 'REJECTED'].includes((order.status || '').toUpperCase()) && (
-                        <Link
-                          to={getVendorPath(`/vendor/create-invoice?poId=${order.id || order.poNumber}`)}
-                          className={buttonVariants({ variant: 'default', size: 'sm' })}
-                        >
-                          <Plus className="size-3.5" /> Create Invoice
-                        </Link>
-                      )}
-                      {['DELIVERED', 'COMPLETED'].includes((order.status || '').toUpperCase()) && (
-                        <Link to={getVendorPath('/vendor/invoices')} className={buttonVariants({ variant: 'secondary', size: 'sm' })}>
-                          <Receipt className="size-3.5" /> View Invoices
-                        </Link>
-                      )}
-                      <Button size="sm" variant="outline" onClick={() => downloadPurchaseOrderAsPdf(order, formatAmount, displayCurrency)}>
-                        <Download className="size-3.5" /> Download PO
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </Card>
-            );
-          })}
-        </div>
-      )}
-    </PageFrame>
-  );
+      <div className="mb-3 flex items-center gap-3 text-xs text-muted-foreground"><span role="status">{loading ? 'Loading orders…' : `${filtered.length} of ${orders.length} orders`}</span>{(search || filter) && <Button variant="ghost" size="sm" onClick={() => updateParams({ q: null, filter: null, page: null })}>Clear filters</Button>}</div>
+      {loading ? <TableSkeleton rows={5} columnWidths={['23%', '14%', '16%', '15%', '14%', '18%']} />
+        : filtered.length === 0 ? <EmptyState icon={Package} title="No orders found" description={search || filter ? 'No orders match the current search and status filter.' : 'Issued purchase orders will appear here once created.'} action={search || filter ? <Button variant="outline" size="sm" onClick={() => updateParams({ q: null, filter: null, page: null })}>Show all orders</Button> : undefined} />
+          : <Card className="overflow-hidden">
+            <div className="order-register-scroll" role="region" aria-label="Purchase orders" tabIndex={0}>
+              <LandingTable key="vendor-orders" preferenceKey="vendor-orders" columns={VENDOR_ORDERS_COLUMNS} className="order-register w-full text-left text-sm">
+                <caption className="sr-only">Compare purchase orders, delivery dates and values. View an order for full details.</caption>
+                <colgroup><col style={{width:'23%'}} /><col style={{width:'14%'}} /><col style={{width:'16%'}} /><col style={{width:'15%'}} /><col style={{width:'14%'}} /><col style={{width:'18%'}} /></colgroup>
+                <thead><tr className="text-xs text-muted-foreground"><th scope="col">Purchase order</th><th scope="col">Buyer / Ordered</th><th scope="col">Status</th><th scope="col">Items / Delivery</th><th scope="col" className="text-right">Order value</th><th scope="col" className="text-right">Actions</th></tr></thead>
+                <tbody>{visibleOrders.map(order => <tr key={order.id}>
+                  <td><Link to={detailUrl(order)} className="order-number font-bold text-base">{order.poNumber}</Link><div className="mt-1 break-words font-mono text-xs text-muted-foreground">{order.rfqNumber || 'No RFQ reference'}</div></td>
+                  <td><div className="font-semibold break-words">{order.buyerCompany || order.buyerName || '—'}</div><div className="mt-1 text-xs text-muted-foreground">{quoteDate(order.orderDate)}</div></td>
+                  <td><RecordStatusBadge kind="order" status={order.status} /></td>
+                  <td><div>{order.items.length} {order.items.length === 1 ? 'item' : 'items'}</div><div className="mt-1 text-xs text-muted-foreground" title="Expected delivery">{quoteDate(order.expectedDelivery)}</div></td>
+                  <td className="text-right font-bold text-lg tabular-nums whitespace-nowrap">{amount(order)}</td>
+                  <td className="text-right"><Link id={`view-order-${order.id}`} aria-label={`View order ${order.poNumber}`} to={detailUrl(order)} className={buttonVariants({ variant: 'outline', size: 'sm' })}><Eye className="size-3.5" />View order</Link></td>
+                </tr>)}</tbody>
+              </LandingTable>
+            </div>
+            <div className="flex items-center justify-between gap-3 border-t border-border p-3 text-xs text-muted-foreground">
+              <span>Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, filtered.length)} of {filtered.length}</span>
+              <div className="flex items-center gap-2"><Button variant="outline" size="sm" disabled={page <= 1} onClick={() => updateParams({ page: String(page - 1) })}><ChevronLeft className="size-4" />Previous</Button><span>Page {page} of {pages}</span><Button variant="outline" size="sm" disabled={page >= pages} onClick={() => updateParams({ page: String(page + 1) })}>Next<ChevronRight className="size-4" /></Button></div>
+            </div>
+          </Card>}
+    </>}
+  </PageFrame>;
 }
 
-
+const VENDOR_ORDERS_COLUMNS: LandingColumn[] = [
+  { key: 'order', label: 'Purchase order', defaultVisible: true, required: true },
+  { key: 'buyer', label: 'Buyer / Ordered', defaultVisible: true },
+  { key: 'status', label: 'Status', defaultVisible: true },
+  { key: 'delivery', label: 'Items / Delivery', defaultVisible: true },
+  { key: 'value', label: 'Order value', defaultVisible: true },
+  { key: 'actions', label: 'Actions', defaultVisible: true, pinned: 'end' },
+];

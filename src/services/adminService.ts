@@ -8,6 +8,7 @@ import type { ApprovalLevel, User } from '../types';
 type UserWithRoles = User & { roles?: string[]; role?: string };
 
 export interface CreateUserPayload {
+  isMobileAccessEnabled?: boolean;
   fullName: string;
   username: string;
   email: string;
@@ -27,6 +28,7 @@ export interface CreateUserPayload {
 }
 
 export interface UpdateUserPayload {
+  isMobileAccessEnabled?: boolean;
   fullName?: string;
   email?: string;
   phone?: string;
@@ -109,6 +111,7 @@ async function mockCreateUser(payload: CreateUserPayload): Promise<UserWithRoles
     department: payload.department,
     phone: payload.phone,
     isActive: true,
+    isMobileAccessEnabled: payload.isMobileAccessEnabled ?? false,
     createdAt: new Date().toISOString(),
     roles: [payload.roleName],
   };
@@ -130,6 +133,7 @@ async function apiCreateUser(payload: CreateUserPayload): Promise<UserWithRoles>
   if (payload.branchId) formData.append('branchId', payload.branchId);
   if (payload.companyCode) formData.append('companyCode', payload.companyCode);
   if (payload.userType) formData.append('userType', payload.userType);
+  if (payload.isMobileAccessEnabled !== undefined) formData.append('isMobileAccessEnabled', String(payload.isMobileAccessEnabled));
   if (payload.documents?.aadhaar) formData.append('aadhaar', payload.documents.aadhaar);
   if (payload.documents?.pan) formData.append('pan', payload.documents.pan);
   if (payload.documents?.offerLetter) formData.append('offerLetter', payload.documents.offerLetter);
@@ -511,11 +515,7 @@ async function mockDeleteApprovalLevel(id: string | number): Promise<void> {
 }
 
 async function apiDeleteApprovalLevel(id: string | number): Promise<void> {
-  try {
-    await apiRequest(`/admin/approval-levels/${id}`, { method: 'DELETE' });
-  } catch (err) {
-    // Gracefully ignore 404 / missing records on deletion
-  }
+  await apiRequest(`/admin/approval-levels/${id}`, { method: 'DELETE' });
 }
 
 async function mockReorderApprovalLevel(

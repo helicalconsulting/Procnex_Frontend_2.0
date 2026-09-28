@@ -1857,3 +1857,24 @@ body.dash-is-dragging .dash-drag-ghost * {
   border-radius: var(--radius-md);
   overflow: hidden;
 }
+
+/* ─── Widget Gallery Modal Window (Normal Active States) ────── */
+#widget-gallery button,
+#vendor-widget-gallery button,
+#widget-gallery button[aria-pressed="true"],
+#widget-gallery button[aria-pressed="true"]:hover,
+#vendor-widget-gallery button[aria-pressed="true"],
+#vendor-widget-gallery button[aria-pressed="true"]:hover {
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+[data-theme="dark"] #widget-gallery button[aria-pressed="true"],
+[data-theme="dark"] #widget-gallery button[aria-pressed="true"]:hover,
+[data-theme="dark"] #vendor-widget-gallery button[aria-pressed="true"],
+[data-theme="dark"] #vendor-widget-gallery button[aria-pressed="true"]:hover {
+  box-shadow: none !important;
+  border-color: rgba(56, 139, 253, 0.4) !important;
+  background-color: rgba(56, 139, 253, 0.1) !important;
+  transform: none !important;
+}

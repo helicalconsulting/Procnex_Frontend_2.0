@@ -1,3 +1,4 @@
+import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
 import React, { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useServiceData } from '../../hooks/useServiceData';
@@ -1015,7 +1016,15 @@ export default function VendorsPage() {
       {/* Table Card */}
       <Card className="overflow-hidden">
         {loading ? (
-          <TableSkeleton rows={perPage} columns={6} />
+          view === 'table' ? (
+            <TableSkeleton rows={perPage} columnWidths={visibleColumns.map((col) => COL_META[col.key]?.width || '120px').concat(['130px'])} />
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 p-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <CardSkeleton key={i} />
+              ))}
+            </div>
+          )
         ) : paginated.length > 0 ? (
           view === 'table' ? (
             <>
@@ -1045,17 +1054,7 @@ export default function VendorsPage() {
                         <div className="flex items-center justify-end gap-2">
                           <span>Actions</span>
                           <div className="relative">
-                            <Button
-                              ref={colBtnRef}
-                              variant={showColPanel ? 'secondary' : 'ghost'}
-                              size="icon-sm"
-                              onClick={() => setShowColPanel((v) => !v)}
-                              title="Customize columns"
-                              aria-label="Customize columns"
-                              aria-expanded={showColPanel}
-                            >
-                              <span className="flex gap-0.5"><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /></span>
-                            </Button>
+                            <ColumnSettingsButton ref={colBtnRef} open={showColPanel} onClick={() => setShowColPanel((v) => !v)} />
 
                             {showColPanel && (
                               <ColumnCustomizer

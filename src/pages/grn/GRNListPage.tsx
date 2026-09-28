@@ -1,3 +1,4 @@
+import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
@@ -564,16 +565,7 @@ export default function GRNListPage() {
                       <div className="flex items-center justify-end gap-2">
                         <span>Actions</span>
                         <div className="relative">
-                          <Button
-                            variant={showPoColPanel ? 'secondary' : 'ghost'}
-                            size="icon-sm"
-                            onClick={() => setShowPoColPanel((v) => !v)}
-                            title="Customize columns"
-                            aria-label="Customize columns"
-                            aria-expanded={showPoColPanel}
-                          >
-                            <span className="flex gap-0.5"><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /></span>
-                          </Button>
+                          <ColumnSettingsButton open={showPoColPanel} onClick={() => setShowPoColPanel((v) => !v)} />
 
                           {showPoColPanel && (
                             <ColumnCustomizer
@@ -717,16 +709,7 @@ export default function GRNListPage() {
                       <div className="flex items-center justify-end gap-2">
                         <span>Actions</span>
                         <div className="relative">
-                          <Button
-                            variant={showGrnColPanel ? 'secondary' : 'ghost'}
-                            size="icon-sm"
-                            onClick={() => setShowGrnColPanel((v) => !v)}
-                            title="Customize columns"
-                            aria-label="Customize columns"
-                            aria-expanded={showGrnColPanel}
-                          >
-                            <span className="flex gap-0.5"><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /></span>
-                          </Button>
+                          <ColumnSettingsButton open={showGrnColPanel} onClick={() => setShowGrnColPanel((v) => !v)} />
 
                           {showGrnColPanel && (
                             <ColumnCustomizer

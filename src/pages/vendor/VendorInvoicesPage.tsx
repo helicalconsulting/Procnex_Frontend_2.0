@@ -1,8 +1,9 @@
+import LandingTable, { type LandingColumn } from '../../components/shared/LandingTable';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Calendar, CheckCircle2, Clock, FileText, Plus, Receipt, Search, XCircle } from 'lucide-react';
 import { CurrencyBadge, CurrencySelector, useCurrency } from '../../components/shared/CurrencyMaster';
-import { Badge } from '../../components/ui/badge';
+import { RecordStatusBadge } from '@/components/shared/RecordStatusBadge';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -12,23 +13,7 @@ import { useServiceData } from '../../hooks/useServiceData';
 import type { VendorInvoiceMock } from '../../mocks/vendorPortal.mock';
 import { vendorPortalService } from '../../services/vendorPortalService';
 import { getVendorPath } from '../../utils/tenantResolver';
-
-type InvStatus = 'PENDING' | 'APPROVED' | 'PAID' | 'REJECTED' | 'OVERDUE';
-type Tone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
-
-const STATUS_CONFIG: Record<InvStatus, { label: string; tone: Tone; icon: typeof Clock }> = {
-  PENDING: { label: 'Pending', tone: 'warning', icon: Clock },
-  APPROVED: { label: 'Approved', tone: 'primary', icon: CheckCircle2 },
-  PAID: { label: 'Paid', tone: 'success', icon: CheckCircle2 },
-  REJECTED: { label: 'Rejected', tone: 'danger', icon: XCircle },
-  OVERDUE: { label: 'Overdue', tone: 'danger', icon: AlertTriangle },
-};
-
-function StatusBadge({ status }: { status: InvStatus }) {
-  const config = STATUS_CONFIG[status] || STATUS_CONFIG.PENDING;
-  const Icon = config.icon;
-  return <Badge tone={config.tone}><Icon className="size-3" />{config.label}</Badge>;
-}
+import { TableSkeleton } from '@/components/shared/Skeleton';
 
 export default function VendorInvoicesPage() {
   const navigate = useNavigate();
@@ -53,7 +38,7 @@ export default function VendorInvoicesPage() {
     try {
       bc = new BroadcastChannel('heliflow_sync');
       bc.onmessage = () => { handleRefresh(); };
-    } catch {}
+    } catch { /* BroadcastChannel is optional in older browsers. */ }
 
     return () => {
       window.removeEventListener('focus', handleRefresh);
@@ -117,6 +102,7 @@ export default function VendorInvoicesPage() {
           {search && (
             <button
               type="button"
+              aria-label="Clear invoice search"
               onClick={() => setSearch('')}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
@@ -127,7 +113,7 @@ export default function VendorInvoicesPage() {
       </div>
 
       {loading ? (
-        <Card className="grid min-h-64 place-items-center text-sm text-muted-foreground">Loading invoices…</Card>
+        <TableSkeleton rows={5} columns={9} />
       ) : filtered.length === 0 ? (
         <EmptyState
           icon={Receipt}
@@ -147,7 +133,7 @@ export default function VendorInvoicesPage() {
         <>
           <Card className="hidden overflow-hidden lg:block">
             <DataTableViewport label="Vendor invoices" showHint={false}>
-              <table className="w-full min-w-[980px] text-left text-sm">
+              <LandingTable key="vendor-invoices" preferenceKey="vendor-invoices" columns={VENDOR_INVOICES_COLUMNS} className="w-full min-w-[980px] text-left text-sm">
                 <thead className="border-b border-border/70 bg-secondary/55 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                   <tr>{['Invoice', 'PO reference', 'Description', 'Amount', 'GST', 'Total', 'Submitted', 'Due date', 'Status'].map((heading) => <th key={heading} className="px-4 py-3">{heading}</th>)}</tr>
                 </thead>
@@ -162,18 +148,18 @@ export default function VendorInvoicesPage() {
                       <td className="px-4 py-3.5 font-semibold tabular-nums">{amount(invoice.totalAmount)} <CurrencyBadge currency={displayCurrency} size="sm" /></td>
                       <td className="px-4 py-3.5 text-xs text-muted-foreground"><span className="flex items-center gap-1"><Calendar className="size-3" />{formatDate(invoice.submittedDate)}</span></td>
                       <td className="px-4 py-3.5 text-xs text-muted-foreground"><div>{formatDate(invoice.dueDate)}</div>{invoice.paymentDate && <div className="mt-1 font-semibold text-emerald-600">Paid {formatDate(invoice.paymentDate)}</div>}</td>
-                      <td className="px-4 py-3.5"><StatusBadge status={invoice.status} /></td>
+                      <td className="px-4 py-3.5"><RecordStatusBadge kind="invoice" status={invoice.status} /></td>
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </LandingTable>
             </DataTableViewport>
           </Card>
 
           <div className="grid gap-3 lg:hidden">
             {filtered.map((invoice) => (
               <Card key={invoice.id} className="p-4">
-                <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="font-semibold text-primary">{invoice.invoiceNumber}</div><div className="mt-1 truncate text-xs text-muted-foreground">PO {invoice.poNumber} · {invoice.rfqNumber}</div></div><StatusBadge status={invoice.status} /></div>
+                <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="font-semibold text-primary">{invoice.invoiceNumber}</div><div className="mt-1 truncate text-xs text-muted-foreground">PO {invoice.poNumber} · {invoice.rfqNumber}</div></div><RecordStatusBadge kind="invoice" status={invoice.status} /></div>
                 <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-muted-foreground">{invoice.description}</p>
                 <dl className="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-secondary/45 p-3 text-xs">
                   <div><dt className="text-muted-foreground">Total</dt><dd className="mt-1 font-semibold tabular-nums">{amount(invoice.totalAmount)}</dd></div>
@@ -189,3 +175,15 @@ export default function VendorInvoicesPage() {
     </PageFrame>
   );
 }
+
+const VENDOR_INVOICES_COLUMNS: LandingColumn[] = [
+  { key: 'invoice', label: 'Invoice', defaultVisible: true, required: true },
+  { key: 'po', label: 'PO reference', defaultVisible: true },
+  { key: 'description', label: 'Description', defaultVisible: true },
+  { key: 'amount', label: 'Amount', defaultVisible: true },
+  { key: 'gst', label: 'GST', defaultVisible: true },
+  { key: 'total', label: 'Total', defaultVisible: true },
+  { key: 'submitted', label: 'Submitted', defaultVisible: true },
+  { key: 'due', label: 'Due date', defaultVisible: true },
+  { key: 'status', label: 'Status', defaultVisible: true },
+];

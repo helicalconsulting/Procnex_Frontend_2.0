@@ -1,3 +1,4 @@
+import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -20,7 +21,8 @@ import { sseClient } from '../../services/sseClient';
 import { useAuth } from '../../context/AuthContext';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
 import { MessageStrip } from '../../components/shared/MessageStrip';
-import ColumnCustomizer, { type ColumnDef } from '../../components/shared/ColumnCustomizer';
+import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
+import type { ColumnDef } from '../../hooks/columnPreferences';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
@@ -465,17 +467,7 @@ export default function PurchaseRequisitionsListPage() {
                         <div className="flex items-center justify-center gap-2">
                           <span>Actions</span>
                           <div className="relative">
-                            <Button
-                              ref={colBtnRef}
-                              variant={showColPanel ? 'secondary' : 'ghost'}
-                              size="icon-sm"
-                              onClick={() => setShowColPanel((v) => !v)}
-                              title="Customize columns"
-                              aria-label="Customize columns"
-                              aria-expanded={showColPanel}
-                            >
-                              <span className="flex gap-0.5"><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /><span className="size-1 rounded-full bg-current" /></span>
-                            </Button>
+                            <ColumnSettingsButton ref={colBtnRef} open={showColPanel} onClick={() => setShowColPanel((v) => !v)} />
 
                             {showColPanel && (
                               <ColumnCustomizer

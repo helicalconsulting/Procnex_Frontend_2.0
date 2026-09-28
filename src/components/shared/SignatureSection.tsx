@@ -1,3 +1,5 @@
+import { Button, buttonVariants } from '../ui/button';
+import { Dialog, DialogContent, DialogTitle } from '../ui/dialog';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { signatureService, type SavedSignature } from '../../services/signatureService';
 import { MessageStrip } from './MessageStrip';
@@ -282,15 +284,15 @@ export default function SignatureSection() {
             <input type="file" accept="image/*" onChange={handleUpload} className="sig-section__upload-input" />
             <Upload size={13} /> Upload
           </label>
-          <button className="sig-section__action-btn" onClick={clearCanvas} disabled={!hasDrawn}>
+          <Button type="button" variant="outline" size="sm" onClick={clearCanvas} disabled={!hasDrawn}>
             <Eraser size={13} /> Clear
-          </button>
-          <button className="sig-section__action-btn" onClick={handleDownload} disabled={!hasDrawn}>
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={handleDownload} disabled={!hasDrawn}>
             <Download size={13} /> Download
-          </button>
-          <button className="sig-section__action-btn sig-section__action-btn--save" onClick={handleSave} disabled={!hasDrawn}>
+          </Button>
+          <Button type="button" size="sm" onClick={handleSave} disabled={!hasDrawn}>
             <Save size={13} /> Save
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -305,7 +307,7 @@ export default function SignatureSection() {
               <div key={sig.id} className="sig-section__item">
                 <div className="sig-section__item-preview" onClick={() => setPreviewSig(sig)}>
                   <img src={sig.dataUrl} alt={sig.name} />
-                  {sig.isDefault && <span className="sig-section__item-default">⭐ Default</span>}
+                  {sig.isDefault && <span className="sig-section__item-default"><Star size={11} aria-hidden/> Default</span>}
                 </div>
                 <div className="sig-section__item-info">
                   <span className="sig-section__item-name">{sig.name}</span>
@@ -342,22 +344,22 @@ export default function SignatureSection() {
 
       {/* ── Preview Modal ── */}
       {previewSig && (
-        <div className="sig-section__backdrop" onClick={() => setPreviewSig(null)}>
-          <div className="sig-section__modal" onClick={e => e.stopPropagation()}>
+        <Dialog open onOpenChange={open => { if (!open) setPreviewSig(null); }}><DialogContent hideClose className="p-0" style={{ maxWidth: 480 }}><DialogTitle className="sr-only">Signature preview: {previewSig.name}</DialogTitle>
+          <div className="sig-section__modal" style={{ width: '100%', maxWidth: 'none', border: 0, boxShadow: 'none', animation: 'none' }} onClick={e => e.stopPropagation()}>
             <div className="sig-section__modal-header">
               <span><Eye size={16} /> {previewSig.name}</span>
-              <button className="sig-section__modal-close" onClick={() => setPreviewSig(null)}><X size={16} /></button>
+              <Button type="button" variant="ghost" size="icon-sm" aria-label="Close signature preview" onClick={() => setPreviewSig(null)}><X size={16} /></Button>
             </div>
             <div className="sig-section__modal-body">
               <img src={previewSig.dataUrl} alt={previewSig.name} />
             </div>
             <div className="sig-section__modal-footer">
-              <a className="sig-section__modal-download" href={previewSig.dataUrl} download={`${previewSig.name}.png`}>
+              <a className={buttonVariants({ size: 'sm' })} href={previewSig.dataUrl} download={`${previewSig.name}.png`}>
                 <Download size={14} /> Download
               </a>
             </div>
           </div>
-        </div>
+        </DialogContent></Dialog>
       )}
     </div>
   );

@@ -1,6 +1,6 @@
-import { useState, useRef, useMemo, useCallback, useEffect } from 'react';
-import { GripVertical, Columns3, RotateCcw, X } from 'lucide-react';
-import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
+import { useState, useRef, useMemo, useCallback, useEffect, useId } from 'react';
+import { ArrowUp, ArrowDown, GripVertical, Columns3, RotateCcw, X } from 'lucide-react';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 import { createPortal } from 'react-dom';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -42,7 +42,9 @@ export default function ColumnCustomizer({
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
   const [insertBefore, setInsertBefore] = useState<number | null>(null);
 
-  useBodyScrollLock(true);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  useDialogFocus(dialogRef, true, onClose);
 
   // Cleanup ghost element on unmount
   useEffect(() => {
@@ -73,6 +75,8 @@ export default function ColumnCustomizer({
   const handleGripMouseDown = useCallback((e: React.MouseEvent, fromIdx: number) => {
     e.preventDefault();
     e.stopPropagation();
+    // Reordering filtered positions would reorder the wrong source columns.
+    if (searchQuery.trim()) return;
 
     const listEl = listRef.current;
     if (!listEl) return;
@@ -151,7 +155,7 @@ export default function ColumnCustomizer({
 
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
-  }, [columnOrder, onReorder]);
+  }, [columnOrder, onReorder, searchQuery]);
 
   const visibleCount = columnOrder.filter((k) => visibleKeys.has(k)).length;
   const totalCount = columnOrder.length;
@@ -175,7 +179,7 @@ export default function ColumnCustomizer({
 
   return createPortal(
     <div className="col-modal-backdrop" onClick={onClose}>
-      <div className="col-modal" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="col-modal" onClick={(e) => e.stopPropagation()}>
 
         {/* ── Header ── */}
         <div className="col-modal__header">
@@ -184,7 +188,7 @@ export default function ColumnCustomizer({
               <Columns3 size={18} />
             </div>
             <div>
-              <h3 className="col-modal__title">Customize Columns</h3>
+              <h3 id={titleId} className="col-modal__title">Customize Columns</h3>
               <p className="col-modal__subtitle">Configure table view preferences</p>
             </div>
           </div>
@@ -203,11 +207,12 @@ export default function ColumnCustomizer({
               type="text"
               className="col-modal__search-input"
               placeholder="Search columns..."
+              aria-label="Search columns"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
             {searchQuery && (
-              <button className="col-modal__search-clear" onClick={() => setSearchQuery('')}>
+              <button className="col-modal__search-clear" aria-label="Clear column search" onClick={() => setSearchQuery('')}>
                 <X size={12} />
               </button>
             )}
@@ -216,7 +221,7 @@ export default function ColumnCustomizer({
             <button className="col-modal__action-btn" onClick={handleSelectAll}>
               Show All
             </button>
-            <button className="col-modal__action-btn" onClick={handleDeselectOptional}>
+            <button className="col-modal__action-btn" onClick={handleDeselectOptional} disabled={!columnOrder.some(key => colMap[key]?.required) || !columnOrder.some(key => !colMap[key]?.required && visibleKeys.has(key))} title="Keep required columns visible">
               Hide Optional
             </button>
             <button className="col-modal__reset" onClick={onReset} title="Reset to default">
@@ -228,7 +233,7 @@ export default function ColumnCustomizer({
         {/* ── Hint ── */}
         <div className="col-modal__hint">
           <GripVertical size={13} className="col-modal__hint-icon" />
-          <span>Drag grip to reorder columns &nbsp;•&nbsp; Click checkbox to toggle visibility</span>
+          <span>{searchQuery.trim() ? 'Clear search to reorder columns.' : 'Drag the grip or use the arrows to reorder columns.'} Required columns stay visible.</span>
         </div>
 
         {/* ── Column list ── */}
@@ -257,7 +262,7 @@ export default function ColumnCustomizer({
                   className="col-modal__grip"
                   aria-hidden
                   onMouseDown={(e) => handleGripMouseDown(e, idx)}
-                  title="Drag to reorder"
+                  title={searchQuery.trim() ? "Clear search to reorder" : "Drag to reorder"}
                 >
                   <GripVertical size={16} />
                 </span>
@@ -269,7 +274,8 @@ export default function ColumnCustomizer({
                     required ? 'col-modal__toggle--required' : '',
                   ].filter(Boolean).join(' ')}
                   onClick={() => { if (!required) onToggle(key); }}
-                  aria-label={`${visible ? 'Hide' : 'Show'} ${col.label} column`}
+                  aria-label={required ? `${col.label} column (required)` : `${visible ? 'Hide' : 'Show'} ${col.label} column`}
+                  disabled={required}
                   aria-pressed={visible}
                   tabIndex={required ? -1 : 0}
                 >
@@ -283,6 +289,23 @@ export default function ColumnCustomizer({
                 <span className={`col-modal__label ${!visible ? 'col-modal__label--muted' : ''}`}>
                   {col.label}
                 </span>
+
+                <div className="col-modal__reorder">
+                  {(['up', 'down'] as const).map(direction => (
+                    <button key={direction} type="button" className="col-modal__reorder-btn"
+                      aria-label={`Move ${col.label} column ${direction}`}
+                      title={`Move ${direction}`}
+                      disabled={!!searchQuery.trim() || (direction === 'up' ? idx === 0 : idx === columnOrder.length - 1)}
+                      onClick={() => {
+                        const next = [...columnOrder];
+                        const target = idx + (direction === 'up' ? -1 : 1);
+                        [next[idx], next[target]] = [next[target], next[idx]];
+                        onReorder(next);
+                      }}>
+                      {direction === 'up' ? <ArrowUp size={13} aria-hidden /> : <ArrowDown size={13} aria-hidden />}
+                    </button>
+                  ))}
+                </div>
 
                 {required ? (
                   <span className="col-modal__required-badge">Required</span>

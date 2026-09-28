@@ -36,10 +36,13 @@ export function ScrollableTabList({
     const scroller = scrollerRef.current;
     if (!scroller) return;
 
-    updateScrollState();
+    const frame = requestAnimationFrame(updateScrollState);
     const resizeObserver = new ResizeObserver(updateScrollState);
     resizeObserver.observe(scroller);
-    return () => resizeObserver.disconnect();
+    return () => {
+      cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+    };
   }, [children, updateScrollState]);
 
   const scrollTabs = (direction: -1 | 1) => {
@@ -50,6 +53,7 @@ export function ScrollableTabList({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
     const tabs = Array.from(
       event.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]:not([disabled])'),

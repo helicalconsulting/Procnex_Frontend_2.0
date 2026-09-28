@@ -1,11 +1,12 @@
-import { useState, useCallback, useEffect, useRef, useMemo, createElement } from 'react';
+import LandingTable, { type LandingColumn } from '../../components/shared/LandingTable';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
-import { companySettingsService, ALLOWED_CONTRACT_UPLOAD_EXTENSIONS, type Department, type Category, type Unit, type Position, type Warehouse, type PaymentTerm, type CompanyProfile, type EmailTemplate, type RequiredDocument, type DocumentTemplate, type DocumentTemplateInput, type ContractTemplate, type ContractTemplateInput, type FormFieldConfig, type SequenceSetting } from '../../services/companySettingsService';
+import { companySettingsService, ALLOWED_CONTRACT_UPLOAD_EXTENSIONS, type Department, type Category, type Unit, type Position, type Warehouse, type PaymentTerm, type CompanyProfile, type EmailTemplate, type RequiredDocument, type DocumentTemplate, type ContractTemplate, type FormFieldConfig, type SequenceSetting } from '../../services/companySettingsService';
 import { invalidateApiCache } from '../../api/client';
 import {
-  Plus, X, Edit3, Building2, Tag, ChevronDown, ChevronRight, ChevronUp, Search,
-  Save, Settings, DollarSign, Trash2, Ruler, Users, CreditCard, Mail, Phone, FileText, RotateCcw, Clock, Calendar,
+  Plus, X, Edit3, Building2, Tag, ChevronDown, ChevronRight, Search,
+  Save, Settings, Trash2, Ruler, Users, CreditCard, Mail, Phone, FileText, RotateCcw, Clock,
   Palette, Image, FileSignature, Eye, Upload, Loader2, ArrowRight, Sparkles, AlertTriangle, CheckCircle2, Info, FileCheck, Globe, Hash,
   Lock, Unlock, ShieldCheck, Key, EyeOff, Check,
 } from 'lucide-react';
@@ -17,16 +18,26 @@ import { CurrencySelector, useCurrency } from '../../components/shared/CurrencyM
 import RichTextEditor from '../../components/shared/RichTextEditor';
 import '../../components/shared/RichTextEditor.css';
 import './CompanySettingsPage.css';
+import { Button } from '../../components/ui/button';
+import { Input, Select, Textarea } from '../../components/ui/input';
+import { DetailTabs, DetailTabPanel } from '../../components/ui/detail-tabs';
+import { requiredDocumentChanged, requiredDocumentErrors, requiredDocumentPayload } from '../../components/admin/company-settings/requiredDocumentModel';
+import { unitAliases } from '../../components/admin/company-settings/unitAliases';
+import { SettingsField } from '../../components/admin/company-settings/SettingsField';
+import { SettingsModal } from '../../components/admin/company-settings/SettingsModal';
+import { sequenceErrors, sequencePreview, SEQUENCE_TYPES } from '../../components/admin/company-settings/serializationModel';
+import { SerializationWorkspace } from '../../components/admin/company-settings/SerializationWorkspace';
+import './company-settings-workspace.css';
+import { DocumentPreview } from '../../components/shared/DocumentPreview';
 import SignatureSection from '../../components/shared/SignatureSection';
 import '../../components/shared/SignatureSection.css';
-import OcrPreview from '../../components/shared/OcrPreview';
 import '../../components/shared/OcrPreview.css';
 import ErrorBoundary from '../../components/shared/ErrorBoundary';
-import { TableSkeleton, CardSkeleton, PageSkeleton, Skeleton } from '../../components/shared/Skeleton';
+import { TableSkeleton } from '../../components/shared/Skeleton';
 import { useAuth } from '../../context/AuthContext';
 import PhoneInput from '../../components/shared/PhoneInput';
 import { COUNTRY_CODES } from '../../config/countryCodes';
-import { ALL_PLACEHOLDERS, PLACEHOLDER_CATEGORIES, resolvePlaceholders } from '../../utils/placeholderResolver';
+import { ALL_PLACEHOLDERS, PLACEHOLDER_CATEGORIES } from '../../utils/placeholderResolver';
 
 // ─── Predictive Match Analysis ──────────────────────────────
 interface PredictiveMatchResult {
@@ -98,7 +109,7 @@ function findSynonymGroup(unitStr: string): string[] | null {
 
 function analyzePredictiveMatches(
   query: string,
-  existingItems: Array<{ id?: number | string; name: string; abbreviation?: string; aliases?: string[] }>,
+  existingItems: Array<{ id?: number | string; name: string; abbreviation?: string; aliases?: string[] | string }>,
   excludeId?: number | string
 ): PredictiveMatchResult | null {
   const trimmed = query.trim();
@@ -119,7 +130,7 @@ function analyzePredictiveMatches(
     if (item.abbreviation && item.abbreviation.trim().toLowerCase() === normQuery) {
       return { exact: true, item: item.name, reason: `"${normQuery}" is the abbreviation of "${item.name}"`, matchScore: 100 };
     }
-    if (item.aliases && item.aliases.some((a) => a.trim().toLowerCase() === normQuery)) {
+    if (item.aliases && unitAliases(item.aliases).some((a) => a.trim().toLowerCase() === normQuery)) {
       return { exact: true, item: item.name, reason: `Matches alias of "${item.name}"`, matchScore: 100 };
     }
   }
@@ -170,7 +181,7 @@ function analyzePredictiveMatches(
     }
 
     if (item.aliases) {
-      for (const a of item.aliases) {
+      for (const a of unitAliases(item.aliases)) {
         const normAlias = a.trim().toLowerCase();
         if (normAlias.includes(normQuery) || normQuery.includes(normAlias)) {
           return { exact: false, item: item.name, reason: `Similar to alias "${a}" of "${item.name}"`, matchScore: 75 };
@@ -189,7 +200,7 @@ function PredictiveMatchCard({
   labelName = 'item',
 }: {
   query: string;
-  items: Array<{ id?: number | string; name: string; abbreviation?: string; aliases?: string[] }>;
+  items: Array<{ id?: number | string; name: string; abbreviation?: string; aliases?: string[] | string }>;
   excludeId?: number | string;
   labelName?: string;
 }) {
@@ -392,16 +403,6 @@ function textToHtml(text: string): string {
 }
 
 // ─── Resolve dynamic placeholders ({YYYY} {YY} {MM} {DD}) ──────────────
-function resolveSequencePlaceholders(template: string): string {
-  const now = new Date();
-  const yyyy = String(now.getFullYear());
-  return template
-    .replace(/\{YYYY\}/g, yyyy)
-    .replace(/\{YY\}/g, yyyy.slice(-2))
-    .replace(/\{MM\}/g, String(now.getMonth() + 1).padStart(2, '0'))
-    .replace(/\{DD\}/g, String(now.getDate()).padStart(2, '0'));
-}
-
 // ─── Tab Definitions ────────────────────────────────────────
 
 type TabKey = 'general' | 'branding' | 'departments' | 'warehouses' | 'forms' | 'form-documents' | 'email-templates' | 'documents-contracts' | 'doc-serialization';
@@ -409,19 +410,19 @@ type TabKey = 'general' | 'branding' | 'departments' | 'warehouses' | 'forms' | 
 interface TabDef {
   key: TabKey;
   label: string;
-  icon: React.ReactNode;
+  icon: typeof Settings;
 }
 
 const TABS: TabDef[] = [
-  { key: 'general',             label: 'General',                icon: <Settings size={15} /> },
-  { key: 'branding',            label: 'Branding',               icon: <Palette size={15} /> },
-  { key: 'departments',         label: 'Departments',            icon: <Building2 size={15} /> },
-  { key: 'warehouses',          label: 'Warehouses',             icon: <Building2 size={15} /> },
-  { key: 'forms',               label: 'Forms Settings',         icon: <FileText size={15} /> },
-  { key: 'form-documents',      label: 'Required Documents',     icon: <FileCheck size={15} /> },
-  { key: 'email-templates',     label: 'Email Templates',        icon: <Mail size={15} /> },
-  { key: 'documents-contracts', label: 'Documents & Contracts',  icon: <FileSignature size={15} /> },
-  { key: 'doc-serialization',   label: 'Document Serialization', icon: <Hash size={15} /> },
+  { key: 'general',             label: 'General',                icon: Settings },
+  { key: 'branding',            label: 'Branding',               icon: Palette },
+  { key: 'departments',         label: 'Departments',            icon: Building2 },
+  { key: 'warehouses',          label: 'Warehouses',             icon: Building2 },
+  { key: 'forms',               label: 'Forms Settings',         icon: FileText },
+  { key: 'form-documents',      label: 'Required Documents',     icon: FileCheck },
+  { key: 'email-templates',     label: 'Email Templates',        icon: Mail },
+  { key: 'documents-contracts', label: 'Documents & Contracts',  icon: FileSignature },
+  { key: 'doc-serialization',   label: 'Document Serialization', icon: Hash },
 ];
 
 // ─── Email Template Labels & Placeholders ───────────────────
@@ -705,7 +706,7 @@ export default function CompanySettingsPage() {
     } finally {
       setActionLoading(false);
     }
-  }, [canCreateSettings, whCode, whName, whType, whAddress, whCity, whCountry, whContactPerson, whPhone, whEmail, whIsDefault, whIsActive, editingWarehouse, reloadWarehouses]);
+  }, [canCreateSettings, whCode, whName, whType, whAddress, whCity, whCountry, whContactPerson, whCountryCode, whPhone, whEmail, whIsDefault, whIsActive, editingWarehouse, reloadWarehouses]);
 
   const handleSetDefaultWarehouse = useCallback(async (id: string) => {
     if (!canCreateSettings) return;
@@ -732,6 +733,7 @@ export default function CompanySettingsPage() {
 
   const fetchSequences = useCallback(async () => {
     setSeqLoading(true);
+    setSeqErrMsg(null);
     try {
       const list = await companySettingsService.listSequenceSettings();
       setSequences(list);
@@ -739,16 +741,16 @@ export default function CompanySettingsPage() {
       const edits: Record<string, Partial<SequenceSetting>> = {};
       list.forEach((s) => { edits[s.entityType] = { ...s }; });
       setSeqEdits(edits);
-    } catch {
-      // ignore
+    } catch (error) {
+      setSeqErrMsg(error instanceof Error ? error.message : 'Could not load document number formats.');
     } finally {
       setSeqLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'doc-serialization') fetchSequences();
-  }, [activeTab, fetchSequences]);
+    if (activeTab === 'doc-serialization' && !sequences.length) fetchSequences();
+  }, [activeTab, fetchSequences, sequences.length]);
 
   const handleSeqFieldChange = useCallback((entityType: string, field: keyof SequenceSetting, value: string | number) => {
     if (!canCreateSettings) return;
@@ -761,7 +763,7 @@ export default function CompanySettingsPage() {
   const handleSeqSave = useCallback(async (entityType: string) => {
     if (!canCreateSettings) return;
     const edit = seqEdits[entityType];
-    if (!edit) return;
+    if (!edit || seqSaving || sequenceErrors(edit).length) return;
     setSeqSaving(entityType);
     setSeqErrMsg(null);
     setSeqSuccessInfo(null);
@@ -777,27 +779,16 @@ export default function CompanySettingsPage() {
         periodEndDate: edit.periodEndDate ? String(edit.periodEndDate) : null,
       });
       setSequences((prev) => prev.map((s) => s.entityType === entityType ? { ...s, ...updated } : s));
-      const meta = {
-        SUPPLIER_CODE: 'Supplier Code',
-        PURCHASE_ORDER: 'Purchase Order No.',
-        RFQ: 'RFQ Number',
-        INVOICE: 'Invoice Number',
-        CONTRACT: 'Contract Number',
-        PAYMENT_VOUCHER: 'Payment Voucher No.',
-      } as Record<string, string>;
-      const prefix = resolveSequencePlaceholders(String(edit.prefix ?? ''));
-      const suffix = resolveSequencePlaceholders(String(edit.suffix ?? ''));
-      const num = Number(edit.nextNumber ?? 1);
-      const pad = Number(edit.paddingLength ?? 4);
-      const preview = `${prefix}${String(num).padStart(pad, '0')}${suffix ? '-' + suffix : ''}`;
-      setSeqSuccessInfo({ label: meta[entityType] ?? entityType, preview });
+      setSeqEdits(previous => ({ ...previous, [entityType]: { ...updated } }));
+      const meta = SEQUENCE_TYPES.find(type => type.key === entityType);
+      setSeqSuccessInfo({ label: meta?.label ?? entityType, preview: sequencePreview(updated) });
 
     } catch (err) {
       setSeqErrMsg(err instanceof Error ? err.message : 'Failed to save');
     } finally {
       setSeqSaving(null);
     }
-  }, [seqEdits, canCreateSettings]);
+  }, [seqEdits, canCreateSettings, seqSaving]);
 
   const [isBackfilling, setIsBackfilling] = useState(false);
   const [backfillResult, setBackfillResult] = useState<{ updated: number; nextCounter: number } | null>(null);
@@ -813,11 +804,15 @@ export default function CompanySettingsPage() {
       setShowBackfillSuccess(true);
       // Reload sequences so counter reflects the new value
       const settings = await companySettingsService.listSequenceSettings();
-      if (settings?.settings) {
-        setSequences(settings.settings);
-        const edits: Record<string, any> = {};
-        for (const s of settings.settings) edits[s.entityType] = { ...s };
-        setSeqEdits(edits);
+      if (settings.length) {
+        setSequences(settings);
+        setSeqEdits(previous => {
+          const edits = { ...previous };
+          for (const row of settings) {
+            if (row.entityType === 'SUPPLIER_CODE' || !edits[row.entityType]) edits[row.entityType] = { ...row };
+          }
+          return edits;
+        });
       }
     } catch (err) {
       setConfirmModalConfig({
@@ -848,27 +843,8 @@ export default function CompanySettingsPage() {
 
 
 
-  const getSeqPreview = useCallback((entityType: string): string => {
-    const e = seqEdits[entityType];
-    if (!e) return '—';
-    const num = Number(e.nextNumber ?? 1);
-    const pad = Number(e.paddingLength ?? 4);
-    const prefix = resolveSequencePlaceholders(String(e.prefix ?? ''));
-    const suffix = resolveSequencePlaceholders(String(e.suffix ?? ''));
-    return `${prefix}${String(num).padStart(pad, '0')}${suffix ? '-' + suffix : ''}`;
-  }, [seqEdits, resolveSequencePlaceholders]);
-
-
-  const ENTITY_LABELS: Record<string, { label: string; desc: string }> = {
-    SUPPLIER_CODE: { label: 'Supplier Code', desc: 'Auto-generated code assigned when a new supplier is created.' },
-    PURCHASE_ORDER: { label: 'Purchase Order No.', desc: 'Sequential number assigned to each new Purchase Order.' },
-    RFQ: { label: 'RFQ Number', desc: 'Sequential number assigned to each new Request for Quotation.' },
-    INVOICE: { label: 'Invoice Number', desc: 'Sequential number assigned to each new Purchase Invoice.' },
-    CONTRACT: { label: 'Contract Number', desc: 'Sequential number assigned to each new Contract.' },
-    PAYMENT_VOUCHER: { label: 'Payment Voucher No.', desc: 'Sequential number assigned to each new Payment Voucher.' },
-  };
   const [search, setSearch] = useState('');
-  const [expandedDept, setExpandedDept] = useState<Set<number>>(new Set());
+  const [expandedDept, setExpandedDept] = useState<Set<string>>(new Set());
   const [pageMsg, setPageMsg] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const { language, setLanguage, t } = useLanguage();
@@ -999,7 +975,7 @@ export default function CompanySettingsPage() {
       return;
     }
 
-    if (passcodeNew.length < 4) {
+    if (passcodeNew.trim().length < 4) {
       setPasscodeError('New passcode must be at least 4 characters');
       return;
     }
@@ -1248,11 +1224,10 @@ export default function CompanySettingsPage() {
   const [positionError, setPositionError] = useState<string | null>(null);
 
   // Delete confirmation state
-  const [deleteTarget, setDeleteTarget] = useState<{ type: 'department' | 'category' | 'unit' | 'position' | 'paymentTerm' | 'requiredDocument'; id: number; name: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: 'department' | 'category' | 'unit' | 'position' | 'paymentTerm' | 'requiredDocument'; id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   // Financial Year Configuration Modal State
-  const [fyModalEntity, setFyModalEntity] = useState<string | null>(null);
 
   // Custom confirmation modal state
   const [confirmModalConfig, setConfirmModalConfig] = useState<{
@@ -1274,14 +1249,14 @@ export default function CompanySettingsPage() {
     : departments;
 
   // Categories grouped by department
-  const categoriesByDept = new Map<number, Category[]>();
+  const categoriesByDept = new Map<string, Category[]>();
   for (const cat of categories) {
     const existing = categoriesByDept.get(cat.departmentId);
     if (existing) existing.push(cat);
     else categoriesByDept.set(cat.departmentId, [cat]);
   }
 
-  const toggleExpand = (id: number) => {
+  const toggleExpand = (id: string) => {
     setExpandedDept((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -1433,23 +1408,6 @@ export default function CompanySettingsPage() {
   const ocrPollActiveRef = useRef(false);
   const [selectedPlaceholderCategory, setSelectedPlaceholderCategory] = useState<string>('all');
   const [insertedPlaceholderNotice, setInsertedPlaceholderNotice] = useState<string | null>(null);
-
-  // Dynamic Sidebar Height Auto-Lock for Rich Text Editor Alignment
-  const sidebarRef = useRef<HTMLDivElement>(null);
-  const [sidebarHeight, setSidebarHeight] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!sidebarRef.current) return;
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        if (entry.target === sidebarRef.current) {
-          setSidebarHeight(entry.target.clientHeight);
-        }
-      }
-    });
-    observer.observe(sidebarRef.current);
-    return () => observer.disconnect();
-  }, [selectedContractType, selectedPlaceholderCategory]);
 
   const handleInsertPlaceholderTag = (tagCode: string) => {
     setEditedContractContent((prev) => {
@@ -2333,6 +2291,7 @@ export default function CompanySettingsPage() {
   const addDocInline = useCallback((category: 'mandatory' | 'optional') => {
     const newDoc: RequiredDocument = {
       id: `new-${Date.now()}`,
+      companyCode: profile?.companyCode || '',
       name: '',
       fieldType: 'attachment',
       documentCategory: category,
@@ -2347,7 +2306,7 @@ export default function CompanySettingsPage() {
     };
     setEditableDocs(prev => [...prev, newDoc]);
     setDocsDirty(true);
-  }, []);
+  }, [profile?.companyCode]);
 
   const removeDocInline = useCallback((id: string) => {
     setEditableDocs(prev => prev.filter(d => d.id !== id));
@@ -2375,7 +2334,7 @@ export default function CompanySettingsPage() {
   }, []);
 
   const handleSaveDocs = useCallback(async () => {
-    if (!canCreateSettings) return;
+    if (!canCreateSettings || requiredDocumentErrors(editableDocs).length > 0) return;
     setSavingDocs(true);
     setPageMsg(null);
     try {
@@ -2408,24 +2367,8 @@ export default function CompanySettingsPage() {
         } else {
           // Existing doc - update name, isRequired, fieldType, alertDays, alertFrequency
           const original = requiredDocuments.find(d => d.id === doc.id);
-          if (
-            original &&
-            (original.name !== doc.name.trim() ||
-              (original.documentCategory || 'mandatory') !== (doc.documentCategory || 'mandatory') ||
-              (original.fieldType || 'attachment') !== (doc.fieldType || 'attachment') ||
-              (original.expirationAlertDays ?? 30) !== (doc.expirationAlertDays ?? 30) ||
-              (original.expirationAlertFrequency || 'DAILY') !== (doc.expirationAlertFrequency || 'DAILY'))
-          ) {
-            await companySettingsService.updateRequiredDocument(doc.id, {
-              name: doc.name.trim(),
-              documentCategory: doc.documentCategory || 'mandatory',
-              fieldType: doc.fieldType || 'attachment',
-              expirationAlertDays: doc.expirationAlertDays ?? 30,
-              expirationAlertFrequency: doc.expirationAlertFrequency || 'DAILY',
-              trackIssueDate: doc.trackIssueDate ?? true,
-              trackExpirationDate: doc.trackExpirationDate ?? true,
-              trackIssuingAuthority: doc.trackIssuingAuthority ?? true,
-            });
+          if (original && requiredDocumentChanged(original, doc)) {
+            await companySettingsService.updateRequiredDocument(doc.id, requiredDocumentPayload(doc));
           }
         }
       }
@@ -2438,20 +2381,9 @@ export default function CompanySettingsPage() {
     } finally {
       setSavingDocs(false);
     }
-  }, [editableDocs, requiredDocuments, reloadRequiredDocuments]);
+  }, [editableDocs, requiredDocuments, reloadRequiredDocuments, canCreateSettings]);
 
-  const tabCounts: Record<TabKey, number | undefined> = {
-    'general': undefined,
-    'branding': undefined,
-    'departments': undefined,
-    'positions': positions.length,
-    'warehouses': warehouses.length,
-    'forms': undefined,
-    'form-documents': editableDocs.length,
-    'email-templates': undefined,
-    'documents-contracts': undefined,
-    'doc-serialization': undefined,
-  };
+
 
   // ── Department CRUD ──
 
@@ -2512,9 +2444,9 @@ export default function CompanySettingsPage() {
 
   // ── Category CRUD ──
 
-  const openAddCat = useCallback((deptId?: number) => {
+  const openAddCat = useCallback((deptId?: string) => {
     setEditingCat(null);
-    setCatDeptId(String(deptId || (departments[0]?.id || 0)));
+    setCatDeptId(deptId || departments[0]?.id || '');
     setCatName('');
     setCatDesc('');
     setCatError(null);
@@ -2845,32 +2777,21 @@ export default function CompanySettingsPage() {
   // -----------------------------------------------------------
 
   // ── Render Documents Tab (extracted for Oxc compatibility) ──
-  
+
 
 
   // ── Early Return for Passcode Protection Gate ──
   if (checkingPasscodeStatus && !isUnlocked) {
     return (
-      <div className="cs-lock-overlay">
-        <div className="cs-lock-card">
-          <div className="cs-lock-badge">
-            <Lock size={34} />
-          </div>
-          <h2 className="cs-lock-title">Verifying Access...</h2>
-          <p className="cs-lock-subtitle">
-            Checking security settings for Company Settings...
-          </p>
-          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
-            <Loader2 size={24} style={{ animation: 'spin 1s linear infinite', color: 'var(--primary-400, #38bdf8)' }} />
-          </div>
-        </div>
+      <div className="p-6 w-full">
+        <PageSkeleton />
       </div>
     );
   }
 
   if (isPasscodeProtected && !isUnlocked) {
     return (
-      <div className="cs-lock-overlay">
+      <div className="settings-workspace cs-lock-overlay">
         <div className="cs-lock-card">
           <div className="cs-lock-badge">
             <Lock size={34} />
@@ -2897,7 +2818,7 @@ export default function CompanySettingsPage() {
                 Security Passcode <span className="cs-passcode-label__req">*</span>
               </label>
               <div className="cs-passcode-input-wrapper">
-                <input
+                <Input
                   id="settings-lock-passcode"
                   type={showPasscodeText ? 'text' : 'password'}
                   className="cs-passcode-input"
@@ -2911,16 +2832,16 @@ export default function CompanySettingsPage() {
                   type="button"
                   className="cs-passcode-toggle-btn"
                   onClick={() => setShowPasscodeText(!showPasscodeText)}
-                  tabIndex={-1}
+                  aria-label="Toggle passcode visibility"
                 >
                   {showPasscodeText ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>
 
-            <button
+            <Button variant="default" size="default"
               type="submit"
-              className="cs-lock-submit-btn"
+              className="settings-action"
               disabled={verifyingLock || !lockPasscode.trim()}
             >
               {verifyingLock ? (
@@ -2931,7 +2852,7 @@ export default function CompanySettingsPage() {
                   <span>Unlock Company Settings</span>
                 </>
               )}
-            </button>
+            </Button>
           </form>
         </div>
       </div>
@@ -2939,7 +2860,7 @@ export default function CompanySettingsPage() {
   }
 
   return (
-    <div className={`company-settings-page ${!canCreateSettings ? 'is-view-only' : ''}`}>
+    <div className={`company-settings-page settings-workspace ${!canCreateSettings ? 'is-view-only' : ''}`}>
       {pageMsg && (
         <MessageStrip
           type={inferMessageType(pageMsg)}
@@ -2961,26 +2882,21 @@ export default function CompanySettingsPage() {
 
 
       {/* ── Tab Bar ── */}
-      <div className="cs-tabs" role="tablist">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            role="tab"
-            aria-selected={activeTab === tab.key}
-            className={`cs-tab ${activeTab === tab.key ? 'cs-tab--active' : ''}`}
-            onClick={() => setActiveTab(tab.key)}
-          >
-            {tab.icon}
-            {tab.label}
-          </button>
-        ))}
+      <div className="settings-category-tabs">
+        <DetailTabs
+          id="settings"
+          label="Company Settings categories"
+          tabs={TABS.map(({ key, label, icon }) => ({ id: key, label, icon }))}
+          activeTab={activeTab}
+          onChange={key => setActiveTab(key as TabKey)}
+        />
       </div>
-
-      {/* -------------------------------------------------------
+      <DetailTabPanel id="settings" tabId={activeTab} className="settings-category-content">    {/* -------------------------------------------------------
           TAB: General
           ------------------------------------------------------- */}
       {activeTab === 'general' && (
-        <div className="cs-tab-panel" role="tabpanel">
+        <div className="cs-tab-panel settings-general-grid">
+          {(hasPendingChange || hasTimeLimitChanges || hasPortalNameChange) && <div className="settings-general-save" role="status"><span>Unsaved general settings</span><Button type="button" variant="outline" onClick={handleCurrencyCancel} disabled={savingCurrency}>Discard Changes</Button><Button type="button" onClick={handleSaveGeneralSettings} disabled={savingCurrency || (pendingInvitationExpiry !== null && pendingInvitationExpiry < 1) || (pendingResubmissionDeadline !== null && pendingResubmissionDeadline < 1)}><Save size={16}/>{savingCurrency ? 'Saving…' : 'Save General Settings'}</Button></div>}
           {/* ── Company Settings Passcode Security ── */}
           <div className="cs-section-card">
             <div className="cs-section-header">
@@ -3007,7 +2923,7 @@ export default function CompanySettingsPage() {
                   </div>
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                      Status: {isPasscodeProtected ? 'Passcode Protection Active 🔒' : 'Passcode Not Set (Open Access)'}
+                      Status: {isPasscodeProtected ? 'Passcode Protection Active' : 'Passcode Not Set (Open Access)'}
                     </div>
                     <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
                       {isPasscodeProtected
@@ -3020,7 +2936,7 @@ export default function CompanySettingsPage() {
                 <div style={{ display: 'flex', gap: 10 }}>
                   {isPasscodeProtected ? (
                     <>
-                      <button
+                      <Button className="settings-action" variant="outline" size="default"
                         type="button"
                         onClick={() => {
                           setPasscodeModalMode('change');
@@ -3030,24 +2946,12 @@ export default function CompanySettingsPage() {
                           setPasscodeConfirm('');
                           setShowPasscodeModal(true);
                         }}
-                        style={{
-                          padding: '9px 16px',
-                          borderRadius: 6,
-                          border: '1px solid var(--primary-500, #0a6ed1)',
-                          background: 'rgba(10, 110, 209, 0.1)',
-                          color: 'var(--primary-500, #0a6ed1)',
-                          fontWeight: 700,
-                          fontSize: 14,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 6,
-                        }}
+
                       >
                         <Key size={15} />
                         Change Passcode
-                      </button>
-                      <button
+                      </Button>
+                      <Button className="settings-action" variant="destructive" size="default"
                         type="button"
                         onClick={() => {
                           setPasscodeModalMode('remove');
@@ -3055,26 +2959,14 @@ export default function CompanySettingsPage() {
                           setPasscodeCurrent('');
                           setShowPasscodeModal(true);
                         }}
-                        style={{
-                          padding: '9px 16px',
-                          borderRadius: 6,
-                          border: '1px solid rgba(239, 68, 68, 0.4)',
-                          background: 'rgba(239, 68, 68, 0.1)',
-                          color: '#ef4444',
-                          fontWeight: 700,
-                          fontSize: 14,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 6,
-                        }}
+
                       >
                         <Unlock size={15} />
                         Disable Passcode
-                      </button>
+                      </Button>
                     </>
                   ) : (
-                    <button
+                    <Button className="settings-action" variant="default" size="default"
                       type="button"
                       onClick={() => {
                         setPasscodeModalMode('set');
@@ -3084,24 +2976,11 @@ export default function CompanySettingsPage() {
                         setPasscodeConfirm('');
                         setShowPasscodeModal(true);
                       }}
-                      style={{
-                        padding: '10px 20px',
-                        borderRadius: 6,
-                        border: 'none',
-                        background: 'var(--primary-500, #0a6ed1)',
-                        color: '#fff',
-                        fontWeight: 700,
-                        fontSize: 14,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        boxShadow: 'var(--shadow-sm)',
-                      }}
+
                     >
                       <Lock size={15} />
                       Set Security Passcode
-                    </button>
+                    </Button>
                   )}
                 </div>
               </div>
@@ -3111,7 +2990,7 @@ export default function CompanySettingsPage() {
           <div className="cs-section-card">
             <div className="cs-section-header">
               <div className="cs-section-header__left">
-                <h2><DollarSign size={17} /> Default Currency</h2>
+                <h2><Globe size={17} /> Default Currency</h2>
                 <p>Set the default currency used throughout the application for RFQs, quotations, invoices, and payments.</p>
               </div>
             </div>
@@ -3214,9 +3093,9 @@ export default function CompanySettingsPage() {
               </div>
             </div>
             <div className="cs-section-body">
-              <div className="company-settings__field">
+              <SettingsField className="company-settings__field">
                 <label>Primary Portal Name</label>
-                <input
+                <Input
                   value={pendingPortalName !== null ? pendingPortalName : portalName}
                   onChange={(e) => setPendingPortalName(e.target.value)}
                   placeholder="e.g. Employee"
@@ -3226,25 +3105,9 @@ export default function CompanySettingsPage() {
                   Shown on the employee login page (e.g. "Employee Sign In"). Default: "Employee".
                   The vendor portal name is fixed as "Vendor".
                 </span>
-              </div>
+              </SettingsField>
 
-              {(hasPendingChange || hasTimeLimitChanges || hasPortalNameChange) && (
-                <div className="cs-time-limit-actions" style={{ marginTop: 16 }}>
-                  <button
-                    className="company-settings__btn company-settings__btn--primary"
-                    onClick={handleSaveGeneralSettings}
-                    disabled={savingCurrency}
-                  >
-                    <Save size={16} /> {savingCurrency ? 'Saving…' : 'Save Portal Name'}
-                  </button>
-                  <button
-                    className="company-settings__btn company-settings__btn--secondary"
-                    onClick={handleCurrencyCancel}
-                  >
-                    <X size={16} /> Discard Changes
-                  </button>
-                </div>
-              )}
+
             </div>
           </div>
           {/* ── User Limit Configuration ── */}
@@ -3291,14 +3154,14 @@ export default function CompanySettingsPage() {
             <div className="cs-section-body">
               <div className="cs-time-limits-grid">
                 <div className="cs-time-limit-field">
-                  <label>Invitation Expiry (hours)</label>
+                  <label htmlFor="settings-invitation-expiry">Invitation Expiry (hours)</label>
                   <div className="cs-time-limit-input-wrap">
-                    <input
+                    <Input
                       type="text"
                       inputMode="numeric"
                       pattern="[0-9]*"
                       maxLength={4}
-                      value={pendingInvitationExpiry !== null ? pendingInvitationExpiry : invitationExpiryHours}
+                      id="settings-invitation-expiry" value={pendingInvitationExpiry !== null ? pendingInvitationExpiry : invitationExpiryHours}
                       onChange={(e) => {
                         const cleaned = e.target.value.replace(/\D/g, '');
                         if (cleaned === '') {
@@ -3320,14 +3183,14 @@ export default function CompanySettingsPage() {
                   </p>
                 </div>
                 <div className="cs-time-limit-field">
-                  <label>Resubmission Deadline (hours)</label>
+                  <label htmlFor="settings-resubmission-deadline">Resubmission Deadline (hours)</label>
                   <div className="cs-time-limit-input-wrap">
-                    <input
+                    <Input
                       type="text"
                       inputMode="numeric"
                       pattern="[0-9]*"
                       maxLength={4}
-                      value={pendingResubmissionDeadline !== null ? pendingResubmissionDeadline : resubmissionDeadlineHours}
+                      id="settings-resubmission-deadline" value={pendingResubmissionDeadline !== null ? pendingResubmissionDeadline : resubmissionDeadlineHours}
                       onChange={(e) => {
                         const cleaned = e.target.value.replace(/\D/g, '');
                         if (cleaned === '') {
@@ -3350,23 +3213,7 @@ export default function CompanySettingsPage() {
                 </div>
               </div>
 
-              {(hasPendingChange || hasTimeLimitChanges || hasPortalNameChange) && (
-                <div className="cs-time-limit-actions">
-                  <button
-                    className="company-settings__btn company-settings__btn--primary"
-                    onClick={handleSaveGeneralSettings}
-                    disabled={savingCurrency}
-                  >
-                    <Save size={16} /> {savingCurrency ? 'Saving…' : 'Save All Changes'}
-                  </button>
-                  <button
-                    className="company-settings__btn company-settings__btn--secondary"
-                    onClick={handleCurrencyCancel}
-                  >
-                    <X size={16} /> Discard Changes
-                  </button>
-                </div>
-              )}
+
             </div>
           </div>
 
@@ -3378,9 +3225,9 @@ export default function CompanySettingsPage() {
                 <p>Manage payment term options for vendor quotations (e.g. Net 15, Net 30, Net 45, Advance)</p>
               </div>
               <div className="cs-section-header__actions">
-                <button className="company-settings__btn company-settings__btn--primary" onClick={openAddPaymentTerm}>
+                <Button type="button" variant="default" size="default" className="settings-action" onClick={openAddPaymentTerm}>
                   <Plus size={16} /> Add Payment Term
-                </button>
+                </Button>
               </div>
             </div>
             <div className="cs-section-body">
@@ -3388,9 +3235,9 @@ export default function CompanySettingsPage() {
                 <div className="cs-empty">
                   <div className="cs-empty__icon"><CreditCard size={28} /></div>
                   <p>No payment terms yet. Add your first payment term to get started.</p>
-                  <button className="company-settings__btn company-settings__btn--primary" onClick={openAddPaymentTerm}>
+                  <Button type="button" variant="default" size="default" className="settings-action" onClick={openAddPaymentTerm}>
                     <Plus size={16} /> Add Payment Term
-                  </button>
+                  </Button>
                 </div>
               ) : (
                 <div className="cs-item-list">
@@ -3401,11 +3248,11 @@ export default function CompanySettingsPage() {
                       </div>
                       <div className="cs-item__actions">
                         <span className={`company-settings__badge company-settings__badge--sm ${term.isActive ? 'company-settings__badge--active' : 'company-settings__badge--inactive'}`}>
-                          {term.isActive ? 'Active' : 'Inactive'}
+                          {term.isActive ? <><CheckCircle2 size={12}/>Active</> : <><EyeOff size={12}/>Inactive</>}
                         </span>
-                        <button className="company-settings__icon-btn company-settings__icon-btn--danger" onClick={() => requestDeletePaymentTerm(term)} title="Delete payment term">
+                        <Button aria-label="Delete payment term" type="button" variant="ghost" size="icon-sm" className="settings-action settings-icon--danger" onClick={() => requestDeletePaymentTerm(term)} title="Delete payment term">
                           <Trash2 size={14} />
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -3422,9 +3269,9 @@ export default function CompanySettingsPage() {
                 <p>Manage units used for line items in RFQs (e.g. Pcs, Kg, Ltr, Mtr)</p>
               </div>
               <div className="cs-section-header__actions">
-                <button className="company-settings__btn company-settings__btn--primary" onClick={openAddUnit}>
+                <Button type="button" variant="default" size="default" className="settings-action" onClick={openAddUnit}>
                   <Plus size={16} /> Add Unit
-                </button>
+                </Button>
               </div>
             </div>
             <div className="cs-section-body">
@@ -3432,9 +3279,9 @@ export default function CompanySettingsPage() {
                 <div className="cs-empty">
                   <div className="cs-empty__icon"><Ruler size={28} /></div>
                   <p>No units yet. Add your first unit to get started.</p>
-                  <button className="company-settings__btn company-settings__btn--primary" onClick={openAddUnit}>
+                  <Button type="button" variant="default" size="default" className="settings-action" onClick={openAddUnit}>
                     <Plus size={16} /> Add Unit
-                  </button>
+                  </Button>
                 </div>
               ) : (
                 <div className="cs-item-list">
@@ -3449,11 +3296,11 @@ export default function CompanySettingsPage() {
                       </div>
                       <div className="cs-item__actions">
                         <span className={`company-settings__badge company-settings__badge--sm ${unit.isActive ? 'company-settings__badge--active' : 'company-settings__badge--inactive'}`}>
-                          {unit.isActive ? 'Active' : 'Inactive'}
+                          {unit.isActive ? <><CheckCircle2 size={12}/>Active</> : <><EyeOff size={12}/>Inactive</>}
                         </span>
-                        <button className="company-settings__icon-btn company-settings__icon-btn--danger" onClick={() => requestDeleteUnit(unit)} title="Delete unit">
+                        <Button aria-label="Delete unit" type="button" variant="ghost" size="icon-sm" className="settings-action settings-icon--danger" onClick={() => requestDeleteUnit(unit)} title="Delete unit">
                           <Trash2 size={14} />
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   ))}                    </div>
@@ -3469,59 +3316,59 @@ export default function CompanySettingsPage() {
           TAB: Branding / White Label
           ------------------------------------------------------- */}
       {activeTab === 'branding' && (
-        <div className="cs-tab-panel" role="tabpanel">
+        <div className="cs-tab-panel">
           <div className="cs-section-card">
             <div className="cs-section-header">
               <div className="cs-section-header__left">
                 <h2><Palette size={17} /> White Label Branding</h2>
-                <p>Customize the platform appearance for your clients - logo, colors, company name, and more. Changes apply immediately.</p>
+                <p>Customize the platform appearance for your clients - logo, colors, company name, and more. Save your changes to update the application.</p>
               </div>
             </div>
             <div className="cs-section-body">
               <div className="cs-branding-form">
                 {/* Company Name */}
-                <div className="company-settings__field">
+                <SettingsField className="company-settings__field">
                   <label>Company Name</label>
-                  <input
+                  <Input
                     value={brandingName}
                     onChange={(e) => { setBrandingName(e.target.value); markBrandingDirty(); }}
                     placeholder="e.g. Acme Corp"
                   />
                   <span className="cs-field-hint">Used throughout the app - sidebar, login page, browser title, and emails</span>
-                </div>
+                </SettingsField>
 
                 {/* Primary Color */}
-                <div className="company-settings__field">
+                <SettingsField className="company-settings__field">
                   <label>Primary Color</label>
                   <div className="cs-color-row">
                     <input
                       type="color"
                       value={brandingColor}
                       onChange={(e) => { setBrandingColor(e.target.value); markBrandingDirty(); }}
-                      className="cs-color-picker"
+                      aria-label="Primary color picker" className="cs-color-picker"
                     />
-                    <input
+                    <Input
                       type="text"
                       value={brandingColor}
                       onChange={(e) => { const v = e.target.value; if (/^#[0-9a-fA-F]{0,6}$/.test(v)) { setBrandingColor(v); markBrandingDirty(); } }}
                       placeholder="#0a6ed1"
-                      className="cs-color-hex"
+                      aria-label="Primary color hex value" className="cs-color-hex"
                       maxLength={7}
                     />
-                    <button
+                    <Button variant="outline" size="default"
                       type="button"
-                      className="cs-color-reset-btn"
+                      className="settings-action"
                       onClick={() => { setBrandingColor('#0a6ed1'); markBrandingDirty(); }}
                       title="Reset to default color"
                     >
                       <RotateCcw size={14} /> Reset
-                    </button>
+                    </Button>
                   </div>
                   <span className="cs-field-hint">Applied to buttons, links, highlights, and sidebar accent. Default: #0a6ed1</span>
-                </div>
+                </SettingsField>
 
                 {/* Logo Upload */}
-                <div className="company-settings__field">
+                <SettingsField className="company-settings__field">
                   <label>Logo</label>
                   <div className="cs-upload-row">
                     {brandingLogoUrl && (
@@ -3561,10 +3408,10 @@ export default function CompanySettingsPage() {
                       </span>
                     </label>
                     {brandingLogoUrl && (
-                      <button
-                        className="company-settings__icon-btn company-settings__icon-btn--danger"
+                      <Button aria-label={!canCreateSettings ? noPermissionTitle : "Remove logo"} type="button" variant="ghost" size="icon-sm"
+                        className="settings-action settings-icon--danger"
                         disabled={!canCreateSettings}
-                        style={!canCreateSettings ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
+
                         onClick={async () => {
                           if (!canCreateSettings) return;
                           try {
@@ -3586,71 +3433,71 @@ export default function CompanySettingsPage() {
                         title={!canCreateSettings ? noPermissionTitle : "Remove logo"}
                       >
                         <Trash2 size={14} />
-                      </button>
+                      </Button>
                     )}
                   </div>
                   <span className="cs-field-hint">Recommended: 200×60px PNG with transparent background. Max 2MB. (This logo will also be used as the website favicon)</span>
-                </div>
+                </SettingsField>
 
                 {/* Login Text */}
-                <div className="company-settings__field">
+                <SettingsField className="company-settings__field">
                   <label>Login Page Text</label>
-                  <input
+                  <Input
                     value={brandingLoginText}
                     onChange={(e) => { setBrandingLoginText(e.target.value); markBrandingDirty(); }}
                     placeholder="Digital Procurement & RFQ Workflow Platform"
                   />
                   <span className="cs-field-hint">Subtitle shown on the login page below the company name</span>
-                </div>
+                </SettingsField>
 
                 {/* Support Email */}
-                <div className="company-settings__field">
+                <SettingsField className="company-settings__field">
                   <label>Support Email</label>
-                  <input
+                  <Input
                     type="email"
                     value={brandingSupportEmail}
                     onChange={(e) => { setBrandingSupportEmail(e.target.value); markBrandingDirty(); }}
                     placeholder="support@example.com"
                   />
                   <span className="cs-field-hint">Shown in the app footer and login page footer</span>
-                </div>
+                </SettingsField>
 
                 {/* Company Phone */}
-                <div className="company-settings__field">
+                <SettingsField className="company-settings__field">
                   <label>Company Phone</label>
-                  <input
+                  <Input
                     type="tel"
                     value={brandingCompanyPhone}
                     onChange={(e) => { setBrandingCompanyPhone(e.target.value); markBrandingDirty(); }}
                     placeholder="+91 1234567890"
                   />
                   <span className="cs-field-hint">Shown on Purchase Order documents and contract templates</span>
-                </div>
+                </SettingsField>
 
                 {/* Company Email */}
-                <div className="company-settings__field">
+                <SettingsField className="company-settings__field">
                   <label>Company Email</label>
-                  <input
+                  <Input
                     type="email"
                     value={brandingCompanyEmail}
                     onChange={(e) => { setBrandingCompanyEmail(e.target.value); markBrandingDirty(); }}
                     placeholder="info@example.com"
                   />
                   <span className="cs-field-hint">Shown on Purchase Order documents and contract templates</span>
-                </div>
+                </SettingsField>
 
                 {/* Save Button */}
                 {brandingDirty && (
                   <div className="cs-branding-actions">
-                    <button
-                      className="company-settings__btn company-settings__btn--primary"
+                    <Button type="button" variant="default" size="default"
+                      className="settings-action"
                       onClick={handleSaveBranding}
                       disabled={savingBranding}
                     >
                       <Save size={16} /> {savingBranding ? 'Saving…' : 'Save Branding'}
-                    </button>
-                    <button
-                      className="company-settings__btn company-settings__btn--secondary"
+                    </Button>
+                    <Button type="button" variant="outline" size="default"
+                      className="settings-action"
                       onClick={() => {
                         brandingInitialized.current = false;
                         setBrandingDirty(false);
@@ -3661,11 +3508,13 @@ export default function CompanySettingsPage() {
                           setBrandingColor(profile.primaryColor || '#0a6ed1');
                           setBrandingLoginText(profile.loginText || '');
                           setBrandingSupportEmail(profile.supportEmail || '');
+                          setBrandingCompanyPhone(profile.companyPhone || '');
+                          setBrandingCompanyEmail(profile.companyEmail || '');
                         }
                       }}
                     >
                       <X size={16} /> Discard
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>
@@ -3678,7 +3527,7 @@ export default function CompanySettingsPage() {
           TAB: Departments & Categories
           ------------------------------------------------------- */}
       {activeTab === 'departments' && (
-        <div className="cs-tab-panel" role="tabpanel">
+        <div className="cs-tab-panel">
           <div className="cs-section-card">
             <div className="cs-section-header">
               <div className="cs-section-header__left">
@@ -3686,19 +3535,19 @@ export default function CompanySettingsPage() {
                 <p>Manage procurement departments and their vendor categories</p>
               </div>
               <div className="cs-section-header__actions">
-                <button className="company-settings__btn company-settings__btn--primary" onClick={() => openAddCat()}>
+                <Button type="button" variant="default" size="default" className="settings-action" onClick={() => openAddCat()}>
                   <Plus size={16} /> Add Category
-                </button>
-                <button className="company-settings__btn company-settings__btn--primary" onClick={openAddDept}>
+                </Button>
+                <Button type="button" variant="default" size="default" className="settings-action" onClick={openAddDept}>
                   <Plus size={16} /> Add Department
-                </button>
+                </Button>
               </div>
             </div>
             <div className="cs-section-body">
               {/* Search */}
               <div className="cs-dept-search">
                 <Search size={16} />
-                <input
+                <Input
                   type="text"
                   placeholder="Search departments..."
                   value={search}
@@ -3711,9 +3560,9 @@ export default function CompanySettingsPage() {
                 <div className="cs-empty">
                   <div className="cs-empty__icon"><Building2 size={28} /></div>
                   <p>No departments found. Add your first department to get started.</p>
-                  <button className="company-settings__btn company-settings__btn--primary" onClick={openAddDept}>
+                  <Button type="button" variant="default" size="default" className="settings-action" onClick={openAddDept}>
                     <Plus size={16} /> Add Department
-                  </button>
+                  </Button>
                 </div>
               ) : (
                 <div className="cs-dept-list">
@@ -3724,7 +3573,7 @@ export default function CompanySettingsPage() {
                       <div key={dept.id} className={`cs-dept ${!dept.isActive ? 'cs-dept--inactive' : ''}`}>
                         {/* Department Row */}
                         <div className="cs-dept__row">
-                          <button className="cs-dept__expand" onClick={() => toggleExpand(dept.id)}>
+                          <button className="cs-dept__expand" aria-expanded={isExpanded} aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${dept.name} categories`} onClick={() => toggleExpand(dept.id)}>
                             {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                           </button>
                           <Building2 size={18} className="cs-dept__icon" />
@@ -3732,24 +3581,24 @@ export default function CompanySettingsPage() {
                             <span className="cs-dept__name">{dept.name}</span>
                             {dept.description && <span className="cs-dept__desc">{dept.description}</span>}
                           </div>
-                          <span className="cs-dept__count">{deptCats.length} categories</span>
+                          <span className="cs-dept__count">{deptCats.length} {deptCats.length === 1 ? 'category' : 'categories'}</span>
                           <div className="cs-dept__actions">
                             <button
                               className={`company-settings__badge ${dept.isActive ? 'company-settings__badge--active' : 'company-settings__badge--inactive'}`}
                               onClick={() => toggleDeptActive(dept)}
                               title={dept.isActive ? 'Deactivate' : 'Activate'}
                             >
-                              {dept.isActive ? 'Active' : 'Inactive'}
+                              {dept.isActive ? <><CheckCircle2 size={12}/>Active</> : <><EyeOff size={12}/>Inactive</>}
                             </button>
-                            <button className="company-settings__icon-btn" onClick={() => { openAddCat(dept.id); }} title="Add category to this department">
+                            <Button aria-label="Add category to this department" type="button" variant="ghost" size="icon-sm" className="settings-action" onClick={() => { openAddCat(dept.id); }} title="Add category to this department">
                               <Plus size={14} />
-                            </button>
-                            <button className="company-settings__icon-btn" onClick={() => openEditDept(dept)} title="Edit department">
+                            </Button>
+                            <Button aria-label="Edit department" type="button" variant="ghost" size="icon-sm" className="settings-action" onClick={() => openEditDept(dept)} title="Edit department">
                               <Edit3 size={14} />
-                            </button>
-                            <button className="company-settings__icon-btn company-settings__icon-btn--danger" onClick={() => requestDeleteDept(dept)} title="Delete department">
+                            </Button>
+                            <Button aria-label="Delete department" type="button" variant="ghost" size="icon-sm" className="settings-action settings-icon--danger" onClick={() => requestDeleteDept(dept)} title="Delete department">
                               <Trash2 size={14} />
-                            </button>
+                            </Button>
                           </div>
                         </div>
 
@@ -3772,14 +3621,14 @@ export default function CompanySettingsPage() {
                                       onClick={() => toggleCatActive(cat)}
                                       title={cat.isActive ? 'Deactivate' : 'Activate'}
                                     >
-                                      {cat.isActive ? 'Active' : 'Inactive'}
+                                      {cat.isActive ? <><CheckCircle2 size={12}/>Active</> : <><EyeOff size={12}/>Inactive</>}
                                     </button>
-                                    <button className="company-settings__icon-btn" onClick={() => openEditCat(cat)} title="Edit category">
+                                    <Button aria-label="Edit category" type="button" variant="ghost" size="icon-sm" className="settings-action" onClick={() => openEditCat(cat)} title="Edit category">
                                       <Edit3 size={13} />
-                                    </button>
-                                    <button className="company-settings__icon-btn company-settings__icon-btn--danger" onClick={() => requestDeleteCat(cat)} title="Delete category">
+                                    </Button>
+                                    <Button aria-label="Delete category" type="button" variant="ghost" size="icon-sm" className="settings-action settings-icon--danger" onClick={() => requestDeleteCat(cat)} title="Delete category">
                                       <Trash2 size={13} />
-                                    </button>
+                                    </Button>
                                   </div>
                                 </div>
                               ))
@@ -3804,7 +3653,7 @@ export default function CompanySettingsPage() {
           TAB: Warehouses (SRM Logistics & Ship-To Locations)
           ------------------------------------------------------- */}
       {activeTab === 'warehouses' && (
-        <div className="cs-tab-panel" role="tabpanel">
+        <div className="cs-tab-panel">
           <div className="cs-section-card">
             <div className="cs-section-header">
               <div className="cs-section-header__left">
@@ -3812,15 +3661,15 @@ export default function CompanySettingsPage() {
                 <p>Manage central warehouses, regional hubs, site stores, and ship-to locations for PRs, POs, and GRNs.</p>
               </div>
               <div className="cs-section-header__actions">
-                <button
-                  className="company-settings__btn company-settings__btn--primary"
+                <Button type="button" variant="default" size="default"
+                  className="settings-action"
                   onClick={() => openWarehouseModal(null)}
                   disabled={!canCreateSettings}
-                  style={disabledActionStyle}
+
                   title={canCreateSettings ? undefined : noPermissionTitle}
                 >
                   <Plus size={16} /> Add Warehouse
-                </button>
+                </Button>
               </div>
             </div>
             <div className="cs-section-body">
@@ -3828,30 +3677,30 @@ export default function CompanySettingsPage() {
               <div className="cs-wh-toolbar">
                 <div className="cs-wh-search">
                   <Search size={15} />
-                  <input
+                  <Input
                     type="text"
                     placeholder="Search by Code, Name, Address, City or Manager..."
                     value={warehouseSearch}
                     onChange={(e) => setWarehouseSearch(e.target.value)}
                   />
                   {warehouseSearch && (
-                    <button className="cs-wh-clear" onClick={() => setWarehouseSearch('')}>
+                    <Button aria-label="Close" type="button" variant="ghost" size="icon-sm" className="settings-action settings-search-clear" onClick={() => setWarehouseSearch('')}>
                       <X size={14} />
-                    </button>
+                    </Button>
                   )}
                 </div>
                 <div className="cs-wh-filters">
-                  <select
+                  <Select
                     value={warehouseTypeFilter}
                     onChange={(e) => setWarehouseTypeFilter(e.target.value)}
-                    className="cs-wh-select"
+                    className="cs-wh-select" aria-label="Warehouse type filter"
                   >
                     <option value="ALL">All Types</option>
                     <option value="Central Warehouse">Central Warehouse</option>
                     <option value="Regional Hub">Regional Hub</option>
                     <option value="Site Store">Site Store</option>
                     <option value="Transit Center">Transit Center</option>
-                  </select>
+                  </Select>
                 </div>
               </div>
 
@@ -3860,20 +3709,20 @@ export default function CompanySettingsPage() {
                   <div className="cs-empty__icon"><Building2 size={28} /></div>
                   <p>{warehouses.length === 0 ? 'No warehouses defined yet. Add your first warehouse location.' : 'No matching warehouses found.'}</p>
                   {warehouses.length === 0 && (
-                    <button
-                      className="company-settings__btn company-settings__btn--primary"
+                    <Button type="button" variant="default" size="default"
+                      className="settings-action"
                       onClick={() => openWarehouseModal(null)}
                       disabled={!canCreateSettings}
-                      style={disabledActionStyle}
+
                       title={canCreateSettings ? undefined : noPermissionTitle}
                     >
                       <Plus size={16} /> Add Warehouse
-                    </button>
+                    </Button>
                   )}
                 </div>
               ) : (
                 <div className="cs-wh-table-wrap">
-                  <table className="cs-wh-table">
+                  <LandingTable key="settings-warehouses" preferenceKey="settings-warehouses" columns={WAREHOUSES_COLUMNS} className="cs-wh-table">
                     <thead>
                       <tr>
                         <th>Code</th>
@@ -3917,48 +3766,48 @@ export default function CompanySettingsPage() {
                                 <CheckCircle2 size={12} /> Default Ship-To
                               </span>
                             ) : (
-                              <button
+                              <Button variant="outline" size="default"
                                 type="button"
-                                className="cs-wh-btn-text"
+                                className="settings-action"
                                 onClick={() => handleSetDefaultWarehouse(wh.id)}
                                 disabled={!canCreateSettings}
-                                style={disabledActionStyle}
+
                               >
                                 Set Default
-                              </button>
+                              </Button>
                             )}
                           </td>
                           <td>
                             <span className={`company-settings__badge company-settings__badge--sm ${wh.isActive ? 'company-settings__badge--active' : 'company-settings__badge--inactive'}`}>
-                              {wh.isActive ? 'Active' : 'Inactive'}
+                              {wh.isActive ? <><CheckCircle2 size={12}/>Active</> : <><EyeOff size={12}/>Inactive</>}
                             </span>
                           </td>
                           <td>
                             <div className="cs-wh-actions">
-                              <button
-                                className="company-settings__icon-btn"
+                              <Button aria-label="Edit Warehouse" type="button" variant="ghost" size="icon-sm"
+                                className="settings-action"
                                 onClick={() => openWarehouseModal(wh)}
                                 title="Edit Warehouse"
                                 disabled={!canCreateSettings}
-                                style={disabledActionStyle}
+
                               >
                                 <Edit3 size={14} />
-                              </button>
-                              <button
-                                className="company-settings__icon-btn company-settings__icon-btn--danger"
+                              </Button>
+                              <Button aria-label="Delete Warehouse" type="button" variant="ghost" size="icon-sm"
+                                className="settings-action settings-icon--danger"
                                 onClick={() => requestDeleteWarehouse(wh)}
                                 title="Delete Warehouse"
                                 disabled={!canCreateSettings}
-                                style={disabledActionStyle}
+
                               >
                                 <Trash2 size={14} />
-                              </button>
+                              </Button>
                             </div>
                           </td>
                         </tr>
                       ))}
                     </tbody>
-                  </table>
+                  </LandingTable>
                 </div>
               )}
             </div>
@@ -3970,7 +3819,7 @@ export default function CompanySettingsPage() {
           TAB: Forms Settings
           ------------------------------------------------------- */}
       {activeTab === 'forms' && (
-        <div className="cs-tab-panel cs-mandatory-section" role="tabpanel">
+        <div className="cs-tab-panel cs-mandatory-section">
           {/* ── Form Selector ── */}
           <div className="cs-section-card">
             <div className="cs-section-header">
@@ -3981,8 +3830,8 @@ export default function CompanySettingsPage() {
             </div>
             <div className="cs-section-body">
               <div className="cs-form-selector" style={{ marginBottom: 24 }}>
-                <select
-                  className="cs-form-select"
+                <Select
+                  className="cs-form-select" aria-label="Form to configure"
                   value={selectedFormKey || ''}
                   onChange={(e) => {
                     if (e.target.value) handleSelectForm(e.target.value);
@@ -3992,7 +3841,7 @@ export default function CompanySettingsPage() {
                   {AVAILABLE_FORMS.map(form => (
                     <option key={form.key} value={form.key}>{form.label}</option>
                   ))}
-                </select>
+                </Select>
                 <ChevronDown size={14} className="cs-form-selector__arrow" />
               </div>
 
@@ -4003,7 +3852,7 @@ export default function CompanySettingsPage() {
                 </div>
               ) : (
                 <div className="cs-flexi-fields-section" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                  <div style={{ padding: 16, border: '1px solid var(--border, #e2e8f0)', borderRadius: 8, background: 'var(--surface-elevated, #f8fafc)' }}>
+                  <div className="settings-flexi-create">
                     <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary, #1e293b)' }}>
                       Add New Custom Flexi Field for {AVAILABLE_FORMS.find(f => f.key === selectedFormKey)?.label}
                     </h3>
@@ -4011,18 +3860,18 @@ export default function CompanySettingsPage() {
                       Pre-define new custom fields here so users on transaction screens can select and add them on demand.
                     </p>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
-                      <div className="company-settings__field" style={{ flex: '1 1 200px' }}>
+                      <SettingsField className="company-settings__field" style={{ flex: '1 1 200px' }}>
                         <label>Field Name</label>
-                        <input
+                        <Input
                           type="text"
                           placeholder="e.g. Emergency Contact / Project Code"
                           value={newFieldName}
                           onChange={(e) => setNewFieldName(e.target.value)}
                         />
-                      </div>
-                      <div className="company-settings__field" style={{ width: 180 }}>
+                      </SettingsField>
+                      <SettingsField className="company-settings__field" style={{ width: 180 }}>
                         <label>Type</label>
-                        <select
+                        <Select
                           value={newFieldType}
                           onChange={(e) => setNewFieldType(e.target.value)}
                         >
@@ -4032,24 +3881,24 @@ export default function CompanySettingsPage() {
                           <option value="date">Date</option>
                           <option value="dropdown">Dropdown</option>
                           <option value="attachment">Attachment</option>
-                        </select>
-                      </div>
+                        </Select>
+                      </SettingsField>
                       <div style={{ alignSelf: 'flex-end' }}>
-                        <button
+                        <Button variant="default" size="default"
                           type="button"
-                          className="company-settings__btn company-settings__btn--primary"
+                          className="settings-action"
                           onClick={handleAddCustomField}
                           disabled={addingFormField || !newFieldName.trim()}
                         >
                           <Plus size={14} /> {addingFormField ? 'Adding...' : 'Add Field'}
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   </div>
 
                   {/* ── Flexi Fields List ── */}
-                  <div style={{ border: '1px solid var(--border, #e2e8f0)', borderRadius: 8, overflow: 'hidden', background: 'var(--surface-card, #fff)' }}>
-                    <div style={{ padding: '12px 16px', background: 'var(--surface-elevated, #f1f5f9)', borderBottom: '1px solid var(--border, #e2e8f0)', fontWeight: 600, fontSize: 14, color: 'var(--text-primary, #1e293b)', display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 12, alignItems: 'center' }}>
+                  <div className="settings-flexi-list">
+                    <div className="settings-flexi-list-header" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 12, alignItems: 'center' }}>
                       <div>Field Name</div>
                       <div>Type</div>
                       <div>Status</div>
@@ -4084,7 +3933,7 @@ export default function CompanySettingsPage() {
                               <span style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary, #64748b)' }}>Key: {field.fieldKey}</span>
                             </div>
                             <div>
-                              <span style={{
+                              <span className="settings-field-type" style={{
                                 textTransform: 'capitalize',
                                 padding: '3px 10px',
                                 borderRadius: 12,
@@ -4098,32 +3947,23 @@ export default function CompanySettingsPage() {
                               </span>
                             </div>
                             <div>
-                              <button
+                              <Button className={`settings-action settings-field-visibility ${field.isVisible ? 'is-active' : ''}`} variant="outline" size="sm"
                                 type="button"
-                                style={{
-                                  padding: '3px 10px',
-                                  borderRadius: 12,
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  fontSize: 13,
-                                  fontWeight: 600,
-                                  background: field.isVisible ? 'rgba(34, 197, 94, 0.15)' : 'var(--surface-elevated, #f1f5f9)',
-                                  color: field.isVisible ? '#22c55e' : 'var(--text-secondary, #64748b)',
-                                }}
+
                                 onClick={() => field.id && handleToggleFormFieldVisibility(field.id, field.isVisible)}
                               >
-                                {field.isVisible ? 'Active' : 'Hidden'}
-                              </button>
+                                {field.isVisible ? <><CheckCircle2 size={14}/>Active</> : <><EyeOff size={14}/>Hidden</>}
+                              </Button>
                             </div>
                             <div style={{ width: 80, textAlign: 'right' }}>
-                              <button
+                              <Button aria-label="Delete field" variant="ghost" size="icon-sm"
                                 type="button"
-                                className="company-settings__icon-btn company-settings__icon-btn--danger"
+                                className="settings-action settings-icon--danger"
                                 onClick={() => field.id && handleDeleteFormField(field.id)}
                                 title="Delete field"
                               >
                                 <Trash2 size={14} />
-                              </button>
+                              </Button>
                             </div>
                           </div>
                         ))}
@@ -4141,21 +3981,21 @@ export default function CompanySettingsPage() {
           TAB: Required Documents
           ------------------------------------------------------- */}
       {activeTab === 'form-documents' && (
-        <div className="cs-tab-panel cs-mandatory-section" role="tabpanel">
+        <div className="cs-tab-panel cs-mandatory-section">
           <div className="cs-section-card">
             <div className="cs-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div className="cs-section-header__left">
                 <h2><FileCheck size={17} /> Required Documents</h2>
                 <p style={{ marginTop: 4 }}>
-                  Configure document types for the vendor onboarding form. Each document can be marked as Mandatory, Optional, or Any Other via its category dropdown.
+                  Configure document types for the vendor onboarding form. Choose Mandatory, Optional, or Any Other for each document.
                 </p>
               </div>
-              <button
-                className="company-settings__btn company-settings__btn--primary"
+              <Button type="button" variant="default" size="default"
+                className="settings-action"
                 onClick={() => addDocInline('mandatory')}
               >
                 <Plus size={14} /> Add Document
-              </button>
+              </Button>
             </div>
             <div className="cs-section-body">
               {requiredDocsLoading ? (
@@ -4186,67 +4026,76 @@ export default function CompanySettingsPage() {
                         <div className="cs-mandatory-item-label" style={{ fontWeight: 700, fontSize: 14.5 }}>
                           Document {idx + 1}
                         </div>
-                        <div className="company-settings__field">
-                          <input
+                        <SettingsField className="company-settings__field">
+                          <Input
+                            aria-label={`Document ${idx + 1} name`}
                             value={doc.name}
                             onChange={(e) => updateDocInline(doc.id, e.target.value)}
                             placeholder="e.g. Emirates ID / Trade License"
                             style={{ fontSize: 16.5, fontWeight: 700 }}
                           />
-                        </div>
+                        </SettingsField>
                         <div>
+                          <span className="settings-document-field-label">Date of Issue</span>
                           <label className={`cs-doc-toggle-pill ${(doc.trackIssueDate ?? true) ? 'cs-doc-toggle-pill--active' : ''}`}>
                             <input
                               type="checkbox"
+                              aria-label={`Track issue date for ${doc.name || `Document ${idx + 1}`}`}
                               checked={doc.trackIssueDate ?? true}
                               onChange={(e) => {
                                 setEditableDocs(prev => prev.map(d => d.id === doc.id ? { ...d, trackIssueDate: e.target.checked } : d));
                                 setDocsDirty(true);
                               }}
                             />
-                            {(doc.trackIssueDate ?? true) ? '✓ Enabled' : 'Disabled'}
+                            {(doc.trackIssueDate ?? true) ? 'Enabled' : 'Disabled'}
                           </label>
                         </div>
                         <div>
+                          <span className="settings-document-field-label">Date of Expiration</span>
                           <label className={`cs-doc-toggle-pill ${(doc.trackExpirationDate ?? true) ? 'cs-doc-toggle-pill--active' : ''}`}>
                             <input
                               type="checkbox"
+                              aria-label={`Track expiration date for ${doc.name || `Document ${idx + 1}`}`}
                               checked={doc.trackExpirationDate ?? true}
                               onChange={(e) => {
                                 setEditableDocs(prev => prev.map(d => d.id === doc.id ? { ...d, trackExpirationDate: e.target.checked } : d));
                                 setDocsDirty(true);
                               }}
                             />
-                            {(doc.trackExpirationDate ?? true) ? '✓ Enabled' : 'Disabled'}
+                            {(doc.trackExpirationDate ?? true) ? 'Enabled' : 'Disabled'}
                           </label>
                         </div>
                         <div>
+                          <span className="settings-document-field-label">Issuing Authority</span>
                           <label className={`cs-doc-toggle-pill ${(doc.trackIssuingAuthority ?? true) ? 'cs-doc-toggle-pill--active' : ''}`}>
                             <input
                               type="checkbox"
+                              aria-label={`Track issuing authority for ${doc.name || `Document ${idx + 1}`}`}
                               checked={doc.trackIssuingAuthority ?? true}
                               onChange={(e) => {
                                 setEditableDocs(prev => prev.map(d => d.id === doc.id ? { ...d, trackIssuingAuthority: e.target.checked } : d));
                                 setDocsDirty(true);
                               }}
                             />
-                            {(doc.trackIssuingAuthority ?? true) ? '✓ Enabled' : 'Disabled'}
+                            {(doc.trackIssuingAuthority ?? true) ? 'Enabled' : 'Disabled'}
                           </label>
                         </div>
                         <div>
-                          <input
+                          <span className="settings-document-field-label">Alert (Days)</span>
+                          <Input
                             type="number"
                             min={0}
                             max={365}
-                            className="cs-doc-number-input"
+                            className="cs-doc-number-input" aria-label={`Alert (Days) for ${doc.name || `Document ${idx + 1}`}`}
                             value={doc.expirationAlertDays ?? 30}
                             onChange={(e) => updateDocExpirationAlertDays(doc.id, Number(e.target.value))}
                             placeholder="e.g. 30"
                           />
                         </div>
                         <div>
-                          <select
-                            className="cs-doc-field-type"
+                          <span className="settings-document-field-label">Frequency</span>
+                          <Select
+                            className="cs-doc-field-type" aria-label={`Frequency for ${doc.name || `Document ${idx + 1}`}`}
                             value={doc.expirationAlertFrequency || 'DAILY'}
                             onChange={(e) => updateDocExpirationAlertFrequency(doc.id, e.target.value as 'DAILY' | 'WEEKLY' | 'MONTHLY')}
                             style={{ width: '100%', fontSize: 15.5, fontWeight: 600 }}
@@ -4254,11 +4103,12 @@ export default function CompanySettingsPage() {
                             <option value="DAILY">Daily</option>
                             <option value="WEEKLY">Weekly</option>
                             <option value="MONTHLY">Monthly</option>
-                          </select>
+                          </Select>
                         </div>
                         <div>
-                          <select
-                            className="cs-doc-category-select"
+                          <span className="settings-document-field-label">Category</span>
+                          <Select
+                            className="cs-doc-category-select" aria-label={`Category for ${doc.name || `Document ${idx + 1}`}`}
                             value={doc.documentCategory || 'mandatory'}
                             onChange={(e) => {
                               setEditableDocs(prev => prev.map(d => d.id === doc.id ? { ...d, documentCategory: e.target.value as 'mandatory' | 'optional' } : d));
@@ -4268,16 +4118,17 @@ export default function CompanySettingsPage() {
                           >
                             <option value="mandatory">Mandatory</option>
                             <option value="optional">Optional</option>
-                          </select>
+                            <option value="any_other">Any Other</option>
+                          </Select>
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                          <button
-                            className="company-settings__icon-btn company-settings__icon-btn--danger"
+                          <Button aria-label="Remove document" type="button" variant="ghost" size="icon-sm"
+                            className="settings-action settings-icon--danger"
                             onClick={() => removeDocInline(doc.id)}
                             title="Remove document"
                           >
                             <Trash2 size={14} />
-                          </button>
+                          </Button>
                         </div>
                       </div>
                     ))}
@@ -4286,24 +4137,25 @@ export default function CompanySettingsPage() {
               )}
 
               {/* -- Save Documents -- */}
+              {docsDirty && requiredDocumentErrors(editableDocs).length > 0 && <MessageStrip type="error">{requiredDocumentErrors(editableDocs).join(' ')}</MessageStrip>}
               {docsDirty && (
                 <div className="cs-mandatory-actions" style={{ marginTop: 24 }}>
-                  <button
-                    className="company-settings__btn company-settings__btn--primary"
+                  <Button type="button" variant="default" size="default"
+                    className="settings-action"
                     onClick={handleSaveDocs}
-                    disabled={savingDocs}
+                    disabled={savingDocs || requiredDocumentErrors(editableDocs).length > 0}
                   >
                     <Save size={16} /> {savingDocs ? 'Saving...' : 'Save Changes'}
-                  </button>
-                  <button
-                    className="company-settings__btn company-settings__btn--secondary"
+                  </Button>
+                  <Button type="button" variant="outline" size="default"
+                    className="settings-action"
                     onClick={() => {
                       setDocsDirty(false);
                       setEditableDocs(requiredDocuments);
                     }}
                   >
                     <X size={16} /> Discard
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
@@ -4315,7 +4167,7 @@ export default function CompanySettingsPage() {
           TAB: Email Templates
           ------------------------------------------------------- */}
       {activeTab === 'email-templates' && (
-        <div className="cs-tab-panel" role="tabpanel">
+        <div className="cs-tab-panel">
           <div className="cs-section-card">
             <div className="cs-section-header">
               <div className="cs-section-header__left">
@@ -4323,7 +4175,7 @@ export default function CompanySettingsPage() {
                 <p>Customize the paragraph content of all emails sent by the system. The format and structure will remain the same.</p>
               </div>
             </div>
-            <div className="cs-section-body" style={{ padding: 0 }}>
+            <div className="cs-section-body">
               {emailTemplatesLoading ? (
                 <TableSkeleton rows={4} />
               ) : !selectedTemplateKey ? (
@@ -4331,10 +4183,11 @@ export default function CompanySettingsPage() {
                 <div className="cs-dt-table-wrapper">
                   <div className="cs-dt-toolbar">
                     <div className="cs-dt-toolbar__left">
-                      <div className="cs-dt-type-tabs">
+                      <div className="cs-dt-type-tabs" role="group" aria-label="Filter email templates">
                         <button
                           type="button"
                           className={`cs-dt-type-tab ${emailFilterType === 'ALL' ? 'cs-dt-type-tab--active' : ''}`}
+                          aria-pressed={emailFilterType === 'ALL'}
                           onClick={() => setEmailFilterType('ALL')}
                         >
                           All ({EMAIL_TEMPLATE_KEYS.length})
@@ -4342,6 +4195,7 @@ export default function CompanySettingsPage() {
                         <button
                           type="button"
                           className={`cs-dt-type-tab ${emailFilterType === 'CUSTOMIZED' ? 'cs-dt-type-tab--active' : ''}`}
+                          aria-pressed={emailFilterType === 'CUSTOMIZED'}
                           onClick={() => setEmailFilterType('CUSTOMIZED')}
                         >
                           Customized
@@ -4349,6 +4203,7 @@ export default function CompanySettingsPage() {
                         <button
                           type="button"
                           className={`cs-dt-type-tab ${emailFilterType === 'DEFAULT' ? 'cs-dt-type-tab--active' : ''}`}
+                          aria-pressed={emailFilterType === 'DEFAULT'}
                           onClick={() => setEmailFilterType('DEFAULT')}
                         >
                           Default
@@ -4357,7 +4212,7 @@ export default function CompanySettingsPage() {
 
                       <div className="cs-dt-search-box">
                         <Search size={14} className="cs-dt-search-icon" />
-                        <input
+                        <Input
                           type="text"
                           placeholder="Search email templates…"
                           value={emailSearchQuery}
@@ -4365,16 +4220,16 @@ export default function CompanySettingsPage() {
                           className="cs-dt-search-input"
                         />
                         {emailSearchQuery && (
-                          <button type="button" className="cs-dt-search-clear" onClick={() => setEmailSearchQuery('')}>
+                          <Button aria-label="Close" variant="ghost" size="icon-sm" type="button" className="settings-action settings-search-clear" onClick={() => setEmailSearchQuery('')}>
                             <X size={12} />
-                          </button>
+                          </Button>
                         )}
                       </div>
                     </div>
                   </div>
 
                   <div className="cs-dt-table-container">
-                    <table className="cs-dt-table">
+                    <LandingTable key="settings-email-templates" preferenceKey="settings-email-templates" columns={EMAIL_TEMPLATES_COLUMNS} className="cs-dt-table">
                       <thead>
                         <tr>
                           <th style={{ width: 100, textAlign: 'center' }}>Actions</th>
@@ -4401,14 +4256,14 @@ export default function CompanySettingsPage() {
                               <tr key={key} className="cs-dt-table-row">
                                 <td className="cs-dt-table-cell cs-dt-table-cell--actions">
                                   <div className="cs-dt-action-btns">
-                                    <button
+                                    <Button aria-label="Edit Email Template" variant="ghost" size="icon-sm"
                                       type="button"
-                                      className="cs-dt-action-btn cs-dt-action-btn--edit"
+                                      className="settings-action"
                                       onClick={() => handleSelectTemplate(key)}
                                       title="Edit Email Template"
                                     >
                                       <Edit3 size={13} />
-                                    </button>
+                                    </Button>
                                   </div>
                                 </td>
 
@@ -4436,7 +4291,7 @@ export default function CompanySettingsPage() {
                           })
                         )}
                       </tbody>
-                    </table>
+                    </LandingTable>
                   </div>
                 </div>
               ) : (
@@ -4444,9 +4299,9 @@ export default function CompanySettingsPage() {
                 <ErrorBoundary>
                   <div className="cs-dt-detail">
                     <div className="cs-dt-detail__topbar">
-                      <button
+                      <Button variant="outline" size="default"
                         type="button"
-                        className="cs-dt-detail__back"
+                        className="settings-action"
                         onClick={() => {
                           if (templateDirty) {
                             setConfirmModalConfig({
@@ -4471,7 +4326,7 @@ export default function CompanySettingsPage() {
                       >
                         <ArrowRight size={15} style={{ transform: 'rotate(180deg)' }} />
                         Back to Templates
-                      </button>
+                      </Button>
                       <div className="cs-dt-detail__breadcrumb">
                         <span className="cs-dt-detail__breadcrumb-type">Email Template</span>
                         <span className="cs-dt-detail__breadcrumb-sep">›</span>
@@ -4481,23 +4336,23 @@ export default function CompanySettingsPage() {
                         {templateDirty ? 'Unsaved changes' : isDefaultTemplate ? 'Using default' : 'Customized'}
                       </span>
                       <div className="cs-dt-detail__actions">
-                        <button
+                        <Button variant="outline" size="default"
                           type="button"
-                          className="cs-dt-detail__sec-btn"
+                          className="settings-action"
                           onClick={handleResetTemplate}
                           disabled={savingTemplate}
                         >
                           <RotateCcw size={14} /> Reset
-                        </button>
-                        <button
+                        </Button>
+                        <Button variant="default" size="default"
                           type="button"
-                          className="cs-dt-detail__save-btn"
+                          className="settings-action"
                           onClick={handleSaveTemplate}
                           disabled={savingTemplate || !templateDirty}
                         >
                           <Save size={15} />
                           {savingTemplate ? 'Saving…' : 'Save'}
-                        </button>
+                        </Button>
                       </div>
                     </div>
 
@@ -4541,29 +4396,17 @@ export default function CompanySettingsPage() {
           TAB: Documents & Contracts (Merged Tab)
           ------------------------------------------------------- */}
       {activeTab === 'documents-contracts' && (
-        <div className="cs-tab-panel" role="tabpanel">
+        <div className="cs-tab-panel">
 
           {/* ── Sub-Navigation Pill Bar ── */}
-          <div className="cs-subtab-bar">
-            <button
-              type="button"
-              className={`cs-subtab-btn ${docContractSubTab === 'contracts' ? 'cs-subtab-btn--active' : ''}`}
-              onClick={() => setDocContractSubTab('contracts')}
-            >
-              <FileText size={15} /> Contract Templates ({contractTemplates.length})
-            </button>
-            <button
-              type="button"
-              className={`cs-subtab-btn ${docContractSubTab === 'doc-templates' ? 'cs-subtab-btn--active' : ''}`}
-              onClick={() => setDocContractSubTab('doc-templates')}
-            >
-              <FileSignature size={15} /> Document Templates ({documentTemplates.length})
-            </button>
-          </div>
+          <DetailTabs id="settings-templates" label="Template category" activeTab={docContractSubTab} onChange={value=>setDocContractSubTab(value as 'contracts'|'doc-templates')} tabs={[
+            {id:'contracts', label:'Contract Templates', icon:FileText, count:contractTemplates.length},
+            {id:'doc-templates', label:'Document Templates', icon:FileSignature, count:documentTemplates.length},
+          ]}/>
 
           {/* ── Sub-Tab 1: Contract Templates ── */}
           {docContractSubTab === 'contracts' && (
-            <div className="cs-section-card">
+            <div className="cs-section-card" role="tabpanel" id="settings-templates-panel-contracts" aria-labelledby="settings-templates-tab-contracts">
               <div className="cs-section-header">
                 <div className="cs-section-header__left">
                   <h2><FileText size={17} /> Contract Templates</h2>
@@ -4590,7 +4433,7 @@ export default function CompanySettingsPage() {
 
                         <div className="cs-dt-search-box">
                           <Search size={14} className="cs-dt-search-icon" />
-                          <input
+                          <Input
                             type="text"
                             placeholder="Search contract templates…"
                             value={contractSearchQuery}
@@ -4598,9 +4441,9 @@ export default function CompanySettingsPage() {
                             className="cs-dt-search-input"
                           />
                           {contractSearchQuery && (
-                            <button type="button" className="cs-dt-search-clear" onClick={() => setContractSearchQuery('')}>
+                            <Button aria-label="Close" variant="ghost" size="icon-sm" type="button" className="settings-action settings-search-clear" onClick={() => setContractSearchQuery('')}>
                               <X size={12} />
-                            </button>
+                            </Button>
                           )}
                         </div>
                       </div>
@@ -4608,7 +4451,7 @@ export default function CompanySettingsPage() {
                       <div className="cs-dt-toolbar__right">
                         {editingNewContractType ? (
                           <div className="cs-dt-new-inline-form">
-                            <input
+                            <Input
                               type="text"
                               placeholder="Contract Type Name (e.g. Lease Contract)"
                               value={newContractTypeName}
@@ -4616,39 +4459,39 @@ export default function CompanySettingsPage() {
                               className="cs-dt-new-input"
                               autoFocus
                             />
-                            <button
+                            <Button variant="default" size="default"
                               type="button"
-                              className="company-settings__btn company-settings__btn--primary"
+                              className="settings-action"
                               onClick={handleCreateNewContractType}
                               disabled={!newContractTypeName.trim() || savingContractTemplate}
-                              style={{ padding: '5px 10px', fontSize: 13 }}
+
                             >
                               {savingContractTemplate ? 'Adding…' : 'Add'}
-                            </button>
-                            <button
+                            </Button>
+                            <Button aria-label="Close" variant="ghost" size="icon-sm"
                               type="button"
-                              className="company-settings__btn company-settings__btn--secondary"
+                              className="settings-action"
                               onClick={() => { setEditingNewContractType(false); setNewContractTypeName(''); }}
-                              style={{ padding: '5px 8px', fontSize: 13 }}
+
                             >
                               <X size={13} />
-                            </button>
+                            </Button>
                           </div>
                         ) : (
-                          <button
+                          <Button variant="default" size="default"
                             type="button"
-                            className="company-settings__btn company-settings__btn--primary"
+                            className="settings-action"
                             onClick={() => setEditingNewContractType(true)}
-                            style={{ gap: 6 }}
+
                           >
                             <Plus size={14} /> New Contract Template
-                          </button>
+                          </Button>
                         )}
                       </div>
                     </div>
 
                     <div className="cs-dt-table-container">
-                      <table className="cs-dt-table">
+                      <LandingTable key="settings-contract-templates" preferenceKey="settings-contract-templates" columns={CONTRACT_TEMPLATES_COLUMNS} className="cs-dt-table">
                         <thead>
                           <tr>
                             <th style={{ width: 100, textAlign: 'center' }}>Actions</th>
@@ -4670,63 +4513,63 @@ export default function CompanySettingsPage() {
                               <tr key={t.type} className="cs-dt-table-row">
                                 <td className="cs-dt-table-cell cs-dt-table-cell--actions">
                                   <div className="cs-dt-action-btns">
-                                    <button
+                                    <Button aria-label="Edit Template" variant="ghost" size="icon-sm"
                                       type="button"
-                                      className="cs-dt-action-btn cs-dt-action-btn--edit"
+                                      className="settings-action"
                                       onClick={() => handleSelectContractType(t.type)}
                                       title="Edit Template"
                                     >
                                       <Edit3 size={13} />
-                                    </button>
-                                    <button
+                                    </Button>
+                                    <Button aria-label="Rename" variant="ghost" size="icon-sm"
                                       type="button"
-                                      className="cs-dt-action-btn"
+                                      className="settings-action"
                                       onClick={() => { setRenamingContractType(t.type); setRenamingContractTypeName(t.name); }}
                                       title="Rename"
                                     >
                                       <FileText size={13} />
-                                    </button>
-                                    <button
+                                    </Button>
+                                    <Button aria-label="Delete" variant="ghost" size="icon-sm"
                                       type="button"
-                                      className="cs-dt-action-btn cs-dt-action-btn--delete"
+                                      className="settings-action settings-icon--danger"
                                       onClick={() => handleDeleteContractType(t.type)}
                                       title="Delete"
                                     >
                                       <Trash2 size={13} />
-                                    </button>
+                                    </Button>
                                   </div>
                                 </td>
 
                                 <td className="cs-dt-table-cell">
                                   {renamingContractType === t.type ? (
                                     <div className="cs-dt-inline-rename">
-                                      <input
+                                      <Input
                                         type="text"
                                         value={renamingContractTypeName}
                                         onChange={(e) => setRenamingContractTypeName(e.target.value)}
-                                        className="cs-dt-inline-rename-input"
+                                        className="cs-dt-inline-rename-input" aria-label="Template name"
                                         autoFocus
                                         onKeyDown={(e) => {
                                           if (e.key === 'Enter') handleRenameContractType(t.type, renamingContractTypeName);
                                           if (e.key === 'Escape') setRenamingContractType(null);
                                         }}
                                       />
-                                      <button
+                                      <Button variant="default" size="default"
                                         type="button"
-                                        className="company-settings__btn company-settings__btn--primary"
+                                        className="settings-action"
                                         onClick={() => handleRenameContractType(t.type, renamingContractTypeName)}
-                                        style={{ padding: '3px 8px', fontSize: 12 }}
+
                                       >
                                         Save
-                                      </button>
-                                      <button
+                                      </Button>
+                                      <Button aria-label="Close" variant="ghost" size="icon-sm"
                                         type="button"
-                                        className="company-settings__btn company-settings__btn--secondary"
+                                        className="settings-action"
                                         onClick={() => setRenamingContractType(null)}
-                                        style={{ padding: '3px 6px', fontSize: 12 }}
+
                                       >
                                         <X size={11} />
-                                      </button>
+                                      </Button>
                                     </div>
                                   ) : (
                                     <div
@@ -4758,7 +4601,7 @@ export default function CompanySettingsPage() {
                             ))
                           )}
                         </tbody>
-                      </table>
+                      </LandingTable>
                     </div>
                   </div>
                 ) : (
@@ -4766,9 +4609,9 @@ export default function CompanySettingsPage() {
                   <ErrorBoundary>
                     <div className="cs-dt-detail">
                       <div className="cs-dt-detail__topbar">
-                        <button
+                        <Button variant="outline" size="default"
                           type="button"
-                          className="cs-dt-detail__back"
+                          className="settings-action"
                           onClick={() => {
                             if (contractTemplateDirty) {
                               setConfirmModalConfig({
@@ -4795,7 +4638,7 @@ export default function CompanySettingsPage() {
                         >
                           <ArrowRight size={15} style={{ transform: 'rotate(180deg)' }} />
                           Back to Templates
-                        </button>
+                        </Button>
                         <div className="cs-dt-detail__breadcrumb">
                           <span className="cs-dt-detail__breadcrumb-type">{selectedContractTemplate?.name || selectedContractTemplate?.type}</span>
                           <span className="cs-dt-detail__breadcrumb-sep">›</span>
@@ -4813,23 +4656,24 @@ export default function CompanySettingsPage() {
                           {contractTemplateDirty ? 'Unsaved changes' : contractTemplateIsDefault ? 'Default' : 'Customized'}
                         </span>
                         <div className="cs-dt-detail__actions">
-                          <button
+                          <Button type="button" variant="outline" onClick={()=>setContractPreviewOpen(true)} disabled={!editedContractContent}><Eye size={15}/>Preview Template</Button>
+                          <Button variant="outline" size="default"
                             type="button"
-                            className="cs-dt-detail__sec-btn"
+                            className="settings-action"
                             onClick={handleResetContractTemplate}
                             disabled={savingContractTemplate || contractTemplateIsDefault}
                           >
                             <RotateCcw size={14} /> Reset
-                          </button>
-                          <button
+                          </Button>
+                          <Button variant="default" size="default"
                             type="button"
-                            className="cs-dt-detail__save-btn"
+                            className="settings-action"
                             onClick={handleSaveContractTemplate}
                             disabled={savingContractTemplate || !contractTemplateDirty}
                           >
                             <Save size={15} />
                             {savingContractTemplate ? 'Saving…' : 'Save'}
-                          </button>
+                          </Button>
                         </div>
                       </div>
 
@@ -4850,9 +4694,9 @@ export default function CompanySettingsPage() {
                                   <FileText size={13} />
                                   <span>{selectedContractTemplate.fileName || 'Uploaded document'}</span>
                                   <a href={selectedContractTemplate.fileUrl} target="_blank" rel="noopener noreferrer" className="cs-dt-upload-strip__view">View</a>
-                                  <button
+                                  <Button aria-label="Remove" variant="ghost" size="icon-sm"
                                     type="button"
-                                    className="cs-dt-upload-strip__remove"
+                                    className="settings-action"
                                     onClick={async () => {
                                       if (!selectedContractType) return;
                                       try {
@@ -4876,7 +4720,7 @@ export default function CompanySettingsPage() {
                                     title="Remove"
                                   >
                                     <Trash2 size={12} />
-                                  </button>
+                                  </Button>
                                 </div>
                               ) : (
                                 <label className="cs-dt-upload-strip__btn">
@@ -4933,9 +4777,8 @@ export default function CompanySettingsPage() {
                                 </label>
                               )}
 
-                              <button
-                                type="button"
-                                className="cs-dt-ocr-btn"
+                              <Button
+                                type="button" variant="outline" className="settings-action"
                                 onClick={() => {
                                   if (!selectedContractTemplate?.fileUrl) {
                                     setPageMsg('Please upload a PDF/DOC file first before running OCR.');
@@ -4959,13 +4802,12 @@ export default function CompanySettingsPage() {
                                 ) : (
                                   <><FileText size={13} /> Run OCR & Insert Text</>
                                 )}
-                              </button>
+                              </Button>
                             </div>
                           </div>
 
                           <div
                             className="cs-dt-detail__editor-wrap"
-                            style={sidebarHeight ? { height: `${sidebarHeight}px` } : undefined}
                           >
                             <div className="cs-dt-detail__editor-label">
                               <FileSignature size={14} /> Contract Template Content
@@ -4981,7 +4823,7 @@ export default function CompanySettingsPage() {
                         </div>
 
                         {/* Right Sidebar Column: Interactive Placeholders & Company Signature */}
-                        <div className="cs-dt-detail__sidebar-col" ref={sidebarRef}>
+                        <div className="cs-dt-detail__sidebar-col">
                           <div className="cs-doc-placeholders">
                             <div className="cs-doc-placeholders__header">
                               <div className="cs-doc-placeholders__title">
@@ -5001,7 +4843,7 @@ export default function CompanySettingsPage() {
                                   className={`cs-doc-placeholders__tab ${selectedPlaceholderCategory === cat.id ? 'cs-doc-placeholders__tab--active' : ''}`}
                                   onClick={() => setSelectedPlaceholderCategory(cat.id)}
                                 >
-                                  {cat.label}
+                                  {(() => { const Icon = ({company:Building2,vendor:Users,contract:FileText,commercial:CreditCard,signature:FileSignature,all:Tag} as const)[cat.id]; return <><Icon size={13}/>{cat.id === 'all' ? cat.label : cat.label.substring(cat.label.indexOf(' ') + 1)}</>; })()}
                                 </button>
                               ))}
                             </div>
@@ -5054,7 +4896,7 @@ export default function CompanySettingsPage() {
 
           {/* ── Sub-Tab 2: Document Templates (NDA/MNDA) ── */}
           {docContractSubTab === 'doc-templates' && (
-            <div className="cs-section-card">
+            <div className="cs-section-card" role="tabpanel" id="settings-templates-panel-doc-templates" aria-labelledby="settings-templates-tab-doc-templates">
               <div className="cs-section-header">
                 <div className="cs-section-header__left">
                   <h2><FileSignature size={17} /> Document Templates (NDA & MNDA)</h2>
@@ -5069,9 +4911,9 @@ export default function CompanySettingsPage() {
                   <ErrorBoundary>
                     <div className="cs-dt-detail">
                       <div className="cs-dt-detail__topbar">
-                        <button
+                        <Button variant="outline" size="default"
                           type="button"
-                          className="cs-dt-detail__back"
+                          className="settings-action"
                           onClick={() => {
                             if (docTemplateDirty) {
                               setConfirmModalConfig({
@@ -5098,7 +4940,7 @@ export default function CompanySettingsPage() {
                         >
                           <ArrowRight size={15} style={{ transform: 'rotate(180deg)' }} />
                           Back to Templates
-                        </button>
+                        </Button>
                         <div className="cs-dt-detail__breadcrumb">
                           <span className="cs-dt-detail__breadcrumb-type">{selectedDocTemplate?.type}</span>
                           <span className="cs-dt-detail__breadcrumb-sep">›</span>
@@ -5108,23 +4950,23 @@ export default function CompanySettingsPage() {
                           {docTemplateDirty ? 'Unsaved changes' : docTemplateIsDefault ? 'Default' : 'Customized'}
                         </span>
                         <div className="cs-dt-detail__actions">
-                          <button
+                          <Button variant="outline" size="default"
                             type="button"
-                            className="cs-dt-detail__sec-btn"
+                            className="settings-action"
                             onClick={handleResetDocTemplate}
                             disabled={savingDocTemplate}
                           >
                             <RotateCcw size={14} /> Reset
-                          </button>
-                          <button
+                          </Button>
+                          <Button variant="default" size="default"
                             type="button"
-                            className="cs-dt-detail__save-btn"
+                            className="settings-action"
                             onClick={handleSaveDocTemplate}
                             disabled={savingDocTemplate || !docTemplateDirty}
                           >
                             <Save size={15} />
                             {savingDocTemplate ? 'Saving…' : 'Save'}
-                          </button>
+                          </Button>
                         </div>
                       </div>
 
@@ -5132,7 +4974,7 @@ export default function CompanySettingsPage() {
                         <div className="cs-dt-detail__editor-col">
                           <div className="cs-dt-detail__name-row">
                             <label className="cs-dt-detail__name-label">Template Name</label>
-                            <input
+                            <Input
                               value={editedDocName || ''}
                               onChange={(e) => handleDocNameChange(e.target.value)}
                               placeholder="Template Name"
@@ -5154,9 +4996,9 @@ export default function CompanySettingsPage() {
                                   <FileText size={13} />
                                   <span>{selectedDocTemplate.fileName || 'Uploaded document'}</span>
                                   <a href={selectedDocTemplate.fileUrl} target="_blank" rel="noopener noreferrer" className="cs-dt-upload-strip__view">View</a>
-                                  <button type="button" className="cs-dt-upload-strip__remove" onClick={handleRemoveDocumentFile} disabled={docFileUploading || !canCreateSettings} title="Remove">
+                                  <Button aria-label="Remove" variant="ghost" size="icon-sm" type="button" className="settings-action" onClick={handleRemoveDocumentFile} disabled={docFileUploading || !canCreateSettings} title="Remove">
                                     <Trash2 size={12} />
-                                  </button>
+                                  </Button>
                                 </div>
                               ) : (
                                 <label className="cs-dt-upload-strip__btn">
@@ -5165,9 +5007,8 @@ export default function CompanySettingsPage() {
                                 </label>
                               )}
 
-                              <button
-                                type="button"
-                                className="cs-dt-ocr-btn"
+                              <Button
+                                type="button" variant="outline" className="settings-action"
                                 onClick={() => {
                                   if (!selectedDocTemplate?.fileUrl) {
                                     setPageMsg('Please upload a PDF/DOC file first before running OCR.');
@@ -5191,7 +5032,7 @@ export default function CompanySettingsPage() {
                                 ) : (
                                   <><FileText size={13} /> Run OCR & Insert Text</>
                                 )}
-                              </button>
+                              </Button>
                             </div>
                           </div>
 
@@ -5257,7 +5098,7 @@ export default function CompanySettingsPage() {
 
                         <div className="cs-dt-search-box">
                           <Search size={14} className="cs-dt-search-icon" />
-                          <input
+                          <Input
                             type="text"
                             value={docSearchQuery}
                             onChange={(e) => setDocSearchQuery(e.target.value)}
@@ -5265,9 +5106,9 @@ export default function CompanySettingsPage() {
                             className="cs-dt-search-input"
                           />
                           {docSearchQuery && (
-                            <button type="button" className="cs-dt-search-clear" onClick={() => setDocSearchQuery('')}>
+                            <Button aria-label="Close" variant="ghost" size="icon-sm" type="button" className="settings-action settings-search-clear" onClick={() => setDocSearchQuery('')}>
                               <X size={12} />
-                            </button>
+                            </Button>
                           )}
                         </div>
                       </div>
@@ -5275,16 +5116,16 @@ export default function CompanySettingsPage() {
                       <div className="cs-dt-toolbar__right">
                         {editingNewDoc ? (
                           <div className="cs-dt-new-inline-form">
-                            <select
+                            <Select
                               value={editingNewDoc}
                               onChange={(e) => setEditingNewDoc(e.target.value as 'NDA' | 'MNDA' | 'ANY_OTHER')}
-                              className="cs-dt-new-select"
+                              className="cs-dt-new-select" aria-label="New document type"
                             >
                               <option value="NDA">NDA</option>
                               <option value="MNDA">MNDA</option>
                               <option value="ANY_OTHER">Any Other Document</option>
-                            </select>
-                            <input
+                            </Select>
+                            <Input
                               type="text"
                               value={newDocName}
                               onChange={(e) => setNewDocName(e.target.value)}
@@ -5296,39 +5137,39 @@ export default function CompanySettingsPage() {
                                 if (e.key === 'Escape') { setEditingNewDoc(null); setNewDocName(''); }
                               }}
                             />
-                            <button
+                            <Button variant="default" size="default"
                               type="button"
-                              className="company-settings__btn company-settings__btn--primary"
+                              className="settings-action"
                               onClick={() => handleCreateNewDocTemplate(editingNewDoc)}
                               disabled={!newDocName.trim() || savingDocTemplate}
-                              style={{ padding: '6px 12px', fontSize: 13 }}
+
                             >
                               <Plus size={13} /> {savingDocTemplate ? 'Creating…' : 'Create'}
-                            </button>
-                            <button
+                            </Button>
+                            <Button variant="outline" size="default"
                               type="button"
-                              className="company-settings__btn company-settings__btn--secondary"
+                              className="settings-action"
                               onClick={() => { setEditingNewDoc(null); setNewDocName(''); }}
-                              style={{ padding: '6px 10px', fontSize: 13 }}
+
                             >
                               Cancel
-                            </button>
+                            </Button>
                           </div>
                         ) : (
-                          <button
+                          <Button variant="default" size="default"
                             type="button"
-                            className="company-settings__btn company-settings__btn--primary"
+                            className="settings-action"
                             onClick={() => { setEditingNewDoc('NDA'); setNewDocName(''); }}
                           >
                             <Plus size={15} /> Add Document
-                          </button>
+                          </Button>
                         )}
                       </div>
                     </div>
 
                     {/* ── Data Table ── */}
                     <div className="cs-dt-table-container">
-                      <table className="cs-dt-table">
+                      <LandingTable key="settings-document-templates" preferenceKey="settings-document-templates" columns={DOCUMENT_TEMPLATES_COLUMNS} className="cs-dt-table">
                         <thead>
                           <tr>
                             <th style={{ width: 110, textAlign: 'center' }}>Actions</th>
@@ -5351,62 +5192,62 @@ export default function CompanySettingsPage() {
                               <tr key={tmpl.id} className="cs-dt-table-row">
                                 <td className="cs-dt-table-cell cs-dt-table-cell--actions">
                                   <div className="cs-dt-action-btns">
-                                    <button
+                                    <Button aria-label="Edit Template" variant="ghost" size="icon-sm"
                                       type="button"
-                                      className="cs-dt-action-btn cs-dt-action-btn--edit"
+                                      className="settings-action"
                                       onClick={() => handleSelectDocTemplate(tmpl.id)}
                                       title="Edit Template"
                                     >
                                       <Edit3 size={13} />
-                                    </button>
-                                    <button
+                                    </Button>
+                                    <Button aria-label="Rename" variant="ghost" size="icon-sm"
                                       type="button"
-                                      className="cs-dt-action-btn"
+                                      className="settings-action"
                                       onClick={() => { setRenamingDocId(tmpl.id); setRenamingDocName(tmpl.name); }}
                                       title="Rename"
                                     >
                                       <FileText size={13} />
-                                    </button>
-                                    <button
+                                    </Button>
+                                    <Button aria-label="Delete" variant="ghost" size="icon-sm"
                                       type="button"
-                                      className="cs-dt-action-btn cs-dt-action-btn--delete"
+                                      className="settings-action settings-icon--danger"
                                       onClick={() => handleDeleteDocTemplate(tmpl.id)}
                                       title="Delete"
                                     >
                                       <Trash2 size={13} />
-                                    </button>
+                                    </Button>
                                   </div>
                                 </td>
                                 <td className="cs-dt-table-cell">
                                   {renamingDocId === tmpl.id ? (
                                     <div className="cs-dt-inline-rename">
-                                      <input
+                                      <Input
                                         type="text"
                                         value={renamingDocName}
                                         onChange={(e) => setRenamingDocName(e.target.value)}
-                                        className="cs-dt-inline-rename-input"
+                                        className="cs-dt-inline-rename-input" aria-label="Template name"
                                         autoFocus
                                         onKeyDown={(e) => {
-                                          if (e.key === 'Enter') handleRenameDocTemplate(tmpl.id, renamingDocName);
+                                          if (e.key === 'Enter') handleRenameDocTemplate(tmpl.id);
                                           if (e.key === 'Escape') setRenamingDocId(null);
                                         }}
                                       />
-                                      <button
+                                      <Button variant="default" size="default"
                                         type="button"
-                                        className="company-settings__btn company-settings__btn--primary"
-                                        onClick={() => handleRenameDocTemplate(tmpl.id, renamingDocName)}
-                                        style={{ padding: '3px 8px', fontSize: 12 }}
+                                        className="settings-action"
+                                        onClick={() => handleRenameDocTemplate(tmpl.id)}
+
                                       >
                                         Save
-                                      </button>
-                                      <button
+                                      </Button>
+                                      <Button aria-label="Close" variant="ghost" size="icon-sm"
                                         type="button"
-                                        className="company-settings__btn company-settings__btn--secondary"
+                                        className="settings-action"
                                         onClick={() => setRenamingDocId(null)}
-                                        style={{ padding: '3px 6px', fontSize: 12 }}
+
                                       >
                                         <X size={11} />
-                                      </button>
+                                      </Button>
                                     </div>
                                   ) : (
                                     <div
@@ -5443,7 +5284,7 @@ export default function CompanySettingsPage() {
                             ))
                           )}
                         </tbody>
-                      </table>
+                      </LandingTable>
                     </div>
                   </div>
                 )}
@@ -5455,33 +5296,37 @@ export default function CompanySettingsPage() {
 
         </div>
       )}
-      {/* ---- MODALS (unchanged logic) ------ */}
+      {activeTab === 'doc-serialization' && <SerializationWorkspace
+        sequences={sequences} edits={seqEdits} loading={seqLoading} saving={seqSaving} error={seqErrMsg}
+        canManage={canCreateSettings} assigning={isBackfilling} onChange={handleSeqFieldChange}
+        onSave={handleSeqSave} onAssignSuppliers={handleBackfillSuppliers} onRetry={fetchSequences}
+        onDiscard={entityType=>setSeqEdits(previous=>({...previous,[entityType]:{...sequences.find(row=>row.entityType===entityType)}}))}
+      />}
+      </DetailTabPanel>
+      {/* ---- MODALS ------ */}
 
       {/* ── Contract Template Preview ── */}
       {contractPreviewOpen && (
-        <div className="company-settings__backdrop" onClick={() => setContractPreviewOpen(false)}>
+        <SettingsModal className="settings-dialog--wide" onClose={() => setContractPreviewOpen(false)}>
           <div className="company-settings__modal company-settings__modal--wide" onClick={(e) => e.stopPropagation()}>
             <div className="company-settings__modal-header">
               <span><Eye size={18} /> Template Preview - {editedContractName}</span>
-              <button className="company-settings__icon-btn" onClick={() => setContractPreviewOpen(false)}><X size={18} /></button>
+              <Button aria-label="Close" type="button" variant="ghost" size="icon-sm" className="settings-action" onClick={() => setContractPreviewOpen(false)}><X size={18} /></Button>
             </div>
             <div className="company-settings__modal-body">
-              <div
-                className="ctr-detail__doc-preview"
-                dangerouslySetInnerHTML={{ __html: editedContractContent }}
-              />
+              <DocumentPreview html={editedContractContent} title={`Template preview: ${editedContractName}`} />
             </div>
           </div>
-        </div>
+        </SettingsModal>
       )}
 
       {/* ── Department Modal ── */}
       {showDeptModal && (
-        <div className="company-settings__backdrop" onClick={() => !actionLoading && setShowDeptModal(false)}>
+        <SettingsModal className="settings-dialog--default" onClose={() => !actionLoading && setShowDeptModal(false)}>
           <div className="company-settings__modal" onClick={(e) => e.stopPropagation()}>
             <div className="company-settings__modal-header">
               <span><Building2 size={18} /> {editingDept ? 'Edit Department' : 'Add Department'}</span>
-              <button className="company-settings__icon-btn" onClick={() => setShowDeptModal(false)}><X size={18} /></button>
+              <Button aria-label="Close" type="button" variant="ghost" size="icon-sm" className="settings-action" onClick={() => setShowDeptModal(false)}><X size={18} /></Button>
             </div>
             <div className="company-settings__modal-body">
               {deptError && (
@@ -5489,9 +5334,9 @@ export default function CompanySettingsPage() {
                   <MessageStrip type="error" compact>{deptError}</MessageStrip>
                 </div>
               )}
-              <div className="company-settings__field">
-                <label>Department Name <span>*</span></label>
-                <input
+              <SettingsField className="company-settings__field">
+                <label>Department Name <span className="settings-required">*</span></label>
+                <Input
                   value={deptName}
                   onChange={(e) => { setDeptName(e.target.value); setDeptError(null); }}
                   placeholder="e.g. R&D"
@@ -5503,30 +5348,30 @@ export default function CompanySettingsPage() {
                   excludeId={editingDept?.id}
                   labelName="Department"
                 />
-              </div>
-              <div className="company-settings__field">
+              </SettingsField>
+              <SettingsField className="company-settings__field">
                 <label>Description</label>
-                <textarea value={deptDesc} onChange={(e) => setDeptDesc(e.target.value)} placeholder="Optional description" rows={3} />
-              </div>
+                <Textarea value={deptDesc} onChange={(e) => setDeptDesc(e.target.value)} placeholder="Optional description" rows={3} />
+              </SettingsField>
             </div>
             <div className="company-settings__modal-footer">
-              <button className="company-settings__btn company-settings__btn--secondary" onClick={() => setShowDeptModal(false)}>Cancel</button>
-              <button className="company-settings__btn company-settings__btn--primary" disabled={!deptName.trim() || actionLoading} onClick={handleSaveDept}>
+              <Button type="button" variant="outline" size="default" className="settings-action" onClick={() => setShowDeptModal(false)}>Cancel</Button>
+              <Button type="button" variant="default" size="default" className="settings-action" disabled={!deptName.trim() || actionLoading} onClick={handleSaveDept}>
                 <Save size={16} /> {actionLoading ? 'Saving…' : editingDept ? 'Update' : 'Create'}
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
+        </SettingsModal>
       )}
 
       {/* ── Delete Confirmation Modal ── */}
       {/* ── Delete Contract Type Confirmation Modal ── */}
       {deleteContractTypeTarget && (
-        <div className="company-settings__backdrop" onClick={cancelDeleteContractType}>
+        <SettingsModal className="settings-dialog--default" onClose={cancelDeleteContractType}>
           <div className="company-settings__modal" onClick={(e) => e.stopPropagation()}>
             <div className="company-settings__modal-header">
               <span><Trash2 size={18} style={{ color: 'var(--danger-500)' }} /> Delete Contract Type?</span>
-              <button className="company-settings__icon-btn" onClick={cancelDeleteContractType}><X size={18} /></button>
+              <Button aria-label="Close" type="button" variant="ghost" size="icon-sm" className="settings-action" onClick={cancelDeleteContractType}><X size={18} /></Button>
             </div>
             <div className="company-settings__modal-body">
               <p style={{ margin: 0, fontSize: '1.0125rem' }}>
@@ -5537,25 +5382,25 @@ export default function CompanySettingsPage() {
               </p>
             </div>
             <div className="company-settings__modal-footer">
-              <button className="company-settings__btn company-settings__btn--secondary" onClick={cancelDeleteContractType}>Cancel</button>
-              <button
-                className="company-settings__btn company-settings__btn--danger"
+              <Button type="button" variant="outline" size="default" className="settings-action" onClick={cancelDeleteContractType}>Cancel</Button>
+              <Button type="button" variant="destructive" size="default"
+                className="settings-action"
                 disabled={savingContractTemplate}
                 onClick={handleDeleteContractTypeConfirm}
               >
                 <Trash2 size={16} /> {savingContractTemplate ? 'Deleting…' : 'Delete'}
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
+        </SettingsModal>
       )}
 
       {deleteDocIdTarget && (
-        <div className="company-settings__backdrop" onClick={cancelDeleteDocTemplate}>
+        <SettingsModal className="settings-dialog--default" onClose={cancelDeleteDocTemplate}>
           <div className="company-settings__modal" onClick={(e) => e.stopPropagation()}>
             <div className="company-settings__modal-header">
               <span><Trash2 size={18} style={{ color: 'var(--danger-500)' }} /> Delete Document Template?</span>
-              <button className="company-settings__icon-btn" onClick={cancelDeleteDocTemplate}><X size={18} /></button>
+              <Button aria-label="Close" type="button" variant="ghost" size="icon-sm" className="settings-action" onClick={cancelDeleteDocTemplate}><X size={18} /></Button>
             </div>
             <div className="company-settings__modal-body">
               <p style={{ margin: 0, fontSize: '1.0125rem' }}>
@@ -5566,25 +5411,25 @@ export default function CompanySettingsPage() {
               </p>
             </div>
             <div className="company-settings__modal-footer">
-              <button className="company-settings__btn company-settings__btn--secondary" onClick={cancelDeleteDocTemplate}>Cancel</button>
-              <button
-                className="company-settings__btn company-settings__btn--danger"
+              <Button type="button" variant="outline" size="default" className="settings-action" onClick={cancelDeleteDocTemplate}>Cancel</Button>
+              <Button type="button" variant="destructive" size="default"
+                className="settings-action"
                 disabled={savingDocTemplate}
                 onClick={confirmDeleteDocTemplate}
               >
                 <Trash2 size={16} /> {savingDocTemplate ? 'Deleting…' : 'Delete'}
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
+        </SettingsModal>
       )}
 
       {deleteTarget && (
-        <div className="company-settings__backdrop" onClick={cancelDelete}>
+        <SettingsModal className="settings-dialog--default" onClose={cancelDelete}>
           <div className="company-settings__modal" onClick={(e) => e.stopPropagation()}>
             <div className="company-settings__modal-header">
               <span><Trash2 size={18} style={{ color: 'var(--danger-500)' }} /> Delete {deleteTarget.type === 'department' ? 'Department' : deleteTarget.type === 'category' ? 'Category' : deleteTarget.type === 'unit' ? 'Unit' : deleteTarget.type === 'paymentTerm' ? 'Payment Term' : deleteTarget.type === 'requiredDocument' ? 'Required Document' : 'Position'}?</span>
-              <button className="company-settings__icon-btn" onClick={cancelDelete}><X size={18} /></button>
+              <Button aria-label="Close" type="button" variant="ghost" size="icon-sm" className="settings-action" onClick={cancelDelete}><X size={18} /></Button>
             </div>
             <div className="company-settings__modal-body">
               <p style={{ margin: 0, fontSize: '1.0125rem' }}>
@@ -5605,22 +5450,22 @@ export default function CompanySettingsPage() {
               </p>
             </div>
             <div className="company-settings__modal-footer">
-              <button className="company-settings__btn company-settings__btn--secondary" onClick={cancelDelete}>Cancel</button>
-              <button
-                className="company-settings__btn company-settings__btn--danger"
+              <Button type="button" variant="outline" size="default" className="settings-action" onClick={cancelDelete}>Cancel</Button>
+              <Button type="button" variant="destructive" size="default"
+                className="settings-action"
                 disabled={deleting}
                 onClick={confirmDelete}
               >
                 <Trash2 size={16} /> {deleting ? 'Deleting…' : 'Delete'}
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
+        </SettingsModal>
       )}
 
       {/* ── Custom Confirmation Modal ── */}
       {confirmModalConfig && confirmModalConfig.isOpen && (
-        <div className="company-settings__backdrop" onClick={() => setConfirmModalConfig(null)}>
+        <SettingsModal className="settings-dialog--default" onClose={() => setConfirmModalConfig(null)}>
           <div className="company-settings__modal" onClick={(e) => e.stopPropagation()}>
             <div className="company-settings__modal-header">
               <span>
@@ -5633,9 +5478,9 @@ export default function CompanySettingsPage() {
                 )}
                 {confirmModalConfig.title}
               </span>
-              <button className="company-settings__icon-btn" onClick={() => setConfirmModalConfig(null)}>
+              <Button aria-label="Close" type="button" variant="ghost" size="icon-sm" className="settings-action" onClick={() => setConfirmModalConfig(null)}>
                 <X size={18} />
-              </button>
+              </Button>
             </div>
             <div className="company-settings__modal-body">
               <p style={{ margin: 0, fontSize: '1.0125rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
@@ -5643,20 +5488,16 @@ export default function CompanySettingsPage() {
               </p>
             </div>
             <div className="company-settings__modal-footer">
-              <button
+              <Button variant="outline" size="default"
                 type="button"
-                className="company-settings__btn company-settings__btn--secondary"
+                className="settings-action"
                 onClick={() => setConfirmModalConfig(null)}
               >
                 {confirmModalConfig.cancelText || 'Cancel'}
-              </button>
-              <button
+              </Button>
+              <Button variant="destructive" size="default"
                 type="button"
-                className={`company-settings__btn ${
-                  confirmModalConfig.variant === 'danger'
-                    ? 'company-settings__btn--danger'
-                    : 'company-settings__btn--primary'
-                }`}
+                className="settings-action"
                 onClick={() => {
                   const action = confirmModalConfig.onConfirm;
                   setConfirmModalConfig(null);
@@ -5664,15 +5505,15 @@ export default function CompanySettingsPage() {
                 }}
               >
                 {confirmModalConfig.confirmText || 'Confirm'}
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
+        </SettingsModal>
       )}
 
       {/* ── Backfill Success Modal ── */}
       {showBackfillSuccess && backfillResult !== null && (
-        <div className="company-settings__backdrop" onClick={() => setShowBackfillSuccess(false)}>
+        <SettingsModal className="settings-dialog--default" onClose={() => setShowBackfillSuccess(false)}>
           <div
             className="company-settings__modal"
             onClick={(e) => e.stopPropagation()}
@@ -5732,25 +5573,25 @@ export default function CompanySettingsPage() {
                 </div>
               </div>
 
-              <button
-                className="company-settings__btn company-settings__btn--primary"
-                style={{ width: '100%', justifyContent: 'center' }}
+              <Button type="button" variant="default" size="default"
+                className="settings-action"
+
                 onClick={() => setShowBackfillSuccess(false)}
               >
                 Done
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
+        </SettingsModal>
       )}
 
       {/* ── Unit Modal ── */}
       {showUnitModal && (
-        <div className="company-settings__backdrop" onClick={() => !actionLoading && setShowUnitModal(false)}>
+        <SettingsModal className="settings-dialog--default" onClose={() => !actionLoading && setShowUnitModal(false)}>
           <div className="company-settings__modal" onClick={(e) => e.stopPropagation()}>
             <div className="company-settings__modal-header">
               <span>Add Unit</span>
-              <button className="company-settings__icon-btn" onClick={() => setShowUnitModal(false)}><X size={18} /></button>
+              <Button aria-label="Close" type="button" variant="ghost" size="icon-sm" className="settings-action" onClick={() => setShowUnitModal(false)}><X size={18} /></Button>
             </div>
             <div className="company-settings__modal-body">
               {unitError && (
@@ -5760,9 +5601,9 @@ export default function CompanySettingsPage() {
               )}
 
               {/* Standard Embedded Units Dropdown */}
-              <div className="company-settings__field">
+              <SettingsField className="company-settings__field">
                 <label>Standard Units Preset</label>
-                <select
+                <Select
                   value={selectedPresetUnit}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -5792,16 +5633,16 @@ export default function CompanySettingsPage() {
                       })}
                     </optgroup>
                   ))}
-                </select>
+                </Select>
                 <span className="cs-field-hint">
                   Pick a standard embedded unit to auto-fill, or enter any custom unit below.
                 </span>
-              </div>
+              </SettingsField>
 
               {/* Unit Name Input & Predictive Analysis */}
-              <div className="company-settings__field">
-                <label>Unit Name <span>*</span></label>
-                <input
+              <SettingsField className="company-settings__field">
+                <label>Unit Name <span className="settings-required">*</span></label>
+                <Input
                   value={unitName}
                   onChange={(e) => {
                     setUnitName(e.target.value);
@@ -5816,56 +5657,56 @@ export default function CompanySettingsPage() {
                   items={units}
                   labelName="Unit"
                 />
-              </div>
+              </SettingsField>
             </div>
             <div className="company-settings__modal-footer">
-              <button className="company-settings__btn company-settings__btn--secondary" onClick={() => setShowUnitModal(false)}>Cancel</button>
-              <button className="company-settings__btn company-settings__btn--primary" disabled={!unitName.trim() || actionLoading} onClick={handleSaveUnit}>
+              <Button type="button" variant="outline" size="default" className="settings-action" onClick={() => setShowUnitModal(false)}>Cancel</Button>
+              <Button type="button" variant="default" size="default" className="settings-action" disabled={!unitName.trim() || actionLoading} onClick={handleSaveUnit}>
                 <Save size={16} /> {actionLoading ? 'Saving…' : 'Create'}
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
+        </SettingsModal>
       )}
 
 
 
       {/* ── Warehouse Modal ── */}
       {showWarehouseModal && (
-        <div className="company-settings__backdrop" onClick={() => !actionLoading && setShowWarehouseModal(false)}>
+        <SettingsModal className="settings-dialog--default" onClose={() => !actionLoading && setShowWarehouseModal(false)}>
           <div className="company-settings__modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600, width: '100%', overflowX: 'hidden' }}>
             <div className="company-settings__modal-header">
               <span>{editingWarehouse ? `Edit Warehouse #${editingWarehouse.code}` : 'Add New Warehouse Location'}</span>
-              <button className="company-settings__icon-btn" onClick={() => setShowWarehouseModal(false)}>
+              <Button aria-label="Close" type="button" variant="ghost" size="icon-sm" className="settings-action" onClick={() => setShowWarehouseModal(false)}>
                 <X size={18} />
-              </button>
+              </Button>
             </div>
             <div className="company-settings__modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
-                <div className="company-settings__field">
-                  <label>Warehouse Code <span>*</span></label>
-                  <input
+                <SettingsField className="company-settings__field">
+                  <label>Warehouse Code <span className="settings-required">*</span></label>
+                  <Input
                     type="text"
                     placeholder="e.g. WH-001"
                     value={whCode}
                     onChange={(e) => setWhCode(e.target.value.toUpperCase())}
                   />
-                </div>
-                <div className="company-settings__field">
-                  <label>Warehouse Name <span>*</span></label>
-                  <input
+                </SettingsField>
+                <SettingsField className="company-settings__field">
+                  <label>Warehouse Name <span className="settings-required">*</span></label>
+                  <Input
                     type="text"
                     placeholder="e.g. Central Depot & Logistics Hub"
                     value={whName}
                     onChange={(e) => setWhName(e.target.value)}
                   />
-                </div>
+                </SettingsField>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div className="company-settings__field">
+                <SettingsField className="company-settings__field">
                   <label>Warehouse Type</label>
-                  <select
+                  <Select
                     value={whType}
                     onChange={(e) => setWhType(e.target.value)}
                     style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface-card)', color: 'var(--text-primary)', outline: 'none' }}
@@ -5874,58 +5715,60 @@ export default function CompanySettingsPage() {
                     <option value="Regional Hub">Regional Hub</option>
                     <option value="Site Store">Site Store</option>
                     <option value="Transit Center">Transit Center / Cross-Dock</option>
-                  </select>
-                </div>
-                <div className="company-settings__field">
+                  </Select>
+                </SettingsField>
+                <SettingsField className="company-settings__field">
                   <label>City / Location</label>
-                  <input
+                  <Input
                     type="text"
                     placeholder="e.g. Nairobi / Mumbai"
                     value={whCity}
                     onChange={(e) => setWhCity(e.target.value)}
                   />
-                </div>
+                </SettingsField>
               </div>
 
-              <div className="company-settings__field">
+              <SettingsField className="company-settings__field">
                 <label>Full Shipping Address</label>
-                <textarea
+                <Textarea
                   rows={2}
                   placeholder="Plot No. 12, Industrial Area, Depot Road"
                   value={whAddress}
                   onChange={(e) => setWhAddress(e.target.value)}
                 />
-              </div>
+              </SettingsField>
 
-              <div className="company-settings__field">
+              <SettingsField className="company-settings__field">
                 <label>Contact Manager</label>
-                <input
+                <Input
                   type="text"
                   placeholder="Storekeeper Name"
                   value={whContactPerson}
                   onChange={(e) => setWhContactPerson(e.target.value)}
                 />
-              </div>
+              </SettingsField>
 
-              <div className="company-settings__field" style={{ maxWidth: 320, width: '100%' }}>
+              <div className="settings-two-fields">
+              <SettingsField className="company-settings__field">
                 <label>Phone Number</label>
-                <PhoneInput
+                <PhoneInput portalWithinDialog
                   countryCode={whCountryCode}
                   onCountryCodeChange={setWhCountryCode}
                   value={whPhone}
                   onChange={setWhPhone}
                   placeholder="8272811866"
                 />
-              </div>
+              </SettingsField>
 
-              <div className="company-settings__field">
+              <SettingsField className="company-settings__field">
                 <label>Manager Email</label>
-                <input
+                <Input
                   type="email"
                   placeholder="warehouse@company.com"
                   value={whEmail}
                   onChange={(e) => setWhEmail(e.target.value)}
                 />
+              </SettingsField>
               </div>
 
               <div style={{ display: 'flex', gap: 24, marginTop: 4 }}>
@@ -5948,28 +5791,28 @@ export default function CompanySettingsPage() {
               </div>
             </div>
             <div className="company-settings__modal-footer">
-              <button className="company-settings__btn company-settings__btn--secondary" onClick={() => setShowWarehouseModal(false)}>
+              <Button type="button" variant="outline" size="default" className="settings-action" onClick={() => setShowWarehouseModal(false)}>
                 Cancel
-              </button>
-              <button
-                className="company-settings__btn company-settings__btn--primary"
+              </Button>
+              <Button type="button" variant="default" size="default"
+                className="settings-action"
                 onClick={handleSaveWarehouse}
                 disabled={actionLoading || !whCode.trim() || !whName.trim()}
               >
                 <Save size={16} /> {actionLoading ? 'Saving...' : (editingWarehouse ? 'Update Warehouse' : 'Save Warehouse')}
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
+        </SettingsModal>
       )}
 
       {/* ── Payment Term Modal ── */}
       {showPaymentTermModal && (
-        <div className="company-settings__backdrop" onClick={() => !actionLoading && setShowPaymentTermModal(false)}>
+        <SettingsModal className="settings-dialog--default" onClose={() => !actionLoading && setShowPaymentTermModal(false)}>
           <div className="company-settings__modal" onClick={(e) => e.stopPropagation()}>
             <div className="company-settings__modal-header">
               <span>Add Payment Term</span>
-              <button className="company-settings__icon-btn" onClick={() => setShowPaymentTermModal(false)}><X size={18} /></button>
+              <Button aria-label="Close" type="button" variant="ghost" size="icon-sm" className="settings-action" onClick={() => setShowPaymentTermModal(false)}><X size={18} /></Button>
             </div>
             <div className="company-settings__modal-body">
               {paymentTermError && (
@@ -5977,9 +5820,9 @@ export default function CompanySettingsPage() {
                   <MessageStrip type="error" compact>{paymentTermError}</MessageStrip>
                 </div>
               )}
-              <div className="company-settings__field">
-                <label>Payment Term Name <span>*</span></label>
-                <input
+              <SettingsField className="company-settings__field">
+                <label>Payment Term Name <span className="settings-required">*</span></label>
+                <Input
                   value={paymentTermName}
                   onChange={(e) => { setPaymentTermName(e.target.value); setPaymentTermError(null); }}
                   placeholder="e.g. Net 30, Net 45, Advance"
@@ -5990,25 +5833,25 @@ export default function CompanySettingsPage() {
                   items={paymentTerms}
                   labelName="Payment term"
                 />
-              </div>
+              </SettingsField>
             </div>
             <div className="company-settings__modal-footer">
-              <button className="company-settings__btn company-settings__btn--secondary" onClick={() => setShowPaymentTermModal(false)}>Cancel</button>
-              <button className="company-settings__btn company-settings__btn--primary" disabled={!paymentTermName.trim() || actionLoading} onClick={handleSavePaymentTerm}>
+              <Button type="button" variant="outline" size="default" className="settings-action" onClick={() => setShowPaymentTermModal(false)}>Cancel</Button>
+              <Button type="button" variant="default" size="default" className="settings-action" disabled={!paymentTermName.trim() || paymentTerms.some(term => term.name.trim().toLowerCase() === paymentTermName.trim().toLowerCase()) || actionLoading} onClick={handleSavePaymentTerm}>
                 <Save size={16} /> {actionLoading ? 'Saving…' : 'Create'}
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
+        </SettingsModal>
       )}
 
       {/* ── Category Modal ── */}
       {showCatModal && (
-        <div className="company-settings__backdrop" onClick={() => !actionLoading && setShowCatModal(false)}>
+        <SettingsModal className="settings-dialog--default" onClose={() => !actionLoading && setShowCatModal(false)}>
           <div className="company-settings__modal" onClick={(e) => e.stopPropagation()}>
             <div className="company-settings__modal-header">
               <span><Tag size={18} /> {editingCat ? 'Edit Category' : 'Add Category'}</span>
-              <button className="company-settings__icon-btn" onClick={() => setShowCatModal(false)}><X size={18} /></button>
+              <Button aria-label="Close" type="button" variant="ghost" size="icon-sm" className="settings-action" onClick={() => setShowCatModal(false)}><X size={18} /></Button>
             </div>
             <div className="company-settings__modal-body">
               {catError && (
@@ -6016,18 +5859,18 @@ export default function CompanySettingsPage() {
                   <MessageStrip type="error" compact>{catError}</MessageStrip>
                 </div>
               )}
-              <div className="company-settings__field">
-                <label>Department <span>*</span></label>
-                <select value={catDeptId} onChange={(e) => setCatDeptId(e.target.value)}>
+              <SettingsField className="company-settings__field">
+                <label>Department <span className="settings-required">*</span></label>
+                <Select value={catDeptId} onChange={(e) => setCatDeptId(e.target.value)}>
                   <option value="">Select department</option>
                   {departments.filter((d) => d.isActive).map((d) => (
                     <option key={d.id} value={String(d.id)}>{d.name}</option>
                   ))}
-                </select>
-              </div>
-              <div className="company-settings__field">
-                <label>Category Name <span>*</span></label>
-                <input
+                </Select>
+              </SettingsField>
+              <SettingsField className="company-settings__field">
+                <label>Category Name <span className="settings-required">*</span></label>
+                <Input
                   value={catName}
                   onChange={(e) => { setCatName(e.target.value); setCatError(null); }}
                   placeholder="e.g. Precision Tools"
@@ -6039,276 +5882,32 @@ export default function CompanySettingsPage() {
                   excludeId={editingCat?.id}
                   labelName="Category"
                 />
-              </div>
-              <div className="company-settings__field">
+              </SettingsField>
+              <SettingsField className="company-settings__field">
                 <label>Description</label>
-                <textarea value={catDesc} onChange={(e) => setCatDesc(e.target.value)} placeholder="Optional description" rows={3} />
-              </div>
+                <Textarea value={catDesc} onChange={(e) => setCatDesc(e.target.value)} placeholder="Optional description" rows={3} />
+              </SettingsField>
             </div>
             <div className="company-settings__modal-footer">
-              <button className="company-settings__btn company-settings__btn--secondary" onClick={() => setShowCatModal(false)}>Cancel</button>
-              <button className="company-settings__btn company-settings__btn--primary" disabled={!catName.trim() || !catDeptId || actionLoading} onClick={handleSaveCat}>
+              <Button type="button" variant="outline" size="default" className="settings-action" onClick={() => setShowCatModal(false)}>Cancel</Button>
+              <Button type="button" variant="default" size="default" className="settings-action" disabled={!catName.trim() || !catDeptId || actionLoading} onClick={handleSaveCat}>
                 <Save size={16} /> {actionLoading ? 'Saving…' : editingCat ? 'Update' : 'Create'}
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
-      )}
-
-
-      {/* -------------------------------------------------------
-          TAB: Document Serialization
-          ------------------------------------------------------- */}
-      {activeTab === 'doc-serialization' && (
-        <div className="cs-tab-panel" role="tabpanel">
-          <div className="cs-section-card">
-            <div className="cs-section-header">
-              <div className="cs-section-header__left">
-                <h2><Hash size={17} /> Document Serialization</h2>
-                <p>
-                  Configure auto-generated number formats for Supplier Codes, Purchase Orders, RFQs, Invoices, Contracts, and Payment Vouchers.
-                  Changes apply to all newly created records — existing records are not affected.
-                </p>
-              </div>
-            </div>
-
-            <div className="cs-section-body">
-              {seqLoading ? (
-                <TableSkeleton rows={3} />
-              ) : (
-                <>
-                  {seqErrMsg && (
-                    <div style={{ marginBottom: '16px' }}>
-                      <MessageStrip type="error" onClose={() => setSeqErrMsg(null)}>
-                        {seqErrMsg}
-                      </MessageStrip>
-                    </div>
-                  )}
-
-                  <div className="cs-seq-grid">
-                    {(['SUPPLIER_CODE', 'PURCHASE_ORDER', 'RFQ', 'INVOICE', 'CONTRACT', 'PAYMENT_VOUCHER'] as const).map((entityType) => {
-                      const meta = ENTITY_LABELS[entityType] ?? { label: entityType, desc: '' };
-                      const edit = seqEdits[entityType] ?? {};
-                      const isSaving = seqSaving === entityType;
-                      const preview = getSeqPreview(entityType);
-                      const isLoaded = sequences.some(s => s.entityType === entityType);
-
-                      return (
-                        <div key={entityType} className="cs-seq-card">
-                          {/* Card Header */}
-                          <div className="cs-seq-card__header">
-                            <div className="cs-seq-card__title-row">
-                              <Hash size={14} className="cs-seq-card__icon" />
-                              <span className="cs-seq-card__title">{meta.label}</span>
-                              <span className="cs-seq-card__badge">{entityType}</span>
-                            </div>
-                            <p className="cs-seq-card__desc">{meta.desc}</p>
-                          </div>
-
-                          {/* Live Preview */}
-                          <div className="cs-seq-preview">
-                            <span className="cs-seq-preview__label">Live Preview</span>
-                            <span className="cs-seq-preview__value">{isLoaded ? preview : '—'}</span>
-                          </div>
-
-                          {/* Form Fields */}
-                          <div className="cs-seq-fields">
-                            <div className="cs-seq-field-row">
-                              <div className="cs-seq-field">
-                                <label className="cs-seq-label">Prefix</label>
-                                <input
-                                  className="cs-seq-input"
-                                  type="text"
-                                  placeholder="e.g. PO-{YYYY}-"
-                                  value={String(edit.prefix ?? '')}
-                                  onChange={(e) => handleSeqFieldChange(entityType, 'prefix', e.target.value)}
-                                />
-                              </div>
-                              <div className="cs-seq-field">
-                                <label className="cs-seq-label">Suffix <span className="cs-seq-optional">(optional)</span></label>
-                                <input
-                                  className="cs-seq-input"
-                                  type="text"
-                                  placeholder="e.g. -{YYYY}"
-                                  value={String(edit.suffix ?? '')}
-                                  onChange={(e) => handleSeqFieldChange(entityType, 'suffix', e.target.value)}
-                                />
-                              </div>
-                            </div>
-
-                            {/* Clickable placeholder tokens */}
-                            {(() => {
-                              const now = new Date();
-                              const tokens = [
-                                { token: '{YYYY}', label: '4-digit Year', example: String(now.getFullYear()) },
-                                { token: '{YY}',   label: '2-digit Year', example: String(now.getFullYear()).slice(-2) },
-                                { token: '{MM}',   label: 'Month',        example: String(now.getMonth() + 1).padStart(2, '0') },
-                                { token: '{DD}',   label: 'Day',          example: String(now.getDate()).padStart(2, '0') },
-                              ];
-                              return (
-                                <div className="cs-seq-token-hint">
-                                  <span className="cs-seq-token-hint__label">Click to add to Prefix:</span>
-                                  {tokens.map(({ token, label, example }) => (
-                                    <button
-                                      key={token}
-                                      type="button"
-                                      className="cs-seq-token cs-seq-token--btn"
-                                      title={`${label} → inserts "${example}" when generating codes`}
-                                      onClick={() => handleSeqFieldChange(
-                                        entityType,
-                                        'prefix',
-                                        String((seqEdits[entityType]?.prefix ?? '')) + token
-                                      )}
-                                    >
-                                      {token}
-                                      <span className="cs-seq-token__eg">= {example}</span>
-                                    </button>
-                                  ))}
-                                </div>
-                              );
-                            })()}
-
-
-                            <div className="cs-seq-field-row">
-                              <div className="cs-seq-field">
-                                <label className="cs-seq-label">Digit Padding</label>
-                                <select
-                                  className="cs-seq-input"
-                                  value={Number(edit.paddingLength ?? 4)}
-                                  onChange={(e) => handleSeqFieldChange(entityType, 'paddingLength', Number(e.target.value))}
-                                >
-                                  <option value={3}>3 digits (001)</option>
-                                  <option value={4}>4 digits (0001)</option>
-                                  <option value={5}>5 digits (00001)</option>
-                                  <option value={6}>6 digits (000001)</option>
-                                </select>
-                              </div>
-                              <div className="cs-seq-field">
-                                <label className="cs-seq-label">Reset Frequency</label>
-                                <select
-                                  className="cs-seq-input"
-                                  value={String(edit.resetFrequency ?? 'NEVER')}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    handleSeqFieldChange(entityType, 'resetFrequency', val);
-                                    if (val === 'YEARLY' || val === 'FISCAL_YEAR') {
-                                      setFyModalEntity(entityType);
-                                    }
-                                  }}
-                                >
-                                  <option value="NEVER">Never Reset</option>
-                                  <option value="YEARLY">Reset Yearly / Financial Year (Custom Dates)</option>
-                                  <option value="MONTHLY">Reset Monthly</option>
-                                </select>
-                              </div>
-                            </div>
-
-                            {/* Financial Year / Sequence Period Start & End Dates Badge Trigger */}
-                            {(edit.resetFrequency === 'YEARLY' || edit.resetFrequency === 'FISCAL_YEAR' || edit.resetFrequency === 'CUSTOM_PERIOD') && (
-                              <div style={{ marginTop: '2px', marginBottom: '6px' }}>
-                                <button
-                                  type="button"
-                                  className="cs-fy-chip-badge"
-                                  onClick={() => setFyModalEntity(entityType)}
-                                >
-                                  <Calendar size={14} />
-                                  <span>
-                                    {edit.periodStartDate && edit.periodEndDate
-                                      ? `${edit.periodStartDate} → ${edit.periodEndDate}`
-                                      : 'Configure Financial Year Dates (Open/Close)'}
-                                  </span>
-                                  <Settings size={12} style={{ opacity: 0.8 }} />
-                                </button>
-                              </div>
-                            )}
-
-                            <div className="cs-seq-field-row">
-                              <div className="cs-seq-field cs-seq-field--full">
-                                <label className="cs-seq-label">
-                                  Next Counter Number
-                                  <span className="cs-seq-optional"> (next record will use this number)</span>
-                                </label>
-                                <input
-                                  className="cs-seq-input"
-                                  type="number"
-                                  min={1}
-                                  step={1}
-                                  value={Number(edit.nextNumber ?? 1)}
-                                  onFocus={(e) => e.target.select()}
-                                  onChange={(e) => {
-                                    const parsed = parseInt(e.target.value, 10);
-                                    handleSeqFieldChange(entityType, 'nextNumber', isNaN(parsed) ? 1 : Math.max(1, parsed));
-                                  }}
-                                />
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Save Button */}
-                          <div className="cs-seq-card__footer">
-                            <button
-                              className="company-settings__btn company-settings__btn--primary cs-seq-save-btn"
-                              disabled={isSaving || !isLoaded}
-                              onClick={() => handleSeqSave(entityType)}
-                            >
-                              {isSaving ? (
-                                <><Loader2 size={14} className="cs-spin" /> Saving…</>
-                              ) : (
-                                <><Save size={14} /> Save {meta.label}</>
-                              )}
-                            </button>
-
-                            {/* Backfill button — only for Supplier Code */}
-                            {entityType === 'SUPPLIER_CODE' && (
-                              <button
-                                className="company-settings__btn company-settings__btn--primary"
-                                disabled={isBackfilling}
-                                onClick={handleBackfillSuppliers}
-                                title="Assign sequential supplier codes to all existing vendors who don't have one"
-                              >
-                                {isBackfilling ? (
-                                  <><Loader2 size={14} className="cs-spin" /> Assigning…</>
-                                ) : (
-                                  <>Assign Existing Vendors</>
-                                )}
-                              </button>
-                            )}
-
-                            {/* Backfill success handled by modal */}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Info Note */}
-                  <div className="cs-seq-note">
-                    <Info size={14} />
-                    <span>
-                      Changing <strong>Next Counter Number</strong> does not affect existing records.
-                      Yearly/Monthly reset automatically resets the counter on the first day of the period.
-                    </span>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
+        </SettingsModal>
       )}
 
 
       {/* ── Document Serialization: Save Success Modal ── */}
       {seqSuccessInfo && (
-        <div
-          className="cs-seq-success-backdrop"
-          onClick={() => setSeqSuccessInfo(null)}
-          role="presentation"
+        <SettingsModal
+          className="settings-dialog--default"
+          onClose={() => setSeqSuccessInfo(null)}
         >
           <div
             className="cs-seq-success-modal"
             onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
           >
             {/* Icon */}
             <div className="cs-seq-success-modal__icon-wrap">
@@ -6328,15 +5927,15 @@ export default function CompanySettingsPage() {
             </div>
 
             {/* OK button */}
-            <button
-              className="cs-seq-success-modal__ok"
+            <Button type="button"
+              className="settings-action"
               onClick={() => setSeqSuccessInfo(null)}
               autoFocus
             >
               OK
-            </button>
+            </Button>
           </div>
-        </div>
+        </SettingsModal>
       )}
 
 
@@ -6355,7 +5954,7 @@ export default function CompanySettingsPage() {
       {/* ── Passcode Configuration Modal ── */}
       {/* ── Passcode Configuration Modal ── */}
       {showPasscodeModal && (
-        <div className="cs-passcode-modal-backdrop" onClick={() => setShowPasscodeModal(false)}>
+        <SettingsModal className="settings-dialog--passcode" onClose={() => setShowPasscodeModal(false)}>
           <div className="cs-passcode-modal-box" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
             <div className="cs-passcode-modal-header">
@@ -6376,14 +5975,14 @@ export default function CompanySettingsPage() {
                   </p>
                 </div>
               </div>
-              <button
+              <Button variant="ghost" size="icon-sm"
                 type="button"
-                className="cs-passcode-modal-close"
+                className="settings-action"
                 onClick={() => setShowPasscodeModal(false)}
                 aria-label="Close"
               >
                 <X size={18} />
-              </button>
+              </Button>
             </div>
 
             {/* Body */}
@@ -6402,14 +6001,14 @@ export default function CompanySettingsPage() {
 
               {isPasscodeProtected && (passcodeModalMode === 'change' || passcodeModalMode === 'remove') && (
                 <div className="cs-passcode-input-group">
-                  <label className="cs-passcode-label">
+                  <label className="cs-passcode-label" htmlFor="settings-current-passcode">
                     Current Security Passcode <span className="cs-passcode-label__req">*</span>
                   </label>
                   <div className="cs-passcode-input-wrapper">
-                    <input
+                    <Input
                       type={showCurrentPasscodeText ? 'text' : 'password'}
                       className="cs-passcode-input"
-                      placeholder="Enter current passcode"
+                      id="settings-current-passcode" placeholder="Enter current passcode"
                       value={passcodeCurrent}
                       onChange={(e) => setPasscodeCurrent(e.target.value)}
                       required
@@ -6418,7 +6017,7 @@ export default function CompanySettingsPage() {
                       type="button"
                       className="cs-passcode-toggle-btn"
                       onClick={() => setShowCurrentPasscodeText(!showCurrentPasscodeText)}
-                      tabIndex={-1}
+                      aria-label="Toggle passcode visibility"
                     >
                       {showCurrentPasscodeText ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
@@ -6429,14 +6028,14 @@ export default function CompanySettingsPage() {
               {passcodeModalMode !== 'remove' && (
                 <>
                   <div className="cs-passcode-input-group">
-                    <label className="cs-passcode-label">
+                    <label className="cs-passcode-label" htmlFor="settings-new-passcode">
                       New Security Passcode <span className="cs-passcode-label__req">*</span>
                     </label>
                     <div className="cs-passcode-input-wrapper">
-                      <input
+                      <Input
                         type={showPasscodeText ? 'text' : 'password'}
                         className="cs-passcode-input"
-                        placeholder="Min 4 characters"
+                        id="settings-new-passcode" placeholder="Min 4 characters"
                         value={passcodeNew}
                         onChange={(e) => setPasscodeNew(e.target.value)}
                         required
@@ -6445,7 +6044,7 @@ export default function CompanySettingsPage() {
                         type="button"
                         className="cs-passcode-toggle-btn"
                         onClick={() => setShowPasscodeText(!showPasscodeText)}
-                        tabIndex={-1}
+                        aria-label="Toggle passcode visibility"
                       >
                         {showPasscodeText ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
@@ -6453,14 +6052,14 @@ export default function CompanySettingsPage() {
                   </div>
 
                   <div className="cs-passcode-input-group">
-                    <label className="cs-passcode-label">
+                    <label className="cs-passcode-label" htmlFor="settings-confirm-passcode">
                       Confirm New Security Passcode <span className="cs-passcode-label__req">*</span>
                     </label>
                     <div className="cs-passcode-input-wrapper">
-                      <input
+                      <Input
                         type={showPasscodeText ? 'text' : 'password'}
                         className="cs-passcode-input"
-                        placeholder="Re-enter new passcode"
+                        id="settings-confirm-passcode" placeholder="Re-enter new passcode"
                         value={passcodeConfirm}
                         onChange={(e) => setPasscodeConfirm(e.target.value)}
                         required
@@ -6473,19 +6072,19 @@ export default function CompanySettingsPage() {
 
             {/* Footer */}
             <div className="cs-passcode-modal-footer">
-              <button
+              <Button variant="outline" size="default"
                 type="button"
-                className="cs-passcode-btn-cancel"
+                className="settings-action"
                 onClick={() => setShowPasscodeModal(false)}
                 disabled={passcodeSaving}
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button variant={passcodeModalMode === 'remove' ? 'destructive' : 'default'} size="default"
                 type="button"
-                className={`cs-passcode-btn-submit ${passcodeModalMode === 'remove' ? 'cs-passcode-btn-submit--danger' : ''}`}
+                className="settings-action"
                 onClick={handleSavePasscode}
-                disabled={passcodeSaving}
+                disabled={passcodeSaving || (isPasscodeProtected && !passcodeCurrent.trim()) || (passcodeModalMode !== 'remove' && (passcodeNew.trim().length < 4 || passcodeNew !== passcodeConfirm))}
               >
                 {passcodeSaving ? (
                   <span>Saving…</span>
@@ -6499,156 +6098,45 @@ export default function CompanySettingsPage() {
                     </span>
                   </>
                 )}
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
+        </SettingsModal>
       )}
 
-      {/* ── Financial Year Configuration Modal ── */}
-      {fyModalEntity && (() => {
-        const entityType = fyModalEntity;
-        const meta = ENTITY_LABELS[entityType] ?? { label: entityType, desc: '' };
-        const edit = seqEdits[entityType] ?? {};
-        const startDate = String(edit.periodStartDate ?? '');
-        const endDate = String(edit.periodEndDate ?? '');
-        const yr = new Date().getFullYear();
-
-        return (
-          <div className="cs-fy-modal-backdrop" onClick={() => setFyModalEntity(null)}>
-            <div className="cs-fy-modal-box" onClick={(e) => e.stopPropagation()}>
-              {/* Modal Header */}
-              <div className="cs-fy-modal-header">
-                <div className="cs-fy-modal-header__title">
-                  <div className="cs-fy-modal-header__icon">
-                    <Calendar size={22} />
-                  </div>
-                  <div className="cs-fy-modal-header__text">
-                    <h3>Financial Year & Sequence Dates</h3>
-                    <p>Configure open & close dates for {meta.label} sequence reset</p>
-                  </div>
-                </div>
-                <button className="cs-passcode-modal-close" onClick={() => setFyModalEntity(null)}>
-                  <X size={18} />
-                </button>
-              </div>
-
-              {/* Modal Body */}
-              <div className="cs-fy-modal-body">
-                {/* Preset Cards */}
-                <div>
-                  <label className="cs-fy-section-label">
-                    Quick Select Regional Financial Year
-                  </label>
-                  <div className="cs-fy-preset-grid">
-                    {/* Apr - Mar */}
-                    <div
-                      className={`cs-fy-preset-card ${startDate === `${yr}-04-01` && endDate === `${yr + 1}-03-31` ? 'cs-fy-preset-card--active' : ''}`}
-                      onClick={() => {
-                        handleSeqFieldChange(entityType, 'periodStartDate', `${yr}-04-01`);
-                        handleSeqFieldChange(entityType, 'periodEndDate', `${yr + 1}-03-31`);
-                      }}
-                    >
-                      <div className="cs-fy-preset-title">🇮🇳 🇬🇧 Apr 01 – Mar 31</div>
-                      <div className="cs-fy-preset-dates">{yr}-04-01 → {yr + 1}-03-31</div>
-                      <div className="cs-fy-preset-region">India, UK, South Africa, Japan</div>
-                    </div>
-
-                    {/* Jan - Dec */}
-                    <div
-                      className={`cs-fy-preset-card ${startDate === `${yr}-01-01` && endDate === `${yr}-12-31` ? 'cs-fy-preset-card--active' : ''}`}
-                      onClick={() => {
-                        handleSeqFieldChange(entityType, 'periodStartDate', `${yr}-01-01`);
-                        handleSeqFieldChange(entityType, 'periodEndDate', `${yr}-12-31`);
-                      }}
-                    >
-                      <div className="cs-fy-preset-title">🌐 Jan 01 – Dec 31</div>
-                      <div className="cs-fy-preset-dates">{yr}-01-01 → {yr}-12-31</div>
-                      <div className="cs-fy-preset-region">Calendar Year / Global Standard</div>
-                    </div>
-
-                    {/* Oct - Sep */}
-                    <div
-                      className={`cs-fy-preset-card ${startDate === `${yr}-10-01` && endDate === `${yr + 1}-09-30` ? 'cs-fy-preset-card--active' : ''}`}
-                      onClick={() => {
-                        handleSeqFieldChange(entityType, 'periodStartDate', `${yr}-10-01`);
-                        handleSeqFieldChange(entityType, 'periodEndDate', `${yr + 1}-09-30`);
-                      }}
-                    >
-                      <div className="cs-fy-preset-title">🇺🇸 Oct 01 – Sep 30</div>
-                      <div className="cs-fy-preset-dates">{yr}-10-01 → {yr + 1}-09-30</div>
-                      <div className="cs-fy-preset-region">US Federal & Institutional FY</div>
-                    </div>
-
-                    {/* Jul - Jun */}
-                    <div
-                      className={`cs-fy-preset-card ${startDate === `${yr}-07-01` && endDate === `${yr + 1}-06-30` ? 'cs-fy-preset-card--active' : ''}`}
-                      onClick={() => {
-                        handleSeqFieldChange(entityType, 'periodStartDate', `${yr}-07-01`);
-                        handleSeqFieldChange(entityType, 'periodEndDate', `${yr + 1}-06-30`);
-                      }}
-                    >
-                      <div className="cs-fy-preset-title">🇦🇺 🇰🇪 Jul 01 – Jun 30</div>
-                      <div className="cs-fy-preset-dates">{yr}-07-01 → {yr + 1}-06-30</div>
-                      <div className="cs-fy-preset-region">Australia, Kenya, Egypt, NZ</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Custom Date Pickers */}
-                <div className="cs-fy-date-row">
-                  <div className="cs-fy-date-field">
-                    <label>Sequence Open Date (Start)</label>
-                    <input
-                      type="date"
-                      className="cs-fy-date-input"
-                      value={startDate}
-                      onChange={(e) => handleSeqFieldChange(entityType, 'periodStartDate', e.target.value)}
-                    />
-                  </div>
-                  <div className="cs-fy-date-field">
-                    <label>Sequence Close Date (End)</label>
-                    <input
-                      type="date"
-                      className="cs-fy-date-input"
-                      value={endDate}
-                      onChange={(e) => handleSeqFieldChange(entityType, 'periodEndDate', e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                {/* Summary Banner */}
-                <div className="cs-fy-summary-banner">
-                  <Info size={18} style={{ color: '#38bdf8', flexShrink: 0, marginTop: '2px' }} />
-                  <div>
-                    Active sequence period: <strong>{startDate || 'Not Set'}</strong> to <strong>{endDate || 'Not Set'}</strong>.
-                    Document serial counter resets to <strong>#0001</strong> as soon as this sequence period closes.
-                  </div>
-                </div>
-              </div>
-
-              {/* Modal Footer */}
-              <div className="cs-fy-modal-footer">
-                <button
-                  type="button"
-                  className="company-settings__btn company-settings__btn--secondary"
-                  onClick={() => setFyModalEntity(null)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="company-settings__btn company-settings__btn--primary"
-                  onClick={() => setFyModalEntity(null)}
-                >
-                  <Check size={16} /> Apply & Done
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
 
     </div>
   );
 }
+
+const WAREHOUSES_COLUMNS: LandingColumn[] = [
+  { key: 'code', label: 'Code', defaultVisible: true, required: true },
+  { key: 'name', label: 'Name & Type', defaultVisible: true },
+  { key: 'address', label: 'Address / City', defaultVisible: true },
+  { key: 'manager', label: 'Manager / Contact', defaultVisible: true },
+  { key: 'default', label: 'Ship-To Default', defaultVisible: true },
+  { key: 'status', label: 'Status', defaultVisible: true },
+  { key: 'actions', label: 'Actions', defaultVisible: true, pinned: 'end' },
+];
+
+const EMAIL_TEMPLATES_COLUMNS: LandingColumn[] = [
+  { key: 'actions', label: 'Actions', defaultVisible: true, pinned: 'end' },
+  { key: 'name', label: 'Template name', defaultVisible: true, required: true },
+  { key: 'key', label: 'Template key', defaultVisible: true },
+  { key: 'status', label: 'Status', defaultVisible: true },
+];
+
+const CONTRACT_TEMPLATES_COLUMNS: LandingColumn[] = [
+  { key: 'actions', label: 'Actions', defaultVisible: true, pinned: 'end' },
+  { key: 'name', label: 'Template name', defaultVisible: true, required: true },
+  { key: 'status', label: 'Status', defaultVisible: true },
+  { key: 'format', label: 'Source format', defaultVisible: true },
+];
+
+const DOCUMENT_TEMPLATES_COLUMNS: LandingColumn[] = [
+  { key: 'actions', label: 'Actions', defaultVisible: true, pinned: 'end' },
+  { key: 'name', label: 'Template name', defaultVisible: true, required: true },
+  { key: 'type', label: 'Type', defaultVisible: true },
+  { key: 'status', label: 'Status', defaultVisible: true },
+  { key: 'format', label: 'Source format', defaultVisible: true },
+];

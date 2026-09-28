@@ -8,6 +8,7 @@ import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
 import { EmptyState, PageFrame, PageLead } from '../../components/ui/product';
 import { rfqService } from '../../services/rfqService';
+import { DetailSkeleton } from '../../components/shared/Skeleton';
 import type { RFQTableRow } from '../../types/viewModels';
 
 export default function RFQViewPage() {
@@ -100,12 +101,7 @@ export default function RFQViewPage() {
       )}
 
       {loading ? (
-        <Card className="flex min-h-[420px] items-center justify-center p-8">
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            <div className="size-5 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
-            Loading RFQ details...
-          </div>
-        </Card>
+        <DetailSkeleton />
       ) : rfq ? (
         <RFQDetailModal
           rfq={rfq}
