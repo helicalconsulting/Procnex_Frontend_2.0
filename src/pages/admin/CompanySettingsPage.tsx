@@ -33,7 +33,7 @@ import SignatureSection from '../../components/shared/SignatureSection';
 import '../../components/shared/SignatureSection.css';
 import '../../components/shared/OcrPreview.css';
 import ErrorBoundary from '../../components/shared/ErrorBoundary';
-import { TableSkeleton } from '../../components/shared/Skeleton';
+import { TableSkeleton, PageSkeleton } from '../../components/shared/Skeleton';
 import { useAuth } from '../../context/AuthContext';
 import PhoneInput from '../../components/shared/PhoneInput';
 import { COUNTRY_CODES } from '../../config/countryCodes';
