@@ -1100,6 +1100,11 @@ export default function CompanySettingsPage() {
   const [brandingSupportEmail, setBrandingSupportEmail] = useState('');
   const [brandingCompanyPhone, setBrandingCompanyPhone] = useState('');
   const [brandingCompanyEmail, setBrandingCompanyEmail] = useState('');
+  const [brandingCompanyAddress, setBrandingCompanyAddress] = useState('');
+  const [brandingTaxRegistrationNumber, setBrandingTaxRegistrationNumber] = useState('');
+  const [brandingBankName, setBrandingBankName] = useState('');
+  const [brandingBankAccountNumber, setBrandingBankAccountNumber] = useState('');
+  const [brandingBankIfscCode, setBrandingBankIfscCode] = useState('');
   const [brandingDirty, setBrandingDirty] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [removingLogo, setRemovingLogo] = useState(false);
@@ -1118,6 +1123,11 @@ export default function CompanySettingsPage() {
       setBrandingSupportEmail(profile.supportEmail || '');
       setBrandingCompanyPhone(profile.companyPhone || '');
       setBrandingCompanyEmail(profile.companyEmail || '');
+      setBrandingCompanyAddress(profile.companyAddress || '');
+      setBrandingTaxRegistrationNumber(profile.taxRegistrationNumber || '');
+      setBrandingBankName(profile.bankName || '');
+      setBrandingBankAccountNumber(profile.bankAccountNumber || '');
+      setBrandingBankIfscCode(profile.bankIfscCode || '');
     }
   }, [profile]);
 
@@ -1138,6 +1148,11 @@ export default function CompanySettingsPage() {
       if (brandingSupportEmail !== (profile?.supportEmail || '')) payload.supportEmail = brandingSupportEmail;
       if (brandingCompanyPhone !== (profile?.companyPhone || '')) payload.companyPhone = brandingCompanyPhone;
       if (brandingCompanyEmail !== (profile?.companyEmail || '')) payload.companyEmail = brandingCompanyEmail;
+      if (brandingCompanyAddress !== (profile?.companyAddress || '')) payload.companyAddress = brandingCompanyAddress;
+      if (brandingTaxRegistrationNumber !== (profile?.taxRegistrationNumber || '')) payload.taxRegistrationNumber = brandingTaxRegistrationNumber;
+      if (brandingBankName !== (profile?.bankName || '')) payload.bankName = brandingBankName;
+      if (brandingBankAccountNumber !== (profile?.bankAccountNumber || '')) payload.bankAccountNumber = brandingBankAccountNumber;
+      if (brandingBankIfscCode !== (profile?.bankIfscCode || '')) payload.bankIfscCode = brandingBankIfscCode;
 
       if (Object.keys(payload).length === 0) {
         setPageMsg('No changes to save.');
@@ -1147,14 +1162,19 @@ export default function CompanySettingsPage() {
       const updated = await companySettingsService.updateCompanyProfile(payload);
       setProfile(updated);
       setBrandingDirty(false);
-      setPageMsg('Branding settings saved successfully! Changes applied immediately.');
+      setPageMsg('Branding & company details saved successfully! Changes applied immediately.');
       refreshBranding();
     } catch (err) {
       setPageMsg(err instanceof Error ? err.message : 'Failed to save branding settings');
     } finally {
       setSavingBranding(false);
     }
-  }, [brandingDirty, brandingName, brandingLogoUrl, brandingColor, brandingLoginText, brandingSupportEmail, brandingCompanyPhone, brandingCompanyEmail, profile, refreshBranding, canCreateSettings]);
+  }, [
+    brandingDirty, brandingName, brandingLogoUrl, brandingColor, brandingLoginText,
+    brandingSupportEmail, brandingCompanyPhone, brandingCompanyEmail,
+    brandingCompanyAddress, brandingTaxRegistrationNumber, brandingBankName,
+    brandingBankAccountNumber, brandingBankIfscCode, profile, refreshBranding, canCreateSettings
+  ]);
 
   const markBrandingDirty = useCallback(() => {
     if (!canCreateSettings) return;
@@ -3486,6 +3506,61 @@ export default function CompanySettingsPage() {
                   <span className="cs-field-hint">Shown on Purchase Order documents and contract templates</span>
                 </SettingsField>
 
+                {/* Company Address */}
+                <SettingsField className="company-settings__field">
+                  <label>Company Address / Headquarters</label>
+                  <Input
+                    value={brandingCompanyAddress}
+                    onChange={(e) => { setBrandingCompanyAddress(e.target.value); markBrandingDirty(); }}
+                    placeholder="123 Business Avenue, Suite 500, City, Country"
+                  />
+                  <span className="cs-field-hint">Rendered on Tax Invoices, Purchase Orders, and Payment Vouchers</span>
+                </SettingsField>
+
+                {/* Tax / GSTIN Registration */}
+                <SettingsField className="company-settings__field">
+                  <label>Tax Registration Number (GSTIN / VAT / PAN)</label>
+                  <Input
+                    value={brandingTaxRegistrationNumber}
+                    onChange={(e) => { setBrandingTaxRegistrationNumber(e.target.value); markBrandingDirty(); }}
+                    placeholder="e.g. 29ABCDE1234F2Z5 / VAT-98765432"
+                  />
+                  <span className="cs-field-hint">Printed on official invoices and procurement receipts</span>
+                </SettingsField>
+
+                {/* Bank Name */}
+                <SettingsField className="company-settings__field">
+                  <label>Disbursement Bank Name</label>
+                  <Input
+                    value={brandingBankName}
+                    onChange={(e) => { setBrandingBankName(e.target.value); markBrandingDirty(); }}
+                    placeholder="e.g. Standard Chartered Bank / HDFC Bank"
+                  />
+                  <span className="cs-field-hint">Remitter bank name printed on Bank Payment Vouchers</span>
+                </SettingsField>
+
+                {/* Bank Account Number */}
+                <SettingsField className="company-settings__field">
+                  <label>Disbursement Bank Account Number</label>
+                  <Input
+                    value={brandingBankAccountNumber}
+                    onChange={(e) => { setBrandingBankAccountNumber(e.target.value); markBrandingDirty(); }}
+                    placeholder="e.g. 98765432101234"
+                  />
+                  <span className="cs-field-hint">Account number printed on Bank Payment Vouchers</span>
+                </SettingsField>
+
+                {/* IFSC / SWIFT Code */}
+                <SettingsField className="company-settings__field">
+                  <label>Bank IFSC / SWIFT / Sort Code</label>
+                  <Input
+                    value={brandingBankIfscCode}
+                    onChange={(e) => { setBrandingBankIfscCode(e.target.value); markBrandingDirty(); }}
+                    placeholder="e.g. SCBL0001234 / HDFC0001234"
+                  />
+                  <span className="cs-field-hint">Routing code for treasury disbursement vouchers</span>
+                </SettingsField>
+
                 {/* Save Button */}
                 {brandingDirty && (
                   <div className="cs-branding-actions">
@@ -3510,6 +3585,11 @@ export default function CompanySettingsPage() {
                           setBrandingSupportEmail(profile.supportEmail || '');
                           setBrandingCompanyPhone(profile.companyPhone || '');
                           setBrandingCompanyEmail(profile.companyEmail || '');
+                          setBrandingCompanyAddress(profile.companyAddress || '');
+                          setBrandingTaxRegistrationNumber(profile.taxRegistrationNumber || '');
+                          setBrandingBankName(profile.bankName || '');
+                          setBrandingBankAccountNumber(profile.bankAccountNumber || '');
+                          setBrandingBankIfscCode(profile.bankIfscCode || '');
                         }
                       }}
                     >

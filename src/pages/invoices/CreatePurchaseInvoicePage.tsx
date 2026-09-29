@@ -38,6 +38,7 @@ import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TableSkeleton } from '../../components/shared/Skeleton';
 import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyMaster';
 import { useBranding } from '../../context/BrandingContext';
+import { useSuccessModal } from '../../context/SuccessModalContext';
 import defaultHeliflowLogo from '../../assets/heliflow.png';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -204,6 +205,7 @@ export default function CreatePurchaseInvoicePage() {
   const [viewerDocIndex, setViewerDocIndex] = useState(0);
 
   // UI state
+  const { showSuccess } = useSuccessModal();
   const [savingDraft, setSavingDraft] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showSendingOverlay, setShowSendingOverlay] = useState(false);
@@ -898,9 +900,33 @@ export default function CreatePurchaseInvoicePage() {
       });
 
       if (isDraft) {
-        setSuccessMsg(`Invoice #${invoiceNumber} saved as draft successfully.`);
+        showSuccess({
+          title: 'Invoice Draft Saved!',
+          badge: 'DRAFT SAVED',
+          type: 'info',
+          referenceNumber: invoiceNumber,
+          message: `Invoice #${invoiceNumber} has been saved as draft successfully.`,
+          details: [
+            { label: 'Vendor / Supplier', value: displayVendorName },
+            { label: 'Total Amount', value: formatAmount(calculations.grandTotal, currency) },
+          ],
+          primaryBtnText: 'View in Invoices',
+        });
       } else {
-        setSuccessMsg(`Purchase Invoice #${invoiceNumber} submitted for approval successfully! Workflow initiated.`);
+        showSuccess({
+          title: 'Purchase Invoice Submitted!',
+          badge: 'INVOICE SUBMITTED',
+          referenceNumber: invoiceNumber,
+          message: `Purchase Invoice #${invoiceNumber} submitted for approval successfully. Approval workflow initiated.`,
+          details: [
+            { label: 'Vendor / Supplier', value: displayVendorName },
+            { label: 'PO Reference', value: displayPoNumber },
+            { label: 'Total Amount', value: formatAmount(calculations.grandTotal, currency) },
+            { label: 'Invoice Date', value: invoiceDate },
+          ],
+          primaryBtnText: 'Go to Accounts Payable',
+          onPrimaryClick: () => navigate('/accounts-payable'),
+        });
       }
 
       try {
@@ -913,10 +939,8 @@ export default function CreatePurchaseInvoicePage() {
         // ignore
       }
 
-      setTimeout(() => {
-        setShowSendingOverlay(false);
-        navigate('/accounts-payable');
-      }, 2200);
+      setShowSendingOverlay(false);
+      navigate('/accounts-payable');
     } catch (err: any) {
       setShowSendingOverlay(false);
       setErrorMsg(err?.message || 'Failed to submit Purchase Invoice.');

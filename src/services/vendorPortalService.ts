@@ -477,6 +477,129 @@ async function apiInvoices(): Promise<VendorInvoiceMock[]> {
   }
 }
 
+// ─── Vendor Payments ─────────────────────────────────────────
+
+export interface VendorPaymentRecord {
+  id: string;
+  paymentNumber: string;
+  invoiceId?: string | null;
+  invoiceNumber?: string;
+  poNumber?: string;
+  amount: number;
+  currency?: string;
+  method: string;
+  status: string;
+  paymentDate: string;
+  referenceNumber?: string;
+  bankAccount?: string;
+  comments?: string;
+  attachments?: any;
+  createdAt?: string;
+}
+
+export interface RecordVendorPaymentPayload {
+  invoiceId?: string;
+  invoiceNumber?: string;
+  amount: number;
+  currency?: string;
+  method: string;
+  referenceNumber?: string;
+  bankAccount?: string;
+  paymentDate: string;
+  comments?: string;
+  status?: string;
+}
+
+const LOCAL_STORAGE_VENDOR_PAYMENTS_KEY = 'heliflow_vendor_payments_cache';
+
+function getLocalVendorPayments(): VendorPaymentRecord[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_VENDOR_PAYMENTS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalVendorPayments(payments: VendorPaymentRecord[]): void {
+  try {
+    localStorage.setItem(LOCAL_STORAGE_VENDOR_PAYMENTS_KEY, JSON.stringify(payments));
+  } catch {}
+}
+
+async function apiListPayments(): Promise<VendorPaymentRecord[]> {
+  try {
+    const data = await vendorFetch<{ payments?: VendorPaymentRecord[] }>('/payments', { cacheTtlMs: 0 });
+    const serverPayments = (data.payments || []).filter((p) => {
+      const s = String(p.status || '').toUpperCase();
+      return (
+        s === 'RECEIVED' ||
+        s === 'PAID' ||
+        s === 'CLEARED' ||
+        s === 'PARTIAL' ||
+        String(p.paymentNumber || '').startsWith('VPAY-')
+      );
+    });
+    return serverPayments;
+  } catch {
+    return getLocalVendorPayments();
+  }
+}
+
+async function apiRecordPayment(payload: RecordVendorPaymentPayload): Promise<VendorPaymentRecord> {
+  const localId = `vpay_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const localPayment: VendorPaymentRecord = {
+    id: localId,
+    paymentNumber: `VPAY-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`,
+    invoiceId: payload.invoiceId || null,
+    invoiceNumber: payload.invoiceNumber || '—',
+    amount: payload.amount,
+    currency: payload.currency || 'KES',
+    method: payload.method || 'NEFT',
+    status: payload.status || 'RECEIVED',
+    paymentDate: payload.paymentDate || new Date().toISOString(),
+    referenceNumber: payload.referenceNumber || '—',
+    bankAccount: payload.bankAccount || '',
+    comments: payload.comments || '',
+    createdAt: new Date().toISOString(),
+  };
+
+  // Optimistically store in local storage
+  const current = getLocalVendorPayments();
+  saveLocalVendorPayments([localPayment, ...current]);
+
+  try {
+    const res = await vendorFetch<{ payment: any }>('/payments', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    if (res?.payment) {
+      return {
+        ...localPayment,
+        ...res.payment,
+        id: res.payment.id || localId,
+      };
+    }
+  } catch (err) {
+    console.warn('Backend payment record fallback to local store:', err);
+  }
+
+  return localPayment;
+}
+
+async function apiDeletePayment(paymentId: string): Promise<void> {
+  const current = getLocalVendorPayments();
+  saveLocalVendorPayments(current.filter((p) => p.id !== paymentId));
+
+  try {
+    await vendorFetch(`/payments/${paymentId}`, {
+      method: 'DELETE',
+    });
+  } catch (err) {
+    console.warn('Backend delete payment fallback:', err);
+  }
+}
+
 // ─── Bid Security (Vendor-facing) ───────────────────────────
 
 async function apiVendorGetBidSecurity(quotationId: string): Promise<import('../types').QuotationBidSecurity | null> {
@@ -772,4 +895,8 @@ export const vendorPortalService = {
   deletePaymentPlan: apiDeletePaymentPlan,
   // Agreements
   listAgreements: apiListAgreements,
+  // Payments
+  listPayments: apiListPayments,
+  recordPayment: apiRecordPayment,
+  deletePayment: apiDeletePayment,
 };

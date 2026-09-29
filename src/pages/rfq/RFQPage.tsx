@@ -52,24 +52,22 @@ export interface ColumnDef {
   width?: string;
 }
 
-const COL_META: Record<string, { width: string; align?: 'left'|'center'|'right' }> = {
-  rfqNumber:    { width: '160px', align: 'left'   },
-  title:        { width: '220px', align: 'left'   },
-  status:       { width: '160px', align: 'left'   },
-  creator:      { width: '150px', align: 'left'   },
-  createdAt:    { width: '110px', align: 'left'   },
-  itemCount:    { width:  '70px', align: 'center' },
-  vendorCount:  { width:  '85px', align: 'center' },
-  quotationCount:{ width: '96px', align: 'center' },
-  totalEstimate:{ width: '116px', align: 'right'  },
-  priority:     { width:  '96px', align: 'left'   },
-  department:   { width: '120px', align: 'left'   },
-  closingDate:  { width: '110px', align: 'left'   },
-  currency:     { width:  '76px', align: 'center' },
+const COL_META: Record<string, { align?: 'left'|'center'|'right' }> = {
+  rfqNumber:    { align: 'left'   },
+  title:        { align: 'left'   },
+  status:       { align: 'left'   },
+  creator:      { align: 'left'   },
+  createdAt:    { align: 'left'   },
+  itemCount:    { align: 'center' },
+  vendorCount:  { align: 'center' },
+  quotationCount:{ align: 'center' },
+  totalEstimate:{ align: 'right'  },
+  priority:     { align: 'left'   },
+  department:   { align: 'left'   },
+  closingDate:  { align: 'left'   },
+  currency:     { align: 'center' },
+  rfqType:      { align: 'center' },
 };
-const COL_WIDTHS: Record<string, string> = Object.fromEntries(
-  Object.entries(COL_META).map(([k, v]) => [k, v.width])
-);
 
 const ALL_COLUMNS: ColumnDef[] = [
   {
@@ -836,21 +834,14 @@ export default function RFQPage() {
       {/* Table Card */}
       <Card className="overflow-hidden">
         {loading ? (
-          <TableSkeleton rows={5} columnWidths={['42px', ...visibleColumns.map((col) => COL_WIDTHS[col.key] || '120px'), '160px']} />
+          <TableSkeleton rows={5} columnWidths={['44px', '140px', '220px', '140px', '150px', '110px', '65px', '75px', '70px', '110px', '85px', '100px']} />
         ) : paginated.length > 0 ? (
           <>
             <div className="hidden overflow-x-auto lg:block">
-              <table className="w-full min-w-[1080px] border-collapse text-sm">
-                <colgroup>
-                  <col className="w-[42px]" />
-                  {visibleColumns.map((col) => (
-                    <col key={col.key} style={{ width: COL_WIDTHS[col.key] || 'auto' }} />
-                  ))}
-                  <col className="w-[160px]" />
-                </colgroup>
+              <table className="w-full min-w-[1000px] border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-border/75 bg-muted/45 text-left text-[12px] font-bold uppercase tracking-wide text-muted-foreground">
-                    <th className="px-3 py-3 text-center">
+                    <th className="w-11 px-4 py-3 text-center">
                       <input
                         type="checkbox"
                         disabled={!canCreateRFQ}
@@ -865,14 +856,16 @@ export default function RFQPage() {
                       return (
                         <th
                           key={col.key}
-                          className="px-3 py-3"
-                          style={{ textAlign: align }}
+                          className={cn(
+                            'px-4 py-3',
+                            align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left'
+                          )}
                         >
                           {col.headerRender ? col.headerRender() : col.label}
                         </th>
                       );
                     })}
-                    <th className="px-3 py-3 text-center">
+                    <th className="w-24 px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-2">
                         <span>Actions</span>
                         <div className="relative">
@@ -912,7 +905,7 @@ export default function RFQPage() {
                         )}
                         onClick={() => openDetail(rfq)}
                       >
-                        <td className="px-3 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
+                        <td className="w-11 px-4 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
                           <input
                             type="checkbox"
                             disabled={!canCreateRFQ}
@@ -925,13 +918,19 @@ export default function RFQPage() {
                         {visibleColumns.map((col) => {
                           const align = COL_META[col.key]?.align ?? 'left';
                           return (
-                            <td key={col.key} className="px-3 py-3.5" style={{ textAlign: align }}>
+                            <td
+                              key={col.key}
+                              className={cn(
+                                'px-4 py-3.5',
+                                align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left'
+                              )}
+                            >
                               {col.render(rfq, formatDate, openDetail)}
                             </td>
                           );
                         })}
 
-                        <td className="px-3 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
+                        <td className="w-24 px-4 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-center gap-1">
                             {canUserActOnRFQ && (
                               <>

@@ -116,7 +116,7 @@ export default function VendorCreateInvoicePage() {
     );
   }, [poList, selectedPoId]);
 
-  const finalLogoUrl = logoUrl || selectedPO?.companyLogoUrl || defaultHeliflowLogo;
+  const finalLogoUrl = selectedPO?.companyLogoUrl || logoUrl || null;
 
   // Human-readable PO Number formatter (never display raw 24-hex Mongo ID)
   const displayPoNumber = useMemo(() => {
@@ -446,8 +446,19 @@ export default function VendorCreateInvoicePage() {
       } catch {}
 
       if (isDraft) {
-        setSuccessMsg(`Draft invoice #${invoiceNumber} saved successfully.`);
-        setTimeout(() => navigate('/procurement/grns'), 1500);
+        setActionSuccessModalData({
+          actionType: 'sent',
+          module: 'Draft Invoice',
+          referenceNumber: invoiceNumber,
+          title: `Draft Invoice Saved`,
+          actionTitle: `Draft Invoice Saved`,
+          badgeText: `DRAFT`,
+          message: `Draft invoice #${invoiceNumber} has been saved successfully in your records.`,
+          details: [
+            { label: 'PO Reference', value: displayPoNumber },
+            { label: 'Total Value', value: formatAmount(calculations.grandTotal, currency) },
+          ],
+        });
       } else {
         setActionSuccessModalData({
           actionType: 'sent',
@@ -840,22 +851,40 @@ export default function VendorCreateInvoicePage() {
         {/* ── Header ── */}
         <div className="po-doc__header">
           <div className="po-doc__header-left">
-            <img src={finalLogoUrl} alt={companyName || 'Procnex'} className="po-doc__logo" />
+            {finalLogoUrl ? (
+              <img src={finalLogoUrl} alt={buyerName || companyName || 'Company'} className="po-doc__logo" />
+            ) : (
+              <div style={{
+                width: 40,
+                height: 40,
+                borderRadius: 8,
+                background: 'linear-gradient(135deg, #1e40af, #3b82f6)',
+                color: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 700,
+                fontSize: 16,
+                marginRight: 10,
+                flexShrink: 0,
+              }}>
+                {(buyerName || companyName || 'Company').substring(0, 2).toUpperCase()}
+              </div>
+            )}
             <div className="po-doc__company-info">
               <h1 className="po-doc__company-name">
-                {companyName || 'Procnex'}
+                {buyerName || companyName || 'Company'}
               </h1>
               <p className="po-doc__company-detail">
-                {selectedPO?.companyAddress || selectedPO?.shipToAddress || (companyName || 'Procnex') + ' • Corporate Headquarters'}
+                {selectedPO?.companyAddress || selectedPO?.shipToAddress || `${buyerName || companyName || 'Company'} • Corporate Headquarters`}
               </p>
-              <p className="po-doc__company-detail">
-                {companyPhone || selectedPO?.companyPhone ? `Phone: ${companyPhone || selectedPO?.companyPhone}` : ''}
-                {(companyPhone || selectedPO?.companyPhone) && (companyEmail || selectedPO?.companyEmail) ? ' | ' : ''}
-                {companyEmail || selectedPO?.companyEmail ? `Email: ${companyEmail || selectedPO?.companyEmail}` : ''}
-              </p>
-              <p className="po-doc__company-detail">
-                {selectedPO?.companyWebsite || 'www.procnex.com'}
-              </p>
+              {(companyPhone || selectedPO?.companyPhone || companyEmail || selectedPO?.companyEmail) && (
+                <p className="po-doc__company-detail">
+                  {companyPhone || selectedPO?.companyPhone ? `Phone: ${companyPhone || selectedPO?.companyPhone}` : ''}
+                  {(companyPhone || selectedPO?.companyPhone) && (companyEmail || selectedPO?.companyEmail) ? ' | ' : ''}
+                  {companyEmail || selectedPO?.companyEmail ? `Email: ${companyEmail || selectedPO?.companyEmail}` : ''}
+                </p>
+              )}
             </div>
           </div>
           <div className="po-doc__header-right">
@@ -898,7 +927,7 @@ export default function VendorCreateInvoicePage() {
           </div>
           <div className="po-doc__party-box">
             <h3 className="po-doc__party-heading">BILL TO (BUYER / CLIENT)</h3>
-            <p className="po-doc__party-name">{buyerName || companyName || 'Procnex'}</p>
+            <p className="po-doc__party-name">{buyerName || companyName || 'Company'}</p>
             <p className="po-doc__party-detail">Warehouse: {selectedPO?.shipToWarehouse || 'Central Warehouse'}</p>
             <p className="po-doc__party-detail">Address: {selectedPO?.shipToAddress || 'Corporate Headquarters'}</p>
             <p className="po-doc__party-detail">Contact: {selectedPO?.shipToContact || 'Accounts Payable / Treasury'}</p>

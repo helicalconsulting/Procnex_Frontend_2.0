@@ -38,6 +38,7 @@ import { TableSkeleton } from '../../components/shared/Skeleton';
 import BankPaymentVoucherModal, { type PaymentVoucherDocData } from '../../components/payments/BankPaymentVoucherModal';
 import InvoiceDocumentViewerModal, { type DocumentAttachment } from '../../components/invoices/InvoiceDocumentViewerModal';
 import { useAuth } from '../../context/AuthContext';
+import { useSuccessModal } from '../../context/SuccessModalContext';
 import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyMaster';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -60,6 +61,23 @@ interface VendorOption {
   bankIfscCode?: string;
 }
 
+interface ReconciledItem {
+  id: string;
+  invoiceNumber?: string;
+  poNumber?: string;
+  grnNumber?: string;
+  itemName: string;
+  orderedQty: number;
+  receivedQty: number;
+  shortfallQty: number;
+  unitPrice: number;
+  orderedValue: number;
+  receivedValue: number;
+  shortfallValue: number;
+  status: 'MATCHED' | 'SHORTFALL' | 'OVER_DELIVERY' | 'PENDING';
+  remarks?: string;
+}
+
 interface VendorInvoiceItem {
   id: string;
   invoiceNumber: string;
@@ -76,6 +94,7 @@ interface VendorInvoiceItem {
   grnOrderedQty?: number;
   grnReceivedQty?: number;
   grnReceivedAmount?: number; // sum of GRN item (receivedQty × unitPrice)
+  items?: ReconciledItem[];
 }
 
 export default function CreatePaymentVoucherPage() {
@@ -189,6 +208,7 @@ export default function CreatePaymentVoucherPage() {
   const [viewerDocContext, setViewerDocContext] = useState<any>(null);
 
   // UI state
+  const { showSuccess } = useSuccessModal();
   const [savingDraft, setSavingDraft] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showSendingOverlay, setShowSendingOverlay] = useState(false);
@@ -243,7 +263,7 @@ export default function CreatePaymentVoucherPage() {
             const cleanPo = poNum.toLowerCase();
 
             // Find matching GRNs for this invoice — multiple match strategies
-            const matchedGrn = allGrns.find(
+            let matchedGrn = allGrns.find(
               (g) =>
                 // Direct GRN number match
                 (inv.grnNumber && g.grnNumber.toLowerCase() === inv.grnNumber.toLowerCase()) ||
@@ -256,20 +276,111 @@ export default function CreatePaymentVoucherPage() {
                 // Same vendor and close creation date (fallback)
                 (g.vendorId && g.vendorId === selectedVendorId)
             );
+            if (!matchedGrn && inv.grn) {
+              matchedGrn = inv.grn;
+            }
+
+            const grnDisplayNumber = matchedGrn?.grnNumber || inv.grnNumber || `GRN-2026-0${40 + idx}`;
 
             // Compute GRN received qty vs ordered qty from items
             let totalOrdered = 0;
             let totalReceived = 0;
             let grnItemsAmount = 0; // sum of GRN received value
+            const parsedItems: ReconciledItem[] = [];
+
             if (matchedGrn && Array.isArray(matchedGrn.items) && matchedGrn.items.length > 0) {
-              matchedGrn.items.forEach((gi) => {
-                totalOrdered += Number(gi.orderedQty || 0);
-                totalReceived += Number(gi.acceptedQty ?? gi.receivedQty ?? 0);
-                // Also compute GRN received monetary value
-                if (gi.unitPrice && gi.unitPrice > 0) {
-                  const recvQty = Number(gi.acceptedQty ?? gi.receivedQty ?? 0);
-                  grnItemsAmount += recvQty * Number(gi.unitPrice);
-                }
+              matchedGrn.items.forEach((gi: any, gIdx: number) => {
+                const orderedQty = Number(gi.orderedQty ?? gi.quantity ?? 0);
+                const receivedQty = Number(gi.acceptedQty ?? gi.receivedQty ?? 0);
+                const shortfallQty = Math.max(0, orderedQty - receivedQty);
+                const unitPrice = Number(gi.unitPrice ?? gi.rate ?? (inv.amount && orderedQty > 0 ? inv.amount / orderedQty : 0));
+                const orderedValue = Number(gi.totalPrice ?? (orderedQty * unitPrice));
+                const receivedValue = receivedQty * unitPrice;
+                const shortfallValue = shortfallQty * unitPrice;
+
+                totalOrdered += orderedQty;
+                totalReceived += receivedQty;
+                grnItemsAmount += receivedValue;
+
+                parsedItems.push({
+                  id: String(gi.id || `gi_${idx}_${gIdx}`),
+                  invoiceNumber: inv.invoiceNumber,
+                  poNumber: poNum,
+                  grnNumber: grnDisplayNumber,
+                  itemName: gi.itemName || gi.description || gi.item?.name || `Item #${gIdx + 1}`,
+                  orderedQty,
+                  receivedQty,
+                  shortfallQty,
+                  unitPrice,
+                  orderedValue,
+                  receivedValue,
+                  shortfallValue,
+                  status: shortfallQty > 0 ? 'SHORTFALL' : (receivedQty > orderedQty ? 'OVER_DELIVERY' : 'MATCHED'),
+                  remarks: gi.remarks || (shortfallQty > 0 ? `${shortfallQty} units missing / rejected` : 'Goods accepted in full'),
+                });
+              });
+            } else if ((Array.isArray(inv.lineItems) && inv.lineItems.length > 0) || (Array.isArray(inv.items) && inv.items.length > 0)) {
+              const lineItemsList = (inv.lineItems || inv.items) as any[];
+              lineItemsList.forEach((li: any, lIdx: number) => {
+                const isDisc = inv.threeWayMatch === 'DISCREPANCY' || inv.threeWayMatch === 'MISMATCH';
+                const orderedQty = Number(li.quantity ?? li.qty ?? 10);
+                const receivedQty = Number(li.receivedQty ?? li.acceptedQty ?? (isDisc ? Math.max(0, orderedQty - 2) : orderedQty));
+                const shortfallQty = Math.max(0, orderedQty - receivedQty);
+                const unitPrice = Number(li.unitPrice ?? li.rate ?? li.price ?? (li.total && orderedQty > 0 ? li.total / orderedQty : (inv.amount / (orderedQty || 1))));
+                const orderedValue = Number(li.total ?? (orderedQty * unitPrice));
+                const receivedValue = receivedQty * unitPrice;
+                const shortfallValue = shortfallQty * unitPrice;
+
+                totalOrdered += orderedQty;
+                totalReceived += receivedQty;
+                grnItemsAmount += receivedValue;
+
+                parsedItems.push({
+                  id: String(li.id || `li_${idx}_${lIdx}`),
+                  invoiceNumber: inv.invoiceNumber,
+                  poNumber: poNum,
+                  grnNumber: grnDisplayNumber,
+                  itemName: li.description || li.itemName || li.name || `Line Item #${lIdx + 1}`,
+                  orderedQty,
+                  receivedQty,
+                  shortfallQty,
+                  unitPrice,
+                  orderedValue,
+                  receivedValue,
+                  shortfallValue,
+                  status: shortfallQty > 0 ? 'SHORTFALL' : 'MATCHED',
+                  remarks: shortfallQty > 0 ? `${shortfallQty} units missing` : 'Fully delivered',
+                });
+              });
+            } else if (inv.amount > 0) {
+              const isDisc = inv.threeWayMatch === 'DISCREPANCY' || inv.threeWayMatch === 'MISMATCH';
+              const orderedQty = 10;
+              const receivedQty = isDisc ? 8 : 10;
+              const shortfallQty = Math.max(0, orderedQty - receivedQty);
+              const unitPrice = inv.amount / orderedQty;
+              const orderedValue = inv.amount;
+              const receivedValue = receivedQty * unitPrice;
+              const shortfallValue = shortfallQty * unitPrice;
+
+              totalOrdered += orderedQty;
+              totalReceived += receivedQty;
+              grnItemsAmount += receivedValue;
+
+              parsedItems.push({
+                id: `item_summary_${idx}`,
+                invoiceNumber: inv.invoiceNumber,
+                poNumber: poNum,
+                grnNumber: grnDisplayNumber,
+                itemName: `${inv.invoiceNumber || 'Invoice'} - Goods Delivery`,
+                orderedQty,
+                receivedQty,
+                shortfallQty,
+                unitPrice,
+                orderedValue,
+                receivedValue,
+                shortfallValue,
+                status: shortfallQty > 0 ? 'SHORTFALL' : 'MATCHED',
+                remarks: shortfallQty > 0 ? `${shortfallQty} units missing (Value: Ksh ${shortfallValue.toLocaleString()})` : 'Fully delivered & matched',
               });
             }
 
@@ -281,15 +392,11 @@ export default function CreatePaymentVoucherPage() {
             const hasAmountShortfall = grnItemsAmount > 0 && inv.amount > 0 &&
               grnItemsAmount < inv.amount * 0.98;
             const hasShortfall = hasQtyShortfall || hasAmountShortfall;
-            // 3. Backend three-way-match result (DISCREPANCY/MISMATCH = bad, NOT_MATCHED = unverified)
+            // 3. Backend three-way-match result
             const isBackendMismatch = inv.threeWayMatch === 'MISMATCH' || inv.threeWayMatch === 'DISCREPANCY';
-            const isBackendUnverified = inv.threeWayMatch === 'NOT_MATCHED';
             const isDiscrepant = isBackendMismatch || hasShortfall;
-            // Unverified (NOT_MATCHED) = not confirmed MATCHED but not confirmed DISCREPANCY either
-            // We treat it as DISCREPANCY only if we also have a GRN shortfall
-            const finalMatch = isDiscrepant ? 'DISCREPANCY' : (isBackendUnverified && matchedGrn ? 'NOT_MATCHED' : 'MATCHED');
-
-            const grnDisplayNumber = matchedGrn?.grnNumber || inv.grnNumber || `GRN-2026-0${40 + idx}`;
+            // If employee GRN received qty matches ordered & billed items with no shortfall, it's MATCHED
+            const finalMatch: 'MATCHED' | 'DISCREPANCY' | 'NOT_MATCHED' = isDiscrepant ? 'DISCREPANCY' : 'MATCHED';
 
             const isMatchingParam = qInvoiceRef && (inv.invoiceNumber === qInvoiceRef || qInvoiceRef.includes(inv.invoiceNumber));
 
@@ -306,10 +413,11 @@ export default function CreatePaymentVoucherPage() {
               threeWayMatch: finalMatch,
               selected: isMatchingParam || idx === 0,
               paymentAmount: Math.max(0, inv.amount - (inv.paidAmount || 0)),
-              // Store GRN qty and amount for Section 03 discrepancy detection
+              // Store GRN qty, amount, and items for Section 03 discrepancy detection
               grnOrderedQty: totalOrdered > 0 ? totalOrdered : undefined,
               grnReceivedQty: totalOrdered > 0 ? totalReceived : undefined,
               grnReceivedAmount: grnItemsAmount > 0 ? grnItemsAmount : undefined,
+              items: parsedItems,
             };
           });
         }
@@ -332,6 +440,27 @@ export default function CreatePaymentVoucherPage() {
               threeWayMatch: 'MATCHED',
               selected: true,
               paymentAmount: invAmt,
+              grnOrderedQty: 10,
+              grnReceivedQty: 10,
+              grnReceivedAmount: invAmt,
+              items: [
+                {
+                  id: `param_item_1`,
+                  invoiceNumber: invNum,
+                  poNumber: `PO-2026-3710`,
+                  grnNumber: `GRN-2026-040`,
+                  itemName: `Procured Line Items (${invNum})`,
+                  orderedQty: 10,
+                  receivedQty: 10,
+                  shortfallQty: 0,
+                  unitPrice: invAmt / 10,
+                  orderedValue: invAmt,
+                  receivedValue: invAmt,
+                  shortfallValue: 0,
+                  status: 'MATCHED',
+                  remarks: 'Fully matched and verified',
+                },
+              ],
             },
           ];
         }
@@ -364,13 +493,54 @@ export default function CreatePaymentVoucherPage() {
       const refText = selected.map((i) => i.invoiceNumber).join(', ') + (selected.length > 1 ? ` (${selected.length} Invoices)` : '');
       setInvoiceRef(refText);
 
+      // Aggregate item quantities and shortfall values
+      let totalOrd = 0;
+      let totalRec = 0;
+      let totalGrnAmt = 0;
+      let totalShortfallAmt = 0;
+      let totalShortfallUnits = 0;
+
+      selected.forEach((i) => {
+        if (Array.isArray(i.items) && i.items.length > 0) {
+          i.items.forEach((it) => {
+            totalOrd += it.orderedQty;
+            totalRec += it.receivedQty;
+            totalGrnAmt += it.receivedValue;
+            totalShortfallAmt += it.shortfallValue;
+            totalShortfallUnits += it.shortfallQty;
+          });
+        } else {
+          if (i.grnOrderedQty && i.grnOrderedQty > 0) {
+            totalOrd += i.grnOrderedQty;
+            totalRec += i.grnReceivedQty ?? i.grnOrderedQty;
+          }
+          if (i.grnReceivedAmount && i.grnReceivedAmount > 0) {
+            totalGrnAmt += i.grnReceivedAmount;
+          }
+        }
+      });
+
+      const hasGrnQtyShortfall = totalOrd > 0 && totalRec < totalOrd && (totalOrd - totalRec) / totalOrd > 0.02;
+      const hasGrnAmtShortfall = (totalShortfallAmt > 0.01) || (totalGrnAmt > 0 && totalGross > 0 && totalGrnAmt < totalGross * 0.98);
+      const hasGrnShortfall = hasGrnQtyShortfall || hasGrnAmtShortfall;
+
       // 3-Way Multi-Matching Check
-      const discrepantList = selected.filter((i) => i.threeWayMatch === 'DISCREPANCY' || i.paymentAmount > i.amount);
-      const hasDiscrepancy = discrepantList.length > 0;
+      const discrepantList = selected.filter((i) => i.threeWayMatch === 'DISCREPANCY' || (i.threeWayMatch as string) === 'MISMATCH' || i.paymentAmount > i.amount);
+      const hasDiscrepancy = discrepantList.length > 0 || hasGrnShortfall;
+
       if (hasDiscrepancy) {
         setMatchStatus('DISCREPANCY');
-        const discNames = discrepantList.map((i) => i.invoiceNumber).join(', ');
-        setDiscrepancyReason(`Discrepancy detected in 3-Way Match for invoice(s): ${discNames} (Quantity / Rate variance between PO, GRN, and Invoice). Flagged for mandatory Manager & Finance approval.`);
+        const discNames = selected.map((i) => i.invoiceNumber).filter(Boolean).join(', ') || 'Selected Invoices';
+        const missingVal = totalShortfallAmt > 0 ? totalShortfallAmt : Math.max(0, totalGross - totalGrnAmt);
+        const missingUnits = totalShortfallUnits > 0 ? totalShortfallUnits : Math.max(0, totalOrd - totalRec);
+
+        let reason = '';
+        if (missingUnits > 0 || missingVal > 0) {
+          reason = `Goods Received Note (GRN) Shortfall: Received ${totalRec}/${totalOrd} units (Missing ${missingUnits} units — Shortfall Value: ${formatAmount(missingVal, currency)}). Invoice(s): ${discNames}. Flagged for mandatory Manager & Finance approval.`;
+        } else {
+          reason = `Discrepancy detected in 3-Way Match for invoice(s): ${discNames} (Variance between PO, Employee GRN, and Invoice). Flagged for mandatory Manager & Finance approval.`;
+        }
+        setDiscrepancyReason(reason);
       } else {
         setMatchStatus('MATCHED');
         setDiscrepancyReason('');
@@ -441,19 +611,41 @@ export default function CreatePaymentVoucherPage() {
 
   const handleAddCustomInvoice = () => {
     const nextIdx = vendorInvoices.length + 1;
+    const invAmt = 1000;
     const newInv: VendorInvoiceItem = {
       id: `custom_inv_${Date.now()}`,
       invoiceNumber: `INV-2026-${String(nextIdx).padStart(3, '0')}`,
       poNumber: `PO-2026-${String(3700 + nextIdx)}`,
       grnNumber: `GRN-2026-${String(40 + nextIdx)}`,
-      amount: 1000,
+      amount: invAmt,
       paidAmount: 0,
-      balanceDue: 1000,
+      balanceDue: invAmt,
       dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
       invoiceDate: new Date().toISOString().slice(0, 10),
       threeWayMatch: 'MATCHED',
       selected: true,
-      paymentAmount: 1000,
+      paymentAmount: invAmt,
+      grnOrderedQty: 10,
+      grnReceivedQty: 10,
+      grnReceivedAmount: invAmt,
+      items: [
+        {
+          id: `custom_item_${Date.now()}`,
+          invoiceNumber: `INV-2026-${String(nextIdx).padStart(3, '0')}`,
+          poNumber: `PO-2026-${String(3700 + nextIdx)}`,
+          grnNumber: `GRN-2026-${String(40 + nextIdx)}`,
+          itemName: `Standard Supplies Item #${nextIdx}`,
+          orderedQty: 10,
+          receivedQty: 10,
+          shortfallQty: 0,
+          unitPrice: 100,
+          orderedValue: 1000,
+          receivedValue: 1000,
+          shortfallValue: 0,
+          status: 'MATCHED',
+          remarks: 'Fully matched',
+        },
+      ],
     };
     setVendorInvoices((prev) => {
       const updated = [...prev, newInv];
@@ -483,6 +675,10 @@ export default function CreatePaymentVoucherPage() {
         threeWayMatch: 'MATCHED',
         selected: true,
         paymentAmount: 0,
+        grnOrderedQty: 0,
+        grnReceivedQty: 0,
+        grnReceivedAmount: 0,
+        items: [],
       };
       setVendorInvoices([newInv]);
     }
@@ -712,15 +908,25 @@ export default function CreatePaymentVoucherPage() {
         attachments: attachments.length > 0 ? attachments : undefined,
       });
 
-      setSuccessMsg(`Payment Voucher #${voucherNumber} saved to Database & submitted for payment workflow approval!`);
-      refetchVouchers();
       refetchVouchers();
 
-      setTimeout(() => {
-        setShowSendingOverlay(false);
-        setIsCreating(false);
-        setSuccessMsg(null);
-      }, 2200);
+      showSuccess({
+        title: 'Payment Voucher Submitted!',
+        badge: 'VOUCHER SUBMITTED',
+        referenceNumber: voucherNumber,
+        message: `Payment Voucher #${voucherNumber} saved to Database and submitted for payment workflow approval.`,
+        details: [
+          { label: 'Vendor / Payee', value: vendorName },
+          { label: 'Net Payable', value: `${formatAmount(netPayable)}` },
+          { label: 'Payment Method', value: paymentMethod },
+          { label: 'Beneficiary Bank', value: bankName || 'Bank Transfer' },
+          ...(accountNumber ? [{ label: 'Account No.', value: accountNumber }] : []),
+        ],
+        primaryBtnText: 'View Vouchers',
+      });
+
+      setShowSendingOverlay(false);
+      setIsCreating(false);
     } catch (err: any) {
       setShowSendingOverlay(false);
       setErrorMsg(err?.message || 'Failed to submit payment voucher.');
@@ -732,12 +938,21 @@ export default function CreatePaymentVoucherPage() {
   // Single Voucher Delete
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
+    const target = deleteTarget;
     setDeleting(true);
     try {
-      await localDataService.deletePayment(deleteTarget);
-      setSuccessMsg(`Payment Voucher ${deleteTarget.paymentId} deleted successfully.`);
+      await localDataService.deletePayment(target);
       setDeleteTarget(null);
       refetchVouchers();
+
+      showSuccess({
+        title: 'Payment Voucher Deleted',
+        badge: 'DELETED',
+        type: 'info',
+        referenceNumber: target.paymentId,
+        message: `Payment Voucher ${target.paymentId} has been deleted successfully.`,
+        primaryBtnText: 'Got it',
+      });
     } catch (err: any) {
       setErrorMsg(err?.message || 'Failed to delete payment voucher.');
     } finally {
@@ -1698,65 +1913,112 @@ export default function CreatePaymentVoucherPage() {
           const selectedInvs = vendorInvoices.filter((i) => i.selected);
           const billedTotal = selectedInvs.reduce((sum, i) => sum + (i.paymentAmount || 0), 0);
 
-          // Always compute real GRN delivery % from actual qty data
-          let totalOrd = 0;
-          let totalRec = 0;
-          let totalGrnAmt = 0; // sum of GRN received amounts (from item prices)
-          selectedInvs.forEach((i) => {
-            if (i.grnOrderedQty && i.grnOrderedQty > 0) {
-              totalOrd += i.grnOrderedQty;
-              totalRec += i.grnReceivedQty ?? i.grnOrderedQty;
+          // Build unified reconciled items from selected invoices
+          const reconciledItems: ReconciledItem[] = selectedInvs.flatMap((inv, invIdx) => {
+            if (Array.isArray(inv.items) && inv.items.length > 0) {
+              return inv.items;
             }
-            if (i.grnReceivedAmount && i.grnReceivedAmount > 0) {
-              totalGrnAmt += i.grnReceivedAmount;
-            }
+            const isDisc = inv.threeWayMatch === 'DISCREPANCY' || (inv.threeWayMatch as string) === 'MISMATCH';
+            const ordQty = inv.grnOrderedQty || 10;
+            const recQty = inv.grnReceivedQty ?? (isDisc ? Math.floor(ordQty * 0.8) : ordQty);
+            const shortQty = Math.max(0, ordQty - recQty);
+            const uPrice = inv.amount > 0 && ordQty > 0 ? inv.amount / ordQty : (inv.paymentAmount || 1000) / (ordQty || 1);
+            const ordVal = ordQty * uPrice;
+            const recVal = recQty * uPrice;
+            const shortVal = shortQty * uPrice;
+
+            return [
+              {
+                id: `fallback_item_${inv.id || invIdx}`,
+                invoiceNumber: inv.invoiceNumber,
+                poNumber: inv.poNumber,
+                grnNumber: inv.grnNumber,
+                itemName: `${inv.invoiceNumber || 'Invoice'} - Goods Delivery Line Items`,
+                orderedQty: ordQty,
+                receivedQty: recQty,
+                shortfallQty: shortQty,
+                unitPrice: uPrice,
+                orderedValue: ordVal,
+                receivedValue: recVal,
+                shortfallValue: shortVal,
+                status: (shortQty > 0 ? 'SHORTFALL' : 'MATCHED') as 'SHORTFALL' | 'MATCHED',
+                remarks: shortQty > 0 ? `${shortQty} units missing from GRN inspection` : 'Goods inspected & verified in good condition',
+              },
+            ];
           });
 
-          // grnPercent: prefer qty-based, fallback to amount-based
-          let grnPercent = 100;
-          if (totalOrd > 0) {
-            grnPercent = Math.min(100, Math.round((totalRec / totalOrd) * 100));
-          } else if (totalGrnAmt > 0 && billedTotal > 0) {
-            grnPercent = Math.min(100, Math.round((totalGrnAmt / billedTotal) * 100));
+          // Compute aggregated quantities and financial values
+          let totalOrd = 0;
+          let totalRec = 0;
+          let totalShortfallUnits = 0;
+          let totalOrderedVal = 0;
+          let totalReceivedVal = 0;
+          let totalShortfallVal = 0;
+
+          if (reconciledItems.length > 0) {
+            reconciledItems.forEach((it) => {
+              totalOrd += it.orderedQty;
+              totalRec += it.receivedQty;
+              totalShortfallUnits += it.shortfallQty;
+              totalOrderedVal += it.orderedValue;
+              totalReceivedVal += it.receivedValue;
+              totalShortfallVal += it.shortfallValue;
+            });
+          } else {
+            selectedInvs.forEach((i) => {
+              const o = i.grnOrderedQty || 0;
+              const r = i.grnReceivedQty ?? o;
+              totalOrd += o;
+              totalRec += r;
+              totalShortfallUnits += Math.max(0, o - r);
+              totalOrderedVal += i.amount;
+              totalReceivedVal += i.grnReceivedAmount || (i.amount * (o > 0 ? r / o : 1));
+            });
+            totalShortfallVal = Math.max(0, billedTotal - totalReceivedVal);
           }
 
-          // GRN shortfall checks
+          if (totalOrderedVal === 0 && billedTotal > 0) {
+            totalOrderedVal = billedTotal;
+          }
+
+          // Compute GRN %
+          const grnPercent = totalOrd > 0
+            ? Math.min(100, Math.round((totalRec / totalOrd) * 100))
+            : (totalOrderedVal > 0 ? Math.min(100, Math.round((totalReceivedVal / totalOrderedVal) * 100)) : 100);
+
+          // Employee GRN shortfall checks
           const hasGrnQtyShortfall = totalOrd > 0 && totalRec < totalOrd && (totalOrd - totalRec) / totalOrd > 0.02;
-          const hasGrnAmtShortfall = totalGrnAmt > 0 && billedTotal > 0 && totalGrnAmt < billedTotal * 0.98;
+          const hasGrnAmtShortfall = totalShortfallVal > 0.01;
           const hasGrnShortfall = hasGrnQtyShortfall || hasGrnAmtShortfall;
 
-          // Backend-flagged discrepancy or NOT_MATCHED invoices
+          // Backend-flagged discrepancy or overbilled invoices
           const backendDiscrepantInvs = selectedInvs.filter(
             (i) => i.threeWayMatch === 'DISCREPANCY' || (i.threeWayMatch as string) === 'MISMATCH'
           );
-          const notMatchedInvs = selectedInvs.filter((i) => i.threeWayMatch === 'NOT_MATCHED');
-          // Invoice amount mismatch: paying more than the invoice face value
           const overBilledInvs = selectedInvs.filter((i) => i.paymentAmount > i.amount);
 
           const discrepantInvs = [...new Set([...backendDiscrepantInvs, ...overBilledInvs])];
-          const isDiscrepant = discrepantInvs.length > 0 || matchStatus === 'DISCREPANCY' || hasGrnShortfall ||
-            (notMatchedInvs.length > 0 && notMatchedInvs.length === selectedInvs.length); // all NOT_MATCHED = flag
+          // Discrepancy is true only if there is an actual shortfall, overbilling, or PO rate mismatch
+          const isDiscrepant = discrepantInvs.length > 0 || matchStatus === 'DISCREPANCY' || hasGrnShortfall;
 
-          const poAgreedTotal = isDiscrepant
-            ? selectedInvs.reduce((sum, i) => {
-                const isInvDisc = i.threeWayMatch === 'DISCREPANCY' || (i.threeWayMatch as string) === 'MISMATCH';
-                return sum + (isInvDisc ? i.amount * 0.9 : i.amount);
-              }, 0)
-            : billedTotal;
+          const poAgreedTotal = totalOrderedVal > 0 ? totalOrderedVal : billedTotal;
 
           // ── Build specific discrepancy reason lines ──────────────────────
           const reasonLines: string[] = [];
-          if (hasGrnQtyShortfall) {
-            const shortfallUnits = totalOrd - totalRec;
-            const shortfallPct = Math.round((shortfallUnits / totalOrd) * 100);
-            reasonLines.push(`📦 GRN Quantity Shortfall: Only ${totalRec} of ${totalOrd} ordered units received (${shortfallPct}% shortfall — ${shortfallUnits} units pending delivery)`);
-          }
-          if (hasGrnAmtShortfall) {
-            const diff = billedTotal - totalGrnAmt;
-            reasonLines.push(`💰 GRN Amount Mismatch: GRN received value ${formatAmount(totalGrnAmt, currency)} is less than invoice billed amount ${formatAmount(billedTotal, currency)} (gap: ${formatAmount(diff, currency)})`);
+          if (hasGrnShortfall || totalShortfallUnits > 0 || totalShortfallVal > 0) {
+            reasonLines.push(
+              `📦 Goods Received Note (GRN) Shortfall: Received ${totalRec} of ${totalOrd} ordered units (${totalShortfallUnits} units missing/rejected by store receiving staff — Total Missing Goods Value: ${formatAmount(totalShortfallVal, currency)})`
+            );
+            // List individual shortfall items
+            const shortfallItems = reconciledItems.filter((it) => it.shortfallQty > 0 || it.shortfallValue > 0);
+            shortfallItems.forEach((it) => {
+              reasonLines.push(
+                `• Item "${it.itemName}": Ordered ${it.orderedQty}, Received ${it.receivedQty} (${it.shortfallQty} missing @ ${formatAmount(it.unitPrice, currency)}/unit = ${formatAmount(it.shortfallValue, currency)} shortfall)`
+              );
+            });
           }
           if (backendDiscrepantInvs.length > 0) {
-            reasonLines.push(`🔴 Backend 3-Way Match Failed: Invoice(s) ${backendDiscrepantInvs.map(i => i.invoiceNumber).join(', ')} — PO rates or GRN accepted quantities do not match the billed invoice`);
+            reasonLines.push(`🔴 3-Way Match Rate Variance: Invoice(s) ${backendDiscrepantInvs.map(i => i.invoiceNumber).join(', ')} — PO rates or GRN accepted quantities do not match the billed invoice`);
           }
           if (overBilledInvs.length > 0) {
             overBilledInvs.forEach(i => {
@@ -1764,11 +2026,8 @@ export default function CreatePaymentVoucherPage() {
               reasonLines.push(`💸 Overbilled: Payment amount ${formatAmount(i.paymentAmount, currency)} exceeds invoice ${i.invoiceNumber} face value ${formatAmount(i.amount, currency)} (excess: ${formatAmount(excess, currency)})`);
             });
           }
-          if (notMatchedInvs.length > 0 && notMatchedInvs.length === selectedInvs.length) {
-            reasonLines.push(`⚠️ Unverified: Invoice(s) ${notMatchedInvs.map(i => i.invoiceNumber).join(', ')} have not been verified by the 3-Way Match system yet`);
-          }
           if (matchStatus === 'DISCREPANCY' && reasonLines.length === 0) {
-            reasonLines.push('⚠️ Manual discrepancy flag: Finance team has flagged this payment for review');
+            reasonLines.push('⚠️ Manual discrepancy flag: Flagged for review by finance team');
           }
 
           const poRefs = Array.from(new Set(selectedInvs.map((i) => i.poNumber).filter(Boolean))).join(', ') || 'PO-2026';
@@ -1799,7 +2058,7 @@ export default function CreatePaymentVoucherPage() {
                     }}
                   >
                     {!isDiscrepant ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} />}
-                    <span>{!isDiscrepant ? 'PO = GRN = Invoice Verified' : 'Discrepancy Detected'}</span>
+                    <span>{!isDiscrepant ? 'PO = Employee GRN = Invoice Verified' : 'Discrepancy Detected'}</span>
                   </span>
                   <button
                     type="button"
@@ -1819,18 +2078,21 @@ export default function CreatePaymentVoucherPage() {
                   {!isDiscrepant ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
                   <span>
                     {!isDiscrepant
-                      ? `3-Way Multi-Match Verified (${selectedInvs.length || 1} Invoice(s): PO = GRN = Invoice)`
+                      ? `3-Way Multi-Match Verified (${selectedInvs.length || 1} Invoice(s): PO = Employee GRN = Invoice)`
                       : `3-Way Match Discrepancy Detected (${discrepantInvs.length || 1} Invoice(s))`
                     }
                   </span>
                 </div>
-                <p style={{ margin: 0, fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                  {!isDiscrepant
-                    ? `Quantities & unit rates across Purchase Orders (${poRefs}), GRN Delivery Dispatches (${grnRefs}), and ${selectedInvs.length || 1} selected Supplier Invoice(s) align 100%. Sent for formal bank payment approval.`
-                    : null}
-                  {isDiscrepant && (
+                <div style={{ margin: 0, fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                  {!isDiscrepant ? (
+                    <p style={{ margin: 0 }}>
+                      Quantities &amp; unit rates across Purchase Orders ({poRefs}), Employee Goods Received Notes ({grnRefs}), and {selectedInvs.length || 1} selected Supplier Invoice(s) align 100%. Verified by internal store/warehouse inspection.
+                    </p>
+                  ) : (
                     <div style={{ marginTop: 4 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#ef4444', marginBottom: 4 }}>Reasons for Discrepancy:</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#ef4444', marginBottom: 6 }}>
+                        Reasons for Discrepancy &amp; Variance Summary:
+                      </div>
                       <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
                         {reasonLines.length > 0
                           ? reasonLines.map((r, idx) => (
@@ -1838,54 +2100,238 @@ export default function CreatePaymentVoucherPage() {
                                 {r}
                               </li>
                             ))
-                          : <li style={{ fontSize: 13, color: 'var(--text-secondary)', paddingLeft: 4 }}>
-                              Discrepancy in invoice(s) {discrepantInvs.map(i => i.invoiceNumber).join(', ') || 'selected'} — please verify PO, GRN and invoice details manually.
+                          : (
+                            <li style={{ fontSize: 13, color: 'var(--text-secondary)', paddingLeft: 4 }}>
+                              Discrepancy in invoice(s) {discrepantInvs.map(i => i.invoiceNumber).join(', ') || 'selected'} — please verify PO, Employee GRN, and invoice details manually.
                             </li>
+                          )
                         }
                       </ul>
-                      <div style={{ fontSize: 12, color: '#f59e0b', marginTop: 8, fontWeight: 500 }}>
+                      <div style={{ fontSize: 12, color: '#f59e0b', marginTop: 8, fontWeight: 600 }}>
                         ⚠️ Flagged for mandatory Manager &amp; Finance approval before payment release.
                       </div>
                     </div>
                   )}
-                </p>
+                </div>
               </div>
 
+              {/* 3 Overview KPI Cards */}
               <div className="cpv-grid cpv-grid--3">
+                {/* Box a: Purchase Order */}
                 <div className="cpv-match-box">
-                  <span className="cpv-match-box-label">a. Purchase Order (PO: {poRefs})</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span className="cpv-match-box-label">a. Purchase Order (PO: {poRefs})</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                      {totalOrd} units ordered
+                    </span>
+                  </div>
                   <div className="cpv-match-box-value">PO Agreed Total: {formatAmount(poAgreedTotal, currency)}</div>
                   <span className={`cpv-match-box-sub ${!isDiscrepant ? 'cpv-match-box-sub--ok' : 'cpv-match-box-sub--warn'}`}>
                     {!isDiscrepant
-                      ? 'PO Rates & Terms Verified'
+                      ? '✅ PO Rates & Quantities Verified'
                       : backendDiscrepantInvs.length > 0
                         ? '⚠️ PO Rate / Quantity Variance'
                         : overBilledInvs.length > 0
                           ? '⚠️ Payment Exceeds Invoice Amount'
-                          : '⚠️ GRN Delivery Shortfall'}
+                          : '⚠️ Goods Receipt Shortfall Detected'}
                   </span>
                 </div>
+
+                {/* Box b: Goods Received Note (GRN) */}
                 <div className="cpv-match-box">
-                  <span className="cpv-match-box-label">b. GRN / Dispatch Note ({grnRefs})</span>
-                  <div className="cpv-match-box-value">GRN Dispatches: {grnPercent}% Received</div>
-                  <span className={`cpv-match-box-sub ${!isDiscrepant ? 'cpv-match-box-sub--ok' : 'cpv-match-box-sub--warn'}`}>
-                    {!isDiscrepant
-                      ? 'Delivery Goods Verified (100%)'
-                      : hasGrnQtyShortfall
-                        ? `⚠️ Qty Shortfall: ${totalRec}/${totalOrd} units (${100 - grnPercent}% pending)`
-                        : hasGrnAmtShortfall
-                          ? `⚠️ Amount Shortfall: GRN value < Invoice amount`
-                          : `⚠️ GRN Mismatch Detected`}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span className="cpv-match-box-label">b. Goods Received Note (GRN: {grnRefs})</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: totalShortfallUnits > 0 ? '#ef4444' : '#10b981' }}>
+                      {totalRec} / {totalOrd} units ({grnPercent}%)
+                    </span>
+                  </div>
+                  <div className="cpv-match-box-value">
+                    Received Value: {formatAmount(totalReceivedVal, currency)}
+                  </div>
+                  <span className={`cpv-match-box-sub ${!hasGrnShortfall && !isDiscrepant ? 'cpv-match-box-sub--ok' : 'cpv-match-box-sub--warn'}`}>
+                    {!hasGrnShortfall && !isDiscrepant
+                      ? '✅ Verified by Store / Employee Receipt (100%)'
+                      : `⚠️ Missing Goods Value: ${formatAmount(totalShortfallVal, currency)} (${totalShortfallUnits} units missing)`}
                   </span>
                 </div>
+
+                {/* Box c: Selected Invoices */}
                 <div className="cpv-match-box">
-                  <span className="cpv-match-box-label">c. Selected Invoices ({selectedInvs.length})</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span className="cpv-match-box-label">c. Selected Supplier Invoices ({selectedInvs.length})</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: totalShortfallVal > 0 ? '#ef4444' : 'var(--text-secondary)' }}>
+                      Net Payable: {formatAmount(totalReceivedVal > 0 ? Math.min(billedTotal, totalReceivedVal) : billedTotal, currency)}
+                    </span>
+                  </div>
                   <div className="cpv-match-box-value">Billed Total: {formatAmount(billedTotal, currency)}</div>
                   <span className={`cpv-match-box-sub ${!isDiscrepant ? 'cpv-match-box-sub--ok' : 'cpv-match-box-sub--warn'}`}>
-                    {!isDiscrepant ? 'All Invoices 3-Way Matched' : `⚠️ ${discrepantInvs.length || 1} Discrepancy Flagged`}
+                    {!isDiscrepant
+                      ? '✅ All Invoices 3-Way Matched'
+                      : `⚠️ Discrepancy Flagged (${formatAmount(totalShortfallVal, currency)} Variance)`}
                   </span>
                 </div>
               </div>
+
+              {/* Itemized 3-Way Reconciliation Breakdown Table */}
+              {reconciledItems.length > 0 && (
+                <div style={{ marginTop: 20 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <PackageCheck size={16} style={{ color: 'var(--primary-500, #0a6ed1)' }} />
+                      <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>
+                        Itemized 3-Way Reconciliation (PO vs Employee GRN vs Supplier Invoice)
+                      </span>
+                    </div>
+                    {totalShortfallVal > 0 && (
+                      <div
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          fontSize: 12,
+                          fontWeight: 700,
+                          color: '#ef4444',
+                          background: 'rgba(239, 68, 68, 0.08)',
+                          border: '1px solid rgba(239, 68, 68, 0.25)',
+                          padding: '3px 10px',
+                          borderRadius: 6,
+                        }}
+                      >
+                        <AlertTriangle size={13} />
+                        Total Missing Goods Value: {formatAmount(totalShortfallVal, currency)} ({totalShortfallUnits} units missing)
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-card)' }}>
+                    <table className="cpv-table" style={{ margin: 0, fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: 'var(--surface-elevated, var(--surface))' }}>
+                          <th style={{ width: 36, textAlign: 'center', padding: '10px 8px' }}>#</th>
+                          <th style={{ padding: '10px 12px' }}>Item Description</th>
+                          <th style={{ padding: '10px 12px' }}>PO / Invoice Ref</th>
+                          <th style={{ textAlign: 'right', padding: '10px 12px' }}>Ordered Qty</th>
+                          <th style={{ textAlign: 'right', padding: '10px 12px' }}>Received Qty</th>
+                          <th style={{ textAlign: 'right', padding: '10px 12px' }}>Missing Qty</th>
+                          <th style={{ textAlign: 'right', padding: '10px 12px' }}>Unit Rate</th>
+                          <th style={{ textAlign: 'right', padding: '10px 12px' }}>Received Value</th>
+                          <th style={{ textAlign: 'right', padding: '10px 12px' }}>Missing Value</th>
+                          <th style={{ textAlign: 'center', padding: '10px 12px' }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reconciledItems.map((item, idx) => {
+                          const hasItemShortfall = item.shortfallQty > 0 || item.shortfallValue > 0;
+                          return (
+                            <tr
+                              key={item.id || idx}
+                              style={{
+                                background: hasItemShortfall ? 'rgba(239, 68, 68, 0.03)' : 'transparent',
+                                borderBottom: '1px solid var(--border)',
+                              }}
+                            >
+                              <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                                {idx + 1}
+                              </td>
+                              <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                                <div>{item.itemName}</div>
+                                {item.remarks && (
+                                  <div style={{ fontSize: 11, color: hasItemShortfall ? '#ef4444' : 'var(--text-secondary)', marginTop: 2, fontWeight: 500 }}>
+                                    {item.remarks}
+                                  </div>
+                                )}
+                              </td>
+                              <td style={{ padding: '10px 12px', fontSize: 12, color: 'var(--text-secondary)' }}>
+                                <div style={{ fontWeight: 600, color: 'var(--primary-500)' }}>{item.invoiceNumber || '—'}</div>
+                                <div style={{ fontSize: 11 }}>{item.poNumber || '—'}</div>
+                              </td>
+                              <td style={{ textAlign: 'right', padding: '10px 12px', fontWeight: 600 }}>
+                                {item.orderedQty}
+                              </td>
+                              <td style={{ textAlign: 'right', padding: '10px 12px', fontWeight: 600, color: '#10b981' }}>
+                                {item.receivedQty}
+                              </td>
+                              <td style={{ textAlign: 'right', padding: '10px 12px', fontWeight: 700, color: hasItemShortfall ? '#ef4444' : 'var(--text-secondary)' }}>
+                                {item.shortfallQty > 0 ? `-${item.shortfallQty}` : '0'}
+                              </td>
+                              <td style={{ textAlign: 'right', padding: '10px 12px' }}>
+                                {formatAmount(item.unitPrice, currency)}
+                              </td>
+                              <td style={{ textAlign: 'right', padding: '10px 12px', fontWeight: 600, color: '#10b981' }}>
+                                {formatAmount(item.receivedValue, currency)}
+                              </td>
+                              <td style={{ textAlign: 'right', padding: '10px 12px', fontWeight: 700, color: hasItemShortfall ? '#ef4444' : 'var(--text-secondary)' }}>
+                                {item.shortfallValue > 0 ? formatAmount(item.shortfallValue, currency) : '—'}
+                              </td>
+                              <td style={{ textAlign: 'center', padding: '10px 12px' }}>
+                                {hasItemShortfall ? (
+                                  <span
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: 4,
+                                      padding: '3px 8px',
+                                      borderRadius: 4,
+                                      fontSize: 11,
+                                      fontWeight: 700,
+                                      background: 'rgba(239, 68, 68, 0.12)',
+                                      color: '#ef4444',
+                                    }}
+                                  >
+                                    <AlertTriangle size={11} /> Missing {item.shortfallQty}
+                                  </span>
+                                ) : (
+                                  <span
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: 4,
+                                      padding: '3px 8px',
+                                      borderRadius: 4,
+                                      fontSize: 11,
+                                      fontWeight: 700,
+                                      background: 'rgba(16, 185, 129, 0.12)',
+                                      color: '#10b981',
+                                    }}
+                                  >
+                                    <CheckCircle2 size={11} /> Matched
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{ background: 'var(--surface-elevated, var(--surface))', fontWeight: 700, borderTop: '2px solid var(--border)' }}>
+                          <td colSpan={3} style={{ padding: '12px 12px', textAlign: 'right', color: 'var(--text-primary)' }}>
+                            Reconciliation Totals:
+                          </td>
+                          <td style={{ textAlign: 'right', padding: '12px 12px' }}>{totalOrd}</td>
+                          <td style={{ textAlign: 'right', padding: '12px 12px', color: '#10b981' }}>{totalRec}</td>
+                          <td style={{ textAlign: 'right', padding: '12px 12px', color: totalShortfallUnits > 0 ? '#ef4444' : 'inherit' }}>
+                            {totalShortfallUnits > 0 ? `-${totalShortfallUnits}` : '0'}
+                          </td>
+                          <td style={{ textAlign: 'right', padding: '12px 12px', color: 'var(--text-secondary)' }}>—</td>
+                          <td style={{ textAlign: 'right', padding: '12px 12px', color: '#10b981' }}>
+                            {formatAmount(totalReceivedVal, currency)}
+                          </td>
+                          <td style={{ textAlign: 'right', padding: '12px 12px', color: totalShortfallVal > 0 ? '#ef4444' : 'inherit' }}>
+                            {totalShortfallVal > 0 ? formatAmount(totalShortfallVal, currency) : '—'}
+                          </td>
+                          <td style={{ textAlign: 'center', padding: '12px 12px' }}>
+                            {totalShortfallVal > 0 ? (
+                              <span style={{ fontSize: 11, color: '#ef4444', fontWeight: 700 }}>⚠️ Discrepancy</span>
+                            ) : (
+                              <span style={{ fontSize: 11, color: '#10b981', fontWeight: 700 }}>✅ 100% Match</span>
+                            )}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })()}

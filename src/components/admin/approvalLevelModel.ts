@@ -10,8 +10,6 @@ export const APPROVAL_MODULES: { key: string; label: string; system: ApprovalSys
   { key: 'PurchaseOrders', label: 'Purchase Orders', system: 'heliflow', aliases: ['Purchase Orders', 'PurchaseOrder', 'PO Approval'] },
   { key: 'AccountsPayable', label: 'Purchase Invoice Approval', system: 'heliflow', aliases: ['Accounts Payable', 'Purchase Invoice Approval'] },
   { key: 'Payments', label: 'Payment Voucher Approval', system: 'heliflow', aliases: ['Payment', 'Payment Voucher Approval'] },
-  { key: 'SalesOrders', label: 'Sales Orders', system: 'heliflow', aliases: ['Sales Orders', 'SalesOrder'] },
-  { key: 'Approvals', label: 'Approvals', system: 'heliflow' },
   { key: 'CustomForms', label: 'Custom Forms', system: 'heliflow', aliases: ['CustomForm', 'Custom Form', 'CustomForms Approval'] },
 ];
 export const APPROVAL_SYSTEM_LABELS = { rfq: 'P2P Engine', heliflow: 'Workflow Engine' };
@@ -26,7 +24,8 @@ export function mapApprovalLevel(level: ApprovalLevel): ApprovalLevelData {
 }
 export function approvalModulesForSystem(system: ApprovalSystem, levels: ApprovalLevelData[]) {
   // Existing custom workflow modules must remain visible, even if not in the catalog.
-  const extra = [...new Set(levels.map(level => level.module))].filter(key => !APPROVAL_MODULES.some(m => m.key === key))
+  const extra = [...new Set(levels.map(level => level.module))]
+    .filter(key => !APPROVAL_MODULES.some(m => m.key === key) && key !== 'SalesOrders' && key !== 'Approvals')
     .map(key => ({ key, label: key, system: 'heliflow' as const }));
   return [...APPROVAL_MODULES, ...extra].filter(module => module.system === system);
 }

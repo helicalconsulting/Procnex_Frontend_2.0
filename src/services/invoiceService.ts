@@ -21,6 +21,8 @@ export interface APInvoice {
   items?: any[];
   attachments?: any[];
   comments?: string;
+  grn?: any;
+  purchaseOrder?: any;
 }
 
 async function mockList(_params?: { poId?: string; vendorId?: string; search?: string }): Promise<APInvoice[]> {
@@ -66,6 +68,8 @@ async function apiList(params?: { poId?: string; vendorId?: string; search?: str
       items: (inv.items || inv.lineItems) as any[] | undefined,
       attachments: inv.attachments as any[] | undefined,
       comments: inv.comments ? String(inv.comments) : undefined,
+      grn: inv.grn,
+      purchaseOrder: inv.purchaseOrder,
     }));
   } catch (_err) {
     return [];

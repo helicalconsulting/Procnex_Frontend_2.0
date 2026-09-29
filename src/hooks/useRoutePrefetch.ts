@@ -104,6 +104,10 @@ const ROUTE_FETCHERS: Record<string, Fetcher[]> = {
   '/vendor/invoices': [
     () => vendorPortalService.listInvoices(),
   ],
+  '/vendor/payments': [
+    () => vendorPortalService.listPayments(),
+    () => vendorPortalService.listInvoices(),
+  ],
   '/vendor/profile': [
     () => vendorPortalService.getProfile(),
   ],

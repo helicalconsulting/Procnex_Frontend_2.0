@@ -86,6 +86,7 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   'My Orders': <Package size={19} />,
   'My Invoices': <Receipt size={19} />,
   'My Invoices & Dispatches': <Truck size={19} />,
+  'My Payments': <CreditCard size={19} />,
   Agreements: <FileSignature size={19} />,
   'My Profile': <UserCircle size={19} />,
   'Custom Form Builder': <FormInput size={19} />,
@@ -105,6 +106,7 @@ const FR_NAV_MAP: Record<string, string> = {
   'My Orders': 'Mes commandes',
   'Accounts Payable': 'Comptes fournisseurs',
   'My Invoices': 'Mes factures',
+  'My Payments': 'Mes paiements',
   Payments: 'Paiements',
   Vendors: 'Fournisseurs',
   Contracts: 'Contrats',
@@ -237,6 +239,9 @@ export default function Sidebar({
         ...menuItems
           .filter((item) => item.id === 'vendor-invoices')
           .map((item) => ({ label: item.label, icon: ICON_MAP[item.label] || <Truck size={19} />, path: item.path })),
+        ...menuItems
+          .filter((item) => item.id === 'vendor-payments')
+          .map((item) => ({ label: item.label, icon: ICON_MAP[item.label] || <CreditCard size={19} />, path: item.path })),
         ...menuItems
           .filter((item) => item.id === 'vendor-contracts')
           .map((item) => ({ label: 'Contracts', icon: ICON_MAP[item.label] || <FileText size={19} />, path: item.path })),

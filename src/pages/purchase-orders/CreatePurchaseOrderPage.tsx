@@ -50,17 +50,17 @@ export default function CreatePurchaseOrderPage() {
   const editId = searchParams.get('id');
   const isReadOnly = searchParams.get('mode') === 'view';
   const { formatAmount, companyDefaultCurrency } = useCurrency();
-  const { companyName: brandingCompanyName, companyPhone: brandingPhone, companyEmail: brandingEmail } = useBranding();
+  const { companyName: brandingCompanyName, companyPhone: brandingPhone, companyEmail: brandingEmail, profile } = useBranding();
 
   // ── Ship-To & Warehouse Master State ──
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [loadingWarehouses, setLoadingWarehouses] = useState(false);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState('');
-  const [shipToCompany, setShipToCompany] = useState(brandingCompanyName || 'Procnex Warehouse');
+  const [shipToCompany, setShipToCompany] = useState(brandingCompanyName || 'Company Warehouse');
   const [shipToWarehouse, setShipToWarehouse] = useState('Central Warehouse');
   const [shipToAddress, setShipToAddress] = useState('Central Depot');
   const [shipToContact, setShipToContact] = useState('Warehouse Manager');
-  const [shipToPhone, setShipToPhone] = useState(brandingPhone || '+91 800-PROCNEX');
+  const [shipToPhone, setShipToPhone] = useState(brandingPhone || '');
 
   // ── Fetch Warehouses dynamically from Company Settings DB ──
   useEffect(() => {
@@ -583,15 +583,19 @@ export default function CreatePurchaseOrderPage() {
 
   // ── Download PDF Handler ──
   const handleDownloadPdf = () => {
+    const compAddress = profile?.companyAddress
+      ? [profile.companyAddress, profile.companyCity, profile.companyState, profile.companyCountry].filter(Boolean).join(', ')
+      : `${brandingCompanyName || 'Company'} • Corporate Headquarters`;
+
     const poData = {
       poNumber,
       revisionNo,
       orderDate: poDate,
-      companyName: brandingCompanyName || 'Procnex Consulting',
-      companyAddress: 'Industrial Zone, Building 4',
-      companyPhone: brandingPhone || '+91 800-PROCNEX',
-      companyEmail: brandingEmail || 'procurement@procnex.com',
-      companyWebsite: 'www.procnex.com',
+      companyName: brandingCompanyName || 'Company',
+      companyAddress: compAddress,
+      companyPhone: brandingPhone || '',
+      companyEmail: brandingEmail || '',
+      companyWebsite: '',
       vendorName: supplierName || 'Supplier',
       supplierCode: supplierCode || undefined,
       supplierType: supplierType || undefined,
@@ -600,11 +604,11 @@ export default function CreatePurchaseOrderPage() {
       vendorPhone: contactPhone || undefined,
       vendorEmail: contactEmail || undefined,
       vendorGstVat: supplierTaxId || undefined,
-      shipToCompany: shipToCompany || brandingCompanyName || 'Procnex Warehouse',
+      shipToCompany: shipToCompany || brandingCompanyName || 'Company Warehouse',
       shipToWarehouse: shipToWarehouse || 'Central Warehouse',
       shipToAddress: shipToAddress || 'Central Depot',
       shipToContact: shipToContact || 'Warehouse Manager',
-      shipToPhone: shipToPhone || brandingPhone || '+91 800-PROCNEX',
+      shipToPhone: shipToPhone || brandingPhone || '',
       requisitioner: 'Procurement Officer',
       shipVia: 'Surface',
       fob: 'Destination',

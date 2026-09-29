@@ -1,7 +1,7 @@
 import LandingTable, { type LandingColumn } from '../../components/shared/LandingTable';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Calendar, CheckCircle2, Clock, FileText, Plus, Receipt, Search, XCircle } from 'lucide-react';
+import { AlertTriangle, Calendar, CheckCircle2, Clock, CreditCard, FileText, Plus, Receipt, Search, XCircle } from 'lucide-react';
 import { CurrencyBadge, CurrencySelector, useCurrency } from '../../components/shared/CurrencyMaster';
 import { RecordStatusBadge } from '@/components/shared/RecordStatusBadge';
 import { Button } from '../../components/ui/button';
@@ -71,6 +71,13 @@ export default function VendorInvoicesPage() {
         actions={
           <div className="flex items-center gap-2">
             <CurrencySelector value={displayCurrency} onChange={setDisplayCurrency} size="sm" />
+            <Button
+              variant="outline"
+              onClick={() => navigate(getVendorPath('/vendor/payments'))}
+              className="gap-1.5 shadow-xs"
+            >
+              <CreditCard size={16} /> Payments Received
+            </Button>
             <Button
               onClick={() => navigate(getVendorPath('/vendor/create-invoice'))}
               className="gap-1.5 shadow-xs"

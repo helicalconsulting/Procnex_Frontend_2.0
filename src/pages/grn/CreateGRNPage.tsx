@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useServiceData } from '../../hooks/useServiceData';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
 import { purchaseRequisitionService } from '../../services/purchaseRequisitionService';
@@ -26,6 +27,7 @@ import {
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { useAuth } from '../../context/AuthContext';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
+import { useSuccessModal } from '../../context/SuccessModalContext';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
@@ -57,6 +59,8 @@ function safeStr(val: any): string {
 export default function CreateGRNPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
+  const { showSuccess } = useSuccessModal();
   const { roles = [], user } = useAuth();
   const [searchParams] = useSearchParams();
 
@@ -566,8 +570,32 @@ export default function CreateGRNPage() {
         items: payloadItems,
       });
 
-      setSuccessMsg(`✅ Goods Receipt Note ${grnNumber} saved & posted directly! Available for 3-way matching.`);
-      setTimeout(() => navigate('/procurement/goods-receipt'), 1500);
+      // Immediately invalidate and trigger fresh refetch across all service caches
+      await queryClient.invalidateQueries({ queryKey: ['svc'] });
+      queryClient.refetchQueries({ queryKey: ['svc'] });
+
+      showSuccess({
+        title: 'Goods Receipt Note Created!',
+        badge: 'GRN POSTED',
+        message: `Goods Receipt Note ${grnNumber} has been verified and posted directly. Available for 3-way matching.`,
+        referenceNumber: grnNumber,
+        details: [
+          { label: 'Purchase Order', value: selectedPO?.poNumber || selectedPoId || 'MANUAL-PO' },
+          { label: 'Vendor / Supplier', value: selectedPO?.vendor?.name || selectedInvoice?.vendorName || 'Supplier' },
+          { label: 'Items Received', value: `${payloadItems.length} line items` },
+          { label: 'Received Date', value: receivedDate },
+        ],
+        primaryBtnText: 'View in Recorded GRNs',
+        onPrimaryClick: () => {
+          navigate('/procurement/goods-receipt?tab=recorded', {
+            state: { filter: 'GRN', tab: 'recorded', newGrnNumber: grnNumber }
+          });
+        },
+      });
+
+      navigate('/procurement/goods-receipt?tab=recorded', {
+        state: { filter: 'GRN', tab: 'recorded', newGrnNumber: grnNumber }
+      });
     } catch (err: any) {
       setErrorMsg(err?.message || 'Failed to save Goods Receipt Note.');
     } finally {
@@ -582,13 +610,6 @@ export default function CreateGRNPage() {
         <div className="mb-4">
           <MessageStrip type="error" onClose={() => setErrorMsg(null)}>
             {errorMsg}
-          </MessageStrip>
-        </div>
-      )}
-      {successMsg && (
-        <div className="mb-4">
-          <MessageStrip type="success" onClose={() => setSuccessMsg(null)}>
-            {successMsg}
           </MessageStrip>
         </div>
       )}

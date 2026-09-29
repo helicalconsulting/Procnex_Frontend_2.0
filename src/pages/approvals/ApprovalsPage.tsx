@@ -107,34 +107,34 @@ interface ApprovalColumnDef {
 
 const ALL_COLUMNS: ApprovalColumnDef[] = [
   {
-    key: 'request', label: 'Request', defaultVisible: true, required: true, width: '290px',
+    key: 'request', label: 'Request', defaultVisible: true, required: true,
     render: (req) => (
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 min-w-0">
         <div className="grid size-9 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary ring-1 ring-primary/15">
           {req.requestedByInitials}
         </div>
         <div className="min-w-0">
           <div className="font-semibold text-foreground font-mono text-sm tracking-tight">{req.referenceNumber}</div>
-          <div className="text-sm font-medium text-foreground truncate max-w-[220px]">{req.title}</div>
-          <div className="text-xs text-muted-foreground">by {req.requestedBy} · {req.department}</div>
+          <div className="text-sm font-medium text-foreground truncate">{req.title}</div>
+          <div className="text-xs text-muted-foreground truncate">by {req.requestedBy} · {req.department}</div>
         </div>
       </div>
     ),
   },
   {
-    key: 'module', label: 'Module', defaultVisible: true, width: '170px',
+    key: 'module', label: 'Module', defaultVisible: true,
     render: (req) => (
-      <Badge variant="outline" className="gap-1.5 px-2.5 py-1 text-xs font-semibold shadow-2xs">
+      <Badge variant="outline" className="gap-1.5 px-2.5 py-1 text-xs font-semibold shadow-2xs whitespace-nowrap">
         {MODULE_ICONS[req.module]}{req.module}
       </Badge>
     ),
   },
   {
-    key: 'amount', label: 'Amount', defaultVisible: true, width: '120px', align: 'right',
-    render: (req) => <span className="font-mono font-semibold text-foreground">{req.amount}</span>,
+    key: 'amount', label: 'Amount', defaultVisible: true, align: 'right',
+    render: (req) => <span className="font-mono font-semibold text-foreground whitespace-nowrap">{req.amount}</span>,
   },
   {
-    key: 'priority', label: 'Priority', defaultVisible: true, width: '100px',
+    key: 'priority', label: 'Priority', defaultVisible: true, align: 'center',
     render: (req) => (
       <Badge
         variant="outline"
@@ -150,13 +150,13 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
     ),
   },
   {
-    key: 'level', label: 'Approval Level', defaultVisible: true, width: '150px',
+    key: 'level', label: 'Approval Level', defaultVisible: true, align: 'center',
     render: (req) => {
       const total = req.totalLevels || 1;
       const isApproved = req.status === 'APPROVED';
       const current = isApproved ? total + 1 : (req.currentLevel || 1);
       return (
-        <div className="flex items-center gap-1.5 text-xs font-mono">
+        <div className="inline-flex items-center justify-center gap-1.5 text-xs font-mono">
           <Badge variant="secondary" className="font-semibold">
             L{isApproved ? total : Math.min(current, total)}/{total}
           </Badge>
@@ -165,7 +165,7 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
     },
   },
   {
-    key: 'status', label: 'Status', defaultVisible: true, width: '190px', align: 'left',
+    key: 'status', label: 'Status', defaultVisible: true, align: 'left',
     render: (req) => {
       let effectiveStatus = req.status;
       const isReturnedReReview = Boolean(
@@ -186,7 +186,7 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
         }
       }
       return (
-        <Badge variant="outline" className={cn('font-semibold gap-1', STATUS_TONES[effectiveStatus] || 'bg-muted/50 text-muted-foreground')}>
+        <Badge variant="outline" className={cn('font-semibold gap-1 whitespace-nowrap', STATUS_TONES[effectiveStatus] || 'bg-muted/50 text-muted-foreground')}>
           {isReturnedReReview && <RotateCcw size={12} className="text-orange-500 shrink-0" />}
           {STATUS_LABELS[effectiveStatus] || effectiveStatus.replace(/_/g, ' ')}
         </Badge>
@@ -194,7 +194,7 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
     },
   },
   {
-    key: 'submitted', label: 'Submitted', defaultVisible: true, width: '130px',
+    key: 'submitted', label: 'Submitted', defaultVisible: true, align: 'left',
     render: (req, formatDateTime) => <span className="text-muted-foreground whitespace-nowrap">{formatDateTime(req.submittedAt)}</span>,
   },
 ];
@@ -628,19 +628,25 @@ export default function ApprovalsPage() {
       {/* Content Table */}
       <Card className="overflow-hidden">
         {loading ? (
-          <TableSkeleton rows={5} columnWidths={visibleColumns.map((c) => c.width || '130px').concat(['120px'])} />
+          <TableSkeleton rows={5} columnWidths={['220px', '140px', '110px', '95px', '110px', '130px', '120px', '90px']} />
         ) : paginated.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1000px] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-border/75 bg-muted/45 text-left text-[12px] font-bold uppercase tracking-wide text-muted-foreground">
                   {visibleColumns.map((col) => (
-                    <th key={col.key} className="px-4 py-3" style={{ textAlign: col.align || 'left', width: col.width || 'auto' }}>
+                    <th
+                      key={col.key}
+                      className={cn(
+                        'px-4 py-3',
+                        col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left'
+                      )}
+                    >
                       {col.label}
                     </th>
                   ))}
-                  <th className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-2">
+                  <th className="w-28 px-4 py-3 text-center">
+                    <div className="flex items-center justify-center gap-2">
                       <span>Actions</span>
                       <div className="relative">
                         <ColumnSettingsButton ref={colBtnRef} open={showColPanel} onClick={() => setShowColPanel((v) => !v)} />
@@ -676,12 +682,18 @@ export default function ApprovalsPage() {
                 {paginated.map((req) => (
                   <tr key={req.id} className="cursor-pointer transition-colors hover:bg-accent/35" onClick={() => setDetailRequest(req)}>
                     {visibleColumns.map((col) => (
-                      <td key={col.key} className="px-4 py-3.5" style={{ textAlign: col.align || 'left' }}>
+                      <td
+                        key={col.key}
+                        className={cn(
+                          'px-4 py-3.5',
+                          col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left'
+                        )}
+                      >
                         {col.render(req, formatDateTime)}
                       </td>
                     ))}
-                    <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className={cn("flex items-center gap-1", req.canAct ? "justify-end" : "justify-center")}>
+                    <td className="w-28 px-4 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-center gap-1">
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="View Details" onClick={() => setDetailRequest(req)}>
                           <Eye className="size-4 text-muted-foreground hover:text-foreground" />
                         </Button>

@@ -1,6 +1,7 @@
 import LandingTable, { type LandingColumn } from '../../components/shared/LandingTable';
-import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useMemo, useEffect } from 'react';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useServiceData } from '../../hooks/useServiceData';
 import { grnService, type GoodsReceivedNote } from '../../services/grnService';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
@@ -78,33 +79,61 @@ export default function CompanyGRNListPage() {
       hasPermission('Goods Received Note', 'canCreate') ||
       hasPermission('GRN', 'canCreate'));
 
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const queryClient = useQueryClient();
+
   const { companyDefaultCurrency, formatAmount } = useCurrency();
 
   const [search, setSearch] = useState('');
-  const [kpiFilter, setKpiFilter] = useState<'ALL' | 'PENDING' | 'GRN'>('PENDING');
+  const [kpiFilter, setKpiFilter] = useState<'ALL' | 'PENDING' | 'GRN'>(() => {
+    const tab = searchParams.get('tab') || location.state?.tab;
+    const filter = location.state?.filter;
+    if (tab === 'recorded' || tab === 'grn' || filter === 'GRN') return 'GRN';
+    if (tab === 'all' || filter === 'ALL') return 'ALL';
+    return 'PENDING';
+  });
   const [selectedGrn, setSelectedGrn] = useState<GoodsReceivedNote | null>(null);
 
-  // Load GRNs
-  const { data: grnData, loading: grnLoading } = useServiceData(
+  // Load GRNs with fresh cache
+  const { data: grnData, loading: grnLoading, forceRefresh: forceRefreshGrns } = useServiceData(
     () => grnService.list({ search }),
     { grns: [], total: 0 },
-    [search]
+    [search],
+    { cacheTtlMs: 0 }
   );
   const grns = grnData.grns || [];
 
   // Load Purchase Orders from purchaseOrderService
-  const { data: poData, loading: poLoading1 } = useServiceData(
+  const { data: poData, loading: poLoading1, forceRefresh: forceRefreshPOs } = useServiceData(
     () => purchaseOrderService.list({ limit: 100 }),
     { orders: [], total: 0 },
-    []
+    [],
+    { cacheTtlMs: 0 }
   );
 
   // Load Purchase Requisitions from purchaseRequisitionService (PO Creation workspace)
-  const { data: reqList, loading: poLoading2 } = useServiceData(
+  const { data: reqList, loading: poLoading2, forceRefresh: forceRefreshReqs } = useServiceData(
     () => purchaseRequisitionService.list(),
     [],
-    []
+    [],
+    { cacheTtlMs: 0 }
   );
+
+  // Auto-switch tab and invalidate queries when arriving with recorded tab state
+  useEffect(() => {
+    const tab = searchParams.get('tab') || location.state?.tab;
+    const filter = location.state?.filter;
+    if (tab === 'recorded' || tab === 'grn' || filter === 'GRN') {
+      setKpiFilter('GRN');
+    } else if (tab === 'pending' || filter === 'PENDING') {
+      setKpiFilter('PENDING');
+    } else if (tab === 'all' || filter === 'ALL') {
+      setKpiFilter('ALL');
+    }
+    // Always trigger fresh refetch when landing on GRN management page
+    queryClient.invalidateQueries({ queryKey: ['svc'] });
+  }, [searchParams, location.state, queryClient]);
 
   const poLoading = poLoading1 || poLoading2;
 

@@ -159,7 +159,7 @@ export default function GRNListPage() {
     () => grnService.list({ search }),
     { grns: [], total: 0 },
     [search],
-    { cacheKey: `grns:list:${search}` }
+    { cacheKey: `grns:list:${search}`, cacheTtlMs: 0 }
   );
   const grns = grnData.grns || [];
 
@@ -168,7 +168,7 @@ export default function GRNListPage() {
     () => purchaseOrderService.list({ limit: 100 }),
     { orders: [], total: 0 },
     [],
-    { cacheKey: 'pos:list' }
+    { cacheKey: 'pos:list', cacheTtlMs: 0 }
   );
   const poList = poData.orders || [];
 
@@ -177,7 +177,7 @@ export default function GRNListPage() {
     () => invoiceService.list(),
     [],
     [],
-    { cacheKey: 'invoices:list' }
+    { cacheKey: 'invoices:list', cacheTtlMs: 0 }
   );
 
   useEffect(() => {

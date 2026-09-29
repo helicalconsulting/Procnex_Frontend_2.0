@@ -3,6 +3,7 @@ import {
   X, Download, FileSpreadsheet, FileText, FileCode, Printer,
   Check, CheckCircle2, ShieldCheck, Sliders, RefreshCw, Eye
 } from 'lucide-react';
+import { useBranding } from '../../context/BrandingContext';
 import './AuditExportModal.css';
 
 export interface AuditEntryForExport {
@@ -41,6 +42,7 @@ export const AuditExportModal: React.FC<AuditExportModalProps> = ({
   activeFilterSummary,
   currentUser = 'System Administrator',
 }) => {
+  const { companyName } = useBranding();
   const [format, setFormat] = useState<ExportFormat>('excel');
   const [includeHeader, setIncludeHeader] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -122,7 +124,7 @@ export const AuditExportModal: React.FC<AuditExportModalProps> = ({
     ${includeHeader ? `
     <tr>
       <td colspan="${colCount}" class="banner">
-        PROCNEX ENTERPRISE PLATFORM — AUDIT TRAIL REPORT
+        ${(companyName || 'ORGANIZATION').toUpperCase()} ENTERPRISE PLATFORM — AUDIT TRAIL REPORT
       </td>
     </tr>
     <tr>
@@ -348,7 +350,7 @@ export const AuditExportModal: React.FC<AuditExportModalProps> = ({
                 <div className="audit-option-row__info">
                   <span className="audit-option-row__title">Executive Summary Banner</span>
                   <span className="audit-option-row__sub">
-                    Include Procnex header with export date, operator name & active filter parameters
+                    Include ${(companyName || 'organization')} header with export date, operator name & active filter parameters
                   </span>
                 </div>
                 <input

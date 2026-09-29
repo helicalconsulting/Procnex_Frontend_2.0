@@ -39,23 +39,53 @@ function ensurePONumber(poNumber: string | null | undefined): string {
 export default function PurchaseOrderDocument({ pr }: Props) {
   const { companyName: brandingCompanyName, companyPhone: brandingPhone, companyEmail: brandingEmail, logoUrl, profile } = useBranding();
 
-  const finalCompanyName = pr.companyName || profile?.companyName || brandingCompanyName || 'Procnex';
+  const finalCompanyName = pr.companyName || profile?.companyName || brandingCompanyName || 'Company';
+  const companyAddress = profile?.companyAddress
+    ? [profile.companyAddress, profile.companyCity, profile.companyState, profile.companyCountry].filter(Boolean).join(', ')
+    : pr.companyAddress || `${finalCompanyName} • Corporate Headquarters`;
 
-  const finalLogoUrl = logoUrl || (pr as any).companyLogoUrl || defaultHeliflowLogo;
+  const finalLogoUrl = (pr as any).companyLogoUrl || logoUrl || null;
 
   return (
     <div className="po-document">
       {/* ── Header ── */}
       <div className="po-doc__header">
         <div className="po-doc__header-left">
-          <img src={finalLogoUrl} alt={finalCompanyName} className="po-doc__logo" />
+          {finalLogoUrl ? (
+            <img src={finalLogoUrl} alt={finalCompanyName} className="po-doc__logo" />
+          ) : (
+            <div style={{
+              width: 42,
+              height: 42,
+              borderRadius: 8,
+              background: 'linear-gradient(135deg, #1e40af, #3b82f6)',
+              color: '#ffffff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 700,
+              fontSize: 18,
+              marginRight: 12,
+              flexShrink: 0,
+            }}>
+              {finalCompanyName.substring(0, 2).toUpperCase()}
+            </div>
+          )}
           <div className="po-doc__company-info">
             <h1 className="po-doc__company-name">{val(finalCompanyName)}</h1>
-            <p className="po-doc__company-detail">{val(pr.companyAddress, 'Industrial Zone, Building 4')}</p>
-            <p className="po-doc__company-detail">
-              Phone: {val(brandingPhone || pr.companyPhone, '+91 800-PROCNEX')} &nbsp;|&nbsp; Email: {val(brandingEmail || pr.companyEmail, 'procurement@procnex.com')}
-            </p>
-            <p className="po-doc__company-detail">{val(pr.companyWebsite, 'www.procnex.com')}</p>
+            <p className="po-doc__company-detail">{val(companyAddress)}</p>
+            {(brandingPhone || pr.companyPhone || brandingEmail || pr.companyEmail) && (
+              <p className="po-doc__company-detail">
+                {brandingPhone || pr.companyPhone ? `Phone: ${brandingPhone || pr.companyPhone}` : ''}
+                {(brandingPhone || pr.companyPhone) && (brandingEmail || pr.companyEmail) ? ' | ' : ''}
+                {brandingEmail || pr.companyEmail ? `Email: ${brandingEmail || pr.companyEmail}` : ''}
+              </p>
+            )}
+            {profile?.taxRegistrationNumber && (
+              <p className="po-doc__company-detail" style={{ fontWeight: 600 }}>
+                GSTIN / VAT: {profile.taxRegistrationNumber}
+              </p>
+            )}
           </div>
         </div>
         <div className="po-doc__header-right">

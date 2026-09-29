@@ -329,6 +329,12 @@ export const VENDOR_NAVIGATION_MENU: MenuItem[] = [
     roles: [RoleName.VENDOR],
   },
   {
+    id: 'vendor-payments',
+    label: 'My Payments',
+    path: '/vendor/payments',
+    roles: [RoleName.VENDOR],
+  },
+  {
     id: 'vendor-agreements',
     label: 'Agreements',
     path: '/vendor/agreements',

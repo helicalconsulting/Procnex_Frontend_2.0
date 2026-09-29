@@ -1,60 +1,10 @@
 /* ═══════════════════════════════════════════════════════════
-   Heliflow — RepNex AI Full Page Embed (Zero Padding)
+   Procnex AI Reports Page Styles
    ═══════════════════════════════════════════════════════════ */
 
-/* Remove surrounding layout padding when Reports page is active */
-.app-layout__content:has(.rpt-embed-page) {
-  padding: 0 !important;
-  margin: 0 !important;
-  max-width: 100% !important;
-  width: 100% !important;
-}
-
-.rpt-embed-page {
-  position: relative;
+.procnex-reports-container {
   width: 100%;
-  height: calc(100vh - 56px);
-  min-height: calc(100vh - 56px);
-  border-radius: 0 !important;
-  overflow: hidden;
-  background: var(--surface-card);
-  border: none !important;
-  box-shadow: none !important;
-  margin: 0 !important;
-  padding: 0 !important;
-}
-
-.rpt-embed-iframe {
-  width: 100%;
-  height: 100%;
-  border: none;
-  display: block;
-}
-
-.rpt-embed-loading {
-  position: absolute;
-  inset: 0;
-  z-index: 10;
-  background: var(--surface-card);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  color: var(--text-primary);
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.rpt-embed-spinner {
-  width: 36px;
-  height: 36px;
-  border: 3px solid rgba(99, 102, 241, 0.2);
-  border-top-color: #6366f1;
-  border-radius: 50%;
-  animation: rptEmbedSpin 0.8s linear infinite;
-}
-
-@keyframes rptEmbedSpin {
-  to { transform: rotate(360deg); }
+  min-height: 100%;
+  padding: 0;
+  margin: 0;
 }

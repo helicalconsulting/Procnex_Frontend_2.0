@@ -102,9 +102,10 @@ export async function downloadContractAsPdf(
     // Wait for fonts and images inside iframe to settle
     await new Promise(resolve => setTimeout(resolve, 300));
 
-    const iframeBody = doc.body;
-
     // Capture the iframe body to high-resolution canvas
+    const iframeBody = doc.body;
+    if (!iframeBody) throw new Error('Iframe body not available');
+
     const canvas = await toCanvas(iframeBody, {
       quality: 1,
       pixelRatio: 2,
@@ -112,42 +113,78 @@ export async function downloadContractAsPdf(
     });
 
     const pdf = new jsPDF('p', 'mm', 'a4');
-    const imgData = canvas.toDataURL('image/png');
-    const margin = 10; // mm
+    const margin = 12; // mm
     const contentWidth = PAGE_WIDTH - margin * 2;
-    const imgWidth = contentWidth;
-    let calculatedImgHeight = (canvas.height * imgWidth) / canvas.width;
-    const usablePageHeight = PAGE_HEIGHT - margin * 2;
+    const usablePageHeight = PAGE_HEIGHT - margin * 2 - 8; // Leave 8mm for footer page numbers
 
-    // If document height is slightly over single page usable height (up to 20%), scale height down to fit on 1 single page
-    if (calculatedImgHeight > usablePageHeight && calculatedImgHeight <= usablePageHeight * 1.20) {
-      calculatedImgHeight = usablePageHeight;
-    }
+    // Calculate pixel to mm conversion ratio
+    const pxPerMm = canvas.width / contentWidth;
+    const maxPageHeightInPx = Math.floor(usablePageHeight * pxPerMm);
+    const scale = canvas.width / (iframeBody.offsetWidth || 794);
 
-    let remainingHeight = calculatedImgHeight;
-    let currentPage = 0;
+    // Compute intelligent DOM-aware split points to never sever <tr>, <p>, <h3>, or <li>
+    const splitPoints = computeSmartPageBreaks(
+      iframeBody,
+      canvas.height,
+      maxPageHeightInPx,
+      scale
+    );
 
-    // 8mm threshold prevents accidental blank 2nd page caused by tiny margin/footer pixel overflow
-    while (remainingHeight > 8) {
-      if (currentPage > 0) {
+    const totalPages = Math.max(1, splitPoints.length - 1);
+
+    for (let p = 0; p < totalPages; p++) {
+      const startY = splitPoints[p];
+      const endY = splitPoints[p + 1];
+      const sliceHeightInPx = endY - startY;
+
+      // Skip empty or tiny stray slices at the end
+      if (sliceHeightInPx <= 10 && p > 0) continue;
+
+      if (p > 0) {
         pdf.addPage();
       }
 
-      const yOffset = margin - currentPage * usablePageHeight;
+      // Create isolated sub-canvas for this specific page slice
+      const pageCanvas = document.createElement('canvas');
+      pageCanvas.width = canvas.width;
+      pageCanvas.height = sliceHeightInPx;
+      const pageCtx = pageCanvas.getContext('2d');
+
+      if (pageCtx) {
+        pageCtx.fillStyle = '#ffffff';
+        pageCtx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+        pageCtx.drawImage(
+          canvas,
+          0,
+          startY,
+          canvas.width,
+          sliceHeightInPx,
+          0,
+          0,
+          canvas.width,
+          sliceHeightInPx
+        );
+      }
+
+      const pageImgData = pageCanvas.toDataURL('image/png');
+      const sliceHeightInMm = sliceHeightInPx / pxPerMm;
 
       pdf.addImage(
-        imgData,
+        pageImgData,
         'PNG',
         margin,
-        yOffset,
-        imgWidth,
-        calculatedImgHeight,
+        margin,
+        contentWidth,
+        sliceHeightInMm,
         undefined,
-        'FAST',
+        'FAST'
       );
 
-      remainingHeight -= usablePageHeight;
-      currentPage++;
+      // Professional SAP-Grade Footer with dynamic Page X of Y
+      pdf.setFontSize(8);
+      pdf.setTextColor(148, 163, 184); // Slate-400
+      pdf.text('Procnex AI Intelligence Report • Confidential', margin, PAGE_HEIGHT - 6);
+      pdf.text(`Page ${p + 1} of ${totalPages}`, PAGE_WIDTH - margin, PAGE_HEIGHT - 6, { align: 'right' });
     }
 
     pdf.save(`${fileName}.pdf`);
@@ -159,6 +196,75 @@ export async function downloadContractAsPdf(
       document.body.removeChild(iframe);
     }
   }
+}
+
+/**
+ * Smart DOM-Aware Page Boundary Detection.
+ * Scans all table rows, headings, paragraphs, and lists to find safe break points.
+ * Guarantees zero sliced rows or split lines of text.
+ */
+function computeSmartPageBreaks(
+  body: HTMLElement,
+  totalCanvasHeight: number,
+  maxPageHeightInPx: number,
+  scale: number
+): number[] {
+  const bodyRect = body.getBoundingClientRect();
+
+  // Find all elements that shouldn't be sliced across: table rows, headings, paragraphs, list items
+  const breakAvoidElements = Array.from(
+    body.querySelectorAll('tr, h1, h2, h3, h4, p, li, hr')
+  ) as HTMLElement[];
+
+  const intervals: { top: number; bottom: number; height: number }[] = [];
+
+  for (const el of breakAvoidElements) {
+    const rect = el.getBoundingClientRect();
+    const top = (rect.top - bodyRect.top) * scale;
+    const bottom = (rect.bottom - bodyRect.top) * scale;
+    const height = bottom - top;
+
+    // Only consider elements that have positive height and fit on a page
+    if (height > 4 && height < maxPageHeightInPx * 0.95) {
+      intervals.push({ top, bottom, height });
+    }
+  }
+
+  // Sort intervals by top position ascending
+  intervals.sort((a, b) => a.top - b.top);
+
+  const breaks: number[] = [0];
+  let currentY = 0;
+
+  while (currentY + maxPageHeightInPx < totalCanvasHeight) {
+    const idealY = currentY + maxPageHeightInPx;
+    let safeCutY = idealY;
+
+    // Check if idealY cuts inside any avoid-break element
+    for (const inv of intervals) {
+      if (inv.top < idealY && inv.bottom > idealY) {
+        // Cut right before this element starts, if doing so makes meaningful progress
+        if (inv.top > currentY + maxPageHeightInPx * 0.15) {
+          safeCutY = inv.top;
+        }
+        break;
+      }
+    }
+
+    // Safety fallback: ensure forward progress
+    if (safeCutY <= currentY) {
+      safeCutY = idealY;
+    }
+
+    breaks.push(Math.round(safeCutY));
+    currentY = safeCutY;
+  }
+
+  if (breaks[breaks.length - 1] < totalCanvasHeight) {
+    breaks.push(Math.round(totalCanvasHeight));
+  }
+
+  return breaks;
 }
 
 /**
@@ -400,4 +506,122 @@ export async function downloadPurchaseOrderAsPdf(
   `;
 
   await downloadContractAsPdf(poHtml, `${order.poNumber}_Purchase_Order`);
+}
+
+/**
+ * Convert AI Markdown Report to a structured PDF and trigger browser file download.
+ */
+export async function downloadAiReportAsPdf(
+  markdown: string,
+  fileName = 'Procnex_Intelligence_Report',
+  companyCode = 'Procnex'
+): Promise<void> {
+  const cleanHtml = markdownReportToHtml(markdown, companyCode);
+  await downloadContractAsPdf(cleanHtml, fileName);
+}
+
+function markdownReportToHtml(md: string, companyCode: string): string {
+  const lines = md.split('\n');
+  let inTable = false;
+  let tableHeaders: string[] = [];
+  let tableRows: string[][] = [];
+
+  // Extract dynamic report title from first markdown header if available
+  const titleMatch = md.match(/^#\s+(.+)$/m);
+  const reportTitle = titleMatch ? titleMatch[1].replace(/[*#]/g, '').trim() : 'Procnex Executive Intelligence Report';
+
+  let html = `
+    <div style="font-family: '72', system-ui, -apple-system, sans-serif; color: #1e293b; padding: 10px 0;">
+      <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #0284c7; padding-bottom: 12px; margin-bottom: 20px;">
+        <div>
+          <h1 style="font-size: 20px; font-weight: 800; color: #0f172a; margin: 0 0 4px 0; border: none;">${reportTitle}</h1>
+          <p style="font-size: 12px; color: #64748b; margin: 0;"><strong>Company:</strong> ${companyCode} &nbsp;|&nbsp; <strong>Generated:</strong> ${new Date().toLocaleDateString()}</p>
+        </div>
+        <div style="text-align: right;">
+          <span style="display: inline-block; background: #e0f2fe; color: #0369a1; font-weight: 700; font-size: 11px; padding: 4px 10px; border-radius: 9999px; border: 1px solid #bae6fd;">Live DB Audit</span>
+        </div>
+      </div>
+      <div>
+  `;
+
+  const flushTable = () => {
+    if (tableHeaders.length > 0 || tableRows.length > 0) {
+      html += '<table style="width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 12px; border: 1px solid #cbd5e1;">';
+      if (tableHeaders.length > 0) {
+        html += '<thead><tr style="background: #f1f5f9;">' + tableHeaders.map(h => `<th style="border: 1px solid #cbd5e1; padding: 8px 10px; text-align: left; font-weight: 700; color: #0f172a;">${cleanInline(h)}</th>`).join('') + '</tr></thead>';
+      }
+      if (tableRows.length > 0) {
+        html += '<tbody>' + tableRows.map(row => '<tr style="border-bottom: 1px solid #e2e8f0;">' + row.map(cell => `<td style="border: 1px solid #cbd5e1; padding: 8px 10px; text-align: left; color: #334155;">${cleanInline(cell)}</td>`).join('') + '</tr>').join('') + '</tbody>';
+      }
+      html += '</table>';
+    }
+    tableHeaders = [];
+    tableRows = [];
+    inTable = false;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i].trim();
+    if (!rawLine) continue;
+
+    // Skip top-level # title since document header already renders it once
+    if (rawLine.startsWith('# ') && !rawLine.startsWith('## ') && !rawLine.startsWith('### ')) {
+      continue;
+    }
+
+    if (rawLine === '---' || rawLine === '***' || rawLine === '___') {
+      if (inTable) flushTable();
+      html += '<hr style="border: none; border-top: 1px solid #e2e8f0; margin: 16px 0;" />';
+      continue;
+    }
+
+    if (rawLine.startsWith('|') && rawLine.endsWith('|')) {
+      if (rawLine.includes('---')) {
+        continue;
+      }
+      const cells = rawLine.split('|').slice(1, -1).map(c => c.trim());
+      if (!inTable) {
+        inTable = true;
+        tableHeaders = cells;
+      } else {
+        tableRows.push(cells);
+      }
+    } else {
+      if (inTable) flushTable();
+
+      if (rawLine.startsWith('### ')) {
+        html += `<h4 style="font-size: 13px; font-weight: 700; color: #0369a1; text-transform: uppercase; margin: 14px 0 6px 0;">${cleanInline(rawLine.slice(4))}</h4>`;
+      } else if (rawLine.startsWith('## ')) {
+        html += `<h3 style="font-size: 15px; font-weight: 700; color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; margin: 18px 0 8px 0;">${cleanInline(rawLine.slice(3))}</h3>`;
+      } else if (rawLine.startsWith('- ') || rawLine.startsWith('* ') || rawLine.startsWith('• ') || rawLine.startsWith('+ ')) {
+        html += `<li style="margin-left: 18px; margin-bottom: 4px; font-size: 13px; color: #334155; line-height: 1.5;">${cleanInline(rawLine.replace(/^[-*•+]\s*/, ''))}</li>`;
+      } else {
+        html += `<p style="font-size: 13px; color: #334155; line-height: 1.6; margin: 0 0 8px 0;">${cleanInline(rawLine)}</p>`;
+      }
+    }
+  }
+
+  if (inTable) {
+    flushTable();
+  }
+
+  html += `
+      </div>
+      <div style="margin-top: 30px; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 10px; text-align: center;">
+        Generated by Procnex AI Reports Engine • Confidential Document
+      </div>
+    </div>
+  `;
+
+  return html;
+}
+
+function cleanInline(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+?)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+?)`/g, '<code style="background:#f1f5f9;padding:2px 4px;border-radius:4px;font-size:11px;">$1</code>')
+    .replace(/\*\*/g, '')
+    .replace(/(?<!\w)\*(?!\w)/g, '');
 }

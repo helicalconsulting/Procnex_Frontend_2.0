@@ -65,10 +65,10 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
   const { companyName, logoUrl, profile } = useBranding();
   const printableRef = useRef<HTMLDivElement>(null);
 
-  const displayCompanyName = profile?.companyName || companyName || 'Procnex';
+  const displayCompanyName = profile?.companyName || companyName || 'Company';
   const companyAddress = profile?.companyAddress
     ? [profile.companyAddress, profile.companyCity, profile.companyState, profile.companyCountry].filter(Boolean).join(', ')
-    : 'Corporate Finance & Treasury Division • Banking Operations';
+    : `${displayCompanyName} • Corporate Finance & Treasury Division`;
 
   const currency = data.currency || 'INR';
   const isMatched = data.matchStatus !== 'DISCREPANCY';
@@ -301,15 +301,36 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
           {/* Header */}
           <div className="bpv-sheet__header">
             <div className="bpv-sheet__company">
-              {logoUrl && (
-                <img
-                  src={logoUrl}
-                  alt={displayCompanyName}
-                  className="bpv-sheet__company-logo"
-                  style={{ maxHeight: 50, maxWidth: 220, objectFit: 'contain', marginBottom: 10, display: 'block' }}
-                />
+              {logoUrl ? (
+                <>
+                  <img
+                    src={logoUrl}
+                    alt={displayCompanyName}
+                    className="bpv-sheet__company-logo"
+                    style={{ maxHeight: 50, maxWidth: 220, objectFit: 'contain', marginBottom: 6, display: 'block' }}
+                  />
+                  <h2>{displayCompanyName}</h2>
+                </>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                  <div style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 8,
+                    background: 'linear-gradient(135deg, #1e40af, #3b82f6)',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 700,
+                    fontSize: 16,
+                    letterSpacing: 0.5,
+                  }}>
+                    {displayCompanyName.substring(0, 2).toUpperCase()}
+                  </div>
+                  <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#0f172a' }}>{displayCompanyName}</h2>
+                </div>
               )}
-              <h2>{displayCompanyName}</h2>
               <p>{companyAddress}</p>
               {profile?.taxRegistrationNumber && (
                 <p className="bpv-sheet__sub">Tax Reg / GST: {profile.taxRegistrationNumber}</p>

@@ -49,10 +49,10 @@ export default function PrintPurchaseInvoiceModal({ data: dataProp, invoice: inv
   const printableRef = useRef<HTMLDivElement>(null);
   const [approversList, setApproversList] = useState<any[]>(data.approvers || []);
 
-  const displayCompanyName = profile?.companyName || companyName || 'Procnex';
+  const displayCompanyName = profile?.companyName || companyName || 'Company';
   const companyAddress = profile?.companyAddress
     ? [profile.companyAddress, profile.companyCity, profile.companyState, profile.companyCountry].filter(Boolean).join(', ')
-    : (profile?.companyName || companyName || 'Procnex') + ' • Corporate Headquarters';
+    : `${displayCompanyName} • Corporate Headquarters`;
 
   const fmtDate = (d: string) => {
     try {
@@ -242,15 +242,34 @@ export default function PrintPurchaseInvoiceModal({ data: dataProp, invoice: inv
           <div className="ppi-sheet__header">
             <div className="ppi-sheet__company">
               {logoUrl ? (
-                <img
-                  src={logoUrl}
-                  alt={displayCompanyName}
-                  style={{ maxHeight: 48, maxWidth: 200, objectFit: 'contain', marginBottom: 8, display: 'block' }}
-                />
+                <>
+                  <img
+                    src={logoUrl}
+                    alt={displayCompanyName}
+                    style={{ maxHeight: 48, maxWidth: 200, objectFit: 'contain', marginBottom: 8, display: 'block' }}
+                  />
+                  <h2 style={{ fontSize: 19, margin: '4px 0 2px 0' }}>{displayCompanyName}</h2>
+                </>
               ) : (
-                <h2>{displayCompanyName}</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                  <div style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 8,
+                    background: 'linear-gradient(135deg, #1e40af, #3b82f6)',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 700,
+                    fontSize: 16,
+                    letterSpacing: 0.5,
+                  }}>
+                    {displayCompanyName.substring(0, 2).toUpperCase()}
+                  </div>
+                  <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#0f172a' }}>{displayCompanyName}</h2>
+                </div>
               )}
-              {logoUrl && <h2 style={{ fontSize: 19, margin: '4px 0 2px 0' }}>{displayCompanyName}</h2>}
               <p>{companyAddress}</p>
               {(profile?.companyPhone || profile?.companyEmail) && (
                 <p>

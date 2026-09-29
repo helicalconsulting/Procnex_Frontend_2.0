@@ -10,14 +10,34 @@ import { companySettingsService, type CompanyProfile } from '../services/company
 import heliflowLogo from '../assets/heliflow.png';
 
 // ─── Local Storage Keys ────────────────────────────────────
-const BRANDING_CACHE_KEY = 'heliflow_branding_cache';
-const TITLE_CACHE_KEY = 'heliflow_tab_title';
+function getActiveCompanyCode(): string | null {
+  try {
+    const userRaw = localStorage.getItem('heliflow_user');
+    if (userRaw) {
+      const u = JSON.parse(userRaw);
+      if (u?.companyCode) return String(u.companyCode).toUpperCase();
+    }
+    const vendorCode = localStorage.getItem('vendor_company_code');
+    if (vendorCode) return String(vendorCode).toUpperCase();
+  } catch {}
+  return null;
+}
+
+function getCacheKey(): string {
+  const cc = getActiveCompanyCode();
+  return cc ? `heliflow_branding_cache_${cc}` : 'heliflow_branding_cache_GLOBAL';
+}
 
 function readCachedProfile(): CompanyProfile | null {
   try {
-    const raw = localStorage.getItem(BRANDING_CACHE_KEY);
+    const raw = localStorage.getItem(getCacheKey());
     if (!raw) return null;
-    return JSON.parse(raw) as CompanyProfile;
+    const parsed = JSON.parse(raw) as CompanyProfile;
+    const currentCc = getActiveCompanyCode();
+    if (currentCc && parsed.companyCode && parsed.companyCode.toUpperCase() !== currentCc) {
+      return null; // Stale cache from different company
+    }
+    return parsed;
   } catch {
     return null;
   }
@@ -25,11 +45,16 @@ function readCachedProfile(): CompanyProfile | null {
 
 function writeCachedProfile(profile: CompanyProfile): void {
   try {
-    localStorage.setItem(BRANDING_CACHE_KEY, JSON.stringify(profile));
+    const key = profile.companyCode
+      ? `heliflow_branding_cache_${profile.companyCode.toUpperCase()}`
+      : getCacheKey();
+    localStorage.setItem(key, JSON.stringify(profile));
   } catch {
     // Storage full or unavailable — silently ignore
   }
 }
+
+const TITLE_CACHE_KEY = 'heliflow_tab_title';
 
 function readCachedTitle(): string | null {
   try {
@@ -50,13 +75,13 @@ function writeCachedTitle(title: string): void {
 // ─── Types ──────────────────────────────────────────────────
 
 interface BrandingContextType {
-  /** Company display name (defaults to "Procnex") */
+  /** Company display name */
   companyName: string;
   /** Company phone number from branding settings */
   companyPhone: string | null;
   /** Company email from branding settings */
   companyEmail: string | null;
-  /** Logo URL (defaults to built-in logo) */
+  /** Logo URL */
   logoUrl: string | null;
   /** Favicon URL */
   faviconUrl: string | null;
@@ -81,7 +106,7 @@ const BrandingContext = createContext<BrandingContextType | undefined>(undefined
 // ─── Defaults ───────────────────────────────────────────────
 
 const DEFAULT_PRIMARY = '#0a6ed1';
-const DEFAULT_TITLE = 'Procnex — Digital Procurement Platform';
+const DEFAULT_TITLE = 'Enterprise Procurement Platform';
 
 // ─── Color shade generation ─────────────────────────────────
 
@@ -132,7 +157,7 @@ function applyPrimaryColor(hex: string) {
   }
 }
 
-/** Apply favicon — defaults to explicit faviconUrl -> logoUrl -> default logo */
+/** Apply favicon — defaults to explicit faviconUrl -> logoUrl -> default icon */
 export function applyFavicon(faviconUrl: string | null, logoUrl: string | null = null) {
   let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
   if (!link) {
@@ -142,7 +167,7 @@ export function applyFavicon(faviconUrl: string | null, logoUrl: string | null =
   }
   const rawTarget = faviconUrl || logoUrl;
   const isValidUrl = rawTarget && (rawTarget.startsWith('http://') || rawTarget.startsWith('https://') || rawTarget.startsWith('data:') || rawTarget.startsWith('/'));
-  const targetUrl = isValidUrl ? rawTarget : '/Procnex-logo.jpeg';
+  const targetUrl = isValidUrl ? rawTarget : '/favicon.png';
   if (targetUrl.endsWith('.svg')) {
     link.type = 'image/svg+xml';
   } else {
@@ -154,10 +179,8 @@ export function applyFavicon(faviconUrl: string | null, logoUrl: string | null =
 /** Apply document title — persists to localStorage so it survives refreshes */
 export function applyTitle(name: string | null) {
   let title = name || DEFAULT_TITLE;
-  if (!title || title === 'Heliflow Consulting' || title === 'Heliflow' || title === 'Procnex Consulting' || title === 'Procnex' || title.includes('SAP Enterprise Suite')) {
-    title = DEFAULT_TITLE;
-  } else if (title !== DEFAULT_TITLE && !title.includes('— Procurement Automation Software') && !title.includes('— Digital Procurement Platform') && !title.includes('— Vendor Portal')) {
-    title = `${title} — Procurement Automation Software`;
+  if (!title.includes('— Procurement Automation Software') && !title.includes('— Digital Procurement Platform') && !title.includes('— Vendor Portal') && !title.includes('— Enterprise Procurement Platform')) {
+    title = `${title} — Digital Procurement Platform`;
   }
   document.title = title;
   writeCachedTitle(title);
@@ -175,7 +198,7 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
       let p = await companySettingsService.getCompanyProfile();
 
       const existing = readCachedProfile();
-      if (existing) {
+      if (existing && (!existing.companyCode || !p.companyCode || existing.companyCode.toUpperCase() === p.companyCode.toUpperCase())) {
         if (p.logoUrl === undefined && existing.logoUrl) p = { ...p, logoUrl: existing.logoUrl };
         if (p.faviconUrl === undefined && existing.faviconUrl) p = { ...p, faviconUrl: existing.faviconUrl };
         if (p.companyName === undefined && existing.companyName) p = { ...p, companyName: existing.companyName };
@@ -192,8 +215,8 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
       applyPrimaryColor(color);
       applyFavicon(p.faviconUrl || null, p.logoUrl || null);
 
-      const name = p.companyName || DEFAULT_TITLE;
-      applyTitle(name);
+      const resolvedName = p.companyName || p.companyCode || DEFAULT_TITLE;
+      applyTitle(resolvedName);
     } catch {
       const existing = readCachedProfile();
       if (existing) {
@@ -202,14 +225,10 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
         applyFavicon(existing.faviconUrl || null, existing.logoUrl || null);
         if (existing.companyName) applyTitle(existing.companyName);
       } else {
-        const path = typeof window !== 'undefined' ? window.location.pathname : '';
-        const isTenantRoute = path.match(/^\/v\/([a-zA-Z0-9_-]+)/);
-        if (!isTenantRoute) {
-          applyPrimaryColor(DEFAULT_PRIMARY);
-          applyFavicon('/Procnex-logo.jpeg');
-          document.title = DEFAULT_TITLE;
-          writeCachedTitle(DEFAULT_TITLE);
-        }
+        applyPrimaryColor(DEFAULT_PRIMARY);
+        applyFavicon(null);
+        document.title = DEFAULT_TITLE;
+        writeCachedTitle(DEFAULT_TITLE);
       }
     } finally {
       setLoaded(true);
@@ -230,12 +249,15 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
     };
   }, [refresh]);
 
+  const activeCc = getActiveCompanyCode();
+  const dynamicName = profile?.companyName || activeCc || 'Organization';
+
   const value: BrandingContextType = {
-    companyName: (profile?.companyName && profile.companyName !== 'HFL') ? profile.companyName : 'Procnex',
+    companyName: dynamicName,
     companyPhone: profile?.companyPhone || null,
     companyEmail: profile?.companyEmail || null,
-    logoUrl: profile?.logoUrl || '/Procnex-logo.jpeg',
-    faviconUrl: profile?.faviconUrl || profile?.logoUrl || '/Procnex-logo.jpeg',
+    logoUrl: profile?.logoUrl || null,
+    faviconUrl: profile?.faviconUrl || profile?.logoUrl || null,
     primaryColor: profile?.primaryColor || DEFAULT_PRIMARY,
     loginText: profile?.loginText || null,
     supportEmail: profile?.supportEmail || null,

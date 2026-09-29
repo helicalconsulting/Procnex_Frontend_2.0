@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { Layers, Plus, X, Shield, FileText, ShoppingCart, ClipboardList, CheckSquare, Wallet, CreditCard, TrendingUp, Info, Zap, GitBranch } from 'lucide-react';
+import { Layers, Plus, X, Shield, FileText, ShoppingCart, ClipboardList, CheckSquare, Wallet, CreditCard, Info, Zap, GitBranch } from 'lucide-react';
 import { useServiceData } from '../../hooks/useServiceData';
 import { adminService, type AdminRoleRecord } from '../../services/adminService';
 import { companySettingsService, type Position } from '../../services/companySettingsService';
@@ -15,7 +15,7 @@ import ApprovalChain from '../../components/admin/ApprovalChain';
 import { APPROVAL_SYSTEM_LABELS, approvalChain, approvalFormErrors, approvalModulesForSystem, mapApprovalLevel, nextApprovalLevel, persistApprovalMove, type ApprovalLevelData, type ApprovalSystem, type MoveDirection } from '../../components/admin/approvalLevelModel';
 import './approval-level-workspace.css';
 
-const MODULE_ICONS = { RFQ: FileText, Quotations: ClipboardList, PurchaseOrders: ShoppingCart, AccountsPayable: Wallet, Payments: CreditCard, SalesOrders: TrendingUp, Approvals: CheckSquare, CustomForms: ClipboardList };
+const MODULE_ICONS = { RFQ: FileText, Quotations: ClipboardList, PurchaseOrders: ShoppingCart, AccountsPayable: Wallet, Payments: CreditCard, CustomForms: ClipboardList };
 const TIME_PRESETS = [2, 4, 8, 12, 24, 48, 72];
 
 export default function ApprovalLevelsPage() {

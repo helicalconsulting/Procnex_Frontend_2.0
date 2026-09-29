@@ -7,6 +7,7 @@ import { BrandingProvider } from "./context/BrandingContext";
 import { LanguageProvider } from "./context/LanguageContext";
 import { AuthProvider } from "./context/AuthContext";
 import { CurrencyProvider } from "./components/shared/CurrencyMaster";
+import { SuccessModalProvider } from "./context/SuccessModalContext";
 import { ProtectedRoute } from "./router/ProtectedRoute";
 import AppLayout from "./components/layout/AppLayout";
 import { PermissionGate } from "./router/PermissionGate";
@@ -47,6 +48,9 @@ const VendorQuotationsPage = lazy(
 const VendorOrdersPage = lazy(() => import("./pages/vendor/VendorOrdersPage"));
 const VendorInvoicesPage = lazy(
   () => import("./pages/vendor/VendorInvoicesPage"),
+);
+const VendorPaymentsPage = lazy(
+  () => import("./pages/vendor/VendorPaymentsPage"),
 );
 const VendorCreateInvoicePage = lazy(
   () => import("./pages/vendor/VendorCreateInvoicePage"),
@@ -145,7 +149,8 @@ export default function App() {
             <BrowserRouter>
               <AuthProvider>
                 <CurrencyProviderWithAuth>
-                  <Routes>
+                  <SuccessModalProvider>
+                    <Routes>
                     {/* Public */}
                     <Route path="/helicalconsulting" element={page(HelicalConsultingPage)} />
                     <Route path="/login" element={page(LoginPage)} />
@@ -164,6 +169,7 @@ export default function App() {
                         <Route path="/v/:companyCode/quotations" element={page(VendorQuotationsPage)} />
                         <Route path="/v/:companyCode/orders" element={page(VendorOrdersPage)} />
                         <Route path="/v/:companyCode/invoices" element={page(VendorInvoicesPage)} />
+                        <Route path="/v/:companyCode/payments" element={page(VendorPaymentsPage)} />
                         <Route path="/v/:companyCode/create-invoice" element={page(VendorCreateInvoicePage)} />
                         <Route path="/v/:companyCode/profile" element={page(VendorProfilePage)} />
                         <Route path="/v/:companyCode/contracts" element={page(VendorContractsPage)} />
@@ -176,6 +182,7 @@ export default function App() {
                         <Route path="/vendor/quotations" element={page(VendorQuotationsPage)} />
                         <Route path="/vendor/orders" element={page(VendorOrdersPage)} />
                         <Route path="/vendor/invoices" element={page(VendorInvoicesPage)} />
+                        <Route path="/vendor/payments" element={page(VendorPaymentsPage)} />
                         <Route path="/vendor/create-invoice" element={page(VendorCreateInvoicePage)} />
                         <Route path="/vendor/profile" element={page(VendorProfilePage)} />
                         <Route path="/vendor/contracts" element={page(VendorContractsPage)} />
@@ -295,6 +302,7 @@ export default function App() {
                     {/* Catch-all → redirect to dashboard */}
                     <Route path="*" element={<Navigate to="/dashboard" replace />} />
                   </Routes>
+                  </SuccessModalProvider>
                 </CurrencyProviderWithAuth>
               </AuthProvider>
             </BrowserRouter>
