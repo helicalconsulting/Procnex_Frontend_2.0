@@ -229,6 +229,36 @@ export default function PurchaseOrderDocument({ pr }: Props) {
         </div>
       </div>
 
+      {/* ── Payment Schedule Breakdown if Custom Plan ── */}
+      {Array.isArray((pr as any).paymentPlanSnapshot) && (pr as any).paymentPlanSnapshot.length > 0 && (
+        <div style={{ margin: '20px 0' }}>
+          <div className="po-doc__divider" style={{ marginBottom: 12 }} />
+          <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8, color: '#333' }}>
+            Payment Milestone Schedule ({val(pr.paymentTerms)})
+          </h4>
+          <table className="po-doc__items-table" style={{ width: '100%', fontSize: 12 }}>
+            <thead>
+              <tr>
+                <th style={{ width: '8%', textAlign: 'center' }}>#</th>
+                <th style={{ width: '52%', textAlign: 'left' }}>Milestone / Condition</th>
+                <th style={{ width: '18%', textAlign: 'right' }}>Allocation %</th>
+                <th style={{ width: '22%', textAlign: 'right' }}>Milestone Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {((pr as any).paymentPlanSnapshot as Array<{ title: string; percentage: number }>).map((m, idx) => (
+                <tr key={idx}>
+                  <td style={{ textAlign: 'center' }}>{idx + 1}</td>
+                  <td>{m.title}</td>
+                  <td style={{ textAlign: 'right', fontWeight: 600 }}>{m.percentage}%</td>
+                  <td style={{ textAlign: 'right' }}>{formatCurrency((pr.grandTotal * Number(m.percentage)) / 100, pr.currency)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {/* ── Notes ── */}
       <div className="po-doc__divider" />
       <div className="po-doc__notes">

@@ -30,6 +30,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { CurrencyAmountInput } from '../../components/shared/CurrencyMaster';
+import { FormSignatureField } from '../../components/shared/FormSignatureField';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
 import { adminService } from '../../services/adminService';
 import { vendorService } from '../../services/vendorService';
@@ -689,10 +690,60 @@ export default function FormsPage() {
                                 <option key={opt} value={opt}>{opt}</option>
                               ))}
                             </select>
+                          ) : field.type === 'multiselect' ? (
+                            <div className="fp-multiselect-group">
+                              {field.options && field.options.length > 0 ? (
+                                <div className="fp-multiselect-chips">
+                                  {field.options.map((opt) => {
+                                    const selectedArr = Array.isArray(val)
+                                      ? val
+                                      : typeof val === 'string' && val.trim()
+                                      ? val.split(',').map((s) => s.trim())
+                                      : [];
+                                    const isSelected = selectedArr.includes(opt);
+                                    return (
+                                      <button
+                                        type="button"
+                                        key={opt}
+                                        className={`fp-multiselect-chip ${isSelected ? 'fp-multiselect-chip--selected' : ''}`}
+                                        disabled={isReadOnly}
+                                        onClick={() => {
+                                          if (isReadOnly) return;
+                                          let updated = [...selectedArr];
+                                          if (isSelected) {
+                                            updated = updated.filter((v) => v !== opt);
+                                          } else {
+                                            updated.push(opt);
+                                          }
+                                          handleFieldChange(field.id, updated);
+                                        }}
+                                      >
+                                        <span className="fp-chip-check">{isSelected ? '✓' : '+'}</span>
+                                        <span>{opt}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <input
+                                  type="text"
+                                  className="fp-field-input"
+                                  placeholder={field.placeholder || 'Enter comma-separated options...'}
+                                  value={Array.isArray(val) ? val.join(', ') : val || ''}
+                                  disabled={isReadOnly}
+                                  onChange={(e) =>
+                                    handleFieldChange(
+                                      field.id,
+                                      e.target.value.split(',').map((s) => s.trim()).filter(Boolean)
+                                    )
+                                  }
+                                />
+                              )}
+                            </div>
                           ) : field.type === 'radio' ? (
                             <div className="fp-radio-group">
                               {field.options?.map((opt) => (
-                                <label key={opt} className="fp-radio-item">
+                                <label key={opt} className={`fp-radio-item ${val === opt ? 'fp-radio-item--selected' : ''}`}>
                                   <input
                                     type="radio"
                                     name={field.id}
@@ -701,7 +752,7 @@ export default function FormsPage() {
                                     disabled={isReadOnly}
                                     onChange={(e) => handleFieldChange(field.id, e.target.value)}
                                   />
-                                  <span>{opt}</span>
+                                  <span className="fp-radio-label">{opt}</span>
                                 </label>
                               ))}
                             </div>
@@ -713,7 +764,7 @@ export default function FormsPage() {
                                     ? val.includes(opt)
                                     : val === opt || Boolean(val && typeof val === 'object' && val[opt]);
                                   return (
-                                    <label key={opt} className="fp-checkbox-item">
+                                    <label key={opt} className={`fp-checkbox-item ${isChecked ? 'fp-checkbox-item--selected' : ''}`}>
                                       <input
                                         type="checkbox"
                                         checked={isChecked}
@@ -728,34 +779,33 @@ export default function FormsPage() {
                                           handleFieldChange(field.id, currentVal);
                                         }}
                                       />
-                                      <span>{opt}</span>
+                                      <span className="fp-checkbox-label">{opt}</span>
                                     </label>
                                   );
                                 })
                               ) : (
-                                <label className="fp-checkbox-item">
+                                <label className={`fp-checkbox-item ${Boolean(val) ? 'fp-checkbox-item--selected' : ''}`}>
                                   <input
                                     type="checkbox"
                                     checked={Boolean(val)}
                                     disabled={isReadOnly}
                                     onChange={(e) => handleFieldChange(field.id, e.target.checked)}
                                   />
-                                  <span>{field.placeholder || field.label || 'Select option'}</span>
+                                  <span className="fp-checkbox-label">{field.placeholder || field.label || 'Select option'}</span>
                                 </label>
                               )}
                             </div>
                           ) : field.type === 'signature' ? (
-                            <div className="fp-signature-box">
-                              <PenTool size={18} />
-                              <input
-                                type="text"
-                                className="fp-field-input"
-                                placeholder="Type Full Name for Digital Signature..."
-                                value={val}
-                                disabled={isReadOnly}
-                                onChange={(e) => handleFieldChange(field.id, e.target.value)}
-                              />
-                            </div>
+                            <FormSignatureField
+                              id={field.id}
+                              label={field.label}
+                              placeholder={field.placeholder}
+                              value={val}
+                              disabled={isReadOnly}
+                              readOnly={isReadOnly}
+                              required={field.required}
+                              onChange={(sigVal) => handleFieldChange(field.id, sigVal)}
+                            />
                           ) : field.type === 'currency' ? (
                             <CurrencyAmountInput
                               amount={val}

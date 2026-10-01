@@ -1,6 +1,7 @@
 import { adminService } from './adminService';
 import { isRoleMatching, type FormSubmissionInstance } from './formWorkflowService';
 import { companySettingsService } from './companySettingsService';
+import { apiRequest } from '../api/client';
 
 export interface SapEmailLog {
   id: string;
@@ -46,20 +47,16 @@ export function getStoredSapEmails(): SapEmailLog[] {
 
 async function sendRealSmtpEmail(to: string, subject: string, html: string): Promise<boolean> {
   try {
-    const res = await fetch('http://localhost:3000/api/notifications/send-email', {
+    const res = await apiRequest<{ success?: boolean }>('/notifications/send-email', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ to, subject, html }),
     });
-    const data = await res.json();
-    if (data && data.success) {
-      console.log(`[REAL SMTP EMAIL SENT] Dispatched to ${to} (${subject})`);
+    if (res) {
+      console.log(`[REAL EMAIL SENT] Dispatched to ${to} (${subject})`);
       return true;
-    } else {
-      console.warn(`[REAL SMTP EMAIL RESP] Backend output:`, data);
     }
   } catch (err) {
-    console.error(`[REAL SMTP EMAIL ERROR] Backend request failed:`, err);
+    console.error(`[REAL EMAIL ERROR] Backend request failed:`, err);
   }
   return false;
 }

@@ -21,7 +21,10 @@ import {
   FileCheck,
   Search,
   ArrowRight,
+  ArrowDown,
   History,
+  Star,
+  Eye,
   X,
   ExternalLink,
   Mic,
@@ -49,6 +52,7 @@ interface ReportHistoryItem {
   cloudinaryUrl: string;
   modelUsed?: string;
   tokensUsed?: number;
+  isFavorite?: boolean;
   createdAt: string;
 }
 
@@ -92,10 +96,13 @@ export function ProcnexAiReportsWidget() {
   const [downloadingPdfId, setDownloadingPdfId] = useState<string | null>(null);
   const [isHistoryDrawerOpen, setIsHistoryDrawerOpen] = useState(false);
   const [historySearchQuery, setHistorySearchQuery] = useState('');
+  const [historyTab, setHistoryTab] = useState<'all' | 'favorites'>('all');
+  const [viewingReport, setViewingReport] = useState<ReportHistoryItem | null>(null);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
 
   const filteredHistoryList = reportsHistory.filter(rpt => {
+    if (historyTab === 'favorites' && !rpt.isFavorite) return false;
     if (!historySearchQuery.trim()) return true;
     const q = historySearchQuery.toLowerCase();
     return (
@@ -106,6 +113,9 @@ export function ProcnexAiReportsWidget() {
   });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const latestUserMsgRef = useRef<HTMLDivElement>(null);
+  const isAutoScrollEnabledRef = useRef(true);
+  const [showScrollBottomBtn, setShowScrollBottomBtn] = useState(false);
 
   useEffect(() => {
     fetchHistoryAndQuota();
@@ -127,6 +137,11 @@ export function ProcnexAiReportsWidget() {
       }
     };
   }, []);
+
+  const promptRef = useRef(prompt);
+  useEffect(() => {
+    promptRef.current = prompt;
+  }, [prompt]);
 
   const toggleListening = () => {
     if (isListening) {
@@ -151,13 +166,20 @@ export function ProcnexAiReportsWidget() {
     }
 
     try {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch (e) {}
+      }
+
       const recognition = new SpeechRecognition();
       recognitionRef.current = recognition;
-      recognition.continuous = true;
+      recognition.continuous = false;
       recognition.interimResults = true;
       recognition.lang = navigator.language || 'en-US';
 
-      let baseText = prompt ? prompt.trim() : '';
+      // Capture initial text snapshot before recognition starts
+      const initialPrompt = (promptRef.current || '').trim();
 
       recognition.onstart = () => {
         setIsListening(true);
@@ -165,13 +187,23 @@ export function ProcnexAiReportsWidget() {
       };
 
       recognition.onresult = (event: any) => {
-        let transcript = '';
+        let fullTranscript = '';
         for (let i = 0; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
+          const item = event.results[i];
+          if (item && item[0] && item[0].transcript) {
+            fullTranscript += item[0].transcript;
+          }
         }
-        if (transcript.trim()) {
-          const combined = baseText ? `${baseText} ${transcript.trim()}` : transcript.trim();
-          setPrompt(combined);
+        const spoken = fullTranscript.trim();
+        if (spoken) {
+          // If the spoken text already starts with the initial text, do not duplicate
+          if (initialPrompt && spoken.toLowerCase().startsWith(initialPrompt.toLowerCase())) {
+            setPrompt(spoken);
+          } else if (initialPrompt) {
+            setPrompt(`${initialPrompt} ${spoken}`);
+          } else {
+            setPrompt(spoken);
+          }
         }
       };
 
@@ -195,11 +227,58 @@ export function ProcnexAiReportsWidget() {
     }
   };
 
+  // ChatGPT-style User Scroll Tracking:
+  // If the user scrolls up to read, disable aggressive autoscrolling and show floating "Scroll to bottom" button
   useEffect(() => {
-    if (messagesEndRef.current && (messages.length > 0 || isGenerating)) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages, liveStreamText, statusMessage]);
+    const handleScroll = () => {
+      const scrollPosition = window.innerHeight + window.scrollY;
+      const distanceFromBottom = document.documentElement.scrollHeight - scrollPosition;
+      const isNearBottom = distanceFromBottom <= 180;
+
+      if (!isNearBottom) {
+        isAutoScrollEnabledRef.current = false;
+        if (messages.length > 0 || isGenerating) {
+          setShowScrollBottomBtn(true);
+        }
+      } else {
+        isAutoScrollEnabledRef.current = true;
+        setShowScrollBottomBtn(false);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [messages.length, isGenerating]);
+
+  // ChatGPT-style gentle follow during live streaming
+  useEffect(() => {
+    if (!isGenerating) return;
+    if (!isAutoScrollEnabledRef.current) return;
+
+    const rafId = requestAnimationFrame(() => {
+      const scrollPosition = window.innerHeight + window.scrollY;
+      const distanceFromBottom = document.documentElement.scrollHeight - scrollPosition;
+
+      // Only follow if the user hasn't scrolled up away from bottom
+      if (distanceFromBottom < 320) {
+        window.scrollTo({
+          top: document.documentElement.scrollHeight,
+          behavior: 'smooth'
+        });
+      }
+    });
+
+    return () => cancelAnimationFrame(rafId);
+  }, [liveStreamText, isGenerating]);
+
+  const scrollToBottom = (smooth = true) => {
+    isAutoScrollEnabledRef.current = true;
+    setShowScrollBottomBtn(false);
+    window.scrollTo({
+      top: document.documentElement.scrollHeight,
+      behavior: smooth ? 'smooth' : 'auto'
+    });
+  };
 
   const getApiUrl = (path: string): string => {
     const rawBase = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
@@ -271,6 +350,15 @@ export function ProcnexAiReportsWidget() {
     setErrorMessage(null);
     setStatusMessage('Connecting to Procnex Intelligence Engine...');
     setLiveStreamText('');
+    isAutoScrollEnabledRef.current = true;
+    setShowScrollBottomBtn(false);
+
+    // Smoothly bring the newly submitted user prompt into view so the user can comfortably watch the answer generate from line 1
+    setTimeout(() => {
+      if (latestUserMsgRef.current) {
+        latestUserMsgRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 80);
 
     try {
       const token = getAuthToken();
@@ -407,6 +495,8 @@ export function ProcnexAiReportsWidget() {
   const clearChat = () => {
     setMessages([]);
     setLiveStreamText('');
+    setShowScrollBottomBtn(false);
+    isAutoScrollEnabledRef.current = true;
   };
 
   const handleDeleteReport = async (id: string, e?: React.MouseEvent) => {
@@ -423,6 +513,29 @@ export function ProcnexAiReportsWidget() {
       }
     } catch (err) {
       console.error('Failed to delete report:', err);
+    }
+  };
+
+  const handleToggleFavorite = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    try {
+      // Optimistic state update
+      setReportsHistory(prev =>
+        prev.map(r => (r.id === id ? { ...r, isFavorite: !r.isFavorite } : r))
+      );
+
+      const token = getAuthToken();
+      const res = await fetch(getApiUrl(`/api/ai-reports-generator/${id}/favorite`), {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!res.ok) {
+        fetchHistoryAndQuota();
+      }
+    } catch (err) {
+      console.error('Failed to toggle favorite status:', err);
+      fetchHistoryAndQuota();
     }
   };
 
@@ -786,6 +899,12 @@ export function ProcnexAiReportsWidget() {
               {reportsHistory.length}
             </span>
           )}
+          {reportsHistory.some(r => r.isFavorite) && (
+            <span className="flex items-center gap-1 text-[11px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-full border border-amber-500/30">
+              <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+              <span>{reportsHistory.filter(r => r.isFavorite).length}</span>
+            </span>
+          )}
         </button>
       </div>
 
@@ -861,11 +980,14 @@ export function ProcnexAiReportsWidget() {
 
             {/* Conversation Messages */}
             <div className="space-y-6">
-              {messages.map((msg, idx) => (
-                <div
-                  key={msg.id}
-                  className={`flex gap-3.5 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
+              {messages.map((msg, idx) => {
+                const lastUserMsgIdx = messages.map(m => m.sender).lastIndexOf('user');
+                return (
+                  <div
+                    key={msg.id}
+                    ref={idx === lastUserMsgIdx ? latestUserMsgRef : null}
+                    className={`flex gap-3.5 ${msg.sender === 'user' ? 'justify-end scroll-mt-28' : 'justify-start'}`}
+                  >
                   {msg.sender === 'assistant' && (
                     <div className={`w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0 mt-1 shadow-md border overflow-hidden p-1.5 ${
                       isDark ? 'bg-slate-900 border-sky-500/40 shadow-sky-950/40' : 'bg-white border-sky-200 shadow-sky-100'
@@ -987,7 +1109,8 @@ export function ProcnexAiReportsWidget() {
                     </div>
                   )}
                 </div>
-              ))}
+              );
+            })}
 
               {/* Live Streaming State */}
               {isGenerating && (
@@ -1029,6 +1152,31 @@ export function ProcnexAiReportsWidget() {
 
               <div ref={messagesEndRef} />
             </div>
+          </div>
+        )}
+
+        {/* Floating ChatGPT-style Scroll to Bottom Button */}
+        {showScrollBottomBtn && (
+          <div className="sticky bottom-20 z-30 flex justify-center w-full pointer-events-none -mb-3">
+            <button
+              type="button"
+              onClick={() => scrollToBottom(true)}
+              className={`pointer-events-auto flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold shadow-xl backdrop-blur-md border transition-all duration-200 transform hover:scale-105 active:scale-95 cursor-pointer ${
+                isDark
+                  ? 'bg-slate-900/95 text-sky-400 border-sky-500/40 shadow-sky-950/80 hover:bg-slate-800 hover:text-white hover:border-sky-400'
+                  : 'bg-white/95 text-sky-700 border-sky-200 shadow-sky-200/60 hover:bg-sky-50 hover:text-sky-800 hover:border-sky-300'
+              }`}
+              title="Scroll to latest response"
+            >
+              <ArrowDown className="w-3.5 h-3.5" />
+              <span>Scroll to bottom</span>
+              {isGenerating && (
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
+                </span>
+              )}
+            </button>
           </div>
         )}
 
@@ -1303,7 +1451,7 @@ export function ProcnexAiReportsWidget() {
                 <div>
                   <h3 className="font-bold text-base">Previously Generated Reports</h3>
                   <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                    Instant PDF downloads • Auto-purged after 7 days
+                    Instant PDF downloads • Auto-purged after 30 days • ⭐ Starred reports never expire
                   </p>
                 </div>
               </div>
@@ -1319,8 +1467,8 @@ export function ProcnexAiReportsWidget() {
               </button>
             </div>
 
-            {/* Search Filter Bar */}
-            <div className={`p-4 border-b ${isDark ? 'border-slate-800 bg-slate-900/60' : 'border-slate-100 bg-slate-50/50'}`}>
+            {/* Search Filter & Favorite Tabs Bar */}
+            <div className={`p-4 border-b space-y-3 ${isDark ? 'border-slate-800 bg-slate-900/60' : 'border-slate-100 bg-slate-50/50'}`}>
               <div className={`relative flex items-center rounded-xl border px-3 py-2 ${
                 isDark ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-200'
               }`}>
@@ -1340,6 +1488,37 @@ export function ProcnexAiReportsWidget() {
                   </button>
                 )}
               </div>
+
+              {/* All vs Starred Tabs */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setHistoryTab('all')}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                    historyTab === 'all'
+                      ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-sm'
+                      : isDark
+                        ? 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700/60'
+                        : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
+                  }`}
+                >
+                  All Reports ({reportsHistory.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHistoryTab('favorites')}
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                    historyTab === 'favorites'
+                      ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/20'
+                      : isDark
+                        ? 'bg-slate-800 text-amber-400 hover:bg-slate-700/80 border border-amber-500/30'
+                        : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
+                  }`}
+                >
+                  <Star className="w-3.5 h-3.5 fill-current" />
+                  <span>Starred / Favorites ({reportsHistory.filter(r => r.isFavorite).length})</span>
+                </button>
+              </div>
             </div>
 
             {/* List Content */}
@@ -1348,28 +1527,52 @@ export function ProcnexAiReportsWidget() {
                 <div className={`text-center py-12 text-xs ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
                   {reportsHistory.length === 0
                     ? 'No reports generated yet. Generate your first report using the chat or cards above!'
-                    : 'No matching reports found.'}
+                    : historyTab === 'favorites'
+                      ? 'No starred reports yet. Click the star icon on any report to save it permanently!'
+                      : 'No matching reports found.'}
                 </div>
               ) : (
                 filteredHistoryList.map(rpt => (
                   <div
                     key={rpt.id}
                     className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
-                      isDark
-                        ? 'bg-slate-950/60 border-slate-800 hover:border-sky-500/40 hover:bg-slate-950'
-                        : 'bg-slate-50/70 border-slate-200 hover:border-sky-300 hover:bg-white'
+                      rpt.isFavorite
+                        ? isDark
+                          ? 'bg-slate-950/90 border-amber-500/40 shadow-sm shadow-amber-950/20 hover:border-amber-500/60'
+                          : 'bg-amber-50/40 border-amber-200/80 shadow-sm hover:border-amber-300'
+                        : isDark
+                          ? 'bg-slate-950/60 border-slate-800 hover:border-sky-500/40 hover:bg-slate-950'
+                          : 'bg-slate-50/70 border-slate-200 hover:border-sky-300 hover:bg-white'
                     }`}
                   >
-                    <div className="flex items-start gap-3 min-w-0">
-                      <div className={`p-2.5 rounded-xl border flex-shrink-0 mt-0.5 ${
-                        isDark ? 'bg-sky-950/60 border-sky-500/30 text-sky-400' : 'bg-sky-50 border-sky-200 text-sky-600'
+                    <div className="flex items-start gap-3 min-w-0 cursor-pointer" onClick={() => setViewingReport(rpt)}>
+                      <div className={`p-2.5 rounded-xl border flex-shrink-0 mt-0.5 transition-transform hover:scale-105 ${
+                        rpt.isFavorite
+                          ? isDark
+                            ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
+                            : 'bg-amber-100 border-amber-300 text-amber-600'
+                          : isDark
+                            ? 'bg-sky-950/60 border-sky-500/30 text-sky-400'
+                            : 'bg-sky-50 border-sky-200 text-sky-600'
                       }`}>
                         <FileText className="w-4 h-4" />
                       </div>
                       <div className="min-w-0">
-                        <h4 className={`font-semibold text-xs truncate ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
-                          {rpt.title}
-                        </h4>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className={`font-semibold text-xs truncate hover:underline ${
+                            isDark ? 'text-slate-200 hover:text-sky-300' : 'text-slate-800 hover:text-sky-600'
+                          }`}>
+                            {rpt.title}
+                          </h4>
+                          {rpt.isFavorite && (
+                            <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md ${
+                              isDark ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-amber-100 text-amber-800 border border-amber-200'
+                            }`}>
+                              <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
+                              <span>Favorite • Never Expires</span>
+                            </span>
+                          )}
+                        </div>
                         <div className={`flex items-center gap-2 mt-1 text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                           <span>{new Date(rpt.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                           <span>•</span>
@@ -1379,6 +1582,38 @@ export function ProcnexAiReportsWidget() {
                     </div>
 
                     <div className="flex items-center gap-2 flex-shrink-0">
+                      {/* View Report Button */}
+                      <button
+                        onClick={() => setViewingReport(rpt)}
+                        title="View Full Report"
+                        className={`inline-flex items-center gap-1.5 font-semibold text-xs px-3 py-2 rounded-xl transition-all shadow-sm border cursor-pointer ${
+                          isDark
+                            ? 'bg-sky-950/60 hover:bg-sky-600 text-sky-300 hover:text-white border-sky-500/40 hover:border-sky-500'
+                            : 'bg-white hover:bg-sky-600 text-sky-700 hover:text-white border-sky-200 hover:border-sky-600'
+                        }`}
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>View</span>
+                      </button>
+
+                      {/* Star / Favorite Button */}
+                      <button
+                        onClick={(e) => handleToggleFavorite(rpt.id, e)}
+                        title={rpt.isFavorite ? 'Starred (Never expires • Click to un-favorite)' : 'Star Report (Keep in database forever • Protected from 30-day auto-purge)'}
+                        className={`p-2 rounded-xl border transition-all cursor-pointer ${
+                          rpt.isFavorite
+                            ? isDark
+                              ? 'bg-amber-500/20 text-amber-400 border-amber-500/50 shadow-sm shadow-amber-950/40 hover:bg-amber-500/30'
+                              : 'bg-amber-100 text-amber-700 border-amber-300 shadow-sm hover:bg-amber-200'
+                            : isDark
+                              ? 'bg-slate-800/80 text-slate-400 hover:text-amber-400 hover:bg-slate-800 border-slate-700/80'
+                              : 'bg-white text-slate-400 hover:text-amber-500 hover:bg-amber-50 border-slate-200'
+                        }`}
+                      >
+                        <Star className={`w-3.5 h-3.5 ${rpt.isFavorite ? 'fill-amber-400 text-amber-400' : ''}`} />
+                      </button>
+
+                      {/* Download PDF Button */}
                       <button
                         onClick={() => handleDownloadPdf(rpt.summaryText || rpt.title, rpt.id, rpt.title)}
                         disabled={downloadingPdfId === rpt.id}
@@ -1401,6 +1636,7 @@ export function ProcnexAiReportsWidget() {
                         )}
                       </button>
 
+                      {/* Delete Button */}
                       <button
                         onClick={(e) => handleDeleteReport(rpt.id, e)}
                         title="Delete report from history"
@@ -1433,6 +1669,159 @@ export function ProcnexAiReportsWidget() {
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════
+          INTERACTIVE FULL REPORT VIEWER MODAL
+          ═══════════════════════════════════════════════════════════════ */}
+      {viewingReport && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/75 backdrop-blur-md"
+          onClick={() => setViewingReport(null)}
+        >
+          <div
+            className={`w-full max-w-4xl rounded-3xl border shadow-2xl overflow-hidden flex flex-col max-h-[90vh] transition-all transform duration-200 ${
+              isDark ? 'bg-slate-900 border-slate-700 text-slate-100 shadow-sky-950/50' : 'bg-white border-slate-200 text-slate-900'
+            }`}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Viewer Header */}
+            <div className={`p-5 border-b flex items-start justify-between gap-4 ${
+              isDark ? 'bg-slate-950/90 border-slate-800' : 'bg-slate-50 border-slate-200'
+            }`}>
+              <div className="flex items-start gap-3 min-w-0">
+                <div className={`p-2.5 rounded-2xl border flex-shrink-0 mt-0.5 ${
+                  viewingReport.isFavorite
+                    ? isDark
+                      ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
+                      : 'bg-amber-100 border-amber-300 text-amber-600'
+                    : isDark
+                      ? 'bg-sky-600/20 border-sky-500/40 text-sky-400'
+                      : 'bg-sky-100 border-sky-300 text-sky-700'
+                }`}>
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-bold text-base sm:text-lg truncate">
+                      {viewingReport.title}
+                    </h3>
+                    {viewingReport.isFavorite && (
+                      <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md ${
+                        isDark ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-amber-100 text-amber-800 border border-amber-200'
+                      }`}>
+                        <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                        <span>Favorite • Never Expires</span>
+                      </span>
+                    )}
+                  </div>
+                  <div className={`flex items-center gap-2 mt-1 text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                    <span>Generated on {new Date(viewingReport.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })} at {new Date(viewingReport.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Header Quick Actions */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  onClick={(e) => handleToggleFavorite(viewingReport.id, e)}
+                  title={viewingReport.isFavorite ? 'Starred (Never expires • Click to un-favorite)' : 'Star Report (Keep in database forever • Protected from 30-day auto-purge)'}
+                  className={`p-2 rounded-xl border transition-all cursor-pointer ${
+                    viewingReport.isFavorite
+                      ? isDark
+                        ? 'bg-amber-500/20 text-amber-400 border-amber-500/50 hover:bg-amber-500/30'
+                        : 'bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200'
+                      : isDark
+                        ? 'bg-slate-800 text-slate-400 hover:text-amber-400 hover:bg-slate-700 border-slate-700'
+                        : 'bg-white text-slate-500 hover:text-amber-600 hover:bg-slate-100 border-slate-200'
+                  }`}
+                >
+                  <Star className={`w-4 h-4 ${viewingReport.isFavorite ? 'fill-amber-400 text-amber-400' : ''}`} />
+                </button>
+
+                <button
+                  onClick={() => handleCopy(viewingReport.summaryText || viewingReport.title, viewingReport.id)}
+                  title="Copy formatted markdown"
+                  className={`p-2 rounded-xl border transition-all cursor-pointer ${
+                    isDark
+                      ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border-slate-700'
+                      : 'bg-white hover:bg-slate-100 text-slate-600 hover:text-slate-900 border-slate-200'
+                  }`}
+                >
+                  {copiedId === viewingReport.id ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                </button>
+
+                <button
+                  onClick={() =>
+                    handleDownloadPdf(
+                      viewingReport.summaryText || viewingReport.title,
+                      viewingReport.id,
+                      viewingReport.title
+                    )
+                  }
+                  disabled={downloadingPdfId === viewingReport.id}
+                  className={`inline-flex items-center gap-1.5 font-semibold text-xs px-3.5 py-2 rounded-xl transition-all shadow-sm border cursor-pointer ${
+                    isDark
+                      ? 'bg-sky-600 hover:bg-sky-500 text-white border-sky-500 shadow-sky-900/40'
+                      : 'bg-sky-600 hover:bg-sky-700 text-white border-sky-600 shadow-sky-100'
+                  }`}
+                >
+                  {downloadingPdfId === viewingReport.id ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Generating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Download PDF</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => setViewingReport(null)}
+                  className={`p-2 rounded-xl transition-colors cursor-pointer ${
+                    isDark ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-500 hover:text-slate-900'
+                  }`}
+                  title="Close Viewer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Viewer Content Body */}
+            <div className="p-6 overflow-y-auto space-y-4 flex-1 text-sm leading-relaxed max-h-[60vh]">
+              {renderFormattedMarkdown(viewingReport.summaryText || viewingReport.title)}
+            </div>
+
+            {/* Viewer Footer */}
+            <div className={`p-4 border-t flex items-center justify-between text-xs ${
+              isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'
+            }`}>
+              <div className="flex items-center gap-2">
+                <span className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                  {viewingReport.isFavorite
+                    ? '⭐ This report is Starred and will NEVER be auto-deleted.'
+                    : '⏳ Auto-purged after 30 days from creation date.'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setViewingReport(null)}
+                  className={`px-4 py-2 rounded-xl font-semibold transition-all cursor-pointer ${
+                    isDark
+                      ? 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+                      : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+                  }`}
+                >
+                  Back to List
+                </button>
+              </div>
             </div>
           </div>
         </div>

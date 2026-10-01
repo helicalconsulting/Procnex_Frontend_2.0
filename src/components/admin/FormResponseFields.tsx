@@ -56,10 +56,19 @@ export function FormResponseFields({ fields, responseData = {} }: { fields: Form
         <a className={buttonVariants({ variant: 'outline', size: 'sm' })} href={file.src} download={file.fileName}><Download size={14}/>Download File</a>
       </div> : <p className="text-xs font-normal text-muted-foreground">The file name was recorded, but no file is available to preview or download.</p>}
     </div>;
-    if (field.type === 'signature') return <div className="space-y-2">
-      <span className="flex items-start gap-2"><PenLine size={16} className="mt-0.5 shrink-0 text-muted-foreground"/>{answerText(value)}</span>
-      <span className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-300"><CheckCircle2 size={14}/>Digital Signature</span>
-    </div>;
+    if (field.type === 'signature') {
+      const sigSrc = typeof value === 'string' && /^(data:image\/|https?:\/\/|blob:|\/)/i.test(value.trim()) ? value.trim() : typeof value === 'object' && value !== null ? ((value as any).signatureDataUrl || (value as any).dataUrl || (value as any).fileDataUrl || '') : '';
+      return <div className="space-y-2">
+        {sigSrc ? (
+          <div className="max-w-xs rounded-lg border border-border/80 bg-white p-2">
+            <img src={sigSrc} alt={field.label || 'Digital Signature'} className="max-h-20 max-w-full object-contain" />
+          </div>
+        ) : (
+          <span className="flex items-start gap-2"><PenLine size={16} className="mt-0.5 shrink-0 text-muted-foreground"/>{answerText(value)}</span>
+        )}
+        <span className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-300"><CheckCircle2 size={14}/>Digital Signature</span>
+      </div>;
+    }
     return answerText(value);
   };
 

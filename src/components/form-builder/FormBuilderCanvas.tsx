@@ -553,20 +553,24 @@ function renderFieldComponent(
       )}
 
       {type === 'multiselect' && (
-        <select className={`${canvasControlClass} min-h-28 py-2`} multiple disabled={readOnly}>
-          {(options || ['Option A', 'Option B', 'Option C']).map((opt, i) => (
-            <option key={i} value={opt}>
-              {opt}
-            </option>
+        <div className="flex flex-wrap items-center gap-2 py-1">
+          {(options && options.length > 0 ? options : ['Option A', 'Option B', 'Option C']).map((opt, i) => (
+            <span
+              key={i}
+              className="inline-flex min-h-[34px] items-center gap-1.5 rounded-full border border-border bg-card px-3.5 py-1 text-xs font-medium text-foreground transition"
+            >
+              <span className="text-primary font-bold">+</span>
+              <span>{opt}</span>
+            </span>
           ))}
-        </select>
+        </div>
       )}
 
       {type === 'checkbox' && (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-2.5 py-1">
           {(options || ['Option 1', 'Option 2']).map((opt, i) => (
-            <label key={i} className="flex min-h-10 cursor-pointer items-center gap-2 rounded-lg px-2 text-sm text-foreground transition hover:bg-muted">
-              <input type="checkbox" disabled={readOnly} />
+            <label key={i} className="inline-flex min-h-[36px] cursor-pointer items-center gap-2 rounded-lg border border-border bg-card px-3.5 py-1.5 text-sm text-foreground transition hover:border-primary/50 hover:bg-muted">
+              <input type="checkbox" disabled={readOnly} className="h-4 w-4 accent-primary" />
               <span>{opt}</span>
             </label>
           ))}
@@ -574,10 +578,10 @@ function renderFieldComponent(
       )}
 
       {type === 'radio' && (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-2.5 py-1">
           {(options || ['Choice 1', 'Choice 2']).map((opt, i) => (
-            <label key={i} className="flex min-h-10 cursor-pointer items-center gap-2 rounded-lg px-2 text-sm text-foreground transition hover:bg-muted">
-              <input type="radio" name={`radio-${field.id}`} disabled={readOnly} />
+            <label key={i} className="inline-flex min-h-[36px] cursor-pointer items-center gap-2 rounded-lg border border-border bg-card px-3.5 py-1.5 text-sm text-foreground transition hover:border-primary/50 hover:bg-muted">
+              <input type="radio" name={`radio-${field.id}`} disabled={readOnly} className="h-4 w-4 accent-primary" />
               <span>{opt}</span>
             </label>
           ))}

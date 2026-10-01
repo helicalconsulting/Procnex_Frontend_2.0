@@ -4,7 +4,6 @@ import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { rfqService } from '../../services/rfqService';
 import { contractService } from '../../services/contractService';
 import { purchaseRequisitionService, type PurchaseRequisition, type PurchaseRequisitionItem } from '../../services/purchaseRequisitionService';
-import { companySettingsService, type Warehouse } from '../../services/companySettingsService';
 import { apiRequest } from '../../api/client';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyMaster';
@@ -13,8 +12,11 @@ import {
   Save, Eye, FileText, Printer, Send, ArrowLeft, Plus, Trash2,
   ShoppingCart, Building2, Truck, ClipboardList, Hash, DollarSign,
   Percent, Calculator, X, Loader2, AlertTriangle, Settings,
-  AlertCircle, Download, FileCheck, ShieldAlert, CheckCircle2, PieChart, IndianRupee,
+  AlertCircle, Download, FileCheck, ShieldAlert, CheckCircle2, PieChart, IndianRupee, Pencil,
 } from 'lucide-react';
+import { companySettingsService, type Warehouse, type PaymentTerm, type PaymentPlan } from '../../services/companySettingsService';
+import CustomPaymentPlanModal from '../../components/vendor/CustomPaymentPlanModal';
+import '../../components/vendor/vendor-rfq-workspace.css';
 import { useBranding } from '../../context/BrandingContext';
 import PurchaseOrderDocument from '../../components/purchase-orders/PurchaseOrderDocument';
 import { toCanvas } from 'html-to-image';
@@ -105,6 +107,18 @@ export default function PurchaseRequisitionPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
 
+  // Payment Terms & Custom Payment Plans state
+  const [paymentTermsList, setPaymentTermsList] = useState<PaymentTerm[]>([]);
+  const [customPlans, setCustomPlans] = useState<PaymentPlan[]>([]);
+  const [selectedPaymentPlanId, setSelectedPaymentPlanId] = useState<string | null>(null);
+  const [showCustomPlanModal, setShowCustomPlanModal] = useState(false);
+  const [editPlan, setEditPlan] = useState<PaymentPlan | null>(null);
+  const [showViewPlanModal, setShowViewPlanModal] = useState(false);
+  const [deleteConfirmPlanId, setDeleteConfirmPlanId] = useState<string | null>(null);
+  const [isDeletingPlan, setIsDeletingPlan] = useState(false);
+  const [deletePlanError, setDeletePlanError] = useState<string | null>(null);
+  const [planSaving, setPlanSaving] = useState(false);
+
   useEffect(() => {
     apiRequest<{ vendors?: any[]; data?: any[] }>('/vendors')
       .then((res) => {
@@ -118,7 +132,56 @@ export default function PurchaseRequisitionPage() {
         setWarehouses(whs || []);
       })
       .catch(() => {});
+
+    companySettingsService.listPaymentTerms()
+      .then((terms) => {
+        if (terms && terms.length > 0) {
+          setPaymentTermsList(terms.filter((t) => t.isActive));
+        } else {
+          setPaymentTermsList([
+            { id: '1', name: 'Net 15', isActive: true } as any,
+            { id: '2', name: 'Net 30', isActive: true } as any,
+            { id: '3', name: 'Net 45', isActive: true } as any,
+            { id: '4', name: 'Net 60', isActive: true } as any,
+            { id: '5', name: 'Cash on Delivery', isActive: true } as any,
+            { id: '6', name: 'Advance Payment', isActive: true } as any,
+          ]);
+        }
+      })
+      .catch(() => {
+        setPaymentTermsList([
+          { id: '1', name: 'Net 15', isActive: true } as any,
+          { id: '2', name: 'Net 30', isActive: true } as any,
+          { id: '3', name: 'Net 45', isActive: true } as any,
+          { id: '4', name: 'Net 60', isActive: true } as any,
+          { id: '5', name: 'Cash on Delivery', isActive: true } as any,
+          { id: '6', name: 'Advance Payment', isActive: true } as any,
+        ]);
+      });
+
+    companySettingsService.listPaymentPlans()
+      .then((plans) => {
+        if (plans && Array.isArray(plans)) {
+          setCustomPlans(plans);
+        }
+      })
+      .catch(() => {});
   }, []);
+
+  const selectedCustomPlan = useMemo(() => {
+    if (selectedPaymentPlanId) {
+      return customPlans.find((p) => p.id === selectedPaymentPlanId) || null;
+    }
+    const snap = (pr as any)?.paymentPlanSnapshot;
+    if (snap && Array.isArray(snap) && snap.length > 0) {
+      return {
+        id: 'snapshot',
+        name: pr?.paymentTerms || 'Custom Payment Plan',
+        milestones: snap.map((m: any, i: number) => ({ id: m.id || `ms_${i}`, title: m.title, percentage: m.percentage })),
+      };
+    }
+    return null;
+  }, [selectedPaymentPlanId, customPlans, pr?.paymentTerms, (pr as any)?.paymentPlanSnapshot]);
 
   // Fetch RFQ data on mount
   useEffect(() => {
@@ -133,6 +196,22 @@ export default function PurchaseRequisitionPage() {
           if (existing) {
             const items = (existing.items || []).map(i => ({ ...i, total: calcItemTotal(i) }));
             const subtotal = items.reduce((s, i) => s + (i.quantity * i.unitPrice), 0);
+            if ((existing as any).paymentPlanId) setSelectedPaymentPlanId((existing as any).paymentPlanId);
+            if ((existing as any).paymentPlanSnapshot) {
+              const snap = (existing as any).paymentPlanSnapshot;
+              if (Array.isArray(snap) && snap.length > 0) {
+                const planId = (existing as any).paymentPlanId || 'snapshot';
+                setSelectedPaymentPlanId(planId);
+                setCustomPlans((prev) => {
+                  if (prev.some((p) => p.id === planId)) return prev;
+                  return [{
+                    id: planId,
+                    name: existing.paymentTerms || 'Custom Payment Plan',
+                    milestones: snap.map((m: any, idx: number) => ({ id: m.id || `ms_${idx}`, title: m.title, percentage: m.percentage })),
+                  }, ...prev];
+                });
+              }
+            }
             setPr({
               ...existing,
               items,
@@ -300,6 +379,8 @@ export default function PurchaseRequisitionPage() {
           shipVia: 'Surface',
           fob: 'Destination',
           paymentTerms: contract?.paymentTerms || quotation?.paymentTerms || rfqData.paymentTerms || 'Net 30',
+          paymentPlanId: (quotation as any)?.paymentPlanId || null,
+          paymentPlanSnapshot: (quotation as any)?.paymentPlanSnapshot || null,
           deliveryDate: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
           shippingTerms: contract?.deliveryTerms || contract?.freightTerms || 'FOB Destination',
           items: items.length > 0 ? items : [
@@ -314,6 +395,20 @@ export default function PurchaseRequisitionPage() {
           discountTotal: 0,
           grandTotal: subtotal,
         });
+
+        if ((quotation as any)?.paymentPlanSnapshot && Array.isArray((quotation as any).paymentPlanSnapshot) && (quotation as any).paymentPlanSnapshot.length > 0) {
+          const snap = (quotation as any).paymentPlanSnapshot;
+          const planId = (quotation as any).paymentPlanId || 'snapshot';
+          setSelectedPaymentPlanId(planId);
+          setCustomPlans((prev) => {
+            if (prev.some((p) => p.id === planId)) return prev;
+            return [{
+              id: planId,
+              name: quotation?.paymentTerms || 'Custom Payment Plan',
+              milestones: snap.map((m: any, idx: number) => ({ id: m.id || `ms_${idx}`, title: m.title, percentage: m.percentage })),
+            }, ...prev];
+          });
+        }
       } catch (err: any) {
         setError(err?.message || 'Failed to load RFQ data');
       } finally {
@@ -1085,15 +1180,276 @@ export default function PurchaseRequisitionPage() {
                 <option>Destination</option>
               </select>
             </div>
-            <div className="pr-field"><label>Payment Terms</label>
-              <select value={pr.paymentTerms} disabled={isReadOnly} onChange={e => updateField('paymentTerms', e.target.value)}>
-                <option>Net 15</option>
-                <option>Net 30</option>
-                <option>Net 45</option>
-                <option>Net 60</option>
-                <option>Cash on Delivery</option>
-                <option>Advance Payment</option>
-              </select>
+            <div className="pr-field pr-field--wide rfq-payment-field">
+              <label>Payment Terms & Schedule</label>
+              <div className="rfq-payment-controls" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <select
+                  id="rfq-po-payment-terms"
+                  disabled={isReadOnly || planSaving}
+                  value={selectedPaymentPlanId ? `custom_${selectedPaymentPlanId}` : pr.paymentTerms}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setShowViewPlanModal(false);
+                    setDeleteConfirmPlanId(null);
+                    setShowCustomPlanModal(false);
+                    if (value.startsWith('custom_')) {
+                      const plan = customPlans.find((p) => p.id === value.slice(7));
+                      if (plan) {
+                        setSelectedPaymentPlanId(plan.id);
+                        setPr((prev) => prev ? ({
+                          ...prev,
+                          paymentTerms: plan.name,
+                          paymentPlanId: plan.id,
+                          paymentPlanSnapshot: plan.milestones,
+                        }) : null);
+                      }
+                    } else {
+                      setSelectedPaymentPlanId(null);
+                      setPr((prev) => prev ? ({
+                        ...prev,
+                        paymentTerms: value,
+                        paymentPlanId: null,
+                        paymentPlanSnapshot: null,
+                      }) : null);
+                    }
+                  }}
+                  style={{ flex: 1, minWidth: 200 }}
+                >
+                  {!pr.paymentTerms && <option value="">Select payment terms</option>}
+                  <optgroup label="Standard Terms">
+                    {paymentTermsList.map((term) => (
+                      <option key={term.id} value={term.name}>
+                        {term.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                  {customPlans.length > 0 && (
+                    <optgroup label="Custom Payment Plans">
+                      {customPlans.map((plan) => (
+                        <option key={plan.id} value={`custom_${plan.id}`}>
+                          {plan.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
+
+                {selectedCustomPlan && (
+                  <div className="rfq-plan-actions" style={{ display: 'flex', gap: 4 }}>
+                    {!isReadOnly && (
+                      <button
+                        type="button"
+                        className="rfq-icon-button"
+                        disabled={planSaving}
+                        title="Edit payment plan"
+                        aria-label="Edit payment plan"
+                        onClick={() => {
+                          setEditPlan(selectedCustomPlan);
+                          setShowCustomPlanModal(true);
+                          setShowViewPlanModal(false);
+                          setDeleteConfirmPlanId(null);
+                        }}
+                      >
+                        <Pencil size={14} />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="rfq-icon-button"
+                      disabled={planSaving}
+                      title="View payment plan"
+                      aria-label="View payment plan"
+                      aria-expanded={showViewPlanModal}
+                      onClick={() => {
+                        setShowViewPlanModal(!showViewPlanModal);
+                        setShowCustomPlanModal(false);
+                        setDeleteConfirmPlanId(null);
+                      }}
+                    >
+                      <Eye size={14} />
+                    </button>
+                    {!isReadOnly && (
+                      <button
+                        type="button"
+                        className="rfq-icon-button rfq-icon-button--danger"
+                        disabled={planSaving}
+                        title="Delete payment plan"
+                        aria-label="Delete payment plan"
+                        onClick={() => {
+                          setDeleteConfirmPlanId(selectedCustomPlan.id);
+                          setShowCustomPlanModal(false);
+                          setShowViewPlanModal(false);
+                        }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {!isReadOnly && (
+                  <button
+                    type="button"
+                    className="rfq-secondary-action text-xs"
+                    disabled={planSaving}
+                    aria-expanded={showCustomPlanModal}
+                    onClick={() => {
+                      setEditPlan(null);
+                      setShowCustomPlanModal(true);
+                      setShowViewPlanModal(false);
+                      setDeleteConfirmPlanId(null);
+                    }}
+                    style={{ padding: '6px 10px', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                  >
+                    <Plus size={14} /> Create Custom Payment Plan
+                  </button>
+                )}
+              </div>
+
+              {/* Custom Payment Plan Modal */}
+              {showCustomPlanModal && (
+                <CustomPaymentPlanModal
+                  key={editPlan?.id || 'new'}
+                  embedded
+                  onSavingChange={setPlanSaving}
+                  editPlan={editPlan}
+                  onSavePlan={async (name, milestones, editPlanId) => {
+                    if (editPlanId && !editPlanId.startsWith('snap')) {
+                      const updated = await companySettingsService.updatePaymentPlan(editPlanId, { name, milestones });
+                      return updated;
+                    } else {
+                      const created = await companySettingsService.createPaymentPlan(name, milestones);
+                      return created;
+                    }
+                  }}
+                  onClose={() => {
+                    setShowCustomPlanModal(false);
+                    setEditPlan(null);
+                  }}
+                  onSaved={(plan) => {
+                    setCustomPlans((plans) =>
+                      plans.some((p) => p.id === plan.id)
+                        ? plans.map((p) => (p.id === plan.id ? plan : p))
+                        : [plan, ...plans]
+                    );
+                    setSelectedPaymentPlanId(plan.id);
+                    setPr((prev) => prev ? ({
+                      ...prev,
+                      paymentTerms: plan.name,
+                      paymentPlanId: plan.id,
+                      paymentPlanSnapshot: plan.milestones,
+                    }) : null);
+                  }}
+                />
+              )}
+
+              {/* View Plan Modal / Section */}
+              {showViewPlanModal && selectedCustomPlan && (
+                <section className="rfq-read-section" aria-label="Payment plan details" style={{ marginTop: 8 }}>
+                  <div className="rfq-read-section__body" style={{ padding: 12 }}>
+                    <div className="rfq-section-heading" style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <strong className="vquot-modal__label">{selectedCustomPlan.name}</strong>
+                      <button
+                        type="button"
+                        className="rfq-icon-button"
+                        aria-label="Close payment plan details"
+                        onClick={() => setShowViewPlanModal(false)}
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <ol className="rfq-payment-milestones text-sm" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                      {selectedCustomPlan.milestones.map((m) => (
+                        <li key={m.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid var(--border)' }}>
+                          <span>{m.title}</span>
+                          <strong>
+                            {m.percentage}% ({formatAmount((pr.grandTotal * Number(m.percentage)) / 100, pr.currency)})
+                          </strong>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                </section>
+              )}
+
+              {/* Delete Confirmation */}
+              {deleteConfirmPlanId && (
+                <section className="rfq-delete-confirm text-sm" aria-label="Delete payment plan confirmation" style={{ marginTop: 8, padding: 12, border: '1px solid var(--danger-300)', borderRadius: 8 }}>
+                  <strong>Delete {selectedCustomPlan?.name}?</strong>
+                  <span className="rfq-muted" style={{ display: 'block', margin: '4px 0' }}>This removes the saved plan from your company account and cannot be undone.</span>
+                  {deletePlanError && <p className="rfq-error" role="alert">{deletePlanError}</p>}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+                    <button
+                      type="button"
+                      className="pr-btn"
+                      style={{ padding: '4px 10px', fontSize: 12 }}
+                      disabled={isDeletingPlan}
+                      onClick={() => setDeleteConfirmPlanId(null)}
+                    >
+                      Keep plan
+                    </button>
+                    <button
+                      type="button"
+                      className="pr-btn"
+                      style={{ padding: '4px 10px', fontSize: 12, background: 'var(--danger-600)', color: '#fff' }}
+                      disabled={isDeletingPlan}
+                      onClick={async () => {
+                        setIsDeletingPlan(true);
+                        setDeletePlanError(null);
+                        try {
+                          if (!deleteConfirmPlanId.startsWith('snap')) {
+                            await companySettingsService.deletePaymentPlan(deleteConfirmPlanId);
+                          }
+                          setCustomPlans((plans) => plans.filter((p) => p.id !== deleteConfirmPlanId));
+                          setSelectedPaymentPlanId(null);
+                          setPr((prev) => prev ? ({
+                            ...prev,
+                            paymentTerms: paymentTermsList[0]?.name || 'Net 30',
+                            paymentPlanId: null,
+                            paymentPlanSnapshot: null,
+                          }) : null);
+                          setDeleteConfirmPlanId(null);
+                        } catch (e) {
+                          setDeletePlanError(e instanceof Error ? e.message : 'Failed to delete payment plan');
+                        } finally {
+                          setIsDeletingPlan(false);
+                        }
+                      }}
+                    >
+                      {isDeletingPlan ? 'Deleting…' : 'Delete plan'}
+                    </button>
+                  </div>
+                </section>
+              )}
+
+              {/* Inline Milestone Breakdown Table when custom plan is selected */}
+              {selectedCustomPlan && selectedCustomPlan.milestones && selectedCustomPlan.milestones.length > 0 && (
+                <div style={{ marginTop: 12, background: 'var(--surface-elevated)', borderRadius: 8, border: '1px solid var(--border)', padding: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Milestone Schedule ({selectedCustomPlan.milestones.length} Milestones · 100% Total)
+                  </div>
+                  <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+                        <th style={{ textAlign: 'left', padding: '6px 4px' }}>Milestone</th>
+                        <th style={{ textAlign: 'right', padding: '6px 4px' }}>Allocation</th>
+                        <th style={{ textAlign: 'right', padding: '6px 4px' }}>Calculated Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedCustomPlan.milestones.map((m, idx) => (
+                        <tr key={m.id || idx} style={{ borderBottom: '1px solid var(--border)' }}>
+                          <td style={{ padding: '6px 4px', color: 'var(--text-primary)' }}>{m.title}</td>
+                          <td style={{ textAlign: 'right', padding: '6px 4px', fontWeight: 600, color: 'var(--text-primary)' }}>{m.percentage}%</td>
+                          <td style={{ textAlign: 'right', padding: '6px 4px', color: 'var(--text-primary)' }}>
+                            {formatAmount((pr.grandTotal * Number(m.percentage)) / 100, pr.currency)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
             <div className="pr-field"><label>Delivery Date</label><input type="date" value={pr.deliveryDate} disabled={isReadOnly} onChange={e => updateField('deliveryDate', e.target.value)} /></div>
             <div className="pr-field"><label>Shipping Terms</label>

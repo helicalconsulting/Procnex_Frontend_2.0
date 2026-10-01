@@ -531,6 +531,64 @@ async function apiDeletePaymentTerm(id: string): Promise<void> {
   await apiRequest(`/company-settings/payment-terms/${id}`, { method: 'DELETE' });
 }
 
+// ─── Company Payment Plans ────────────────────────────────────────────────
+
+export interface PaymentPlan {
+  id: string;
+  name: string;
+  milestones: Array<{ id: string; title: string; percentage: number }>;
+}
+
+async function mockListPaymentPlans(): Promise<PaymentPlan[]> {
+  await new Promise((r) => setTimeout(r, 150));
+  return [];
+}
+
+async function apiListPaymentPlans(): Promise<PaymentPlan[]> {
+  const data = await apiRequest<{ paymentPlans: PaymentPlan[] }>('/company-settings/payment-plans', { cacheTtlMs: 0 });
+  return data.paymentPlans || [];
+}
+
+async function mockCreatePaymentPlan(name: string, milestones: Array<{ title: string; percentage: number }>): Promise<PaymentPlan> {
+  await new Promise((r) => setTimeout(r, 200));
+  return {
+    id: `plan_${Date.now()}`,
+    name,
+    milestones: milestones.map((m, i) => ({ id: `ms_${Date.now()}_${i}`, title: m.title, percentage: m.percentage })),
+  };
+}
+
+async function apiCreatePaymentPlan(name: string, milestones: Array<{ title: string; percentage: number }>): Promise<PaymentPlan> {
+  return apiRequest<PaymentPlan>('/company-settings/payment-plans', {
+    method: 'POST',
+    body: JSON.stringify({ name, milestones }),
+  });
+}
+
+async function mockUpdatePaymentPlan(id: string, data: { name?: string; milestones?: Array<{ title: string; percentage: number }> }): Promise<PaymentPlan> {
+  await new Promise((r) => setTimeout(r, 200));
+  return {
+    id,
+    name: data.name || 'Plan',
+    milestones: (data.milestones || []).map((m, i) => ({ id: `ms_${Date.now()}_${i}`, title: m.title, percentage: m.percentage })),
+  };
+}
+
+async function apiUpdatePaymentPlan(id: string, data: { name?: string; milestones?: Array<{ title: string; percentage: number }> }): Promise<PaymentPlan> {
+  return apiRequest<PaymentPlan>(`/company-settings/payment-plans/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+async function mockDeletePaymentPlan(id: string): Promise<void> {
+  await new Promise((r) => setTimeout(r, 150));
+}
+
+async function apiDeletePaymentPlan(id: string): Promise<void> {
+  await apiRequest(`/company-settings/payment-plans/${id}`, { method: 'DELETE' });
+}
+
 // ─── Email Templates ───────────────────────────────────────────────────────
 
 export interface RequiredDocument {
@@ -1429,6 +1487,10 @@ export const companySettingsService = {
   listPaymentTerms: USE_MOCK ? mockListPaymentTerms : apiListPaymentTerms,
   createPaymentTerm: USE_MOCK ? mockCreatePaymentTerm : apiCreatePaymentTerm,
   deletePaymentTerm: USE_MOCK ? mockDeletePaymentTerm : apiDeletePaymentTerm,
+  listPaymentPlans: USE_MOCK ? mockListPaymentPlans : apiListPaymentPlans,
+  createPaymentPlan: USE_MOCK ? mockCreatePaymentPlan : apiCreatePaymentPlan,
+  updatePaymentPlan: USE_MOCK ? mockUpdatePaymentPlan : apiUpdatePaymentPlan,
+  deletePaymentPlan: USE_MOCK ? mockDeletePaymentPlan : apiDeletePaymentPlan,
   getCompanyProfile: USE_MOCK ? mockGetCompanyProfile : apiGetCompanyProfile,
   updateCompanyProfile: USE_MOCK ? mockUpdateCompanyProfile : apiUpdateCompanyProfile,
   getDefaultCurrency: USE_MOCK ? mockGetDefaultCurrency : apiGetDefaultCurrency,

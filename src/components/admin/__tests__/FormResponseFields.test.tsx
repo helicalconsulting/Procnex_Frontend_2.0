@@ -79,4 +79,16 @@ describe('submitted form answers', () => {
     expect(render([field('file')], { answer: { fileName: 'report.pdf', url: '/uploads/report.pdf' } })).toContain('href="/uploads/report.pdf"');
     expect(render([field('file')], { answer: { fileName: 'report', url: 'javascript:alert(1)' } })).not.toContain('href=');
   });
+  it('renders captured signature image with digital signature badge', () => {
+    const sigData = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAA=';
+    const html = render([field('signature', { label: 'Authorised Signature' })], { answer: sigData });
+    expect(html).toContain('<img');
+    expect(html).toContain(`src="${sigData}"`);
+    expect(html).toContain('Digital Signature');
+  });
+  it('renders legacy typed signature text with digital signature badge', () => {
+    const html = render([field('signature', { label: 'Authorised Signature' })], { answer: 'John Doe' });
+    expect(html).toContain('John Doe');
+    expect(html).toContain('Digital Signature');
+  });
 });

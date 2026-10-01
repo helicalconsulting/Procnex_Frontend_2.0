@@ -433,29 +433,109 @@
 
 .fp-checkbox-group,
 .fp-radio-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 4px 0;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 4px 0 !important;
+  width: 100% !important;
 }
 
 .fp-checkbox-item,
 .fp-radio-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  font-size: 14px;
-  color: var(--text-primary);
-  user-select: none;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 8px 14px !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  background: var(--surface-elevated) !important;
+  cursor: pointer !important;
+  font-size: 13px !important;
+  color: var(--text-primary) !important;
+  user-select: none !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  min-height: 38px !important;
+}
+
+.fp-checkbox-item:hover,
+.fp-radio-item:hover {
+  border-color: var(--primary-500) !important;
+  background: rgba(10, 110, 209, 0.04) !important;
+}
+
+.fp-radio-item--selected,
+.fp-checkbox-item--selected {
+  border-color: var(--primary-500) !important;
+  background: rgba(10, 110, 209, 0.08) !important;
+  color: var(--primary-500) !important;
+  font-weight: 600 !important;
+  box-shadow: 0 0 0 1px var(--primary-500) !important;
 }
 
 .fp-checkbox-item input[type="checkbox"],
 .fp-radio-item input[type="radio"] {
-  width: 17px;
-  height: 17px;
-  accent-color: var(--primary-500);
-  cursor: pointer;
+  width: 16px !important;
+  height: 16px !important;
+  accent-color: var(--primary-500) !important;
+  cursor: pointer !important;
+  margin: 0 !important;
+  flex-shrink: 0 !important;
+}
+
+.fp-radio-label,
+.fp-checkbox-label {
+  font-size: 13px !important;
+  color: inherit !important;
+  line-height: 1.2 !important;
+}
+
+.fp-multiselect-group {
+  width: 100% !important;
+}
+
+.fp-multiselect-chips {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 4px 0 !important;
+  width: 100% !important;
+}
+
+.fp-multiselect-chip {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 7px 14px !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 9999px !important;
+  background: var(--surface-elevated) !important;
+  cursor: pointer !important;
+  font-size: 13px !important;
+  color: var(--text-primary) !important;
+  user-select: none !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  min-height: 36px !important;
+}
+
+.fp-multiselect-chip:hover:not(:disabled) {
+  border-color: var(--primary-500) !important;
+  background: rgba(10, 110, 209, 0.06) !important;
+}
+
+.fp-multiselect-chip--selected {
+  border-color: var(--primary-500) !important;
+  background: rgba(10, 110, 209, 0.12) !important;
+  color: var(--primary-500) !important;
+  font-weight: 600 !important;
+  box-shadow: 0 0 0 1px var(--primary-500) !important;
+}
+
+.fp-chip-check {
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
 }
 
 .fp-signature-box {

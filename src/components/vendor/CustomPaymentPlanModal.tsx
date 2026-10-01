@@ -13,10 +13,11 @@ interface CustomPaymentPlanModalProps {
   editPlan?: PaymentPlan | null;
   embedded?: boolean;
   onSavingChange?: (saving: boolean) => void;
+  onSavePlan?: (name: string, milestones: Array<{ title: string; percentage: number }>, editPlanId?: string) => Promise<PaymentPlan>;
 }
 const emptyRow = (): MilestoneRow => ({ id: crypto.randomUUID(), title: '', percentage: '', manual: false });
 
-export default function CustomPaymentPlanModal({ onClose, onSaved, editPlan, embedded = false, onSavingChange }: CustomPaymentPlanModalProps) {
+export default function CustomPaymentPlanModal({ onClose, onSaved, editPlan, embedded = false, onSavingChange, onSavePlan }: CustomPaymentPlanModalProps) {
   const [planName, setPlanName] = useState(editPlan?.name || '');
   const [milestones, setMilestones] = useState<MilestoneRow[]>(() => editPlan?.milestones.length
     ? editPlan.milestones.map(m => ({ id: m.id, title: m.title, percentage: String(m.percentage), manual: true }))
@@ -62,9 +63,11 @@ export default function CustomPaymentPlanModal({ onClose, onSaved, editPlan, emb
     setSaving(true); onSavingChange?.(true); setError(null);
     try {
       const data = milestones.map(m => ({ title: m.title.trim(), percentage: percentageUnits(m.percentage)! / 100 }));
-      const plan = editPlan
-        ? await vendorPortalService.updatePaymentPlan(editPlan.id, { name: planName.trim(), milestones: data })
-        : await vendorPortalService.createPaymentPlan(planName.trim(), data);
+      const plan = onSavePlan
+        ? await onSavePlan(planName.trim(), data, editPlan?.id)
+        : editPlan
+          ? await vendorPortalService.updatePaymentPlan(editPlan.id, { name: planName.trim(), milestones: data })
+          : await vendorPortalService.createPaymentPlan(planName.trim(), data);
       onSaved(plan); onClose();
     } catch (e) { setError(e instanceof Error ? e.message : 'Failed to save payment plan'); }
     finally { setSaving(false); onSavingChange?.(false); }

@@ -29,13 +29,11 @@ async function getEffectiveCompanyName(): Promise<string> {
 
 export async function sendSystemEmail(to: string, subject: string, html: string): Promise<boolean> {
   try {
-    const res = await fetch('http://localhost:3000/api/notifications/send-email', {
+    const res = await apiRequest<{ success?: boolean }>('/notifications/send-email', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ to, subject, html }),
     });
-    const data = await res.json();
-    if (data && data.success) {
+    if (res) {
       console.log(`[System Email Dispatched] To: ${to} | Subject: ${subject}`);
       return true;
     }
