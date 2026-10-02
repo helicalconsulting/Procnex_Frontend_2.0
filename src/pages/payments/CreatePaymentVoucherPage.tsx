@@ -31,7 +31,15 @@ import {
   Layers,
   RotateCcw,
   Database,
-  Edit3
+  Edit3,
+  PackageX,
+  Scale,
+  TrendingDown,
+  ShieldAlert,
+  ShieldCheck,
+  AlertCircle,
+  Info,
+  Box
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TableSkeleton } from '../../components/shared/Skeleton';
@@ -259,28 +267,46 @@ export default function CreatePaymentVoucherPage() {
           const baseInvoices = filteredInvs.length > 0 ? filteredInvs : fetchedInvoices;
 
           mappedInvoices = baseInvoices.map((inv, idx) => {
-            const poNum = inv.poNumber || `PO-2026-${3710 + idx}`;
+            const rawPoNum = (typeof inv.poNumber === 'string' && inv.poNumber)
+              ? inv.poNumber
+              : (typeof (inv.purchaseOrder as any)?.poNumber === 'string' ? (inv.purchaseOrder as any).poNumber : `PO-2026-${3710 + idx}`);
+            const poNum = String(rawPoNum || `PO-2026-${3710 + idx}`);
             const cleanPo = poNum.toLowerCase();
+
+            const rawInvNum = typeof inv.invoiceNumber === 'string' ? inv.invoiceNumber : (inv.invoiceNumber ? String(inv.invoiceNumber) : `INV-2026-00${idx + 1}`);
+            const cleanInvNum = rawInvNum.toLowerCase();
+
+            const rawInvGrnNum = typeof inv.grnNumber === 'string' ? inv.grnNumber : (typeof (inv.grn as any)?.grnNumber === 'string' ? (inv.grn as any).grnNumber : '');
+            const cleanInvGrnNum = rawInvGrnNum.toLowerCase();
+
+            const invPoIdStr = typeof inv.poId === 'string' ? inv.poId : (typeof (inv.poId as any)?.id === 'string' ? (inv.poId as any).id : '');
 
             // Find matching GRNs for this invoice — multiple match strategies
             let matchedGrn = allGrns.find(
-              (g) =>
-                // Direct GRN number match
-                (inv.grnNumber && g.grnNumber.toLowerCase() === inv.grnNumber.toLowerCase()) ||
-                // PO number match
-                (g.purchaseOrder?.poNumber && g.purchaseOrder.poNumber.toLowerCase() === cleanPo) ||
-                // PO id match
-                (g.poId && String(g.poId) === String(inv.poId)) ||
-                // GRN's vendorInvoiceNumber matches invoice number
-                (g.vendorInvoiceNumber && inv.invoiceNumber && g.vendorInvoiceNumber.toLowerCase() === inv.invoiceNumber.toLowerCase()) ||
-                // Same vendor and close creation date (fallback)
-                (g.vendorId && g.vendorId === selectedVendorId)
+              (g) => {
+                const gGrnNum = typeof g.grnNumber === 'string' ? g.grnNumber.toLowerCase() : '';
+                const gPoNum = typeof g.purchaseOrder?.poNumber === 'string' ? g.purchaseOrder.poNumber.toLowerCase() : '';
+                const gPoIdStr = typeof g.poId === 'string' ? g.poId : (typeof (g.poId as any)?.id === 'string' ? (g.poId as any).id : '');
+                const gVendorInvNum = typeof g.vendorInvoiceNumber === 'string' ? g.vendorInvoiceNumber.toLowerCase() : '';
+                const gVendorId = typeof g.vendorId === 'string' ? g.vendorId : (typeof (g.vendorId as any)?.id === 'string' ? (g.vendorId as any).id : '');
+
+                return (
+                  (cleanInvGrnNum && gGrnNum && gGrnNum === cleanInvGrnNum) ||
+                  (gPoNum && gPoNum === cleanPo) ||
+                  (gPoIdStr && invPoIdStr && gPoIdStr === invPoIdStr) ||
+                  (gVendorInvNum && gVendorInvNum === cleanInvNum) ||
+                  (gVendorId && selectedVendorId && gVendorId === selectedVendorId)
+                );
+              }
             );
             if (!matchedGrn && inv.grn) {
               matchedGrn = inv.grn;
             }
 
-            const grnDisplayNumber = matchedGrn?.grnNumber || inv.grnNumber || `GRN-2026-0${40 + idx}`;
+            const rawGrnDisplay = typeof matchedGrn?.grnNumber === 'string'
+              ? matchedGrn.grnNumber
+              : (rawInvGrnNum || `GRN-2026-0${40 + idx}`);
+            const grnDisplayNumber = String(rawGrnDisplay);
 
             // Compute GRN received qty vs ordered qty from items
             let totalOrdered = 0;
@@ -392,27 +418,27 @@ export default function CreatePaymentVoucherPage() {
             const hasAmountShortfall = grnItemsAmount > 0 && inv.amount > 0 &&
               grnItemsAmount < inv.amount * 0.98;
             const hasShortfall = hasQtyShortfall || hasAmountShortfall;
-            // 3. Backend three-way-match result
+            // 3. If verified GRN line items exist, trust the itemized calculation over stale backend flag
             const isBackendMismatch = inv.threeWayMatch === 'MISMATCH' || inv.threeWayMatch === 'DISCREPANCY';
-            const isDiscrepant = isBackendMismatch || hasShortfall;
+            const isDiscrepant = parsedItems.length > 0 ? hasShortfall : (hasShortfall || isBackendMismatch);
             // If employee GRN received qty matches ordered & billed items with no shortfall, it's MATCHED
             const finalMatch: 'MATCHED' | 'DISCREPANCY' | 'NOT_MATCHED' = isDiscrepant ? 'DISCREPANCY' : 'MATCHED';
 
             const isMatchingParam = qInvoiceRef && (inv.invoiceNumber === qInvoiceRef || qInvoiceRef.includes(inv.invoiceNumber));
 
             return {
-              id: inv.id,
-              invoiceNumber: inv.invoiceNumber,
+              id: String(inv.id || idx),
+              invoiceNumber: rawInvNum,
               poNumber: poNum,
               grnNumber: grnDisplayNumber,
-              amount: inv.amount,
-              paidAmount: inv.paidAmount || 0,
-              balanceDue: Math.max(0, inv.amount - (inv.paidAmount || 0)),
-              dueDate: inv.dueDate || new Date().toISOString().slice(0, 10),
-              invoiceDate: inv.submittedAt || new Date().toISOString().slice(0, 10),
+              amount: typeof inv.amount === 'number' ? inv.amount : (Number(inv.amount) || 0),
+              paidAmount: typeof inv.paidAmount === 'number' ? inv.paidAmount : (Number(inv.paidAmount) || 0),
+              balanceDue: Math.max(0, (typeof inv.amount === 'number' ? inv.amount : Number(inv.amount) || 0) - (Number(inv.paidAmount) || 0)),
+              dueDate: typeof inv.dueDate === 'string' ? inv.dueDate : (inv.dueDate instanceof Date ? inv.dueDate.toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10)),
+              invoiceDate: typeof inv.submittedAt === 'string' ? inv.submittedAt.slice(0, 10) : (typeof inv.invoiceDate === 'string' ? inv.invoiceDate.slice(0, 10) : new Date().toISOString().slice(0, 10)),
               threeWayMatch: finalMatch,
-              selected: isMatchingParam || idx === 0,
-              paymentAmount: Math.max(0, inv.amount - (inv.paidAmount || 0)),
+              selected: Boolean(isMatchingParam || idx === 0),
+              paymentAmount: Math.max(0, (typeof inv.amount === 'number' ? inv.amount : Number(inv.amount) || 0) - (Number(inv.paidAmount) || 0)),
               // Store GRN qty, amount, and items for Section 03 discrepancy detection
               grnOrderedQty: totalOrdered > 0 ? totalOrdered : undefined,
               grnReceivedQty: totalOrdered > 0 ? totalReceived : undefined,
@@ -524,9 +550,15 @@ export default function CreatePaymentVoucherPage() {
       const hasGrnAmtShortfall = (totalShortfallAmt > 0.01) || (totalGrnAmt > 0 && totalGross > 0 && totalGrnAmt < totalGross * 0.98);
       const hasGrnShortfall = hasGrnQtyShortfall || hasGrnAmtShortfall;
 
-      // 3-Way Multi-Matching Check
-      const discrepantList = selected.filter((i) => i.threeWayMatch === 'DISCREPANCY' || (i.threeWayMatch as string) === 'MISMATCH' || i.paymentAmount > i.amount);
-      const hasDiscrepancy = discrepantList.length > 0 || hasGrnShortfall;
+      // 3-Way Multi-Matching Check: check actual variances
+      const hasOverbilling = selected.some((i) => i.paymentAmount > i.amount);
+      const hasItemDiscrepancy = selected.some((i) => {
+        if (Array.isArray(i.items) && i.items.length > 0) {
+          return i.items.some((it) => it.shortfallQty > 0 || it.shortfallValue > 0.01);
+        }
+        return i.threeWayMatch === 'DISCREPANCY' || (i.threeWayMatch as string) === 'MISMATCH';
+      });
+      const hasDiscrepancy = hasOverbilling || hasItemDiscrepancy || hasGrnShortfall;
 
       if (hasDiscrepancy) {
         setMatchStatus('DISCREPANCY');
@@ -1991,81 +2023,114 @@ export default function CreatePaymentVoucherPage() {
           const hasGrnAmtShortfall = totalShortfallVal > 0.01;
           const hasGrnShortfall = hasGrnQtyShortfall || hasGrnAmtShortfall;
 
-          // Backend-flagged discrepancy or overbilled invoices
-          const backendDiscrepantInvs = selectedInvs.filter(
-            (i) => i.threeWayMatch === 'DISCREPANCY' || (i.threeWayMatch as string) === 'MISMATCH'
-          );
+          // Check if any invoice has actual rate/spec discrepancy or overbilling
           const overBilledInvs = selectedInvs.filter((i) => i.paymentAmount > i.amount);
-
-          const discrepantInvs = [...new Set([...backendDiscrepantInvs, ...overBilledInvs])];
-          // Discrepancy is true only if there is an actual shortfall, overbilling, or PO rate mismatch
-          const isDiscrepant = discrepantInvs.length > 0 || matchStatus === 'DISCREPANCY' || hasGrnShortfall;
+          const rateDiscrepantInvs = selectedInvs.filter((i) => {
+            if (i.paymentAmount > i.amount) return false;
+            if (Array.isArray(i.items) && i.items.length > 0) {
+              return i.items.some((it) => it.shortfallQty > 0 || it.shortfallValue > 0.01);
+            }
+            if (i.grnReceivedAmount && i.amount) {
+              return i.grnReceivedAmount < i.amount * 0.98;
+            }
+            return (i.threeWayMatch === 'DISCREPANCY' || (i.threeWayMatch as string) === 'MISMATCH') && hasGrnShortfall;
+          });
 
           const poAgreedTotal = totalOrderedVal > 0 ? totalOrderedVal : billedTotal;
 
-          // ── Build specific discrepancy reason lines ──────────────────────
-          const reasonLines: string[] = [];
+          // ── Build structured discrepancy items ───────────────────────────
+          interface DiscrepancyItemData {
+            id: string;
+            icon: any;
+            title: string;
+            description: string;
+            badge?: string;
+            details?: { name: string; ordered: number; received: number; shortfall: number; unitPrice: number; shortfallVal: number }[];
+          }
+          const discrepancyItems: DiscrepancyItemData[] = [];
+
           if (hasGrnShortfall || totalShortfallUnits > 0 || totalShortfallVal > 0) {
-            reasonLines.push(
-              `📦 Goods Received Note (GRN) Shortfall: Received ${totalRec} of ${totalOrd} ordered units (${totalShortfallUnits} units missing/rejected by store receiving staff — Total Missing Goods Value: ${formatAmount(totalShortfallVal, currency)})`
-            );
-            // List individual shortfall items
             const shortfallItems = reconciledItems.filter((it) => it.shortfallQty > 0 || it.shortfallValue > 0);
-            shortfallItems.forEach((it) => {
-              reasonLines.push(
-                `• Item "${it.itemName}": Ordered ${it.orderedQty}, Received ${it.receivedQty} (${it.shortfallQty} missing @ ${formatAmount(it.unitPrice, currency)}/unit = ${formatAmount(it.shortfallValue, currency)} shortfall)`
-              );
+            discrepancyItems.push({
+              id: 'grn_shortfall',
+              icon: PackageX,
+              title: 'Goods Received Note (GRN) Shortfall',
+              description: `Received ${totalRec} of ${totalOrd} ordered units (${totalShortfallUnits} units missing/rejected during store receiving inspection).`,
+              badge: `${formatAmount(totalShortfallVal, currency)} Shortfall`,
+              details: shortfallItems.map((it) => ({
+                name: it.itemName,
+                ordered: it.orderedQty,
+                received: it.receivedQty,
+                shortfall: it.shortfallQty,
+                unitPrice: it.unitPrice,
+                shortfallVal: it.shortfallValue,
+              })),
             });
-          }
-          if (backendDiscrepantInvs.length > 0) {
-            reasonLines.push(`🔴 3-Way Match Rate Variance: Invoice(s) ${backendDiscrepantInvs.map(i => i.invoiceNumber).join(', ')} — PO rates or GRN accepted quantities do not match the billed invoice`);
-          }
-          if (overBilledInvs.length > 0) {
-            overBilledInvs.forEach(i => {
-              const excess = i.paymentAmount - i.amount;
-              reasonLines.push(`💸 Overbilled: Payment amount ${formatAmount(i.paymentAmount, currency)} exceeds invoice ${i.invoiceNumber} face value ${formatAmount(i.amount, currency)} (excess: ${formatAmount(excess, currency)})`);
-            });
-          }
-          if (matchStatus === 'DISCREPANCY' && reasonLines.length === 0) {
-            reasonLines.push('⚠️ Manual discrepancy flag: Flagged for review by finance team');
           }
 
-          const poRefs = Array.from(new Set(selectedInvs.map((i) => i.poNumber).filter(Boolean))).join(', ') || 'PO-2026';
-          const grnRefs = Array.from(new Set(selectedInvs.map((i) => i.grnNumber).filter(Boolean))).join(', ') || 'GRN-2026';
+          if (rateDiscrepantInvs.length > 0) {
+            discrepancyItems.push({
+              id: 'rate_variance',
+              icon: Scale,
+              title: 'PO Rate & Specification Variance',
+              description: `Invoice(s) ${rateDiscrepantInvs.map((i) => i.invoiceNumber).join(', ')} — PO agreed unit rates or accepted quantities do not match billed lines.`,
+              badge: 'Rate Mismatch',
+            });
+          }
+
+          if (overBilledInvs.length > 0) {
+            overBilledInvs.forEach((inv) => {
+              const excess = inv.paymentAmount - inv.amount;
+              discrepancyItems.push({
+                id: `overbill_${inv.id}`,
+                icon: TrendingDown,
+                title: `Overbilled Invoice (${inv.invoiceNumber})`,
+                description: `Payment allocated (${formatAmount(inv.paymentAmount, currency)}) exceeds invoice face value (${formatAmount(inv.amount, currency)}).`,
+                badge: `+${formatAmount(excess, currency)} Excess`,
+              });
+            });
+          }
+
+          if (matchStatus === 'DISCREPANCY' && discrepancyItems.length === 0 && (hasGrnShortfall || overBilledInvs.length > 0 || rateDiscrepantInvs.length > 0)) {
+            discrepancyItems.push({
+              id: 'manual_flag',
+              icon: ShieldAlert,
+              title: 'Manual Review Discrepancy Flag',
+              description: 'Flagged for mandatory review by finance management prior to payment voucher approval.',
+              badge: 'Under Review',
+            });
+          }
+
+          const isDiscrepant = discrepancyItems.length > 0;
+
+          const poRefs = Array.from(new Set(selectedInvs.map((i) => typeof i.poNumber === 'string' ? i.poNumber : '').filter(Boolean))).join(', ') || 'PO-2026';
+          const grnRefs = Array.from(new Set(selectedInvs.map((i) => typeof i.grnNumber === 'string' ? i.grnNumber : '').filter(Boolean))).join(', ') || 'GRN-2026';
 
           return (
             <div className={`cpv-section cpv-match-card ${isDiscrepant ? 'cpv-match-card--discrepancy' : ''}`}>
               <div className="cpv-section__header" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <span className="cpv-section__num">03</span>
-                  <span className="cpv-section__title">
-                    3-Way Multi-Match Engine ({selectedInvs.length} Selected Invoice{selectedInvs.length !== 1 ? 's' : ''})
-                  </span>
+                  <div>
+                    <span className="cpv-section__title">
+                      3-Way Multi-Match Engine ({selectedInvs.length} Selected Invoice{selectedInvs.length !== 1 ? 's' : ''})
+                    </span>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                      Automated PO, Goods Receipt (GRN) &amp; Vendor Invoice Multi-Line Reconciliation
+                    </div>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 5,
-                      padding: '4px 10px',
-                      borderRadius: '6px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      background: !isDiscrepant ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-                      color: !isDiscrepant ? '#10b981' : '#ef4444',
-                      border: !isDiscrepant ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
-                    }}
-                  >
+                <div className="cpv-match-header-actions">
+                  <span className={`cpv-status-badge ${!isDiscrepant ? 'cpv-status-badge--success' : 'cpv-status-badge--danger'}`}>
                     {!isDiscrepant ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} />}
-                    <span>{!isDiscrepant ? 'PO = Employee GRN = Invoice Verified' : 'Discrepancy Detected'}</span>
+                    <span>{!isDiscrepant ? '100% 3-Way Match Verified' : 'Discrepancy Detected'}</span>
                   </span>
                   <button
                     type="button"
                     className="cpv-btn cpv-btn--sm cpv-btn--outline"
                     onClick={() => updateTotalsFromInvoices(vendorInvoices)}
                     title="Re-verify 3-Way Match across selected invoices"
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, height: 28 }}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5, height: 30 }}
                   >
                     <RotateCcw size={12} />
                     <span>Re-Verify</span>
@@ -2073,228 +2138,344 @@ export default function CreatePaymentVoucherPage() {
                 </div>
               </div>
 
+              {/* Status Banner */}
               <div className={`cpv-match-banner ${!isDiscrepant ? 'cpv-match-banner--matched' : 'cpv-match-banner--discrepancy'}`}>
-                <div className={`cpv-match-banner-title ${!isDiscrepant ? 'cpv-match-banner-title--matched' : 'cpv-match-banner-title--discrepancy'}`}>
-                  {!isDiscrepant ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
-                  <span>
-                    {!isDiscrepant
-                      ? `3-Way Multi-Match Verified (${selectedInvs.length || 1} Invoice(s): PO = Employee GRN = Invoice)`
-                      : `3-Way Match Discrepancy Detected (${discrepantInvs.length || 1} Invoice(s))`
-                    }
-                  </span>
-                </div>
-                <div style={{ margin: 0, fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                  {!isDiscrepant ? (
-                    <p style={{ margin: 0 }}>
-                      Quantities &amp; unit rates across Purchase Orders ({poRefs}), Employee Goods Received Notes ({grnRefs}), and {selectedInvs.length || 1} selected Supplier Invoice(s) align 100%. Verified by internal store/warehouse inspection.
-                    </p>
-                  ) : (
-                    <div style={{ marginTop: 4 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#ef4444', marginBottom: 6 }}>
-                        Reasons for Discrepancy &amp; Variance Summary:
-                      </div>
-                      <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-                        {reasonLines.length > 0
-                          ? reasonLines.map((r, idx) => (
-                              <li key={idx} style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, paddingLeft: 4 }}>
-                                {r}
-                              </li>
-                            ))
-                          : (
-                            <li style={{ fontSize: 13, color: 'var(--text-secondary)', paddingLeft: 4 }}>
-                              Discrepancy in invoice(s) {discrepantInvs.map(i => i.invoiceNumber).join(', ') || 'selected'} — please verify PO, Employee GRN, and invoice details manually.
-                            </li>
-                          )
-                        }
-                      </ul>
-                      <div style={{ fontSize: 12, color: '#f59e0b', marginTop: 8, fontWeight: 600 }}>
-                        ⚠️ Flagged for mandatory Manager &amp; Finance approval before payment release.
-                      </div>
+                <div className="cpv-match-banner-header">
+                  <div className={`cpv-match-banner-icon ${!isDiscrepant ? 'cpv-match-banner-icon--matched' : 'cpv-match-banner-icon--discrepancy'}`}>
+                    {!isDiscrepant ? <ShieldCheck size={22} /> : <ShieldAlert size={22} />}
+                  </div>
+                  <div>
+                    <div className={`cpv-match-banner-title ${!isDiscrepant ? 'cpv-match-banner-title--matched' : 'cpv-match-banner-title--discrepancy'}`}>
+                      {!isDiscrepant
+                        ? `3-Way Multi-Match Verified (${selectedInvs.length || 1} Invoice(s): PO = Employee GRN = Invoice)`
+                        : `3-Way Multi-Match Discrepancy Flagged (${discrepancyItems.length} Issue${discrepancyItems.length !== 1 ? 's' : ''} Detected)`
+                      }
                     </div>
-                  )}
+                    <div className="cpv-match-banner-subtitle">
+                      {!isDiscrepant
+                        ? `Quantities & unit rates across Purchase Orders (${poRefs}), Employee Goods Received Notes (${grnRefs}), and ${selectedInvs.length || 1} selected Supplier Invoice(s) align 100%. Verified by internal store inspection.`
+                        : 'Variance identified between Purchase Orders, Goods Receipt quantities, and billed Supplier Invoices.'
+                      }
+                    </div>
+                  </div>
                 </div>
+
+                {/* If Discrepant: Structured Discrepancy Breakdown */}
+                {isDiscrepant && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
+                    <div className="cpv-discrepancy-grid">
+                      {discrepancyItems.map((item) => {
+                        const ItemIcon = item.icon;
+                        return (
+                          <div key={item.id} className="cpv-discrepancy-item-card">
+                            <div className="cpv-discrepancy-item-icon">
+                              <ItemIcon size={16} />
+                            </div>
+                            <div className="cpv-discrepancy-item-content">
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                                <div className="cpv-discrepancy-item-title">{item.title}</div>
+                                {item.badge && (
+                                  <span className="cpv-discrepancy-item-highlight">{item.badge}</span>
+                                )}
+                              </div>
+                              <div className="cpv-discrepancy-item-desc">{item.description}</div>
+                              {item.details && item.details.length > 0 && (
+                                <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                  {item.details.map((d, dIdx) => (
+                                    <div
+                                      key={dIdx}
+                                      style={{
+                                        fontSize: 11,
+                                        background: 'rgba(239, 68, 68, 0.05)',
+                                        padding: '4px 8px',
+                                        borderRadius: 4,
+                                        border: '1px solid rgba(239, 68, 68, 0.15)',
+                                        color: 'var(--text-secondary)',
+                                      }}
+                                    >
+                                      <strong style={{ color: 'var(--text-primary)' }}>{d.name}</strong>: Ordered {d.ordered}, Received {d.received} (
+                                      <span style={{ color: '#ef4444', fontWeight: 700 }}>
+                                        {d.shortfall} missing @ {formatAmount(d.unitPrice, currency)} = {formatAmount(d.shortfallVal, currency)}
+                                      </span>)
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="cpv-discrepancy-routing-strip">
+                      <AlertCircle size={15} style={{ flexShrink: 0 }} />
+                      <span>
+                        <strong>Mandatory Approval Routing:</strong> This payment voucher will require elevated Manager &amp; Finance audit approval before disbursement release due to active reconciliation variance.
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* 3 Overview KPI Cards */}
-              <div className="cpv-grid cpv-grid--3">
-                {/* Box a: Purchase Order */}
-                <div className="cpv-match-box">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span className="cpv-match-box-label">a. Purchase Order (PO: {poRefs})</span>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>
-                      {totalOrd} units ordered
-                    </span>
+              {/* 3 Overview Comparator Cards */}
+              <div className="cpv-match-comparator-grid">
+                {/* Box A: Purchase Order */}
+                <div className="cpv-match-box-pro">
+                  <div>
+                    <div className="cpv-match-box-top">
+                      <span className="cpv-step-tag">Step A • Baseline</span>
+                      <span className="cpv-match-box-ref" title={poRefs}>PO: {poRefs}</span>
+                    </div>
+                    <div className="cpv-match-box-header-title">Purchase Order Total</div>
+                    <div className="cpv-match-box-main-value">{formatAmount(poAgreedTotal, currency)}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+                      {totalOrd} Total Units Contracted
+                    </div>
                   </div>
-                  <div className="cpv-match-box-value">PO Agreed Total: {formatAmount(poAgreedTotal, currency)}</div>
-                  <span className={`cpv-match-box-sub ${!isDiscrepant ? 'cpv-match-box-sub--ok' : 'cpv-match-box-sub--warn'}`}>
-                    {!isDiscrepant
-                      ? '✅ PO Rates & Quantities Verified'
-                      : backendDiscrepantInvs.length > 0
-                        ? '⚠️ PO Rate / Quantity Variance'
-                        : overBilledInvs.length > 0
-                          ? '⚠️ Payment Exceeds Invoice Amount'
-                          : '⚠️ Goods Receipt Shortfall Detected'}
-                  </span>
+                  <div className={`cpv-match-box-status-chip ${!isDiscrepant ? 'cpv-match-box-status-chip--ok' : 'cpv-match-box-status-chip--warn'}`}>
+                    {!isDiscrepant ? (
+                      <>
+                        <CheckCircle2 size={13} />
+                        <span>PO Agreed Baseline</span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertCircle size={13} />
+                        <span>PO Baseline Contract</span>
+                      </>
+                    )}
+                  </div>
                 </div>
 
-                {/* Box b: Goods Received Note (GRN) */}
-                <div className="cpv-match-box">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span className="cpv-match-box-label">b. Goods Received Note (GRN: {grnRefs})</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: totalShortfallUnits > 0 ? '#ef4444' : '#10b981' }}>
-                      {totalRec} / {totalOrd} units ({grnPercent}%)
-                    </span>
+                {/* Box B: Goods Received Note (GRN) */}
+                <div className="cpv-match-box-pro">
+                  <div>
+                    <div className="cpv-match-box-top">
+                      <span className="cpv-step-tag">Step B • Fulfilment</span>
+                      <span className="cpv-match-box-ref" title={grnRefs}>GRN: {grnRefs}</span>
+                    </div>
+                    <div className="cpv-match-box-header-title">Store Received Value</div>
+                    <div className="cpv-match-box-main-value" style={{ color: totalShortfallUnits > 0 ? '#ef4444' : '#10b981' }}>
+                      {formatAmount(totalReceivedVal, currency)}
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="cpv-match-progress-wrap">
+                      <div className="cpv-match-progress-bar">
+                        <div
+                          className="cpv-match-progress-fill"
+                          style={{
+                            width: `${grnPercent}%`,
+                            background: totalShortfallUnits > 0 ? 'linear-gradient(90deg, #f59e0b, #ef4444)' : 'linear-gradient(90deg, #10b981, #059669)',
+                          }}
+                        />
+                      </div>
+                      <div className="cpv-match-progress-label">
+                        <span>{totalRec} of {totalOrd} units accepted</span>
+                        <span>{grnPercent}%</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="cpv-match-box-value">
-                    Received Value: {formatAmount(totalReceivedVal, currency)}
+
+                  <div className={`cpv-match-box-status-chip ${!hasGrnShortfall && !isDiscrepant ? 'cpv-match-box-status-chip--ok' : 'cpv-match-box-status-chip--warn'}`}>
+                    {!hasGrnShortfall && !isDiscrepant ? (
+                      <>
+                        <CheckCircle2 size={13} />
+                        <span>100% Store Fulfilled</span>
+                      </>
+                    ) : (
+                      <>
+                        <PackageX size={13} />
+                        <span>Shortfall: -{totalShortfallUnits} units ({formatAmount(totalShortfallVal, currency)})</span>
+                      </>
+                    )}
                   </div>
-                  <span className={`cpv-match-box-sub ${!hasGrnShortfall && !isDiscrepant ? 'cpv-match-box-sub--ok' : 'cpv-match-box-sub--warn'}`}>
-                    {!hasGrnShortfall && !isDiscrepant
-                      ? '✅ Verified by Store / Employee Receipt (100%)'
-                      : `⚠️ Missing Goods Value: ${formatAmount(totalShortfallVal, currency)} (${totalShortfallUnits} units missing)`}
-                  </span>
                 </div>
 
-                {/* Box c: Selected Invoices */}
-                <div className="cpv-match-box">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span className="cpv-match-box-label">c. Selected Supplier Invoices ({selectedInvs.length})</span>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: totalShortfallVal > 0 ? '#ef4444' : 'var(--text-secondary)' }}>
-                      Net Payable: {formatAmount(totalReceivedVal > 0 ? Math.min(billedTotal, totalReceivedVal) : billedTotal, currency)}
-                    </span>
+                {/* Box C: Selected Invoices */}
+                <div className="cpv-match-box-pro">
+                  <div>
+                    <div className="cpv-match-box-top">
+                      <span className="cpv-step-tag">Step C • Settlement</span>
+                      <span className="cpv-match-box-ref">{selectedInvs.length} Invoice{selectedInvs.length !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div className="cpv-match-box-header-title">Supplier Billed Total</div>
+                    <div className="cpv-match-box-main-value">{formatAmount(billedTotal, currency)}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Net Payable:</span>
+                      <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono, monospace)' }}>
+                        {formatAmount(totalReceivedVal > 0 ? Math.min(billedTotal, totalReceivedVal) : billedTotal, currency)}
+                      </span>
+                    </div>
                   </div>
-                  <div className="cpv-match-box-value">Billed Total: {formatAmount(billedTotal, currency)}</div>
-                  <span className={`cpv-match-box-sub ${!isDiscrepant ? 'cpv-match-box-sub--ok' : 'cpv-match-box-sub--warn'}`}>
-                    {!isDiscrepant
-                      ? '✅ All Invoices 3-Way Matched'
-                      : `⚠️ Discrepancy Flagged (${formatAmount(totalShortfallVal, currency)} Variance)`}
-                  </span>
+
+                  <div className={`cpv-match-box-status-chip ${!isDiscrepant ? 'cpv-match-box-status-chip--ok' : 'cpv-match-box-status-chip--warn'}`}>
+                    {!isDiscrepant ? (
+                      <>
+                        <ShieldCheck size={13} />
+                        <span>All Invoices Matched</span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertTriangle size={13} />
+                        <span>Variance: {formatAmount(totalShortfallVal, currency)}</span>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
 
               {/* Itemized 3-Way Reconciliation Breakdown Table */}
               {reconciledItems.length > 0 && (
-                <div style={{ marginTop: 20 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <PackageCheck size={16} style={{ color: 'var(--primary-500, #0a6ed1)' }} />
-                      <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>
-                        Itemized 3-Way Reconciliation (PO vs Employee GRN vs Supplier Invoice)
-                      </span>
+                <div className="cpv-recon-container">
+                  <div className="cpv-recon-header">
+                    <div className="cpv-recon-title-area">
+                      <div style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: 8,
+                        background: 'rgba(10, 110, 209, 0.1)',
+                        color: 'var(--primary-500, #0a6ed1)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}>
+                        <PackageCheck size={16} />
+                      </div>
+                      <div>
+                        <div className="cpv-recon-title">
+                          Itemized 3-Way Reconciliation Breakdown
+                        </div>
+                        <div style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>
+                          Comparative audit: PO Contract vs Store GRN Receipt vs Vendor Invoice Line Items
+                        </div>
+                      </div>
                     </div>
                     {totalShortfallVal > 0 && (
-                      <div
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 6,
-                          fontSize: 12,
-                          fontWeight: 700,
-                          color: '#ef4444',
-                          background: 'rgba(239, 68, 68, 0.08)',
-                          border: '1px solid rgba(239, 68, 68, 0.25)',
-                          padding: '3px 10px',
-                          borderRadius: 6,
-                        }}
-                      >
+                      <div className="cpv-recon-badge-alert">
                         <AlertTriangle size={13} />
-                        Total Missing Goods Value: {formatAmount(totalShortfallVal, currency)} ({totalShortfallUnits} units missing)
+                        <span>Shortfall Impact: {formatAmount(totalShortfallVal, currency)} ({totalShortfallUnits} units)</span>
                       </div>
                     )}
                   </div>
 
-                  <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-card)' }}>
-                    <table className="cpv-table" style={{ margin: 0, fontSize: 13 }}>
+                  <div className="cpv-recon-table-wrap">
+                    <table className="cpv-recon-table">
                       <thead>
-                        <tr style={{ background: 'var(--surface-elevated, var(--surface))' }}>
-                          <th style={{ width: 36, textAlign: 'center', padding: '10px 8px' }}>#</th>
-                          <th style={{ padding: '10px 12px' }}>Item Description</th>
-                          <th style={{ padding: '10px 12px' }}>PO / Invoice Ref</th>
-                          <th style={{ textAlign: 'right', padding: '10px 12px' }}>Ordered Qty</th>
-                          <th style={{ textAlign: 'right', padding: '10px 12px' }}>Received Qty</th>
-                          <th style={{ textAlign: 'right', padding: '10px 12px' }}>Missing Qty</th>
-                          <th style={{ textAlign: 'right', padding: '10px 12px' }}>Unit Rate</th>
-                          <th style={{ textAlign: 'right', padding: '10px 12px' }}>Received Value</th>
-                          <th style={{ textAlign: 'right', padding: '10px 12px' }}>Missing Value</th>
-                          <th style={{ textAlign: 'center', padding: '10px 12px' }}>Status</th>
+                        <tr>
+                          <th style={{ width: 40, textAlign: 'center' }}>#</th>
+                          <th>Item Description &amp; Receiving Note</th>
+                          <th>PO / Invoice Ref</th>
+                          <th style={{ textAlign: 'right' }}>Ordered</th>
+                          <th style={{ textAlign: 'right' }}>Received (GRN)</th>
+                          <th style={{ textAlign: 'right' }}>Variance</th>
+                          <th style={{ textAlign: 'right' }}>Unit Rate</th>
+                          <th style={{ textAlign: 'right' }}>Accepted Value</th>
+                          <th style={{ textAlign: 'right' }}>Missing Value</th>
+                          <th style={{ textAlign: 'center' }}>Recon Status</th>
                         </tr>
                       </thead>
                       <tbody>
                         {reconciledItems.map((item, idx) => {
                           const hasItemShortfall = item.shortfallQty > 0 || item.shortfallValue > 0;
                           return (
-                            <tr
-                              key={item.id || idx}
-                              style={{
-                                background: hasItemShortfall ? 'rgba(239, 68, 68, 0.03)' : 'transparent',
-                                borderBottom: '1px solid var(--border)',
-                              }}
-                            >
-                              <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                            <tr key={item.id || idx} className={hasItemShortfall ? 'cpv-row--shortfall' : ''}>
+                              <td style={{ textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 600 }}>
                                 {idx + 1}
                               </td>
-                              <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                                <div>{item.itemName}</div>
+                              <td>
+                                <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{item.itemName}</div>
                                 {item.remarks && (
-                                  <div style={{ fontSize: 11, color: hasItemShortfall ? '#ef4444' : 'var(--text-secondary)', marginTop: 2, fontWeight: 500 }}>
-                                    {item.remarks}
+                                  <div style={{
+                                    fontSize: 11,
+                                    color: hasItemShortfall ? '#ef4444' : 'var(--text-secondary)',
+                                    marginTop: 2,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                  }}>
+                                    {hasItemShortfall && <AlertCircle size={10} />}
+                                    <span>{item.remarks}</span>
                                   </div>
                                 )}
                               </td>
-                              <td style={{ padding: '10px 12px', fontSize: 12, color: 'var(--text-secondary)' }}>
-                                <div style={{ fontWeight: 600, color: 'var(--primary-500)' }}>{item.invoiceNumber || '—'}</div>
-                                <div style={{ fontSize: 11 }}>{item.poNumber || '—'}</div>
+                              <td>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                  <span style={{
+                                    fontSize: 11,
+                                    fontWeight: 600,
+                                    color: 'var(--primary-500)',
+                                    fontFamily: 'var(--font-mono, monospace)',
+                                  }}>
+                                    {item.invoiceNumber || '—'}
+                                  </span>
+                                  <span style={{
+                                    fontSize: 10.5,
+                                    color: 'var(--text-secondary)',
+                                    fontFamily: 'var(--font-mono, monospace)',
+                                  }}>
+                                    {item.poNumber || '—'}
+                                  </span>
+                                </div>
                               </td>
-                              <td style={{ textAlign: 'right', padding: '10px 12px', fontWeight: 600 }}>
+                              <td style={{ textAlign: 'right', fontWeight: 600 }} className="cpv-mono-val">
                                 {item.orderedQty}
                               </td>
-                              <td style={{ textAlign: 'right', padding: '10px 12px', fontWeight: 600, color: '#10b981' }}>
+                              <td style={{ textAlign: 'right', fontWeight: 700, color: '#10b981' }} className="cpv-mono-val">
                                 {item.receivedQty}
                               </td>
-                              <td style={{ textAlign: 'right', padding: '10px 12px', fontWeight: 700, color: hasItemShortfall ? '#ef4444' : 'var(--text-secondary)' }}>
+                              <td style={{
+                                textAlign: 'right',
+                                fontWeight: 700,
+                                color: hasItemShortfall ? '#ef4444' : 'var(--text-secondary)',
+                              }} className="cpv-mono-val">
                                 {item.shortfallQty > 0 ? `-${item.shortfallQty}` : '0'}
                               </td>
-                              <td style={{ textAlign: 'right', padding: '10px 12px' }}>
+                              <td style={{ textAlign: 'right' }} className="cpv-mono-val">
                                 {formatAmount(item.unitPrice, currency)}
                               </td>
-                              <td style={{ textAlign: 'right', padding: '10px 12px', fontWeight: 600, color: '#10b981' }}>
+                              <td style={{ textAlign: 'right', fontWeight: 700, color: '#10b981' }} className="cpv-mono-val">
                                 {formatAmount(item.receivedValue, currency)}
                               </td>
-                              <td style={{ textAlign: 'right', padding: '10px 12px', fontWeight: 700, color: hasItemShortfall ? '#ef4444' : 'var(--text-secondary)' }}>
+                              <td style={{
+                                textAlign: 'right',
+                                fontWeight: 700,
+                                color: hasItemShortfall ? '#ef4444' : 'var(--text-secondary)',
+                              }} className="cpv-mono-val">
                                 {item.shortfallValue > 0 ? formatAmount(item.shortfallValue, currency) : '—'}
                               </td>
-                              <td style={{ textAlign: 'center', padding: '10px 12px' }}>
+                              <td style={{ textAlign: 'center' }}>
                                 {hasItemShortfall ? (
-                                  <span
-                                    style={{
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: 4,
-                                      padding: '3px 8px',
-                                      borderRadius: 4,
-                                      fontSize: 11,
-                                      fontWeight: 700,
-                                      background: 'rgba(239, 68, 68, 0.12)',
-                                      color: '#ef4444',
-                                    }}
-                                  >
-                                    <AlertTriangle size={11} /> Missing {item.shortfallQty}
+                                  <span style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    padding: '3px 8px',
+                                    borderRadius: 6,
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    background: 'rgba(239, 68, 68, 0.12)',
+                                    color: '#ef4444',
+                                    border: '1px solid rgba(239, 68, 68, 0.25)',
+                                  }}>
+                                    <AlertTriangle size={11} />
+                                    <span>Missing {item.shortfallQty}</span>
                                   </span>
                                 ) : (
-                                  <span
-                                    style={{
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: 4,
-                                      padding: '3px 8px',
-                                      borderRadius: 4,
-                                      fontSize: 11,
-                                      fontWeight: 700,
-                                      background: 'rgba(16, 185, 129, 0.12)',
-                                      color: '#10b981',
-                                    }}
-                                  >
-                                    <CheckCircle2 size={11} /> Matched
+                                  <span style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    padding: '3px 8px',
+                                    borderRadius: 6,
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    background: 'rgba(16, 185, 129, 0.12)',
+                                    color: '#10b981',
+                                    border: '1px solid rgba(16, 185, 129, 0.25)',
+                                  }}>
+                                    <CheckCircle2 size={11} />
+                                    <span>Matched</span>
                                   </span>
                                 )}
                               </td>
@@ -2303,27 +2484,33 @@ export default function CreatePaymentVoucherPage() {
                         })}
                       </tbody>
                       <tfoot>
-                        <tr style={{ background: 'var(--surface-elevated, var(--surface))', fontWeight: 700, borderTop: '2px solid var(--border)' }}>
-                          <td colSpan={3} style={{ padding: '12px 12px', textAlign: 'right', color: 'var(--text-primary)' }}>
+                        <tr>
+                          <td colSpan={3} style={{ textAlign: 'right', color: 'var(--text-primary)', fontWeight: 700 }}>
                             Reconciliation Totals:
                           </td>
-                          <td style={{ textAlign: 'right', padding: '12px 12px' }}>{totalOrd}</td>
-                          <td style={{ textAlign: 'right', padding: '12px 12px', color: '#10b981' }}>{totalRec}</td>
-                          <td style={{ textAlign: 'right', padding: '12px 12px', color: totalShortfallUnits > 0 ? '#ef4444' : 'inherit' }}>
+                          <td style={{ textAlign: 'right' }} className="cpv-mono-val">{totalOrd}</td>
+                          <td style={{ textAlign: 'right', color: '#10b981' }} className="cpv-mono-val">{totalRec}</td>
+                          <td style={{
+                            textAlign: 'right',
+                            color: totalShortfallUnits > 0 ? '#ef4444' : 'inherit',
+                          }} className="cpv-mono-val">
                             {totalShortfallUnits > 0 ? `-${totalShortfallUnits}` : '0'}
                           </td>
-                          <td style={{ textAlign: 'right', padding: '12px 12px', color: 'var(--text-secondary)' }}>—</td>
-                          <td style={{ textAlign: 'right', padding: '12px 12px', color: '#10b981' }}>
+                          <td style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>—</td>
+                          <td style={{ textAlign: 'right', color: '#10b981' }} className="cpv-mono-val">
                             {formatAmount(totalReceivedVal, currency)}
                           </td>
-                          <td style={{ textAlign: 'right', padding: '12px 12px', color: totalShortfallVal > 0 ? '#ef4444' : 'inherit' }}>
+                          <td style={{
+                            textAlign: 'right',
+                            color: totalShortfallVal > 0 ? '#ef4444' : 'inherit',
+                          }} className="cpv-mono-val">
                             {totalShortfallVal > 0 ? formatAmount(totalShortfallVal, currency) : '—'}
                           </td>
-                          <td style={{ textAlign: 'center', padding: '12px 12px' }}>
+                          <td style={{ textAlign: 'center' }}>
                             {totalShortfallVal > 0 ? (
-                              <span style={{ fontSize: 11, color: '#ef4444', fontWeight: 700 }}>⚠️ Discrepancy</span>
+                              <span style={{ fontSize: 11, color: '#ef4444', fontWeight: 700 }}>⚠️ Variance</span>
                             ) : (
-                              <span style={{ fontSize: 11, color: '#10b981', fontWeight: 700 }}>✅ 100% Match</span>
+                              <span style={{ fontSize: 11, color: '#10b981', fontWeight: 700 }}>✓ 100% Match</span>
                             )}
                           </td>
                         </tr>

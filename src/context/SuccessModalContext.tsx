@@ -211,11 +211,9 @@ export function SuccessModalProvider({ children }: { children: ReactNode }) {
                   variant="outline"
                   className="flex-1 text-xs h-9 font-medium"
                   onClick={() => {
-                    if (modalState.onSecondaryClick) {
-                      modalState.onSecondaryClick();
-                    } else {
-                      hideSuccess();
-                    }
+                    const cb = modalState.onSecondaryClick;
+                    hideSuccess();
+                    if (cb) cb();
                   }}
                 >
                   {modalState.secondaryBtnText}
@@ -232,11 +230,9 @@ export function SuccessModalProvider({ children }: { children: ReactNode }) {
                     : 'bg-emerald-600 hover:bg-emerald-700 text-white'
                 )}
                 onClick={() => {
-                  if (modalState.onPrimaryClick) {
-                    modalState.onPrimaryClick();
-                  } else {
-                    hideSuccess();
-                  }
+                  const cb = modalState.onPrimaryClick;
+                  hideSuccess();
+                  if (cb) cb();
                 }}
               >
                 <span>{modalState.primaryBtnText || 'Done / Got it'}</span>

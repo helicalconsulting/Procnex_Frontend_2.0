@@ -8,6 +8,7 @@ import {
 } from 'react';
 import { companySettingsService, type CompanyProfile } from '../services/companySettingsService';
 import heliflowLogo from '../assets/heliflow.png';
+import procnexLogo from '../assets/procnex.png';
 
 // ─── Local Storage Keys ────────────────────────────────────
 function getActiveCompanyCode(): string | null {
@@ -256,8 +257,8 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
     companyName: dynamicName,
     companyPhone: profile?.companyPhone || null,
     companyEmail: profile?.companyEmail || null,
-    logoUrl: profile?.logoUrl || null,
-    faviconUrl: profile?.faviconUrl || profile?.logoUrl || null,
+    logoUrl: profile?.logoUrl || '/Procnex-logo.jpeg' || procnexLogo || heliflowLogo,
+    faviconUrl: profile?.faviconUrl || profile?.logoUrl || '/Procnex-logo.jpeg' || null,
     primaryColor: profile?.primaryColor || DEFAULT_PRIMARY,
     loginText: profile?.loginText || null,
     supportEmail: profile?.supportEmail || null,

@@ -332,7 +332,17 @@
 }
 
 /* Print Overrides */
+@page {
+  size: A4 portrait;
+  margin: 0 !important;
+}
+
 @media print {
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
   body * {
     visibility: hidden;
   }
@@ -358,7 +368,8 @@
     left: 0;
     top: 0;
     width: 100%;
-    padding: 20px;
+    padding: 12mm 15mm;
     box-shadow: none;
+    box-sizing: border-box;
   }
 }

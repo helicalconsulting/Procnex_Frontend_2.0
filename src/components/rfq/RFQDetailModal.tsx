@@ -12,7 +12,7 @@ import {
   X, CalendarDays, Building2, Tag, Banknote, ClipboardList, Users,
   Package, FileText, Minus, Maximize2, Minimize2, ChevronUp,
   Trophy, Eye, ArrowRightLeft, Shield, ShieldCheck, TrendingUp, CheckCircle2,
-  XCircle, Undo2, Clock, ArrowLeft, Send, ChevronRight, PenLine,
+  XCircle, Undo2, Clock, ArrowLeft, Send, ChevronRight, PenLine, RotateCcw,
 } from 'lucide-react';
 import { useCurrency, CurrencySelector, CurrencyBadge, DEFAULT_CURRENCY } from '../../components/shared/CurrencyMaster';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
@@ -23,10 +23,13 @@ import { Card } from '../../components/ui/card';
 import { cn } from '../../lib/utils';
 import '../../pages/rfq/RFQPage.css';
 
-function getStatusTone(status: RFQStatus): 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info' {
+function getStatusTone(status: string): 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info' {
   switch (status) {
     case 'DRAFT': return 'neutral';
     case 'PENDING_APPROVAL': return 'warning';
+    case 'RETURNED':
+    case 'RE_REVIEW':
+    case 'RETURN_FOR_RE_REVIEW': return 'warning';
     case 'APPROVED':
     case 'SENT':
     case 'IN_PROGRESS':
@@ -90,7 +93,7 @@ interface EvalData {
   summary: { totalSuppliers: number; recommendedVendor: EvalSupplierResult | null; averageScore: number };
 }
 
-const STATUS_LABELS: Record<RFQStatus, string> = {
+const STATUS_LABELS: Record<string, string> = {
   DRAFT: 'Draft',
   PENDING_APPROVAL: 'Pending Approval',
   APPROVED: 'Approved',
@@ -99,6 +102,9 @@ const STATUS_LABELS: Record<RFQStatus, string> = {
   CLOSED: 'Closed',
   CANCELLED: 'Cancelled',
   REJECTED: 'Rejected',
+  RETURNED: 'Returned for Revision',
+  RE_REVIEW: 'Returned (Re-Review)',
+  RETURN_FOR_RE_REVIEW: 'Returned (Re-Review)',
 };
 
 const QUOT_STATUS_LABELS: Record<string, string> = {
@@ -205,7 +211,25 @@ export default function RFQDetailModal({
   onCompareQuotations,
 }: RFQDetailModalProps) {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, roles = [] } = useAuth();
+  const isUserAdmin = Boolean(
+    roles.some((r) => typeof r === 'string' && ['super admin', 'administrator', 'admin'].includes(r.trim().toLowerCase())) ||
+    (user as any)?.roles?.some((r: any) => {
+      const name = typeof r === 'string' ? r : r?.roleName || r?.name || '';
+      return ['super admin', 'administrator', 'admin'].includes(name.trim().toLowerCase());
+    }) ||
+    (user as any)?.roleName?.toLowerCase()?.includes('admin') ||
+    String(user?.id) === '1'
+  );
+  const currentUserId = String(user?.id || (user as any)?._id || '');
+  const creatorId = String((rfq as any)?.createdBy || (rfq as any)?.creatorId || (rfq as any)?.creator?.id || '');
+  const userFullName = (user?.fullName || (user as any)?.name || (user as any)?.username || '').trim().toLowerCase();
+  const rfqCreatorName = (rfq?.creator || '').trim().toLowerCase();
+  const isCreator = Boolean(
+    (creatorId && currentUserId && creatorId === currentUserId) ||
+    (rfqCreatorName && userFullName && (rfqCreatorName === userFullName || userFullName.includes(rfqCreatorName) || rfqCreatorName.includes(userFullName)))
+  );
+  const canEditThisRFQ = isCreator || isUserAdmin;
   const [activeTab, setActiveTab] = useState<'info' | 'items' | 'vendors' | 'quotations' | 'approvals'>('info');
   const [modalState, setModalState] = useState<ModalState>('open');
   const [viewPlanQuotation, setViewPlanQuotation] = useState<{ name: string; milestones: Array<{ id: string; title: string; percentage: number }> } | null>(null);
@@ -224,6 +248,7 @@ export default function RFQDetailModal({
   const [showCommentBox, setShowCommentBox] = useState<'reject' | 'return' | null>(null);
   const [approvalActionSuccess, setApprovalActionSuccess] = useState<string | null>(null);
   const [approvalActionError, setApprovalActionError] = useState<string | null>(null);
+  const [actionReturnTarget, setActionReturnTarget] = useState<'ORIGINATOR' | 'LEVEL_1'>('ORIGINATOR');
 
   const [approvalChain, setApprovalChain] = useState<{ levels?: any[]; history?: any[]; timeline?: any[]; totalLevels?: number } | null>(null);
   const [approvalChainLoading, setApprovalChainLoading] = useState(false);
@@ -243,23 +268,38 @@ export default function RFQDetailModal({
     fetchApprovalChain();
   }, [rfq?.id, fetchApprovalChain]);
 
-  // Fetch pending approval for this RFQ when status is PENDING_APPROVAL
+  // Fetch pending approval for this RFQ when status is PENDING_APPROVAL or RE_REVIEW
   useEffect(() => {
-    if (!rfq || rfq.status !== 'PENDING_APPROVAL') {
+    if (!rfq || (rfq.status !== 'PENDING_APPROVAL' && rfq.status !== 'RE_REVIEW' && rfq.status !== 'RETURN_FOR_RE_REVIEW')) {
       setPendingApproval(null);
       return;
     }
+
+    const currentUserId = String(user?.id || (user as any)?._id || '');
+    const creatorId = String((rfq as any).createdBy || (rfq as any).creatorId || (rfq as any).creator?.id || '');
+    const userFullName = (user?.fullName || (user as any)?.name || (user as any)?.username || '').trim().toLowerCase();
+    const rfqCreatorName = (rfq.creator || '').trim().toLowerCase();
+    const isCreator = Boolean(
+      (creatorId && currentUserId && creatorId === currentUserId) ||
+      (rfqCreatorName && userFullName && rfqCreatorName === userFullName)
+    );
+
+    if (isCreator) {
+      setPendingApproval(null);
+      return;
+    }
+
     approvalService.listTable({ module: 'RFQ', status: 'PENDING' })
       .then((pendingRows) => {
         const pendingFound = pendingRows.find(
-          (r) => String(r.referenceId) === String(rfq.id) || r.referenceNumber === rfq.rfqNumber
+          (r) => (String(r.referenceId) === String(rfq.id) || r.referenceNumber === rfq.rfqNumber) && Boolean(r.canAct)
         );
         setPendingApproval(pendingFound || null);
       })
       .catch(() => {
         setPendingApproval(null);
       });
-  }, [rfq?.id, rfq?.status]);
+  }, [rfq?.id, rfq?.status, user]);
 
   const handleApproveRFQ = async () => {
     if (!pendingApproval || !rfq) return;
@@ -350,7 +390,7 @@ export default function RFQDetailModal({
     window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
 
     try {
-      const res = await approvalService.return(approvalId, comment, 'LEVEL_1');
+      const res = await approvalService.return(approvalId, comment, actionReturnTarget);
       if (res?.message) setApprovalActionSuccess(res.message);
       fetchApprovalChain();
       window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
@@ -632,9 +672,16 @@ export default function RFQDetailModal({
             <div className="flex flex-col gap-2 min-w-0">
               <div className="flex flex-wrap items-center gap-2.5">
                 <h1 className="text-2xl font-bold tracking-tight text-foreground">{rfq.rfqNumber}</h1>
-                <Badge tone={getStatusTone(rfq.status)}>
-                  {STATUS_LABELS[rfq.status] || rfq.status}
-                </Badge>
+                {(() => {
+                  const isReturnedByMe = (rfq as any)._isReturnedByMe || rfq.status === 'RETURNED' || rfq.status === 'RETURN_FOR_RE_REVIEW';
+                  const isReturnedForReReview = (rfq as any)._isReturnedForReReview || rfq.status === 'RE_REVIEW' || Boolean(pendingApproval?.isReturned || (pendingApproval?.comments && /return/i.test(pendingApproval.comments)));
+                  const displayStatus = isReturnedByMe ? 'RETURNED' : isReturnedForReReview ? 'RE_REVIEW' : rfq.status;
+                  return (
+                    <Badge tone={getStatusTone(displayStatus)}>
+                      {STATUS_LABELS[displayStatus] || displayStatus}
+                    </Badge>
+                  );
+                })()}
                 {rfq.priority && (
                   <Badge tone={rfq.priority === 'Critical' || rfq.priority === 'High' ? 'danger' : rfq.priority === 'Medium' ? 'warning' : 'neutral'}>
                     <Tag className="size-3 mr-1" />
@@ -683,9 +730,9 @@ export default function RFQDetailModal({
               </Button>
             )}
 
-            {enableSend && (rfq.status === 'DRAFT' || rfq.status === 'RETURNED' || (rfq.status === 'PENDING_APPROVAL' && String((rfq as any).createdBy || (rfq as any).creatorId || '') === String(user?.id || (user as any)?._id || ''))) && (
+            {canEditThisRFQ && (rfq.status === 'DRAFT' || rfq.status === 'RETURNED' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW' || rfq.status === 'PENDING_APPROVAL') && (
               <Button variant="outline" onClick={() => navigate(`/rfq/edit/${rfq.id}`)}>
-                <PenLine className="size-4 mr-1.5" /> {rfq.status === 'RETURNED' ? 'Edit & Resubmit RFQ' : rfq.status === 'DRAFT' ? 'Edit Draft' : 'Edit RFQ'}
+                <PenLine className="size-4 mr-1.5" /> {rfq.status === 'RETURNED' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW' ? 'Edit & Resubmit RFQ' : rfq.status === 'DRAFT' ? 'Edit Draft' : 'Edit RFQ'}
               </Button>
             )}
           </div>
@@ -713,35 +760,131 @@ export default function RFQDetailModal({
           </MessageStrip>
         )}
 
-        {/* ── 2. PENDING APPROVAL INTERACTIVE CARD (If PENDING_APPROVAL) ── */}
-        {rfq.status === 'PENDING_APPROVAL' && pendingApproval && pendingApproval.canAct && (
-          <Card className="p-4 border-amber-500/30 bg-amber-500/[0.04]">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
-                <div className="grid size-9 place-items-center rounded-lg bg-amber-500/10 text-amber-600">
-                  <Clock className="size-5" />
+        {/* ── RETURNED FOR REVISION INTERACTIVE NOTICE CARD ── */}
+        {(rfq.status === 'RETURNED' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW' || (rfq as any)._isReturnedByMe) && (() => {
+          const latestReturnEntry = approvalChain?.history?.slice().reverse().find((h: any) => h.status === 'RETURNED');
+          const returnComment = (rfq as any).returnComments || (rfq as any).returnReason || latestReturnEntry?.comments;
+          const returnedBy = latestReturnEntry?.approverName || (latestReturnEntry?.levelNumber ? `Level ${latestReturnEntry.levelNumber} Approver` : 'Approver');
+          return (
+            <Card className="p-4 border-amber-500/40 bg-amber-500/[0.06] dark:bg-amber-500/[0.1]">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <div className="grid size-9 shrink-0 place-items-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 mt-0.5">
+                    <RotateCcw className="size-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      Returned for Revision
+                      {latestReturnEntry?.levelNumber && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 font-medium">
+                          Level {latestReturnEntry.levelNumber}
+                        </span>
+                      )}
+                    </h4>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      This RFQ was returned by <strong>{returnedBy}</strong>. {canEditThisRFQ ? 'Please make the required changes and resubmit for approval.' : 'Awaiting creator revision and resubmission.'}
+                    </p>
+                    {returnComment && (
+                      <div className="mt-2 text-xs font-medium text-foreground/90 bg-background/80 dark:bg-card border border-amber-500/20 rounded-md p-2 italic">
+                        &ldquo;{returnComment}&rdquo;
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-foreground">Action Required: Internal Approval</h4>
-                  <p className="text-xs text-muted-foreground">
-                    This RFQ is pending Level {pendingApproval.levelNumber || 1} approval.
-                  </p>
+                {canEditThisRFQ && (
+                  <div className="flex items-center gap-2 shrink-0 sm:self-center">
+                    <Button
+                      size="sm"
+                      className="w-full sm:w-auto"
+                      onClick={() => navigate(`/rfq/edit/${rfq.id}`)}
+                    >
+                      <PenLine className="size-3.5 mr-1.5" /> Edit &amp; Resubmit RFQ
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </Card>
+          );
+        })()}
+
+        {/* ── 2. PENDING APPROVAL INTERACTIVE CARD (If PENDING_APPROVAL or RE_REVIEW) ── */}
+        {(rfq.status === 'PENDING_APPROVAL' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW') && pendingApproval && pendingApproval.canAct && (() => {
+          const latestReturnEntry = approvalChain?.history?.slice().reverse().find((h: any) => h.status === 'RETURNED');
+          const isReturned = Boolean(
+            pendingApproval.isReturned ||
+            (pendingApproval.comments && /return/i.test(pendingApproval.comments)) ||
+            latestReturnEntry
+          );
+          const returnComment = (pendingApproval.comments && /return/i.test(pendingApproval.comments) ? pendingApproval.comments : null) || latestReturnEntry?.comments;
+          const returnedBy = latestReturnEntry?.approverName || (latestReturnEntry?.levelNumber ? `Level ${latestReturnEntry.levelNumber} Approver` : 'Approver');
+
+          return (
+            <Card className={cn(
+              "p-4",
+              isReturned ? "border-amber-500/50 bg-amber-500/[0.08] dark:bg-amber-500/[0.12]" : "border-amber-500/30 bg-amber-500/[0.04]"
+            )}>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <div className={cn(
+                    "grid size-9 shrink-0 place-items-center rounded-lg mt-0.5",
+                    isReturned ? "bg-amber-500/20 text-amber-600 dark:text-amber-400" : "bg-amber-500/10 text-amber-600"
+                  )}>
+                    {isReturned ? <RotateCcw className="size-5" /> : <Clock className="size-5" />}
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      {isReturned ? `Action Required: Level ${pendingApproval.levelNumber || 1} Re-Review (Returned)` : 'Action Required: Internal Approval'}
+                      {isReturned && (
+                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 font-medium">
+                          Returned by {returnedBy}
+                        </span>
+                      )}
+                    </h4>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {isReturned
+                        ? `This RFQ was returned by ${returnedBy} for re-evaluation. Please review and approve or return to originator.`
+                        : `This RFQ is pending Level ${pendingApproval.levelNumber || 1} approval.`}
+                    </p>
+                    {isReturned && returnComment && (
+                      <div className="mt-2 text-xs font-medium text-foreground/90 bg-background/80 dark:bg-card border border-amber-500/20 rounded-md p-2 italic">
+                        &ldquo;{returnComment}&rdquo;
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 sm:self-center">
+                  <Button variant="outline" size="sm" onClick={() => setShowCommentBox(showCommentBox === 'return' ? null : 'return')}>
+                    <Undo2 className="size-3.5 mr-1" /> Return
+                  </Button>
+                  <Button variant="destructive" size="sm" onClick={() => setShowCommentBox(showCommentBox === 'reject' ? null : 'reject')}>
+                    <XCircle className="size-3.5 mr-1" /> Reject
+                  </Button>
+                  <Button size="sm" loading={approvalActionLoading} onClick={handleApproveRFQ}>
+                    <CheckCircle2 className="size-3.5 mr-1" /> Approve
+                  </Button>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => setShowCommentBox(showCommentBox === 'return' ? null : 'return')}>
-                  <Undo2 className="size-3.5 mr-1" /> Return
-                </Button>
-                <Button variant="destructive" size="sm" onClick={() => setShowCommentBox(showCommentBox === 'reject' ? null : 'reject')}>
-                  <XCircle className="size-3.5 mr-1" /> Reject
-                </Button>
-                <Button size="sm" loading={approvalActionLoading} onClick={handleApproveRFQ}>
-                  <CheckCircle2 className="size-3.5 mr-1" /> Approve
-                </Button>
-              </div>
-            </div>
             {showCommentBox && (
               <div className="mt-3 border-t border-amber-500/20 pt-3">
+                {showCommentBox === 'return' && (
+                  <div className="mb-2.5 flex flex-col gap-1">
+                    <label className="text-xs font-semibold text-foreground">Return to</label>
+                    {(pendingApproval?.levelNumber || 1) > 1 ? (
+                      <select
+                        className="h-8 w-full rounded-md border border-input bg-card px-2 text-xs font-medium focus:ring-1 focus:ring-primary"
+                        value={actionReturnTarget}
+                        onChange={(e) => setActionReturnTarget(e.target.value as any)}
+                      >
+                        <option value="ORIGINATOR">Originator (Creator)</option>
+                        <option value="LEVEL_1">Level 1 Approver</option>
+                      </select>
+                    ) : (
+                      <div className="flex h-8 items-center rounded-md border border-border/70 bg-muted/40 px-2 text-xs font-medium text-foreground">
+                        Originator (Creator)
+                      </div>
+                    )}
+                  </div>
+                )}
                 <textarea
                   className="w-full rounded-md border border-input bg-card p-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
                   rows={2}
@@ -763,7 +906,7 @@ export default function RFQDetailModal({
               </div>
             )}
           </Card>
-        )}
+        ); })()}
 
         {/* ── 3. COMPACT RFQ SUMMARY / METADATA CONTAINER ── */}
         <Card className="p-4 sm:p-5">
@@ -1802,13 +1945,13 @@ export default function RFQDetailModal({
                 </MessageStrip>
               )}
               <button type="button" className="rfq-modal__btn rfq-modal__btn--secondary" onClick={onClose}>{isPage ? 'Back to RFQs' : 'Close'}</button>
-              {enableSend && (rfq.status === 'DRAFT' || rfq.status === 'RETURNED' || (rfq.status === 'PENDING_APPROVAL' && String((rfq as any).createdBy || (rfq as any).creatorId || '') === String(user?.id || (user as any)?._id || ''))) && (
+              {canEditThisRFQ && (rfq.status === 'DRAFT' || rfq.status === 'RETURNED' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW' || rfq.status === 'PENDING_APPROVAL') && (
                 <button
                   type="button"
                   className="rfq-modal__btn rfq-modal__btn--primary"
                   onClick={() => navigate(`/rfq/edit/${rfq.id}`)}
                 >
-                  <FileText size={15} /> {rfq.status === 'RETURNED' ? 'Edit & Resubmit RFQ' : rfq.status === 'DRAFT' ? 'Edit Draft' : 'Edit RFQ'}
+                  <FileText size={15} /> {rfq.status === 'RETURNED' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW' ? 'Edit & Resubmit RFQ' : rfq.status === 'DRAFT' ? 'Edit Draft' : 'Edit RFQ'}
                 </button>
               )}
             </div>

@@ -51,7 +51,7 @@ import { signatureService } from '../../services/signatureService';
 import { apiRequest } from '../../api/client';
 import '../../components/shared/ColumnCustomizer.css';
 
-type PaymentStatus = 'COMPLETED' | 'PENDING' | 'PROCESSING' | 'FAILED' | 'CONFIRMED' | 'CANCELLED' | 'RETRIED' | 'RETURNED' | 'RE_REVIEW';
+type PaymentStatus = 'DRAFT' | 'COMPLETED' | 'PENDING' | 'PROCESSING' | 'FAILED' | 'CONFIRMED' | 'CANCELLED' | 'RETRIED' | 'RETURNED' | 'RE_REVIEW';
 type PaymentMethod = 'NEFT' | 'RTGS' | 'IMPS' | 'Cheque' | 'UPI';
 type ActionType = 'confirm' | 'cancel' | 'retry' | 'return';
 type Tone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
@@ -79,11 +79,12 @@ interface Payment {
 }
 
 const STATUS_CONFIG: Record<PaymentStatus, { label: string; tone: Tone; icon: typeof Clock }> = {
-  COMPLETED: { label: 'Completed', tone: 'success', icon: CheckCircle2 },
+  DRAFT: { label: 'Draft', tone: 'neutral', icon: Clock },
+  COMPLETED: { label: 'Approved', tone: 'success', icon: CheckCircle2 },
   PENDING: { label: 'Pending', tone: 'warning', icon: Clock },
   PROCESSING: { label: 'Processing', tone: 'info', icon: RefreshCw },
   FAILED: { label: 'Failed', tone: 'danger', icon: XCircle },
-  CONFIRMED: { label: 'Confirmed', tone: 'success', icon: CheckCircle2 },
+  CONFIRMED: { label: 'Approved', tone: 'success', icon: CheckCircle2 },
   CANCELLED: { label: 'Cancelled', tone: 'danger', icon: X },
   RETRIED: { label: 'Retried', tone: 'neutral', icon: RotateCcw },
   RETURNED: { label: 'Returned', tone: 'warning', icon: RotateCcw },
@@ -150,6 +151,7 @@ function resolvePaymentAttachments(paymentId?: string, invoiceRef?: string, rawA
 
 function mapPayment(payment: ServicePayment): Payment {
   const statusMap: Record<string, PaymentStatus> = {
+    DRAFT: 'DRAFT',
     COMPLETED: 'COMPLETED',
     SCHEDULED: 'PENDING',
     PENDING: 'PENDING',
@@ -159,8 +161,12 @@ function mapPayment(payment: ServicePayment): Payment {
     FAILED: 'FAILED',
     CANCELLED: 'CANCELLED',
     RETURNED: 'RETURNED',
+    RE_REVIEW: 'RE_REVIEW',
   };
   const atts = resolvePaymentAttachments(payment.paymentId, payment.invoiceRef, payment.attachments || (payment as any).attachments);
+  const rawStatus = String(payment.status || '').toUpperCase();
+  const resolvedStatus: PaymentStatus =
+    statusMap[rawStatus] || (rawStatus === 'DRAFT' ? 'DRAFT' : rawStatus === 'RETURNED' ? 'RETURNED' : 'PENDING');
 
   return {
     id: payment.id,
@@ -171,7 +177,7 @@ function mapPayment(payment: ServicePayment): Payment {
     amount: payment.amount,
     method: (payment.method as PaymentMethod) || 'NEFT',
     date: payment.paidAt,
-    status: statusMap[payment.status] || (payment.status === 'RETURNED' ? 'RETURNED' : 'PENDING'),
+    status: resolvedStatus,
     approvedBy: payment.approvedBy || '—',
     remarks: payment.remarks || '',
     attachments: atts.length > 0 ? atts : undefined,
@@ -210,8 +216,7 @@ export default function PaymentsPage() {
   const canApprovePayment =
     hasPermission('Payments', 'canApprove') ||
     hasPermission('Payments', 'canCreate') ||
-    hasPermission('Accounts Payable', 'canApprove') ||
-    isAdmin;
+    hasPermission('Accounts Payable', 'canApprove');
 
   const [paymentsList, setPaymentsList] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -222,13 +227,12 @@ export default function PaymentsPage() {
       setLoading(true);
       setError(null);
 
-      const [rawPayments, approvalRowsPay, approvalRowsAP] = await Promise.all([
+      const [rawPayments, approvalRowsPay] = await Promise.all([
         localDataService.getPayments().catch(() => []),
         approvalService.listTable({ module: 'Payments' }).catch(() => [] as any[]),
-        approvalService.listTable({ module: 'AccountsPayable' }).catch(() => [] as any[]),
       ]);
 
-      const approvalRows = [...approvalRowsPay, ...approvalRowsAP];
+      const approvalRows = approvalRowsPay;
       const normalize = (str?: string | number) =>
         String(str || '')
           .toLowerCase()
@@ -259,17 +263,29 @@ export default function PaymentsPage() {
 
       const mapped = rawPayments.map((p) => {
         const base = mapPayment(p);
+        if (base.status === 'DRAFT') {
+          return {
+            ...base,
+            status: 'DRAFT' as PaymentStatus,
+            currentLevel: 1,
+            totalLevels: 2,
+            requiredRole: 'Purchase Manager',
+            canAct: false,
+            hasApprovedPriorLevel: false,
+          };
+        }
+
         const pIdNorm = normalize(p.id);
         const payIdNorm = normalize(p.paymentId);
-        const invRefNorm = normalize(p.invoiceRef);
+        const pNumNorm = normalize((p as any).paymentNumber);
 
         let rows =
           approvalGroups.get(String(p.id)) ||
           (pIdNorm ? approvalGroups.get(pIdNorm) : undefined) ||
           approvalGroups.get(p.paymentId) ||
           (payIdNorm ? approvalGroups.get(payIdNorm) : undefined) ||
-          (p.invoiceRef ? approvalGroups.get(p.invoiceRef) : undefined) ||
-          (invRefNorm ? approvalGroups.get(invRefNorm) : undefined) ||
+          ((p as any).paymentNumber ? approvalGroups.get((p as any).paymentNumber) : undefined) ||
+          (pNumNorm ? approvalGroups.get(pNumNorm) : undefined) ||
           [];
 
         if (rows.length === 0) {
@@ -279,9 +295,9 @@ export default function PaymentsPage() {
             const aTitle = normalize(a.title);
 
             return (
-              (payIdNorm && (aNum === payIdNorm || aRef === payIdNorm || aTitle.includes(payIdNorm))) ||
-              (pIdNorm && (aNum === pIdNorm || aRef === pIdNorm)) ||
-              (invRefNorm && invRefNorm !== '—' && (aNum === invRefNorm || aRef === invRefNorm || aTitle.includes(invRefNorm)))
+              (payIdNorm && (aNum === payIdNorm || aRef === payIdNorm || (aTitle && aTitle.includes(payIdNorm)))) ||
+              (pNumNorm && (aNum === pNumNorm || aRef === pNumNorm || (aTitle && aTitle.includes(pNumNorm)))) ||
+              (pIdNorm && (aNum === pIdNorm || aRef === pIdNorm))
             );
           });
           if (matchByTitle) {
@@ -294,24 +310,42 @@ export default function PaymentsPage() {
         const returnedRow = rows.find((r) => r.status === 'RETURNED');
         const activeApp = pendingRow || rejectedRow || returnedRow || rows[rows.length - 1];
 
-        const hasApprovedPriorLevel = rows.some(
-          (r) => r.status === 'APPROVED' && isRoleMatching(r.requiredRole, authRoles)
-        );
+        // Has current user (or their role) approved a prior level, or is this payment already past level 1?
+        const hasApprovedPriorLevel =
+          rows.some((r) => r.status === 'APPROVED' && isRoleMatching(r.requiredRole, authRoles)) ||
+          (Boolean(pendingRow) && ((pendingRow.currentLevel || pendingRow.level?.levelNumber || 1) > 1) && isRoleMatching('Purchase Manager', authRoles));
 
         if (activeApp) {
-          const currentLevel = activeApp.currentLevel || (activeApp.level?.levelNumber) || 1;
+          const currentLevel = activeApp.currentLevel || (activeApp.level?.levelNumber) || (pendingRow ? 2 : 1);
           const totalLevels = activeApp.totalLevels || 2;
           const reqRole = activeApp.requiredRole && activeApp.requiredRole !== 'Approver'
             ? activeApp.requiredRole
             : currentLevel === 2
             ? 'Purchase Clerk'
             : 'Purchase Manager';
-          const isApproved = !pendingRow && !rejectedRow && !returnedRow && (activeApp.status === 'APPROVED' || rows.some((r) => r.status === 'APPROVED'));
-          const status = pendingRow ? 'PENDING' : rejectedRow ? 'CANCELLED' : returnedRow ? 'RETURNED' : isApproved ? 'CONFIRMED' : base.status;
 
           const canAct =
-            (status === 'PENDING' || status === 'RETURNED') &&
+            (activeApp.status === 'PENDING' || activeApp.status === 'RETURNED' || Boolean(pendingRow)) &&
             (activeApp.canAct !== undefined ? Boolean(activeApp.canAct) : isRoleMatching(reqRole, authRoles));
+
+          let status: PaymentStatus;
+          if (rejectedRow) {
+            status = 'CANCELLED';
+          } else if (returnedRow) {
+            status = 'RETURNED';
+          } else if (pendingRow || activeApp.status === 'PENDING') {
+            if (canAct || isAdmin) {
+              status = 'PENDING';
+            } else if (hasApprovedPriorLevel || currentLevel > 1) {
+              status = 'CONFIRMED';
+            } else {
+              status = 'PENDING';
+            }
+          } else if (activeApp.status === 'APPROVED' || rows.some((r) => r.status === 'APPROVED')) {
+            status = 'CONFIRMED';
+          } else {
+            status = base.status;
+          }
 
           return {
             ...base,
@@ -587,29 +621,35 @@ export default function PaymentsPage() {
         .filter((payment) => ['COMPLETED', 'CONFIRMED'].includes(payment.status))
         .reduce((sum, payment) => sum + payment.amount, 0),
       pending: payments.filter(
-        (payment) => payment.status === 'PENDING' && (isAdmin || payment.canAct || payment.hasApprovedPriorLevel)
+        (payment) => payment.status === 'PENDING'
       ).length,
       completed: payments.filter((payment) => ['COMPLETED', 'CONFIRMED'].includes(payment.status)).length,
       failed: payments.filter((payment) => ['FAILED', 'CANCELLED'].includes(payment.status)).length,
     }),
-    [payments, isAdmin]
+    [payments]
   );
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     return payments.filter((payment) => {
-      if (payment.status === 'PENDING' && !isAdmin && !payment.canAct && !payment.hasApprovedPriorLevel) {
-        return false;
-      }
+      const matchesStatus =
+        statusFilter === 'ALL' ||
+        payment.status === statusFilter ||
+        (statusFilter === 'COMPLETED' && ['COMPLETED', 'CONFIRMED'].includes(payment.status)) ||
+        (statusFilter === 'CONFIRMED' && ['COMPLETED', 'CONFIRMED'].includes(payment.status)) ||
+        (statusFilter === 'FAILED' && ['FAILED', 'CANCELLED'].includes(payment.status)) ||
+        (statusFilter === 'CANCELLED' && ['FAILED', 'CANCELLED'].includes(payment.status));
+
+      if (!matchesStatus) return false;
+
       return (
-        (statusFilter === 'ALL' || payment.status === statusFilter) &&
-        (!query ||
-          [payment.paymentNumber, payment.vendorName, payment.invoiceRef].some((field) =>
-            (field || '').toLowerCase().includes(query)
-          ))
+        !query ||
+        [payment.paymentNumber, payment.vendorName, payment.invoiceRef].some((field) =>
+          (field || '').toLowerCase().includes(query)
+        )
       );
     });
-  }, [payments, search, statusFilter, isAdmin]);
+  }, [payments, search, statusFilter]);
 
   const amount = (value: number) => formatAmount(value, companyDefaultCurrency);
   const formatDate = (date: string) =>
@@ -628,19 +668,27 @@ export default function PaymentsPage() {
     const isLevel1 = (target.currentLevel || 1) === 1;
     const isMultiLevel = (target.totalLevels || 2) > 1;
     const optimisticStatus: PaymentStatus = act === 'confirm'
-      ? (isLevel1 && isMultiLevel ? 'PENDING' : 'CONFIRMED')
+      ? 'CONFIRMED'
       : act === 'cancel' ? 'CANCELLED' : act === 'return' ? 'RETURNED' : 'RETRIED';
 
-    // ⚡ INSTANT 0ms Optimistic UI & Success Modal Trigger
+    const updatedPayment: Payment = {
+      ...target,
+      status: optimisticStatus,
+      currentLevel: isLevel1 && isMultiLevel ? 2 : target.currentLevel,
+      requiredRole: isLevel1 && isMultiLevel ? 'Purchase Clerk' : target.requiredRole,
+      canAct: false,
+      hasApprovedPriorLevel: true,
+      approvedBy: isLevel1 ? 'Purchase Manager' : 'Purchase Clerk',
+      comments: comment || target.comments,
+    };
+
+    // ⚡ INSTANT 0ms Optimistic UI in paymentsList, pendingActions & Success Modal
+    setPaymentsList((prev) =>
+      prev.map((p) => (p.id === target.id || (target.paymentNumber && p.paymentNumber === target.paymentNumber) ? updatedPayment : p))
+    );
     setPendingActions((current) => ({
       ...current,
-      [target.id]: {
-        ...target,
-        status: optimisticStatus,
-        currentLevel: isLevel1 && isMultiLevel ? 2 : target.currentLevel,
-        requiredRole: isLevel1 && isMultiLevel ? 'Purchase Clerk' : target.requiredRole,
-        comments: comment,
-      },
+      [target.id]: updatedPayment,
     }));
     setActionModal(null);
     setActionComment('');
@@ -724,9 +772,10 @@ export default function PaymentsPage() {
       if (!actionSucceeded) {
         try {
           const statusMap: Record<ActionType, string> = {
-            confirm: 'APPROVED',
+            confirm: isLevel1 && isMultiLevel ? 'PENDING_APPROVAL' : 'APPROVED',
             cancel: 'CANCELLED',
             retry: 'PENDING_APPROVAL',
+            return: 'RETURNED',
           };
           await apiRequest(`/payments/${target.paymentNumber || target.id}/status`, {
             method: 'PUT',
@@ -737,6 +786,7 @@ export default function PaymentsPage() {
         }
       }
 
+      await new Promise((r) => setTimeout(r, 200));
       window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
       await fetchPaymentsData();
       setPendingActions((current) => {
@@ -756,16 +806,24 @@ export default function PaymentsPage() {
       const isLevel1 = levelNum === 1;
       const isMultiLevel = (target.totalLevels || 2) > 1;
 
-      // ⚡ INSTANT 0ms Optimistic UI & Success Modal Trigger
+      const updatedPayment: Payment = {
+        ...target,
+        status: 'CONFIRMED',
+        currentLevel: isLevel1 && isMultiLevel ? 2 : target.currentLevel,
+        requiredRole: isLevel1 && isMultiLevel ? 'Purchase Clerk' : target.requiredRole,
+        canAct: false,
+        hasApprovedPriorLevel: true,
+        approvedBy: isLevel1 ? 'Purchase Manager' : 'Purchase Clerk',
+        comments: comment || target.comments,
+      };
+
+      // ⚡ INSTANT 0ms Optimistic UI in paymentsList, pendingActions & Success Modal
+      setPaymentsList((prev) =>
+        prev.map((p) => (p.id === target.id || (target.paymentNumber && p.paymentNumber === target.paymentNumber) ? updatedPayment : p))
+      );
       setPendingActions((current) => ({
         ...current,
-        [target.id]: {
-          ...target,
-          status: isLevel1 && isMultiLevel ? 'PENDING' : 'CONFIRMED',
-          currentLevel: isLevel1 && isMultiLevel ? 2 : target.currentLevel,
-          requiredRole: isLevel1 && isMultiLevel ? 'Purchase Clerk' : target.requiredRole,
-          comments: comment,
-        },
+        [target.id]: updatedPayment,
       }));
       setActionModal(null);
       setActionComment('');
@@ -866,7 +924,7 @@ export default function PaymentsPage() {
             try {
               await apiRequest(`/payments/${target.paymentNumber || target.id}/status`, {
                 method: 'PUT',
-                body: JSON.stringify({ status: 'APPROVED', comments: comment }),
+                body: JSON.stringify({ status: isLevel1 && isMultiLevel ? 'PENDING_APPROVAL' : 'APPROVED', comments: comment }),
               });
             } catch (statusErr) {
               console.error('Payment status update fallback after digital signature failed:', statusErr);
@@ -874,6 +932,7 @@ export default function PaymentsPage() {
           }
 
           await Promise.all(sigPromises);
+          await new Promise((r) => setTimeout(r, 200));
           window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
           await fetchPaymentsData();
         } catch (err) {
@@ -926,7 +985,7 @@ export default function PaymentsPage() {
       <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard {...cardProps('ALL')} label="Total paid" value={amount(summary.totalPaid)} detail="Completed payments" icon={Banknote} tone="success" />
         <MetricCard {...cardProps('PENDING')} label="Pending" value={summary.pending} detail="Awaiting confirmation" icon={Clock} tone="warning" />
-        <MetricCard {...cardProps('COMPLETED')} label="Completed" value={summary.completed} detail="Confirmed transactions" icon={CheckCircle2} />
+        <MetricCard {...cardProps('COMPLETED')} label="Approved" value={summary.completed} detail="Approved transactions" icon={CheckCircle2} />
         <MetricCard {...cardProps('FAILED')} label="Failed / cancelled" value={summary.failed} detail="Needs attention" icon={XCircle} tone="danger" />
       </div>
 
@@ -1133,7 +1192,7 @@ export default function PaymentsPage() {
                           >
                             <Printer className="size-4" />
                           </Button>
-                          {ACTIONABLE.includes(payment.status) && (payment.canAct || isAdmin || canApprovePayment) && (
+                          {ACTIONABLE.includes(payment.status) && payment.canAct && (
                             <>
                               <Button
                                 variant="ghost"
@@ -1184,7 +1243,7 @@ export default function PaymentsPage() {
                     <div className="mt-1 truncate text-sm font-medium">{payment.vendorName}</div>
                     <div className="mt-1 text-xs text-muted-foreground">{payment.invoiceRef}</div>
                   </div>
-                  <StatusBadge status={payment.status} />
+                  <StatusBadge status={payment.status} currentLevel={payment.currentLevel} />
                 </div>
                 <dl className="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-secondary/45 p-3 text-xs">
                   <div>
@@ -1237,7 +1296,7 @@ export default function PaymentsPage() {
                   <Button variant="ghost" size="sm" onClick={() => setSelectedPrintVoucher(payment)}>
                     <Printer /> Print
                   </Button>
-                  {ACTIONABLE.includes(payment.status) && (payment.canAct || isAdmin || canApprovePayment) && (
+                  {ACTIONABLE.includes(payment.status) && payment.canAct && (
                     <>
                       <Button size="sm" onClick={() => openAction(payment, 'confirm')}>
                         <ThumbsUp /> Confirm
@@ -1345,7 +1404,7 @@ export default function PaymentsPage() {
                 <DialogTitle className="text-xl font-bold tracking-tight text-foreground">
                   {detailPayment.paymentNumber}
                 </DialogTitle>
-                <StatusBadge status={detailPayment.status} />
+                <StatusBadge status={detailPayment.status} currentLevel={detailPayment.currentLevel} />
               </div>
               <DialogDescription className="text-sm font-medium text-muted-foreground">
                 {detailPayment.vendorName} · {amount(detailPayment.amount)}
@@ -1538,7 +1597,7 @@ export default function PaymentsPage() {
                 <Clock className="size-4" /> View Approval Chain
               </Button>
               <div className="flex flex-wrap items-center gap-2">
-                {ACTIONABLE.includes(detailPayment.status) && (detailPayment.canAct || isAdmin || canApprovePayment) && (
+                {ACTIONABLE.includes(detailPayment.status) && detailPayment.canAct && (
                   <>
                     <Button
                       variant="outline"

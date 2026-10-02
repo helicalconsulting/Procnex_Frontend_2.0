@@ -106,6 +106,7 @@ export default function RFQViewPage() {
         <RFQDetailModal
           rfq={rfq}
           variant="page"
+          enableSend={true}
           loading={loading}
           sending={sending}
           sendError={sendError}

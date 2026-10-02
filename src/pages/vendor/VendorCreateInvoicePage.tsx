@@ -25,6 +25,7 @@ import { Card } from '../../components/ui/card';
 import { Input, Select, Textarea } from '../../components/ui/input';
 import { PageFrame, PageLead } from '../../components/ui/product';
 import defaultHeliflowLogo from '../../assets/heliflow.png';
+import procnexLogo from '../../assets/procnex.png';
 import '../purchase-orders/CreatePurchaseOrderPage.css';
 import '../../components/purchase-orders/PurchaseOrderDocument.css';
 import '../../styles/vendor-portal.css';
@@ -116,7 +117,7 @@ export default function VendorCreateInvoicePage() {
     );
   }, [poList, selectedPoId]);
 
-  const finalLogoUrl = selectedPO?.companyLogoUrl || logoUrl || null;
+  const finalLogoUrl = selectedPO?.companyLogoUrl || logoUrl || '/Procnex-logo.jpeg' || procnexLogo || defaultHeliflowLogo;
 
   // Human-readable PO Number formatter (never display raw 24-hex Mongo ID)
   const displayPoNumber = useMemo(() => {
@@ -719,7 +720,7 @@ export default function VendorCreateInvoicePage() {
             </table>
           </div>
           <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-            <span role="status">{lineItems.length} {lineItems.length === 1 ? 'line item' : 'line items'}</span>
+            <span role="status">{lineItems.length} {lineItems.length === 1 ? 'item' : 'items'}</span>
             <span>Line totals include tax</span>
           </div>
         </Card>
@@ -968,13 +969,13 @@ export default function VendorCreateInvoicePage() {
           <table className="po-doc__items-table">
             <colgroup>
               <col style={{ width: '5%' }} />
-              <col style={{ width: '35%' }} />
-              <col style={{ width: '10%' }} />
-              <col style={{ width: '10%' }} />
-              <col style={{ width: '12%' }} />
-              <col style={{ width: '13%' }} />
-              <col style={{ width: '7%' }} />
+              <col style={{ width: '28%' }} />
+              <col style={{ width: '9%' }} />
+              <col style={{ width: '9%' }} />
+              <col style={{ width: '16%' }} />
               <col style={{ width: '8%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '17%' }} />
             </colgroup>
             <thead>
               <tr>
@@ -1053,16 +1054,6 @@ export default function VendorCreateInvoicePage() {
             <h4 className="po-doc__notes-heading">Payment Instructions</h4>
             <p className="po-doc__notes-text">Please remit payment as per agreed payment terms ({paymentTerms}).</p>
           </div>
-        </div>
-
-        {/* ── Footer ── */}
-        <div className="po-doc__footer">
-          <div className="po-doc__footer-divider" />
-          <p className="po-doc__footer-text">
-            {buyerName || companyName}
-            {companyPhone && <span> &nbsp;|&nbsp; Phone: {companyPhone}</span>}
-            {companyEmail && <span> &nbsp;|&nbsp; Email: {companyEmail}</span>}
-          </p>
         </div>
       </div>
     </PageFrame>

@@ -2,6 +2,8 @@ import React, { useRef } from 'react';
 import { Printer, X, ShoppingCart, CheckCircle2, ShieldCheck, Landmark, Building2, Clock } from 'lucide-react';
 import { useCurrency } from '../shared/CurrencyMaster';
 import { useBranding } from '../../context/BrandingContext';
+import defaultHeliflowLogo from '../../assets/heliflow.png';
+import procnexLogo from '../../assets/procnex.png';
 import './PrintPurchaseOrderModal.css';
 
 export interface PurchaseOrderPrintData {
@@ -32,10 +34,18 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
   const { companyName, logoUrl, profile } = useBranding();
   const printableRef = useRef<HTMLDivElement>(null);
 
-  const displayCompanyName = profile?.companyName || companyName || 'Company';
-  const companyAddress = profile?.companyAddress
-    ? [profile.companyAddress, profile.companyCity, profile.companyState, profile.companyCountry].filter(Boolean).join(', ')
-    : `${displayCompanyName} • Corporate Headquarters`;
+  const displayCompanyName = (data as any).companyName || profile?.companyName || companyName || 'Company';
+  const companyAddress = (data as any).companyAddress
+    ? (data as any).companyAddress
+    : profile?.companyAddress
+      ? [profile.companyAddress, profile.companyCity, profile.companyState, profile.companyCountry].filter(Boolean).join(', ')
+      : `${displayCompanyName} • Corporate Headquarters`;
+
+  const finalLogoUrl = (data as any).companyLogoUrl
+    || profile?.logoUrl
+    || logoUrl
+    || (displayCompanyName.toLowerCase().includes('procnex') ? ('/Procnex-logo.jpeg' || procnexLogo) : null)
+    || (displayCompanyName.toLowerCase().includes('helical') ? defaultHeliflowLogo : null);
 
   // Parse vendor name if embedded in title like "Purchase Order for Ajabu Consulting — Direct PO Master"
   const derivedVendorName = data.vendorName || (() => {
@@ -98,12 +108,22 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
           {/* Header */}
           <div className="ppo-sheet__header">
             <div className="ppo-sheet__company">
-              {logoUrl ? (
+              {finalLogoUrl ? (
                 <>
                   <img
-                    src={logoUrl}
+                    src={finalLogoUrl}
                     alt={displayCompanyName}
-                    style={{ maxHeight: 48, maxWidth: 200, objectFit: 'contain', marginBottom: 8, display: 'block' }}
+                    style={{ maxHeight: 48, maxWidth: 160, objectFit: 'contain', marginBottom: 8, display: 'block' }}
+                    onError={(e) => {
+                      const img = e.currentTarget as HTMLImageElement;
+                      if (displayCompanyName.toLowerCase().includes('procnex') && !img.src.includes('procnex')) {
+                        img.src = procnexLogo;
+                      } else if (displayCompanyName.toLowerCase().includes('helical') && !img.src.includes('heliflow')) {
+                        img.src = defaultHeliflowLogo;
+                      } else {
+                        img.style.display = 'none';
+                      }
+                    }}
                   />
                   <h2 style={{ fontSize: 19, margin: '4px 0 2px 0' }}>{displayCompanyName}</h2>
                 </>

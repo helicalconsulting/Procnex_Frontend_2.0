@@ -6,6 +6,7 @@ import { purchaseOrderService } from '../../services/purchaseOrderService';
 import { purchaseRequisitionService } from '../../services/purchaseRequisitionService';
 import { grnService, type GRNItemPayload } from '../../services/grnService';
 import { invoiceService } from '../../services/invoiceService';
+import { companySettingsService, type Warehouse } from '../../services/companySettingsService';
 import { apiRequest } from '../../api/client';
 import {
   ArrowLeft,
@@ -193,9 +194,44 @@ export default function CreateGRNPage() {
   const [selectedVendorInvoiceId, setSelectedVendorInvoiceId] = useState<string>('');
   const [receivedDate, setReceivedDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [warehouseLocation, setWarehouseLocation] = useState<string>('');
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [loadingWarehouses, setLoadingWarehouses] = useState<boolean>(false);
   const [notes, setNotes] = useState<string>('');
   const [currency] = useState<string>(companyDefaultCurrency);
   const [attachments, setAttachments] = useState<{ id: string; name: string; size: string }[]>([]);
+
+  // Load Warehouses from Company Settings
+  useEffect(() => {
+    setLoadingWarehouses(true);
+    companySettingsService
+      .listWarehouses()
+      .then((whs) => {
+        const activeWhs = whs.filter((w) => w.isActive !== false);
+        setWarehouses(activeWhs);
+        if (activeWhs.length > 0) {
+          const defWh = activeWhs.find((w) => w.isDefault) || activeWhs[0];
+          if (defWh && !warehouseLocation) {
+            setSelectedWarehouseId(defWh.id);
+            setWarehouseLocation(`${defWh.code} — ${defWh.name}`);
+          }
+        }
+      })
+      .catch((err) => console.warn('Failed to load company warehouses:', err))
+      .finally(() => setLoadingWarehouses(false));
+  }, []);
+
+  const handleWarehouseSelect = (whId: string) => {
+    setSelectedWarehouseId(whId);
+    if (whId === 'CUSTOM') {
+      return;
+    }
+    const wh = warehouses.find((w) => w.id === whId);
+    if (wh) {
+      const fullLoc = `${wh.code} — ${wh.name}`;
+      setWarehouseLocation(fullLoc);
+    }
+  };
 
   // Line items state
   const [lineItems, setLineItems] = useState<LineItemState[]>([]);
@@ -425,13 +461,26 @@ export default function CreateGRNPage() {
     }
 
     // Auto-fill warehouse location & dispatch note if available on selected PO
-    if (selectedPO.warehouseLocation || selectedPO.deliveryLocation || selectedPO.shippingAddress) {
-      setWarehouseLocation(selectedPO.warehouseLocation || selectedPO.deliveryLocation || selectedPO.shippingAddress || '');
+    const poWhLocation = selectedPO.warehouseLocation || selectedPO.deliveryLocation || selectedPO.shippingAddress;
+    if (poWhLocation) {
+      setWarehouseLocation(poWhLocation);
+      const matchedWh = warehouses.find(
+        (w) =>
+          w.id === poWhLocation ||
+          w.name.toLowerCase() === poWhLocation.toLowerCase() ||
+          w.code.toLowerCase() === poWhLocation.toLowerCase() ||
+          `${w.code} — ${w.name}`.toLowerCase() === poWhLocation.toLowerCase()
+      );
+      if (matchedWh) {
+        setSelectedWarehouseId(matchedWh.id);
+      } else {
+        setSelectedWarehouseId('CUSTOM');
+      }
     }
     if (selectedPO.dispatchNoteNumber || selectedPO.vendorDispatchNoteNumber || selectedPO.vendorInvoiceNumber) {
       setVendorDispatchNoteNumber(selectedPO.dispatchNoteNumber || selectedPO.vendorDispatchNoteNumber || selectedPO.vendorInvoiceNumber || '');
     }
-  }, [selectedPO]);
+  }, [selectedPO, warehouses]);
 
   // Pre-select PO ONLY if poId is in URL query params or router state
   useEffect(() => {
@@ -824,18 +873,55 @@ export default function CreateGRNPage() {
               />
             </div>
 
-            {/* Warehouse Location */}
+            {/* Warehouse Location - Linked to Company Settings */}
             <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                Store / Warehouse Location
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                <span>Store / Warehouse Location</span>
+                <span className="text-[11px] font-normal text-primary lowercase tracking-normal">
+                  (linked to company settings)
+                </span>
               </label>
-              <Input
-                type="text"
-                placeholder="e.g. Central Warehouse - Dock 1"
-                value={warehouseLocation}
-                onChange={(e) => setWarehouseLocation(e.target.value)}
-                className="text-sm bg-background"
-              />
+              <div className="space-y-2">
+                <select
+                  value={selectedWarehouseId}
+                  onChange={(e) => handleWarehouseSelect(e.target.value)}
+                  className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-medium"
+                >
+                  <option value="">-- Select Warehouse from Company Settings --</option>
+                  {warehouses.map((wh) => (
+                    <option key={wh.id} value={wh.id}>
+                      {wh.code} — {wh.name} {wh.city ? `(${wh.city})` : ''} {wh.isDefault ? '★ (Default Master)' : ''}
+                    </option>
+                  ))}
+                  <option value="CUSTOM">✏️ Custom / Specific Store Location...</option>
+                </select>
+
+                {(selectedWarehouseId === 'CUSTOM' || (!selectedWarehouseId && warehouseLocation)) && (
+                  <Input
+                    type="text"
+                    placeholder="e.g. Central Warehouse - Dock 1"
+                    value={warehouseLocation}
+                    onChange={(e) => setWarehouseLocation(e.target.value)}
+                    className="text-sm bg-background mt-2"
+                  />
+                )}
+
+                {selectedWarehouseId && selectedWarehouseId !== 'CUSTOM' && (() => {
+                  const wh = warehouses.find((w) => w.id === selectedWarehouseId);
+                  if (!wh) return null;
+                  const fullAddress = [wh.address, wh.city, wh.country].filter(Boolean).join(', ');
+                  return (
+                    <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 px-2.5 py-1.5 bg-muted/40 rounded-lg border border-border/50">
+                      <span className="inline-flex items-center gap-1 font-medium text-foreground">
+                        <Building2 className="size-3.5 text-primary" /> {wh.code} — {wh.name}
+                      </span>
+                      {fullAddress && <span>📍 {fullAddress}</span>}
+                      {wh.contactPerson && <span>👤 Contact: {wh.contactPerson}</span>}
+                      {wh.phone && <span>📞 {wh.phone}</span>}
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
           </div>
 

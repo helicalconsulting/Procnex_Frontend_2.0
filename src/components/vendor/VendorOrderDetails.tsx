@@ -92,7 +92,7 @@ export function VendorOrderDetails({ order, currency, onCurrencyChange, onBack, 
             <div><dt>Buyer / Company</dt><dd>{order.buyerCompany || order.buyerName || '—'}</dd></div>
             <div><dt>RFQ Number</dt><dd className="font-mono">{order.rfqNumber || '—'}</dd></div>
             <div><dt>Order Date</dt><dd>{quoteDate(order.orderDate)}</dd></div>
-            <div><dt>Total Items</dt><dd>{order.items.length} {order.items.length === 1 ? 'line item' : 'line items'}</dd></div>
+            <div><dt>Total Items</dt><dd>{order.items.length} {order.items.length === 1 ? 'item' : 'items'}</dd></div>
             <div><dt>Order currency</dt><dd><CurrencyBadge currency={sourceCurrency} size="sm" /></dd></div>
             {order.trackingId && <div><dt>Tracking reference</dt><dd>{order.trackingId}</dd></div>}
           </dl>

@@ -75,9 +75,9 @@ export function mapApiRfqToTableRow(rfq: Record<string, unknown>): RFQTableRow {
   });
 
   const rawStatus = String(rfq.status || '');
-  const isDocReturned = rawStatus === 'RETURNED' || rawStatus === 'RE_REVIEW' || rawStatus === 'RETURN_FOR_RE_REVIEW' || rawStatus === 'RETURNED_TO_ORIGINATOR' || Boolean(rfq.isReturnedByMe) || rfq.userAction === 'RETURNED';
-  const isDocRejected = rawStatus === 'REJECTED' || Boolean(rfq.isRejectedByMe) || rfq.userAction === 'REJECTED';
-  const isDocApproved = !isDocReturned && !isDocRejected && (rawStatus === 'APPROVED' || rawStatus === 'SENT' || rawStatus === 'ACCEPTED' || Boolean(rfq.isApprovedByMe) || rfq.userAction === 'APPROVED');
+  const isDocReturned = rawStatus === 'RETURNED' || rawStatus === 'RE_REVIEW' || rawStatus === 'RETURN_FOR_RE_REVIEW' || rawStatus === 'RETURNED_TO_ORIGINATOR';
+  const isDocRejected = rawStatus === 'REJECTED';
+  const isDocApproved = rawStatus === 'APPROVED' || rawStatus === 'SENT' || rawStatus === 'ACCEPTED';
 
   const finalStatus: RFQStatus = isDocReturned
     ? 'RETURNED'
@@ -93,13 +93,15 @@ export function mapApiRfqToTableRow(rfq: Record<string, unknown>): RFQTableRow {
     title: String(rfq.title),
     description: String(rfq.description || ''),
     status: finalStatus,
-    _isApprovedByMe: Boolean(isDocApproved && (rfq.isApprovedByMe || rfq.userAction === 'APPROVED')),
-    _isReturnedByMe: Boolean(isDocReturned),
-    _isRejectedByMe: Boolean(isDocRejected),
+    _isApprovedByMe: Boolean(rfq.isApprovedByMe || rfq.userAction === 'APPROVED'),
+    _isReturnedByMe: Boolean(rfq.isReturnedByMe || rfq.userAction === 'RETURNED'),
+    _isRejectedByMe: Boolean(rfq.isRejectedByMe || rfq.userAction === 'REJECTED'),
     canUserAct: Boolean(rfq.canUserAct),
     createdAt: String(rfq.createdAt).slice(0, 10),
     creator: creator?.fullName || 'Unknown',
     creatorInitials: initials(creator?.fullName),
+    createdBy: String(rfq.createdBy || creator?.id || ''),
+    creatorId: String(rfq.createdBy || creator?.id || ''),
     vendorCount: counts?.vendors ?? vendors.length,
     itemCount: counts?.items ?? items.length,
     totalEstimate: rfq.totalEstimate ? String(rfq.totalEstimate) : '—',

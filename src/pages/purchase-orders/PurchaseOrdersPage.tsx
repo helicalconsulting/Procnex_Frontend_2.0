@@ -153,7 +153,6 @@ export default function PurchaseOrdersPage() {
     hasPermission('PO', 'canCreate');
 
   const canApprovePO =
-    isAdmin ||
     hasPermission('PO Approvals', 'canApprove') ||
     hasPermission('PO Creation', 'canApprove') ||
     hasPermission('Purchase Orders', 'canApprove') ||
@@ -214,9 +213,12 @@ export default function PurchaseOrdersPage() {
   const [actionSuccessData, setActionSuccessData] = useState<ActionSuccessModalData | null>(null);
   const [chainModal, setChainModal] = useState<{ module: string; referenceId: string } | null>(null);
 
+  const [actionReturnTarget, setActionReturnTarget] = useState<'ORIGINATOR' | 'LEVEL_1'>('ORIGINATOR');
+
   const openAction = useCallback((order: MockPO, action: 'approve' | 'reject' | 'return') => {
     setActionModal({ order, action });
     setActionComment('');
+    setActionReturnTarget('ORIGINATOR');
   }, []);
 
   const handleAction = useCallback(async () => {
@@ -242,10 +244,10 @@ export default function PurchaseOrdersPage() {
       referenceNumber: targetOrder.poNumber,
       title: `Purchase Order ${targetOrder.poNumber}`,
       message: act === 'approve'
-        ? 'Purchase Order approved successfully.'
+        ? `Purchase Order ${targetOrder.poNumber} approved successfully.`
         : act === 'reject'
-        ? 'Purchase Order rejected successfully.'
-        : 'Purchase Order returned for revision successfully.',
+        ? `Purchase Order ${targetOrder.poNumber} rejected.`
+        : `Purchase Order ${targetOrder.poNumber} returned for revision.`,
       comment: comment,
       details: [
         { label: 'Vendor Name', value: targetOrder.vendorName },
@@ -283,16 +285,28 @@ export default function PurchaseOrdersPage() {
       }
 
       try {
+        let res: any;
         if (approvalId) {
           if (act === 'approve') {
-            await approvalService.approve(approvalId, comment);
+            res = await approvalService.approve(approvalId, comment);
           } else if (act === 'reject') {
-            await approvalService.reject(approvalId, comment);
+            res = await approvalService.reject(approvalId, comment);
           } else {
-            await approvalService.return(approvalId, comment, 'ORIGINATOR');
+            res = await approvalService.return(approvalId, comment, actionReturnTarget);
           }
         } else {
-          await purchaseOrderService.updateStatus(targetOrder.id, statusToSet, comment);
+          res = await purchaseOrderService.updateStatus(targetOrder.id, statusToSet, comment);
+        }
+
+        // Keep optimistic APPROVED status visible for the approver on their UI
+        setOptimisticOverrides((prev) => ({
+          ...prev,
+          [targetOrder.id]: statusToSet,
+          ...(targetOrder.poNumber ? { [targetOrder.poNumber]: statusToSet } : {}),
+        }));
+
+        if (res?.message) {
+          setActionSuccessData((prev) => (prev ? { ...prev, message: res.message } : null));
         }
 
         window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
@@ -300,10 +314,17 @@ export default function PurchaseOrdersPage() {
         forceRefresh().catch(() => {});
       } catch (err) {
         console.error('PO action failed in background:', err);
+        setOptimisticOverrides((prev) => {
+          const next = { ...prev };
+          delete next[targetOrder.id];
+          if (targetOrder.poNumber) delete next[targetOrder.poNumber];
+          return next;
+        });
+        setActionSuccessData(null);
         forceRefresh().catch(() => {});
       }
     })();
-  }, [actionModal, actionComment, forceRefresh, formatAmount, companyDefaultCurrency]);
+  }, [actionModal, actionComment, actionReturnTarget, forceRefresh, formatAmount, companyDefaultCurrency]);
 
   const handleSignatureConfirm = useCallback(
     async (signatureDataUrl: string, comment?: string) => {
@@ -372,19 +393,39 @@ export default function PurchaseOrdersPage() {
             comments: comment,
           }).catch((sigErr) => console.warn('Digital signature recording warning:', sigErr));
 
-          let approvePromise;
+          let approvePromise: Promise<any>;
           if (approvalId) {
             approvePromise = approvalService.approve(approvalId, comment);
           } else {
             approvePromise = purchaseOrderService.updateStatus(targetOrder.id, 'APPROVED', comment);
           }
 
-          await Promise.all([signPromise, approvePromise]);
+          const [, approveRes] = await Promise.all([signPromise, approvePromise]);
+
+          if (approveRes?.nextLevel) {
+            setOptimisticOverrides((prev) => ({
+              ...prev,
+              [targetOrder.id]: 'PENDING_APPROVAL',
+              ...(targetOrder.poNumber ? { [targetOrder.poNumber]: 'PENDING_APPROVAL' } : {}),
+            }));
+          }
+
+          if (approveRes?.message) {
+            setActionSuccessData((prev) => (prev ? { ...prev, message: approveRes.message } : null));
+          }
+
           window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
           window.dispatchEvent(new CustomEvent('heliflow:po-updated'));
           forceRefresh().catch(() => {});
         } catch (err) {
           console.error('Background PO approval sync error:', err);
+          setOptimisticOverrides((prev) => {
+            const next = { ...prev };
+            delete next[targetOrder.id];
+            if (targetOrder.poNumber) delete next[targetOrder.poNumber];
+            return next;
+          });
+          setActionSuccessData(null);
           forceRefresh().catch(() => {});
         }
       })();
@@ -797,7 +838,7 @@ export default function PurchaseOrdersPage() {
                             >
                               <Eye className="size-4" />
                             </Button>
-                            {['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW'].includes(order.status) && (canApprovePO || canCreatePO) && (
+                            {['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW'].includes(order.status) && canApprovePO && (
                               <>
                                 <Button
                                   variant="ghost"
@@ -901,7 +942,7 @@ export default function PurchaseOrdersPage() {
                       <Download /> PDF
                     </Button>
                   </div>
-                  {['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW'].includes(order.status) && (canApprovePO || canCreatePO) && (
+                  {['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW'].includes(order.status) && canApprovePO && (
                     <div className="flex gap-1">
                       <Button size="sm" onClick={() => openAction(order, 'approve')}>
                         <ThumbsUp /> Approve
@@ -1124,7 +1165,7 @@ export default function PurchaseOrdersPage() {
                 <Clock className="size-4" /> View Approval Chain
               </Button>
               <div className="flex flex-wrap items-center gap-2">
-                {['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW'].includes(detailPO.status) && (canApprovePO || canCreatePO) && (
+                {['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW'].includes(detailPO.status) && canApprovePO && (
                   <>
                     <Button
                       variant="outline"
@@ -1176,68 +1217,117 @@ export default function PurchaseOrdersPage() {
       </Dialog>
 
       {/* Action Dialog */}
-      {actionModal && actionModal.action === 'approve' ? (
-        <DigitalSignatureApprovalModal
-          open={!!actionModal}
-          onClose={() => setActionModal(null)}
-          onConfirm={handleSignatureConfirm}
-          docTitle={`Purchase Order ${actionModal.order.poNumber}`}
-          docDetails={[
-            { label: 'PO Number', value: actionModal.order.poNumber },
-            { label: 'Vendor Name', value: actionModal.order.vendorName },
-            { label: 'Total Amount', value: formatAmount(actionModal.order.totalAmountNum, companyDefaultCurrency) },
-            { label: 'Expected Delivery', value: formatDate(actionModal.order.expectedDelivery) },
-          ]}
-        />
-      ) : (
-        <Dialog open={!!actionModal} onOpenChange={(open) => { if (!open && !actionSaving) setActionModal(null); }}>
-          {actionModal && (
-            <DialogContent>
-              <DialogHeader>
-                <div
-                  className={cn(
-                    'mb-2 grid size-11 place-items-center rounded-xl',
-                    actionModal.action === 'reject' ? 'bg-destructive/10 text-destructive' : 'bg-amber-500/10 text-amber-600'
-                  )}
-                >
-                  {actionModal.action === 'reject' ? <ThumbsDown className="size-5" /> : <RotateCcw className="size-5" />}
-                </div>
-                <DialogTitle>
-                  {actionModal.action === 'reject' ? `Reject PO ${actionModal.order.poNumber}?` : `Return PO ${actionModal.order.poNumber}?`}
-                </DialogTitle>
-                <DialogDescription>
-                  {actionModal.action === 'reject'
-                    ? 'Rejecting this purchase order will decline the request.'
-                    : 'Returning this purchase order will send it back to the originator for revision.'}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-3 py-2">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Comments / Reason (Optional)
-                </label>
-                <Input
-                  placeholder="Enter comment or reason for this decision..."
-                  value={actionComment}
-                  onChange={(e) => setActionComment(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleAction(); }}
-                />
+      <Dialog open={!!actionModal} onOpenChange={(open) => { if (!open && !actionSaving) setActionModal(null); }}>
+        {actionModal && (
+          <DialogContent>
+            <DialogHeader>
+              <div
+                className={cn(
+                  'mb-2 grid size-11 place-items-center rounded-xl',
+                  actionModal.action === 'approve'
+                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                    : actionModal.action === 'reject'
+                    ? 'bg-destructive/10 text-destructive'
+                    : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                )}
+              >
+                {actionModal.action === 'approve' ? (
+                  <ThumbsUp className="size-5" />
+                ) : actionModal.action === 'reject' ? (
+                  <ThumbsDown className="size-5" />
+                ) : (
+                  <RotateCcw className="size-5" />
+                )}
               </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setActionModal(null)} disabled={actionSaving}>
-                  Cancel
-                </Button>
-                <Button
-                  variant={actionModal.action === 'reject' ? 'destructive' : 'default'}
-                  loading={actionSaving}
-                  onClick={handleAction}
+              <DialogTitle>
+                {actionModal.action === 'approve'
+                  ? `Approve Purchase Order ${actionModal.order.poNumber}?`
+                  : actionModal.action === 'reject'
+                  ? `Reject PO ${actionModal.order.poNumber}?`
+                  : `Return PO ${actionModal.order.poNumber}?`}
+              </DialogTitle>
+              <DialogDescription>
+                {actionModal.action === 'approve'
+                  ? 'Approving this purchase order will advance it through the approval workflow.'
+                  : actionModal.action === 'reject'
+                  ? 'Rejecting this purchase order will decline the request.'
+                  : 'Returning this purchase order will send it back for revision.'}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="rounded-xl border border-border/70 bg-muted/30 p-3 space-y-1.5 text-xs">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Vendor:</span>
+                <span className="font-semibold text-foreground">{actionModal.order.vendorName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Total Amount:</span>
+                <span className="font-semibold text-foreground">{formatAmount(actionModal.order.totalAmountNum, companyDefaultCurrency)}</span>
+              </div>
+              {actionModal.order.expectedDelivery && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Expected Delivery:</span>
+                  <span className="font-semibold text-foreground">{formatDate(actionModal.order.expectedDelivery)}</span>
+                </div>
+              )}
+            </div>
+
+            {actionModal.action === 'return' && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-foreground">Return to</label>
+                <select
+                  className="h-10 rounded-xl border border-input bg-background px-3 text-sm font-medium focus:ring-2 focus:ring-primary/20"
+                  value={actionReturnTarget}
+                  onChange={(e) => setActionReturnTarget(e.target.value as any)}
                 >
-                  Confirm {actionModal.action === 'reject' ? 'Rejection' : 'Return'}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          )}
-        </Dialog>
-      )}
+                  <option value="ORIGINATOR">Originator / Creator for Resubmission</option>
+                  <option value="LEVEL_1">Level 1 Approver</option>
+                </select>
+              </div>
+            )}
+
+            <div className="space-y-2 py-1">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Comments / Reason {actionModal.action !== 'approve' && <span className="text-destructive">*</span>}
+              </label>
+              <Input
+                placeholder={
+                  actionModal.action === 'approve'
+                    ? 'Optional approval comments...'
+                    : 'Required comment explaining the decision...'
+                }
+                value={actionComment}
+                onChange={(e) => setActionComment(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAction(); }}
+              />
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setActionModal(null)} disabled={actionSaving}>
+                Cancel
+              </Button>
+              <Button
+                variant={
+                  actionModal.action === 'approve'
+                    ? 'default'
+                    : actionModal.action === 'reject'
+                    ? 'destructive'
+                    : 'default'
+                }
+                className={actionModal.action === 'approve' ? 'bg-emerald-600 hover:bg-emerald-700 text-white font-medium' : undefined}
+                loading={actionSaving}
+                onClick={handleAction}
+              >
+                {actionModal.action === 'approve'
+                  ? 'Confirm Approval'
+                  : actionModal.action === 'reject'
+                  ? 'Confirm Rejection'
+                  : 'Confirm Return'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        )}
+      </Dialog>
 
       {/* Delete Single Modal */}
       <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open && !deleting) setDeleteTarget(null); }}>

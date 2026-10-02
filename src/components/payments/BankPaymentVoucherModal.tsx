@@ -4,6 +4,8 @@ import { useCurrency } from '../shared/CurrencyMaster';
 import { useBranding } from '../../context/BrandingContext';
 import { signatureService } from '../../services/signatureService';
 import InvoiceDocumentViewerModal, { type DocumentAttachment } from '../invoices/InvoiceDocumentViewerModal';
+import procnexLogo from '../../assets/procnex.png';
+import defaultHeliflowLogo from '../../assets/heliflow.png';
 import './BankPaymentVoucherModal.css';
 
 export interface PaymentVoucherDocData {
@@ -39,6 +41,9 @@ export interface PaymentVoucherDocData {
   grossAmount: number;
   tdsAmount: number;
   netAmount: number;
+  companyName?: string;
+  companyLogoUrl?: string;
+  companyAddress?: string;
   currency?: string;
   matchStatus?: 'MATCHED' | 'DISCREPANCY';
   discrepancyReason?: string;
@@ -62,13 +67,22 @@ interface BankPaymentVoucherModalProps {
 
 export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVoucherModalProps) {
   const { formatAmount } = useCurrency();
-  const { companyName, logoUrl, profile } = useBranding();
+  const { companyName: brandingCompanyName, logoUrl, profile } = useBranding();
   const printableRef = useRef<HTMLDivElement>(null);
 
-  const displayCompanyName = profile?.companyName || companyName || 'Company';
-  const companyAddress = profile?.companyAddress
-    ? [profile.companyAddress, profile.companyCity, profile.companyState, profile.companyCountry].filter(Boolean).join(', ')
-    : `${displayCompanyName} • Corporate Finance & Treasury Division`;
+  const displayCompanyName = data.companyName || profile?.companyName || brandingCompanyName || 'Company';
+  const companyAddress = data.companyAddress
+    ? data.companyAddress
+    : profile?.companyAddress
+      ? [profile.companyAddress, profile.companyCity, profile.companyState, profile.companyCountry].filter(Boolean).join(', ')
+      : `${displayCompanyName} • Corporate Finance & Treasury Division`;
+
+  // Dynamically resolve company logo: 1. data override -> 2. Company Profile logo -> 3. Tenant Branding logo -> 4. Known Company Fallback
+  const finalLogoUrl = data.companyLogoUrl
+    || profile?.logoUrl
+    || logoUrl
+    || (displayCompanyName.toLowerCase().includes('procnex') ? ('/Procnex-logo.jpeg' || procnexLogo) : null)
+    || (displayCompanyName.toLowerCase().includes('helical') ? defaultHeliflowLogo : null);
 
   const currency = data.currency || 'INR';
   const isMatched = data.matchStatus !== 'DISCREPANCY';
@@ -301,13 +315,23 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
           {/* Header */}
           <div className="bpv-sheet__header">
             <div className="bpv-sheet__company">
-              {logoUrl ? (
+              {finalLogoUrl ? (
                 <>
                   <img
-                    src={logoUrl}
+                    src={finalLogoUrl}
                     alt={displayCompanyName}
                     className="bpv-sheet__company-logo"
-                    style={{ maxHeight: 50, maxWidth: 220, objectFit: 'contain', marginBottom: 6, display: 'block' }}
+                    style={{ maxHeight: 48, maxWidth: 200, objectFit: 'contain', marginBottom: 6, display: 'block' }}
+                    onError={(e) => {
+                      const img = e.currentTarget as HTMLImageElement;
+                      if (displayCompanyName.toLowerCase().includes('procnex') && !img.src.includes('procnex')) {
+                        img.src = procnexLogo;
+                      } else if (displayCompanyName.toLowerCase().includes('helical') && !img.src.includes('heliflow')) {
+                        img.src = defaultHeliflowLogo;
+                      } else {
+                        img.style.display = 'none';
+                      }
+                    }}
                   />
                   <h2>{displayCompanyName}</h2>
                 </>

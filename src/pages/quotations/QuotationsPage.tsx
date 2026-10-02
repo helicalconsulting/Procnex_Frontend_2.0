@@ -37,6 +37,7 @@ import ContractTemplateSelectModal from '../../components/contracts/ContractTemp
 import type { EvalCategory } from '../../types/rfqEvaluation';
 import type { RFQEvaluationData } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { authService } from '../../services/authService';
 import { isL2OrHigherUser } from '../../utils/rbac';
 import { CreatorLevelPromptModal } from '../../components/shared/CreatorLevelPromptModal';
 import { Button } from '../../components/ui/button';
@@ -2224,16 +2225,34 @@ function ActionModalInner({
   useDialogFocus(dialogRef, true, onClose);
   const [comment, setComment] = useState('');
   const { type, quotation: q } = modal;
-  const isOriginatorStart = (q as any).rfqApprovalStartPoint === 'ORIGINATOR' || (q as any).rfq?.rfqApprovalStartPoint === 'ORIGINATOR';
-  const [returnTarget, setReturnTarget] = useState<'LEVEL_1' | 'VENDOR'>(
-    isOriginatorStart ? 'VENDOR' : 'LEVEL_1'
+  const { user: authUser, roles: authRoles } = useAuth();
+  const cached = authService.getCachedSession();
+  const user = authUser || cached?.user;
+  const rolesList: string[] = (
+    Array.isArray(authRoles) && authRoles.length > 0
+      ? authRoles
+      : Array.isArray(cached?.roles) && cached.roles.length > 0
+      ? cached.roles
+      : []
   );
 
+  // Quotation is at Level 2+ review (already approved by Level 1 / Approver 1, currently Under Review)
+  const isLevel2PlusReview =
+    q.status === 'UNDER_REVIEW' ||
+    Number((q as any).currentLevelNumber || (q as any).currentLevel || 0) > 1 ||
+    Boolean((q as any).userAction === 'APPROVED_L1');
+
+  // Approver 1 / Single-level Review (SUBMITTED): Hide Level 1 return option; default and sole destination is Return to Vendor.
+  // Approver 2 (Level 2+ / UNDER_REVIEW): Show BOTH options:
+  // 1) Return to Vendor for Resubmission (selected by default)
+  // 2) Return to Level 1 Approver
+  const canReturnToLevel1 = Boolean(isLevel2PlusReview);
+
+  const [returnTarget, setReturnTarget] = useState<'LEVEL_1' | 'VENDOR'>('VENDOR');
+
   useEffect(() => {
-    if (isOriginatorStart) {
-      setReturnTarget('VENDOR');
-    }
-  }, [isOriginatorStart]);
+    setReturnTarget('VENDOR');
+  }, [canReturnToLevel1]);
 
   const { formatAmount } = useCurrency();
 
@@ -2413,27 +2432,13 @@ function ActionModalInner({
             </div>
           )}
 
-          {/* Return Target Selection — only show if not Originator mode */}
-          {type === 'return' && !isOriginatorStart && (
+          {/* Return Target Selection — only show if quotation is at Level 2+ and user can return to Level 1 */}
+          {type === 'return' && canReturnToLevel1 && (
             <div style={{ margin: '14px 0', padding: 12, background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 6 }}>
               <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--foreground)', display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 Return Destination
               </label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 14, color: 'var(--foreground)' }}>
-                  <input
-                    type="radio"
-                    name="returnTarget"
-                    value="LEVEL_1"
-                    checked={returnTarget === 'LEVEL_1'}
-                    onChange={() => setReturnTarget('LEVEL_1')}
-                    style={{ marginTop: 3, accentColor: 'var(--primary)' }}
-                  />
-                  <div>
-                    <div style={{ fontWeight: 600, color: 'var(--primary)' }}>Return to Level 1</div>
-                    <div style={{ fontSize: 12, color: 'var(--muted-foreground)', marginTop: 2 }}>Restart approval chain starting at Level 1 (Clerk review first)</div>
-                  </div>
-                </label>
                 <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 14, color: 'var(--foreground)' }}>
                   <input
                     type="radio"
@@ -2444,8 +2449,22 @@ function ActionModalInner({
                     style={{ marginTop: 3, accentColor: 'var(--primary)' }}
                   />
                   <div>
-                    <div style={{ fontWeight: 600, color: 'var(--foreground)' }}>Return to Vendor for Resubmission</div>
+                    <div style={{ fontWeight: 600, color: 'var(--primary)' }}>Return to Vendor for Resubmission</div>
                     <div style={{ fontSize: 12, color: 'var(--muted-foreground)', marginTop: 2 }}>Send feedback email & notification to Vendor so they can revise and resubmit</div>
+                  </div>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 14, color: 'var(--foreground)' }}>
+                  <input
+                    type="radio"
+                    name="returnTarget"
+                    value="LEVEL_1"
+                    checked={returnTarget === 'LEVEL_1'}
+                    onChange={() => setReturnTarget('LEVEL_1')}
+                    style={{ marginTop: 3, accentColor: 'var(--primary)' }}
+                  />
+                  <div>
+                    <div style={{ fontWeight: 600, color: 'var(--primary)' }}>Return to Level 1 Approver</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted-foreground)', marginTop: 2 }}>Restart approval chain starting at Level 1 (Clerk review first)</div>
                   </div>
                 </label>
               </div>

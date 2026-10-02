@@ -99,7 +99,9 @@ export default function VendorNotificationBell() {
       setUnreadCount((c) => Math.max(0, c - 1));
     }
     setOpen(false);
-    const targetUrl = getVendorNotificationTargetUrl(n.title, n.message || '', n.metadata?.rfqId);
+    const rfqId = n.metadata?.rfqId || n.metadata?.rfqNumber || (n.metadata as any)?.referenceId;
+    const companyCode = (n.metadata as any)?.companyCode;
+    const targetUrl = getVendorNotificationTargetUrl(n.title, n.message || '', rfqId, companyCode);
     navigate(targetUrl);
   };
 

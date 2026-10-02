@@ -20,7 +20,9 @@ import {
   Shield,
   ChevronDown,
   CheckCircle2,
+  RotateCcw,
 } from 'lucide-react';
+import { approvalService } from '../../services/approvalService';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyMaster';
 import { PageSkeleton, CardSkeleton } from '../../components/shared/Skeleton';
@@ -108,6 +110,17 @@ export default function CreateRFQPage() {
   const navigate = useNavigate();
   const { id: editId } = useParams<{ id: string }>();
   const isEditing = !!editId;
+  const { user, roles = [], hasPermission } = useAuth();
+  const isUserAdmin = Boolean(
+    roles.some((r) => typeof r === 'string' && ['super admin', 'administrator', 'admin'].includes(r.trim().toLowerCase())) ||
+    (user as any)?.roles?.some((r: any) => {
+      const name = typeof r === 'string' ? r : r?.roleName || r?.name || '';
+      return ['super admin', 'administrator', 'admin'].includes(name.trim().toLowerCase());
+    }) ||
+    (user as any)?.roleName?.toLowerCase()?.includes('admin') ||
+    String(user?.id) === '1'
+  );
+  const canCreateRFQ = isUserAdmin || hasPermission('RFQ Management', 'canCreate') || hasPermission('RFQ', 'canCreate');
   const [loadingRfq, setLoadingRfq] = useState(false);
   const { data: availableVendors, loading: vendorsLoading } = useServiceData(
     () =>
@@ -162,6 +175,8 @@ export default function CreateRFQPage() {
   const UNIT_OPTIONS = useMemo(() => unitOptions.length > 0 ? unitOptions : ['Pcs', 'Kg', 'Ltr', 'Mtr', 'Box', 'Set', 'Nos', 'Pair'], [unitOptions]);
 
   const [isEditLocked, setIsEditLocked] = useState(false);
+  const [currentRfq, setCurrentRfq] = useState<any>(null);
+  const [returnFeedback, setReturnFeedback] = useState<{ comment?: string; levelNumber?: number; approver?: string } | null>(null);
 
   // Load existing RFQ data when editing
   useEffect(() => {
@@ -172,14 +187,34 @@ export default function CreateRFQPage() {
       rfqService.getEvaluationCategories(editId).catch(() => null),
     ]).then(([rfq, evalCats]) => {
       if (!rfq) return;
+      setCurrentRfq(rfq);
 
       const currentUserId = String(user?.id || (user as any)?._id || '');
       const creatorId = String((rfq as any).createdBy || (rfq as any).creatorId || (rfq as any).creator?.id || '');
-      const isOriginator = creatorId ? creatorId === currentUserId : true;
+      const userFullName = (user?.fullName || (user as any)?.name || (user as any)?.username || '').trim().toLowerCase();
+      const rfqCreatorName = (rfq.creator || '').trim().toLowerCase();
+      const isOriginator = Boolean(
+        (creatorId && currentUserId && creatorId === currentUserId) ||
+        (rfqCreatorName && userFullName && (rfqCreatorName === userFullName || userFullName.includes(rfqCreatorName) || rfqCreatorName.includes(userFullName)))
+      );
 
-      if (rfq.status === 'PENDING_APPROVAL' && !isOriginator) {
+      if ((rfq.status === 'PENDING_APPROVAL' || rfq.status === 'RETURNED' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW') && !isOriginator && !isUserAdmin) {
         setIsEditLocked(true);
-        setSubmitError(`RFQ #${rfq.rfqNumber} is currently under approval workflow. Only the originator (${rfq.creator || 'Originator'}) can edit it.`);
+        setSubmitError(`RFQ #${rfq.rfqNumber} was created by ${rfq.creator || 'the originator'}. Only the creator or administrator can edit and resubmit it.`);
+      }
+
+      if (rfq.status === 'RETURNED' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW') {
+        approvalService.getChain('RFQ', String(rfq.id)).then((chain) => {
+          const retEntry = chain?.history?.slice().reverse().find((h: any) => h.status === 'RETURNED');
+          const comment = (rfq as any).returnComments || (rfq as any).returnReason || retEntry?.comments;
+          if (comment || retEntry) {
+            setReturnFeedback({
+              comment: comment || undefined,
+              levelNumber: retEntry?.levelNumber,
+              approver: retEntry?.approverName,
+            });
+          }
+        }).catch(() => {});
       }
 
       setTitle(rfq.title);
@@ -275,8 +310,6 @@ export default function CreateRFQPage() {
     });
   }, [editId]);
 
-  const { roles, hasPermission } = useAuth();
-  const canCreateRFQ = hasPermission('RFQ Management', 'canCreate') || hasPermission('RFQ', 'canCreate');
   const [savingDraft, setSavingDraft] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -770,6 +803,10 @@ export default function CreateRFQPage() {
         setSuccessMsg('RFQ saved as draft successfully!');
       }
       await rfqService.saveWeightagePreferences(simpleWeightages).catch(() => {});
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('heliflow:rfq-updated'));
+        window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
+      }
       setTimeout(() => navigate('/rfq'), 1200);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Failed to save RFQ');
@@ -814,6 +851,11 @@ export default function CreateRFQPage() {
         await saveEvalCategories(createdId);
       }
       await rfqService.saveWeightagePreferences(simpleWeightages).catch(() => {});
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('heliflow:rfq-updated'));
+        window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
+      }
 
       const rfqStatus = rfqResult?.status;
       const rfqNum = rfqResult?.rfqNumber || payload.rfqNumber || 'RFQ';
@@ -873,29 +915,73 @@ export default function CreateRFQPage() {
       <div className="create-rfq__header">
         <button className="create-rfq__back" onClick={() => navigate('/rfq')}>
           <ArrowLeft size={18} />
-        </button>          <div className="create-rfq__header-text">
-            <h1>{isEditing ? 'Edit RFQ' : 'Create New RFQ'}</h1>
-            <p>{isEditing ? 'Update the RFQ details, items, or vendors' : 'Fill in the details to create a new Request for Quotation'}</p>
-          </div>
+        </button>
+        <div className="create-rfq__header-text">
+          <h1>{isEditing ? (currentRfq?.status === 'RETURNED' || currentRfq?.status === 'RE_REVIEW' || currentRfq?.status === 'RETURN_FOR_RE_REVIEW' ? 'Edit & Resubmit RFQ' : 'Edit RFQ') : 'Create New RFQ'}</h1>
+          <p>{isEditing ? (currentRfq?.status === 'RETURNED' || currentRfq?.status === 'RE_REVIEW' || currentRfq?.status === 'RETURN_FOR_RE_REVIEW' ? 'Review feedback, update the RFQ details or items, and resubmit for approval' : 'Update the RFQ details, items, or vendors') : 'Fill in the details to create a new Request for Quotation'}</p>
+        </div>
 
-          {/* ── Mode Toggle ── */}
-          <div className="create-rfq__mode-tabs">
-            <button
-              className={`create-rfq__mode-btn ${rfqMode === 'RFQ' ? 'create-rfq__mode-btn--active' : ''}`}
-              onClick={() => setRfqMode('RFQ')}
-            >
-              <FileText size={14} />
-              RFQ
-            </button>
-            <button
-              className={`create-rfq__mode-btn ${rfqMode === 'TENDER' ? 'create-rfq__mode-btn--active' : ''}`}
-              onClick={() => setRfqMode('TENDER')}
-            >
-              <Settings size={14} />
-              Tender
-            </button>
+        {/* ── Mode Toggle ── */}
+        <div className="create-rfq__mode-tabs">
+          <button
+            className={`create-rfq__mode-btn ${rfqMode === 'RFQ' ? 'create-rfq__mode-btn--active' : ''}`}
+            onClick={() => setRfqMode('RFQ')}
+          >
+            <FileText size={14} />
+            RFQ
+          </button>
+          <button
+            className={`create-rfq__mode-btn ${rfqMode === 'TENDER' ? 'create-rfq__mode-btn--active' : ''}`}
+            onClick={() => setRfqMode('TENDER')}
+          >
+            <Settings size={14} />
+            Tender
+          </button>
+        </div>
+      </div>
+
+      {/* ── Returned for Revision Warning Banner ── */}
+      {returnFeedback && (
+        <div style={{
+          margin: '0 0 16px',
+          padding: '14px 16px',
+          borderRadius: 8,
+          background: 'rgba(217, 119, 6, 0.08)',
+          border: '1px solid rgba(217, 119, 6, 0.3)',
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 12,
+        }}>
+          <RotateCcw size={20} style={{ color: '#d97706', marginTop: 2, flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#d97706', display: 'flex', alignItems: 'center', gap: 8 }}>
+              Returned for Revision
+              {returnFeedback.levelNumber && (
+                <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12, background: 'rgba(217, 119, 6, 0.15)', color: '#b45309' }}>
+                  Level {returnFeedback.levelNumber}
+                </span>
+              )}
+            </div>
+            <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary, #4b5563)' }}>
+              This RFQ was returned by {returnFeedback.approver ? <strong>{returnFeedback.approver}</strong> : 'the approver'}. Please make the necessary revisions below and click Submit to resubmit for approval.
+            </p>
+            {returnFeedback.comment && (
+              <div style={{
+                marginTop: 8,
+                padding: '8px 12px',
+                borderRadius: 6,
+                background: 'rgba(255, 255, 255, 0.7)',
+                border: '1px solid rgba(217, 119, 6, 0.2)',
+                fontSize: 13,
+                fontStyle: 'italic',
+                color: '#1f2937',
+              }}>
+                &ldquo;{returnFeedback.comment}&rdquo;
+              </div>
+            )}
           </div>
         </div>
+      )}
 
       {/* ── RFQ Details ──────────────────────────────────── */}
       <div className="create-rfq__card">

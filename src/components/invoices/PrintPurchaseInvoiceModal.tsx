@@ -5,6 +5,8 @@ import { useCurrency } from '../shared/CurrencyMaster';
 import { useBranding } from '../../context/BrandingContext';
 import { approvalService } from '../../services/approvalService';
 import { signatureService } from '../../services/signatureService';
+import procnexLogo from '../../assets/procnex.png';
+import defaultHeliflowLogo from '../../assets/heliflow.png';
 import './PrintPurchaseInvoiceModal.css';
 
 export interface PurchaseInvoicePrintData {
@@ -49,10 +51,18 @@ export default function PrintPurchaseInvoiceModal({ data: dataProp, invoice: inv
   const printableRef = useRef<HTMLDivElement>(null);
   const [approversList, setApproversList] = useState<any[]>(data.approvers || []);
 
-  const displayCompanyName = profile?.companyName || companyName || 'Company';
-  const companyAddress = profile?.companyAddress
-    ? [profile.companyAddress, profile.companyCity, profile.companyState, profile.companyCountry].filter(Boolean).join(', ')
-    : `${displayCompanyName} • Corporate Headquarters`;
+  const displayCompanyName = (data as any).companyName || profile?.companyName || companyName || 'Company';
+  const companyAddress = (data as any).companyAddress
+    ? (data as any).companyAddress
+    : profile?.companyAddress
+      ? [profile.companyAddress, profile.companyCity, profile.companyState, profile.companyCountry].filter(Boolean).join(', ')
+      : `${displayCompanyName} • Corporate Headquarters`;
+
+  const finalLogoUrl = (data as any).companyLogoUrl
+    || profile?.logoUrl
+    || logoUrl
+    || (displayCompanyName.toLowerCase().includes('procnex') ? ('/Procnex-logo.jpeg' || procnexLogo) : null)
+    || (displayCompanyName.toLowerCase().includes('helical') ? defaultHeliflowLogo : null);
 
   const fmtDate = (d: string) => {
     try {
@@ -241,12 +251,22 @@ export default function PrintPurchaseInvoiceModal({ data: dataProp, invoice: inv
           {/* Header */}
           <div className="ppi-sheet__header">
             <div className="ppi-sheet__company">
-              {logoUrl ? (
+              {finalLogoUrl ? (
                 <>
                   <img
-                    src={logoUrl}
+                    src={finalLogoUrl}
                     alt={displayCompanyName}
                     style={{ maxHeight: 48, maxWidth: 200, objectFit: 'contain', marginBottom: 8, display: 'block' }}
+                    onError={(e) => {
+                      const img = e.currentTarget as HTMLImageElement;
+                      if (displayCompanyName.toLowerCase().includes('procnex') && !img.src.includes('procnex')) {
+                        img.src = procnexLogo;
+                      } else if (displayCompanyName.toLowerCase().includes('helical') && !img.src.includes('heliflow')) {
+                        img.src = defaultHeliflowLogo;
+                      } else {
+                        img.style.display = 'none';
+                      }
+                    }}
                   />
                   <h2 style={{ fontSize: 19, margin: '4px 0 2px 0' }}>{displayCompanyName}</h2>
                 </>

@@ -1,6 +1,7 @@
 import { useBranding } from '../../context/BrandingContext';
 import type { PurchaseRequisition } from '../../services/purchaseRequisitionService';
 import defaultHeliflowLogo from '../../assets/heliflow.png';
+import procnexLogo from '../../assets/procnex.png';
 import './PurchaseOrderDocument.css';
 
 interface Props {
@@ -39,12 +40,12 @@ function ensurePONumber(poNumber: string | null | undefined): string {
 export default function PurchaseOrderDocument({ pr }: Props) {
   const { companyName: brandingCompanyName, companyPhone: brandingPhone, companyEmail: brandingEmail, logoUrl, profile } = useBranding();
 
-  const finalCompanyName = pr.companyName || profile?.companyName || brandingCompanyName || 'Company';
+  const finalCompanyName = pr.companyName || profile?.companyName || brandingCompanyName || 'Procnex';
   const companyAddress = profile?.companyAddress
     ? [profile.companyAddress, profile.companyCity, profile.companyState, profile.companyCountry].filter(Boolean).join(', ')
     : pr.companyAddress || `${finalCompanyName} • Corporate Headquarters`;
 
-  const finalLogoUrl = (pr as any).companyLogoUrl || logoUrl || null;
+  const finalLogoUrl = (pr as any).companyLogoUrl || logoUrl || '/Procnex-logo.jpeg' || procnexLogo || defaultHeliflowLogo;
 
   return (
     <div className="po-document">
@@ -52,22 +53,16 @@ export default function PurchaseOrderDocument({ pr }: Props) {
       <div className="po-doc__header">
         <div className="po-doc__header-left">
           {finalLogoUrl ? (
-            <img src={finalLogoUrl} alt={finalCompanyName} className="po-doc__logo" />
+            <img
+              src={finalLogoUrl}
+              alt={finalCompanyName}
+              className="po-doc__logo"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).src = procnexLogo || defaultHeliflowLogo;
+              }}
+            />
           ) : (
-            <div style={{
-              width: 42,
-              height: 42,
-              borderRadius: 8,
-              background: 'linear-gradient(135deg, #1e40af, #3b82f6)',
-              color: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: 700,
-              fontSize: 18,
-              marginRight: 12,
-              flexShrink: 0,
-            }}>
+            <div className="po-doc__logo-placeholder">
               {finalCompanyName.substring(0, 2).toUpperCase()}
             </div>
           )}
@@ -93,12 +88,24 @@ export default function PurchaseOrderDocument({ pr }: Props) {
             <span className="po-doc__title-label">PURCHASE ORDER</span>
             <span className="po-doc__title-po-num">{ensurePONumber(pr.poNumber)}</span>
           </div>
-          <table className="po-doc__meta-table">
-            <tbody>
-              <tr><td className="po-doc__meta-label">PO Date</td><td className="po-doc__meta-value">{formatDate(pr.poDate)}</td></tr>
-              <tr><td className="po-doc__meta-label">PO Number</td><td className="po-doc__meta-value">{ensurePONumber(pr.poNumber)}</td></tr>
-            </tbody>
-          </table>
+          <div className="po-doc__meta-grid">
+            <div className="po-doc__meta-row">
+              <span className="po-doc__meta-label">PO Date:</span>
+              <span className="po-doc__meta-value">{formatDate(pr.poDate)}</span>
+            </div>
+            {pr.quotationNumber && (
+              <div className="po-doc__meta-row">
+                <span className="po-doc__meta-label">Quotation Ref:</span>
+                <span className="po-doc__meta-value">{pr.quotationNumber}</span>
+              </div>
+            )}
+            {pr.requisitionNumber && (
+              <div className="po-doc__meta-row">
+                <span className="po-doc__meta-label">PR Number:</span>
+                <span className="po-doc__meta-value">{pr.requisitionNumber}</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -159,13 +166,13 @@ export default function PurchaseOrderDocument({ pr }: Props) {
         <table className="po-doc__items-table">
           <colgroup>
             <col style={{ width: '5%' }} />
-            <col style={{ width: '35%' }} />
+            <col style={{ width: '28%' }} />
             <col style={{ width: '10%' }} />
-            <col style={{ width: '10%' }} />
-            <col style={{ width: '15%' }} />
             <col style={{ width: '8%' }} />
-            <col style={{ width: '7%' }} />
-            <col style={{ width: '10%' }} />
+            <col style={{ width: '16%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '17%' }} />
           </colgroup>
           <thead>
             <tr>
@@ -270,17 +277,6 @@ export default function PurchaseOrderDocument({ pr }: Props) {
           <h4 className="po-doc__notes-heading">Special Instructions</h4>
           <p className="po-doc__notes-text">{val(pr.specialInstructions, 'No special instructions')}</p>
         </div>
-      </div>
-
-      {/* ── Footer ── */}
-      <div className="po-doc__footer">
-        <div className="po-doc__footer-divider" />
-        <p className="po-doc__footer-text">
-          {val(brandingCompanyName)}
-          <span> &nbsp;|&nbsp; Phone: {val(brandingPhone)}</span>
-          <span> &nbsp;|&nbsp; Email: {val(brandingEmail)}</span>
-          {pr.companyWebsite && <span> &nbsp;|&nbsp; {pr.companyWebsite}</span>}
-        </p>
       </div>
     </div>
   );

@@ -1685,36 +1685,61 @@
    Print Styles — Show ONLY the professional Purchase Order Document
    ═══════════════════════════════════════════════════════════ */
 
+@page {
+  size: A4 portrait;
+  margin: 0 !important;
+}
+
 @media print {
-  /* Hide all regular web UI elements (Sidebar, TopBar, forms, buttons) */
-  body * {
-    visibility: hidden !important;
-  }
-
-  /* Show only the PO print document area */
-  .po-print-area,
-  .po-print-area * {
-    visibility: visible !important;
-  }
-
-  .po-print-area {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
-    width: 100% !important;
-    height: auto !important;
-    opacity: 1 !important;
-    z-index: 99999 !important;
+  /* Suppress default browser header and footer (URLs, timestamps, tab title) */
+  html,
+  body {
+    margin: 0 !important;
     padding: 0 !important;
+    background: #ffffff !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* Hide all regular web UI elements from DOM layout flow so they don't generate extra blank pages */
+  .pr-page > *:not(.po-print-area),
+  .pr-toolbar,
+  .pr-page__body,
+  .pr-send-modal,
+  .pr-modal-backdrop,
+  .sidebar,
+  .topbar,
+  header,
+  aside,
+  nav,
+  footer {
+    display: none !important;
+  }
+
+  /* Display only the PO print document area in natural document flow */
+  .po-print-area {
+    display: block !important;
+    visibility: visible !important;
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    opacity: 1 !important;
+    padding: 12mm 15mm !important;
     margin: 0 !important;
     background: #ffffff !important;
     pointer-events: auto !important;
+    box-sizing: border-box !important;
+    z-index: auto !important;
+    overflow: visible !important;
   }
 
-  /* Page setup */
-  @page {
-    size: A4 portrait;
-    margin: 12mm 15mm;
+  .po-print-area * {
+    visibility: visible !important;
   }
 
   /* Ensure items table and boxes break properly on pages */

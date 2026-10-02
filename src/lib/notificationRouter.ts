@@ -61,7 +61,24 @@ export function getNotificationTargetUrl(
     return '/rfq';
   }
 
-  // 3. Purchase Orders & PO Approvals
+  // 3. Accounts Payable / Purchase Invoices & PI Approvals (Must be before PO because invoice notifications often mention PO references)
+  if (
+    lower.includes('purchase invoice') ||
+    lower.includes('invoice') ||
+    lower.includes('accounts payable') ||
+    piMatch
+  ) {
+    if (piMatch) return `/accounts-payable?search=${encodeURIComponent(piMatch[0])}`;
+    return '/accounts-payable';
+  }
+
+  // 4. Payment Vouchers & Payment Approvals
+  if (lower.includes('payment') || lower.includes('voucher') || payMatch) {
+    if (payMatch) return `/payments?search=${encodeURIComponent(payMatch[0])}`;
+    return '/payments';
+  }
+
+  // 5. Purchase Orders & PO Approvals
   if (lower.includes('purchase order') || lower.includes('po ') || poMatch) {
     if (
       lower.includes('approval') ||
@@ -76,7 +93,7 @@ export function getNotificationTargetUrl(
     return '/procurement/purchase-orders';
   }
 
-  // 4. Purchase Requisitions & PR Approvals
+  // 6. Purchase Requisitions & PR Approvals
   if (lower.includes('purchase requisition') || lower.includes('requisition') || prMatch) {
     if (
       lower.includes('approval') ||
@@ -89,41 +106,6 @@ export function getNotificationTargetUrl(
     }
     if (prMatch) return `/procurement/purchase-requisitions?search=${encodeURIComponent(prMatch[0])}`;
     return '/procurement/purchase-requisitions';
-  }
-
-  // 5. Accounts Payable / Purchase Invoices & PI Approvals
-  if (
-    lower.includes('purchase invoice') ||
-    lower.includes('invoice') ||
-    lower.includes('accounts payable') ||
-    piMatch
-  ) {
-    if (
-      lower.includes('approval') ||
-      lower.includes('approver') ||
-      lower.includes('level') ||
-      lower.includes('pending review')
-    ) {
-      if (piMatch) return `/approvals?search=${encodeURIComponent(piMatch[0])}`;
-      return '/approvals';
-    }
-    if (piMatch) return `/accounts-payable?search=${encodeURIComponent(piMatch[0])}`;
-    return '/accounts-payable';
-  }
-
-  // 6. Payment Vouchers & Payment Approvals
-  if (lower.includes('payment') || lower.includes('voucher') || payMatch) {
-    if (
-      lower.includes('approval') ||
-      lower.includes('approver') ||
-      lower.includes('level') ||
-      lower.includes('pending review')
-    ) {
-      if (payMatch) return `/approvals?search=${encodeURIComponent(payMatch[0])}`;
-      return '/approvals';
-    }
-    if (payMatch) return `/payments?search=${encodeURIComponent(payMatch[0])}`;
-    return '/payments';
   }
 
   // 7. Contracts & Digital Agreements
@@ -188,21 +170,68 @@ export function getVendorNotificationTargetUrl(
   const combined = `${title} ${message}`.toLowerCase();
   const base = companyCode ? `/v/${companyCode}` : '/vendor';
 
-  if (combined.includes('contract') || combined.includes('agreement') || combined.includes('sign')) {
+  // 1. RFQ Invitations & Requests for Quotation (Always routes to "My RFQs" so vendor can view details & submit quotation)
+  const isRfqInvitation =
+    Boolean(rfqId) ||
+    combined.includes('new rfq') ||
+    combined.includes('rfq invited') ||
+    combined.includes('rfq_invited') ||
+    combined.includes('invited to submit') ||
+    combined.includes('submit a quotation') ||
+    combined.includes('submit quotation') ||
+    combined.includes('submit your quotation') ||
+    combined.includes('request for quotation') ||
+    combined.includes('rfq invitation') ||
+    combined.includes('rfq-');
+
+  if (
+    isRfqInvitation &&
+    !combined.includes('quotation awarded') &&
+    !combined.includes('quotation approved') &&
+    !combined.includes('quotation rejected') &&
+    !combined.includes('quotation under review') &&
+    !combined.includes('quotation shortlisted')
+  ) {
+    if (rfqId) {
+      return `${base}/rfqs?rfq=${encodeURIComponent(rfqId)}`;
+    }
+    const rfqMatch = combined.match(/\brfq-[a-z0-9_-]+\b/i);
+    if (rfqMatch) {
+      return `${base}/rfqs?search=${encodeURIComponent(rfqMatch[0])}`;
+    }
+    return `${base}/rfqs`;
+  }
+
+  // 2. Contracts & Digital Agreements
+  if (combined.includes('contract') || combined.includes('agreement') || combined.includes('sign') || combined.includes('e-signature')) {
     return `${base}/contracts`;
   }
+
+  // 3. Invoices & Payments
   if (combined.includes('invoice') || combined.includes('payment') || combined.includes('voucher')) {
     return `${base}/invoices`;
   }
-  if (combined.includes('order') || combined.includes('po-')) {
+
+  // 4. Purchase Orders
+  if (combined.includes('purchase order') || combined.includes('po-') || combined.includes('order')) {
     return `${base}/orders`;
   }
-  if (combined.includes('quotation') || combined.includes('quote') || combined.includes('qtn-') || combined.includes('bid')) {
+
+  // 5. Existing Quotations (Awards, approvals, rejections, reviews, revisions)
+  if (
+    combined.includes('quotation') ||
+    combined.includes('quote') ||
+    combined.includes('qtn-') ||
+    combined.includes('bid')
+  ) {
     return `${base}/quotations`;
   }
+
+  // 6. Vendor Profile & Compliance
   if (combined.includes('profile') || combined.includes('bank') || combined.includes('document')) {
     return `${base}/profile`;
   }
+
   if (rfqId) {
     return `${base}/rfqs?rfq=${encodeURIComponent(rfqId)}`;
   }

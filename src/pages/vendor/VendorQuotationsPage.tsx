@@ -484,7 +484,7 @@ export default function VendorQuotationsPage() {
                       )}
                     </div>
                     <div className="text-sm font-medium text-muted-foreground truncate">
-                      {quot.rfqTitle} <span className="text-muted-foreground/50">·</span> {quot.items.length} {quot.items.length === 1 ? 'line item' : 'line items'} <span className="text-muted-foreground/50">·</span> Submitted {fmtDate(quot.submittedAt)}
+                      {quot.rfqTitle} <span className="text-muted-foreground/50">·</span> {quot.items.length} {quot.items.length === 1 ? 'item' : 'items'} <span className="text-muted-foreground/50">·</span> Submitted {fmtDate(quot.submittedAt)}
                     </div>
                   </div>
 
@@ -1055,7 +1055,7 @@ function ViewVendorQuotationModal({
                     </div>
                     <div className="flex items-center justify-between p-3.5 bg-muted/30 border-t border-border/60 text-xs font-semibold">
                       <span className="text-muted-foreground">
-                        {q.items.length} line items{q.status === 'ACCEPTED' && ` · ${q.items.filter(i => i.isSelected).length} selected by buyer`}
+                        {q.items.length} {q.items.length === 1 ? 'item' : 'items'}{q.status === 'ACCEPTED' && ` · ${q.items.filter(i => i.isSelected).length} selected by buyer`}
                       </span>
                       <span className="text-foreground text-sm font-bold">
                         Total: {formatAmount(convert(

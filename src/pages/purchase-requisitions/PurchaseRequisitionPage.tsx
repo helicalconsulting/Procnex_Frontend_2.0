@@ -19,7 +19,7 @@ import CustomPaymentPlanModal from '../../components/vendor/CustomPaymentPlanMod
 import '../../components/vendor/vendor-rfq-workspace.css';
 import { useBranding } from '../../context/BrandingContext';
 import PurchaseOrderDocument from '../../components/purchase-orders/PurchaseOrderDocument';
-import { toCanvas } from 'html-to-image';
+import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import { useAuth } from '../../context/AuthContext';
 import ActionSendingOverlay from '../../components/shared/ActionSendingOverlay';
@@ -632,17 +632,53 @@ export default function PurchaseRequisitionPage() {
     }
     setDownloadingPdf(true);
     try {
-      await new Promise(r => setTimeout(r, 150));
-      await document.fonts?.ready;
-
       const element = printAreaRef.current;
       if (!element) throw new Error('Print area not available');
 
-      const canvas = await toCanvas(element, {
-        quality: 1,
-        pixelRatio: 2,
-        cacheBust: true,
-        backgroundColor: '#ffffff',
+      // Temporarily bring element to (0, 0) behind viewport for high-quality DOM capture
+      const prevPosition = element.style.position;
+      const prevLeft = element.style.left;
+      const prevTop = element.style.top;
+      const prevZIndex = element.style.zIndex;
+      const prevOpacity = element.style.opacity;
+      const prevVisibility = element.style.visibility;
+      const prevPointerEvents = element.style.pointerEvents;
+
+      element.style.position = 'fixed';
+      element.style.left = '0px';
+      element.style.top = '0px';
+      element.style.zIndex = '-9999';
+      element.style.opacity = '1';
+      element.style.visibility = 'visible';
+      element.style.pointerEvents = 'none';
+
+      await document.fonts?.ready;
+      await new Promise(r => setTimeout(r, 120));
+
+      let imgData = '';
+      try {
+        imgData = await toPng(element, {
+          quality: 1,
+          pixelRatio: 2,
+          cacheBust: true,
+          backgroundColor: '#ffffff',
+        });
+      } finally {
+        // Guarantee original off-screen coordinates are restored
+        element.style.position = prevPosition;
+        element.style.left = prevLeft;
+        element.style.top = prevTop;
+        element.style.zIndex = prevZIndex;
+        element.style.opacity = prevOpacity;
+        element.style.visibility = prevVisibility;
+        element.style.pointerEvents = prevPointerEvents;
+      }
+
+      const img = new Image();
+      img.src = imgData;
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
       });
 
       const pdf = new jsPDF('p', 'mm', 'a4');
@@ -651,26 +687,25 @@ export default function PurchaseRequisitionPage() {
       const pageHeight = 297; // A4 height mm
       const contentWidth = pageWidth - margin * 2; // 190 mm
 
-      const imgData = canvas.toDataURL('image/png');
       const imgWidth = contentWidth;
-      let calculatedImgHeight = (canvas.height * imgWidth) / canvas.width;
+      let calculatedImgHeight = (img.naturalHeight * imgWidth) / img.naturalWidth;
       const usablePageHeight = pageHeight - margin * 2; // 277 mm
 
-      // If document height is slightly over single page usable height (up to 20%), scale height down to fit on 1 single page
-      if (calculatedImgHeight > usablePageHeight && calculatedImgHeight <= usablePageHeight * 1.20) {
-        calculatedImgHeight = usablePageHeight;
-      }
+      // If document height fits within single page (or is within 25% of single page), scale it to fit perfectly on 1 page
+      if (calculatedImgHeight <= usablePageHeight * 1.25) {
+        pdf.addImage(imgData, 'PNG', margin, margin, imgWidth, Math.min(calculatedImgHeight, usablePageHeight), undefined, 'FAST');
+      } else {
+        let remainingHeight = calculatedImgHeight;
+        let pageNum = 0;
 
-      let remainingHeight = calculatedImgHeight;
-      let pageNum = 0;
-
-      // 8mm threshold prevents accidental blank 2nd page caused by tiny margin/footer pixel overflow
-      while (remainingHeight > 8) {
-        if (pageNum > 0) pdf.addPage();
-        const yOffset = margin - pageNum * usablePageHeight;
-        pdf.addImage(imgData, 'PNG', margin, yOffset, imgWidth, calculatedImgHeight, undefined, 'FAST');
-        remainingHeight -= usablePageHeight;
-        pageNum++;
+        // 12mm threshold prevents accidental blank trailing page caused by margin/padding overflow
+        while (remainingHeight > 12) {
+          if (pageNum > 0) pdf.addPage();
+          const yOffset = margin - pageNum * usablePageHeight;
+          pdf.addImage(imgData, 'PNG', margin, yOffset, imgWidth, calculatedImgHeight, undefined, 'FAST');
+          remainingHeight -= usablePageHeight;
+          pageNum++;
+        }
       }
 
       const fileName = pr.poNumber || `PO-${Date.now()}`;
@@ -1606,7 +1641,7 @@ export default function PurchaseRequisitionPage() {
           zIndex: -9999,
           opacity: 1,
           pointerEvents: 'none',
-          padding: '40px 48px',
+          padding: '24px 32px',
         }}
       >
         {pr && <PurchaseOrderDocument pr={pr} />}

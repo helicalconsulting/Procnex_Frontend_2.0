@@ -10,6 +10,8 @@ export interface RFQTableRow {
   createdAt: string;
   creator: string;
   creatorInitials: string;
+  createdBy?: string;
+  creatorId?: string;
   vendorCount: number;
   itemCount: number;
   totalEstimate: string;

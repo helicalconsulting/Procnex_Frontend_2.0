@@ -11,7 +11,7 @@ import {
   Plus, Search, FileText, Eye, Trash2, Users, Building2,
   ArrowUpDown, ChevronLeft, ChevronRight, CalendarDays,
   ClipboardList, AlertTriangle, Clock, CheckCircle2,
-  X, XCircle, ThumbsUp, ThumbsDown, RotateCcw, MessageSquare, CheckSquare,
+  X, XCircle, ThumbsUp, ThumbsDown, RotateCcw, MessageSquare, CheckSquare, PenLine,
 } from 'lucide-react';
 import type { RFQStatus } from '../../types';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
@@ -99,12 +99,15 @@ const ALL_COLUMNS: ColumnDef[] = [
     label: 'Status',
     defaultVisible: true,
     render: (rfq) => {
-      const isReturnedByMe = (rfq as any)._isReturnedByMe || rfq.status === 'RETURNED' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW';
+      const isReturnedByMe = (rfq as any)._isReturnedByMe || rfq.status === 'RETURNED' || rfq.status === 'RETURN_FOR_RE_REVIEW';
+      const isReturnedForReReview = (rfq as any)._isReturnedForReReview || rfq.status === 'RE_REVIEW';
       const isRejectedByMe = (rfq as any)._isRejectedByMe || rfq.status === 'REJECTED';
       const isApprovedByMe = (rfq as any)._isApprovedByMe;
 
       let displayStatus: string = isReturnedByMe
         ? 'RETURNED'
+        : isReturnedForReReview
+        ? 'RE_REVIEW'
         : (isRejectedByMe || rfq.status === 'REJECTED')
         ? 'REJECTED'
         : (rfq.status === 'SENT' || rfq.status === 'IN_PROGRESS' || rfq.status === 'ACCEPTED' || rfq.status === 'APPROVED' || isApprovedByMe)
@@ -113,6 +116,8 @@ const ALL_COLUMNS: ColumnDef[] = [
 
       const label = displayStatus === 'RETURNED'
         ? 'Returned for Revision'
+        : displayStatus === 'RE_REVIEW'
+        ? 'Returned (Re-Review)'
         : (displayStatus === 'APPROVED' || displayStatus === 'SENT')
         ? 'Approved'
         : displayStatus === 'ACCEPTED'
@@ -248,8 +253,17 @@ function statusTone(status: string): 'neutral' | 'primary' | 'success' | 'warnin
 
 export default function RFQPage() {
   const navigate = useNavigate();
-  const { hasPermission } = useAuth();
-  const canCreateRFQ = hasPermission('RFQ Management', 'canCreate') || hasPermission('RFQ', 'canCreate');
+  const { user, roles = [], hasPermission } = useAuth();
+  const isUserAdmin = Boolean(
+    roles.some((r) => typeof r === 'string' && ['super admin', 'administrator', 'admin'].includes(r.trim().toLowerCase())) ||
+    (user as any)?.roles?.some((r: any) => {
+      const name = typeof r === 'string' ? r : r?.roleName || r?.name || '';
+      return ['super admin', 'administrator', 'admin'].includes(name.trim().toLowerCase());
+    }) ||
+    (user as any)?.roleName?.toLowerCase()?.includes('admin') ||
+    String(user?.id) === '1'
+  );
+  const canCreateRFQ = isUserAdmin || hasPermission('RFQ Management', 'canCreate') || hasPermission('RFQ', 'canCreate');
   const canApproveRFQ = hasPermission('RFQ Management', 'canApprove') || hasPermission('RFQ', 'canApprove') || canCreateRFQ;
 
   const [search, setSearch] = useState('');
@@ -261,7 +275,7 @@ export default function RFQPage() {
     () => rfqService.list({ limit: 100 }),
     [] as RFQTableRow[],
     [],
-    { cacheKey: 'rfqs:list' }
+    { cacheKey: 'rfqs:list', cacheTtlMs: 0 }
   );
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
@@ -277,15 +291,14 @@ export default function RFQPage() {
   // Approval Action State
   const [pendingApprovalsMap, setPendingApprovalsMap] = useState<Map<string, any>>(new Map());
   const [localStatusMap, setLocalStatusMap] = useState<Map<string, RFQStatus>>(new Map());
-  const [myApprovedMap, setMyApprovedMap] = useState<Set<string>>(new Set());
-  const [myReturnedMap, setMyReturnedMap] = useState<Set<string>>(new Set());
-  const [myRejectedMap, setMyRejectedMap] = useState<Set<string>>(new Set());
   const [approvalActionModal, setApprovalActionModal] = useState<{
     rfq: MockRFQ;
     action: 'approve' | 'reject' | 'return';
     approvalId: string;
+    levelNumber?: number;
   } | null>(null);
   const [approvalComment, setApprovalComment] = useState('');
+  const [approvalModalError, setApprovalModalError] = useState<string | null>(null);
   const [approvalActionLoading, setApprovalActionLoading] = useState(false);
   const [approvalActionMessage, setApprovalActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [actionReturnTarget, setActionReturnTarget] = useState<'ORIGINATOR' | 'LEVEL_1'>('ORIGINATOR');
@@ -293,12 +306,7 @@ export default function RFQPage() {
 
   const fetchPendingApprovals = useCallback(async () => {
     try {
-      const [pendingRows, approvedRows, returnedRows, rejectedRows] = await Promise.all([
-        approvalService.listTable({ module: 'RFQ', status: 'PENDING' }),
-        approvalService.listTable({ module: 'RFQ', status: 'APPROVED' }),
-        approvalService.listTable({ module: 'RFQ', status: 'RETURNED' }),
-        approvalService.listTable({ module: 'RFQ', status: 'REJECTED' }),
-      ]);
+      const pendingRows = await approvalService.listTable({ module: 'RFQ', status: 'PENDING' });
       const map = new Map<string, any>();
       pendingRows.forEach((r) => {
         if (r.referenceId) map.set(String(r.referenceId), r);
@@ -306,47 +314,8 @@ export default function RFQPage() {
         if (r.id) map.set(String(r.id), r);
       });
       setPendingApprovalsMap(map);
-
-      const aSet = new Set<string>();
-      approvedRows.forEach((r) => {
-        if (r.referenceId) aSet.add(String(r.referenceId));
-        if (r.referenceNumber) aSet.add(String(r.referenceNumber));
-        if (r.id) aSet.add(String(r.id));
-      });
-      setMyApprovedMap((prev) => {
-        const next = new Set(prev);
-        aSet.forEach((x) => next.add(x));
-        return next;
-      });
-
-      const rSet = new Set<string>();
-      returnedRows.forEach((r) => {
-        if (r.referenceId) rSet.add(String(r.referenceId));
-        if (r.referenceNumber) rSet.add(String(r.referenceNumber));
-        if (r.id) rSet.add(String(r.id));
-      });
-      setMyReturnedMap((prev) => {
-        const next = new Set(prev);
-        rSet.forEach((x) => next.add(x));
-        return next;
-      });
-
-      const rejSet = new Set<string>();
-      rejectedRows.forEach((r) => {
-        if (r.referenceId) rejSet.add(String(r.referenceId));
-        if (r.referenceNumber) rejSet.add(String(r.referenceNumber));
-        if (r.id) rejSet.add(String(r.id));
-      });
-      setMyRejectedMap((prev) => {
-        const next = new Set(prev);
-        rejSet.forEach((x) => next.add(x));
-        return next;
-      });
     } catch {
       setPendingApprovalsMap(new Map());
-      setMyApprovedMap(new Set());
-      setMyReturnedMap(new Set());
-      setMyRejectedMap(new Set());
     }
   }, []);
 
@@ -361,38 +330,49 @@ export default function RFQPage() {
     const unsubLevel = sseClient.on('approval_level_complete', handleRefresh);
     const unsubChain = sseClient.on('approval_chain_complete', handleRefresh);
     const unsubNotif = sseClient.on('notification', handleRefresh);
+    const unsubRfqStatus = sseClient.on('rfq_status_changed', handleRefresh);
 
     window.addEventListener('heliflow:approval-updated', handleRefresh);
+    window.addEventListener('heliflow:rfq-updated', handleRefresh);
 
     return () => {
       unsubLevel();
       unsubChain();
       unsubNotif();
+      unsubRfqStatus();
       window.removeEventListener('heliflow:approval-updated', handleRefresh);
+      window.removeEventListener('heliflow:rfq-updated', handleRefresh);
     };
-  }, [rfqList, fetchPendingApprovals, forceRefresh]);
+  }, [fetchPendingApprovals, forceRefresh]);
 
   const openApprovalAction = useCallback((rfq: MockRFQ, action: 'approve' | 'reject' | 'return') => {
     const found = pendingApprovalsMap.get(String(rfq.id)) || pendingApprovalsMap.get(rfq.rfqNumber);
     const approvalId = found ? found.id : String(rfq.id);
+    const levelNumber = found?.currentLevel || (found?.level as any)?.levelNumber || 1;
 
-    setApprovalActionModal({ rfq, action, approvalId });
+    setApprovalActionModal({ rfq, action, approvalId, levelNumber });
     setApprovalComment('');
+    setApprovalModalError(null);
     setActionReturnTarget('ORIGINATOR');
   }, [pendingApprovalsMap]);
 
-  const handleExecuteApprovalAction = useCallback(() => {
+  const handleExecuteApprovalAction = useCallback(async () => {
     if (!approvalActionModal) return;
     const { rfq, action, approvalId } = approvalActionModal;
     const comment = approvalComment.trim();
 
     if (action !== 'approve' && !comment) {
+      const errText = action === 'reject' ? 'Please enter a comment explaining the reason for rejection.' : 'Please enter a comment explaining the reason for return.';
+      setApprovalModalError(errText);
       setApprovalActionMessage({
         type: 'error',
-        text: action === 'reject' ? 'Please enter a comment explaining the reason for rejection.' : 'Please enter a comment explaining the reason for return.',
+        text: errText,
       });
       return;
     }
+
+    setApprovalActionLoading(true);
+    setApprovalModalError(null);
 
     const modalType = action === 'approve' ? 'approve' : action === 'reject' ? 'reject' : 'return';
     const defaultMsg = action === 'approve'
@@ -401,117 +381,91 @@ export default function RFQPage() {
       ? `RFQ #${rfq.rfqNumber} Rejected.`
       : `RFQ #${rfq.rfqNumber} Returned for revision.`;
 
-    setActionSuccessData({
-      actionType: modalType,
-      module: 'RFQ',
-      referenceNumber: rfq.rfqNumber,
-      title: rfq.title,
-      message: defaultMsg,
-      comment: comment || undefined,
-      details: [
-        { label: 'Created By', value: rfq.creator },
-        { label: 'Department', value: rfq.department || 'Procurement' },
-      ],
-    });
+    try {
+      const res = action === 'approve'
+        ? await approvalService.approve(approvalId, comment)
+        : action === 'reject'
+        ? await approvalService.reject(approvalId, comment)
+        : await approvalService.return(approvalId, comment, actionReturnTarget);
 
-    setApprovalActionModal(null);
-    setApprovalComment('');
-    setApprovalActionLoading(false);
-
-    // ⚡ INSTANT Optimistic State Updates in local maps (0ms latency!)
-    const optimisticStatus: RFQStatus = action === 'approve' ? 'APPROVED' : action === 'reject' ? 'REJECTED' : 'RETURNED';
-    setLocalStatusMap((prev) => {
-      const next = new Map(prev);
-      next.set(String(rfq.id), optimisticStatus);
-      if (rfq.rfqNumber) next.set(rfq.rfqNumber, optimisticStatus);
-      if (approvalId) next.set(approvalId, optimisticStatus);
-      return next;
-    });
-
-    setPendingApprovalsMap((prev) => {
-      const next = new Map(prev);
-      next.delete(String(rfq.id));
-      if (rfq.rfqNumber) next.delete(rfq.rfqNumber);
-      next.delete(approvalId);
-      return next;
-    });
-
-    if (action === 'approve') {
-      setMyApprovedMap((prev) => {
-        const next = new Set(prev);
-        next.add(String(rfq.id));
-        if (rfq.rfqNumber) next.add(rfq.rfqNumber);
+      // ⚡ INSTANT Optimistic State Updates in local maps
+      const optimisticStatus: RFQStatus = action === 'approve' ? 'APPROVED' : action === 'reject' ? 'REJECTED' : 'RETURNED';
+      setLocalStatusMap((prev) => {
+        const next = new Map(prev);
+        next.set(String(rfq.id), optimisticStatus);
+        if (rfq.rfqNumber) next.set(rfq.rfqNumber, optimisticStatus);
+        if (approvalId) next.set(approvalId, optimisticStatus);
         return next;
       });
-    } else if (action === 'return') {
-      setMyReturnedMap((prev) => {
-        const next = new Set(prev);
-        next.add(String(rfq.id));
-        if (rfq.rfqNumber) next.add(rfq.rfqNumber);
+
+      setPendingApprovalsMap((prev) => {
+        const next = new Map(prev);
+        next.delete(String(rfq.id));
+        if (rfq.rfqNumber) next.delete(rfq.rfqNumber);
+        next.delete(approvalId);
         return next;
       });
-    } else if (action === 'reject') {
-      setMyRejectedMap((prev) => {
-        const next = new Set(prev);
-        next.add(String(rfq.id));
-        if (rfq.rfqNumber) next.add(rfq.rfqNumber);
-        return next;
+
+      setActionSuccessData({
+        actionType: modalType,
+        module: 'RFQ',
+        referenceNumber: rfq.rfqNumber,
+        title: rfq.title,
+        message: res?.message || defaultMsg,
+        comment: comment || undefined,
+        details: [
+          { label: 'Created By', value: rfq.creator },
+          { label: 'Department', value: rfq.department || 'Procurement' },
+        ],
       });
+
+      setApprovalActionModal(null);
+      setApprovalComment('');
+      setApprovalModalError(null);
+
+      forceRefresh();
+      reload();
+      fetchPendingApprovals();
+      window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : 'Action failed';
+      setApprovalModalError(errMsg);
+      setApprovalActionMessage({ type: 'error', text: errMsg });
+    } finally {
+      setApprovalActionLoading(false);
     }
-
-    const apiCall = action === 'approve'
-      ? approvalService.approve(approvalId, comment)
-      : action === 'reject'
-      ? approvalService.reject(approvalId, comment)
-      : approvalService.return(approvalId, comment, actionReturnTarget);
-
-    apiCall
-      .then((res) => {
-        if (res?.message) {
-          setActionSuccessData((prev) => prev ? { ...prev, message: res.message } : null);
-        }
-        forceRefresh();
-        reload();
-        fetchPendingApprovals();
-        window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
-      })
-      .catch((err) => {
-        setActionSuccessData(null);
-        setApprovalActionMessage({ type: 'error', text: err instanceof Error ? err.message : 'Action failed' });
-      });
   }, [approvalActionModal, approvalComment, actionReturnTarget, reload, forceRefresh, fetchPendingApprovals]);
 
   const enrichedRfqList = useMemo(() => {
     return rfqList.map((rfq) => {
       const idStr = String(rfq.id);
       const overrideStatus = localStatusMap.get(idStr) || (rfq.rfqNumber && localStatusMap.get(rfq.rfqNumber));
+      const pendingApp = pendingApprovalsMap.get(idStr) || (rfq.rfqNumber && pendingApprovalsMap.get(rfq.rfqNumber));
+      const isReturnedForReReview = Boolean(
+        pendingApp?.isReturned ||
+        (pendingApp?.comments && /return/i.test(pendingApp.comments)) ||
+        rfq.status === 'RE_REVIEW' ||
+        (rfq as any)._isReturnedForReReview
+      );
       const effectiveStatus = overrideStatus || rfq.status;
-
-      const isReturned = effectiveStatus === 'RETURNED' || effectiveStatus === 'RE_REVIEW' || effectiveStatus === 'RETURN_FOR_RE_REVIEW' || myReturnedMap.has(idStr) || (rfq.rfqNumber && myReturnedMap.has(rfq.rfqNumber));
-      const isRejected = !isReturned && (effectiveStatus === 'REJECTED' || myRejectedMap.has(idStr) || (rfq.rfqNumber && myRejectedMap.has(rfq.rfqNumber)));
-      const isApproved = !isReturned && !isRejected && (effectiveStatus === 'APPROVED' || effectiveStatus === 'SENT' || effectiveStatus === 'ACCEPTED' || myApprovedMap.has(idStr) || (rfq.rfqNumber && myApprovedMap.has(rfq.rfqNumber)));
-
-      const finalStatus = isReturned ? 'RETURNED' : isRejected ? 'REJECTED' : isApproved ? 'APPROVED' : effectiveStatus;
 
       return {
         ...rfq,
-        status: finalStatus,
-        _isApprovedByMe: Boolean(isApproved && (myApprovedMap.has(idStr) || (rfq.rfqNumber && myApprovedMap.has(rfq.rfqNumber)) || rfq._isApprovedByMe)),
-        _isReturnedByMe: Boolean(isReturned),
-        _isRejectedByMe: Boolean(isRejected),
+        status: effectiveStatus,
+        _isReturnedForReReview: isReturnedForReReview,
       };
     });
-  }, [rfqList, localStatusMap, myApprovedMap, myReturnedMap, myRejectedMap]);
+  }, [rfqList, localStatusMap, pendingApprovalsMap]);
 
   const stats = useMemo(() => {
     const cleanList = enrichedRfqList.filter((r) => r.title !== 'Direct PO Master' && !r.rfqNumber?.startsWith('RFQ-DIRECT'));
     return {
       total: cleanList.length,
       draft: cleanList.filter((r) => r.status === 'DRAFT').length,
-      pendingApproval: cleanList.filter((r) => r.status === 'PENDING_APPROVAL' && !r._isApprovedByMe && !r._isReturnedByMe && !r._isRejectedByMe).length,
-      draftOrPending: cleanList.filter((r) => (r.status === 'DRAFT' || r.status === 'PENDING_APPROVAL' || r.status === 'RETURNED') && !r._isApprovedByMe && !r._isRejectedByMe).length,
-      approved: cleanList.filter((r) => (r.status === 'APPROVED' || r.status === 'SENT' || r.status === 'IN_PROGRESS' || r.status === 'ACCEPTED' || r._isApprovedByMe) && !r._isReturnedByMe && !r._isRejectedByMe && r.status !== 'RETURNED' && r.status !== 'REJECTED').length,
-      rejected: cleanList.filter((r) => r.status === 'REJECTED' || r._isRejectedByMe).length,
+      pendingApproval: cleanList.filter((r) => r.status === 'PENDING_APPROVAL').length,
+      draftOrPending: cleanList.filter((r) => r.status === 'DRAFT' || r.status === 'PENDING_APPROVAL' || r.status === 'RETURNED').length,
+      approved: cleanList.filter((r) => r.status === 'APPROVED' || r.status === 'SENT' || r.status === 'IN_PROGRESS' || r.status === 'ACCEPTED').length,
+      rejected: cleanList.filter((r) => r.status === 'REJECTED').length,
     };
   }, [enrichedRfqList]);
 
@@ -892,9 +846,21 @@ export default function RFQPage() {
                   {paginated.map((rfq) => {
                     const rfqIdStr = String(rfq.id);
                     const isSelected = selectedRfqIds.includes(rfqIdStr);
-                    const isPending = rfq.status === 'PENDING_APPROVAL' && !rfq._isApprovedByMe && !rfq._isReturnedByMe && !rfq._isRejectedByMe;
+
+                    const currentUserId = String(user?.id || (user as any)?._id || '');
+                    const creatorId = String((rfq as any).createdBy || (rfq as any).creatorId || (rfq as any).creator?.id || '');
+                    const userFullName = (user?.fullName || (user as any)?.name || (user as any)?.username || '').trim().toLowerCase();
+                    const rfqCreatorName = (rfq.creator || '').trim().toLowerCase();
+                    const isCreator = Boolean(
+                      (creatorId && currentUserId && creatorId === currentUserId) ||
+                      (rfqCreatorName && userFullName && rfqCreatorName === userFullName)
+                    );
+
                     const pendingApproval = pendingApprovalsMap.get(String(rfq.id)) || pendingApprovalsMap.get(rfq.rfqNumber);
-                    const canUserActOnRFQ = isPending && Boolean(pendingApproval?.canAct) && !rfq._isApprovedByMe && !rfq._isReturnedByMe && !rfq._isRejectedByMe;
+                    const isPending = (rfq.status === 'PENDING_APPROVAL' || rfq.status === 'RE_REVIEW' || Boolean((rfq as any)._isReturnedForReReview)) && !rfq._isReturnedByMe && !rfq._isRejectedByMe;
+                    // Creator should NEVER approve/return/reject their own RFQ
+                    const canUserActOnRFQ = isPending && !isCreator && (Boolean(pendingApproval?.canAct) || Boolean(rfq.canUserAct)) && (!rfq._isApprovedByMe || Boolean(pendingApproval?.canAct));
+                    const canEditThisRFQ = isCreator || isUserAdmin;
 
                     return (
                       <tr
@@ -964,6 +930,18 @@ export default function RFQPage() {
                               </>
                             )}
 
+                            {canEditThisRFQ && (rfq.status === 'DRAFT' || rfq.status === 'RETURNED' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW') && (
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                className="text-primary hover:bg-primary/10 hover:text-primary"
+                                onClick={() => navigate(`/rfq/edit/${rfq.id}`)}
+                                title={rfq.status === 'DRAFT' ? 'Edit Draft' : 'Edit & Resubmit RFQ'}
+                              >
+                                <PenLine className="size-4" />
+                              </Button>
+                            )}
+
                             <Button
                               variant="ghost"
                               size="icon-sm"
@@ -995,31 +973,56 @@ export default function RFQPage() {
 
             {/* Mobile View */}
             <div className="divide-y divide-border/65 lg:hidden">
-              {paginated.map((rfq) => (
-                <article key={rfq.id} className="p-4 sm:p-5">
-                  <button type="button" className="w-full text-left" onClick={() => openDetail(rfq)}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-primary">{rfq.rfqNumber}</p>
-                        <p className="mt-1 truncate text-sm font-medium">{rfq.title}</p>
+              {paginated.map((rfq) => {
+                const currentUserId = String(user?.id || (user as any)?._id || '');
+                const creatorId = String((rfq as any).createdBy || (rfq as any).creatorId || (rfq as any).creator?.id || '');
+                const userFullName = (user?.fullName || (user as any)?.name || (user as any)?.username || '').trim().toLowerCase();
+                const rfqCreatorName = (rfq.creator || '').trim().toLowerCase();
+                const isCreator = Boolean(
+                  (creatorId && currentUserId && creatorId === currentUserId) ||
+                  (rfqCreatorName && userFullName && (rfqCreatorName === userFullName || userFullName.includes(rfqCreatorName) || rfqCreatorName.includes(userFullName)))
+                );
+                const canEditThisRFQ = isCreator || isUserAdmin;
+
+                return (
+                  <article key={rfq.id} className="p-4 sm:p-5">
+                    <button type="button" className="w-full text-left" onClick={() => openDetail(rfq)}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-primary">{rfq.rfqNumber}</p>
+                          <p className="mt-1 truncate text-sm font-medium">{rfq.title}</p>
+                        </div>
+                        {(() => {
+                          const isReturnedByMe = (rfq as any)._isReturnedByMe || rfq.status === 'RETURNED' || rfq.status === 'RETURN_FOR_RE_REVIEW';
+                          const isReturnedForReReview = (rfq as any)._isReturnedForReReview || rfq.status === 'RE_REVIEW';
+                          const displayStatus = isReturnedByMe ? 'RETURNED' : isReturnedForReReview ? 'RE_REVIEW' : rfq.status;
+                          const label = displayStatus === 'RETURNED' ? 'Returned for Revision' : displayStatus === 'RE_REVIEW' ? 'Returned (Re-Review)' : (STATUS_LABELS[displayStatus] || displayStatus);
+                          return (
+                            <Badge tone={statusTone(displayStatus)} className="shrink-0">
+                              {label}
+                            </Badge>
+                          );
+                        })()}
                       </div>
-                      <Badge tone={statusTone(rfq.status)} className="shrink-0">
-                        {STATUS_LABELS[rfq.status] || rfq.status}
-                      </Badge>
+                      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+                        <div><dt className="text-muted-foreground">Created by</dt><dd className="mt-1 font-medium">{rfq.creator}</dd></div>
+                        <div><dt className="text-muted-foreground">Estimate</dt><dd className="mt-1 font-semibold tabular-nums">{rfq.totalEstimate}</dd></div>
+                      </dl>
+                    </button>
+                    <div className="mt-4 flex gap-2 border-t border-border/60 pt-3">
+                      {canEditThisRFQ && (rfq.status === 'DRAFT' || rfq.status === 'RETURNED' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW') && (
+                        <Button variant="default" size="sm" className="flex-1" onClick={() => navigate(`/rfq/edit/${rfq.id}`)}>
+                          <PenLine className="size-3.5 mr-1" /> {rfq.status === 'DRAFT' ? 'Edit Draft' : 'Edit & Resubmit'}
+                        </Button>
+                      )}
+                      <Button variant="outline" size="sm" className="flex-1" onClick={() => openDetail(rfq)}><Eye className="size-3.5 mr-1" /> View</Button>
+                      {canCreateRFQ && (
+                        <Button variant="ghost" size="icon-sm" className="text-destructive" onClick={() => requestDeleteRFQ(rfq)}><Trash2 className="size-4" /></Button>
+                      )}
                     </div>
-                    <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
-                      <div><dt className="text-muted-foreground">Created by</dt><dd className="mt-1 font-medium">{rfq.creator}</dd></div>
-                      <div><dt className="text-muted-foreground">Estimate</dt><dd className="mt-1 font-semibold tabular-nums">{rfq.totalEstimate}</dd></div>
-                    </dl>
-                  </button>
-                  <div className="mt-4 flex gap-2 border-t border-border/60 pt-3">
-                    <Button variant="outline" size="sm" className="flex-1" onClick={() => openDetail(rfq)}><Eye /> View</Button>
-                    {canCreateRFQ && (
-                      <Button variant="ghost" size="icon-sm" className="text-destructive" onClick={() => requestDeleteRFQ(rfq)}><Trash2 /></Button>
-                    )}
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           </>
         ) : (
@@ -1160,17 +1163,37 @@ export default function RFQPage() {
             </DialogHeader>
 
             <div className="flex flex-col gap-3 py-2">
+              {approvalModalError && (
+                <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-xs font-medium text-destructive">
+                  {approvalModalError}
+                </div>
+              )}
+
               {approvalActionModal.action === 'return' && (
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-semibold text-foreground">Return to</label>
-                  <select
-                    className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
-                    value={actionReturnTarget}
-                    onChange={(e) => setActionReturnTarget(e.target.value as any)}
-                  >
-                    <option value="ORIGINATOR">Originator (Creator)</option>
-                    <option value="LEVEL_1">Level 1 Approver</option>
-                  </select>
+                  {(approvalActionModal.levelNumber || 1) > 1 ? (
+                    <select
+                      className="h-10 rounded-xl border border-input bg-background px-3 text-sm font-medium focus:ring-2 focus:ring-primary/20"
+                      value={actionReturnTarget}
+                      onChange={(e) => {
+                        setActionReturnTarget(e.target.value as any);
+                        setApprovalModalError(null);
+                      }}
+                    >
+                      <option value="ORIGINATOR">Originator (Creator)</option>
+                      <option value="LEVEL_1">Level 1 Approver</option>
+                    </select>
+                  ) : (
+                    <div className="flex h-10 items-center rounded-xl border border-border/80 bg-muted/40 px-3 text-sm font-medium text-foreground">
+                      Originator (Creator)
+                    </div>
+                  )}
+                  {(approvalActionModal.levelNumber || 1) <= 1 && (
+                    <span className="text-[11px] text-muted-foreground">
+                      Level 1 return sends the RFQ back to the originator for revision.
+                    </span>
+                  )}
                 </div>
               )}
 
@@ -1186,7 +1209,10 @@ export default function RFQPage() {
                       : 'Required comment explaining the decision...'
                   }
                   value={approvalComment}
-                  onChange={(e) => setApprovalComment(e.target.value)}
+                  onChange={(e) => {
+                    setApprovalComment(e.target.value);
+                    if (e.target.value.trim()) setApprovalModalError(null);
+                  }}
                 />
               </div>
             </div>

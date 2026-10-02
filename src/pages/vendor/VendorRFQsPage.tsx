@@ -211,6 +211,10 @@ export default function VendorRFQsPage() {
 
   useEffect(() => {
     const rfqParam = searchParams.get('rfq');
+    const searchParam = searchParams.get('search');
+    if (searchParam) {
+      setSearch(searchParam);
+    }
     if (!rfqParam || rfqs.length === 0) return;
     const match = rfqs.find(rfq => String(rfq.id) === rfqParam || rfq.rfqNumber === rfqParam);
     if (!match) return;

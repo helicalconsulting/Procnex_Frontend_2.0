@@ -40,6 +40,7 @@ import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyM
 import { useBranding } from '../../context/BrandingContext';
 import { useSuccessModal } from '../../context/SuccessModalContext';
 import defaultHeliflowLogo from '../../assets/heliflow.png';
+import procnexLogo from '../../assets/procnex.png';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
@@ -269,7 +270,7 @@ export default function CreatePurchaseInvoicePage() {
     );
   }, [poList, selectedPoId]);
 
-  const finalLogoUrl = logoUrl || selectedPO?.companyLogoUrl || defaultHeliflowLogo;
+  const finalLogoUrl = logoUrl || selectedPO?.companyLogoUrl || '/Procnex-logo.jpeg' || procnexLogo || defaultHeliflowLogo;
 
   // Human-readable PO Number formatter
   const displayPoNumber = useMemo(() => {
@@ -296,6 +297,17 @@ export default function CreatePurchaseInvoicePage() {
 
     return selectedPoId || 'Select Purchase Order';
   }, [selectedPO, poList, selectedPoId, grnOptions, poIdParam]);
+
+  // Human-readable Vendor Name formatter
+  const displayVendorName = useMemo(() => {
+    if (vendorName) return vendorName;
+    const selectedVendorObj = allSuppliers.find((v) => String(v.id) === String(selectedVendorId));
+    if (selectedVendorObj?.name) return selectedVendorObj.name;
+    if ((selectedVendorObj as any)?.companyName) return (selectedVendorObj as any).companyName;
+    if (selectedPO?.vendor?.name) return selectedPO.vendor.name;
+    if (selectedPO?.vendorName) return selectedPO.vendorName;
+    return 'Supplier';
+  }, [vendorName, allSuppliers, selectedVendorId, selectedPO]);
 
   // Human-readable Dispatch Note / Invoice Number formatter
   const displayGrnNumber = useMemo(() => {
@@ -911,6 +923,7 @@ export default function CreatePurchaseInvoicePage() {
             { label: 'Total Amount', value: formatAmount(calculations.grandTotal, currency) },
           ],
           primaryBtnText: 'View in Invoices',
+          onPrimaryClick: () => navigate('/accounts-payable'),
         });
       } else {
         showSuccess({
@@ -924,7 +937,7 @@ export default function CreatePurchaseInvoicePage() {
             { label: 'Total Amount', value: formatAmount(calculations.grandTotal, currency) },
             { label: 'Invoice Date', value: invoiceDate },
           ],
-          primaryBtnText: 'Go to Accounts Payable',
+          primaryBtnText: 'Go to Purchase Invoice Approval',
           onPrimaryClick: () => navigate('/accounts-payable'),
         });
       }
@@ -940,7 +953,6 @@ export default function CreatePurchaseInvoicePage() {
       }
 
       setShowSendingOverlay(false);
-      navigate('/accounts-payable');
     } catch (err: any) {
       setShowSendingOverlay(false);
       setErrorMsg(err?.message || 'Failed to submit Purchase Invoice.');
@@ -2285,13 +2297,13 @@ export default function CreatePurchaseInvoicePage() {
           <table className="po-doc__items-table">
             <colgroup>
               <col style={{ width: '5%' }} />
-              <col style={{ width: '35%' }} />
-              <col style={{ width: '10%' }} />
-              <col style={{ width: '10%' }} />
-              <col style={{ width: '12%' }} />
-              <col style={{ width: '13%' }} />
-              <col style={{ width: '7%' }} />
+              <col style={{ width: '28%' }} />
+              <col style={{ width: '9%' }} />
+              <col style={{ width: '9%' }} />
+              <col style={{ width: '16%' }} />
               <col style={{ width: '8%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '17%' }} />
             </colgroup>
             <thead>
               <tr>
@@ -2374,15 +2386,6 @@ export default function CreatePurchaseInvoicePage() {
               Payment will be scheduled upon L2 Accounts Payable approval under agreed payment terms ({paymentTerms}).
             </p>
           </div>
-        </div>
-
-        <div className="po-doc__footer">
-          <div className="po-doc__footer-divider" />
-          <p className="po-doc__footer-text">
-            {companyName}
-            {companyPhone && <span> &nbsp;|&nbsp; Phone: {companyPhone}</span>}
-            {companyEmail && <span> &nbsp;|&nbsp; Email: {companyEmail}</span>}
-          </p>
         </div>
       </div>
 

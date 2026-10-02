@@ -177,9 +177,8 @@ export default function AccountsPayablePage() {
     hasPermission('Create Purchase Invoice', 'canApprove') ||
     hasPermission('Invoices', 'canApprove') ||
     hasPermission('Accounts Payable', 'canCreate') ||
-    isRoleMatching('Purchase Manager', authRoles) ||
-    isRoleMatching('L1 User', authRoles) ||
-    isAdmin;
+    isRoleMatching('Purchase Clerk', authRoles) ||
+    isRoleMatching('Purchase Manager', authRoles);
 
   const [invoicesList, setInvoicesList] = useState<APInvoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -288,14 +287,15 @@ export default function AccountsPayablePage() {
         const reqRole = pendingRow?.requiredRole || (status === 'RETURNED' ? 'Purchase Manager' : (activeApp.requiredRole || 'Purchase Manager'));
 
         // Approver permissions:
-        // - If pendingRow exists: ONLY users with pendingRow.requiredRole (e.g. Purchase Manager at Level 1) or admin can act.
-        // - If Approver 2 returned it and it is pending at Level 1, Approver 2 (Finance/Director) CANNOT act (canAct = false).
+        // - ONLY users with matching role for the active approval step can act
         let effectiveCanAct = false;
-        if (status === 'PENDING' || status === 'RETURNED') {
+        if (status === 'PENDING' || status === 'RETURNED' || status === 'RE_REVIEW') {
           if (pendingRow) {
-            effectiveCanAct = isRoleMatching(pendingRow.requiredRole, authRoles) || isAdmin || canApproveAP;
+            effectiveCanAct = pendingRow.canAct !== undefined ? Boolean(pendingRow.canAct) : isRoleMatching(pendingRow.requiredRole, authRoles);
           } else if (status === 'RETURNED') {
-            effectiveCanAct = isRoleMatching('Purchase Manager', authRoles) || isAdmin || canApproveAP;
+            effectiveCanAct = isRoleMatching('Purchase Clerk', authRoles) || isRoleMatching('Purchase Manager', authRoles);
+          } else if (activeApp) {
+            effectiveCanAct = activeApp.canAct !== undefined ? Boolean(activeApp.canAct) : isRoleMatching(activeApp.requiredRole, authRoles);
           }
         }
 
@@ -350,7 +350,7 @@ export default function AccountsPayablePage() {
           };
           const status = statusMap[inv.status] || (inv.status === 'DRAFT' ? 'DRAFT' : 'PENDING');
           const isActionable = status === 'PENDING' || status === 'RETURNED';
-          const effectiveCanAct = isActionable && (isRoleMatching('Purchase Manager', authRoles) || isAdmin || canApproveAP);
+          const effectiveCanAct = isActionable && isRoleMatching('Purchase Clerk', authRoles);
 
           merged.push({
             id: inv.id,
@@ -507,6 +507,17 @@ export default function AccountsPayablePage() {
                 vendorName: targetInvoice.vendorName,
                 amount: targetInvoice.amount,
               });
+              try {
+                localDataService.savePayment({
+                  paymentId: `PV-${targetInvoice.invoiceNumber.replace(/^INV-?/i, '')}`,
+                  vendor: targetInvoice.vendorName,
+                  invoiceRef: targetInvoice.invoiceNumber,
+                  amount: targetInvoice.amount,
+                  method: 'NEFT',
+                  status: 'DRAFT',
+                  remarks: `Auto-generated Draft Payment Voucher for approved Invoice #${targetInvoice.invoiceNumber}`,
+                });
+              } catch {}
             }
           } else if (act === 'reject') {
             await approvalService.reject(approvalId, comment);
@@ -611,6 +622,17 @@ export default function AccountsPayablePage() {
                   vendorName: targetInvoice.vendorName,
                   amount: targetInvoice.amount,
                 });
+                try {
+                  localDataService.savePayment({
+                    paymentId: `PV-${targetInvoice.invoiceNumber.replace(/^INV-?/i, '')}`,
+                    vendor: targetInvoice.vendorName,
+                    invoiceRef: targetInvoice.invoiceNumber,
+                    amount: targetInvoice.amount,
+                    method: 'NEFT',
+                    status: 'DRAFT',
+                    remarks: `Auto-generated Draft Payment Voucher for approved Invoice #${targetInvoice.invoiceNumber}`,
+                  });
+                } catch {}
               }
             });
           } else {
@@ -893,7 +915,7 @@ export default function AccountsPayablePage() {
                           >
                             <Printer className="size-4" />
                           </Button>
-                          {['PENDING', 'RETURNED', 'RE_REVIEW', 'PENDING_APPROVAL'].includes(invoice.status) && (invoice.canAct || isAdmin || canApproveAP || isRoleMatching(invoice.requiredRole || 'Purchase Manager', authRoles)) ? (
+                          {['PENDING', 'RETURNED', 'RE_REVIEW', 'PENDING_APPROVAL'].includes(invoice.status) && invoice.canAct ? (
                             <>
                               <Button
                                 variant="ghost"
@@ -977,7 +999,7 @@ export default function AccountsPayablePage() {
                       <Printer /> Print
                     </Button>
                   </div>
-                  {['PENDING', 'RETURNED', 'RE_REVIEW', 'PENDING_APPROVAL'].includes(invoice.status) && (invoice.canAct || isAdmin || canApproveAP || isRoleMatching(invoice.requiredRole || 'Purchase Manager', authRoles)) && (
+                  {['PENDING', 'RETURNED', 'RE_REVIEW', 'PENDING_APPROVAL'].includes(invoice.status) && invoice.canAct && (
                     <div className="flex gap-1">
                       <Button size="sm" onClick={() => openAction(invoice, 'approve')}>
                         <ThumbsUp /> Approve
@@ -1310,7 +1332,7 @@ export default function AccountsPayablePage() {
               </Button>
 
               <div className="flex items-center gap-2">
-                {['PENDING', 'RETURNED', 'RE_REVIEW', 'PENDING_APPROVAL'].includes(detailInvoice.status) && (detailInvoice.canAct || isAdmin || canApproveAP || isRoleMatching(detailInvoice.requiredRole || 'Purchase Manager', authRoles)) ? (
+                {['PENDING', 'RETURNED', 'RE_REVIEW', 'PENDING_APPROVAL'].includes(detailInvoice.status) && detailInvoice.canAct ? (
                   <>
                     <Button
                       variant="outline"
