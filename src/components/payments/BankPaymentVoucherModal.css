@@ -113,7 +113,7 @@
 .bpv-sheet {
   background: #ffffff;
   color: #0f172a;
-  padding: 40px 48px;
+  padding: 24px 32px;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.05);
 }
@@ -125,8 +125,8 @@
 }
 
 .bpv-sheet__company h2 {
-  margin: 0 0 4px 0;
-  font-size: 1.4625rem;
+  margin: 0 0 2px 0;
+  font-size: 1.35rem;
   font-weight: 800;
   color: #0f172a;
   letter-spacing: -0.02em;
@@ -134,14 +134,14 @@
 
 .bpv-sheet__company p {
   margin: 0;
-  font-size: 13.5px;
+  font-size: 12.5px;
   color: #475569;
 }
 
 .bpv-sheet__sub {
   color: #64748b !important;
-  font-size: 12.5px !important;
-  margin-top: 2px !important;
+  font-size: 11.5px !important;
+  margin-top: 1px !important;
 }
 
 .bpv-sheet__doc-type {
@@ -149,57 +149,59 @@
 }
 
 .bpv-sheet__doc-type h3 {
-  margin: 0 0 6px 0;
-  font-size: 1.2125rem;
+  margin: 0 0 4px 0;
+  font-size: 1.15rem;
   font-weight: 800;
   color: #1e3a8a;
   letter-spacing: 0.05em;
 }
 
 .bpv-sheet__voucher-no {
-  font-size: 1.2625rem;
+  font-size: 1.18rem;
   font-weight: 800;
   color: #0f172a;
   font-family: monospace;
   background: #f1f5f9;
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 6px;
   display: inline-block;
 }
 
 .bpv-sheet__doc-type p {
-  margin: 6px 0 0 0;
-  font-size: 13px;
+  margin: 4px 0 0 0;
+  font-size: 12px;
   color: #475569;
 }
 
 .bpv-divider {
-  height: 2px;
+  height: 1px;
   background: #e2e8f0;
-  margin: 24px 0;
+  margin: 14px 0;
 }
 
 /* ── Section Styling ── */
 .bpv-section {
-  margin-bottom: 24px;
+  margin-bottom: 14px;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .bpv-section__title {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  gap: 5px;
+  font-size: 11.5px;
   font-weight: 700;
   color: #1e293b;
   letter-spacing: 0.05em;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   border-bottom: 1px solid #cbd5e1;
-  padding-bottom: 4px;
+  padding-bottom: 3px;
 }
 
 .bpv-grid {
   display: grid;
-  gap: 16px;
+  gap: 10px;
 }
 
 .bpv-grid--2 {
@@ -209,25 +211,27 @@
 .bpv-box {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 14px 18px;
+  border-radius: 6px;
+  padding: 10px 14px;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .bpv-box__title {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   color: #475569;
   letter-spacing: 0.05em;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
   border-bottom: 1px dashed #cbd5e1;
-  padding-bottom: 4px;
+  padding-bottom: 3px;
 }
 
 .bpv-box__row {
   display: flex;
   justify-content: space-between;
-  font-size: 13.5px;
-  margin-bottom: 6px;
+  font-size: 12.5px;
+  margin-bottom: 4px;
 }
 
 .bpv-box__row span {
@@ -246,11 +250,13 @@
 .bpv-match-strip {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border-radius: 8px;
-  margin-bottom: 14px;
-  font-size: 13.5px;
+  gap: 10px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .bpv-match-strip--success {
@@ -266,16 +272,16 @@
 }
 
 .bpv-match-strip p {
-  margin: 2px 0 0 0;
-  font-size: 12.5px;
+  margin: 1px 0 0 0;
+  font-size: 11.5px;
 }
 
 /* ── Tables ── */
 .bpv-table {
   width: 100%;
   border-collapse: collapse;
-  margin-bottom: 16px;
-  font-size: 13.5px;
+  margin-bottom: 10px;
+  font-size: 12px;
 }
 
 .bpv-table th {
@@ -283,22 +289,29 @@
   color: #334155;
   font-weight: 700;
   text-align: left;
-  padding: 8px 12px;
+  padding: 6px 8px;
   border-top: 1px solid #cbd5e1;
   border-bottom: 2px solid #cbd5e1;
+  font-size: 11px;
 }
 
 .bpv-table td {
-  padding: 10px 12px;
+  padding: 6px 8px;
   border-bottom: 1px solid #e2e8f0;
   color: #1e293b;
+  font-size: 12px;
+}
+
+.bpv-table tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .bpv-table-total-row td {
   background: #f8fafc;
   border-top: 2px solid #cbd5e1 !important;
   border-bottom: 2px solid #cbd5e1 !important;
-  padding: 12px;
+  padding: 8px 10px;
   color: #0f172a;
 }
 
@@ -307,20 +320,23 @@
   justify-content: space-between;
   align-items: center;
   background: #f8fafc;
-  border: 2px solid #cbd5e1;
-  border-radius: 8px;
-  padding: 14px 20px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 8px 14px;
+  margin-top: 6px;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .bpv-totals-box__words span {
   display: block;
-  font-size: 12px;
+  font-size: 11px;
   color: #64748b;
   font-weight: 600;
 }
 
 .bpv-totals-box__words strong {
-  font-size: 14px;
+  font-size: 12.5px;
   color: #0f172a;
   font-style: italic;
 }
@@ -330,15 +346,15 @@
 }
 
 .bpv-totals-box__grand span {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   color: #475569;
   letter-spacing: 0.05em;
 }
 
 .bpv-totals-box__grand h2 {
-  margin: 2px 0 0 0;
-  font-size: 1.5625rem;
+  margin: 1px 0 0 0;
+  font-size: 1.35rem;
   font-weight: 800;
   color: #059669;
 }
@@ -346,21 +362,25 @@
 /* ── Approval Stamps ("Kisne Kisne Approve Kiya") ── */
 .bpv-stamps-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .bpv-stamp-card {
   background: #f8fafc;
   border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  padding: 10px 12px;
+  border-radius: 6px;
+  padding: 8px 10px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 6px;
+  gap: 4px;
   position: relative;
-  transition: all 0.2s ease;
+  break-inside: avoid !important;
+  page-break-inside: avoid !important;
+  box-sizing: border-box;
 }
 
 .bpv-stamp-card:hover {
@@ -373,15 +393,15 @@
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid #e2e8f0;
-  padding-bottom: 6px;
+  padding-bottom: 4px;
 }
 
 .bpv-stamp-level-pill {
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 800;
   color: #1e293b;
   background: #e2e8f0;
-  padding: 2px 6px;
+  padding: 1px 5px;
   border-radius: 4px;
   letter-spacing: 0.05em;
 }
@@ -390,12 +410,12 @@
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 700;
   color: #059669;
   background: #ecfdf5;
   border: 1px solid #a7f3d0;
-  padding: 2px 6px;
+  padding: 1px 5px;
   border-radius: 4px;
   letter-spacing: 0.02em;
 }
@@ -409,24 +429,24 @@
 .bpv-stamp-card__details {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .bpv-stamp-role {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 800;
   color: #0f172a;
-  line-height: 1.25;
+  line-height: 1.2;
 }
 
 .bpv-stamp-name {
-  font-size: 11px;
+  font-size: 10.5px;
   color: #475569;
   font-weight: 500;
 }
 
 .bpv-stamp-date {
-  font-size: 10.5px;
+  font-size: 10px;
   color: #64748b;
   margin-top: 1px;
 }
@@ -434,14 +454,20 @@
 .bpv-stamp-card__signature {
   background: #ffffff;
   border: 1px dashed #cbd5e1;
-  border-radius: 6px;
-  padding: 6px 8px;
+  border-radius: 4px;
+  padding: 3px 6px;
   margin-top: 2px;
   text-align: center;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  break-inside: avoid !important;
+  page-break-inside: avoid !important;
 }
 
 .bpv-stamp-sig-pending {
-  font-size: 10.5px;
+  font-size: 10px;
   font-style: italic;
   color: #94a3b8;
 }
@@ -450,22 +476,24 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 1px;
+  width: 100%;
 }
 
 .bpv-stamp-sig-img {
-  max-height: 60px;
-  min-height: 44px;
-  max-width: 220px;
+  max-height: 38px;
+  min-height: 28px;
+  max-width: 170px;
   width: auto;
   object-fit: contain;
-  margin: 2px 0;
+  margin: 1px 0;
+  display: block;
 }
 
 .bpv-stamp-sig-svg-wrap {
   width: 100%;
-  max-width: 200px;
-  height: 48px;
+  max-width: 160px;
+  height: 34px;
 }
 
 .bpv-stamp-sig-svg {
@@ -478,10 +506,11 @@
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 9.5px;
+  font-size: 8.5px;
   font-weight: 700;
   color: #0284c7;
   letter-spacing: 0.02em;
+  margin-top: 1px;
 }
 
 .bpv-seal-icon {
@@ -490,49 +519,88 @@
 
 /* ── Footer ── */
 .bpv-sheet__footer {
-  margin-top: 32px;
-  padding-top: 16px;
+  margin-top: 20px;
+  padding-top: 10px;
   border-top: 1px solid #e2e8f0;
   text-align: center;
-  font-size: 12px;
+  font-size: 11px;
   color: #64748b;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .bpv-sheet__system-id {
   font-family: monospace;
-  font-size: 11px !important;
+  font-size: 10px !important;
   color: #94a3b8 !important;
-  margin-top: 4px !important;
+  margin-top: 2px !important;
 }
 
 /* ── Media Print Overrides ── */
 @media print {
-  body * {
-    visibility: hidden;
+  @page {
+    size: A4 portrait;
+    margin: 6mm 8mm;
   }
-  .no-print {
+
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+  }
+
+  .no-print,
+  .bpv-modal__topbar {
     display: none !important;
   }
+
   .bpv-modal-backdrop {
-    position: static;
-    background: transparent;
-    padding: 0;
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+    backdrop-filter: none !important;
   }
+
   .bpv-modal {
-    border: none;
-    box-shadow: none;
-    max-width: 100%;
-    width: 100%;
+    position: static !important;
+    border: none !important;
+    box-shadow: none !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    overflow: visible !important;
   }
-  .bpv-sheet, .bpv-sheet * {
-    visibility: visible;
-  }
+
   .bpv-sheet {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    padding: 20px;
-    box-shadow: none;
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    overflow: visible !important;
+    color: #0f172a !important;
+  }
+
+  .bpv-section,
+  .bpv-box,
+  .bpv-table,
+  .bpv-table tr,
+  .bpv-totals-box,
+  .bpv-stamps-grid,
+  .bpv-stamp-card,
+  .bpv-stamp-card__signature {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 }

@@ -15,11 +15,14 @@ export function getNotificationTargetUrl(
   const rfqMatch = combined.match(/\brfq-[a-z0-9_-]+\b/i);
   const piMatch = combined.match(/\bpi-[a-z0-9_-]+\b/i);
   const payMatch = combined.match(/\b(pay|pv)-[a-z0-9_-]+\b/i);
-  const contractMatch = combined.match(/\b(cnt|ctr|cont|con)-[a-z0-9_-]+\b/i);
+  const contractMatch = combined.match(/\b(cnt|ctr|cont)-[a-z0-9_-]+\b/i);
   const qtnMatch = combined.match(/\bqtn-[a-z0-9_-]+\b/i);
 
   // Special: Returned for Revision (Direct to Creator edit page)
   if (lower.includes('returned for revision') || (lower.includes('returned') && !lower.includes('re-review'))) {
+    if (lower.includes('form') || lower.includes('custom form')) {
+      return '/forms?tab=returned';
+    }
     if (lower.includes('quotation') || qtnMatch) {
       if (rfqMatch) return `/quotations?rfq=${encodeURIComponent(rfqMatch[0])}`;
       return '/quotations';
@@ -108,18 +111,60 @@ export function getNotificationTargetUrl(
     return '/procurement/purchase-requisitions';
   }
 
-  // 7. Contracts & Digital Agreements
+  // 7. Forms & Custom Form Workflows (Must precede Contracts and Generic Approvals)
+  if (
+    lower.includes('form') ||
+    lower.includes('forms') ||
+    lower.includes('custom form') ||
+    lower.includes('form response') ||
+    lower.includes('form submission')
+  ) {
+    if (lower.includes('returned') || lower.includes('revision') || lower.includes('re-review')) {
+      return '/forms?tab=returned';
+    }
+    if (lower.includes('submitted for approval') || lower.includes('progress update') || lower.includes('sent for level')) {
+      return '/forms?tab=submitted';
+    }
+    if (lower.includes('fully approved') || lower.includes('form level approved') || lower.includes('approved by all levels')) {
+      return '/forms?tab=completed';
+    }
+    if (
+      lower.includes('approval required') ||
+      lower.includes('requires level') ||
+      lower.includes('requires your level') ||
+      lower.includes('approval (level') ||
+      lower.includes('level 1 approval') ||
+      lower.includes('level 2 approval') ||
+      lower.includes('level 3 approval') ||
+      lower.includes('pending approval') ||
+      lower.includes('approval chain')
+    ) {
+      return '/forms?tab=approval_pending';
+    }
+    if (lower.includes('response submitted') || lower.includes('submitted a response')) {
+      return '/admin/form-responses';
+    }
+    if (lower.includes('assigned') || lower.includes('received a new form') || lower.includes('new form')) {
+      return '/forms?tab=pending';
+    }
+    return '/forms';
+  }
+
+  // 8. Contracts & Digital Agreements
+  const isContractSignature = /\b(signed|signature|countersigned|counter-signed)\b/i.test(combined);
   if (
     lower.includes('contract') ||
     lower.includes('agreement') ||
     lower.includes('e-signature') ||
-    lower.includes('signed') ||
+    lower.includes('e-sign') ||
+    isContractSignature ||
     contractMatch
   ) {
+    if (contractMatch) return `/contracts?search=${encodeURIComponent(contractMatch[0])}`;
     return '/contracts';
   }
 
-  // 8. Onboarding & Vendor Compliance
+  // 9. Onboarding & Vendor Compliance
   if (
     lower.includes('onboarding') ||
     lower.includes('uploaded') ||
@@ -131,12 +176,12 @@ export function getNotificationTargetUrl(
     return '/onboarding/queue';
   }
 
-  // 9. Goods Receipt Note (GRN)
+  // 10. Goods Receipt Note (GRN)
   if (lower.includes('grn') || lower.includes('goods receipt') || lower.includes('receipt')) {
     return '/procurement/goods-receipt';
   }
 
-  // 10. Generic Approvals Fallback
+  // 11. Generic Approvals Fallback
   if (
     lower.includes('approval') ||
     lower.includes('approver') ||
@@ -149,7 +194,7 @@ export function getNotificationTargetUrl(
     return '/approvals';
   }
 
-  // 11. Vendor Management
+  // 12. Vendor Management
   if (lower.includes('vendor') || lower.includes('supplier')) {
     return '/vendors';
   }
@@ -202,22 +247,34 @@ export function getVendorNotificationTargetUrl(
     return `${base}/rfqs`;
   }
 
-  // 2. Contracts & Digital Agreements
-  if (combined.includes('contract') || combined.includes('agreement') || combined.includes('sign') || combined.includes('e-signature')) {
+  // 2. Forms & Digital Agreements
+  if (combined.includes('form') || combined.includes('forms')) {
+    return `${base}/agreements`;
+  }
+
+  // 3. Contracts & Digital Agreements
+  const isVendorSignature = /\b(signed|signature|countersigned|counter-signed)\b/i.test(combined);
+  if (
+    combined.includes('contract') ||
+    combined.includes('agreement') ||
+    combined.includes('e-signature') ||
+    combined.includes('e-sign') ||
+    isVendorSignature
+  ) {
     return `${base}/contracts`;
   }
 
-  // 3. Invoices & Payments
+  // 4. Invoices & Payments
   if (combined.includes('invoice') || combined.includes('payment') || combined.includes('voucher')) {
     return `${base}/invoices`;
   }
 
-  // 4. Purchase Orders
+  // 5. Purchase Orders
   if (combined.includes('purchase order') || combined.includes('po-') || combined.includes('order')) {
     return `${base}/orders`;
   }
 
-  // 5. Existing Quotations (Awards, approvals, rejections, reviews, revisions)
+  // 6. Existing Quotations (Awards, approvals, rejections, reviews, revisions)
   if (
     combined.includes('quotation') ||
     combined.includes('quote') ||
@@ -227,7 +284,7 @@ export function getVendorNotificationTargetUrl(
     return `${base}/quotations`;
   }
 
-  // 6. Vendor Profile & Compliance
+  // 7. Vendor Profile & Compliance
   if (combined.includes('profile') || combined.includes('bank') || combined.includes('document')) {
     return `${base}/profile`;
   }

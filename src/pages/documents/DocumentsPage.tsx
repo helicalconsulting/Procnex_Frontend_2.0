@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TableSkeleton } from '../../components/shared/Skeleton';
+import { TablePagination } from '../../components/shared/TablePagination';
 import { PageFrame, PageLead, MetricCard, EmptyState } from '../../components/ui/product';
 import { Card } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
@@ -366,63 +367,57 @@ export default function DocumentsPage() {
               </LandingTable>
             </div>
 
-            {filtered.length > perPage && (
-              <div className="flex items-center justify-between border-t border-border/60 px-5 py-3 text-xs text-muted-foreground">
-                <span>Showing {(currentPage-1)*perPage+1}–{Math.min(currentPage*perPage, filtered.length)} of {filtered.length}</span>
-                <div className="flex items-center gap-1">
-                  <Button variant="outline" size="sm" disabled={currentPage===1} onClick={() => setCurrentPage(p=>p-1)} className="h-8 w-8 p-0">
-                    <ChevronLeft className="size-4" />
-                  </Button>
-                  {Array.from({length:totalPages},(_,i)=>i+1).map(p=>(
-                    <Button
-                      key={p}
-                      variant={currentPage===p?'default':'outline'}
-                      size="sm"
-                      onClick={()=>setCurrentPage(p)}
-                      className="h-8 w-8 p-0"
-                    >
-                      {p}
-                    </Button>
-                  ))}
-                  <Button variant="outline" size="sm" disabled={currentPage===totalPages} onClick={()=>setCurrentPage(p=>p+1)} className="h-8 w-8 p-0">
-                    <ChevronRight className="size-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
+            <TablePagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+              totalItems={filtered.length}
+              perPage={perPage}
+              className="border-t border-border/60 rounded-none"
+            />
           </Card>
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {paginated.map(doc => (
-              <Card
-                key={doc.id}
-                className="group cursor-pointer p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
-                onClick={() => setDetailDoc(doc)}
-              >
-                <div className="flex items-center justify-between">
-                  <div className={cn('grid size-10 place-items-center rounded-xl ring-1', FILE_TONES[doc.fileType])}>
-                    {FILE_ICONS[doc.fileType]}
-                  </div>
-                  <Badge variant="secondary" className="text-[11px] font-semibold">{doc.fileType}</Badge>
-                </div>
-                <h3 className="mt-3 truncate text-sm font-semibold text-foreground group-hover:text-primary">{doc.fileName}</h3>
-                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground min-h-[32px]">{doc.description}</p>
-                <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-3 text-xs">
-                  <Badge variant="outline" className="text-[11px]">{doc.category}</Badge>
-                  <span className="font-mono text-[12px] text-muted-foreground">{doc.fileSize}</span>
-                </div>
-                <div className="mt-3 flex items-center justify-between text-[12px] text-muted-foreground">
-                  <div className="flex items-center gap-1.5">
-                    <div className="grid size-5 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
-                      {doc.uploadedByInitials}
+          <>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {paginated.map(doc => (
+                <Card
+                  key={doc.id}
+                  className="group cursor-pointer p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
+                  onClick={() => setDetailDoc(doc)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className={cn('grid size-10 place-items-center rounded-xl ring-1', FILE_TONES[doc.fileType])}>
+                      {FILE_ICONS[doc.fileType]}
                     </div>
-                    <span className="truncate max-w-[90px]">{doc.uploadedBy}</span>
+                    <Badge variant="secondary" className="text-[11px] font-semibold">{doc.fileType}</Badge>
                   </div>
-                  <span>{formatDate(doc.uploadedAt)}</span>
-                </div>
-              </Card>
-            ))}
-          </div>
+                  <h3 className="mt-3 truncate text-sm font-semibold text-foreground group-hover:text-primary">{doc.fileName}</h3>
+                  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground min-h-[32px]">{doc.description}</p>
+                  <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-3 text-xs">
+                    <Badge variant="outline" className="text-[11px]">{doc.category}</Badge>
+                    <span className="font-mono text-[12px] text-muted-foreground">{doc.fileSize}</span>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between text-[12px] text-muted-foreground">
+                    <div className="flex items-center gap-1.5">
+                      <div className="grid size-5 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                        {doc.uploadedByInitials}
+                      </div>
+                      <span className="truncate max-w-[90px]">{doc.uploadedBy}</span>
+                    </div>
+                    <span>{formatDate(doc.uploadedAt)}</span>
+                  </div>
+                </Card>
+              ))}
+            </div>
+            <TablePagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+              totalItems={filtered.length}
+              perPage={perPage}
+              className="mt-6"
+            />
+          </>
         )
       ) : (
         <EmptyState

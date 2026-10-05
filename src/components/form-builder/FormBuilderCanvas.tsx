@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import type { FormDefinition, FormField, FieldType } from '../../types/formBuilder';
 import { CurrencyAmountInput } from '../shared/CurrencyMaster';
+import PhoneInput from '../shared/PhoneInput';
 import { adminService } from '../../services/adminService';
 import { vendorService } from '../../services/vendorService';
 import type { User as UserType } from '../../types';
@@ -494,12 +495,15 @@ function renderFieldComponent(
       )}
 
       {type === 'phone' && (
-        <input
-          type="tel"
-          className={canvasControlClass}
-          placeholder={placeholder ?? ''}
-          defaultValue={defaultValue}
+        <PhoneInput
           disabled={readOnly}
+          countryCode={field.countryCode || '+254'}
+          onCountryCodeChange={(code) => {
+            field.countryCode = code;
+          }}
+          value={defaultValue || ''}
+          onChange={() => {}}
+          placeholder={placeholder ?? '712345678'}
         />
       )}
 

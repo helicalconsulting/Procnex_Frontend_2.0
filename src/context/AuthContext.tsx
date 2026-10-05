@@ -17,7 +17,7 @@ import {
   type UserPermissionsMap,
 } from '../utils/permissions';
 import { isVendor } from '../utils/rbac';
-import { getTenantCompanyCode } from '../utils/tenantResolver';
+import { getTenantCompanyCode, getEmployeeCompanyCode, setEmployeeCompanyCode, setTenantCompanyCode } from '../utils/tenantResolver';
 
 interface AuthContextType {
   user: User | null;
@@ -56,6 +56,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setPermissions(
       session.permissions?.length ? permissionsListToMap(session.permissions) : {}
     );
+    if (session.user?.companyCode) {
+      setEmployeeCompanyCode(session.user.companyCode);
+    }
   }, []);
 
   useEffect(() => {
@@ -99,6 +102,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (payload: LoginPayload) => {
     const data = await authService.login(payload);
+    if (payload.companyCode) {
+      const userCode = (data.user?.companyCode || '').trim().toUpperCase();
+      const reqCode = payload.companyCode.trim().toUpperCase();
+      if (userCode && userCode !== reqCode) {
+        await authService.clearSession();
+        throw new Error(`This user account does not belong to organization '${reqCode}'.`);
+      }
+    }
     applySession(data);
   }, [applySession]);
 
@@ -117,10 +128,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.location.pathname.startsWith('/v/') ||
       window.location.pathname.startsWith('/vendor');
 
-    const companyCode =
+    // Extract current user company code before session reset
+    const userCompanyCode =
       (user as any)?.companyCode ||
+      (() => {
+        try {
+          const u = localStorage.getItem('heliflow_user');
+          return u ? JSON.parse(u)?.companyCode : null;
+        } catch {
+          return null;
+        }
+      })();
+
+    const targetVendorCompanyCode =
+      userCompanyCode ||
       getTenantCompanyCode() ||
       localStorage.getItem('vendor_company_code');
+
+    const targetEmpCompanyCode =
+      userCompanyCode ||
+      getEmployeeCompanyCode() ||
+      localStorage.getItem('employee_company_code');
 
     await authService.logout();
     queryClient.clear();
@@ -129,15 +157,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setPermissions({});
 
     if (isVendorSession) {
-      const code = companyCode && companyCode.toUpperCase() !== 'VENDOR' ? companyCode.toLowerCase() : null;
+      const code =
+        targetVendorCompanyCode && targetVendorCompanyCode.toUpperCase() !== 'VENDOR'
+          ? targetVendorCompanyCode.toLowerCase()
+          : null;
       if (code) {
-        localStorage.setItem('vendor_company_code', code.toUpperCase());
+        setTenantCompanyCode(code);
         window.location.href = `/v/${code}/login`;
       } else {
-        window.location.href = '/login';
+        window.location.href = '/helicalconsulting';
       }
     } else {
-      window.location.href = '/login';
+      const code =
+        targetEmpCompanyCode &&
+        targetEmpCompanyCode.toUpperCase() !== 'SUPERADMIN' &&
+        targetEmpCompanyCode.toUpperCase() !== 'GLOBAL' &&
+        targetEmpCompanyCode.toUpperCase() !== 'EMPLOYEE'
+          ? targetEmpCompanyCode.toLowerCase()
+          : null;
+      if (code) {
+        setEmployeeCompanyCode(code);
+        window.location.href = `/e/${code}/login`;
+      } else {
+        window.location.href = '/helicalconsulting';
+      }
     }
   }, [roles, user, queryClient]);
 

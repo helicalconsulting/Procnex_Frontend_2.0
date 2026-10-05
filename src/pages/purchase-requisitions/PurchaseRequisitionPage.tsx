@@ -4,6 +4,7 @@ import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { rfqService } from '../../services/rfqService';
 import { contractService } from '../../services/contractService';
 import { purchaseRequisitionService, type PurchaseRequisition, type PurchaseRequisitionItem } from '../../services/purchaseRequisitionService';
+import { erpService, type ERPStockItem } from '../../services/erpService';
 import { apiRequest } from '../../api/client';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyMaster';
@@ -485,13 +486,78 @@ export default function PurchaseRequisitionPage() {
     }
   }, [pr, isReadOnly, warehouses, updateField]);
 
+  const [erpStockItems, setErpStockItems] = useState<ERPStockItem[]>([]);
+
+  useEffect(() => {
+    erpService.getStockCodes().then((list) => {
+      if (Array.isArray(list) && list.length > 0) {
+        setErpStockItems(list);
+      }
+    }).catch(() => {});
+  }, []);
+
   // Update an item field
   const updateItem = useCallback((index: number, key: keyof PurchaseRequisitionItem, value: any) => {
     if (!pr || isReadOnly) return;
     const items = [...pr.items];
-    items[index] = { ...items[index], [key]: value };
+    const currentItem = { ...items[index], [key]: value };
+    items[index] = currentItem;
+
+    if (key === 'description' && typeof value === 'string' && value.trim()) {
+      const trimmed = value.trim();
+      const matched = erpStockItems.find(
+        (s) => s.stockCode.toLowerCase() === trimmed.toLowerCase() || s.description.toLowerCase() === trimmed.toLowerCase()
+      );
+      const stockCodeToLookup = matched ? matched.stockCode : trimmed;
+
+      if (matched) {
+        if (matched.price && (!currentItem.unitPrice || currentItem.unitPrice === 0)) {
+          currentItem.unitPrice = matched.price;
+        }
+        if (matched.taxRate !== undefined && (!currentItem.taxPercent || currentItem.taxPercent === 0)) {
+          currentItem.taxPercent = matched.taxRate;
+        }
+        if (matched.unitOfMeasure) {
+          currentItem.unit = matched.unitOfMeasure;
+        }
+      }
+
+      // Async live pull from ERP if price or tax is not set yet
+      if (!currentItem.unitPrice || currentItem.unitPrice === 0) {
+        erpService.getItemPrice(stockCodeToLookup).then((priceRes) => {
+          if (priceRes && priceRes.priceFound && priceRes.price > 0) {
+            setPr((latest) => {
+              if (!latest) return null;
+              const nextItems = [...latest.items];
+              if (nextItems[index] && (!nextItems[index].unitPrice || nextItems[index].unitPrice === 0)) {
+                nextItems[index] = { ...nextItems[index], unitPrice: priceRes.price };
+                return recalc({ ...latest, items: nextItems });
+              }
+              return latest;
+            });
+          }
+        }).catch(() => {});
+      }
+
+      if (!currentItem.taxPercent || currentItem.taxPercent === 0) {
+        erpService.getTaxRate(stockCodeToLookup).then((taxRes) => {
+          if (taxRes && taxRes.taxRate !== undefined) {
+            setPr((latest) => {
+              if (!latest) return null;
+              const nextItems = [...latest.items];
+              if (nextItems[index] && (!nextItems[index].taxPercent || nextItems[index].taxPercent === 0)) {
+                nextItems[index] = { ...nextItems[index], taxPercent: taxRes.taxRate };
+                return recalc({ ...latest, items: nextItems });
+              }
+              return latest;
+            });
+          }
+        }).catch(() => {});
+      }
+    }
+
     setPr(recalc({ ...pr, items }));
-  }, [pr, recalc, isReadOnly]);
+  }, [pr, recalc, isReadOnly, erpStockItems]);
 
   // Add item
   const addItem = useCallback(() => {
@@ -1177,7 +1243,7 @@ export default function PurchaseRequisitionPage() {
               )}
             </div>
             <div className="pr-field pr-field--wide"><label>Address</label><input value={pr.shipToAddress} disabled={isReadOnly} onChange={e => updateField('shipToAddress', e.target.value)} /></div>
-            <div className="pr-field"><label>Contact</label><input value={pr.shipToContact} disabled={isReadOnly} onChange={e => updateField('shipToContact', e.target.value)} /></div>
+            <div className="pr-field"><label>Contact Person</label><input value={pr.shipToContact} disabled={isReadOnly} onChange={e => updateField('shipToContact', e.target.value)} /></div>
             <div className="pr-field"><label>Phone</label><input value={pr.shipToPhone} disabled={isReadOnly} onChange={e => updateField('shipToPhone', e.target.value)} /></div>
           </div>
         </section>
@@ -1189,7 +1255,7 @@ export default function PurchaseRequisitionPage() {
             <div className="pr-field"><label>PO Number</label><input value={pr.poNumber || ''} disabled={isReadOnly} onChange={e => updateField('poNumber', e.target.value)} className="pr-field--auto" title="Auto-generated. You can edit if needed." /></div>
             <div className={`pr-field ${validationErrors.poDate ? 'pr-field--error' : ''}`}>
               <label>PO Date {!isReadOnly && <span className="pr-required">*</span>}</label>
-              <input type="date" value={pr.poDate} disabled={isReadOnly} onChange={e => { updateField('poDate', e.target.value); clearFieldError('poDate'); }} />
+              <input type="date" value={pr.poDate ? String(pr.poDate).slice(0, 10) : ''} disabled={isReadOnly} onChange={e => { updateField('poDate', e.target.value); clearFieldError('poDate'); }} />
               {validationErrors.poDate && <span className="pr-field__error-msg">{validationErrors.poDate}</span>}
             </div>
             <div className="pr-field">
@@ -1486,7 +1552,7 @@ export default function PurchaseRequisitionPage() {
                 </div>
               )}
             </div>
-            <div className="pr-field"><label>Delivery Date</label><input type="date" value={pr.deliveryDate} disabled={isReadOnly} onChange={e => updateField('deliveryDate', e.target.value)} /></div>
+            <div className="pr-field"><label>Delivery Date</label><input type="date" value={pr.deliveryDate ? String(pr.deliveryDate).slice(0, 10) : ''} disabled={isReadOnly} onChange={e => updateField('deliveryDate', e.target.value)} /></div>
             <div className="pr-field"><label>Shipping Terms</label>
               <select value={pr.shippingTerms} disabled={isReadOnly} onChange={e => updateField('shippingTerms', e.target.value)}>
                 <option>FOB Origin</option>
@@ -1541,9 +1607,18 @@ export default function PurchaseRequisitionPage() {
                 {pr.items.map((item, idx) => (
                   <tr key={idx} className={itemValidationErrors[idx] ? 'pr-item--error-row' : ''}>
                     <td className="pr-td--no">{item.itemNo}</td>
-                    <td className="pr-td--desc"><input value={item.description} disabled={isFormDisabled} onChange={e => updateItem(idx, 'description', e.target.value)} placeholder="Item description" /></td>
+                    <td className="pr-td--desc">
+                      <input
+                        value={item.description}
+                        disabled={isFormDisabled}
+                        list="po-erp-stock-codes"
+                        onChange={e => updateItem(idx, 'description', e.target.value)}
+                        placeholder="Item description / stock code"
+                      />
+                    </td>
                     <td className={`pr-td--num ${itemValidationErrors[idx]?.quantity ? 'pr-item__cell--error' : ''}`}>
                       <input type="number" min="1" value={item.quantity === 0 ? '' : item.quantity} disabled={isFormDisabled}
+                        onWheel={e => e.currentTarget.blur()}
                         onChange={e => { updateItem(idx, 'quantity', e.target.value === '' ? 0 : Math.max(0, Number(e.target.value))); clearItemError(idx, 'quantity'); }}
                       />
                       {itemValidationErrors[idx]?.quantity && <span className="pr-field__error-msg">{itemValidationErrors[idx].quantity}</span>}
@@ -1555,6 +1630,7 @@ export default function PurchaseRequisitionPage() {
                     </td>
                     <td className={`pr-td--num ${itemValidationErrors[idx]?.unitPrice ? 'pr-item__cell--error' : ''}`}>
                       <input type="number" min="0" step="1" placeholder="0" value={item.unitPrice === 0 ? '' : item.unitPrice} disabled={isFormDisabled}
+                        onWheel={e => e.currentTarget.blur()}
                         onChange={e => { updateItem(idx, 'unitPrice', e.target.value === '' ? 0 : Math.max(0, Number(e.target.value))); clearItemError(idx, 'unitPrice'); }}
                       />
                       {itemValidationErrors[idx]?.unitPrice && <span className="pr-field__error-msg">{itemValidationErrors[idx].unitPrice}</span>}
@@ -1577,6 +1653,13 @@ export default function PurchaseRequisitionPage() {
                 ))}
               </tbody>
             </table>
+            <datalist id="po-erp-stock-codes">
+              {erpStockItems.map((s) => (
+                <option key={s.stockCode} value={s.stockCode}>
+                  {s.description ? `${s.description} — Price: ${s.price ?? 'N/A'}` : s.stockCode}
+                </option>
+              ))}
+            </datalist>
           </div>
         </section>
 

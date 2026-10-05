@@ -4,6 +4,7 @@ import { checkRoutePermission, getFirstAllowedPath } from '../utils/permissions'
 import { getRoutePermissionRule } from '../config/permissionRouting';
 import { isAdmin, isVendor, NAVIGATION_MENU } from '../utils/rbac';
 import { isRoleMatching } from '../services/formWorkflowService';
+import { getEmployeeCompanyCode } from '../utils/tenantResolver';
 
 /**
  * Check if the current path is allowed by the user's role via NAVIGATION_MENU.
@@ -51,7 +52,8 @@ export function PermissionGate() {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    const empCode = getEmployeeCompanyCode();
+    return <Navigate to={empCode ? `/e/${empCode.toLowerCase()}/login` : '/helicalconsulting'} replace />;
   }
 
   if (isVendor(roles) || isAdmin(roles)) {

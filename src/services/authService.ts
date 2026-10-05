@@ -54,6 +54,13 @@ async function mockLogin(payload: LoginPayload): Promise<AuthResponse> {
   );
   if (!user) throw new Error('Invalid username or password');
   if (!user.isActive) throw new Error('Account is deactivated. Contact your administrator.');
+  if (payload.companyCode) {
+    const uCode = (user.companyCode || '').trim().toUpperCase();
+    const reqCode = payload.companyCode.trim().toUpperCase();
+    if (uCode && uCode !== reqCode) {
+      throw new Error(`This user account does not belong to organization '${reqCode}'.`);
+    }
+  }
   const { password, roles, ...userData } = user;
   void password;
   const permissions = mockPermissionsForRoles(roles);
@@ -100,12 +107,20 @@ async function mockGetCurrentUser(): Promise<AuthResponse | null> {
 }
 
 async function apiLogin(payload: LoginPayload): Promise<AuthResponse> {
+  const companyCode = payload.companyCode || localStorage.getItem('employee_company_code') || undefined;
+  const headers = authHeaders();
+  if (companyCode) {
+    (headers as any)['x-company-code'] = companyCode;
+  }
   let res: Response;
   try {
     res = await fetch(`${API_BASE}/auth/login`, {
       method: 'POST',
-      headers: authHeaders(),
-      body: JSON.stringify(payload),
+      headers,
+      body: JSON.stringify({
+        ...payload,
+        companyCode,
+      }),
     });
   } catch (err) {
     throw new Error(`Unable to connect to authentication server at ${API_BASE}. Please verify server network status.`);
@@ -242,6 +257,13 @@ function saveSession(data: AuthResponse, options?: { vendorPortal?: boolean }): 
   }
   if (options?.vendorPortal) {
     localStorage.setItem(VENDOR_TOKEN_KEY, data.token);
+    if (data.user?.companyCode) {
+      localStorage.setItem('vendor_company_code', data.user.companyCode.toUpperCase());
+    }
+  } else {
+    if (data.user?.companyCode) {
+      localStorage.setItem('employee_company_code', data.user.companyCode.toUpperCase());
+    }
   }
 }
 

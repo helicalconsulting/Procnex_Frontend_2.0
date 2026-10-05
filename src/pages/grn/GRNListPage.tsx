@@ -37,6 +37,7 @@ import {
 } from '../../components/ui/dialog';
 import { Input } from '../../components/ui/input';
 import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
+import TablePagination from '../../components/shared/TablePagination';
 import { cn } from '../../lib/utils';
 
 function isFrom16SeptOnwards(dateVal?: string): boolean {
@@ -398,6 +399,21 @@ export default function GRNListPage() {
     });
   }, [allRecordedDispatches, search]);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const perPage = 8;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, kpiFilter]);
+
+  const totalPoPages = Math.max(1, Math.ceil(filteredPOs.length / perPage));
+  const safePoPage = Math.min(currentPage, totalPoPages);
+  const paginatedPOs = filteredPOs.slice((safePoPage - 1) * perPage, safePoPage * perPage);
+
+  const totalGrnPages = Math.max(1, Math.ceil(filteredGRNs.length / perPage));
+  const safeGrnPage = Math.min(currentPage, totalGrnPages);
+  const paginatedGRNs = filteredGRNs.slice((safeGrnPage - 1) * perPage, safeGrnPage * perPage);
+
   // Eligible Approved POs for GRN creation
   const approvedOrders = useMemo(() => {
     return poList.filter((po) => {
@@ -594,7 +610,7 @@ export default function GRNListPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
-                  {filteredPOs.map((po) => {
+                  {paginatedPOs.map((po) => {
                     const poNum = String(po?.poNumber || '');
                     const vName =
                       typeof po?.vendor === 'object' && po?.vendor?.name
@@ -681,6 +697,12 @@ export default function GRNListPage() {
               </table>
             </div>
           )}
+          <TablePagination
+            currentPage={safePoPage}
+            totalItems={filteredPOs.length}
+            perPage={perPage}
+            onPageChange={setCurrentPage}
+          />
         </Card>
       ) : (
         <Card className="overflow-hidden border border-border/80 shadow-sm">
@@ -738,7 +760,7 @@ export default function GRNListPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
-                  {filteredGRNs.map((grn) => {
+                  {paginatedGRNs.map((grn) => {
                     const poNum = String(grn.purchaseOrder?.poNumber || '').toLowerCase();
                     const poId = String(grn.poId || grn.purchaseOrder?.id || '').toLowerCase();
                     const grnNum = String(grn.grnNumber || '').toLowerCase();
@@ -834,6 +856,12 @@ export default function GRNListPage() {
               </table>
             </div>
           )}
+          <TablePagination
+            currentPage={safeGrnPage}
+            totalItems={filteredGRNs.length}
+            perPage={perPage}
+            onPageChange={setCurrentPage}
+          />
         </Card>
       )}
 

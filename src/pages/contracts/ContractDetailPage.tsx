@@ -1092,10 +1092,6 @@ export default function ContractDetailPage() {
         {activeTab === 'documents' && (
           <div>
             <div className="ctr-detail__doc-preview">
-              <div style={{ textAlign: 'center', marginBottom: 24 }}>
-                <h2 style={{ fontSize: 21, fontWeight: 700, margin: 0 }}>{contract.title}</h2>
-                <p style={{ color: 'var(--text-secondary)', margin: '4px 0 0', fontSize: 14 }}>{contract.contractNumber}</p>
-              </div>
               {contract.contentSnapshot ? (
                 <div className="ctr-doc-preview-content" dangerouslySetInnerHTML={{ __html: cleanDuplicateSignatures(contract.contentSnapshot) }} />
               ) : (

@@ -303,16 +303,9 @@ export default function VendorContractDetailPage() {
           <div className="flex flex-wrap items-center gap-2">
             <RecordStatusBadge kind="contract" status={status} className="py-1 px-2.5 text-xs font-semibold" />
 
-            {canSign && (
-              <Button size="sm" onClick={() => setActiveTab('signature')} className="gap-1.5">
-                <FileSignature className="size-4" /> Sign Now
-              </Button>
-            )}
-
             <Button variant="outline" size="sm" onClick={handleDownload} className="gap-1.5">
               <Download className="size-4" /> Download PDF
             </Button>
-
           </div>
         }
       />

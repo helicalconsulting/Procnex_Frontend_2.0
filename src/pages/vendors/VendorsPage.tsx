@@ -20,6 +20,7 @@ import {
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import FloatingMenu from '../../components/shared/FloatingMenu';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
+import { TablePagination } from '../../components/shared/TablePagination';
 import { procurementService } from '../../services/procurementService';
 import { sapEmailService } from '../../services/sapEmailService';
 import { API_BASE } from '../../api/client';
@@ -116,122 +117,7 @@ function formatDateShort(d: string | null | undefined): string {
   }
 }
 
-const DEFAULT_VENDOR_DOCUMENTS: Record<string, VendorDocumentItem[]> = {
-  '1': [
-    {
-      id: 'doc-101',
-      name: 'GST Registration Certificate',
-      type: 'GST Registration',
-      documentNumber: '27AABCU9603R1ZX',
-      submittedAt: '2024-06-12',
-      expiryDate: '2026-08-30',
-      status: 'EXPIRING_SOON',
-    },
-    {
-      id: 'doc-102',
-      name: 'PAN Card Copy',
-      type: 'PAN Card',
-      documentNumber: 'AABCU9603R',
-      submittedAt: '2024-06-12',
-      expiryDate: null,
-      status: 'VALID',
-    },
-    {
-      id: 'doc-103',
-      name: 'ISO 9001:2015 Quality Certificate',
-      type: 'ISO Certification',
-      documentNumber: 'ISO-88219-QMS',
-      submittedAt: '2024-01-15',
-      expiryDate: '2026-08-22',
-      status: 'EXPIRED',
-    },
-    {
-      id: 'doc-104',
-      name: 'HDFC Bank Cancelled Cheque',
-      type: 'Bank Proof',
-      documentNumber: 'HDFC-50100234567890',
-      submittedAt: '2024-06-14',
-      expiryDate: null,
-      status: 'VALID',
-    },
-    {
-      id: 'doc-105',
-      name: 'Trade License & Business Registration',
-      type: 'Business License',
-      documentNumber: 'BL-MH-99210',
-      submittedAt: '2024-01-10',
-      expiryDate: '2027-12-31',
-      status: 'VALID',
-    },
-  ],
-  '2': [
-    {
-      id: 'doc-201',
-      name: 'GST Registration Certificate',
-      type: 'GST Registration',
-      documentNumber: '27BPCB1234R1ZY',
-      submittedAt: '2024-02-01',
-      expiryDate: '2026-09-10',
-      status: 'EXPIRING_SOON',
-    },
-    {
-      id: 'doc-202',
-      name: 'PAN Card Copy',
-      type: 'PAN Card',
-      documentNumber: 'BPCB1234R',
-      submittedAt: '2024-02-01',
-      expiryDate: null,
-      status: 'VALID',
-    },
-    {
-      id: 'doc-203',
-      name: 'Electrical Safety License',
-      type: 'Business License',
-      documentNumber: 'E-LIC-5542',
-      submittedAt: '2024-02-15',
-      expiryDate: '2026-08-20',
-      status: 'EXPIRED',
-    },
-    {
-      id: 'doc-204',
-      name: 'ICICI Bank Account Proof',
-      type: 'Bank Proof',
-      documentNumber: 'ICICI-62030123456789',
-      submittedAt: '2024-02-05',
-      expiryDate: null,
-      status: 'VALID',
-    },
-  ],
-  '3': [
-    {
-      id: 'doc-301',
-      name: 'GST Registration Certificate',
-      type: 'GST Registration',
-      documentNumber: '07AABCS1234R1ZV',
-      submittedAt: '2024-03-10',
-      expiryDate: '2027-04-15',
-      status: 'VALID',
-    },
-    {
-      id: 'doc-302',
-      name: 'PAN Card Copy',
-      type: 'PAN Card',
-      documentNumber: 'AABCS1234R',
-      submittedAt: '2024-03-10',
-      expiryDate: null,
-      status: 'VALID',
-    },
-    {
-      id: 'doc-303',
-      name: 'MSME Udhyam Registration Certificate',
-      type: 'MSME Certificate',
-      documentNumber: 'UDYAM-DL-07-00912',
-      submittedAt: '2024-03-12',
-      expiryDate: null,
-      status: 'VALID',
-    },
-  ],
-};
+const DEFAULT_VENDOR_DOCUMENTS: Record<string, VendorDocumentItem[]> = {};
 
 // ─── Column Definitions ─────────────────────────────────────
 
@@ -465,14 +351,14 @@ export default function VendorsPage() {
     procurementService.getVendorDocuments(String(vendorId))
       .then((res) => {
         if (isCancelled || !res || !res.documents || res.documents.length === 0) return;
-        const fetchedDocs: VendorDocumentItem[] = res.documents.map((d) => ({
+        const fetchedDocs: VendorDocumentItem[] = res.documents.map((d: any) => ({
           id: d.id || `doc-${Date.now()}-${Math.random()}`,
           name: d.originalName || d.documentType,
           type: d.documentType,
-          documentNumber: d.documentType === 'GST Registration' ? (detailVendor.gstNumber || undefined) : d.documentType === 'PAN Card' ? (detailVendor.panNumber || undefined) : undefined,
+          documentNumber: d.documentNumber || (d.documentType === 'GST Registration' ? (detailVendor.gstNumber || undefined) : d.documentType === 'PAN Card' ? (detailVendor.panNumber || undefined) : undefined),
           fileUrl: d.publicUrl ? getDocUrl(d.publicUrl) : undefined,
-          submittedAt: d.uploadedAt ? d.uploadedAt.slice(0, 10) : detailVendor.createdAt,
-          expiryDate: d.documentType === 'GST Registration' ? '2026-08-30' : null,
+          submittedAt: d.uploadedAt ? d.uploadedAt.slice(0, 10) : (detailVendor.createdAt ? detailVendor.createdAt.slice(0, 10) : ''),
+          expiryDate: d.expiryDate ? d.expiryDate.slice(0, 10) : null,
           status: d.status === 'VERIFIED' ? 'VALID' : 'VALID',
         }));
 
@@ -1234,44 +1120,12 @@ export default function VendorsPage() {
       </Card>
 
       {/* Pagination */}
-      {filtered.length > perPage && (
-        <div className="mt-4 flex flex-col gap-3 rounded-xl border border-border/65 bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <span className="text-xs text-muted-foreground">
-            Showing {(safePage - 1) * perPage + 1}–{Math.min(safePage * perPage, filtered.length)} of {filtered.length}
-          </span>
-          <div className="flex flex-wrap gap-1">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              disabled={safePage === 1}
-              onClick={() => setCurrentPage((page) => page - 1)}
-              aria-label="Previous page"
-            >
-              <ChevronLeft />
-            </Button>
-            {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
-              <Button
-                key={page}
-                variant={safePage === page ? 'default' : 'ghost'}
-                size="icon-sm"
-                onClick={() => setCurrentPage(page)}
-                aria-label={`Page ${page}`}
-              >
-                {page}
-              </Button>
-            ))}
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              disabled={safePage === totalPages}
-              onClick={() => setCurrentPage((page) => page + 1)}
-              aria-label="Next page"
-            >
-              <ChevronRight />
-            </Button>
-          </div>
-        </div>
-      )}
+      <TablePagination
+        currentPage={safePage}
+        totalItems={filtered.length}
+        perPage={perPage}
+        onPageChange={setCurrentPage}
+      />
 
       {/* Add / Edit Vendor Modal */}
       {showModal && (
@@ -1573,44 +1427,7 @@ export default function VendorsPage() {
         const delivRisk = effectiveDelivery > 0 ? Math.max(0, 100 - effectiveDelivery) : 0;
         const priceRisk = effectivePrice > 0 ? Math.max(0, 100 - effectivePrice) : 0;
 
-        const currentDocs: VendorDocumentItem[] = vendorDocsMap[detailVendor.id] || (DEFAULT_VENDOR_DOCUMENTS[detailVendor.id] || [
-          ...(detailVendor.gstNumber ? [{
-            id: `doc-${detailVendor.id}-gst`,
-            name: 'GST Registration Certificate',
-            type: 'GST Registration',
-            documentNumber: detailVendor.gstNumber,
-            submittedAt: detailVendor.createdAt,
-            expiryDate: '2026-08-30',
-            status: 'EXPIRING_SOON' as const,
-          }] : []),
-          ...(detailVendor.panNumber ? [{
-            id: `doc-${detailVendor.id}-pan`,
-            name: 'PAN Card Copy',
-            type: 'PAN Card',
-            documentNumber: detailVendor.panNumber,
-            submittedAt: detailVendor.createdAt,
-            expiryDate: null,
-            status: 'VALID' as const,
-          }] : []),
-          ...(detailVendor.bankName ? [{
-            id: `doc-${detailVendor.id}-bank`,
-            name: `${detailVendor.bankName} Account Proof`,
-            type: 'Bank Proof',
-            documentNumber: detailVendor.bankAccountNumber || 'Account Proof',
-            submittedAt: detailVendor.createdAt,
-            expiryDate: null,
-            status: 'VALID' as const,
-          }] : []),
-          {
-            id: `doc-${detailVendor.id}-license`,
-            name: 'Business Operating License',
-            type: 'Business License',
-            documentNumber: `LIC-${detailVendor.id}-2024`,
-            submittedAt: detailVendor.createdAt,
-            expiryDate: '2026-08-20',
-            status: 'EXPIRED' as const,
-          },
-        ]);
+        const currentDocs: VendorDocumentItem[] = vendorDocsMap[detailVendor.id] || [];
 
         const expiredDocs = currentDocs.filter((d) => getDocExpiryInfo(d.expiryDate).isExpired);
         const expiringDocs = currentDocs.filter((d) => getDocExpiryInfo(d.expiryDate).isExpiringSoon);

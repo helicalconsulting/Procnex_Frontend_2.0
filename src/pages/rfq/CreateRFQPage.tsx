@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
 import { rfqService, type CreateRfqPayload, type EvalCategoryDTO } from '../../services/rfqService';
+import { erpService, type ERPStockItem } from '../../services/erpService';
 import { vendorService } from '../../services/vendorService';
 import { companySettingsService, type Unit, type FormFieldConfig } from '../../services/companySettingsService';
 import {
@@ -367,7 +368,15 @@ export default function CreateRFQPage() {
   }, []);
 
   const updateCustomField = useCallback((id: string, field: Partial<CustomField>) => {
-    setCustomFields((prev) => prev.map((cf) => (cf.id === id ? { ...cf, ...field } : cf)));
+    setCustomFields((prev) => prev.map((cf) => {
+      if (cf.id !== id) return cf;
+      const updated = { ...cf, ...field };
+      if (field.weightage !== undefined) {
+        const w = Number(field.weightage);
+        updated.weightage = isNaN(w) ? 0 : Math.max(0, Math.min(100, w));
+      }
+      return updated;
+    }));
   }, []);
 
   // ── RFQ Info: Extra Fields from Settings (Flexi Fields) ──
@@ -551,6 +560,15 @@ export default function CreateRFQPage() {
   const [items, setItems] = useState<LineItem[]>([
     { id: 1, itemCode: '', itemName: '', description: '', quantity: '', unit: '', expectedDate: '' },
   ]);
+  const [erpStockItems, setErpStockItems] = useState<ERPStockItem[]>([]);
+
+  useEffect(() => {
+    erpService.getStockCodes().then((stockList) => {
+      if (Array.isArray(stockList) && stockList.length > 0) {
+        setErpStockItems(stockList);
+      }
+    }).catch(() => {});
+  }, []);
 
   const addItem = useCallback(() => {
     setItems((prev) => [
@@ -565,9 +583,23 @@ export default function CreateRFQPage() {
 
   const updateItem = useCallback((id: number, field: keyof LineItem, value: string) => {
     setItems((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, [field]: value } : i))
+      prev.map((i) => {
+        if (i.id !== id) return i;
+        const updated = { ...i, [field]: value };
+        if (field === 'itemCode' && value.trim()) {
+          const matched = erpStockItems.find(
+            (s) => s.stockCode.toLowerCase() === value.trim().toLowerCase()
+          );
+          if (matched) {
+            if (!updated.itemName || updated.itemName === '') updated.itemName = matched.description || matched.stockCode;
+            if (!updated.description || updated.description === '') updated.description = matched.description || '';
+            if (!updated.unit || updated.unit === '') updated.unit = matched.unitOfMeasure || 'Pcs';
+          }
+        }
+        return updated;
+      })
     );
-  }, []);
+  }, [erpStockItems]);
 
   // Form state — Vendors
   const [selectedVendors, setSelectedVendors] = useState<string[]>([]);
@@ -1053,7 +1085,7 @@ export default function CreateRFQPage() {
               <input
                 className="create-rfq__input"
                 type="date"
-                value={closingDate}
+                value={closingDate ? String(closingDate).slice(0, 10) : ''}
                 onChange={(e) => setClosingDate(e.target.value)}
               />
               <span className="create-rfq__hint">Last date for vendors to submit quotations</span>
@@ -1421,10 +1453,25 @@ export default function CreateRFQPage() {
                         type="number"
                         min="0"
                         max="100"
-                        value={param.weightage}
-                        onChange={(e) => updateSimpleWeightage(key, parseInt(e.target.value, 10) || 0)}
+                        value={param.weightage === 0 ? '' : param.weightage}
+                        placeholder="0"
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          if (raw === '') {
+                            updateSimpleWeightage(key, 0);
+                            return;
+                          }
+                          const cleaned = raw.replace(/^0+(?=\d)/, '');
+                          const parsed = parseInt(cleaned, 10);
+                          if (isNaN(parsed)) {
+                            updateSimpleWeightage(key, 0);
+                            return;
+                          }
+                          updateSimpleWeightage(key, Math.max(0, Math.min(100, parsed)));
+                        }}
                         style={{
-                          width: 52,
+                          width: 58,
                           padding: '6px 8px',
                           border: '1px solid var(--border)',
                           borderRadius: 'var(--radius-sm)',
@@ -1435,7 +1482,9 @@ export default function CreateRFQPage() {
                           fontFamily: 'inherit',
                           textAlign: 'center',
                           outline: 'none',
+                          boxSizing: 'border-box',
                         }}
+                        title="Scoring weightage (%) — Max 100%"
                       />
                       <span style={{ fontSize: 13, color: 'var(--text-secondary)', width: 20 }}>%</span>
                       {/* Edit button */}
@@ -1558,29 +1607,46 @@ export default function CreateRFQPage() {
                   />
 
                   {/* Weightage Input */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                     <input
                       type="number"
                       min={0}
                       max={100}
-                      value={cf.weightage}
-                      onChange={(e) => updateCustomField(cf.id, { weightage: parseInt(e.target.value) || 0 })}
+                      value={cf.weightage === 0 ? '' : cf.weightage}
+                      placeholder="0"
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        if (raw === '') {
+                          updateCustomField(cf.id, { weightage: 0 });
+                          return;
+                        }
+                        const cleaned = raw.replace(/^0+(?=\d)/, '');
+                        const parsed = parseInt(cleaned, 10);
+                        if (isNaN(parsed)) {
+                          updateCustomField(cf.id, { weightage: 0 });
+                          return;
+                        }
+                        const clamped = Math.max(0, Math.min(100, parsed));
+                        updateCustomField(cf.id, { weightage: clamped });
+                      }}
                       style={{
-                        width: 44,
-                        padding: '5px 6px',
+                        width: 58,
+                        padding: '6px 8px',
                         border: '1px solid var(--border)',
                         borderRadius: 'var(--radius-sm)',
                         background: 'var(--surface)',
                         color: 'var(--text-primary)',
-                        fontSize: 13,
+                        fontSize: 14,
                         fontWeight: 700,
                         fontFamily: 'inherit',
                         textAlign: 'center',
                         outline: 'none',
+                        boxSizing: 'border-box',
                       }}
-                      title="Scoring weightage (%)"
+                      title="Scoring weightage (%) — Max 100%"
                     />
-                    <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, marginRight: 2 }}>%</span>
+                    <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 600, marginRight: 2 }}>%</span>
                   </div>
                   <label
                     style={{
@@ -1687,8 +1753,9 @@ export default function CreateRFQPage() {
                       <td>
                         <input
                           type="text"
-                          placeholder="e.g. ITM-001"
+                          placeholder="e.g. LED-6060"
                           value={item.itemCode || ''}
+                          list="erp-stock-codes-list"
                           onChange={(e) => updateItem(item.id, 'itemCode', e.target.value)}
                         />
                       </td>
@@ -1731,7 +1798,7 @@ export default function CreateRFQPage() {
                       <td>
                         <input
                           type="date"
-                          value={item.expectedDate}
+                          value={item.expectedDate ? String(item.expectedDate).slice(0, 10) : ''}
                           onChange={(e) => updateItem(item.id, 'expectedDate', e.target.value)}
                         />
                       </td>
@@ -1748,6 +1815,13 @@ export default function CreateRFQPage() {
                   ))}
                 </tbody>
               </table>
+              <datalist id="erp-stock-codes-list">
+                {erpStockItems.map((s) => (
+                  <option key={s.stockCode} value={s.stockCode}>
+                    {s.description ? `${s.description} (${s.unitOfMeasure || 'EA'})` : s.stockCode}
+                  </option>
+                ))}
+              </datalist>
             </div>
 
             <button className="create-rfq__add-row" onClick={addItem}>

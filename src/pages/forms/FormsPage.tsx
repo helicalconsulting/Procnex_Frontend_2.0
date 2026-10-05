@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import {
@@ -30,8 +31,10 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { CurrencyAmountInput } from '../../components/shared/CurrencyMaster';
+import PhoneInput from '../../components/shared/PhoneInput';
 import { FormSignatureField } from '../../components/shared/FormSignatureField';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
+import { TablePagination } from '../../components/shared/TablePagination';
 import { adminService } from '../../services/adminService';
 import { vendorService } from '../../services/vendorService';
 import type { User as UserType } from '../../types';
@@ -42,6 +45,7 @@ type ActiveTab = 'pending' | 'approval_pending' | 'submitted' | 'draft' | 'compl
 
 export default function FormsPage() {
   const { user, roles, hasPermission } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const canCreateFormResponse = true;
   const canApproveFormResponse = true;
   const currentUserId = String(user?.id || (user as any)?._id || '1');
@@ -58,7 +62,12 @@ export default function FormsPage() {
   const [userList, setUserList] = useState<UserType[]>([]);
   const [vendorList, setVendorList] = useState<VendorTableRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<ActiveTab>('pending');
+  
+  const tabParam = searchParams.get('tab') as ActiveTab | null;
+  const initialTab = tabParam && ['pending', 'approval_pending', 'submitted', 'draft', 'completed', 'returned'].includes(tabParam)
+    ? tabParam
+    : 'pending';
+  const [activeTab, setActiveTab] = useState<ActiveTab>(initialTab);
   const [selectedSubmission, setSelectedSubmission] = useState<FormSubmissionInstance | null>(null);
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -66,6 +75,8 @@ export default function FormsPage() {
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [pageMsg, setPageMsg] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 8;
 
   useEffect(() => {
     adminService
@@ -228,12 +239,51 @@ export default function FormsPage() {
     return { pending, approvalPending: pending, submitted, draft, completed, returned };
   }, [submissions, currentUserId, currentUserEmail, isUserApproverForCurrentLevel, hasUserApprovedAnyLevel, isWorkflowApproverForAnyLevel, hasUserReturnedForm]);
 
-  // Auto-switch to Pending My Approval tab if user has approval tasks
+  // Sync searchParams with activeTab
   useEffect(() => {
-    if (counts.approvalPending > 0 && activeTab === 'pending' && counts.pending === 0) {
+    const tab = searchParams.get('tab') as ActiveTab | null;
+    if (tab && ['pending', 'approval_pending', 'submitted', 'draft', 'completed', 'returned'].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
+  // Handle Tab Switch
+  const handleTabChange = (newTab: ActiveTab) => {
+    setActiveTab(newTab);
+    setCurrentPage(1);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('tab', newTab);
+      return next;
+    }, { replace: true });
+  };
+
+  const totalPages = Math.max(1, Math.ceil(filteredSubmissions.length / itemsPerPage));
+  const paginatedSubmissions = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredSubmissions.slice(start, start + itemsPerPage);
+  }, [filteredSubmissions, currentPage, itemsPerPage]);
+
+  // Auto-switch to Pending My Approval tab if user has approval tasks (only when no tab param is specified)
+  useEffect(() => {
+    if (!searchParams.get('tab') && counts.approvalPending > 0 && activeTab === 'pending' && counts.pending === 0) {
       setActiveTab('approval_pending');
     }
-  }, [counts.approvalPending, counts.pending, activeTab]);
+  }, [counts.approvalPending, counts.pending, activeTab, searchParams]);
+
+  // Auto open form if id or search query parameter is present in URL
+  useEffect(() => {
+    const formSearch = searchParams.get('id') || searchParams.get('search');
+    if (formSearch && submissions.length > 0 && !selectedSubmission) {
+      const matched = submissions.find(
+        (s) => s.id === formSearch || s.formTitle.toLowerCase().includes(formSearch.toLowerCase())
+      );
+      if (matched) {
+        setSelectedSubmission(matched);
+        setFormData(matched.responseData || {});
+      }
+    }
+  }, [searchParams, submissions, selectedSubmission]);
 
   // Open Form Filler Modal
   const openFormFiller = (sub: FormSubmissionInstance) => {
@@ -281,6 +331,20 @@ export default function FormsPage() {
       if (isEmail && val && typeof val === 'string' && val.trim() !== '') {
         if (!emailRegex.test(val.trim())) {
           setPageMsg(`⚠️ Invalid Email Format: Please enter a valid email address for "${field.label}" (e.g. name@domain.com).`);
+          return false;
+        }
+      }
+
+      const isPhone = field.type === 'phone' || (field.label && (
+        field.label.toLowerCase().includes('phone') ||
+        field.label.toLowerCase().includes('mobile') ||
+        field.label.toLowerCase().includes('contact number') ||
+        field.label.toLowerCase().includes('telephone')
+      ));
+      if (isPhone && val && typeof val === 'string' && val.trim() !== '') {
+        const phoneDigits = val.replace(/[\s\-\(\)\+\.]/g, '');
+        if (/[a-zA-Z]/.test(val) || !/^[\+]?[(]?[0-9]{1,4}[)]?[-\s\./0-9]*$/.test(val.trim()) || phoneDigits.length < 7 || phoneDigits.length > 15) {
+          setPageMsg(`⚠️ Invalid Phone Number: Please enter a valid phone number for "${field.label}" (7-15 digits, numbers only).`);
           return false;
         }
       }
@@ -416,7 +480,7 @@ export default function FormsPage() {
       <div className="fp-tabs-bar">
         <button
           className={`fp-tab-btn ${activeTab === 'pending' || activeTab === 'approval_pending' ? 'fp-tab-btn--active' : ''}`}
-          onClick={() => setActiveTab('pending')}
+          onClick={() => handleTabChange('pending')}
         >
           <ShieldCheck size={16} />
           <span>Pending Actions &amp; Approvals</span>
@@ -425,18 +489,16 @@ export default function FormsPage() {
 
         <button
           className={`fp-tab-btn ${activeTab === 'submitted' ? 'fp-tab-btn--active' : ''}`}
-          onClick={() => setActiveTab('submitted')}
+          onClick={() => handleTabChange('submitted')}
         >
           <Clock size={16} />
           <span>My Submitted Forms</span>
           <span className="fp-tab-badge">{counts.submitted}</span>
         </button>
 
-
-
         <button
           className={`fp-tab-btn ${activeTab === 'draft' ? 'fp-tab-btn--active' : ''}`}
-          onClick={() => setActiveTab('draft')}
+          onClick={() => handleTabChange('draft')}
         >
           <FileText size={16} />
           <span>Draft Forms</span>
@@ -445,7 +507,7 @@ export default function FormsPage() {
 
         <button
           className={`fp-tab-btn ${activeTab === 'completed' ? 'fp-tab-btn--active' : ''}`}
-          onClick={() => setActiveTab('completed')}
+          onClick={() => handleTabChange('completed')}
         >
           <CheckCircle2 size={16} />
           <span>Completed</span>
@@ -454,7 +516,7 @@ export default function FormsPage() {
 
         <button
           className={`fp-tab-btn ${activeTab === 'returned' ? 'fp-tab-btn--active' : ''}`}
-          onClick={() => setActiveTab('returned')}
+          onClick={() => handleTabChange('returned')}
         >
           <RotateCcw size={16} />
           <span>Returned</span>
@@ -472,126 +534,137 @@ export default function FormsPage() {
           <p>You have no forms under the "{activeTab.replace('_', ' ')}" category at this time.</p>
         </div>
       ) : (
-        <div className="fp-cards-grid">
-          {filteredSubmissions.map((sub) => {
-            const isApproverForSub = isUserApproverForCurrentLevel(sub);
-            const hasApprovedPrior = hasUserApprovedAnyLevel(sub);
-            const currentRoleNeeded = sub.approvalLevels?.find((l) => l.levelNumber === sub.currentLevelNumber)?.requiredRole || 'Approver';
+        <>
+          <div className="fp-cards-grid">
+            {paginatedSubmissions.map((sub) => {
+              const isApproverForSub = isUserApproverForCurrentLevel(sub);
+              const hasApprovedPrior = hasUserApprovedAnyLevel(sub);
+              const currentRoleNeeded = sub.approvalLevels?.find((l) => l.levelNumber === sub.currentLevelNumber)?.requiredRole || 'Approver';
 
-            return (
-              <div key={sub.id} className="fp-card">
-                <div className="fp-card__top">
-                  <span className={`fp-priority-tag fp-priority-tag--${sub.priority.toLowerCase()}`}>
-                    {sub.priority} Priority
-                  </span>
-                  <span className={`fp-status-tag fp-status-tag--${sub.status === 'completed' ? 'completed' : sub.status === 'returned' ? 'returned' : sub.status}`}>
-                    {sub.status === 'completed'
-                      ? 'COMPLETED'
-                      : sub.status === 'returned'
-                      ? 'RETURNED'
-                      : sub.status === 'draft'
-                      ? 'DRAFT'
-                      : sub.status === 'pending'
-                      ? 'AWAITING RESPONSE'
-                      : sub.workflowAttached && sub.currentLevelNumber > 0
-                      ? `PENDING LEVEL ${sub.currentLevelNumber} APPROVAL`
-                      : 'SUBMITTED'}
-                  </span>
-                </div>
+              return (
+                <div key={sub.id} className="fp-card">
+                  <div className="fp-card__top">
+                    <span className={`fp-priority-tag fp-priority-tag--${sub.priority.toLowerCase()}`}>
+                      {sub.priority} Priority
+                    </span>
+                    <span className={`fp-status-tag fp-status-tag--${sub.status === 'completed' ? 'completed' : sub.status === 'returned' ? 'returned' : sub.status}`}>
+                      {sub.status === 'completed'
+                        ? 'COMPLETED'
+                        : sub.status === 'returned'
+                        ? 'RETURNED'
+                        : sub.status === 'draft'
+                        ? 'DRAFT'
+                        : sub.status === 'pending'
+                        ? 'AWAITING RESPONSE'
+                        : sub.workflowAttached && sub.currentLevelNumber > 0
+                        ? `PENDING LEVEL ${sub.currentLevelNumber} APPROVAL`
+                        : 'SUBMITTED'}
+                    </span>
+                  </div>
 
-                <h3 className="fp-card__title">{sub.formTitle}</h3>
-                {sub.formDescription && <p className="fp-card__desc">{sub.formDescription}</p>}
+                  <h3 className="fp-card__title">{sub.formTitle}</h3>
+                  {sub.formDescription && <p className="fp-card__desc">{sub.formDescription}</p>}
 
-                {sub.workflowAttached && (
-                  <div className="fp-card__level-box" style={{ marginBottom: '12px' }}>
-                    <div className="fp-card__level-badge">
-                      <ShieldCheck size={14} />
-                      <span>
-                        {sub.status === 'completed'
-                          ? 'Completed (All Levels)'
-                          : `Level ${sub.currentLevelNumber || 1} of ${sub.totalLevels}: ${currentRoleNeeded}`}
-                      </span>
-                    </div>
-                    <div
-                      style={{
-                        marginTop: '6px',
-                        height: '5px',
-                        background: 'rgba(255,255,255,0.08)',
-                        borderRadius: '3px',
-                        overflow: 'hidden',
-                      }}
-                    >
+                  {sub.workflowAttached && (
+                    <div className="fp-card__level-box" style={{ marginBottom: '12px' }}>
+                      <div className="fp-card__level-badge">
+                        <ShieldCheck size={14} />
+                        <span>
+                          {sub.status === 'completed'
+                            ? 'Completed (All Levels)'
+                            : `Level ${sub.currentLevelNumber || 1} of ${sub.totalLevels}: ${currentRoleNeeded}`}
+                        </span>
+                      </div>
                       <div
                         style={{
-                          height: '100%',
-                          background: 'linear-gradient(90deg, #0a6ed1, #107e3e)',
-                          transition: 'width 0.3s ease',
-                          width: `${
-                            sub.status === 'completed'
-                              ? 100
-                              : (() => {
-                                  const total = sub.totalLevels || 1;
-                                  const approvedByStatus = (sub.approvalLevels || []).filter((l) => l.status === 'approved').length;
-                                  const approvedByNum = (sub.currentLevelNumber || 1) - 1;
-                                  const approvedCount = Math.max(approvedByStatus, approvedByNum);
-                                  const pct = (approvedCount / total) * 100;
-                                  return Math.max(5, Math.min(100, pct));
-                                })()
-                          }%`,
+                          marginTop: '6px',
+                          height: '5px',
+                          background: 'rgba(255,255,255,0.08)',
+                          borderRadius: '3px',
+                          overflow: 'hidden',
                         }}
-                      />
+                      >
+                        <div
+                          style={{
+                            height: '100%',
+                            background: 'linear-gradient(90deg, #0a6ed1, #107e3e)',
+                            transition: 'width 0.3s ease',
+                            width: `${
+                              sub.status === 'completed'
+                                ? 100
+                                : (() => {
+                                    const total = sub.totalLevels || 1;
+                                    const approvedByStatus = (sub.approvalLevels || []).filter((l) => l.status === 'approved').length;
+                                    const approvedByNum = (sub.currentLevelNumber || 1) - 1;
+                                    const approvedCount = Math.max(approvedByStatus, approvedByNum);
+                                    const pct = (approvedCount / total) * 100;
+                                    return Math.max(5, Math.min(100, pct));
+                                  })()
+                            }%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="fp-card__meta">
+                    <div className="fp-meta-item">
+                      <User size={13} />
+                      {sub.workflowAttached ? (
+                        <span>
+                          {sub.status === 'completed'
+                            ? <>All Levels <strong>Approved ✓</strong></>
+                            : <>Current Approver: <strong>{currentRoleNeeded}</strong></>}
+                        </span>
+                      ) : (
+                        <span>Assigned To: <strong>{sub.assignedUserName}</strong></span>
+                      )}
+                    </div>
+                    <div className="fp-meta-item">
+                      <Calendar size={13} />
+                      <span>Due Date: <strong>{sub.dueDate}</strong></span>
+                    </div>
+                    <div className="fp-meta-item">
+                      <Clock size={13} />
+                      <span>Created: {new Date(sub.createdAt).toLocaleDateString()}</span>
                     </div>
                   </div>
-                )}
 
-                <div className="fp-card__meta">
-                  <div className="fp-meta-item">
-                    <User size={13} />
-                    {sub.workflowAttached ? (
-                      <span>
-                        {sub.status === 'completed'
-                          ? <>All Levels <strong>Approved ✓</strong></>
-                          : <>Current Approver: <strong>{currentRoleNeeded}</strong></>}
-                      </span>
-                    ) : (
-                      <span>Assigned To: <strong>{sub.assignedUserName}</strong></span>
-                    )}
-                  </div>
-                  <div className="fp-meta-item">
-                    <Calendar size={13} />
-                    <span>Due Date: <strong>{sub.dueDate}</strong></span>
-                  </div>
-                  <div className="fp-meta-item">
-                    <Clock size={13} />
-                    <span>Created: {new Date(sub.createdAt).toLocaleDateString()}</span>
+                  <div className="fp-card__footer">
+                    <button className="fp-card-btn" onClick={() => openFormFiller(sub)}>
+                      {isApproverForSub ? (
+                        <>
+                          <ShieldCheck size={15} /> Review &amp; Approve Level {sub.currentLevelNumber}
+                        </>
+                      ) : activeTab === 'returned' || sub.status === 'returned' ? (
+                        <>
+                          <RotateCcw size={15} /> View Returned Form
+                        </>
+                      ) : sub.status === 'completed' || sub.status === 'submitted' ? (
+                        <>
+                          <Eye size={15} /> View Form Response
+                        </>
+                      ) : (
+                        <>
+                          <Edit3 size={15} /> Fill Form
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
+              );
+            })}
+          </div>
 
-                <div className="fp-card__footer">
-                  <button className="fp-card-btn" onClick={() => openFormFiller(sub)}>
-                    {isApproverForSub ? (
-                      <>
-                        <ShieldCheck size={15} /> Review &amp; Approve Level {sub.currentLevelNumber}
-                      </>
-                    ) : activeTab === 'returned' || sub.status === 'returned' ? (
-                      <>
-                        <RotateCcw size={15} /> View Returned Form
-                      </>
-                    ) : sub.status === 'completed' || sub.status === 'submitted' ? (
-                      <>
-                        <Eye size={15} /> View Form Response
-                      </>
-                    ) : (
-                      <>
-                        <Edit3 size={15} /> Fill Form
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+          <TablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            totalItems={filteredSubmissions.length}
+            perPage={itemsPerPage}
+            className="mt-6"
+          />
+        </>
       )}
 
       {/* ── Form Filler & Approver Drawer Modal ── */}
@@ -815,6 +888,33 @@ export default function FormsPage() {
                               placeholder={field.placeholder || '0.00'}
                               disabled={isReadOnly}
                             />
+                          ) : field.type === 'phone' ? (
+                            <div className="space-y-1">
+                              <PhoneInput
+                                id={field.id}
+                                disabled={isReadOnly}
+                                portalWithinDialog
+                                countryCode={formData[`${field.id}_countryCode`] || '+254'}
+                                onCountryCodeChange={(code) => handleFieldChange(`${field.id}_countryCode`, code)}
+                                value={val || ''}
+                                onChange={(phoneVal) => handleFieldChange(field.id, phoneVal)}
+                                placeholder={field.placeholder || '712345678'}
+                                hasError={
+                                  Boolean(val) &&
+                                  typeof val === 'string' &&
+                                  (val.replace(/[\s\-\(\)\+\.]/g, '').length < 7 ||
+                                    val.replace(/[\s\-\(\)\+\.]/g, '').length > 15 ||
+                                    /[a-zA-Z]/.test(val))
+                                }
+                              />
+                              {Boolean(val) &&
+                                typeof val === 'string' &&
+                                (val.replace(/[\s\-\(\)\+\.]/g, '').length < 7 ||
+                                  val.replace(/[\s\-\(\)\+\.]/g, '').length > 15 ||
+                                  /[a-zA-Z]/.test(val)) && (
+                                  <span className="fp-field-error">Please enter a valid phone number (7-15 digits)</span>
+                                )}
+                            </div>
                           ) : field.type === 'file' ? (
                             <div className="fp-file-upload-box">
                               <Upload size={18} />
@@ -900,39 +1000,55 @@ export default function FormsPage() {
                                 }
                               }}
                             />
-                          ) : (
-                            <>
-                              <input
-                                type={
-                                  field.type === 'number'
-                                    ? 'number'
-                                    : field.type === 'email'
-                                    ? 'email'
-                                    : field.type === 'phone'
-                                    ? 'tel'
-                                    : 'text'
-                                }
-                                className={`fp-field-input ${
-                                  (field.type === 'email' || (field.label && field.label.toLowerCase().includes('email'))) &&
-                                  Boolean(val) &&
-                                  typeof val === 'string' &&
-                                  !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim())
-                                    ? 'fp-field-input--error'
-                                    : ''
-                                }`}
-                                placeholder={field.placeholder}
-                                value={val}
-                                disabled={isReadOnly}
-                                onChange={(e) => handleFieldChange(field.id, e.target.value)}
-                              />
-                              {(field.type === 'email' || (field.label && field.label.toLowerCase().includes('email'))) &&
-                                Boolean(val) &&
-                                typeof val === 'string' &&
-                                !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim()) && (
+                          ) : (() => {
+                            const isEmailField = field.type === 'email' || (field.label && field.label.toLowerCase().includes('email'));
+                            const isPhoneField = field.type === 'phone' || (field.label && (
+                              field.label.toLowerCase().includes('phone') ||
+                              field.label.toLowerCase().includes('mobile') ||
+                              field.label.toLowerCase().includes('contact number') ||
+                              field.label.toLowerCase().includes('telephone')
+                            ));
+                            const isEmailInvalid = isEmailField && Boolean(val) && typeof val === 'string' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim());
+                            const isPhoneInvalid = isPhoneField && Boolean(val) && typeof val === 'string' && (
+                              /[a-zA-Z]/.test(val) ||
+                              !/^[\+]?[(]?[0-9]{1,4}[)]?[-\s\./0-9]*$/.test(val.trim()) ||
+                              val.replace(/[\s\-\(\)\+\.]/g, '').length < 7 ||
+                              val.replace(/[\s\-\(\)\+\.]/g, '').length > 15
+                            );
+
+                            return (
+                              <>
+                                <input
+                                  type={
+                                    field.type === 'number'
+                                      ? 'number'
+                                      : isEmailField
+                                      ? 'email'
+                                      : isPhoneField
+                                      ? 'tel'
+                                      : 'text'
+                                  }
+                                  className={`fp-field-input ${isEmailInvalid || isPhoneInvalid ? 'fp-field-input--error' : ''}`}
+                                  placeholder={field.placeholder}
+                                  value={val || ''}
+                                  disabled={isReadOnly}
+                                  onChange={(e) => {
+                                    let value = e.target.value;
+                                    if (isPhoneField) {
+                                      value = value.replace(/[^\d\s\-\+\(\)\.]/g, '');
+                                    }
+                                    handleFieldChange(field.id, value);
+                                  }}
+                                />
+                                {isEmailInvalid && (
                                   <span className="fp-field-error">Please enter a valid email address (e.g. user@domain.com)</span>
                                 )}
-                            </>
-                          )}
+                                {isPhoneInvalid && (
+                                  <span className="fp-field-error">Please enter a valid phone number (7-15 digits, numbers only)</span>
+                                )}
+                              </>
+                            );
+                          })()}
                           {field.helpText && <span className="fp-field-help">{field.helpText}</span>}
                         </>
                       )}

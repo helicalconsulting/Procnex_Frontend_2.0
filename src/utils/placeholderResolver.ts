@@ -235,7 +235,7 @@ export function resolvePlaceholders(templateText: string, context: ResolverConte
   // Build standard replacement map
   const replacements: Record<string, string> = {
     '{{company_name}}': context.companyName || 'Procnex Consulting',
-    '{{company_address}}': context.companyAddress || 'Central Headquarters',
+    '{{company_address}}': context.companyAddress || '',
     '{{company_email}}': context.companyEmail || 'procurement@procnex.com',
     '{{company_phone}}': context.companyPhone || '+254 700 000 000',
     '{{company_tax_id}}': context.companyTaxId || 'TAX-PROCNEX-01',

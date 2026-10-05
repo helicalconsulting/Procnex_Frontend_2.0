@@ -3,6 +3,7 @@ import { Printer, Download, X, CheckCircle2, ShieldCheck, Landmark, Building2, A
 import { useCurrency } from '../shared/CurrencyMaster';
 import { useBranding } from '../../context/BrandingContext';
 import { signatureService } from '../../services/signatureService';
+import { printElementInIframe } from '../../utils/pdfDownload';
 import InvoiceDocumentViewerModal, { type DocumentAttachment } from '../invoices/InvoiceDocumentViewerModal';
 import procnexLogo from '../../assets/procnex.png';
 import defaultHeliflowLogo from '../../assets/heliflow.png';
@@ -75,7 +76,7 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
     ? data.companyAddress
     : profile?.companyAddress
       ? [profile.companyAddress, profile.companyCity, profile.companyState, profile.companyCountry].filter(Boolean).join(', ')
-      : `${displayCompanyName} • Corporate Finance & Treasury Division`;
+      : '';
 
   // Dynamically resolve company logo: 1. data override -> 2. Company Profile logo -> 3. Tenant Branding logo -> 4. Known Company Fallback
   const finalLogoUrl = data.companyLogoUrl
@@ -88,7 +89,11 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
   const isMatched = data.matchStatus !== 'DISCREPANCY';
 
   const handlePrint = () => {
-    window.print();
+    if (printableRef.current) {
+      printElementInIframe(printableRef.current, `Bank_Payment_Voucher_${data.voucherNumber}`);
+    } else {
+      window.print();
+    }
   };
 
   const [approversList, setApproversList] = useState<any[]>(data.approvers || []);
@@ -160,8 +165,13 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
         });
         const defaultSigUrl = savedSigs.find((s) => s.isDefault)?.dataUrl || savedSigs[0]?.dataUrl;
 
-        const getSigForLevel = (lvlNum: number, idx: number, approverName?: string | null) => {
-          if (approverName && approverName !== '—' && !approverName.toLowerCase().includes('pending')) {
+        const getSigForLevel = (lvlNum: number, approverName?: string | null) => {
+          const match =
+            uniqueDocSigs.find((d: any) => Number(d.levelNumber) === Number(lvlNum)) ||
+            uniqueDocSigs.find((d: any) => Number(d.levelNumber || d.level) === Number(lvlNum));
+          if (match) return match.dataUrl || match.signature?.dataUrl;
+
+          if (approverName && approverName !== '—' && !approverName.toLowerCase().includes('pending') && !approverName.toLowerCase().includes('purchase clerk')) {
             const cleanName = approverName.toLowerCase().trim();
             const byName = uniqueDocSigs.find((d: any) => {
               const sName = (d.signedBy?.fullName || d.signedByName || d.signature?.name || '').toLowerCase().trim();
@@ -170,21 +180,12 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
             if (byName) return byName.dataUrl || byName.signature?.dataUrl;
           }
 
-          const match =
-            uniqueDocSigs.find((d: any) => Number(d.levelNumber) === Number(lvlNum)) ||
-            uniqueDocSigs.find((d: any) => Number(d.levelNumber || d.level) === Number(lvlNum));
-          if (match) return match.dataUrl || match.signature?.dataUrl;
-
-          const byIdx = uniqueDocSigs[idx];
-          if (byIdx) {
-            return byIdx.dataUrl || byIdx.signature?.dataUrl;
-          }
           return undefined;
         };
 
         const l1ApproverName = (data as any).approvedBy && (data as any).approvedBy !== '—' ? (data as any).approvedBy : 'Purchase Manager';
-        const sigL1 = getSigForLevel(1, 0, l1ApproverName) || (uniqueDocSigs.length === 0 ? defaultSigUrl : undefined);
-        const sigL2 = getSigForLevel(2, 1, 'Purchase Clerk');
+        const sigL1 = getSigForLevel(1, l1ApproverName) || (uniqueDocSigs.length === 0 ? defaultSigUrl : undefined);
+        const sigL2 = getSigForLevel(2, 'Purchase Clerk');
 
         setApproversList([
           {
@@ -355,7 +356,7 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
                   <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#0f172a' }}>{displayCompanyName}</h2>
                 </div>
               )}
-              <p>{companyAddress}</p>
+              {companyAddress ? <p>{companyAddress}</p> : null}
               {profile?.taxRegistrationNumber && (
                 <p className="bpv-sheet__sub">Tax Reg / GST: {profile.taxRegistrationNumber}</p>
               )}
@@ -379,7 +380,7 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
                 <div className="bpv-box__title">REMITTER (PAYER) BANK ACCOUNT</div>
                 <div className="bpv-box__row"><span>Account Name:</span> <strong>{displayCompanyName}</strong></div>
                 <div className="bpv-box__row">
-                  <span>Bank Name:</span> <strong>{data.remitterBankName || profile?.bankName || (displayCompanyName ? `${displayCompanyName} Treasury Bank` : 'Corporate Treasury Account')}</strong>
+                  <span>Bank Name:</span> <strong>{data.remitterBankName || profile?.bankName || '—'}</strong>
                 </div>
                 <div className="bpv-box__row">
                   <span>Account Number:</span> <strong>{data.remitterAccountNumber || profile?.bankAccountNumber || '—'}</strong>

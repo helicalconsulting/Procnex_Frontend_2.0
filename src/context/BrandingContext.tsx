@@ -18,6 +18,17 @@ function getActiveCompanyCode(): string | null {
       const u = JSON.parse(userRaw);
       if (u?.companyCode) return String(u.companyCode).toUpperCase();
     }
+    const path = typeof window !== 'undefined' ? window.location.pathname : '';
+    const empMatch = path.match(/^\/e\/([a-zA-Z0-9_-]+)/);
+    if (empMatch && empMatch[1] && empMatch[1].toUpperCase() !== 'LOGIN') {
+      return empMatch[1].toUpperCase();
+    }
+    const vendorMatch = path.match(/^\/v\/([a-zA-Z0-9_-]+)/);
+    if (vendorMatch && vendorMatch[1] && vendorMatch[1].toUpperCase() !== 'LOGIN') {
+      return vendorMatch[1].toUpperCase();
+    }
+    const employeeCode = localStorage.getItem('employee_company_code');
+    if (employeeCode) return String(employeeCode).toUpperCase();
     const vendorCode = localStorage.getItem('vendor_company_code');
     if (vendorCode) return String(vendorCode).toUpperCase();
   } catch {}
@@ -168,9 +179,13 @@ export function applyFavicon(faviconUrl: string | null, logoUrl: string | null =
   }
   const rawTarget = faviconUrl || logoUrl;
   const isValidUrl = rawTarget && (rawTarget.startsWith('http://') || rawTarget.startsWith('https://') || rawTarget.startsWith('data:') || rawTarget.startsWith('/'));
-  const targetUrl = isValidUrl ? rawTarget : '/favicon.png';
+  const targetUrl = isValidUrl ? rawTarget : '/Procnex-logo.jpeg';
   if (targetUrl.endsWith('.svg')) {
     link.type = 'image/svg+xml';
+  } else if (targetUrl.endsWith('.jpeg') || targetUrl.endsWith('.jpg')) {
+    link.type = 'image/jpeg';
+  } else if (targetUrl.endsWith('.ico')) {
+    link.type = 'image/x-icon';
   } else {
     link.type = 'image/png';
   }

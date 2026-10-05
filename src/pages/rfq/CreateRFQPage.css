@@ -859,3 +859,15 @@
     flex: 1;
   }
 }
+
+/* ─── Number Input Clean Stepper Hide ─── */
+.create-rfq input[type='number']::-webkit-inner-spin-button,
+.create-rfq input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.create-rfq input[type='number'] {
+  -moz-appearance: textfield;
+}
+

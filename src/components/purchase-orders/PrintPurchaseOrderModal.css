@@ -332,44 +332,58 @@
 }
 
 /* Print Overrides */
-@page {
-  size: A4 portrait;
-  margin: 0 !important;
-}
-
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+
   html, body {
     margin: 0 !important;
     padding: 0 !important;
     background: #ffffff !important;
+    color: #0f172a !important;
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
   }
-  body * {
-    visibility: hidden;
-  }
-  .no-print {
+
+  .no-print,
+  .ppo-modal__topbar {
     display: none !important;
   }
+
   .ppo-modal-backdrop {
-    position: static;
-    background: transparent;
-    padding: 0;
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+    backdrop-filter: none !important;
   }
+
   .ppo-modal {
-    border: none;
-    box-shadow: none;
-    max-width: 100%;
-    width: 100%;
+    position: static !important;
+    border: none !important;
+    box-shadow: none !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    overflow: visible !important;
   }
-  .ppo-sheet, .ppo-sheet * {
-    visibility: visible;
-  }
+
   .ppo-sheet {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    padding: 12mm 15mm;
-    box-shadow: none;
-    box-sizing: border-box;
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    overflow: visible !important;
+    color: #0f172a !important;
   }
 }

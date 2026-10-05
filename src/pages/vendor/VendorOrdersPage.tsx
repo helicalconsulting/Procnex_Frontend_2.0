@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, ChevronLeft, ChevronRight, Eye, Package, Search, Truck, X, XCircle } from 'lucide-react';
 import { CurrencySelector, useCurrency } from '@/components/shared/CurrencyMaster';
 import { RecordStatusBadge } from '@/components/shared/RecordStatusBadge';
+import { TablePagination } from '@/components/shared/TablePagination';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input, Select } from '@/components/ui/input';
@@ -124,10 +125,14 @@ export default function VendorOrdersPage() {
                 </tr>)}</tbody>
               </LandingTable>
             </div>
-            <div className="flex items-center justify-between gap-3 border-t border-border p-3 text-xs text-muted-foreground">
-              <span>Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, filtered.length)} of {filtered.length}</span>
-              <div className="flex items-center gap-2"><Button variant="outline" size="sm" disabled={page <= 1} onClick={() => updateParams({ page: String(page - 1) })}><ChevronLeft className="size-4" />Previous</Button><span>Page {page} of {pages}</span><Button variant="outline" size="sm" disabled={page >= pages} onClick={() => updateParams({ page: String(page + 1) })}>Next<ChevronRight className="size-4" /></Button></div>
-            </div>
+            <TablePagination
+              currentPage={page}
+              totalPages={pages}
+              onPageChange={(nextPage) => updateParams({ page: String(nextPage) })}
+              totalItems={filtered.length}
+              perPage={pageSize}
+              className="border-t border-border rounded-none"
+            />
           </Card>}
     </>}
   </PageFrame>;

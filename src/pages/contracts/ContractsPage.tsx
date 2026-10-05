@@ -16,6 +16,7 @@ import {
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import '../../components/shared/ColumnCustomizer.css';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
+import { TablePagination } from '../../components/shared/TablePagination';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
 import { TableSkeleton } from '../../components/shared/Skeleton';
 import { downloadContractAsPdf } from '../../utils/pdfDownload';
@@ -109,31 +110,38 @@ export default function ContractsPage() {
 
   const [contractTypeLabels, setContractTypeLabels] = useState<Record<string, string>>({});
 
-  const { data: rawResult, loading, error, reload } = useServiceData(
+  const { data: rawResult, loading, error, reload, forceRefresh } = useServiceData(
     () => contractService.listContracts().then(r => ({
-      rawContracts: r.contracts,
-      total: r.total,
+      rawContracts: Array.isArray(r) ? r : (r?.contracts || (r as any)?.data || []),
+      total: r?.total ?? (Array.isArray(r) ? r.length : ((r?.contracts || (r as any)?.data)?.length || 0)),
     })),
     { rawContracts: [] as Contract[], total: 0 },
     [],
-    { cacheKey: 'contracts:list' }
+    { cacheKey: 'contracts:list', cacheTtlMs: 0 }
   );
 
-  const contracts = useMemo(() => rawResult.rawContracts.map((c: Contract): ContractRow => ({
-    id: c.id,
-    contractNumber: c.contractNumber,
-    title: c.title,
-    vendorName: c.vendor?.name || 'Unknown',
-    contractType: contractTypeLabels[c.contractType] || c.contractType,
-    sourceRfq: c.rfq?.rfqNumber || '',
-    contractValue: c.contractValue,
-    currency: c.currency,
-    startDate: c.effectiveDate,
-    endDate: c.expirationDate,
-    status: c.status as ContractStatus,
-    contractOwner: c.contractOwner?.fullName || '—',
-    hasPO: ((c as any)._count?.purchaseOrders ?? 0) > 0 || ((c as any).purchaseOrders?.length ?? 0) > 0,
-  })), [rawResult.rawContracts, contractTypeLabels]);
+  const contracts = useMemo(() => {
+    const list = Array.isArray(rawResult?.rawContracts)
+      ? rawResult.rawContracts
+      : Array.isArray(rawResult)
+      ? (rawResult as any)
+      : (rawResult?.contracts || []);
+    return list.map((c: Contract): ContractRow => ({
+      id: c.id,
+      contractNumber: c.contractNumber || '—',
+      title: c.title || 'Untitled Contract',
+      vendorName: c.vendor?.name || 'Unknown',
+      contractType: contractTypeLabels[c.contractType] || c.contractType,
+      sourceRfq: c.rfq?.rfqNumber || '',
+      contractValue: Number(c.contractValue || 0),
+      currency: c.currency || 'KES',
+      startDate: c.effectiveDate,
+      endDate: c.expirationDate,
+      status: (c.status || 'DRAFT') as ContractStatus,
+      contractOwner: c.contractOwner?.fullName || '—',
+      hasPO: ((c as any)._count?.purchaseOrders ?? 0) > 0 || ((c as any).purchaseOrders?.length ?? 0) > 0,
+    }));
+  }, [rawResult, contractTypeLabels]);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
@@ -164,7 +172,16 @@ export default function ContractsPage() {
   }>>([]);
 
   useEffect(() => {
-    const unsub = sseClient.on('contract_signed', (data: unknown) => {
+    const handleRefresh = () => forceRefresh();
+
+    window.addEventListener('focus', handleRefresh);
+    window.addEventListener('heliflow:contract-created', handleRefresh);
+    window.addEventListener('heliflow:contract-updated', handleRefresh);
+    window.addEventListener('heliflow:contract-deleted', handleRefresh);
+    window.addEventListener('heliflow:po-created', handleRefresh);
+    window.addEventListener('heliflow:approval-updated', handleRefresh);
+
+    const unsubSigned = sseClient.on('contract_signed', (data: unknown) => {
       const event = data as {
         contractId: string;
         contractNumber: string;
@@ -182,24 +199,50 @@ export default function ContractsPage() {
         return [event, ...prev].slice(0, 5);
       });
 
-      reload();
+      handleRefresh();
 
       setTimeout(() => {
         setRecentlySigned(prev => prev.filter(s => s.contractId !== event.contractId));
       }, 60_000);
     });
 
-    const unsubPO = sseClient.on('po_created', () => {
-      reload();
-    });
+    const unsubCreated = sseClient.on('contract_created', handleRefresh);
+    const unsubUpdated = sseClient.on('contract_updated', handleRefresh);
+    const unsubPO = sseClient.on('po_created', handleRefresh);
+    const unsubPoStatus = sseClient.on('po_status_changed', handleRefresh);
+    const unsubChain = sseClient.on('approval_chain_complete', handleRefresh);
+    const unsubNotif = sseClient.on('notification', handleRefresh);
 
     sseClient.connect();
 
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('heliflow_sync');
+      bc.onmessage = () => { handleRefresh(); };
+    } catch {}
+
+    const interval = setInterval(() => {
+      handleRefresh();
+    }, 5000);
+
     return () => {
-      unsub();
+      window.removeEventListener('focus', handleRefresh);
+      window.removeEventListener('heliflow:contract-created', handleRefresh);
+      window.removeEventListener('heliflow:contract-updated', handleRefresh);
+      window.removeEventListener('heliflow:contract-deleted', handleRefresh);
+      window.removeEventListener('heliflow:po-created', handleRefresh);
+      window.removeEventListener('heliflow:approval-updated', handleRefresh);
+      unsubSigned();
+      unsubCreated();
+      unsubUpdated();
       unsubPO();
+      unsubPoStatus();
+      unsubChain();
+      unsubNotif();
+      if (bc) bc.close();
+      clearInterval(interval);
     };
-  }, [reload]);
+  }, [forceRefresh]);
 
   const dismissAllSigned = useCallback(() => {
     setRecentlySigned([]);
@@ -738,31 +781,6 @@ export default function ContractsPage() {
                 </tbody>
               </table>
             </div>
-
-            {filtered.length > perPage && (
-              <div className="flex items-center justify-between border-t border-border/60 px-5 py-3 text-xs text-muted-foreground">
-                <span>Showing {(currentPage-1)*perPage+1}–{Math.min(currentPage*perPage, filtered.length)} of {filtered.length}</span>
-                <div className="flex items-center gap-1">
-                  <Button variant="outline" size="sm" disabled={currentPage===1} onClick={() => setCurrentPage(p=>p-1)} className="h-8 w-8 p-0">
-                    <ChevronLeft className="size-4" />
-                  </Button>
-                  {Array.from({length:totalPages},(_,i)=>i+1).map(p=>(
-                    <Button
-                      key={p}
-                      variant={currentPage===p?'default':'outline'}
-                      size="sm"
-                      onClick={()=>setCurrentPage(p)}
-                      className="h-8 w-8 p-0"
-                    >
-                      {p}
-                    </Button>
-                  ))}
-                  <Button variant="outline" size="sm" disabled={currentPage===totalPages} onClick={()=>setCurrentPage(p=>p+1)} className="h-8 w-8 p-0">
-                    <ChevronRight className="size-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
           </Card>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -795,6 +813,14 @@ export default function ContractsPage() {
           description={search ? 'Try adjusting your search criteria.' : 'Create your first contract to get started.'}
         />
       )}
+
+      {/* Pagination */}
+      <TablePagination
+        currentPage={currentPage}
+        totalItems={filtered.length}
+        perPage={perPage}
+        onPageChange={setCurrentPage}
+      />
 
       {/* Delete Modal */}
       <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>

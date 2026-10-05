@@ -620,7 +620,7 @@ export default function VendorCreateInvoicePage() {
               <Input id="invoice-date"
                 className="h-10 rounded-xl text-sm font-medium"
                 type="date"
-                value={invoiceDate}
+                value={invoiceDate ? String(invoiceDate).slice(0, 10) : ''}
                 onChange={(e) => setInvoiceDate(e.target.value)}
               />
             </div>
@@ -630,7 +630,7 @@ export default function VendorCreateInvoicePage() {
               <Input id="invoice-due-date"
                 className="h-10 rounded-xl text-sm font-medium"
                 type="date"
-                value={dueDate}
+                value={dueDate ? String(dueDate).slice(0, 10) : ''}
                 onChange={(e) => setDueDate(e.target.value)}
               />
             </div>
@@ -876,9 +876,11 @@ export default function VendorCreateInvoicePage() {
               <h1 className="po-doc__company-name">
                 {buyerName || companyName || 'Company'}
               </h1>
-              <p className="po-doc__company-detail">
-                {selectedPO?.companyAddress || selectedPO?.shipToAddress || `${buyerName || companyName || 'Company'} • Corporate Headquarters`}
-              </p>
+              {(selectedPO?.companyAddress || selectedPO?.shipToAddress) && (
+                <p className="po-doc__company-detail">
+                  {selectedPO?.companyAddress || selectedPO?.shipToAddress}
+                </p>
+              )}
               {(companyPhone || selectedPO?.companyPhone || companyEmail || selectedPO?.companyEmail) && (
                 <p className="po-doc__company-detail">
                   {companyPhone || selectedPO?.companyPhone ? `Phone: ${companyPhone || selectedPO?.companyPhone}` : ''}
@@ -930,8 +932,8 @@ export default function VendorCreateInvoicePage() {
             <h3 className="po-doc__party-heading">BILL TO (BUYER / CLIENT)</h3>
             <p className="po-doc__party-name">{buyerName || companyName || 'Company'}</p>
             <p className="po-doc__party-detail">Warehouse: {selectedPO?.shipToWarehouse || 'Central Warehouse'}</p>
-            <p className="po-doc__party-detail">Address: {selectedPO?.shipToAddress || 'Corporate Headquarters'}</p>
-            <p className="po-doc__party-detail">Contact: {selectedPO?.shipToContact || 'Accounts Payable / Treasury'}</p>
+            <p className="po-doc__party-detail">Address: {selectedPO?.shipToAddress || '—'}</p>
+            <p className="po-doc__party-detail">Contact Person: {selectedPO?.shipToContact || 'Accounts Payable / Treasury'}</p>
             <p className="po-doc__party-detail">Phone: {companyPhone || selectedPO?.shipToPhone || '—'}</p>
           </div>
         </div>

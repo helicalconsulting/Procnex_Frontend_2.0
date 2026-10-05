@@ -32,6 +32,7 @@ import {
 } from '../../components/ui/dialog';
 import { Input } from '../../components/ui/input';
 import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
+import TablePagination from '../../components/shared/TablePagination';
 import { cn } from '../../lib/utils';
 
 function formatDate(value?: string): string {
@@ -337,6 +338,21 @@ export default function CompanyGRNListPage() {
     });
   }, [grns, search]);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const perPage = 8;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, kpiFilter]);
+
+  const totalPoPages = Math.max(1, Math.ceil(filteredPOs.length / perPage));
+  const safePoPage = Math.min(currentPage, totalPoPages);
+  const paginatedPOs = filteredPOs.slice((safePoPage - 1) * perPage, safePoPage * perPage);
+
+  const totalGrnPages = Math.max(1, Math.ceil(filteredGRNs.length / perPage));
+  const safeGrnPage = Math.min(currentPage, totalGrnPages);
+  const paginatedGRNs = filteredGRNs.slice((safeGrnPage - 1) * perPage, safeGrnPage * perPage);
+
   // Unique Eligible Approved POs for GRN creation (from 16 Sept 2026 onwards)
   const approvedOrders = useMemo(() => {
     const seen = new Set<string>();
@@ -552,7 +568,7 @@ export default function CompanyGRNListPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
-                  {filteredPOs.map((po) => {
+                  {paginatedPOs.map((po) => {
                     const poNum = String(po?.poNumber || '');
                     const vName =
                       typeof po?.vendor === 'object' && po?.vendor?.name
@@ -607,6 +623,12 @@ export default function CompanyGRNListPage() {
               </LandingTable>
             </div>
           )}
+          <TablePagination
+            currentPage={safePoPage}
+            totalItems={filteredPOs.length}
+            perPage={perPage}
+            onPageChange={setCurrentPage}
+          />
         </Card>
       ) : (
         <Card className="overflow-hidden border border-border/80 shadow-sm">
@@ -635,7 +657,7 @@ export default function CompanyGRNListPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
-                  {filteredGRNs.map((grn) => {
+                  {paginatedGRNs.map((grn) => {
                     const poObj = poList.find(
                       (p) => String(p.id) === String(grn.poId) || String(p.poNumber) === String(grn.purchaseOrder?.poNumber)
                     );
@@ -679,6 +701,12 @@ export default function CompanyGRNListPage() {
               </LandingTable>
             </div>
           )}
+          <TablePagination
+            currentPage={safeGrnPage}
+            totalItems={filteredGRNs.length}
+            perPage={perPage}
+            onPageChange={setCurrentPage}
+          />
         </Card>
       )}
 

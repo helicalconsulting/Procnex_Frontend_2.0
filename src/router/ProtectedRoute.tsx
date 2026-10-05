@@ -1,7 +1,7 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { isVendor } from '../utils/rbac';
-import { getTenantCompanyCode } from '../utils/tenantResolver';
+import { getTenantCompanyCode, getEmployeeCompanyCode } from '../utils/tenantResolver';
 
 interface ProtectedRouteProps {
   allowedRoles?: string[];
@@ -25,10 +25,12 @@ export function ProtectedRoute({ allowedRoles, requireVendor }: ProtectedRoutePr
   if (!isAuthenticated) {
     if (requireVendor) {
       const companyCode = getTenantCompanyCode();
-      const loginTarget = companyCode ? `/v/${companyCode.toLowerCase()}/login` : '/login';
+      const loginTarget = companyCode ? `/v/${companyCode.toLowerCase()}/login` : '/helicalconsulting';
       return <Navigate to={loginTarget} replace />;
     }
-    return <Navigate to="/login" replace />;
+    const empCode = getEmployeeCompanyCode();
+    const loginTarget = empCode ? `/e/${empCode.toLowerCase()}/login` : '/helicalconsulting';
+    return <Navigate to={loginTarget} replace />;
   }
 
   // Check if vendor portal route

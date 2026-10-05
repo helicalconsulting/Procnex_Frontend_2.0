@@ -17,6 +17,7 @@ import type { RFQStatus } from '../../types';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TableSkeleton } from '../../components/shared/Skeleton';
+import { TablePagination } from '../../components/shared/TablePagination';
 import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -1041,44 +1042,12 @@ export default function RFQPage() {
       </Card>
 
       {/* Pagination */}
-      {filtered.length > perPage && (
-        <div className="mt-4 flex flex-col gap-3 rounded-xl border border-border/65 bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <span className="text-xs text-muted-foreground">
-            {(safePage - 1) * perPage + 1}–{Math.min(safePage * perPage, filtered.length)} of {filtered.length}
-          </span>
-          <div className="flex flex-wrap gap-1">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              disabled={safePage === 1}
-              onClick={() => setCurrentPage((page) => page - 1)}
-              aria-label="Previous page"
-            >
-              <ChevronLeft />
-            </Button>
-            {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
-              <Button
-                key={page}
-                variant={safePage === page ? 'default' : 'ghost'}
-                size="icon-sm"
-                onClick={() => setCurrentPage(page)}
-                aria-label={`Page ${page}`}
-              >
-                {page}
-              </Button>
-            ))}
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              disabled={safePage === totalPages}
-              onClick={() => setCurrentPage((page) => page + 1)}
-              aria-label="Next page"
-            >
-              <ChevronRight />
-            </Button>
-          </div>
-        </div>
-      )}
+      <TablePagination
+        currentPage={safePage}
+        totalItems={filtered.length}
+        perPage={perPage}
+        onPageChange={setCurrentPage}
+      />
 
       {/* Single Delete Confirmation Modal */}
       <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open && !deletingId) cancelDeleteRFQ(); }}>

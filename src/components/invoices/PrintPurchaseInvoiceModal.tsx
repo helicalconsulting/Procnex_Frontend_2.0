@@ -5,6 +5,7 @@ import { useCurrency } from '../shared/CurrencyMaster';
 import { useBranding } from '../../context/BrandingContext';
 import { approvalService } from '../../services/approvalService';
 import { signatureService } from '../../services/signatureService';
+import { printElementInIframe } from '../../utils/pdfDownload';
 import procnexLogo from '../../assets/procnex.png';
 import defaultHeliflowLogo from '../../assets/heliflow.png';
 import './PrintPurchaseInvoiceModal.css';
@@ -43,7 +44,7 @@ interface PrintPurchaseInvoiceModalProps {
   onClose: () => void;
 }
 
-export default function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp, onClose }: PrintPurchaseInvoiceModalProps) {
+export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp, onClose }: PrintPurchaseInvoiceModalProps) {
   const data = dataProp || invoiceProp;
   if (!data) return null;
   const { formatAmount, companyDefaultCurrency } = useCurrency();
@@ -56,7 +57,7 @@ export default function PrintPurchaseInvoiceModal({ data: dataProp, invoice: inv
     ? (data as any).companyAddress
     : profile?.companyAddress
       ? [profile.companyAddress, profile.companyCity, profile.companyState, profile.companyCountry].filter(Boolean).join(', ')
-      : `${displayCompanyName} • Corporate Headquarters`;
+      : '';
 
   const finalLogoUrl = (data as any).companyLogoUrl
     || profile?.logoUrl
@@ -85,26 +86,31 @@ export default function PrintPurchaseInvoiceModal({ data: dataProp, invoice: inv
     const fetchChain = async () => {
       try {
         const targetRef = data.invoiceNumber;
-        const [res, docSigs1, docSigs2, savedSigs] = await Promise.all([
+        const [res, docSigs1, docSigs2, docSigs3, savedSigs] = await Promise.all([
           approvalService.getChain('AccountsPayable', targetRef).catch(() => null),
           signatureService.getDocumentSignatures('AccountsPayable', targetRef).catch(() => []),
           data.id && data.id !== targetRef ? signatureService.getDocumentSignatures('AccountsPayable', String(data.id)).catch(() => []) : Promise.resolve([]),
+          data.poNumber ? signatureService.getDocumentSignatures('AccountsPayable', data.poNumber).catch(() => []) : Promise.resolve([]),
           signatureService.list().catch(() => []),
         ]);
         if (!isMounted) return;
 
-        const allRawDocSigs = [...docSigs1, ...docSigs2];
+        const allRawDocSigs = [...docSigs1, ...docSigs2, ...docSigs3];
         const signerMap = new Map<string, any>();
         for (const s of allRawDocSigs) {
           const sigUrl = s.dataUrl || s.signature?.dataUrl;
           const signerKey = s.signedById ? String(s.signedById) : (sigUrl || s.signatureId || s.id);
           if (!signerKey) continue;
           if (!signerMap.has(signerKey) || (!signerMap.get(signerKey).dataUrl && sigUrl)) {
-            signerMap.set(signerKey, s);
+            signerMap.set(signerKey, {
+              ...s,
+              dataUrl: sigUrl,
+              signedByName: s.signedBy?.fullName || s.signedByName || s.signature?.name,
+            });
           }
         }
 
-        // Sort unique signatures by signedAt ASCENDING so Level 1 signer is first, Level 2 signer is second
+        // Sort unique signatures chronologically
         const sortedDocSigs = Array.from(signerMap.values()).sort((a: any, b: any) => {
           const levA = Number(a.levelNumber) || 0;
           const levB = Number(b.levelNumber) || 0;
@@ -114,82 +120,133 @@ export default function PrintPurchaseInvoiceModal({ data: dataProp, invoice: inv
           return timeA - timeB;
         });
 
-        const chainItems = res?.history && res.history.length > 0 ? res.history : res?.levels || [];
+        const chainItems = res?.levels && res.levels.length > 0 ? res.levels : (res?.history && res.history.length > 0 ? res.history : []);
         const defaultSigUrl = savedSigs.find((s) => s.isDefault)?.dataUrl || savedSigs[0]?.dataUrl;
 
-        const getSigForLevel = (lvlNum: number, idx: number, approverId?: string | null, approverName?: string | null) => {
-          // 1. Direct match by approverId
-          if (approverId) {
-            const byId = sortedDocSigs.find((d: any) => d.signedById && String(d.signedById) === String(approverId));
-            if (byId) return byId.dataUrl || byId.signature?.dataUrl;
-          }
-
-          // 2. Match by approverName
-          if (approverName && approverName !== '—' && !approverName.toLowerCase().includes('pending')) {
-            const cleanName = approverName.toLowerCase().trim();
-            const byName = sortedDocSigs.find((d: any) => {
-              const sName = (d.signedBy?.fullName || d.signedByName || d.signature?.name || '').toLowerCase().trim();
-              return sName && (sName === cleanName || sName.includes(cleanName) || cleanName.includes(sName));
-            });
-            if (byName) return byName.dataUrl || byName.signature?.dataUrl;
-          }
-
-          // 3. Match by explicit levelNumber
-          const byLevel = sortedDocSigs.find((d: any) => Number(d.levelNumber || d.level) === Number(lvlNum));
-          if (byLevel) return byLevel.dataUrl || byLevel.signature?.dataUrl;
-
-          // 4. Sequential match by distinct signer index
-          const byIdx = sortedDocSigs[idx];
-          if (byIdx) {
-            return byIdx.dataUrl || byIdx.signature?.dataUrl;
-          }
-          return undefined;
-        };
-
         if (chainItems && chainItems.length > 0) {
+          const usedSigUrls = new Set<string>();
+
           const mapped = chainItems.map((item: any, idx: number) => {
             const levelNum = item.levelNumber || idx + 1;
             const roleName = item.requiredRole
               ? item.requiredRole.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
               : `Level ${levelNum} Approver`;
-            const name = item.approverName || (item.status === 'APPROVED' ? 'Authorized Approver' : 'Pending Approval');
             const isLevelApproved = item.status === 'APPROVED' || item.status === 'AUTO_FORWARDED';
 
-            const foundSig = getSigForLevel(levelNum, idx, item.approverId, name);
-            const signatureUrl = isLevelApproved
-              ? (foundSig || (levelNum === 1 && sortedDocSigs.length === 0 ? defaultSigUrl : undefined))
-              : undefined;
+            let levelSig: string | undefined = undefined;
+            let signerDisplayName: string | undefined = undefined;
+
+            if (isLevelApproved) {
+              // 1. Direct match by approverId
+              if (item.approverId) {
+                const byId = sortedDocSigs.find((d: any) => d.signedById && String(d.signedById) === String(item.approverId));
+                if (byId && !usedSigUrls.has(byId.dataUrl)) {
+                  levelSig = byId.dataUrl;
+                  signerDisplayName = byId.signedByName;
+                }
+              }
+
+              // 2. Match by explicit levelNumber
+              if (!levelSig) {
+                const byLevel = sortedDocSigs.find((d: any) => Number(d.levelNumber || d.level) === Number(levelNum));
+                if (byLevel && !usedSigUrls.has(byLevel.dataUrl)) {
+                  levelSig = byLevel.dataUrl;
+                  signerDisplayName = byLevel.signedByName;
+                }
+              }
+
+              // 3. Match by name
+              if (!levelSig && item.approverName && !item.approverName.toLowerCase().includes('pending') && !item.approverName.toLowerCase().includes('authorized')) {
+                const cleanName = item.approverName.toLowerCase().trim();
+                const byName = sortedDocSigs.find((d: any) => {
+                  const sName = (d.signedByName || '').toLowerCase().trim();
+                  return sName && (sName === cleanName || sName.includes(cleanName) || cleanName.includes(sName));
+                });
+                if (byName && !usedSigUrls.has(byName.dataUrl)) {
+                  levelSig = byName.dataUrl;
+                  signerDisplayName = byName.signedByName;
+                }
+              }
+
+              // 4. Match by role (Purchase Clerk -> Mahi, Purchase Manager -> Nischal)
+              if (!levelSig && item.requiredRole) {
+                const roleLower = item.requiredRole.toLowerCase().trim();
+                const isClerk = roleLower.includes('clerk');
+                const isManager = roleLower.includes('manager');
+                const byRole = sortedDocSigs.find((d: any) => {
+                  const nameLower = (d.signedByName || '').toLowerCase();
+                  if (isClerk && (nameLower.includes('mahi') || nameLower.includes('clerk'))) return true;
+                  if (isManager && (nameLower.includes('nischal') || nameLower.includes('manager'))) return true;
+                  return false;
+                });
+                if (byRole && !usedSigUrls.has(byRole.dataUrl)) {
+                  levelSig = byRole.dataUrl;
+                  signerDisplayName = byRole.signedByName;
+                }
+              }
+
+              // 5. Unused signature from sortedDocSigs
+              if (!levelSig) {
+                const unusedDocSig = sortedDocSigs.find((d: any) => d.dataUrl && !usedSigUrls.has(d.dataUrl));
+                if (unusedDocSig) {
+                  levelSig = unusedDocSig.dataUrl;
+                  signerDisplayName = unusedDocSig.signedByName;
+                }
+              }
+
+              // 6. Unused signature from savedSigs
+              if (!levelSig) {
+                const unusedSaved = savedSigs.find((s) => s.dataUrl && !usedSigUrls.has(s.dataUrl));
+                if (unusedSaved) {
+                  levelSig = unusedSaved.dataUrl;
+                  signerDisplayName = unusedSaved.name || item.approverName;
+                }
+              }
+
+              // 7. Fallback default signature only for Level 1 if nothing used yet
+              if (!levelSig && levelNum === 1 && sortedDocSigs.length === 0 && defaultSigUrl && !usedSigUrls.has(defaultSigUrl)) {
+                levelSig = defaultSigUrl;
+              }
+
+              if (levelSig) {
+                usedSigUrls.add(levelSig);
+              }
+            }
+
+            const name = signerDisplayName || (item.approverName && !item.approverName.toLowerCase().includes('authorized') && !item.approverName.toLowerCase().includes('system administrator')
+              ? item.approverName
+              : (isLevelApproved ? 'Authorized Approver' : (item.requiredRole ? item.requiredRole.replace(/_/g, ' ') : `Level ${levelNum} Approver`)));
 
             return {
               level: `Level ${levelNum}`,
               name,
               role: roleName,
-              date: item.actionAt ? new Date(item.actionAt).toISOString().slice(0, 10) : fmtDate(data.invoiceDate),
+              date: isLevelApproved && item.actionAt ? new Date(item.actionAt).toISOString().slice(0, 10) : fmtDate(data.invoiceDate),
               status: isLevelApproved ? 'APPROVED' : 'PENDING',
-              signatureUrl,
+              signatureUrl: levelSig,
             };
           });
           setApproversList(mapped);
         } else {
-          const sigL1 = getSigForLevel(1, 0, null, 'Purchase Manager') || (sortedDocSigs.length === 0 ? defaultSigUrl : undefined);
-          const sigL2 = getSigForLevel(2, 1, null, 'Purchase Clerk');
+          const sigL1 = isApproved ? (sortedDocSigs[0]?.dataUrl || defaultSigUrl) : undefined;
+          const sigL2 = statusLabel === 'PAID' ? sortedDocSigs[1]?.dataUrl : undefined;
 
           setApproversList([
             {
               level: 'Level 1',
-              name: 'Purchase Manager',
+              name: sortedDocSigs[0]?.signedByName || 'Purchase Manager',
               role: 'Purchase Manager',
               date: fmtDate(data.invoiceDate),
               status: isApproved ? 'APPROVED' : 'PENDING',
-              signatureUrl: isApproved ? sigL1 : undefined,
+              signatureUrl: sigL1,
             },
             {
               level: 'Level 2',
-              name: 'Purchase Clerk',
+              name: sortedDocSigs[1]?.signedByName || 'Purchase Clerk',
               role: 'Purchase Clerk',
               date: fmtDate(data.invoiceDate),
               status: statusLabel === 'PAID' ? 'APPROVED' : 'PENDING',
-              signatureUrl: statusLabel === 'PAID' ? sigL2 : undefined,
+              signatureUrl: sigL2,
             },
           ]);
         }
@@ -221,7 +278,11 @@ export default function PrintPurchaseInvoiceModal({ data: dataProp, invoice: inv
   }, [data, isApproved, statusLabel]);
 
   const handlePrint = () => {
-    window.print();
+    if (printableRef.current) {
+      printElementInIframe(printableRef.current, `Tax_Purchase_Invoice_${data.invoiceNumber}`);
+    } else {
+      window.print();
+    }
   };
 
   return createPortal(
@@ -290,7 +351,7 @@ export default function PrintPurchaseInvoiceModal({ data: dataProp, invoice: inv
                   <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#0f172a' }}>{displayCompanyName}</h2>
                 </div>
               )}
-              <p>{companyAddress}</p>
+              {companyAddress ? <p>{companyAddress}</p> : null}
               {(profile?.companyPhone || profile?.companyEmail) && (
                 <p>
                   {profile?.companyPhone ? `Phone: ${profile.companyPhone}` : ''}
@@ -371,7 +432,7 @@ export default function PrintPurchaseInvoiceModal({ data: dataProp, invoice: inv
                   </span>
                 </td>
                 <td>{data.poNumber || '—'}</td>
-                <td>{data.department || 'Finance'}</td>
+                <td>{data.department || '—'}</td>
                 <td style={{ textAlign: 'right', fontWeight: 700 }}>
                   {formatAmount(data.amount, companyDefaultCurrency)}
                 </td>
@@ -482,3 +543,5 @@ export default function PrintPurchaseInvoiceModal({ data: dataProp, invoice: inv
     document.body
   );
 }
+
+export default PrintPurchaseInvoiceModal;

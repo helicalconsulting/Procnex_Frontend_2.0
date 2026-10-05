@@ -853,7 +853,7 @@ export default function CreateGRNPage() {
               </label>
               <Input
                 type="date"
-                value={receivedDate}
+                value={receivedDate ? String(receivedDate).slice(0, 10) : ''}
                 onChange={(e) => setReceivedDate(e.target.value)}
                 className="text-sm bg-background"
               />

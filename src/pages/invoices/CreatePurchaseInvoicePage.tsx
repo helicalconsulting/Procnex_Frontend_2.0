@@ -34,6 +34,7 @@ import {
   Pencil,
   Download
 } from 'lucide-react';
+import TablePagination from '../../components/shared/TablePagination';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TableSkeleton } from '../../components/shared/Skeleton';
 import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyMaster';
@@ -116,6 +117,13 @@ export default function CreatePurchaseInvoicePage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 8;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter]);
+
   const [deleteTarget, setDeleteTarget] = useState<APInvoice | null>(null);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -315,15 +323,26 @@ export default function CreatePurchaseInvoicePage() {
     const matchInGrn = grnOptions.find(
       (g) => String(g.id) === String(cleanGrnId) || String(g.grnNumber) === String(cleanGrnId)
     );
-    if (matchInGrn?.grnNumber) {
-      const formattedNum = matchInGrn.grnNumber.replace(/^GRN-/, 'DN-');
-      return `Dispatch Note: ${formattedNum}`;
-    }
-
     const matchInInv = invoiceOptions.find(
       (i) => String(i.id) === String(cleanGrnId) || String(i.invoiceNumber) === String(cleanGrnId)
     );
-    if (matchInInv?.invoiceNumber) return `Invoice: ${matchInInv.invoiceNumber}`;
+
+    const dnLabel = matchInGrn?.grnNumber
+      ? matchInGrn.grnNumber.replace(/^GRN-/, 'DN-')
+      : grnOptions[0]?.grnNumber
+      ? grnOptions[0].grnNumber.replace(/^GRN-/, 'DN-')
+      : null;
+    const invLabel = matchInInv?.invoiceNumber || invoiceOptions[0]?.invoiceNumber || null;
+
+    if (dnLabel && invLabel) {
+      return `DN: ${dnLabel} • Invoice: ${invLabel}`;
+    }
+    if (invLabel) {
+      return `Invoice: ${invLabel}`;
+    }
+    if (dnLabel) {
+      return `Dispatch Note: ${dnLabel}`;
+    }
 
     if (grnIdParam && (grnIdParam.startsWith('GRN-') || grnIdParam.startsWith('DN-') || grnIdParam.startsWith('INV-')))
       return grnIdParam.replace(/^GRN-/, 'DN-');
@@ -334,8 +353,8 @@ export default function CreatePurchaseInvoicePage() {
       return `Ref: ${cleanGrnId.slice(-6).toUpperCase()}`;
     }
 
-    return selectedGrnId || 'Select Dispatch Note or Vendor Invoice';
-  }, [grnOptions, invoiceOptions, selectedGrnId, grnIdParam]);
+    return selectedPoId ? 'Direct PO Billing (No Linked DN / Invoice)' : 'Select Purchase Order First';
+  }, [grnOptions, invoiceOptions, selectedGrnId, grnIdParam, selectedPoId]);
 
   // Pre-fill query params if present
   useEffect(() => {
@@ -353,7 +372,7 @@ export default function CreatePurchaseInvoicePage() {
     }
   }, [poIdParam, poList]);
 
-  // Pre-select GRN / Vendor Invoice once grnOptions / invoiceOptions load
+  // Pre-select GRN / Vendor Invoice once grnOptions / invoiceOptions load or when PO is selected
   useEffect(() => {
     if (grnIdParam && (grnOptions.length > 0 || invoiceOptions.length > 0)) {
       const matchGrn = grnOptions.find(
@@ -361,22 +380,61 @@ export default function CreatePurchaseInvoicePage() {
       );
       if (matchGrn) {
         setSelectedGrnId(`grn_${matchGrn.id}`);
-      } else {
-        const matchInv = invoiceOptions.find(
-          (i) => String(i.id) === String(grnIdParam) || String(i.invoiceNumber) === String(grnIdParam)
+        return;
+      }
+      const matchInv = invoiceOptions.find(
+        (i) => String(i.id) === String(grnIdParam) || String(i.invoiceNumber) === String(grnIdParam)
+      );
+      if (matchInv) {
+        setSelectedGrnId(`inv_${matchInv.id}`);
+        return;
+      }
+      setSelectedGrnId(grnIdParam);
+      return;
+    }
+
+    if (selectedPoId && (!selectedGrnId || selectedGrnId === '')) {
+      // 1. If invoiceNumber matches an invoiceOption, pick it
+      if (invoiceNumber && invoiceOptions.length > 0) {
+        const matchInvByNumber = invoiceOptions.find(
+          (i) => String(i.invoiceNumber).toLowerCase() === String(invoiceNumber).toLowerCase()
         );
-        if (matchInv) {
-          setSelectedGrnId(`inv_${matchInv.id}`);
-        } else {
-          setSelectedGrnId(grnIdParam);
+        if (matchInvByNumber) {
+          setSelectedGrnId(`inv_${matchInvByNumber.id}`);
+          return;
         }
       }
+
+      // 2. Auto-select first linked Vendor Invoice if available
+      if (invoiceOptions.length > 0) {
+        setSelectedGrnId(`inv_${invoiceOptions[0].id}`);
+        return;
+      }
+
+      // 3. Else auto-select first linked Dispatch Note if available
+      if (grnOptions.length > 0) {
+        setSelectedGrnId(`grn_${grnOptions[0].id}`);
+        return;
+      }
     }
-  }, [grnIdParam, grnOptions, invoiceOptions]);
+  }, [grnIdParam, grnOptions, invoiceOptions, selectedPoId, selectedGrnId, invoiceNumber]);
+
+  // When switching to manual creation mode, reset items to clean blank template
+  useEffect(() => {
+    if (creationMode === 'manual') {
+      setSelectedPoId('');
+      setSelectedGrnId('');
+      setGrnOptions([]);
+      setInvoiceOptions([]);
+      setLineItems([
+        { id: Date.now(), itemCode: 'ITM-001', itemName: '', description: '', poQty: 0, grnQty: 0, supplierQty: 1, unitPrice: '', taxPercent: 18 },
+      ]);
+    }
+  }, [creationMode]);
 
   // Fetch GRNs & Vendor Invoices strictly linked to the selected PO
   useEffect(() => {
-    if (!selectedPoId) {
+    if (creationMode === 'manual' || !selectedPoId) {
       setGrnOptions([]);
       setInvoiceOptions([]);
       return;
@@ -451,7 +509,7 @@ export default function CreatePurchaseInvoicePage() {
       })
       .catch(() => setInvoiceOptions([]));
 
-    if (foundPO) {
+    if (foundPO && creationMode !== 'manual') {
       if (foundPO.vendorId) setSelectedVendorId(String(foundPO.vendorId));
       if (foundPO.vendor?.name) setVendorName(foundPO.vendor.name);
 
@@ -483,7 +541,7 @@ export default function CreatePurchaseInvoicePage() {
         );
       }
     }
-  }, [selectedPoId, poList]);
+  }, [selectedPoId, poList, creationMode]);
 
   // When selected GRN or Vendor Invoice changes, populate form & item details
   useEffect(() => {
@@ -911,6 +969,32 @@ export default function CreatePurchaseInvoicePage() {
         }),
       });
 
+      const handleResetToCreateInvoice = () => {
+        setSelectedVendorId('');
+        setSelectedPoId('');
+        setSelectedGrnId('');
+        setVendorName('');
+        setInvoiceNumber('');
+        setNotes('');
+        setAttachments([]);
+        setLineItems([
+          { id: 1, itemCode: 'ITM-001', itemName: '', description: '', poQty: 0, grnQty: 0, supplierQty: 1, unitPrice: '', taxPercent: 18 },
+        ]);
+        setInvoiceDate(new Date().toISOString().slice(0, 10));
+        const d = new Date();
+        d.setDate(d.getDate() + 30);
+        setDueDate(d.toISOString().slice(0, 10));
+        setIsCreating(true);
+        refetchInvoices();
+        companySettingsService
+          .generateNextSequence('INVOICE')
+          .then((res) => {
+            if (res?.formattedCode) setInvoiceNumber(res.formattedCode);
+          })
+          .catch(() => {});
+        navigate('/procurement/create-purchase-invoice', { replace: true });
+      };
+
       if (isDraft) {
         showSuccess({
           title: 'Invoice Draft Saved!',
@@ -924,6 +1008,7 @@ export default function CreatePurchaseInvoicePage() {
           ],
           primaryBtnText: 'View in Invoices',
           onPrimaryClick: () => navigate('/accounts-payable'),
+          onClose: handleResetToCreateInvoice,
         });
       } else {
         showSuccess({
@@ -939,6 +1024,7 @@ export default function CreatePurchaseInvoicePage() {
           ],
           primaryBtnText: 'Go to Purchase Invoice Approval',
           onPrimaryClick: () => navigate('/accounts-payable'),
+          onClose: handleResetToCreateInvoice,
         });
       }
 
@@ -989,6 +1075,11 @@ export default function CreatePurchaseInvoicePage() {
         (inv.status || '').toLowerCase().includes(term)
       );
     });
+
+    const paginatedInvoices = filteredInvoices.slice(
+      (currentPage - 1) * itemsPerPage,
+      currentPage * itemsPerPage
+    );
 
     const isAllSelected = filteredInvoices.length > 0 && filteredInvoices.every((inv) => selectedInvoiceIds.includes(String(inv.id)));
 
@@ -1175,169 +1266,177 @@ export default function CreatePurchaseInvoicePage() {
                 </Button>
               </div>
             ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1080px] border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-border/75 bg-muted/45 text-left text-[12px] font-bold uppercase tracking-wide text-muted-foreground">
-                    <th className="w-[42px] px-3 py-3 text-center">
-                      <input
-                        type="checkbox"
-                        checked={isAllSelected}
-                        onChange={handleSelectAll}
-                        className="size-4 cursor-pointer rounded border-border text-primary focus:ring-primary/40"
-                        title="Select all invoices"
-                      />
-                    </th>
-                    <th className="w-[160px] px-3 py-3">INVOICE NUMBER</th>
-                    <th className="w-[200px] px-3 py-3">VENDOR</th>
-                    <th className="w-[140px] px-3 py-3">INVOICE DATE</th>
-                    <th className="w-[110px] px-3 py-3">CURRENCY</th>
-                    <th className="w-[150px] px-3 py-3 text-right">GRAND TOTAL</th>
-                    <th className="w-[160px] px-3 py-3">STATUS</th>
-                    <th className="w-[130px] px-3 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <span>ACTIONS</span>
-                        <div className="relative">
-                          <ColumnSettingsButton open={showInvColPanel} onClick={() => setShowInvColPanel((v) => !v)} />
-
-                          {showInvColPanel && (
-                            <ColumnCustomizer
-                              columnOrder={invColOrder}
-                              visibleKeys={invVisibleKeys}
-                              allColumns={INV_COLS}
-                              onToggle={(key) => {
-                                setInvVisibleKeys((prev) => {
-                                  const next = new Set(prev);
-                                  if (next.has(key)) next.delete(key);
-                                  else next.add(key);
-                                  return next;
-                                });
-                              }}
-                              onReorder={setInvColOrder}
-                              onReset={() => {
-                                setInvColOrder(INV_COLS.map((c) => c.key));
-                                setInvVisibleKeys(new Set(INV_COLS.map((c) => c.key)));
-                              }}
-                              onClose={() => setShowInvColPanel(false)}
-                            />
-                          )}
-                        </div>
-                      </div>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/60">
-                  {filteredInvoices.map((inv) => {
-                    const invIdStr = String(inv.id);
-                    const isSelected = selectedInvoiceIds.includes(invIdStr);
-                    const statusKey = (inv.status || 'DRAFT').toUpperCase();
-                    const isDraft = statusKey === 'DRAFT' || statusKey === 'REGISTERED';
-                    const isApproved = statusKey === 'APPROVED' || statusKey === 'PAID';
-                    const isRejected = statusKey === 'REJECTED' || statusKey === 'CANCELLED';
-                    const isReturned = statusKey === 'RETURNED';
-
-                    const tone =
-                      isApproved
-                        ? 'success'
-                        : isRejected
-                        ? 'danger'
-                        : isDraft
-                        ? 'neutral'
-                        : isReturned
-                        ? 'warning'
-                        : 'warning';
-                    const statusLabel =
-                      isApproved
-                        ? 'Approved'
-                        : isRejected
-                        ? 'Rejected'
-                        : isReturned
-                        ? 'Returned / Re-Review'
-                        : isDraft
-                        ? 'Draft'
-                        : 'Pending Approval';
-
-                    return (
-                      <tr
-                        key={inv.id}
-                        className={cn('transition-colors hover:bg-muted/40', isSelected && 'bg-primary/[0.04]')}
-                      >
-                        <td className="px-3 py-3.5 text-center">
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[1080px] border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-border/75 bg-muted/45 text-left text-[12px] font-bold uppercase tracking-wide text-muted-foreground">
+                        <th className="w-[42px] px-3 py-3 text-center">
                           <input
                             type="checkbox"
-                            checked={isSelected}
-                            onChange={() => handleToggleSelect(invIdStr)}
+                            checked={isAllSelected}
+                            onChange={handleSelectAll}
                             className="size-4 cursor-pointer rounded border-border text-primary focus:ring-primary/40"
+                            title="Select all invoices"
                           />
-                        </td>
-                        <td className="px-3 py-3.5">
-                          <button
-                            className="font-semibold text-primary transition-colors hover:text-primary/75 hover:underline"
-                            onClick={() => {
-                              if (inv.poNumber) setSelectedPoId(inv.poNumber);
-                              setCreationMode('linked');
-                              setIsCreating(true);
-                            }}
-                          >
-                            {inv.invoiceNumber}
-                          </button>
-                        </td>
-                        <td className="px-3 py-3.5 font-medium text-foreground">{inv.vendorName || '—'}</td>
-                        <td className="px-3 py-3.5 text-muted-foreground">{inv.submittedAt || inv.dueDate || '—'}</td>
-                        <td className="px-3 py-3.5 font-medium text-muted-foreground">{companyDefaultCurrency}</td>
-                        <td className="px-3 py-3.5 text-right font-semibold font-mono text-foreground">
-                          {formatAmount(inv.amount, companyDefaultCurrency)}
-                        </td>
-                        <td className="px-3 py-3.5">
-                          <Badge tone={tone}>
-                            <span className="size-1.5 rounded-full bg-current" />
-                            {statusLabel}
-                          </Badge>
-                        </td>
-                        <td className="px-3 py-3.5 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() => {
-                                if (inv.poNumber) setSelectedPoId(inv.poNumber);
-                                setCreationMode('linked');
-                                setIsCreating(true);
-                              }}
-                              title="View Invoice Entry"
-                            >
-                              <Eye size={15} />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() => {
-                                if (inv.poNumber) setSelectedPoId(inv.poNumber);
-                                setCreationMode('linked');
-                                setIsCreating(true);
-                              }}
-                              title="Edit Invoice Entry"
-                            >
-                              <Pencil size={15} />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              className="text-muted-foreground hover:text-destructive"
-                              onClick={() => setDeleteTarget(inv)}
-                              title="Delete Invoice Entry"
-                            >
-                              <Trash2 size={15} />
-                            </Button>
+                        </th>
+                        <th className="w-[160px] px-3 py-3">INVOICE NUMBER</th>
+                        <th className="w-[200px] px-3 py-3">VENDOR</th>
+                        <th className="w-[140px] px-3 py-3">INVOICE DATE</th>
+                        <th className="w-[110px] px-3 py-3">CURRENCY</th>
+                        <th className="w-[150px] px-3 py-3 text-right">GRAND TOTAL</th>
+                        <th className="w-[160px] px-3 py-3">STATUS</th>
+                        <th className="w-[130px] px-3 py-3 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <span>ACTIONS</span>
+                            <div className="relative">
+                              <ColumnSettingsButton open={showInvColPanel} onClick={() => setShowInvColPanel((v) => !v)} />
+
+                              {showInvColPanel && (
+                                <ColumnCustomizer
+                                  columnOrder={invColOrder}
+                                  visibleKeys={invVisibleKeys}
+                                  allColumns={INV_COLS}
+                                  onToggle={(key) => {
+                                    setInvVisibleKeys((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(key)) next.delete(key);
+                                      else next.add(key);
+                                      return next;
+                                    });
+                                  }}
+                                  onReorder={setInvColOrder}
+                                  onReset={() => {
+                                    setInvColOrder(INV_COLS.map((c) => c.key));
+                                    setInvVisibleKeys(new Set(INV_COLS.map((c) => c.key)));
+                                  }}
+                                  onClose={() => setShowInvColPanel(false)}
+                                />
+                              )}
+                            </div>
                           </div>
-                        </td>
+                        </th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+                    </thead>
+                    <tbody className="divide-y divide-border/60">
+                      {paginatedInvoices.map((inv) => {
+                        const invIdStr = String(inv.id);
+                        const isSelected = selectedInvoiceIds.includes(invIdStr);
+                        const statusKey = (inv.status || 'DRAFT').toUpperCase();
+                        const isDraft = statusKey === 'DRAFT' || statusKey === 'REGISTERED';
+                        const isApproved = statusKey === 'APPROVED' || statusKey === 'PAID';
+                        const isRejected = statusKey === 'REJECTED' || statusKey === 'CANCELLED';
+                        const isReturned = statusKey === 'RETURNED';
+
+                        const tone =
+                          isApproved
+                            ? 'success'
+                            : isRejected
+                            ? 'danger'
+                            : isDraft
+                            ? 'neutral'
+                            : isReturned
+                            ? 'warning'
+                            : 'warning';
+                        const statusLabel =
+                          isApproved
+                            ? 'Approved'
+                            : isRejected
+                            ? 'Rejected'
+                            : isReturned
+                            ? 'Returned / Re-Review'
+                            : isDraft
+                            ? 'Draft'
+                            : 'Pending Approval';
+
+                        return (
+                          <tr
+                            key={inv.id}
+                            className={cn('transition-colors hover:bg-muted/40', isSelected && 'bg-primary/[0.04]')}
+                          >
+                            <td className="px-3 py-3.5 text-center">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => handleToggleSelect(invIdStr)}
+                                className="size-4 cursor-pointer rounded border-border text-primary focus:ring-primary/40"
+                              />
+                            </td>
+                            <td className="px-3 py-3.5">
+                              <button
+                                className="font-semibold text-primary transition-colors hover:text-primary/75 hover:underline"
+                                onClick={() => {
+                                  if (inv.poNumber) setSelectedPoId(inv.poNumber);
+                                  setCreationMode('linked');
+                                  setIsCreating(true);
+                                }}
+                              >
+                                {inv.invoiceNumber}
+                              </button>
+                            </td>
+                            <td className="px-3 py-3.5 font-medium text-foreground">{inv.vendorName || '—'}</td>
+                            <td className="px-3 py-3.5 text-muted-foreground">{inv.submittedAt || inv.dueDate || '—'}</td>
+                            <td className="px-3 py-3.5 font-medium text-muted-foreground">{companyDefaultCurrency}</td>
+                            <td className="px-3 py-3.5 text-right font-semibold font-mono text-foreground">
+                              {formatAmount(inv.amount, companyDefaultCurrency)}
+                            </td>
+                            <td className="px-3 py-3.5">
+                              <Badge tone={tone}>
+                                <span className="size-1.5 rounded-full bg-current" />
+                                {statusLabel}
+                              </Badge>
+                            </td>
+                            <td className="px-3 py-3.5 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  onClick={() => {
+                                    if (inv.poNumber) setSelectedPoId(inv.poNumber);
+                                    setCreationMode('linked');
+                                    setIsCreating(true);
+                                  }}
+                                  title="View Invoice Entry"
+                                >
+                                  <Eye size={15} />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  onClick={() => {
+                                    if (inv.poNumber) setSelectedPoId(inv.poNumber);
+                                    setCreationMode('linked');
+                                    setIsCreating(true);
+                                  }}
+                                  title="Edit Invoice Entry"
+                                >
+                                  <Pencil size={15} />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  className="text-muted-foreground hover:text-destructive"
+                                  onClick={() => setDeleteTarget(inv)}
+                                  title="Delete Invoice Entry"
+                                >
+                                  <Trash2 size={15} />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <TablePagination
+                  currentPage={currentPage}
+                  totalItems={filteredInvoices.length}
+                  perPage={itemsPerPage}
+                  onPageChange={setCurrentPage}
+                />
+              </>
+            )}
         </Card>
       )}
 
@@ -1488,12 +1587,15 @@ export default function CreatePurchaseInvoicePage() {
                 <div
                   className="cpi-mode-option"
                   onClick={() => {
-                    if (!poIdParam && !grnIdParam) {
-                      setSelectedVendorId('');
-                      setSelectedPoId('');
-                      setSelectedGrnId('');
-                      setVendorName('');
-                    }
+                    setSelectedVendorId('');
+                    setSelectedPoId('');
+                    setSelectedGrnId('');
+                    setVendorName('');
+                    setGrnOptions([]);
+                    setInvoiceOptions([]);
+                    setLineItems([
+                      { id: Date.now(), itemCode: 'ITM-001', itemName: '', description: '', poQty: 0, grnQty: 0, supplierQty: 1, unitPrice: '', taxPercent: 18 },
+                    ]);
                     setCreationMode('manual');
                     setIsCreating(true);
                     setShowModeModal(false);
@@ -1640,44 +1742,21 @@ export default function CreatePurchaseInvoicePage() {
                 <span className="cpi-field__sub">Auto-loads PO items & linked Dispatch Notes</span>
               </div>
 
-              {/* 3. Dispatch Note / Vendor Invoice Selection */}
+              {/* 3. Auto-Linked Dispatch Note / Vendor Invoice */}
               <div className="cpi-field">
-                <label>3. DISPATCH NOTE / VENDOR INVOICE SELECTION</label>
-                <select value={selectedGrnId} onChange={(e) => setSelectedGrnId(e.target.value)} disabled={!selectedPoId}>
-                  {!selectedPoId ? (
-                    <option value="">-- Select Purchase Order First --</option>
-                  ) : grnOptions.length === 0 && invoiceOptions.length === 0 ? (
-                    <option value="">-- Direct PO Billing (No Linked Dispatch Note / Invoice) --</option>
-                  ) : (
-                    <option value="">-- Select Linked Dispatch Note or Vendor Invoice --</option>
+                <label>3. LINKED DISPATCH NOTE / VENDOR INVOICE</label>
+                <div className="cpi-auto-linked-box">
+                  <div className="cpi-auto-linked-text">
+                    {displayGrnNumber}
+                  </div>
+                  {selectedPoId && (grnOptions.length > 0 || invoiceOptions.length > 0) && (
+                    <span className="cpi-auto-linked-badge">
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
+                      Auto-linked
+                    </span>
                   )}
-                  {grnOptions.length > 0 && (
-                    <optgroup label="📄 Dispatch Notes">
-                      {grnOptions.map((g) => (
-                        <option key={`grn_${g.id}`} value={`grn_${g.id}`}>
-                          Dispatch Note: {g.grnNumber ? g.grnNumber.replace(/^GRN-/, 'DN-') : 'DN'} (Received:{' '}
-                          {new Date(g.receivedDate).toLocaleDateString()})
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                  {invoiceOptions.length > 0 && (
-                    <optgroup label="🧾 Vendor Invoices">
-                      {invoiceOptions.map((inv) => (
-                        <option key={`inv_${inv.id}`} value={`inv_${inv.id}`}>
-                          Invoice: {inv.invoiceNumber} — Ksh {inv.amount ? inv.amount.toLocaleString() : '0'} (
-                          {inv.submittedAt || inv.dueDate || 'Recent'})
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                  {selectedGrnId &&
-                    !grnOptions.some((g) => String(g.id) === String(selectedGrnId) || `grn_${g.id}` === selectedGrnId) &&
-                    !invoiceOptions.some((i) => String(i.id) === String(selectedGrnId) || `inv_${i.id}` === selectedGrnId) && (
-                      <option value={selectedGrnId}>{displayGrnNumber}</option>
-                    )}
-                </select>
-                <span className="cpi-field__sub">Auto-populates items from Dispatch Note or Vendor Invoice</span>
+                </div>
+                <span className="cpi-field__sub">Automatically mapped from selected Purchase Order</span>
               </div>
             </div>
           </div>
@@ -1782,8 +1861,8 @@ export default function CreatePurchaseInvoicePage() {
                   </th>
                   <th style={{ width: '130px' }}>Unit Price ({currency})</th>
                   <th style={{ width: '80px' }}>Tax %</th>
-                  <th style={{ width: '140px', textAlign: 'right' }}>Total ({currency})</th>
-                  <th style={{ width: '44px' }}></th>
+                  <th style={{ width: '185px', textAlign: 'right', paddingRight: '16px' }}>Total ({currency})</th>
+                  <th style={{ width: '48px' }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -2189,11 +2268,12 @@ export default function CreatePurchaseInvoicePage() {
               <h1 className="po-doc__company-name">
                 {profile?.companyName || companyName || 'Procnex'}
               </h1>
-              <p className="po-doc__company-detail">
-                {profile?.companyAddress
+              {(() => {
+                const addr = profile?.companyAddress
                   ? [profile.companyAddress, profile.companyCity, profile.companyState, profile.companyCountry].filter(Boolean).join(', ')
-                  : selectedPO?.companyAddress || selectedPO?.shipToAddress || (profile?.companyName || companyName || 'Procnex') + ' • Corporate Headquarters'}
-              </p>
+                  : selectedPO?.companyAddress || selectedPO?.shipToAddress || '';
+                return addr ? <p className="po-doc__company-detail">{addr}</p> : null;
+              })()}
               <p className="po-doc__company-detail">
                 {companyPhone || profile?.companyPhone || selectedPO?.companyPhone ? `Phone: ${companyPhone || profile?.companyPhone || selectedPO?.companyPhone}` : ''}
                 {(companyPhone || profile?.companyPhone || selectedPO?.companyPhone) && (companyEmail || profile?.companyEmail || selectedPO?.companyEmail) ? ' | ' : ''}
@@ -2257,9 +2337,9 @@ export default function CreatePurchaseInvoicePage() {
             <p className="po-doc__party-detail">
               Address: {profile?.companyAddress
                 ? [profile.companyAddress, profile.companyCity, profile.companyState, profile.companyCountry].filter(Boolean).join(', ')
-                : selectedPO?.shipToAddress || 'Corporate Headquarters'}
+                : selectedPO?.shipToAddress || '—'}
             </p>
-            <p className="po-doc__party-detail">Contact: {selectedPO?.shipToContact || 'Accounts Payable / Treasury'}</p>
+            <p className="po-doc__party-detail">Contact Person: {selectedPO?.shipToContact || 'Accounts Payable / Treasury'}</p>
             <p className="po-doc__party-detail">
               Phone: {companyPhone || profile?.companyPhone || selectedPO?.shipToPhone || '—'}
             </p>
@@ -2434,12 +2514,15 @@ export default function CreatePurchaseInvoicePage() {
               <div
                 className={`cpi-mode-option ${creationMode === 'manual' ? 'cpi-mode-option--selected' : ''}`}
                 onClick={() => {
-                  if (!poIdParam && !grnIdParam) {
-                    setSelectedVendorId('');
-                    setSelectedPoId('');
-                    setSelectedGrnId('');
-                    setVendorName('');
-                  }
+                  setSelectedVendorId('');
+                  setSelectedPoId('');
+                  setSelectedGrnId('');
+                  setVendorName('');
+                  setGrnOptions([]);
+                  setInvoiceOptions([]);
+                  setLineItems([
+                    { id: Date.now(), itemCode: 'ITM-001', itemName: '', description: '', poQty: 0, grnQty: 0, supplierQty: 1, unitPrice: '', taxPercent: 18 },
+                  ]);
                   setCreationMode('manual');
                   setIsCreating(true);
                   setShowModeModal(false);

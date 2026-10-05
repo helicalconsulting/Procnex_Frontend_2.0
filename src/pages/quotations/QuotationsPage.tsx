@@ -4007,7 +4007,7 @@ export default function QuotationsPage() {
             </button>
             {/* Compare RFQ dropdown */}
             {compareDropdownOpen && (
-              <FloatingMenu open anchorRef={compareDropdownBtnRef} ariaLabel="Choose an RFQ" width={460} zIndex={100040}
+              <FloatingMenu open anchorRef={compareDropdownBtnRef} ariaLabel="Choose an RFQ" width={580} zIndex={100040}
                 onClose={() => { setCompareDropdownOpen(false); setCompareSearch(''); compareDropdownBtnRef.current?.focus(); }}
                 className="quotation-rfq-picker" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               <div id="quotation-rfq-options" className="quotation-rfq-picker__content" onKeyDown={event => {
@@ -4712,15 +4712,17 @@ export default function QuotationsPage() {
 
                         <div className="quot-rfq-card__actions" onClick={(e) => e.stopPropagation()}>
                           <Button
-                            type="button" variant="outline" size="sm"
+                            type="button"
+                            size="sm"
+                            className="quot-rfq-card__compare-btn bg-[#0a6ed1] hover:bg-[#0856a4] text-white border-[#0a6ed1] shadow-sm font-semibold"
                             title="Open Side-by-Side Comparison for this RFQ"
                             onClick={() => {
                               setSelectedRFQ(group.rfqNumber);
                               setCompareModalOpen(true);
                             }}
                           >
-                            <GitCompareArrows size={14} />
-                            <span>Compare</span>
+                            <GitCompareArrows size={14} className="text-white" />
+                            <span className="text-white">Compare</span>
                           </Button>
                         </div>
                       </div>

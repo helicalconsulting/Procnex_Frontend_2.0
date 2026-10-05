@@ -671,7 +671,7 @@ export default function CreatePurchaseOrderPage() {
   const handleDownloadPdf = () => {
     const compAddress = profile?.companyAddress
       ? [profile.companyAddress, profile.companyCity, profile.companyState, profile.companyCountry].filter(Boolean).join(', ')
-      : `${brandingCompanyName || 'Company'} • Corporate Headquarters`;
+      : '';
 
     const poData = {
       poNumber,
@@ -814,7 +814,7 @@ export default function CreatePurchaseOrderPage() {
             <div className="cpo-field">
               <label>PO DATE</label>
               <span className="cpo-field__sub">Date of issue</span>
-              <input type="date" value={poDate} onChange={(e) => setPoDate(e.target.value)} />
+              <input type="date" value={poDate ? String(poDate).slice(0, 10) : ''} onChange={(e) => setPoDate(e.target.value)} />
             </div>
           </div>
         </div>
@@ -861,7 +861,7 @@ export default function CreatePurchaseOrderPage() {
             <div className="cpo-field">
               <label>QUOTATION DATE</label>
               <span className="cpo-field__sub">Date of quotation</span>
-              <input type="date" value={quotationDate} onChange={(e) => setQuotationDate(e.target.value)} />
+              <input type="date" value={quotationDate ? String(quotationDate).slice(0, 10) : ''} onChange={(e) => setQuotationDate(e.target.value)} />
             </div>
             <div className="cpo-field">
               <label>BLANKET ORDER NO.</label>
@@ -1174,7 +1174,7 @@ export default function CreatePurchaseOrderPage() {
                   <th style={{ width: '90px' }}>Qty</th>
                   <th style={{ width: '80px' }}>Unit</th>
                   <th style={{ width: '130px' }}>Unit Price ({currency})</th>
-                  <th style={{ width: '130px', textAlign: 'right' }}>Total</th>
+                  <th style={{ width: '180px', textAlign: 'right', paddingRight: '16px' }}>Total</th>
                   <th style={{ width: '50px' }}></th>
                 </tr>
               </thead>
@@ -1551,7 +1551,7 @@ export default function CreatePurchaseOrderPage() {
               </div>
               <div className="cpo-field">
                 <label>EXPECTED DELIVERY DATE</label>
-                <input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
+                <input type="date" value={deliveryDate ? String(deliveryDate).slice(0, 10) : ''} onChange={(e) => setDeliveryDate(e.target.value)} />
               </div>
               <div className="cpo-field">
                 <label>SHIPPING TERMS</label>

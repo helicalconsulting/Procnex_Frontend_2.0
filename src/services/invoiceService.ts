@@ -13,6 +13,7 @@ export interface APInvoice {
   status: string;
   dueDate: string;
   submittedAt: string;
+  invoiceDate?: string;
   threeWayMatch?: string;
   matchStatus?: string;
   department?: string;
@@ -52,8 +53,21 @@ async function apiList(params?: { poId?: string; vendorId?: string; search?: str
       amount: Number(inv.amount ?? inv.totalAmount ?? 0),
       paidAmount: Number(inv.paidAmount ?? 0),
       status: String(inv.status),
-      dueDate: String(inv.dueDate || '').slice(0, 10),
-      submittedAt: String(inv.createdAt || inv.submittedAt || '').slice(0, 10),
+      dueDate: (() => {
+        const raw = inv.dueDate || (inv as any).due_date;
+        if (!raw) return '';
+        return typeof raw === 'string' ? raw.slice(0, 10) : (raw instanceof Date ? raw.toISOString().slice(0, 10) : String(raw).slice(0, 10));
+      })(),
+      invoiceDate: (() => {
+        const raw = inv.invoiceDate || (inv as any).issueDate || (inv as any).submittedDate || inv.submittedAt || inv.createdAt || inv.syncedAt;
+        if (!raw) return '';
+        return typeof raw === 'string' ? raw.slice(0, 10) : (raw instanceof Date ? raw.toISOString().slice(0, 10) : String(raw).slice(0, 10));
+      })(),
+      submittedAt: (() => {
+        const raw = inv.submittedAt || inv.createdAt || inv.syncedAt || inv.invoiceDate;
+        if (!raw) return '';
+        return typeof raw === 'string' ? raw.slice(0, 10) : (raw instanceof Date ? raw.toISOString().slice(0, 10) : String(raw).slice(0, 10));
+      })(),
       threeWayMatch: (() => {
         const raw = inv.threeWayMatch ? String(inv.threeWayMatch) : (inv.matchStatus ? String(inv.matchStatus) : '');
         if (raw === 'MATCHED' || raw === 'VERIFIED') return 'MATCHED';
@@ -76,6 +90,19 @@ async function apiList(params?: { poId?: string; vendorId?: string; search?: str
   }
 }
 
+async function updateStatus(id: string, status: string, comments?: string): Promise<boolean> {
+  try {
+    await apiRequest(`/invoices/${encodeURIComponent(id)}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status, comments }),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export const invoiceService = {
   list: USE_MOCK ? mockList : apiList,
+  updateStatus: USE_MOCK ? async () => true : updateStatus,
 };

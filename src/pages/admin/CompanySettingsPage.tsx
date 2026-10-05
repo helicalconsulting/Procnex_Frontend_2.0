@@ -3442,7 +3442,10 @@ export default function CompanySettingsPage() {
                             setProfile(updated);
                             setPageMsg('Logo removed');
                             const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
-                            if (link) link.href = '/favicon.png';
+                            if (link) {
+                              link.type = 'image/jpeg';
+                              link.href = '/Procnex-logo.jpeg';
+                            }
                             refreshBranding();
                           } catch (err) {
                             setPageMsg(err instanceof Error ? err.message : 'Failed to remove logo');

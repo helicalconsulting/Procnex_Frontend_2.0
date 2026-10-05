@@ -20,6 +20,23 @@ export function cleanDuplicateSignatures(html: string, buyerNameOverride?: strin
   // Remove any CSS border-top rules on signature lines
   result = result.replace(/border-top:\s*1px\s+solid\s+#[0-9a-fA-F]{3,6}/gi, 'border-top: none');
 
+  // ── Clean redundant duplicate headers & subtitles ──
+  // 1. Remove duplicate consecutive <h1> tags or duplicate title wrappers
+  result = result.replace(/(<h1[^>]*>[\s\S]*?<\/h1>)\s*(?:<div[^>]*>)?\s*<h1[^>]*>[\s\S]*?<\/h1>(?:\s*<\/div>)?/gi, '$1');
+
+  // 2. Remove outer centered header container if immediately followed by <h1>
+  result = result.replace(/<div[^>]*text-align:\s*center[^>]*>\s*<h[12][^>]*>[\s\S]*?<\/h[12]>\s*(?:<p[^>]*>[\s\S]*?<\/p>\s*)?<\/div>\s*(?=<h1)/gi, '');
+
+  // 3. Remove duplicate Contract No lines
+  result = result.replace(/(<p[^>]*>\s*Contract No:[^<]+<\/p>)\s*<p[^>]*>\s*Contract No:[^<]+<\/p>/gi, '$1');
+
+  // 4. Resolve date placeholders if unreplaced
+  const todayFormatted = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+  result = result.replace(/\{\{currentDate\}\}/gi, todayFormatted)
+                 .replace(/\{\{current_date\}\}/gi, todayFormatted)
+                 .replace(/\{\{created_date\}\}/gi, todayFormatted)
+                 .replace(/\{\{createdDate\}\}/gi, todayFormatted);
+
   // Check if contract has signature section (FOR THE BUYER or signature-block)
   const buyerHeaderIdx = result.search(/FOR THE BUYER/i);
   if (buyerHeaderIdx === -1) return result;

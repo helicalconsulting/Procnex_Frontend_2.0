@@ -16,6 +16,146 @@ const PAGE_HEIGHT = 297; // A4 height in mm
 const CONTENT_WIDTH = PAGE_WIDTH - PDF_MARGIN * 2;
 
 /**
+ * Robust isolated printing via hidden iframe.
+ * Ensures the printable element is fully styled and rendered without SPA background/overflow clipping.
+ */
+export function printElementInIframe(element: HTMLElement, title = 'Document'): void {
+  if (!element) {
+    window.print();
+    return;
+  }
+
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.left = '-10000px';
+  iframe.style.top = '0';
+  iframe.style.width = '950px';
+  iframe.style.height = '1300px';
+  iframe.style.border = '0';
+  iframe.style.opacity = '0';
+  iframe.style.pointerEvents = 'none';
+  iframe.style.zIndex = '-9999';
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentWindow?.document;
+  if (!doc) {
+    window.print();
+    return;
+  }
+
+  // Collect all existing stylesheets & style tags from the current document
+  let styles = '';
+  document.querySelectorAll('style, link[rel="stylesheet"]').forEach((el) => {
+    styles += el.outerHTML;
+  });
+
+  doc.open();
+  doc.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>${title}</title>
+        ${styles}
+        <style>
+          @page {
+            size: A4 portrait;
+            margin: 6mm 8mm;
+          }
+          * {
+            box-sizing: border-box !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+          }
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #ffffff !important;
+            color: #0f172a !important;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+            width: 100% !important;
+            height: auto !important;
+            overflow: visible !important;
+            visibility: visible !important;
+          }
+          body * {
+            visibility: visible !important;
+          }
+          .ppi-sheet, .ppo-sheet, .bpv-sheet {
+            display: block !important;
+            visibility: visible !important;
+            position: static !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            padding: 8px 12px !important;
+            margin: 0 !important;
+            background: #ffffff !important;
+            color: #0f172a !important;
+            box-shadow: none !important;
+          }
+          @media print {
+            body, body * {
+              visibility: visible !important;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        ${element.outerHTML}
+      </body>
+    </html>
+  `);
+  doc.close();
+
+  // Wait for images inside iframe to load before triggering print
+  const images = doc.querySelectorAll('img');
+  let loaded = 0;
+  let printTriggered = false;
+
+  const triggerPrint = () => {
+    if (printTriggered) return;
+    printTriggered = true;
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch (err) {
+        console.warn('Iframe print error, falling back to window.print():', err);
+        window.print();
+      } finally {
+        setTimeout(() => {
+          if (iframe.parentNode) {
+            document.body.removeChild(iframe);
+          }
+        }, 1500);
+      }
+    }, 250);
+  };
+
+  if (images.length === 0) {
+    triggerPrint();
+  } else {
+    images.forEach((img) => {
+      if (img.complete) {
+        loaded++;
+        if (loaded === images.length) triggerPrint();
+      } else {
+        img.onload = () => {
+          loaded++;
+          if (loaded === images.length) triggerPrint();
+        };
+        img.onerror = () => {
+          loaded++;
+          if (loaded === images.length) triggerPrint();
+        };
+      }
+    });
+    setTimeout(triggerPrint, 1000);
+  }
+}
+
+/**
  * Convert HTML content to a properly formatted PDF and trigger download.
  * Uses an isolated hidden iframe so contract template CSS styles never leak into the main UI.
  * @param contentHtml - The contract HTML content snapshot
@@ -75,11 +215,13 @@ export async function downloadContractAsPdf(
               width: 794px;
               box-sizing: border-box;
             }
-            h1, h2, h3, h4 { color: #0a2342; margin-top: 20px; margin-bottom: 8px; font-weight: 700; }
-            h1 { font-size: 21px; border-bottom: 2px solid #0a6ed1; padding-bottom: 6px; }
-            h2 { font-size: 17px; }
-            h3 { font-size: 15px; }
+            h1, h2, h3, h4 { color: #0a2342; font-weight: 700; margin-top: 20px; margin-bottom: 8px; }
+            h1 { text-align: center; font-size: 20px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 1.2px; border: none; }
+            h2 { font-size: 15px; border-bottom: 1px solid #333; padding-bottom: 4px; margin-top: 24px; margin-bottom: 12px; text-transform: uppercase; }
+            h3 { font-size: 14px; }
             p { margin: 0 0 8px 0; }
+            .parties { margin: 20px 0; padding: 16px; border: 1px solid #ccc; background: #f9f9f9; }
+            .parties p { margin: 4px 0; }
             table { width: 100%; border-collapse: collapse; margin: 12px 0; }
             th, td { border: 1px solid #d0d5dd; padding: 8px 12px; text-align: left; font-size: 13px; }
             th { background: #f0f4ff; font-weight: 700; color: #0a2342; }
@@ -92,7 +234,7 @@ export async function downloadContractAsPdf(
           </style>
         </head>
         <body>
-          ${docTitle ? `<div style="text-align:center;margin-bottom:24px;padding-bottom:12px;border-bottom:2px solid #0a6ed1;"><h1 style="margin:0;font-size:19px;border:none;">${docTitle}</h1></div>` : ''}
+          ${(!/<h[1-3]/i.test(contentHtml || '') && docTitle) ? `<div style="text-align:center;margin-bottom:24px;padding-bottom:12px;border-bottom:2px solid #0a6ed1;"><h1 style="margin:0;font-size:19px;border:none;">${docTitle}</h1></div>` : ''}
           ${contentHtml}
         </body>
       </html>
@@ -389,7 +531,7 @@ export async function downloadPurchaseOrderAsPdf(
           <h3 style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #059669; margin: 0 0 8px 0; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0;">VENDOR</h3>
           <p style="font-size: 15px; font-weight: 700; color: #0a2342; margin: 0 0 4px 0;">${vendorName} ${order.supplierCode ? `<span style="font-size:12px; color:#64748b; font-weight:normal;">(${order.supplierCode})</span>` : ''}</p>
           ${order.supplierType ? `<p style="font-size: 12px; color: #475569; margin: 1px 0;">Type: ${order.supplierType}</p>` : ''}
-          <p style="font-size: 12px; color: #475569; margin: 1px 0;">Contact: ${vendorContact}</p>
+          <p style="font-size: 12px; color: #475569; margin: 1px 0;">Contact Person: ${vendorContact}</p>
           <p style="font-size: 12px; color: #475569; margin: 1px 0;">Address: ${vendorAddress}</p>
           <p style="font-size: 12px; color: #475569; margin: 1px 0;">Phone: ${vendorPhone}</p>
           <p style="font-size: 12px; color: #475569; margin: 1px 0;">Email: ${vendorEmail}</p>
@@ -400,7 +542,7 @@ export async function downloadPurchaseOrderAsPdf(
           <p style="font-size: 15px; font-weight: 700; color: #0a2342; margin: 0 0 4px 0;">${shipToCompany}</p>
           <p style="font-size: 12px; color: #475569; margin: 1px 0;">Warehouse: ${shipToWarehouse}</p>
           <p style="font-size: 12px; color: #475569; margin: 1px 0;">Address: ${shipToAddress}</p>
-          <p style="font-size: 12px; color: #475569; margin: 1px 0;">Contact: ${shipToContact}</p>
+          <p style="font-size: 12px; color: #475569; margin: 1px 0;">Contact Person: ${shipToContact}</p>
           <p style="font-size: 12px; color: #475569; margin: 1px 0;">Phone: ${shipToPhone}</p>
         </div>
       </div>

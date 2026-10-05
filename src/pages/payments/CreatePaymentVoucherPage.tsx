@@ -41,6 +41,7 @@ import {
   Info,
   Box
 } from 'lucide-react';
+import TablePagination from '../../components/shared/TablePagination';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TableSkeleton } from '../../components/shared/Skeleton';
 import BankPaymentVoucherModal, { type PaymentVoucherDocData } from '../../components/payments/BankPaymentVoucherModal';
@@ -105,6 +106,19 @@ interface VendorInvoiceItem {
   items?: ReconciledItem[];
 }
 
+const formatDisplayDate = (d?: string | Date | null) => {
+  if (!d) return '—';
+  try {
+    const str = String(d);
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(str)) return str;
+    const parsed = new Date(d);
+    if (isNaN(parsed.getTime())) return str;
+    return parsed.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  } catch {
+    return String(d);
+  }
+};
+
 export default function CreatePaymentVoucherPage() {
   const navigate = useNavigate();
   const { hasPermission } = useAuth();
@@ -133,6 +147,13 @@ export default function CreatePaymentVoucherPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [selectedVoucherIds, setSelectedVoucherIds] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 8;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter]);
+
   const [deleteTarget, setDeleteTarget] = useState<Payment | null>(null);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -245,26 +266,66 @@ export default function CreatePaymentVoucherPage() {
         const qAmount = searchParams.get('amount');
         const qVendorName = searchParams.get('vendorName');
 
-        const [fetchedInvoices, grnResponse] = await Promise.all([
+        const [fetchedInvoices, grnResponse, existingPayments] = await Promise.all([
           invoiceService.list(selectedVendorId ? { vendorId: selectedVendorId } : undefined),
           grnService.list(selectedVendorId ? { vendorId: selectedVendorId, limit: 100 } : { limit: 100 }).catch(() => ({ grns: [], total: 0 })),
+          localDataService.getPayments().catch(() => [] as Payment[]),
         ]);
         if (!isMounted) return;
 
         const allGrns = grnResponse?.grns || [];
+        
+        // Collect existing paid / vouchered invoice references
+        const voucheredInvoiceKeys = new Set<string>();
+        (existingPayments || []).forEach((p) => {
+          if (p.invoiceRef) {
+            p.invoiceRef.split(',').forEach((ref) => {
+              const clean = ref.replace(/^(Invoice:\s*|PO:\s*)/gi, '').trim().toLowerCase();
+              if (clean && clean !== '—' && clean !== '-') {
+                voucheredInvoiceKeys.add(clean);
+              }
+            });
+          }
+          if (Array.isArray(p.invoiceIds)) {
+            p.invoiceIds.forEach((id) => {
+              if (id) voucheredInvoiceKeys.add(String(id).toLowerCase());
+            });
+          }
+          if (Array.isArray(p.invoices)) {
+            p.invoices.forEach((inv) => {
+              if (inv.invoiceId) voucheredInvoiceKeys.add(String(inv.invoiceId).toLowerCase());
+              if (inv.invoiceNumber) voucheredInvoiceKeys.add(String(inv.invoiceNumber).trim().toLowerCase());
+            });
+          }
+        });
+
+        // Filter out invoices that already have a payment voucher created or are marked as PAID
+        const unvoucheredInvoices = (fetchedInvoices || []).filter((inv) => {
+          const invId = String(inv.id || '').toLowerCase();
+          const invNum = String(inv.invoiceNumber || '').trim().toLowerCase();
+          const isStatusPaid = (inv.status || '').toUpperCase() === 'PAID';
+          const isAmountPaid = (Number(inv.paidAmount) || 0) > 0 && (Number(inv.paidAmount) >= Number(inv.amount || 0));
+
+          if (isStatusPaid || isAmountPaid) return false;
+          if (invId && voucheredInvoiceKeys.has(invId)) return false;
+          if (invNum && voucheredInvoiceKeys.has(invNum)) return false;
+
+          return true;
+        });
+
         let mappedInvoices: VendorInvoiceItem[] = [];
 
-        if (fetchedInvoices && fetchedInvoices.length > 0) {
+        if (unvoucheredInvoices && unvoucheredInvoices.length > 0) {
           // If a vendor is selected or passed by name, filter to that vendor's invoices if needed
           const filteredInvs = (selectedVendorId || vendorName)
-            ? fetchedInvoices.filter((inv) => {
+            ? unvoucheredInvoices.filter((inv) => {
                 const vNameMatch = vendorName && inv.vendorName && inv.vendorName.toLowerCase().includes(vendorName.toLowerCase());
                 const invRefMatch = qInvoiceRef && (inv.invoiceNumber === qInvoiceRef || qInvoiceRef.includes(inv.invoiceNumber));
                 return !selectedVendorId ? (vNameMatch || invRefMatch) : true;
               })
-            : fetchedInvoices;
+            : unvoucheredInvoices;
 
-          const baseInvoices = filteredInvs.length > 0 ? filteredInvs : fetchedInvoices;
+          const baseInvoices = filteredInvs.length > 0 ? filteredInvs : unvoucheredInvoices;
 
           mappedInvoices = baseInvoices.map((inv, idx) => {
             const rawPoNum = (typeof inv.poNumber === 'string' && inv.poNumber)
@@ -434,8 +495,18 @@ export default function CreatePaymentVoucherPage() {
               amount: typeof inv.amount === 'number' ? inv.amount : (Number(inv.amount) || 0),
               paidAmount: typeof inv.paidAmount === 'number' ? inv.paidAmount : (Number(inv.paidAmount) || 0),
               balanceDue: Math.max(0, (typeof inv.amount === 'number' ? inv.amount : Number(inv.amount) || 0) - (Number(inv.paidAmount) || 0)),
-              dueDate: typeof inv.dueDate === 'string' ? inv.dueDate : (inv.dueDate instanceof Date ? inv.dueDate.toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10)),
-              invoiceDate: typeof inv.submittedAt === 'string' ? inv.submittedAt.slice(0, 10) : (typeof inv.invoiceDate === 'string' ? inv.invoiceDate.slice(0, 10) : new Date().toISOString().slice(0, 10)),
+              dueDate: (() => {
+                const raw = inv.dueDate || (inv as any).due_date;
+                if (typeof raw === 'string' && raw.trim()) return raw.trim().slice(0, 10);
+                if (raw instanceof Date) return raw.toISOString().slice(0, 10);
+                return '';
+              })(),
+              invoiceDate: (() => {
+                const raw = (inv as any).invoiceDate || (inv as any).submittedDate || (inv as any).issueDate || inv.submittedAt || (inv as any).createdAt || (inv as any).syncedAt;
+                if (typeof raw === 'string' && raw.trim()) return raw.trim().slice(0, 10);
+                if (raw instanceof Date) return raw.toISOString().slice(0, 10);
+                return new Date().toISOString().slice(0, 10);
+              })(),
               threeWayMatch: finalMatch,
               selected: Boolean(isMatchingParam || idx === 0),
               paymentAmount: Math.max(0, (typeof inv.amount === 'number' ? inv.amount : Number(inv.amount) || 0) - (Number(inv.paidAmount) || 0)),
@@ -1070,6 +1141,11 @@ export default function CreatePaymentVoucherPage() {
       );
     });
 
+    const paginatedVouchers = filteredVouchers.slice(
+      (currentPage - 1) * itemsPerPage,
+      currentPage * itemsPerPage
+    );
+
     const isAllSelected = filteredVouchers.length > 0 && filteredVouchers.every((v) => selectedVoucherIds.includes(String(v.id)));
 
     const handleSelectAll = () => {
@@ -1250,151 +1326,159 @@ export default function CreatePaymentVoucherPage() {
                 <X size={14} /> Clear Filters
               </Button>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1080px] border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-border/75 bg-muted/45 text-left text-[12px] font-bold uppercase tracking-wide text-muted-foreground">
-                    <th className="w-[44px] px-3 py-3 text-center">
-                      <input
-                        type="checkbox"
-                        checked={isAllSelected}
-                        disabled={!canCreateVoucher}
-                        onChange={canCreateVoucher ? handleSelectAll : undefined}
-                        className="size-4 cursor-pointer rounded border-border text-primary focus:ring-primary/40"
-                      />
-                    </th>
-                    <th className="w-[170px] px-3 py-3">VOUCHER NUMBER</th>
-                    <th className="w-[220px] px-3 py-3">VENDOR</th>
-                    <th className="w-[140px] px-3 py-3">VOUCHER DATE</th>
-                    <th className="w-[100px] px-3 py-3">CURRENCY</th>
-                    <th className="w-[170px] px-3 py-3 text-right">NET DISBURSEMENT</th>
-                    <th className="w-[160px] px-3 py-3">STATUS</th>
-                    <th className="w-[120px] px-3 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <span>ACTIONS</span>
-                        <div className="relative">
-                          <ColumnSettingsButton open={showVoucherColPanel} onClick={() => setShowVoucherColPanel((v) => !v)} />
-
-                          {showVoucherColPanel && (
-                            <ColumnCustomizer
-                              columnOrder={voucherColOrder}
-                              visibleKeys={voucherVisibleKeys}
-                              allColumns={VOUCHER_COLS}
-                              onToggle={(key) => {
-                                setVoucherVisibleKeys((prev) => {
-                                  const next = new Set(prev);
-                                  if (next.has(key)) next.delete(key);
-                                  else next.add(key);
-                                  return next;
-                                });
-                              }}
-                              onReorder={setVoucherColOrder}
-                              onReset={() => {
-                                setVoucherColOrder(VOUCHER_COLS.map((c) => c.key));
-                                setVoucherVisibleKeys(new Set(VOUCHER_COLS.map((c) => c.key)));
-                              }}
-                              onClose={() => setShowVoucherColPanel(false)}
-                            />
-                          )}
-                        </div>
-                      </div>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/60">
-                  {filteredVouchers.map((v) => {
-                    const statusKey = (v.status || '').toUpperCase();
-                    const isDraft = statusKey === 'DRAFT';
-                    const isApproved = statusKey === 'APPROVED' || statusKey === 'PAID' || statusKey === 'COMPLETED';
-                    const isRejected = statusKey === 'REJECTED' || statusKey === 'CANCELLED';
-                    const tone = isDraft ? 'neutral' : isApproved ? 'success' : isRejected ? 'danger' : 'warning';
-                    const badgeLabel = isDraft ? 'Draft' : isApproved ? 'Approved' : isRejected ? 'Rejected' : 'Pending Approval';
-                    const isSelected = selectedVoucherIds.includes(String(v.id));
-
-                    return (
-                      <tr
-                        key={v.id || v.paymentId}
-                        className={cn('transition-colors hover:bg-muted/40 cursor-pointer', isSelected && 'bg-primary/[0.04]')}
-                        onClick={() => handleViewVoucherDoc(v)}
-                      >
-                        <td onClick={(e) => e.stopPropagation()} className="px-3 py-3.5 text-center">
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[1080px] border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-border/75 bg-muted/45 text-left text-[12px] font-bold uppercase tracking-wide text-muted-foreground">
+                        <th className="w-[44px] px-3 py-3 text-center">
                           <input
                             type="checkbox"
-                            checked={isSelected}
+                            checked={isAllSelected}
                             disabled={!canCreateVoucher}
-                            onChange={() => canCreateVoucher && handleToggleSelect(String(v.id))}
+                            onChange={canCreateVoucher ? handleSelectAll : undefined}
                             className="size-4 cursor-pointer rounded border-border text-primary focus:ring-primary/40"
                           />
-                        </td>
-                        <td className="px-3 py-3.5 font-semibold text-primary font-mono">{v.paymentId}</td>
-                        <td className="px-3 py-3.5 font-medium text-foreground">{v.vendor || '—'}</td>
-                        <td className="px-3 py-3.5 text-muted-foreground">{v.paidAt || '—'}</td>
-                        <td className="px-3 py-3.5 font-medium text-muted-foreground">{companyDefaultCurrency}</td>
-                        <td className="px-3 py-3.5 text-right font-semibold font-mono text-foreground">
-                          {formatAmount(v.amount || 0, companyDefaultCurrency)}
-                        </td>
-                        <td className="px-3 py-3.5">
-                          <Badge tone={tone}>
-                            <span className="size-1.5 rounded-full bg-current" />
-                            {badgeLabel}
-                          </Badge>
-                        </td>
-                        <td className="px-3 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() => handleViewVoucherDoc(v)}
-                              title="View Bank Payment Voucher Document"
-                            >
-                              <Eye size={15} />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              disabled={!canCreateVoucher}
-                              title="Edit Payment Voucher"
-                              onClick={() => {
-                                if (!canCreateVoucher) return;
-                                setVoucherNumber(v.paymentId);
-                                setVendorName(v.vendor);
-                                setInvoiceRef(v.invoiceRef || '');
-                                setGrossAmount(v.amount);
-                                if (v.method) setPaymentMethod(v.method);
-                                if (v.bankName) setBankName(v.bankName);
-                                if (v.accountNumber) setAccountNumber(v.accountNumber);
-                                if (v.ifscCode) setIfscCode(v.ifscCode);
-                                if (v.beneficiaryName) setBeneficiaryName(v.beneficiaryName);
-                                if (v.remarks) setRemarks(v.remarks);
-                                if (v.purpose) setPurpose(v.purpose);
-                                setIsCreating(true);
-                              }}
-                            >
-                              <Pencil size={15} />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              className="text-muted-foreground hover:text-destructive"
-                              disabled={!canCreateVoucher}
-                              title="Delete Payment Voucher"
-                              onClick={() => {
-                                if (!canCreateVoucher) return;
-                                setDeleteTarget(v);
-                              }}
-                            >
-                              <Trash2 size={15} />
-                            </Button>
+                        </th>
+                        <th className="w-[170px] px-3 py-3">VOUCHER NUMBER</th>
+                        <th className="w-[220px] px-3 py-3">VENDOR</th>
+                        <th className="w-[140px] px-3 py-3">VOUCHER DATE</th>
+                        <th className="w-[100px] px-3 py-3">CURRENCY</th>
+                        <th className="w-[170px] px-3 py-3 text-right">NET DISBURSEMENT</th>
+                        <th className="w-[160px] px-3 py-3">STATUS</th>
+                        <th className="w-[120px] px-3 py-3 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <span>ACTIONS</span>
+                            <div className="relative">
+                              <ColumnSettingsButton open={showVoucherColPanel} onClick={() => setShowVoucherColPanel((v) => !v)} />
+
+                              {showVoucherColPanel && (
+                                <ColumnCustomizer
+                                  columnOrder={voucherColOrder}
+                                  visibleKeys={voucherVisibleKeys}
+                                  allColumns={VOUCHER_COLS}
+                                  onToggle={(key) => {
+                                    setVoucherVisibleKeys((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(key)) next.delete(key);
+                                      else next.add(key);
+                                      return next;
+                                    });
+                                  }}
+                                  onReorder={setVoucherColOrder}
+                                  onReset={() => {
+                                    setVoucherColOrder(VOUCHER_COLS.map((c) => c.key));
+                                    setVoucherVisibleKeys(new Set(VOUCHER_COLS.map((c) => c.key)));
+                                  }}
+                                  onClose={() => setShowVoucherColPanel(false)}
+                                />
+                              )}
+                            </div>
                           </div>
-                        </td>
+                        </th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+                    </thead>
+                    <tbody className="divide-y divide-border/60">
+                      {paginatedVouchers.map((v) => {
+                        const statusKey = (v.status || '').toUpperCase();
+                        const isDraft = statusKey === 'DRAFT';
+                        const isApproved = statusKey === 'APPROVED' || statusKey === 'PAID' || statusKey === 'COMPLETED';
+                        const isRejected = statusKey === 'REJECTED' || statusKey === 'CANCELLED';
+                        const tone = isDraft ? 'neutral' : isApproved ? 'success' : isRejected ? 'danger' : 'warning';
+                        const badgeLabel = isDraft ? 'Draft' : isApproved ? 'Approved' : isRejected ? 'Rejected' : 'Pending Approval';
+                        const isSelected = selectedVoucherIds.includes(String(v.id));
+
+                        return (
+                          <tr
+                            key={v.id || v.paymentId}
+                            className={cn('transition-colors hover:bg-muted/40 cursor-pointer', isSelected && 'bg-primary/[0.04]')}
+                            onClick={() => handleViewVoucherDoc(v)}
+                          >
+                            <td onClick={(e) => e.stopPropagation()} className="px-3 py-3.5 text-center">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                disabled={!canCreateVoucher}
+                                onChange={() => canCreateVoucher && handleToggleSelect(String(v.id))}
+                                className="size-4 cursor-pointer rounded border-border text-primary focus:ring-primary/40"
+                              />
+                            </td>
+                            <td className="px-3 py-3.5 font-semibold text-primary font-mono">{v.paymentId}</td>
+                            <td className="px-3 py-3.5 font-medium text-foreground">{v.vendor || '—'}</td>
+                            <td className="px-3 py-3.5 text-muted-foreground">{v.paidAt || '—'}</td>
+                            <td className="px-3 py-3.5 font-medium text-muted-foreground">{companyDefaultCurrency}</td>
+                            <td className="px-3 py-3.5 text-right font-semibold font-mono text-foreground">
+                              {formatAmount(v.amount || 0, companyDefaultCurrency)}
+                            </td>
+                            <td className="px-3 py-3.5">
+                              <Badge tone={tone}>
+                                <span className="size-1.5 rounded-full bg-current" />
+                                {badgeLabel}
+                              </Badge>
+                            </td>
+                            <td className="px-3 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center justify-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  onClick={() => handleViewVoucherDoc(v)}
+                                  title="View Bank Payment Voucher Document"
+                                >
+                                  <Eye size={15} />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  disabled={!canCreateVoucher}
+                                  title="Edit Payment Voucher"
+                                  onClick={() => {
+                                    if (!canCreateVoucher) return;
+                                    setVoucherNumber(v.paymentId);
+                                    setVendorName(v.vendor);
+                                    setInvoiceRef(v.invoiceRef || '');
+                                    setGrossAmount(v.amount);
+                                    if (v.method) setPaymentMethod(v.method);
+                                    if (v.bankName) setBankName(v.bankName);
+                                    if (v.accountNumber) setAccountNumber(v.accountNumber);
+                                    if (v.ifscCode) setIfscCode(v.ifscCode);
+                                    if (v.beneficiaryName) setBeneficiaryName(v.beneficiaryName);
+                                    if (v.remarks) setRemarks(v.remarks);
+                                    if (v.purpose) setPurpose(v.purpose);
+                                    setIsCreating(true);
+                                  }}
+                                >
+                                  <Pencil size={15} />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  className="text-muted-foreground hover:text-destructive"
+                                  disabled={!canCreateVoucher}
+                                  title="Delete Payment Voucher"
+                                  onClick={() => {
+                                    if (!canCreateVoucher) return;
+                                    setDeleteTarget(v);
+                                  }}
+                                >
+                                  <Trash2 size={15} />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <TablePagination
+                  currentPage={currentPage}
+                  totalItems={filteredVouchers.length}
+                  perPage={itemsPerPage}
+                  onPageChange={setCurrentPage}
+                />
+              </>
+            )}
         </Card>
       )}
 
@@ -1571,7 +1655,7 @@ export default function CreatePaymentVoucherPage() {
               <label>Voucher Date <span>*</span></label>
               <input
                 type="date"
-                value={voucherDate}
+                value={voucherDate ? String(voucherDate).slice(0, 10) : ''}
                 onChange={(e) => setVoucherDate(e.target.value)}
               />
             </div>
@@ -1579,7 +1663,7 @@ export default function CreatePaymentVoucherPage() {
               <label>Scheduled Payment Date <span>*</span></label>
               <input
                 type="date"
-                value={scheduledDate}
+                value={scheduledDate ? String(scheduledDate).slice(0, 10) : ''}
                 onChange={(e) => setScheduledDate(e.target.value)}
               />
             </div>
@@ -1820,8 +1904,7 @@ export default function CreatePaymentVoucherPage() {
                         <th>3-Way Match</th>
                         <th>Invoice Date</th>
                         <th>Due Date</th>
-                        <th style={{ textAlign: 'right' }}>Total Amount</th>
-                        <th style={{ textAlign: 'right' }}>Disbursement Amount</th>
+                        <th style={{ textAlign: 'right' }}>Amount</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1841,32 +1924,20 @@ export default function CreatePaymentVoucherPage() {
                               style={{ cursor: 'pointer', width: 16, height: 16 }}
                             />
                           </td>
-                          <td onClick={(e) => e.stopPropagation()}>
-                            <input
-                              type="text"
-                              value={inv.invoiceNumber}
-                              onChange={(e) => handleInvoiceFieldChange(inv.id, 'invoiceNumber', e.target.value)}
-                              className="rounded border border-input bg-background/80 px-2 py-1 text-xs font-bold text-foreground focus:ring-1 focus:ring-primary"
-                              style={{ width: '140px' }}
-                            />
+                          <td>
+                            <span className="text-xs font-semibold text-primary">
+                              {inv.invoiceNumber || '—'}
+                            </span>
                           </td>
-                          <td onClick={(e) => e.stopPropagation()}>
-                            <input
-                              type="text"
-                              value={inv.poNumber}
-                              onChange={(e) => handleInvoiceFieldChange(inv.id, 'poNumber', e.target.value)}
-                              className="rounded border border-input bg-background/80 px-2 py-1 text-xs text-muted-foreground focus:ring-1 focus:ring-primary"
-                              style={{ width: '140px' }}
-                            />
+                          <td>
+                            <span className="text-xs text-muted-foreground">
+                              {inv.poNumber || '—'}
+                            </span>
                           </td>
-                          <td onClick={(e) => e.stopPropagation()}>
-                            <input
-                              type="text"
-                              value={inv.grnNumber}
-                              onChange={(e) => handleInvoiceFieldChange(inv.id, 'grnNumber', e.target.value)}
-                              className="rounded border border-input bg-background/80 px-2 py-1 text-xs text-muted-foreground focus:ring-1 focus:ring-primary"
-                              style={{ width: '120px' }}
-                            />
+                          <td>
+                            <span className="text-xs text-muted-foreground">
+                              {inv.grnNumber || '—'}
+                            </span>
                           </td>
                           <td onClick={(e) => e.stopPropagation()}>
                             <button
@@ -1892,30 +1963,20 @@ export default function CreatePaymentVoucherPage() {
                               {inv.threeWayMatch === 'MATCHED' ? '✅ MATCHED' : '⚠️ DISCREPANCY'}
                             </button>
                           </td>
-                          <td>{inv.invoiceDate}</td>
-                          <td>{inv.dueDate}</td>
-                          <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatAmount(inv.amount, currency)}</td>
-                          <td style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyRight: 'flex-end', gap: 6 }}>
-                              <input
-                                type="number"
-                                step="0.01"
-                                value={inv.paymentAmount || ''}
-                                onChange={(e) => handleInvoiceFieldChange(inv.id, 'paymentAmount', parseFloat(e.target.value) || 0)}
-                                className="rounded border border-input bg-background/80 px-2 py-1 text-right text-xs font-bold text-foreground focus:ring-1 focus:ring-primary"
-                                style={{ width: '110px' }}
-                              />
-                              {vendorInvoices.length > 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveInvoice(inv.id)}
-                                  title="Remove Invoice Line"
-                                  style={{ padding: 4, background: 'none', border: 'none', color: '#ff4d4f', cursor: 'pointer' }}
-                                >
-                                  <Trash2 size={15} />
-                                </button>
-                              )}
-                            </div>
+                          <td>
+                            <span className="text-xs text-muted-foreground">
+                              {formatDisplayDate(inv.invoiceDate)}
+                            </span>
+                          </td>
+                          <td>
+                            <span className="text-xs text-muted-foreground">
+                              {formatDisplayDate(inv.dueDate)}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: 'right', fontWeight: 600 }}>
+                            <span className="text-xs font-bold text-foreground">
+                              {formatAmount(inv.paymentAmount ?? inv.amount, currency)}
+                            </span>
                           </td>
                         </tr>
                       ))}

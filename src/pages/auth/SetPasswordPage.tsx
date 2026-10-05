@@ -99,8 +99,9 @@ export default function SetPasswordPage() {
     try {
       const res = await submitPasswordSetup(token, password, confirmPassword);
       const code = (routeCompanyCode || res.companyCode || validation?.companyCode || '').trim().toLowerCase();
+      const isEmployeePath = window.location.pathname.startsWith('/e/');
       if (code) {
-        navigate(`/v/${code}/login?passwordSet=1`, { replace: true });
+        navigate(isEmployeePath ? `/e/${code}/login?passwordSet=1` : `/v/${code}/login?passwordSet=1`, { replace: true });
       } else {
         navigate('/login?passwordSet=1', { replace: true });
       }

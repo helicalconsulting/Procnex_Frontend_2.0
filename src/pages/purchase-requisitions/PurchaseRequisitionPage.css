@@ -648,24 +648,25 @@
 
 .pr-items-table {
   width: 100%;
+  min-width: 960px;
   table-layout: fixed;
   border-collapse: collapse;
   font-size: 14px;
 }
 
 /* Column widths */
-.pr-col--no     { width: 48px; }
-.pr-col--desc   { width: auto; }
+.pr-col--no     { width: 44px; }
+.pr-col--desc   { width: auto; min-width: 220px; }
 .pr-col--num    { width: 90px; }
 .pr-col--unit   { width: 90px; }
-.pr-col--price  { width: 120px; }
-.pr-col--total  { width: 130px; }
-.pr-col--action { width: 44px; }
+.pr-col--price  { width: 130px; }
+.pr-col--total  { width: 210px; }
+.pr-col--action { width: 54px; }
 
 /* Table Header */
 .pr-items-table thead th {
   background: linear-gradient(180deg, var(--surface-elevated), var(--surface-card));
-  padding: 11px 10px;
+  padding: 11px 12px;
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
@@ -681,12 +682,12 @@
 .pr-th--no     { text-align: center !important; }
 .pr-th--num    { text-align: right !important; }
 .pr-th--price  { text-align: right !important; }
-.pr-th--total  { text-align: right !important; }
-.pr-th--action { text-align: center !important; }
+.pr-th--total  { text-align: right !important; padding-right: 18px !important; }
+.pr-th--action { text-align: center !important; width: 54px; padding: 0 !important; }
 
 /* Table Body */
 .pr-items-table tbody td {
-  padding: 8px 10px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border);
   border-right: 1px solid var(--border);
   vertical-align: middle;
@@ -707,8 +708,19 @@
 .pr-td--no     { text-align: center; font-weight: 700; color: var(--text-secondary); }
 .pr-td--num    { text-align: right; }
 .pr-td--unit   { text-align: left; }
-.pr-td--total  { text-align: right; font-weight: 700; color: var(--primary-500, #0a6ed1); font-family: var(--font-mono, monospace); }
-.pr-td--action { text-align: center; }
+.pr-td--total  {
+  text-align: right;
+  font-weight: 700;
+  color: var(--primary-500, #0a6ed1);
+  font-family: var(--font-mono, monospace);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  padding-right: 18px;
+}
+.pr-td--action {
+  text-align: center;
+  padding: 4px 6px;
+}
 
 /* Form Controls Inside Table Cells */
 .pr-items-table input,

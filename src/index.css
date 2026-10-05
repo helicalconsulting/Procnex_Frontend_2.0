@@ -1114,3 +1114,17 @@ table td:not(:last-child) {
 .dark table td:not(:last-child) {
   border-right: 1px solid var(--border, #283548) !important;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Disable Spin Buttons on Number Inputs
+   ═══════════════════════════════════════════════════════════ */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+

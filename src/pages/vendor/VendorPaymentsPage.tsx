@@ -41,6 +41,7 @@ import { DataTableViewport } from '../../components/ui/data-table-viewport';
 import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
 import { TableSkeleton } from '@/components/shared/Skeleton';
 import { MessageStrip } from '../../components/shared/MessageStrip';
+import { TablePagination } from '../../components/shared/TablePagination';
 import { useServiceData } from '../../hooks/useServiceData';
 import {
   vendorPortalService,
@@ -232,6 +233,22 @@ export default function VendorPaymentsPage() {
       );
     });
   }, [invoices, search]);
+
+  const [ledgerPage, setLedgerPage] = useState(1);
+  const [invoicesPage, setInvoicesPage] = useState(1);
+  const pageSize = 8;
+
+  const totalLedgerPages = Math.max(1, Math.ceil(filteredPayments.length / pageSize));
+  const paginatedPayments = useMemo(() => {
+    const start = (ledgerPage - 1) * pageSize;
+    return filteredPayments.slice(start, start + pageSize);
+  }, [filteredPayments, ledgerPage, pageSize]);
+
+  const totalInvoicesPages = Math.max(1, Math.ceil(filteredInvoices.length / pageSize));
+  const paginatedInvoices = useMemo(() => {
+    const start = (invoicesPage - 1) * pageSize;
+    return filteredInvoices.slice(start, start + pageSize);
+  }, [filteredInvoices, invoicesPage, pageSize]);
 
   const amount = (val: number) => formatAmount(val, displayCurrency);
   const formatDate = (dateStr?: string) => {
@@ -462,7 +479,7 @@ export default function VendorPaymentsPage() {
         <div className="flex items-center gap-1 rounded-xl bg-secondary/70 p-1 border border-border/60">
           <button
             type="button"
-            onClick={() => setActiveTab('LEDGER')}
+            onClick={() => { setActiveTab('LEDGER'); setLedgerPage(1); }}
             className={cn(
               'flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all',
               activeTab === 'LEDGER'
@@ -475,7 +492,7 @@ export default function VendorPaymentsPage() {
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab('INVOICES')}
+            onClick={() => { setActiveTab('INVOICES'); setInvoicesPage(1); }}
             className={cn(
               'flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all',
               activeTab === 'INVOICES'
@@ -500,12 +517,20 @@ export default function VendorPaymentsPage() {
               type="text"
               placeholder={activeTab === 'LEDGER' ? 'Search payment #, UTR, invoice...' : 'Search invoice, PO #...'}
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setLedgerPage(1);
+                setInvoicesPage(1);
+              }}
             />
             {search && (
               <button
                 type="button"
-                onClick={() => setSearch('')}
+                onClick={() => {
+                  setSearch('');
+                  setLedgerPage(1);
+                  setInvoicesPage(1);
+                }}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
                 <XCircle size={14} />
@@ -519,7 +544,7 @@ export default function VendorPaymentsPage() {
                 <button
                   key={st}
                   type="button"
-                  onClick={() => setStatusFilter(st)}
+                  onClick={() => { setStatusFilter(st); setLedgerPage(1); }}
                   className={cn(
                     'rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-colors',
                     statusFilter === st
@@ -584,7 +609,7 @@ export default function VendorPaymentsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/60">
-                    {filteredPayments.map((pay) => (
+                    {paginatedPayments.map((pay) => (
                       <tr key={pay.id} className="transition-colors hover:bg-accent/30">
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-2.5">
@@ -664,6 +689,14 @@ export default function VendorPaymentsPage() {
                   </tbody>
                 </table>
               </DataTableViewport>
+              <TablePagination
+                currentPage={ledgerPage}
+                totalPages={totalLedgerPages}
+                onPageChange={setLedgerPage}
+                totalItems={filteredPayments.length}
+                perPage={pageSize}
+                className="border-t border-border rounded-none"
+              />
             </Card>
           )}
         </>
@@ -702,7 +735,7 @@ export default function VendorPaymentsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/60">
-                    {filteredInvoices.map((inv) => {
+                    {paginatedInvoices.map((inv) => {
                       const stats = invoiceStatsMap.get(inv.invoiceNumber) || {
                         totalAmount: inv.totalAmount || inv.amount || 0,
                         paidAmount: 0,
@@ -777,6 +810,14 @@ export default function VendorPaymentsPage() {
                   </tbody>
                 </table>
               </DataTableViewport>
+              <TablePagination
+                currentPage={invoicesPage}
+                totalPages={totalInvoicesPages}
+                onPageChange={setInvoicesPage}
+                totalItems={filteredInvoices.length}
+                perPage={pageSize}
+                className="border-t border-border rounded-none"
+              />
             </Card>
           )}
         </>
@@ -878,7 +919,7 @@ export default function VendorPaymentsPage() {
                 <label className="text-xs font-semibold text-foreground">Payment Date *</label>
                 <Input
                   type="date"
-                  value={formData.paymentDate}
+                  value={formData.paymentDate ? String(formData.paymentDate).slice(0, 10) : ''}
                   onChange={(e) => setFormData((prev) => ({ ...prev, paymentDate: e.target.value }))}
                   required
                 />

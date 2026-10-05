@@ -73,8 +73,17 @@ export function getClientInstanceId(): string {
 
 import { getTenantCompanyCode } from '../utils/tenantResolver';
 
-export function authHeaders(extra?: Record<string, string>): HeadersInit {
-  const token = localStorage.getItem(TOKEN_KEY) || localStorage.getItem('heliflow_vendor_token');
+export function authHeaders(extra?: Record<string, string>, targetPath?: string): HeadersInit {
+  const isVendorContext =
+    (targetPath && (targetPath.startsWith('/vendors') || targetPath.startsWith('/v/'))) ||
+    (typeof window !== 'undefined' && (window.location.pathname.startsWith('/v/') || window.location.pathname.startsWith('/vendor')));
+
+  const vendorToken = localStorage.getItem('heliflow_vendor_token');
+  const userToken = localStorage.getItem(TOKEN_KEY);
+  const token = isVendorContext
+    ? (vendorToken || userToken)
+    : (userToken || vendorToken);
+
   const companyCode = getTenantCompanyCode();
   return {
     'Content-Type': 'application/json',
@@ -90,7 +99,10 @@ function methodOf(options: RequestInit): string {
 }
 
 function buildCacheKey(path: string, options: RequestInit): string {
-  const token = localStorage.getItem(TOKEN_KEY) || localStorage.getItem('heliflow_vendor_token') || '';
+  const isVendorContext = path.startsWith('/vendors') || (typeof window !== 'undefined' && (window.location.pathname.startsWith('/v/') || window.location.pathname.startsWith('/vendor')));
+  const token = isVendorContext
+    ? (localStorage.getItem('heliflow_vendor_token') || localStorage.getItem(TOKEN_KEY) || '')
+    : (localStorage.getItem(TOKEN_KEY) || localStorage.getItem('heliflow_vendor_token') || '');
   const companyCode = getTenantCompanyCode() || '';
   return [methodOf(options), path, token, companyCode, getClientInstanceId()].join('|');
 }
@@ -188,7 +200,7 @@ async function fetchApi<T>(
   requestTimeoutMs?: number
 ): Promise<T> {
   let res: Response;
-  const timeoutMs = requestTimeoutMs ?? Number(import.meta.env.VITE_API_TIMEOUT_MS || 30000);
+  const timeoutMs = requestTimeoutMs ?? Number(import.meta.env.VITE_API_TIMEOUT_MS || 45000);
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -197,7 +209,7 @@ async function fetchApi<T>(
       cache: 'no-store',
       signal: controller.signal,
       headers: {
-        ...authHeaders(),
+        ...authHeaders(undefined, path),
         ...(fetchOptions.headers as Record<string, string> | undefined),
       },
     });
@@ -205,12 +217,14 @@ async function fetchApi<T>(
     clearTimeout(t);
     if (err instanceof DOMException && err.name === 'AbortError') {
       throw new ApiError(
-        `Request timed out after ${timeoutMs}ms. Backend may be slow/unreachable.`,
+        `Request timed out after ${timeoutMs}ms. Backend may be slow or unreachable. Please try again.`,
         'TIMEOUT'
       );
     }
+    const isDev = Boolean(import.meta.env?.DEV);
+    const devHint = isDev ? ' (Start the server: cd Heliflow_Client_Backend && npm run dev)' : '';
     throw new ApiError(
-      `Cannot reach backend at ${API_BASE}. Start the server: cd Heliflow_Client_Backend && npm run dev`,
+      `Cannot reach server at ${API_BASE}. Please check your connection or try again.${devHint}`,
       'NETWORK_ERROR'
     );
   } finally {

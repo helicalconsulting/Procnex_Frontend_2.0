@@ -43,7 +43,7 @@ export default function PurchaseOrderDocument({ pr }: Props) {
   const finalCompanyName = pr.companyName || profile?.companyName || brandingCompanyName || 'Procnex';
   const companyAddress = profile?.companyAddress
     ? [profile.companyAddress, profile.companyCity, profile.companyState, profile.companyCountry].filter(Boolean).join(', ')
-    : pr.companyAddress || `${finalCompanyName} • Corporate Headquarters`;
+    : pr.companyAddress || '';
 
   const finalLogoUrl = (pr as any).companyLogoUrl || logoUrl || '/Procnex-logo.jpeg' || procnexLogo || defaultHeliflowLogo;
 
@@ -68,7 +68,7 @@ export default function PurchaseOrderDocument({ pr }: Props) {
           )}
           <div className="po-doc__company-info">
             <h1 className="po-doc__company-name">{val(finalCompanyName)}</h1>
-            <p className="po-doc__company-detail">{val(companyAddress)}</p>
+            {companyAddress ? <p className="po-doc__company-detail">{val(companyAddress)}</p> : null}
             {(brandingPhone || pr.companyPhone || brandingEmail || pr.companyEmail) && (
               <p className="po-doc__company-detail">
                 {brandingPhone || pr.companyPhone ? `Phone: ${brandingPhone || pr.companyPhone}` : ''}
@@ -117,7 +117,7 @@ export default function PurchaseOrderDocument({ pr }: Props) {
         <div className="po-doc__party-box">
           <h3 className="po-doc__party-heading">VENDOR</h3>
           <p className="po-doc__party-name">{val(pr.vendorName)}</p>
-          <p className="po-doc__party-detail">Contact: {val(pr.vendorContactPerson)}</p>
+          <p className="po-doc__party-detail">Contact Person: {val(pr.vendorContactPerson)}</p>
           <p className="po-doc__party-detail">Address: {val(pr.vendorAddress)}</p>
           <p className="po-doc__party-detail">Phone: {val(pr.vendorPhone)}</p>
           <p className="po-doc__party-detail">Email: {val(pr.vendorEmail)}</p>
@@ -128,7 +128,7 @@ export default function PurchaseOrderDocument({ pr }: Props) {
           <p className="po-doc__party-name">{val(pr.shipToCompany)}</p>
           <p className="po-doc__party-detail">Warehouse: {val(pr.shipToWarehouse)}</p>
           <p className="po-doc__party-detail">Address: {val(pr.shipToAddress)}</p>
-          <p className="po-doc__party-detail">Contact: {val(pr.shipToContact)}</p>
+          <p className="po-doc__party-detail">Contact Person: {val(pr.shipToContact)}</p>
           <p className="po-doc__party-detail">Phone: {val(pr.shipToPhone)}</p>
         </div>
       </div>

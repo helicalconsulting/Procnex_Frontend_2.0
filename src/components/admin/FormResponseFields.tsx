@@ -48,6 +48,10 @@ export function FormResponseFields({ fields, responseData = {} }: { fields: Form
       const amount = typeof value === 'number' || typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN;
       return <span className="font-semibold">{String(currency)} {Number.isFinite(amount) ? amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : answerText(value)}</span>;
     }
+    if (field.type === 'phone') {
+      const countryCode = answers[`${field.id}_countryCode`] || '';
+      return <span className="font-semibold">{countryCode ? `${countryCode} ` : ''}{answerText(value)}</span>;
+    }
     const file = attachment(field, value);
     if (file) return <div className="space-y-3">
       <div className="flex items-start gap-2"><FileText size={17} className="mt-0.5 shrink-0 text-primary"/><span className="break-all">{file.fileName}</span></div>

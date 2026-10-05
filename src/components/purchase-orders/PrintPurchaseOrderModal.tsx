@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { Printer, X, ShoppingCart, CheckCircle2, ShieldCheck, Landmark, Building2, Clock } from 'lucide-react';
 import { useCurrency } from '../shared/CurrencyMaster';
 import { useBranding } from '../../context/BrandingContext';
+import { printElementInIframe } from '../../utils/pdfDownload';
 import defaultHeliflowLogo from '../../assets/heliflow.png';
 import procnexLogo from '../../assets/procnex.png';
 import './PrintPurchaseOrderModal.css';
@@ -39,7 +40,7 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
     ? (data as any).companyAddress
     : profile?.companyAddress
       ? [profile.companyAddress, profile.companyCity, profile.companyState, profile.companyCountry].filter(Boolean).join(', ')
-      : `${displayCompanyName} • Corporate Headquarters`;
+      : '';
 
   const finalLogoUrl = (data as any).companyLogoUrl
     || profile?.logoUrl
@@ -75,7 +76,11 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
     : formatAmount(numericAmount, companyDefaultCurrency);
 
   const handlePrint = () => {
-    window.print();
+    if (printableRef.current) {
+      printElementInIframe(printableRef.current, `Official_Purchase_Order_${data.referenceNumber}`);
+    } else {
+      window.print();
+    }
   };
 
   const statusLabel = (data.status || 'PENDING').replace(/_/g, ' ');
@@ -147,7 +152,7 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
                   <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#0f172a' }}>{displayCompanyName}</h2>
                 </div>
               )}
-              <p>{companyAddress}</p>
+              {companyAddress ? <p>{companyAddress}</p> : null}
               {(profile?.companyPhone || profile?.companyEmail) && (
                 <p>
                   {profile?.companyPhone ? `Phone: ${profile.companyPhone}` : ''}

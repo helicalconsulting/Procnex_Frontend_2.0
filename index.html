@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/jpeg" href="/Procnex-logo.jpeg" />
     <script>
       (function() {
         try {
@@ -12,7 +13,7 @@
             var params = new URLSearchParams(window.location.search);
             code = (params.get('company') || params.get('companyCode') || '').toUpperCase() || null;
           }
-          var link = document.createElement('link');
+          var link = document.querySelector('link[rel="icon"]') || document.createElement('link');
           link.rel = 'icon';
           if (code && code !== 'LOGIN' && code !== 'DASHBOARD') {
             var raw = localStorage.getItem('branding_cache_' + code);
@@ -20,19 +21,23 @@
               var b = JSON.parse(raw);
               if (b.companyName) document.title = b.companyName + ' — Vendor Portal';
               if (b.logoUrl) {
+                link.type = b.logoUrl.endsWith('.svg') ? 'image/svg+xml' : (b.logoUrl.endsWith('.jpeg') || b.logoUrl.endsWith('.jpg') ? 'image/jpeg' : 'image/png');
                 link.href = b.logoUrl;
               } else {
+                link.type = 'image/svg+xml';
                 link.href = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏢</text></svg>';
               }
             } else {
               document.title = code + ' — Vendor Portal';
+              link.type = 'image/svg+xml';
               link.href = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏢</text></svg>';
             }
           } else {
             document.title = 'Procnex — Procurement Automation Software';
+            link.type = 'image/jpeg';
             link.href = '/Procnex-logo.jpeg';
           }
-          document.head.appendChild(link);
+          if (!link.parentNode) document.head.appendChild(link);
         } catch (e) {}
       })();
     </script>

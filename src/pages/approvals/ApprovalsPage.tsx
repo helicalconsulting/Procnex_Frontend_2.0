@@ -37,6 +37,7 @@ import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import '../../components/shared/ColumnCustomizer.css';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TableSkeleton } from '../../components/shared/Skeleton';
+import { TablePagination } from '../../components/shared/TablePagination';
 import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
 import InvoiceDocumentViewerModal from '../../components/invoices/InvoiceDocumentViewerModal';
 import { apiRequest } from '../../api/client';
@@ -225,6 +226,8 @@ function getInvoiceAttachments(req: any): any[] {
     req.referenceNumber ? `invoice_attachments_${req.referenceNumber}` : null,
     req.referenceId ? `invoice_attachments_${req.referenceId}` : null,
     req.id ? `invoice_attachments_${req.id}` : null,
+    req.referenceNumber ? `payment_attachments_${req.referenceNumber}` : null,
+    req.referenceId ? `payment_attachments_${req.referenceId}` : null,
   ].filter(Boolean) as string[];
 
   for (const k of keys) {
@@ -417,38 +420,25 @@ export default function ApprovalsPage() {
   }, [authRoles]);
 
   const getEffectiveStatus = useCallback((a: ApprovalRequest): ApprovalStatusType => {
-    if (a.status === 'APPROVED') return 'APPROVED';
+    if (a.status === 'APPROVED' || (a.status as string) === 'APPROVED_L1') return 'APPROVED';
     if (a.status === 'REJECTED') return 'REJECTED';
-    if (a.status === 'RETURNED') return 'RETURNED';
-
-    if (a.status === 'PENDING') {
-      if (a.canAct) return 'PENDING';
-      if ((a.currentLevel || 1) > 1 && !isAdmin) return 'APPROVED';
-      return 'PENDING';
-    }
-    return a.status;
-  }, [isAdmin]);
+    if (a.status === 'RETURNED' || (a as any).isReturned) return 'RETURNED';
+    return 'PENDING';
+  }, []);
 
   const filtered = useMemo(() => {
-    let list = moduleFiltered.filter((a) => {
-      if (a.status === 'PENDING' && !a.canAct && !isAdmin) {
-        return false;
-      }
-      return true;
-    });
-    if (statusFilter === 'ALL') return list;
-    return list.filter((a) => getEffectiveStatus(a) === statusFilter);
-  }, [moduleFiltered, statusFilter, getEffectiveStatus, isAdmin]);
+    if (statusFilter === 'ALL' || statusFilter === 'All') return moduleFiltered;
+    return moduleFiltered.filter((a) => getEffectiveStatus(a) === statusFilter);
+  }, [moduleFiltered, statusFilter, getEffectiveStatus]);
 
   const summary = useMemo(() => {
-    const list = moduleFiltered.filter((a) => isAdmin || a.status !== 'PENDING' || a.canAct);
     return {
-      total: list.length,
-      pending: list.filter((a) => getEffectiveStatus(a) === 'PENDING').length,
-      approved: list.filter((a) => getEffectiveStatus(a) === 'APPROVED').length,
-      rejected: list.filter((a) => getEffectiveStatus(a) === 'REJECTED').length,
+      total: moduleFiltered.length,
+      pending: moduleFiltered.filter((a) => getEffectiveStatus(a) === 'PENDING').length,
+      approved: moduleFiltered.filter((a) => getEffectiveStatus(a) === 'APPROVED').length,
+      rejected: moduleFiltered.filter((a) => getEffectiveStatus(a) === 'REJECTED').length,
     };
-  }, [moduleFiltered, getEffectiveStatus, isAdmin]);
+  }, [moduleFiltered, getEffectiveStatus]);
 
   const totalPages = Math.ceil(filtered.length / perPage);
   const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
@@ -725,30 +715,13 @@ export default function ApprovalsPage() {
           />
         )}
 
-        {filtered.length > perPage && (
-          <div className="flex items-center justify-between border-t border-border/60 px-5 py-3 text-xs text-muted-foreground">
-            <span>Showing {(currentPage - 1) * perPage + 1}–{Math.min(currentPage * perPage, filtered.length)} of {filtered.length}</span>
-            <div className="flex items-center gap-1">
-              <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)} className="h-8 w-8 p-0">
-                <ChevronLeft className="size-4" />
-              </Button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                <Button
-                  key={p}
-                  variant={currentPage === p ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setCurrentPage(p)}
-                  className="h-8 w-8 p-0"
-                >
-                  {p}
-                </Button>
-              ))}
-              <Button variant="outline" size="sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => p + 1)} className="h-8 w-8 p-0">
-                <ChevronRight className="size-4" />
-              </Button>
-            </div>
-          </div>
-        )}
+        <TablePagination
+          currentPage={currentPage}
+          totalItems={filtered.length}
+          perPage={perPage}
+          onPageChange={setCurrentPage}
+          className="border-t border-border/60 rounded-none"
+        />
       </Card>
 
       {/* Action Dialog */}
@@ -970,7 +943,7 @@ export default function ApprovalsPage() {
               {/* Attached Vendor Documents / Physical Invoice PDF */}
               {(() => {
                 const attList = getInvoiceAttachments(detailRequest);
-                const isInvoiceOrPO = /invoice|payable|order|po/i.test(detailRequest.module);
+                const isInvoiceOrPO = /invoice|payable|order|po|voucher|payment/i.test(detailRequest.module);
                 if (!isInvoiceOrPO && attList.length === 0) return null;
 
                 return (

@@ -10,6 +10,7 @@ import {
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
 import { PageFrame, PageLead, MetricCard, EmptyState } from '../../components/ui/product';
+import TablePagination from '../../components/shared/TablePagination';
 import { Card } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -155,6 +156,13 @@ export default function SalesOrdersPage() {
     cancelled:    orders.filter(o => o.status === 'CANCELLED' || o.status === 'DISCARDED').length,
   }), [orders]);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const perPage = 8;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
+
   const filtered = useMemo(() => {
     let list = orders;
     if (search.trim()) {
@@ -167,6 +175,10 @@ export default function SalesOrdersPage() {
     }
     return list;
   }, [orders, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginated = filtered.slice((safePage - 1) * perPage, safePage * perPage);
 
   const handleAction = useCallback(() => {
     if (!actionModal) return;
@@ -244,7 +256,7 @@ export default function SalesOrdersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/50">
-                {filtered.map(so => {
+                {paginated.map(so => {
                   const cfg    = STATUS_MAP[so.status];
                   const actCfg = ACTION_CFG[so.status];
                   return (
@@ -302,6 +314,13 @@ export default function SalesOrdersPage() {
           />
         )}
       </Card>
+
+      <TablePagination
+        currentPage={safePage}
+        totalItems={filtered.length}
+        perPage={perPage}
+        onPageChange={setCurrentPage}
+      />
 
       {/* Action Dialog */}
       <Dialog open={!!actionModal} onOpenChange={() => setActionModal(null)}>

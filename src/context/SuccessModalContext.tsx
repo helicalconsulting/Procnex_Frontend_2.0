@@ -20,6 +20,7 @@ export interface SuccessModalOptions {
   secondaryBtnText?: string;
   onPrimaryClick?: () => void;
   onSecondaryClick?: () => void;
+  onClose?: () => void;
   autoCloseMs?: number;
 }
 
@@ -40,9 +41,13 @@ export function SuccessModalProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const hideSuccess = useCallback(() => {
+    const onCloseCb = modalState?.onClose;
     setModalState(null);
     setCopied(false);
-  }, []);
+    if (onCloseCb) {
+      onCloseCb();
+    }
+  }, [modalState]);
 
   // Listen for global custom events
   useEffect(() => {
@@ -212,7 +217,8 @@ export function SuccessModalProvider({ children }: { children: ReactNode }) {
                   className="flex-1 text-xs h-9 font-medium"
                   onClick={() => {
                     const cb = modalState.onSecondaryClick;
-                    hideSuccess();
+                    setModalState(null);
+                    setCopied(false);
                     if (cb) cb();
                   }}
                 >
@@ -231,7 +237,8 @@ export function SuccessModalProvider({ children }: { children: ReactNode }) {
                 )}
                 onClick={() => {
                   const cb = modalState.onPrimaryClick;
-                  hideSuccess();
+                  setModalState(null);
+                  setCopied(false);
                   if (cb) cb();
                 }}
               >

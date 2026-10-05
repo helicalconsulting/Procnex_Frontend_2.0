@@ -1,12 +1,15 @@
 import { useState, useEffect, useLayoutEffect, type FormEvent } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams, Navigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { applyFavicon, applyTitle } from '../../context/BrandingContext';
-import { Eye, EyeOff, AlertCircle, CheckCircle2, LoaderCircle } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, LoaderCircle } from 'lucide-react';
 import { PORTAL_NAMES } from '../../config/portalNames';
 import { vendorPortalService, type CompanyBranding } from '../../services/vendorPortalService';
-import { getTenantCompanyCode, setTenantCompanyCode } from '../../utils/tenantResolver';
+import { setEmployeeCompanyCode, getEmployeeCompanyCode } from '../../utils/tenantResolver';
+import { getFirstAllowedPath } from '../../utils/permissions';
+import { isVendor } from '../../utils/rbac';
+import { getVendorPath } from '../../utils/tenantResolver';
 import { AuthLayout } from '../../components/auth/AuthLayout';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -31,19 +34,19 @@ function setCachedTenantBranding(code: string, branding: CompanyBranding): void 
   }
 }
 
-export const BrandedVendorLoginPage: React.FC = () => {
+export const BrandedEmployeeLoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { companyCode: routeCompanyCode } = useParams<{ companyCode?: string }>();
   const [searchParams] = useSearchParams();
 
-  const { vendorLogin } = useAuth();
+  const { login, isAuthenticated, isLoading, roles, permissions } = useAuth();
   const { isDark, toggleTheme } = useTheme();
 
   // Resolve initial company code synchronously
   const resolvedCode = (
     routeCompanyCode?.toUpperCase() ||
     searchParams.get('company')?.toUpperCase() ||
-    getTenantCompanyCode() ||
+    getEmployeeCompanyCode() ||
     ''
   ).trim().toUpperCase();
 
@@ -59,14 +62,13 @@ export const BrandedVendorLoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const passwordSetSuccess = searchParams.get('passwordSet') === '1';
 
   // Synchronous title and favicon update BEFORE render to prevent master portal flash
   useLayoutEffect(() => {
     const code = resolvedCode || companyCodeState;
     if (code) {
       const activeName = tenantBranding?.companyName || `${code} Portal`;
-      applyTitle(`${activeName} — Vendor Portal`);
+      applyTitle(`${activeName} — Procurement Workspace`);
       if (tenantBranding?.logoUrl) {
         applyFavicon(tenantBranding.logoUrl, tenantBranding.logoUrl);
       }
@@ -74,10 +76,10 @@ export const BrandedVendorLoginPage: React.FC = () => {
   }, [resolvedCode, companyCodeState, tenantBranding]);
 
   useEffect(() => {
-    let code = resolvedCode || getTenantCompanyCode() || '';
+    const code = resolvedCode || getEmployeeCompanyCode() || '';
     if (code) {
       setCompanyCodeState(code);
-      setTenantCompanyCode(code);
+      setEmployeeCompanyCode(code);
 
       // Async fetch fresh branding and validate company code registration
       vendorPortalService
@@ -90,7 +92,7 @@ export const BrandedVendorLoginPage: React.FC = () => {
             applyFavicon(b.logoUrl, b.logoUrl);
           }
           if (b.companyName) {
-            applyTitle(`${b.companyName} — Vendor Portal`);
+            applyTitle(`${b.companyName} — Procurement Workspace`);
           }
         })
         .catch((err: any) => {
@@ -101,23 +103,33 @@ export const BrandedVendorLoginPage: React.FC = () => {
     }
   }, [routeCompanyCode, searchParams, resolvedCode]);
 
+  if (!isLoading && isAuthenticated) {
+    const landing = isVendor(roles)
+      ? getVendorPath('/vendor/dashboard')
+      : getFirstAllowedPath(permissions);
+    return <Navigate to={landing} replace />;
+  }
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
 
     if (!username.trim() || !password.trim()) {
-      setError('Please enter both email and password');
+      setError('Please enter both username and password');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      if (companyCodeState) {
-        setTenantCompanyCode(companyCodeState);
+      const activeCode = (companyCodeState || resolvedCode || '').trim().toUpperCase();
+      if (activeCode) {
+        setEmployeeCompanyCode(activeCode);
       }
-      await vendorLogin({ username: username.trim(), password });
-      const targetPath = companyCodeState ? `/v/${companyCodeState.toLowerCase()}/dashboard` : '/vendor/dashboard';
-      navigate(targetPath, { replace: true });
+      await login({
+        username: username.trim(),
+        password,
+        companyCode: activeCode || undefined,
+      });
     } catch (err: any) {
       setError(err?.message || 'Login failed. Please check your credentials.');
     } finally {
@@ -129,7 +141,7 @@ export const BrandedVendorLoginPage: React.FC = () => {
     return (
       <AuthLayout
         companyName="ProcNex Enterprise"
-        tagline="Supplier Collaboration & Order Management"
+        tagline="Procurement Automation & Collaboration Platform"
         features={[]}
         portalLabel="Invalid URL"
         title="Invalid Organization Code"
@@ -157,8 +169,8 @@ export const BrandedVendorLoginPage: React.FC = () => {
     );
   }
 
-  const activeCode = companyCodeState || resolvedCode || 'VENDOR';
-  const companyName = tenantBranding?.companyName || (activeCode !== 'VENDOR' ? `${activeCode} Supplier Portal` : 'Supplier Portal');
+  const activeCode = companyCodeState || resolvedCode || 'EMPLOYEE';
+  const companyName = tenantBranding?.companyName || (activeCode !== 'EMPLOYEE' ? `${activeCode} Procurement Workspace` : 'Procurement Workspace');
   const logoUrl = tenantBranding?.logoUrl || null;
   const supportEmail = tenantBranding?.supportEmail || null;
 
@@ -166,27 +178,20 @@ export const BrandedVendorLoginPage: React.FC = () => {
     <AuthLayout
       companyName={companyName}
       logoUrl={logoUrl}
-      tagline="Supplier Collaboration & Order Management"
+      tagline="A focused workspace for sourcing, approvals, contracts, vendors, and payments."
       features={[
-        'Respond to RFQs & submit quotations',
-        'Track purchase orders & invoices',
-        'Manage your company profile',
-        'Real-time notifications & updates',
+        'End-to-end RFQ lifecycle management',
+        'Clear quotation comparison and scoring',
+        'Multi-level approval workflows',
+        'Vendor collaboration and performance tracking',
       ]}
       supportEmail={supportEmail}
-      portalLabel={PORTAL_NAMES.secondary}
-      title="Supplier sign in"
-      description="Enter your vendor credentials to access the portal."
+      portalLabel={PORTAL_NAMES.primary || 'Employee'}
+      title="Welcome back"
+      description="Sign in to manage your procurement workspace."
       isDark={isDark}
       onThemeToggle={toggleTheme}
     >
-      {passwordSetSuccess && !error && (
-        <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3.5 py-3 text-[14px] leading-5 text-emerald-700 dark:text-emerald-300" role="status">
-          <CheckCircle2 size={17} className="mt-0.5 shrink-0" />
-          <span>Password set successfully. Please sign in with your new password.</span>
-        </div>
-      )}
-
       {error && (
         <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-destructive/20 bg-destructive/10 px-3.5 py-3 text-[14px] leading-5 text-destructive" role="alert">
           <AlertCircle size={17} className="mt-0.5 shrink-0" />
@@ -196,13 +201,13 @@ export const BrandedVendorLoginPage: React.FC = () => {
 
       <form className="grid gap-5" onSubmit={handleSubmit}>
         <div className="grid gap-2">
-          <label className="text-[14px] font-semibold text-foreground" htmlFor="vlogin-email">
-            Email <span className="text-destructive">*</span>
+          <label className="text-[14px] font-semibold text-foreground" htmlFor="elogin-username">
+            Username / Email <span className="text-destructive">*</span>
           </label>
           <Input
-            id="vlogin-email"
-            type="email"
-            placeholder="vendor@company.com"
+            id="elogin-username"
+            type="text"
+            placeholder="Enter username or email"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             autoComplete="username"
@@ -213,12 +218,12 @@ export const BrandedVendorLoginPage: React.FC = () => {
         </div>
 
         <div className="grid gap-2">
-          <label className="text-[14px] font-semibold text-foreground" htmlFor="vlogin-password">
+          <label className="text-[14px] font-semibold text-foreground" htmlFor="elogin-password">
             Password <span className="text-destructive">*</span>
           </label>
           <div className="relative">
             <Input
-              id="vlogin-password"
+              id="elogin-password"
               className="pr-12"
               type={showPassword ? 'text' : 'password'}
               placeholder="Enter password"
@@ -239,13 +244,13 @@ export const BrandedVendorLoginPage: React.FC = () => {
           </div>
         </div>
 
-        <Button type="submit" size="lg" disabled={isSubmitting} id="vlogin-submit-btn" className="mt-1 w-full">
+        <Button type="submit" size="lg" disabled={isSubmitting} id="elogin-submit-btn" className="mt-1 w-full">
           {isSubmitting && <LoaderCircle size={17} className="animate-spin" />}
-          {isSubmitting ? 'Signing in…' : 'Sign In to Portal'}
+          {isSubmitting ? 'Signing in…' : 'Sign in'}
         </Button>
       </form>
     </AuthLayout>
   );
 };
 
-export default BrandedVendorLoginPage;
+export default BrandedEmployeeLoginPage;

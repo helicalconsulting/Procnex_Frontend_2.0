@@ -36,6 +36,7 @@ import {
 } from '../../components/ui/dialog';
 import { Input } from '../../components/ui/input';
 import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
+import TablePagination from '../../components/shared/TablePagination';
 import { cn } from '../../lib/utils';
 import '../../components/shared/ColumnCustomizer.css';
 
@@ -194,18 +195,29 @@ export default function PurchaseRequisitionsListPage() {
     });
   }, [requisitions, searchTerm, statusFilter]);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const perPage = 8;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRequisitions.length / perPage));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginated = filteredRequisitions.slice((safePage - 1) * perPage, safePage * perPage);
+
   // Batch Selection
   const isAllSelected = useMemo(() => {
-    if (filteredRequisitions.length === 0) return false;
-    return filteredRequisitions.every((p) => selectedPrIds.includes(String(p.id || p.rfqId)));
-  }, [filteredRequisitions, selectedPrIds]);
+    if (paginated.length === 0) return false;
+    return paginated.every((p) => selectedPrIds.includes(String(p.id || p.rfqId)));
+  }, [paginated, selectedPrIds]);
 
   const handleToggleSelectAll = () => {
     if (isAllSelected) {
-      const pageIds = new Set(filteredRequisitions.map((p) => String(p.id || p.rfqId)));
+      const pageIds = new Set(paginated.map((p) => String(p.id || p.rfqId)));
       setSelectedPrIds((prev) => prev.filter((id) => !pageIds.has(id)));
     } else {
-      const newIds = filteredRequisitions.map((p) => String(p.id || p.rfqId));
+      const newIds = paginated.map((p) => String(p.id || p.rfqId));
       setSelectedPrIds((prev) => Array.from(new Set([...prev, ...newIds])));
     }
   };
@@ -497,7 +509,7 @@ export default function PurchaseRequisitionsListPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredRequisitions.map((requisition) => {
+                    {paginated.map((requisition) => {
                       const idStr = String(requisition.id || requisition.rfqId);
                       const isSelected = selectedPrIds.includes(idStr);
 
@@ -599,7 +611,7 @@ export default function PurchaseRequisitionsListPage() {
               </div>
 
               <div className="divide-y divide-border/65 lg:hidden">
-                {filteredRequisitions.map((requisition) => (
+                {paginated.map((requisition) => (
                   <article key={requisition.id || requisition.rfqId} className="p-4 sm:p-5">
                     <button type="button" className="w-full text-left" onClick={() => openDocument(requisition, 'view')}>
                       <div className="flex items-start justify-between gap-3">
@@ -624,6 +636,12 @@ export default function PurchaseRequisitionsListPage() {
               </div>
             </>
           )}
+          <TablePagination
+            currentPage={safePage}
+            totalItems={filteredRequisitions.length}
+            perPage={perPage}
+            onPageChange={setCurrentPage}
+          />
         </Card>
       )}
 

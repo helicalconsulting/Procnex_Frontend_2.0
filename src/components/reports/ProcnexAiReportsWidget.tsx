@@ -587,6 +587,62 @@ export function ProcnexAiReportsWidget() {
 
   const preBuiltAgents: PreBuiltAgent[] = [
     {
+      id: 'multi-module-status',
+      title: 'Multi-Module Status Matrix',
+      description: 'Audit closed/open RFQs, active quotations, approved, rejected, and returned records across all modules.',
+      category: 'status',
+      status: 'Cross-Module',
+      icon: <BarChart3 className="w-5 h-5 text-violet-400" />,
+      prompt: 'Closed RFQs, opened RFQs, active quotations, approved, rejected, returned status breakdown har module ka batao in full table format',
+      actionLabel: 'Audit All Modules',
+      iconBg: isDark ? 'bg-violet-500/15 border-violet-500/30' : 'bg-violet-50 border-violet-200',
+      statusBadge: isDark ? 'bg-violet-500/10 text-violet-300 border-violet-500/30' : 'bg-violet-50 text-violet-700 border-violet-200',
+      cardBorder: isDark ? 'hover:border-violet-500/50 hover:shadow-violet-950/40' : 'hover:border-violet-400 hover:shadow-violet-100',
+      actionBtn: isDark ? 'bg-violet-500/15 hover:bg-violet-600 text-violet-300 hover:text-white border-violet-500/30' : 'bg-violet-50 hover:bg-violet-600 text-violet-700 hover:text-white border-violet-200'
+    },
+    {
+      id: 'rfq-lifecycle',
+      title: 'RFQs & Quotations Lifecycle',
+      description: 'Audit Closed vs Opened RFQs, Active Quotations, Awarded bids, and Return/Revision requests.',
+      category: 'sourcing',
+      status: 'Lifecycle',
+      icon: <FileCheck className="w-5 h-5 text-amber-400" />,
+      prompt: 'Closed RFQs, opened RFQs, active quotations, approved, rejected, and returned quotations breakdown in full table format',
+      actionLabel: 'Review RFQs',
+      iconBg: isDark ? 'bg-amber-500/15 border-amber-500/30' : 'bg-amber-50 border-amber-200',
+      statusBadge: isDark ? 'bg-amber-500/10 text-amber-300 border-amber-500/30' : 'bg-amber-50 text-amber-700 border-amber-200',
+      cardBorder: isDark ? 'hover:border-amber-500/50 hover:shadow-amber-950/40' : 'hover:border-amber-400 hover:shadow-amber-100',
+      actionBtn: isDark ? 'bg-amber-500/15 hover:bg-amber-600 text-amber-300 hover:text-white border-amber-500/30' : 'bg-amber-50 hover:bg-amber-600 text-amber-700 hover:text-white border-amber-200'
+    },
+    {
+      id: 'po-approvals',
+      title: 'PO Approvals & Returns Audit',
+      description: 'Track Approved, Rejected, Returned, and Open Purchase Orders with complete vendor and value audit.',
+      category: 'orders',
+      status: 'Approvals',
+      icon: <Package className="w-5 h-5 text-blue-400" />,
+      prompt: 'Approved, rejected, returned, open and closed purchase orders status breakdown in full table format',
+      actionLabel: 'Audit PO Status',
+      iconBg: isDark ? 'bg-blue-500/15 border-blue-500/30' : 'bg-blue-50 border-blue-200',
+      statusBadge: isDark ? 'bg-blue-500/10 text-blue-300 border-blue-500/30' : 'bg-blue-50 text-blue-700 border-blue-200',
+      cardBorder: isDark ? 'hover:border-blue-500/50 hover:shadow-blue-950/40' : 'hover:border-blue-400 hover:shadow-blue-100',
+      actionBtn: isDark ? 'bg-blue-500/15 hover:bg-blue-600 text-blue-300 hover:text-white border-blue-500/30' : 'bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border-blue-200'
+    },
+    {
+      id: 'invoice-voucher-reconcile',
+      title: 'Invoices & Payment Vouchers',
+      description: 'Audit Approved, Paid, Unpaid, Rejected, and Returned Invoices alongside Payment Vouchers.',
+      category: 'finance',
+      status: 'Reconciliation',
+      icon: <Receipt className="w-5 h-5 text-emerald-400" />,
+      prompt: 'Approved, unpaid, paid, rejected and returned purchase invoices and payment vouchers audit report in full table format',
+      actionLabel: 'Audit Invoices & Pay',
+      iconBg: isDark ? 'bg-emerald-500/15 border-emerald-500/30' : 'bg-emerald-50 border-emerald-200',
+      statusBadge: isDark ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      cardBorder: isDark ? 'hover:border-emerald-500/50 hover:shadow-emerald-950/40' : 'hover:border-emerald-400 hover:shadow-emerald-100',
+      actionBtn: isDark ? 'bg-emerald-500/15 hover:bg-emerald-600 text-emerald-300 hover:text-white border-emerald-500/30' : 'bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border-emerald-200'
+    },
+    {
       id: 'vendor-spend',
       title: 'Vendor Spend & Risk Analysis',
       description: 'Comprehensive spend analysis by supplier with rating metrics and order volume.',
@@ -599,48 +655,6 @@ export function ProcnexAiReportsWidget() {
       statusBadge: isDark ? 'bg-sky-500/10 text-sky-300 border-sky-500/30' : 'bg-sky-50 text-sky-700 border-sky-200',
       cardBorder: isDark ? 'hover:border-sky-500/50 hover:shadow-sky-950/40' : 'hover:border-sky-400 hover:shadow-sky-100',
       actionBtn: isDark ? 'bg-sky-500/15 hover:bg-sky-600 text-sky-300 hover:text-white border-sky-500/30' : 'bg-sky-50 hover:bg-sky-600 text-sky-700 hover:text-white border-sky-200'
-    },
-    {
-      id: 'po-status',
-      title: 'Purchase Orders Breakdown',
-      description: 'Audit live purchase order statuses, draft backlogs, and total allocated values.',
-      category: 'orders',
-      status: 'Live Data',
-      icon: <Package className="w-5 h-5 text-blue-400" />,
-      prompt: 'Purchase orders status breakdown with PO numbers, amounts and statuses in full table format',
-      actionLabel: 'Audit POs',
-      iconBg: isDark ? 'bg-blue-500/15 border-blue-500/30' : 'bg-blue-50 border-blue-200',
-      statusBadge: isDark ? 'bg-blue-500/10 text-blue-300 border-blue-500/30' : 'bg-blue-50 text-blue-700 border-blue-200',
-      cardBorder: isDark ? 'hover:border-blue-500/50 hover:shadow-blue-950/40' : 'hover:border-blue-400 hover:shadow-blue-100',
-      actionBtn: isDark ? 'bg-blue-500/15 hover:bg-blue-600 text-blue-300 hover:text-white border-blue-500/30' : 'bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border-blue-200'
-    },
-    {
-      id: 'invoice-audit',
-      title: 'Invoices & Cashflow Audit',
-      description: 'Track pending payments, overdue bills, and 30-day working capital projections.',
-      category: 'finance',
-      status: 'Audit Ready',
-      icon: <Receipt className="w-5 h-5 text-emerald-400" />,
-      prompt: 'Overdue invoices and pending billing audit report with due dates and amounts in full table format',
-      actionLabel: 'Audit Invoices',
-      iconBg: isDark ? 'bg-emerald-500/15 border-emerald-500/30' : 'bg-emerald-50 border-emerald-200',
-      statusBadge: isDark ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      cardBorder: isDark ? 'hover:border-emerald-500/50 hover:shadow-emerald-950/40' : 'hover:border-emerald-400 hover:shadow-emerald-100',
-      actionBtn: isDark ? 'bg-emerald-500/15 hover:bg-emerald-600 text-emerald-300 hover:text-white border-emerald-500/30' : 'bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border-emerald-200'
-    },
-    {
-      id: 'rfq-sourcing',
-      title: 'RFQ & Sourcing Evaluation',
-      description: 'Overview of active quotations, participating vendor bids, and awarded bids.',
-      category: 'sourcing',
-      status: 'Active Bids',
-      icon: <FileCheck className="w-5 h-5 text-amber-400" />,
-      prompt: 'Show all RFQs with RFQ numbers, titles, status and created dates in full table format',
-      actionLabel: 'Review RFQs',
-      iconBg: isDark ? 'bg-amber-500/15 border-amber-500/30' : 'bg-amber-50 border-amber-200',
-      statusBadge: isDark ? 'bg-amber-500/10 text-amber-300 border-amber-500/30' : 'bg-amber-50 text-amber-700 border-amber-200',
-      cardBorder: isDark ? 'hover:border-amber-500/50 hover:shadow-amber-950/40' : 'hover:border-amber-400 hover:shadow-amber-100',
-      actionBtn: isDark ? 'bg-amber-500/15 hover:bg-amber-600 text-amber-300 hover:text-white border-amber-500/30' : 'bg-amber-50 hover:bg-amber-600 text-amber-700 hover:text-white border-amber-200'
     },
     {
       id: 'spend-compare',
@@ -1336,16 +1350,28 @@ export function ProcnexAiReportsWidget() {
               All Categories
             </button>
             <button
-              onClick={() => setSelectedCategory('procurement')}
+              onClick={() => setSelectedCategory('status')}
               className={`text-xs px-3.5 py-1.5 rounded-full font-medium transition-all ${
-                selectedCategory === 'procurement'
-                  ? 'bg-sky-600 text-white shadow-md shadow-sky-600/30'
+                selectedCategory === 'status'
+                  ? 'bg-violet-600 text-white shadow-md shadow-violet-600/30'
                   : isDark
-                    ? 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-sky-300'
-                    : 'bg-white border border-slate-200 text-slate-600 hover:text-sky-700'
+                    ? 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-violet-300'
+                    : 'bg-white border border-slate-200 text-slate-600 hover:text-violet-700'
               }`}
             >
-              Vendor Analytics
+              Status Matrix
+            </button>
+            <button
+              onClick={() => setSelectedCategory('sourcing')}
+              className={`text-xs px-3.5 py-1.5 rounded-full font-medium transition-all ${
+                selectedCategory === 'sourcing'
+                  ? 'bg-amber-600 text-white shadow-md shadow-amber-600/30'
+                  : isDark
+                    ? 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-amber-300'
+                    : 'bg-white border border-slate-200 text-slate-600 hover:text-amber-700'
+              }`}
+            >
+              RFQs & Sourcing
             </button>
             <button
               onClick={() => setSelectedCategory('orders')}
@@ -1370,6 +1396,18 @@ export function ProcnexAiReportsWidget() {
               }`}
             >
               Invoices & Cashflow
+            </button>
+            <button
+              onClick={() => setSelectedCategory('procurement')}
+              className={`text-xs px-3.5 py-1.5 rounded-full font-medium transition-all ${
+                selectedCategory === 'procurement'
+                  ? 'bg-sky-600 text-white shadow-md shadow-sky-600/30'
+                  : isDark
+                    ? 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-sky-300'
+                    : 'bg-white border border-slate-200 text-slate-600 hover:text-sky-700'
+              }`}
+            >
+              Vendor Analytics
             </button>
           </div>
         </div>

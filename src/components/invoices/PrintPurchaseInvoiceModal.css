@@ -104,6 +104,22 @@
   background: #059669;
 }
 
+.ppi-btn--secondary {
+  background: #334155;
+  color: #f1f5f9;
+  border: 1px solid #475569;
+}
+
+.ppi-btn--secondary:hover:not(:disabled) {
+  background: #475569;
+  color: #ffffff;
+}
+
+.ppi-btn--secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .ppi-btn--close {
   background: #334155;
   color: #94a3b8;
@@ -464,6 +480,14 @@
 
 /* Print Overrides */
 @media print {
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
   body * {
     visibility: hidden;
   }
@@ -471,25 +495,44 @@
     display: none !important;
   }
   .ppi-modal-backdrop {
-    position: static;
-    background: transparent;
-    padding: 0;
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    display: block !important;
+    backdrop-filter: none !important;
+    overflow: visible !important;
   }
   .ppi-modal {
-    border: none;
-    box-shadow: none;
-    max-width: 100%;
-    width: 100%;
+    border: none !important;
+    box-shadow: none !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    background: transparent !important;
+    overflow: visible !important;
   }
   .ppi-sheet, .ppi-sheet * {
-    visibility: visible;
+    visibility: visible !important;
   }
   .ppi-sheet {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    padding: 20px;
-    box-shadow: none;
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  .ppi-stamps-section,
+  .ppi-stamps-grid,
+  .ppi-stamp-card,
+  .ppi-stamp-card__signature,
+  .ppi-sheet__parties,
+  .ppi-sheet__party-box,
+  .ppi-sheet__totals,
+  .ppi-sheet__table tr {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 }

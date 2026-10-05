@@ -26,6 +26,7 @@ import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import { TableSkeleton } from '../../components/shared/Skeleton';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { CurrencyBadge, CurrencySelector, useCurrency } from '../../components/shared/CurrencyMaster';
+import { TablePagination } from '../../components/shared/TablePagination';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
@@ -274,6 +275,14 @@ export default function VendorQuotationsPage() {
     return list;
   }, [quotations, kpiFilter, search]);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 8;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paginatedQuotations = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, currentPage, pageSize]);
+
   const { formatAmount, convert, companyDefaultCurrency } = useCurrency();
   const [displayCurrency, setDisplayCurrency] = useState<string>(companyDefaultCurrency);
 
@@ -407,11 +416,11 @@ export default function VendorQuotationsPage() {
                 isActive &&
                   'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
               )}
-              onClick={() => setKpiFilter(isActive ? null : c.filter)}
+              onClick={() => { setKpiFilter(isActive ? null : c.filter); setCurrentPage(1); }}
               role="button"
               tabIndex={0}
               aria-pressed={isActive}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiFilter(isActive ? null : c.filter); } }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setKpiFilter(isActive ? null : c.filter); setCurrentPage(1); } }}
             />
           );
         })}
@@ -426,7 +435,7 @@ export default function VendorQuotationsPage() {
             type="text"
             placeholder="Search by RFQ number, title, or reference..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
           />
         </div>
       </div>
@@ -437,8 +446,9 @@ export default function VendorQuotationsPage() {
           <TableSkeleton rows={4} columnWidths={['140px', '180px', '140px', '120px', '120px', '100px']} />
         </Card>
       ) : filtered.length > 0 ? (
+        <>
         <div className="flex flex-col gap-3.5">
-          {filtered.map((quot) => {
+          {paginatedQuotations.map((quot) => {
             const isExpanded = String(expandedQuot) === String(quot.id);
             const statusCfg = STATUS_CONFIG[quot.status] || { label: quot.status || 'Submitted', tone: 'neutral' as const, icon: null };
 
@@ -653,6 +663,15 @@ export default function VendorQuotationsPage() {
             );
           })}
         </div>
+        <TablePagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          totalItems={filtered.length}
+          perPage={pageSize}
+          className="mt-4"
+        />
+        </>
       ) : (
         <EmptyState
           icon={ClipboardList}

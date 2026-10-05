@@ -1,6 +1,6 @@
 import { useMemo, useCallback, type SetStateAction } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getTenantCompanyCode } from '../utils/tenantResolver';
+import { getTenantCompanyCode, getEmployeeCompanyCode } from '../utils/tenantResolver';
 
 export interface UseServiceDataResult<T> {
   data: T;
@@ -54,7 +54,7 @@ export function useServiceData<T>(
 
   const fetcherStr = fetcher.toString();
   const userKey = getUserToken();
-  const companyKey = getTenantCompanyCode() || 'default';
+  const companyKey = getTenantCompanyCode() || getEmployeeCompanyCode() || 'default';
   const depsHash = useMemo(() => JSON.stringify(deps), [deps]);
   const cacheKey = options.cacheKey;
 

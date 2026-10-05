@@ -226,7 +226,7 @@ async function mockListVendorContracts(): Promise<ContractListResponse> {
 
 async function apiListVendorContracts(): Promise<ContractListResponse> {
   try {
-    const data = await apiRequest<{ contracts: Contract[]; total?: number }>('/contracts/vendor/my-contracts', { cacheTtlMs: 30000 });
+    const data = await apiRequest<{ contracts: Contract[]; total?: number }>('/contracts/vendor/my-contracts', { cacheTtlMs: 0 });
     const contracts = data?.contracts || [];
     return { contracts, total: data?.total ?? contracts.length, page: 1, limit: 20, pages: 1 };
   } catch (err) {
@@ -247,7 +247,7 @@ async function mockGetVendorContract(id: string): Promise<{ contract: Contract }
 
 async function apiGetVendorContract(id: string): Promise<{ contract: Contract }> {
   try {
-    const data = await apiRequest<{ contract: Contract }>(`/contracts/vendor/my-contracts/${id}`);
+    const data = await apiRequest<{ contract: Contract }>(`/contracts/vendor/my-contracts/${id}`, { cacheTtlMs: 0 });
     return data;
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
@@ -275,7 +275,7 @@ async function mockListContracts(params?: Record<string, string>): Promise<Contr
 async function apiListContracts(params?: Record<string, string>): Promise<ContractListResponse> {
   try {
     const query = params ? '?' + new URLSearchParams(params).toString() : '';
-    const data = await apiRequest<ContractListResponse>(`/contracts${query}`, { cacheTtlMs: 30000 });
+    const data = await apiRequest<ContractListResponse>(`/contracts${query}`, { cacheTtlMs: 0 });
     return data;
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
@@ -288,7 +288,7 @@ async function apiListContracts(params?: Record<string, string>): Promise<Contra
 
 async function mockGetContract(id: string): Promise<{ contract: Contract; activity: unknown[] } | null> {
   await new Promise(r => setTimeout(r, 200));
-  const contract = MOCK_CONTRACTS.find(c => c.id === id);
+  const contract = MOCK_CONTRACTS.find(c => c.id === id || c.contractNumber === id);
   if (!contract) return null;
   return { contract, activity: [] };
 }
@@ -431,7 +431,7 @@ async function apiCreateContract(payload: ContractCreatePayload): Promise<Contra
 
 async function mockUpdateContract(id: string, data: Partial<ContractCreatePayload>): Promise<Contract> {
   await new Promise(r => setTimeout(r, 300));
-  const idx = MOCK_CONTRACTS.findIndex(c => c.id === id);
+  const idx = MOCK_CONTRACTS.findIndex(c => c.id === id || c.contractNumber === id);
   if (idx === -1) throw new Error('Contract not found');
   MOCK_CONTRACTS[idx] = { ...MOCK_CONTRACTS[idx], ...data, updatedAt: new Date().toISOString() };
   return MOCK_CONTRACTS[idx];
@@ -455,7 +455,7 @@ async function apiUpdateContract(id: string, data: Partial<ContractCreatePayload
 
 async function mockDeleteContract(id: string): Promise<void> {
   await new Promise(r => setTimeout(r, 200));
-  const idx = MOCK_CONTRACTS.findIndex(c => c.id === id);
+  const idx = MOCK_CONTRACTS.findIndex(c => c.id === id || c.contractNumber === id);
   if (idx >= 0) MOCK_CONTRACTS.splice(idx, 1);
 }
 
@@ -473,7 +473,7 @@ async function apiDeleteContract(id: string): Promise<void> {
 
 async function mockSignContractBuyer(id: string, signerName: string, signatureBase64: string): Promise<{ status: string }> {
   await new Promise(r => setTimeout(r, 500));
-  const idx = MOCK_CONTRACTS.findIndex(c => c.id === id);
+  const idx = MOCK_CONTRACTS.findIndex(c => c.id === id || c.contractNumber === id);
   if (idx >= 0) {
     MOCK_CONTRACTS[idx].status = 'AWAITING_VENDOR_SIGNATURE';
     MOCK_CONTRACTS[idx].signedByCustomerAt = new Date().toISOString();
@@ -499,7 +499,7 @@ async function apiSignContractBuyer(id: string, signerName: string, signerTitle:
 
 async function mockSignContractVendor(id: string, signerName: string, signatureBase64: string): Promise<{ status: string }> {
   await new Promise(r => setTimeout(r, 500));
-  const idx = MOCK_CONTRACTS.findIndex(c => c.id === id);
+  const idx = MOCK_CONTRACTS.findIndex(c => c.id === id || c.contractNumber === id);
   if (idx >= 0) {
     MOCK_CONTRACTS[idx].status = 'ACTIVE';
     MOCK_CONTRACTS[idx].signedByVendorAt = new Date().toISOString();
@@ -525,7 +525,7 @@ async function apiSignContractVendor(id: string, signerName: string, signerTitle
 
 async function mockTerminateContract(id: string, reason?: string): Promise<void> {
   await new Promise(r => setTimeout(r, 300));
-  const idx = MOCK_CONTRACTS.findIndex(c => c.id === id);
+  const idx = MOCK_CONTRACTS.findIndex(c => c.id === id || c.contractNumber === id);
   if (idx >= 0) MOCK_CONTRACTS[idx].status = 'TERMINATED';
 }
 
@@ -578,7 +578,7 @@ async function apiGetContractBalance(id: string): Promise<ContractBalance> {
 
 async function mockCreatePOFromContract(id: string, amount?: number): Promise<{ poNumber: string; consumedValue?: number; remainingValue?: number }> {
   await new Promise(r => setTimeout(r, 400));
-  const contract = MOCK_CONTRACTS.find(c => c.id === id);
+  const contract = MOCK_CONTRACTS.find(c => c.id === id || c.contractNumber === id);
   const poNumber = `PO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
   const poAmount = amount || (contract?.contractValue || 50000);
   if (contract) {

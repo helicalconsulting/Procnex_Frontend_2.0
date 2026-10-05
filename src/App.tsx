@@ -12,9 +12,10 @@ import { ProtectedRoute } from "./router/ProtectedRoute";
 import AppLayout from "./components/layout/AppLayout";
 import { PermissionGate } from "./router/PermissionGate";
 
+import { getEmployeeCompanyCode, getTenantCompanyCode } from './utils/tenantResolver';
+
 const HelicalConsultingPage = lazy(() => import("./pages/auth/HelicalConsultingPage"));
-const LoginPage = lazy(() => import("./pages/auth/LoginPage"));
-const VendorLoginPage = lazy(() => import("./pages/auth/VendorLoginPage"));
+const BrandedEmployeeLoginPage = lazy(() => import("./pages/auth/BrandedEmployeeLoginPage"));
 const BrandedVendorLoginPage = lazy(() => import("./pages/vendor/BrandedVendorLoginPage"));
 const SetPasswordPage = lazy(() => import("./pages/auth/SetPasswordPage"));
 const VendorMagicLinkPage = lazy(
@@ -139,6 +140,16 @@ const queryClient = new QueryClient({
 
 import { AppMotionProvider } from './components/motion/AppMotionProvider';
 
+function LoginRedirect() {
+  const empCode = getEmployeeCompanyCode();
+  return <Navigate to={empCode ? `/e/${empCode.toLowerCase()}/login` : '/helicalconsulting'} replace />;
+}
+
+function VendorLoginRedirect() {
+  const vendorCode = getTenantCompanyCode();
+  return <Navigate to={vendorCode ? `/v/${vendorCode.toLowerCase()}/login` : '/helicalconsulting'} replace />;
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -153,11 +164,13 @@ export default function App() {
                     <Routes>
                     {/* Public */}
                     <Route path="/helicalconsulting" element={page(HelicalConsultingPage)} />
-                    <Route path="/login" element={page(LoginPage)} />
-                    <Route path="/vendor/login" element={<Navigate to="/login" replace />} />
+                    <Route path="/login" element={<LoginRedirect />} />
+                    <Route path="/e/:companyCode/login" element={page(BrandedEmployeeLoginPage)} />
+                    <Route path="/vendor/login" element={<VendorLoginRedirect />} />
                     <Route path="/v/:companyCode/login" element={page(BrandedVendorLoginPage)} />
                     <Route path="/set-password" element={page(SetPasswordPage)} />
                     <Route path="/v/:companyCode/set-password" element={page(SetPasswordPage)} />
+                    <Route path="/e/:companyCode/set-password" element={page(SetPasswordPage)} />
                     <Route path="/auth/magic" element={page(VendorMagicLinkPage)} />
 
                     {/* Vendor Portal Routes — Multi-Tenant Isolated */}

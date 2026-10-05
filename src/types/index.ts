@@ -60,6 +60,7 @@ export interface AuthResponse {
 export interface LoginPayload {
   username: string;
   password: string;
+  companyCode?: string;
 }
 
 // ─── RFQ ────────────────────────────────────────────────────

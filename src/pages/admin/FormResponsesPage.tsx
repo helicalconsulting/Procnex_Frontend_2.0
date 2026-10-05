@@ -30,6 +30,7 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import { Input, Select } from '../../components/ui/input';
 import { Button } from '../../components/ui/button';
+import { TablePagination } from '../../components/shared/TablePagination';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../../components/ui/dialog';
 import { FormResponseFields } from '../../components/admin/FormResponseFields';
 
@@ -42,6 +43,8 @@ export default function FormResponsesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [audienceFilter, setAudienceFilter] = useState<string>('ALL');
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 8;
 
   const [selectedResponse, setSelectedResponse] = useState<FormSubmissionInstance | null>(null);
   const responseTrigger = useRef<HTMLButtonElement | null>(null);
@@ -101,6 +104,17 @@ export default function FormResponsesPage() {
       return true;
     });
   }, [submissions, statusFilter, audienceFilter, searchQuery]);
+
+  // Reset page to 1 on filter or search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, audienceFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredSubmissions.length / pageSize));
+  const paginatedSubmissions = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredSubmissions.slice(start, start + pageSize);
+  }, [filteredSubmissions, currentPage, pageSize]);
 
   // Selection & Delete Handlers
   const isAllSelected = useMemo(() => {
@@ -243,7 +257,7 @@ export default function FormResponsesPage() {
               ? 'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)] -translate-y-0.5'
               : 'border-border/70'
           )}
-          onClick={() => setStatusFilter('submitted')}
+          onClick={() => { setStatusFilter('submitted'); setCurrentPage(1); }}
           title="Click to view submitted responses"
         >
           <div className="flex size-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600">
@@ -264,7 +278,7 @@ export default function FormResponsesPage() {
               ? 'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)] -translate-y-0.5'
               : 'border-border/70'
           )}
-          onClick={() => setStatusFilter('pending')}
+          onClick={() => { setStatusFilter('pending'); setCurrentPage(1); }}
           title="Click to view pending responses"
         >
           <div className="flex size-11 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600">
@@ -285,7 +299,7 @@ export default function FormResponsesPage() {
               ? 'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)] -translate-y-0.5'
               : 'border-border/70'
           )}
-          onClick={() => setStatusFilter('completed')}
+          onClick={() => { setStatusFilter('completed'); setCurrentPage(1); }}
           title="Click to view completed workflows"
         >
           <div className="flex size-11 items-center justify-center rounded-xl bg-violet-500/10 text-violet-600">
@@ -308,7 +322,7 @@ export default function FormResponsesPage() {
             className="pl-10 pr-3"
             placeholder="Search by form title, employee name, or email..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
           />
         </div>
 
@@ -316,7 +330,7 @@ export default function FormResponsesPage() {
           <label htmlFor="response-audience" className="text-xs font-semibold text-muted-foreground">Audience:</label>
           <Select id="response-audience" className="w-48"
             value={audienceFilter}
-            onChange={(e) => setAudienceFilter(e.target.value)}
+            onChange={(e) => { setAudienceFilter(e.target.value); setCurrentPage(1); }}
           >
             <option value="ALL">All Audiences</option>
             <option value="specific_users">Specific Users</option>
@@ -367,111 +381,120 @@ export default function FormResponsesPage() {
             </Link>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <LandingTable key="form-responses" preferenceKey="form-responses" columns={FORM_RESPONSES_COLUMNS} className="w-full min-w-[1000px] border-collapse text-left text-sm">
-              <thead>
-                <tr className="border-b border-border/70 bg-muted/35 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  <th className="w-12 px-4 py-3 text-center">
-                    <input
-                      type="checkbox"
-                      className="size-4 rounded border-input accent-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                      checked={isAllSelected}
-                      disabled={!canCreateCustomForm}
-                      onChange={canCreateCustomForm ? handleToggleSelectAll : undefined}
-                      title={!canCreateCustomForm ? "Admin has not allowed this action. You do not have permission to select form responses." : "Select All Form Responses"}
-                    />
-                  </th>
-                  <th className="px-4 py-3">Form Name</th>
-                  <th className="px-4 py-3">Audience</th>
-                  <th className="px-4 py-3">Assigned User</th>
-                  <th className="px-4 py-3">Workflow Status</th>
-                  <th className="px-4 py-3">Level Progress</th>
-                  <th className="px-4 py-3">Date Assigned</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredSubmissions.map((sub) => {
-                  const isSelected = selectedSubmissionIds.includes(sub.id);
+          <>
+            <div className="overflow-x-auto">
+              <LandingTable key="form-responses" preferenceKey="form-responses" columns={FORM_RESPONSES_COLUMNS} className="w-full min-w-[1000px] border-collapse text-left text-sm">
+                <thead>
+                  <tr className="border-b border-border/70 bg-muted/35 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <th className="w-12 px-4 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        className="size-4 rounded border-input accent-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                        checked={isAllSelected}
+                        disabled={!canCreateCustomForm}
+                        onChange={canCreateCustomForm ? handleToggleSelectAll : undefined}
+                        title={!canCreateCustomForm ? "Admin has not allowed this action. You do not have permission to select form responses." : "Select All Form Responses"}
+                      />
+                    </th>
+                    <th className="px-4 py-3">Form Name</th>
+                    <th className="px-4 py-3">Audience</th>
+                    <th className="px-4 py-3">Assigned User</th>
+                    <th className="px-4 py-3">Workflow Status</th>
+                    <th className="px-4 py-3">Level Progress</th>
+                    <th className="px-4 py-3">Date Assigned</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedSubmissions.map((sub) => {
+                    const isSelected = selectedSubmissionIds.includes(sub.id);
 
-                  return (
-                    <tr key={sub.id} className={`border-b border-border/60 transition hover:bg-muted/25 ${isSelected ? 'bg-primary/5' : ''}`}>
-                      <td className="px-4 py-3 text-center">
-                        <input
-                          type="checkbox"
-                          className="size-4 rounded border-input accent-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                          checked={isSelected}
-                          disabled={!canCreateCustomForm}
-                          onChange={() => canCreateCustomForm && handleToggleSelectRow(sub.id)}
-                        />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex min-w-0 items-center gap-2.5">
-                          <FileText size={16} className="shrink-0 text-primary" />
-                          <div className="flex min-w-0 flex-col">
-                            <strong className="truncate text-sm font-semibold text-foreground">{sub.formTitle}</strong>
-                            <span className="text-[12px] text-muted-foreground">{sub.fields.length} fields configured</span>
+                    return (
+                      <tr key={sub.id} className={`border-b border-border/60 transition hover:bg-muted/25 ${isSelected ? 'bg-primary/5' : ''}`}>
+                        <td className="px-4 py-3 text-center">
+                          <input
+                            type="checkbox"
+                            className="size-4 rounded border-input accent-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                            checked={isSelected}
+                            disabled={!canCreateCustomForm}
+                            onChange={() => canCreateCustomForm && handleToggleSelectRow(sub.id)}
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex min-w-0 items-center gap-2.5">
+                            <FileText size={16} className="shrink-0 text-primary" />
+                            <div className="flex min-w-0 flex-col">
+                              <strong className="truncate text-sm font-semibold text-foreground">{sub.formTitle}</strong>
+                              <span className="text-[12px] text-muted-foreground">{sub.fields.length} fields configured</span>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        {sub.audienceType === 'whole_org' ? (
-                          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-violet-500/10 px-2.5 py-1 text-[12px] font-semibold text-violet-700 dark:text-violet-300">
-                            <Building size={12} /> Whole Organization
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-blue-500/10 px-2.5 py-1 text-[12px] font-semibold text-blue-700 dark:text-blue-300">
-                            <UserCheck size={12} /> Specific Users
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex min-w-0 flex-col">
-                          {sub.workflowAttached ? (
-                            <>
-                              <span className="text-xs font-semibold text-foreground">Approval Workflow</span>
-                              <span className="text-[12px] text-muted-foreground">
-                                {sub.totalLevels}-Level Sequential Approval
-                              </span>
-                            </>
+                        </td>
+                        <td className="px-4 py-3">
+                          {sub.audienceType === 'whole_org' ? (
+                            <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-violet-500/10 px-2.5 py-1 text-[12px] font-semibold text-violet-700 dark:text-violet-300">
+                              <Building size={12} /> Whole Organization
+                            </span>
                           ) : (
-                            <>
-                              <span className="text-xs font-semibold text-foreground">{sub.assignedUserName}</span>
-                              <span className="truncate text-[12px] text-muted-foreground">{sub.assignedUserEmail}</span>
-                            </>
+                            <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-blue-500/10 px-2.5 py-1 text-[12px] font-semibold text-blue-700 dark:text-blue-300">
+                              <UserCheck size={12} /> Specific Users
+                            </span>
                           )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold ${sub.status === 'completed' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : sub.status === 'returned' || String(sub.status) === 'rejected' ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300' : sub.status === 'submitted' ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300' : sub.status === 'pending' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'bg-muted text-muted-foreground'}`}>
-                          {sub.status === 'completed' && <CheckCircle2 size={12} />}
-                          {sub.status === 'returned' && <RotateCcw size={12} />}
-                          {sub.status === 'submitted' && <Send size={12} />}
-                          {sub.status === 'pending' && <Clock size={12} />}
-                          {sub.status === 'draft' && <FileText size={12} />}
-                          <span>{sub.status.toUpperCase()}</span>
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {renderFormApprovalLevel(sub)}
-                      </td>
-                      <td className="px-4 py-3">{new Date(sub.createdAt).toLocaleDateString()}</td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button type="button" variant="ghost" size="sm"
-                            title="View Response Data"
-                            onClick={event => { responseTrigger.current = event.currentTarget; setSelectedResponse(sub); }}
-                          >
-                            <Eye size={14} /> View Response
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </LandingTable>
-          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex min-w-0 flex-col">
+                            {sub.workflowAttached ? (
+                              <>
+                                <span className="text-xs font-semibold text-foreground">Approval Workflow</span>
+                                <span className="text-[12px] text-muted-foreground">
+                                  {sub.totalLevels}-Level Sequential Approval
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="text-xs font-semibold text-foreground">{sub.assignedUserName}</span>
+                                <span className="truncate text-[12px] text-muted-foreground">{sub.assignedUserEmail}</span>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold ${sub.status === 'completed' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : sub.status === 'returned' || String(sub.status) === 'rejected' ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300' : sub.status === 'submitted' ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300' : sub.status === 'pending' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'bg-muted text-muted-foreground'}`}>
+                            {sub.status === 'completed' && <CheckCircle2 size={12} />}
+                            {sub.status === 'returned' && <RotateCcw size={12} />}
+                            {sub.status === 'submitted' && <Send size={12} />}
+                            {sub.status === 'pending' && <Clock size={12} />}
+                            {sub.status === 'draft' && <FileText size={12} />}
+                            <span>{sub.status.toUpperCase()}</span>
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          {renderFormApprovalLevel(sub)}
+                        </td>
+                        <td className="px-4 py-3">{new Date(sub.createdAt).toLocaleDateString()}</td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button type="button" variant="ghost" size="sm"
+                              title="View Response Data"
+                              onClick={event => { responseTrigger.current = event.currentTarget; setSelectedResponse(sub); }}
+                            >
+                              <Eye size={14} /> View Response
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </LandingTable>
+            </div>
+            <TablePagination
+              currentPage={currentPage}
+              onPageChange={setCurrentPage}
+              totalItems={filteredSubmissions.length}
+              perPage={pageSize}
+              className="border-t border-border/70 rounded-none bg-transparent"
+            />
+          </>
         )}
       </div>
 

@@ -384,7 +384,7 @@ export default function VendorProfilePage() {
                           className="h-8 text-xs rounded-lg"
                           id="profile-issue-date"
                           disabled={uploading}
-                          value={issueDate}
+                          value={issueDate ? String(issueDate).slice(0, 10) : ''}
                           onChange={(e) => setIssueDate(e.target.value)}
                         />
                       </div>
@@ -397,10 +397,10 @@ export default function VendorProfilePage() {
                           className="h-8 text-xs rounded-lg"
                           id="profile-expiration-date"
                           disabled={uploading}
-                          min={showIssueDate && issueDate ? issueDate : undefined}
+                          min={showIssueDate && issueDate ? String(issueDate).slice(0, 10) : undefined}
                           aria-invalid={invalidDocumentDates}
                           aria-describedby={invalidDocumentDates ? "profile-date-error" : undefined}
-                          value={expirationDate}
+                          value={expirationDate ? String(expirationDate).slice(0, 10) : ''}
                           onChange={(e) => setExpirationDate(e.target.value)}
                         />
                       </div>

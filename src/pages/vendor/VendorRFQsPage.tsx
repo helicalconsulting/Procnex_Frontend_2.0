@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { CurrencySelector, CurrencyAmountInput, useCurrency } from '../../components/shared/CurrencyMaster';
 import { MessageStrip } from '../../components/shared/MessageStrip';
+import { TablePagination } from '../../components/shared/TablePagination';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
@@ -905,7 +906,14 @@ export default function VendorRFQsPage() {
               </div>}
             </article>;
           })}
-          <div className="rfq-register__footer text-xs"><span className="rfq-muted">Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length}</span><div className="rfq-register__pagination"><Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>Previous</Button><Button variant="outline" size="sm" disabled={currentPage * PAGE_SIZE >= filtered.length} onClick={() => setPage(currentPage + 1)}>Next</Button></div></div>
+          <TablePagination
+            currentPage={currentPage}
+            totalPages={Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))}
+            onPageChange={setPage}
+            totalItems={filtered.length}
+            perPage={PAGE_SIZE}
+            className="mt-4"
+          />
         </section>
       ) : <EmptyState icon={FileText} title="No RFQs Found" description={search || kpiFilter ? 'No assignments match these filters.' : 'No RFQs have been assigned to your company yet.'} action={search || kpiFilter ? <Button variant="outline" size="sm" onClick={() => { setSearch(''); setKpiFilter(null); setPage(1); }}>Clear filters</Button> : undefined} />}
 
@@ -1101,7 +1109,7 @@ export default function VendorRFQsPage() {
                               <input
                                 className="vquot-modal__input"
                                 type="date"
-                                value={String(customFieldValues[cf.id] || '')}
+                                value={customFieldValues[cf.id] ? String(customFieldValues[cf.id]).slice(0, 10) : ''}
                                 onChange={(e) => setCustomFieldValues(prev => ({ ...prev, [cf.id]: e.target.value }))}
                                 disabled={isQuotReadOnly}
                               />
@@ -1503,7 +1511,7 @@ export default function VendorRFQsPage() {
                             <input
                               className="vquot-modal__input"
                               type="date"
-                              value={bidBondIssueDate}
+                              value={bidBondIssueDate ? String(bidBondIssueDate).slice(0, 10) : ''}
                               onChange={(e) => setBidBondIssueDate(e.target.value)}
                               disabled={isQuotReadOnly}
                             />
@@ -1513,7 +1521,7 @@ export default function VendorRFQsPage() {
                             <input
                               className="vquot-modal__input"
                               type="date"
-                              value={bidBondExpiryDate}
+                              value={bidBondExpiryDate ? String(bidBondExpiryDate).slice(0, 10) : ''}
                               onChange={(e) => setBidBondExpiryDate(e.target.value)}
                               disabled={isQuotReadOnly}
                             />

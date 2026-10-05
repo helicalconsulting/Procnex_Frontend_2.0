@@ -41,6 +41,7 @@ import { useServiceData } from '../../hooks/useServiceData';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
 import { useAuth } from '../../context/AuthContext';
 import { MessageStrip } from '../../components/shared/MessageStrip';
+import { TablePagination } from '../../components/shared/TablePagination';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import type { ColumnDef } from '../../hooks/columnPreferences';
 import { Badge } from '../../components/ui/badge';
@@ -1004,44 +1005,13 @@ export default function PurchaseOrdersPage() {
         </div>
       )}
 
-      {filtered.length > perPage && (
-        <div className="mt-4 flex flex-col gap-3 rounded-xl border border-border/65 bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <span className="text-xs text-muted-foreground">
-            {(safePage - 1) * perPage + 1}–{Math.min(safePage * perPage, filtered.length)} of {filtered.length}
-          </span>
-          <div className="flex flex-wrap gap-1">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              disabled={safePage === 1}
-              onClick={() => setCurrentPage((page) => page - 1)}
-              aria-label="Previous page"
-            >
-              <ChevronLeft />
-            </Button>
-            {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
-              <Button
-                key={page}
-                variant={safePage === page ? 'default' : 'ghost'}
-                size="icon-sm"
-                onClick={() => setCurrentPage(page)}
-                aria-label={`Page ${page}`}
-              >
-                {page}
-              </Button>
-            ))}
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              disabled={safePage === totalPages}
-              onClick={() => setCurrentPage((page) => page + 1)}
-              aria-label="Next page"
-            >
-              <ChevronRight />
-            </Button>
-          </div>
-        </div>
-      )}
+      {/* Pagination */}
+      <TablePagination
+        currentPage={safePage}
+        totalItems={filtered.length}
+        perPage={perPage}
+        onPageChange={setCurrentPage}
+      />
 
       {/* Detail Dialog */}
       <Dialog open={!!detailPO} onOpenChange={(open) => { if (!open) setDetailPO(null); }}>

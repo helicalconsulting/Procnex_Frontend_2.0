@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Calendar, CheckCircle2, Clock, CreditCard, FileText, Plus, Receipt, Search, XCircle } from 'lucide-react';
 import { CurrencyBadge, CurrencySelector, useCurrency } from '../../components/shared/CurrencyMaster';
 import { RecordStatusBadge } from '@/components/shared/RecordStatusBadge';
+import { TablePagination } from '@/components/shared/TablePagination';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -48,6 +49,8 @@ export default function VendorInvoicesPage() {
     };
   }, [forceRefresh]);
   const [search, setSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 8;
   const summary = useMemo(() => ({
     totalAmount: (invoices || []).reduce((sum, invoice) => sum + (invoice.totalAmount || 0), 0),
     paid: (invoices || []).filter((invoice) => invoice.status === 'PAID').reduce((sum, invoice) => sum + (invoice.totalAmount || 0), 0),
@@ -59,6 +62,12 @@ export default function VendorInvoicesPage() {
     if (!query) return invoices || [];
     return (invoices || []).filter((invoice) => [invoice.invoiceNumber, invoice.poNumber, invoice.description].some((field) => (field || '').toLowerCase().includes(query)));
   }, [invoices, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage));
+  const paginatedInvoices = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filtered.slice(start, start + itemsPerPage);
+  }, [filtered, currentPage, itemsPerPage]);
 
   const amount = (value: number) => formatAmount(value, displayCurrency);
   const formatDate = (date: string) => new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -103,14 +112,14 @@ export default function VendorInvoicesPage() {
             type="text"
             placeholder="Search invoice, PO, or description..."
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => { setSearch(event.target.value); setCurrentPage(1); }}
             aria-label="Search invoices"
           />
           {search && (
             <button
               type="button"
               aria-label="Clear invoice search"
-              onClick={() => setSearch('')}
+              onClick={() => { setSearch(''); setCurrentPage(1); }}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
               <XCircle size={15} />
@@ -128,7 +137,7 @@ export default function VendorInvoicesPage() {
           description={search ? 'Try another search term.' : 'Your first submitted invoice will appear here.'}
           action={
             search ? (
-              <Button variant="secondary" onClick={() => setSearch('')}>Clear search</Button>
+              <Button variant="secondary" onClick={() => { setSearch(''); setCurrentPage(1); }}>Clear search</Button>
             ) : (
               <Button onClick={() => navigate(getVendorPath('/vendor/create-invoice'))} className="gap-1.5">
                 <Plus size={16} /> Create Invoice
@@ -145,7 +154,7 @@ export default function VendorInvoicesPage() {
                   <tr>{['Invoice', 'PO reference', 'Description', 'Amount', 'GST', 'Total', 'Submitted', 'Due date', 'Status'].map((heading) => <th key={heading} className="px-4 py-3">{heading}</th>)}</tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
-                  {filtered.map((invoice) => (
+                  {paginatedInvoices.map((invoice) => (
                     <tr key={invoice.id} className="transition-colors hover:bg-accent/35">
                       <td className="px-4 py-3.5"><div className="flex items-center gap-2.5"><span className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary"><FileText className="size-4" /></span><div><div className="font-semibold text-primary">{invoice.invoiceNumber}</div><div className="mt-0.5 text-[12px] text-muted-foreground">{invoice.rfqNumber}</div></div></div></td>
                       <td className="px-4 py-3.5 font-medium">{invoice.poNumber}</td>
@@ -164,7 +173,7 @@ export default function VendorInvoicesPage() {
           </Card>
 
           <div className="grid gap-3 lg:hidden">
-            {filtered.map((invoice) => (
+            {paginatedInvoices.map((invoice) => (
               <Card key={invoice.id} className="p-4">
                 <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="font-semibold text-primary">{invoice.invoiceNumber}</div><div className="mt-1 truncate text-xs text-muted-foreground">PO {invoice.poNumber} · {invoice.rfqNumber}</div></div><RecordStatusBadge kind="invoice" status={invoice.status} /></div>
                 <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-muted-foreground">{invoice.description}</p>
@@ -177,6 +186,15 @@ export default function VendorInvoicesPage() {
               </Card>
             ))}
           </div>
+
+          <TablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            totalItems={filtered.length}
+            perPage={itemsPerPage}
+            className="mt-4"
+          />
         </>
       )}
     </PageFrame>

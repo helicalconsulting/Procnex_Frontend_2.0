@@ -7,6 +7,7 @@ import {
 import { useCurrency } from '@/components/shared/CurrencyMaster';
 import { MessageStrip } from '@/components/shared/MessageStrip';
 import { RecordStatusBadge } from '@/components/shared/RecordStatusBadge';
+import { TablePagination } from '@/components/shared/TablePagination';
 import { quoteDate } from '@/components/vendor/quotationFormatting';
 import './vendor-contract-workspace.css';
 import { Button } from '@/components/ui/button';
@@ -262,16 +263,14 @@ export default function VendorContractsPage() {
               </tbody>
             </LandingTable>
           </div>
-          {pages > 1 && (
-            <div className="flex items-center justify-between border-t border-border px-5 py-3 text-xs text-muted-foreground">
-              <span>Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filtered.length)} of {filtered.length}</span>
-              <div className="flex items-center gap-3">
-                <Button size="icon" variant="outline" aria-label="Previous page" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}><ChevronLeft className="size-4" /></Button>
-                <span>Page {currentPage} of {pages}</span>
-                <Button size="icon" variant="outline" aria-label="Next page" disabled={currentPage === pages} onClick={() => setPage(currentPage + 1)}><ChevronRight className="size-4" /></Button>
-              </div>
-            </div>
-          )}
+          <TablePagination
+            currentPage={currentPage}
+            totalPages={pages}
+            onPageChange={setPage}
+            totalItems={filtered.length}
+            perPage={pageSize}
+            className="border-t border-border rounded-none"
+          />
         </Card>
       )}
     </PageFrame>

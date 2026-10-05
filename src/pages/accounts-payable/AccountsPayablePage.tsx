@@ -33,6 +33,7 @@ import {
 } from '../../components/ui/dialog';
 import { Input } from '../../components/ui/input';
 import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
+import TablePagination from '../../components/shared/TablePagination';
 import { cn } from '../../lib/utils';
 import {
   AlertTriangle,
@@ -125,7 +126,31 @@ const STATUS_CONFIG: Record<APStatus, { label: string; tone: Tone; icon: typeof 
   RE_REVIEW: { label: 'Returned (Re-Review)', tone: 'warning', icon: RotateCcw },
 };
 
-function StatusBadge({ status }: { status: APStatus }) {
+function StatusBadge({
+  status,
+  currentLevel,
+  hasApprovedPriorLevel,
+}: {
+  status: APStatus;
+  currentLevel?: number;
+  hasApprovedPriorLevel?: boolean;
+}) {
+  if (status === 'PENDING') {
+    if (hasApprovedPriorLevel) {
+      return (
+        <Badge tone="success">
+          <CheckCircle2 className="size-3" />
+          Approved
+        </Badge>
+      );
+    }
+    return (
+      <Badge tone="warning">
+        <Clock className="size-3" />
+        Pending
+      </Badge>
+    );
+  }
   const config = STATUS_CONFIG[status] || STATUS_CONFIG.PENDING;
   const Icon = config.icon;
   return (
@@ -171,7 +196,7 @@ const ALL_COLUMNS: ColumnDef[] = [
 
 export default function AccountsPayablePage() {
   const navigate = useNavigate();
-  const { roles: authRoles, hasPermission } = useAuth();
+  const { user, roles: authRoles, hasPermission } = useAuth();
   const canApproveAP =
     hasPermission('Accounts Payable', 'canApprove') ||
     hasPermission('Create Purchase Invoice', 'canApprove') ||
@@ -265,7 +290,7 @@ export default function AccountsPayablePage() {
         const isReturnedChain = Boolean(returnedRow) || matchingRaw?.status === 'RETURNED';
 
         let status: APStatus;
-        if (matchingRaw?.status && ['PAID', 'PARTIAL', 'OVERDUE'].includes(matchingRaw.status)) {
+        if (matchingRaw?.status && ['PAID', 'PARTIAL', 'OVERDUE', 'APPROVED'].includes(matchingRaw.status)) {
           status = matchingRaw.status as APStatus;
         } else if (pendingRow) {
           status = isReturnedChain ? 'RETURNED' : 'PENDING';
@@ -282,9 +307,9 @@ export default function AccountsPayablePage() {
             ? activeApp.amount
             : parseFloat(String(activeApp.amount).replace(/[^0-9.]/g, '')) || matchingRaw?.amount || 0;
 
-        const currentLevel = pendingRow?.currentLevel || (status === 'RETURNED' ? 1 : (activeApp.currentLevel || 1));
+        const currentLevel = status === 'APPROVED' ? 2 : (pendingRow?.currentLevel || (status === 'RETURNED' ? 1 : (activeApp.currentLevel || 1)));
         const totalLevels = activeApp.totalLevels || 2;
-        const reqRole = pendingRow?.requiredRole || (status === 'RETURNED' ? 'Purchase Manager' : (activeApp.requiredRole || 'Purchase Manager'));
+        const reqRole = status === 'APPROVED' ? '' : (pendingRow?.requiredRole || (status === 'RETURNED' ? 'Purchase Manager' : (activeApp.requiredRole || 'Purchase Manager')));
 
         // Approver permissions:
         // - ONLY users with matching role for the active approval step can act
@@ -299,9 +324,22 @@ export default function AccountsPayablePage() {
           }
         }
 
-        const hasApprovedPriorLevel = rows.some(
-          (r) => r.status === 'APPROVED' && isRoleMatching(r.requiredRole, authRoles)
-        );
+        const hasApprovedPriorLevel =
+          (currentLevel > 1 && isRoleMatching('Purchase Clerk', authRoles)) ||
+          rows.some(
+            (r) =>
+              r.status === 'APPROVED' &&
+              (isRoleMatching(r.requiredRole, authRoles) || (user?.id && r.approverId && String(r.approverId) === String(user.id)))
+          );
+
+        const resolvedDept =
+          activeApp.department ||
+          matchingRaw?.department ||
+          (matchingRaw?.purchaseOrder as any)?.department ||
+          (matchingRaw?.purchaseOrder as any)?.rfq?.department ||
+          (matchingRaw?.vendor as any)?.categoryRef?.department?.name ||
+          (matchingRaw?.vendor as any)?.categoryRef?.name ||
+          '';
 
         merged.push({
           id: matchingRaw?.id || activeApp.referenceId || activeApp.id,
@@ -317,7 +355,7 @@ export default function AccountsPayablePage() {
           invoiceDate: activeApp.submittedAt || matchingRaw?.submittedAt || new Date().toISOString(),
           status,
           paymentTerms: matchingRaw?.paymentTerms || 'Net 30',
-          department: activeApp.department || matchingRaw?.department || 'Finance',
+          department: resolvedDept,
           currentLevel,
           totalLevels,
           requiredRole: reqRole,
@@ -338,6 +376,7 @@ export default function AccountsPayablePage() {
           const initials = inv.vendorName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() || 'VN';
           const statusMap: Record<string, APStatus> = {
             PENDING_APPROVAL: 'PENDING',
+            POSTED: 'PENDING',
             PENDING: 'PENDING',
             APPROVED: 'APPROVED',
             PAID: 'PAID',
@@ -352,6 +391,14 @@ export default function AccountsPayablePage() {
           const isActionable = status === 'PENDING' || status === 'RETURNED';
           const effectiveCanAct = isActionable && isRoleMatching('Purchase Clerk', authRoles);
 
+          const resolvedDept =
+            inv.department ||
+            (inv.purchaseOrder as any)?.department ||
+            (inv.purchaseOrder as any)?.rfq?.department ||
+            (inv as any)?.vendor?.categoryRef?.department?.name ||
+            (inv as any)?.vendor?.categoryRef?.name ||
+            '';
+
           merged.push({
             id: inv.id,
             invoiceNumber: inv.invoiceNumber,
@@ -365,7 +412,7 @@ export default function AccountsPayablePage() {
             invoiceDate: inv.submittedAt || new Date().toISOString(),
             status,
             paymentTerms: inv.paymentTerms || 'Net 30',
-            department: inv.department || 'Finance',
+            department: resolvedDept,
             currentLevel: isActionable ? 1 : 0,
             totalLevels: isActionable ? 2 : 0,
             requiredRole: isActionable ? 'Purchase Manager' : '',
@@ -403,19 +450,23 @@ export default function AccountsPayablePage() {
     () => ({
       totalPayable: invoicesList.reduce((sum, invoice) => sum + invoice.amount - invoice.paidAmount, 0),
       overdue: invoicesList.filter((invoice) => invoice.status === 'OVERDUE').length,
-      pending: invoicesList.filter((invoice) => (invoice.status === 'PENDING' || invoice.status === 'RETURNED') && (isAdmin || invoice.canAct || invoice.hasApprovedPriorLevel)).length,
+      pending: invoicesList.filter((invoice) => invoice.status === 'PENDING' || invoice.status === 'RETURNED').length,
       completed: invoicesList.filter((invoice) => ['PAID', 'APPROVED'].includes(invoice.status)).length,
     }),
-    [invoicesList, isAdmin]
+    [invoicesList]
   );
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const perPage = 8;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter]);
 
   const filtered = useMemo(() => {
     const list = invoicesList;
     const query = search.trim().toLowerCase();
     return list.filter((invoice) => {
-      if ((invoice.status === 'PENDING' || invoice.status === 'RETURNED') && !isAdmin && !invoice.canAct && !invoice.hasApprovedPriorLevel) {
-        return false;
-      }
       return (
         (statusFilter === 'ALL' || invoice.status === statusFilter) &&
         (!query ||
@@ -424,7 +475,11 @@ export default function AccountsPayablePage() {
           ))
       );
     });
-  }, [invoicesList, search, statusFilter, isAdmin]);
+  }, [invoicesList, search, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginated = filtered.slice((safePage - 1) * perPage, safePage * perPage);
 
   const handleAction = useCallback(async () => {
     if (!actionModal) return;
@@ -501,6 +556,7 @@ export default function AccountsPayablePage() {
             const isFinal = res?.nextLevel === false || targetInvoice.currentLevel >= targetInvoice.totalLevels;
 
             if (isFinal) {
+              await invoiceService.updateStatus(targetInvoice.id, 'APPROVED').catch(() => {});
               setGeneratedVoucherBanner({
                 voucherNumber: targetInvoice.invoiceNumber,
                 invoiceNumber: targetInvoice.invoiceNumber,
@@ -521,8 +577,10 @@ export default function AccountsPayablePage() {
             }
           } else if (act === 'reject') {
             await approvalService.reject(approvalId, comment);
+            await invoiceService.updateStatus(targetInvoice.id, 'REJECTED').catch(() => {});
           } else {
             await approvalService.return(approvalId, comment, 'ORIGINATOR');
+            await invoiceService.updateStatus(targetInvoice.id, 'RETURNED').catch(() => {});
           }
         } else {
           const statusToSet = act === 'approve' ? 'APPROVED' : act === 'reject' ? 'REJECTED' : 'RETURNED';
@@ -838,7 +896,7 @@ export default function AccountsPayablePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
-                  {filtered.map((invoice) => (
+                  {paginated.map((invoice) => (
                     <tr key={invoice.id} className="transition-colors hover:bg-accent/35 cursor-pointer" onClick={() => setDetailInvoice(invoice)}>
                       {visibleColumns.map((col) => {
                         if (col.key === 'invoiceNumber') {
@@ -891,7 +949,15 @@ export default function AccountsPayablePage() {
                           return <td key="dueDate" className="px-4 py-3.5 text-xs text-muted-foreground">{formatDate(invoice.dueDate)}</td>;
                         }
                         if (col.key === 'status') {
-                          return <td key="status" className="px-4 py-3.5"><StatusBadge status={invoice.status} /></td>;
+                          return (
+                            <td key="status" className="px-4 py-3.5">
+                              <StatusBadge
+                                status={invoice.status}
+                                currentLevel={invoice.currentLevel}
+                                hasApprovedPriorLevel={invoice.hasApprovedPriorLevel}
+                              />
+                            </td>
+                          );
                         }
                         return <td key={col.key} className="px-4 py-3.5">-</td>;
                       })}
@@ -962,7 +1028,7 @@ export default function AccountsPayablePage() {
           </Card>
 
           <div className="grid gap-3 lg:hidden">
-            {filtered.map((invoice) => (
+            {paginated.map((invoice) => (
               <Card key={invoice.id} className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -970,7 +1036,11 @@ export default function AccountsPayablePage() {
                     <div className="mt-1 truncate text-sm font-medium">{invoice.vendorName}</div>
                     <div className="mt-1 text-xs text-muted-foreground">PO {invoice.poNumber}</div>
                   </div>
-                  <StatusBadge status={invoice.status} />
+                  <StatusBadge
+                    status={invoice.status}
+                    currentLevel={invoice.currentLevel}
+                    hasApprovedPriorLevel={invoice.hasApprovedPriorLevel}
+                  />
                 </div>
                 <dl className="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-secondary/45 p-3 text-xs">
                   <div>
@@ -1016,6 +1086,13 @@ export default function AccountsPayablePage() {
               </Card>
             ))}
           </div>
+
+          <TablePagination
+            currentPage={safePage}
+            totalItems={filtered.length}
+            perPage={perPage}
+            onPageChange={setCurrentPage}
+          />
         </>
       )}
 
@@ -1114,7 +1191,11 @@ export default function AccountsPayablePage() {
                 <DialogTitle className="text-xl font-bold tracking-tight text-foreground">
                   {detailInvoice.invoiceNumber}
                 </DialogTitle>
-                <StatusBadge status={detailInvoice.status} />
+                <StatusBadge
+                  status={detailInvoice.status}
+                  currentLevel={detailInvoice.currentLevel}
+                  hasApprovedPriorLevel={detailInvoice.hasApprovedPriorLevel}
+                />
               </div>
               <DialogDescription className="text-sm font-medium text-muted-foreground">
                 {detailInvoice.vendorName} · {formatAmount(detailInvoice.amount, companyDefaultCurrency)}
@@ -1143,7 +1224,7 @@ export default function AccountsPayablePage() {
                         Department
                       </div>
                       <div className="mt-1 font-medium text-foreground">
-                        {detailInvoice.department}
+                        {detailInvoice.department || '—'}
                       </div>
                     </div>
                   </div>
