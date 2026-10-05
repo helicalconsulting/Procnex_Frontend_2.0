@@ -295,34 +295,44 @@ export default function CreateGRNPage() {
     }
   }, [poIdParam, selectedPO, poLoading]);
 
-  // Display options for Vendor Invoice / Dispatch Note select dropdown (includes PO dispatch note if missing)
+  // Display options for Vendor Invoice / Dispatch Note select dropdown (includes PO dispatch note)
   const displayInvoiceOptions = useMemo(() => {
     const list = [...(invoicesList || [])];
-    const poDispatchNum = safeStr(
-      selectedPO?.dispatchNoteNumber ||
-      selectedPO?.vendorDispatchNoteNumber ||
-      selectedPO?.vendorInvoiceNumber
-    );
+    if (!selectedPO) return list;
 
-    if (poDispatchNum && poDispatchNum !== safeStr(selectedPO?.poNumber)) {
-      const exists = list.some(
-        (inv) =>
-          safeStr(inv.id).toLowerCase() === poDispatchNum.toLowerCase() ||
-          safeStr(inv.invoiceNumber).toLowerCase() === poDispatchNum.toLowerCase()
+    const targetPoId = safeStr(selectedPO.id).toLowerCase().trim();
+    const targetPoNum = safeStr(selectedPO.poNumber).toLowerCase().trim();
+
+    const exists = list.some((inv) => {
+      const invPoId = safeStr(inv.poId).toLowerCase().trim();
+      const invPoNum = safeStr(inv.poNumber).toLowerCase().trim();
+      const invId = safeStr(inv.id).toLowerCase().trim();
+      const invNum = safeStr(inv.invoiceNumber).toLowerCase().trim();
+      return (
+        (targetPoId && (invPoId === targetPoId || invPoNum === targetPoId || invId === targetPoId)) ||
+        (targetPoNum && (invPoId === targetPoNum || invPoNum === targetPoNum || invNum === targetPoNum))
       );
-      if (!exists) {
-        list.unshift({
-          id: poDispatchNum,
-          invoiceNumber: poDispatchNum,
-          vendorName: selectedPO?.vendor?.name || 'Supplier',
-          poNumber: selectedPO?.poNumber || '',
-          poId: selectedPO?.id || '',
-          amount: Number(selectedPO?.totalAmount || 0),
-          status: 'DISPATCHED',
-          dueDate: new Date().toISOString().slice(0, 10),
-          submittedAt: new Date().toISOString().slice(0, 10),
-        });
-      }
+    });
+
+    if (!exists && (selectedPO.poNumber || selectedPO.id)) {
+      const dnNum = safeStr(
+        selectedPO.dispatchNoteNumber ||
+        selectedPO.vendorDispatchNoteNumber ||
+        selectedPO.vendorInvoiceNumber ||
+        (selectedPO.poNumber ? (selectedPO.poNumber.startsWith('PO-') ? selectedPO.poNumber.replace(/^PO-/, 'DN-') : `DN-${selectedPO.poNumber}`) : `DN-${selectedPO.id}`)
+      );
+
+      list.unshift({
+        id: dnNum,
+        invoiceNumber: dnNum,
+        vendorName: selectedPO?.vendor?.name || (selectedPO as any)?.vendorName || 'Supplier',
+        poNumber: selectedPO?.poNumber || '',
+        poId: selectedPO?.id || '',
+        amount: Number(selectedPO?.totalAmount || (selectedPO as any)?.amount || 0),
+        status: 'DISPATCHED',
+        dueDate: new Date().toISOString().slice(0, 10),
+        submittedAt: new Date().toISOString().slice(0, 10),
+      });
     }
     return list;
   }, [invoicesList, selectedPO]);
@@ -364,10 +374,12 @@ export default function CreateGRNPage() {
     const match = displayInvoiceOptions.find((inv) => {
       const invPoId = safeStr(inv.poId).toLowerCase().trim();
       const invPoNum = safeStr(inv.poNumber).toLowerCase().trim();
-      if (!invPoId && !invPoNum) return false;
+      const invId = safeStr(inv.id).toLowerCase().trim();
+      const invNum = safeStr(inv.invoiceNumber).toLowerCase().trim();
+      if (!invPoId && !invPoNum && !invId && !invNum) return false;
       return (
-        (targetPoId && (invPoId === targetPoId || invPoNum === targetPoId)) ||
-        (targetPoNum && (invPoId === targetPoNum || invPoNum === targetPoNum))
+        (targetPoId && (invPoId === targetPoId || invPoNum === targetPoId || invId === targetPoId)) ||
+        (targetPoNum && (invPoId === targetPoNum || invPoNum === targetPoNum || invNum === targetPoNum))
       );
     });
 
@@ -378,86 +390,88 @@ export default function CreateGRNPage() {
       const fallbackDn = safeStr(
         selectedPO.dispatchNoteNumber ||
         selectedPO.vendorDispatchNoteNumber ||
-        selectedPO.vendorInvoiceNumber
+        selectedPO.vendorInvoiceNumber ||
+        (selectedPO.poNumber ? (selectedPO.poNumber.startsWith('PO-') ? selectedPO.poNumber.replace(/^PO-/, 'DN-') : `DN-${selectedPO.poNumber}`) : '')
       );
-      if (fallbackDn && fallbackDn !== targetPoNum) {
+      if (fallbackDn) {
         setSelectedVendorInvoiceId(fallbackDn);
         setVendorDispatchNoteNumber(fallbackDn);
-      } else {
-        setSelectedVendorInvoiceId('');
-        setVendorDispatchNoteNumber('');
       }
     }
   }, [selectedPO, displayInvoiceOptions]);
 
-  // Update line items and header details when PO selection changes
+  // Update line items and header details when PO selection changes (Only in AUTO_FILL mode)
   useEffect(() => {
     if (!selectedPO) {
-      setLineItems([]);
+      if (entryMode === 'AUTO_FILL') {
+        setLineItems([]);
+      }
       return;
     }
 
-    const rawItems: any[] =
-      (selectedPO.items && selectedPO.items.length > 0 && selectedPO.items) ||
-      (selectedPO.lineItems && selectedPO.lineItems.length > 0 && selectedPO.lineItems) ||
-      (selectedPO.products && selectedPO.products.length > 0 && selectedPO.products) ||
-      (selectedPO.materials && selectedPO.materials.length > 0 && selectedPO.materials) ||
-      (selectedPO.rfq?.selectedQuotation?.items && selectedPO.rfq.selectedQuotation.items.length > 0 && selectedPO.rfq.selectedQuotation.items) ||
-      (selectedPO.rfq?.items && selectedPO.rfq.items.length > 0 && selectedPO.rfq.items) ||
-      (selectedPO.requisition?.items && selectedPO.requisition.items.length > 0 && selectedPO.requisition.items) ||
-      [];
+    if (entryMode === 'AUTO_FILL') {
+      const rawItems: any[] =
+        (selectedPO.items && selectedPO.items.length > 0 && selectedPO.items) ||
+        (selectedPO.lineItems && selectedPO.lineItems.length > 0 && selectedPO.lineItems) ||
+        (selectedPO.products && selectedPO.products.length > 0 && selectedPO.products) ||
+        (selectedPO.materials && selectedPO.materials.length > 0 && selectedPO.materials) ||
+        (selectedPO.rfq?.selectedQuotation?.items && selectedPO.rfq.selectedQuotation.items.length > 0 && selectedPO.rfq.selectedQuotation.items) ||
+        (selectedPO.rfq?.items && selectedPO.rfq.items.length > 0 && selectedPO.rfq.items) ||
+        (selectedPO.requisition?.items && selectedPO.requisition.items.length > 0 && selectedPO.requisition.items) ||
+        [];
 
-    if (rawItems.length > 0) {
-      setLineItems(
-        rawItems.map((item: any, idx: number) => {
-          const name = safeStr(
-            item.itemName ||
-            item.name ||
-            item.description ||
-            item.itemDescription ||
-            item.title ||
-            (selectedPO.rfq?.title && selectedPO.rfq.title !== 'Direct PO Master' ? selectedPO.rfq.title : '') ||
-            selectedPO.title ||
-            selectedPO.poNumber ||
-            'Purchase Order Material/Services'
-          );
-          const qty = Number(item.quantity || item.orderedQty || item.qty || 1);
-          const price = Number(item.unitPrice || item.price || item.rate || 0);
+      if (rawItems.length > 0) {
+        setLineItems(
+          rawItems.map((item: any, idx: number) => {
+            const name = safeStr(
+              item.itemName ||
+              item.name ||
+              item.description ||
+              item.itemDescription ||
+              item.title ||
+              (selectedPO.rfq?.title && selectedPO.rfq.title !== 'Direct PO Master' ? selectedPO.rfq.title : '') ||
+              selectedPO.title ||
+              selectedPO.poNumber ||
+              'Purchase Order Material/Services'
+            );
+            const qty = Number(item.quantity || item.orderedQty || item.qty || 1);
+            const price = Number(item.unitPrice || item.price || item.rate || 0);
 
-          return {
-            id: `item_${idx}_${Date.now()}`,
-            itemName: name || 'Purchase Order Material/Services',
-            orderedQty: qty,
-            receivedQty: qty,
-            acceptedQty: qty,
+            return {
+              id: `item_${idx}_${Date.now()}`,
+              itemName: name || 'Purchase Order Material/Services',
+              orderedQty: qty,
+              receivedQty: qty,
+              acceptedQty: qty,
+              rejectedQty: 0,
+              unitPrice: price,
+              unit: safeStr(item.unit || item.uom || 'Units'),
+              remarks: 'Inspected - Goods in good condition',
+            };
+          })
+        );
+      } else {
+        const fallbackTitle = safeStr(
+          (selectedPO.rfq?.title && selectedPO.rfq.title !== 'Direct PO Master' ? selectedPO.rfq.title : '') ||
+          selectedPO.title ||
+          selectedPO.poNumber ||
+          'Purchase Order Material/Services'
+        );
+
+        setLineItems([
+          {
+            id: `item_0_${Date.now()}`,
+            itemName: fallbackTitle || 'Purchase Order Material/Services',
+            orderedQty: 1,
+            receivedQty: 1,
+            acceptedQty: 1,
             rejectedQty: 0,
-            unitPrice: price,
-            unit: safeStr(item.unit || item.uom || 'Units'),
-            remarks: 'Inspected - Goods in good condition',
-          };
-        })
-      );
-    } else {
-      const fallbackTitle = safeStr(
-        (selectedPO.rfq?.title && selectedPO.rfq.title !== 'Direct PO Master' ? selectedPO.rfq.title : '') ||
-        selectedPO.title ||
-        selectedPO.poNumber ||
-        'Purchase Order Material/Services'
-      );
-
-      setLineItems([
-        {
-          id: `item_0_${Date.now()}`,
-          itemName: fallbackTitle || 'Purchase Order Material/Services',
-          orderedQty: 1,
-          receivedQty: 1,
-          acceptedQty: 1,
-          rejectedQty: 0,
-          unitPrice: Number(selectedPO.totalAmount || selectedPO.grandTotal || 0),
-          unit: 'Units',
-          remarks: 'Inspected - Verified',
-        },
-      ]);
+            unitPrice: Number(selectedPO.totalAmount || selectedPO.grandTotal || 0),
+            unit: 'Units',
+            remarks: 'Inspected - Verified',
+          },
+        ]);
+      }
     }
 
     // Auto-fill warehouse location & dispatch note if available on selected PO
@@ -480,7 +494,7 @@ export default function CreateGRNPage() {
     if (selectedPO.dispatchNoteNumber || selectedPO.vendorDispatchNoteNumber || selectedPO.vendorInvoiceNumber) {
       setVendorDispatchNoteNumber(selectedPO.dispatchNoteNumber || selectedPO.vendorDispatchNoteNumber || selectedPO.vendorInvoiceNumber || '');
     }
-  }, [selectedPO, warehouses]);
+  }, [selectedPO, warehouses, entryMode]);
 
   // Pre-select PO ONLY if poId is in URL query params or router state
   useEffect(() => {
@@ -749,7 +763,22 @@ export default function CreateGRNPage() {
 
             {/* Mode 2: Manual GRN */}
             <div
-              onClick={() => setEntryMode('MANUAL')}
+              onClick={() => {
+                setEntryMode('MANUAL');
+                setLineItems([
+                  {
+                    id: `manual_${Date.now()}_0`,
+                    itemName: '',
+                    orderedQty: 1,
+                    receivedQty: 1,
+                    acceptedQty: 1,
+                    rejectedQty: 0,
+                    unitPrice: 0,
+                    unit: 'Units',
+                    remarks: 'Manual receiving entry',
+                  },
+                ]);
+              }}
               className={cn(
                 'cursor-pointer p-4 rounded-xl border transition-all flex items-start gap-4',
                 entryMode === 'MANUAL'
@@ -773,7 +802,7 @@ export default function CreateGRNPage() {
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                  Select Purchase Order manually and input actual received, accepted, and rejected quantities with custom remarks.
+                  Input custom materials, received, accepted, and rejected inspection quantities with custom remarks.
                 </p>
               </div>
             </div>

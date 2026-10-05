@@ -205,6 +205,7 @@ export default function CreatePaymentVoucherPage() {
   const [paymentMethod, setPaymentMethod] = useState<string>('NEFT');
   const [selectedVendorId, setSelectedVendorId] = useState<string>('');
   const [vendorName, setVendorName] = useState<string>('');
+  const [isManualSupplier, setIsManualSupplier] = useState<boolean>(false);
   const [invoiceRef, setInvoiceRef] = useState<string>('');
   const [voucherDate, setVoucherDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [scheduledDate, setScheduledDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
@@ -712,63 +713,63 @@ export default function CreatePaymentVoucherPage() {
     });
   };
 
-  const handleAddCustomInvoice = () => {
+  const handleAddCustomInvoice = (defaults?: Partial<VendorInvoiceItem>) => {
     const nextIdx = vendorInvoices.length + 1;
-    const invAmt = 1000;
+    const invAmt = defaults?.paymentAmount ?? 0;
     const newInv: VendorInvoiceItem = {
-      id: `custom_inv_${Date.now()}`,
-      invoiceNumber: `INV-2026-${String(nextIdx).padStart(3, '0')}`,
-      poNumber: `PO-2026-${String(3700 + nextIdx)}`,
-      grnNumber: `GRN-2026-${String(40 + nextIdx)}`,
+      id: `custom_inv_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      invoiceNumber: defaults?.invoiceNumber ?? `INV-2026-${String(nextIdx).padStart(3, '0')}`,
+      poNumber: defaults?.poNumber ?? `PO-2026-${String(3700 + nextIdx)}`,
+      grnNumber: defaults?.grnNumber ?? '',
       amount: invAmt,
       paidAmount: 0,
       balanceDue: invAmt,
-      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
-      invoiceDate: new Date().toISOString().slice(0, 10),
-      threeWayMatch: 'MATCHED',
+      dueDate: defaults?.dueDate ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+      invoiceDate: defaults?.invoiceDate ?? new Date().toISOString().slice(0, 10),
+      threeWayMatch: defaults?.threeWayMatch ?? 'MATCHED',
       selected: true,
       paymentAmount: invAmt,
-      grnOrderedQty: 10,
-      grnReceivedQty: 10,
+      grnOrderedQty: 1,
+      grnReceivedQty: 1,
       grnReceivedAmount: invAmt,
       items: [
         {
           id: `custom_item_${Date.now()}`,
-          invoiceNumber: `INV-2026-${String(nextIdx).padStart(3, '0')}`,
-          poNumber: `PO-2026-${String(3700 + nextIdx)}`,
-          grnNumber: `GRN-2026-${String(40 + nextIdx)}`,
-          itemName: `Standard Supplies Item #${nextIdx}`,
-          orderedQty: 10,
-          receivedQty: 10,
+          invoiceNumber: defaults?.invoiceNumber ?? `INV-2026-${String(nextIdx).padStart(3, '0')}`,
+          poNumber: defaults?.poNumber ?? `PO-2026-${String(3700 + nextIdx)}`,
+          grnNumber: defaults?.grnNumber ?? '',
+          itemName: `Manual Invoice Item #${nextIdx}`,
+          orderedQty: 1,
+          receivedQty: 1,
           shortfallQty: 0,
-          unitPrice: 100,
-          orderedValue: 1000,
-          receivedValue: 1000,
+          unitPrice: invAmt,
+          orderedValue: invAmt,
+          receivedValue: invAmt,
           shortfallValue: 0,
           status: 'MATCHED',
-          remarks: 'Fully matched',
+          remarks: 'Manual entry',
         },
       ],
     };
     setVendorInvoices((prev) => {
-      const updated = [...prev, newInv];
+      const updated = selectionMode === 'single' ? [newInv] : [...prev, newInv];
       updateTotalsFromInvoices(updated);
       return updated;
     });
   };
 
-  // Switch invoice entry mode — resets table and either triggers DB fetch or starts with blank row
+  // Switch invoice entry mode — resets table and either triggers DB fetch or sets manual mode
   const handleSelectInvoiceMode = (mode: 'AUTO_FILL' | 'MANUAL') => {
-    setVendorInvoices([]);
     setGrossAmount('');
     setInvoiceRef('');
     setInvoiceEntryMode(mode);
+    setMatchStatus('MATCHED');
+    setDiscrepancyReason('');
     if (mode === 'MANUAL') {
-      // Add one blank row immediately so user can start typing
-      const newInv: VendorInvoiceItem = {
+      const initialInv: VendorInvoiceItem = {
         id: `custom_inv_${Date.now()}`,
-        invoiceNumber: '',
-        poNumber: '',
+        invoiceNumber: 'INV-2026-001',
+        poNumber: 'PO-2026-001',
         grnNumber: '',
         amount: 0,
         paidAmount: 0,
@@ -778,15 +779,23 @@ export default function CreatePaymentVoucherPage() {
         threeWayMatch: 'MATCHED',
         selected: true,
         paymentAmount: 0,
-        grnOrderedQty: 0,
-        grnReceivedQty: 0,
+        grnOrderedQty: 1,
+        grnReceivedQty: 1,
         grnReceivedAmount: 0,
-        items: [],
       };
-      setVendorInvoices([newInv]);
+      setVendorInvoices([initialInv]);
+      setInvoiceRef(initialInv.invoiceNumber);
+    } else {
+      setVendorInvoices([]);
     }
-    // AUTO_FILL: setting invoiceEntryMode to 'AUTO_FILL' triggers the useEffect to fetch
   };
+
+  // Auto-initialize 1 manual row if page is in MANUAL mode and invoices list is empty
+  useEffect(() => {
+    if (invoiceEntryMode === 'MANUAL' && vendorInvoices.length === 0) {
+      handleAddCustomInvoice();
+    }
+  }, [invoiceEntryMode]);
 
   const handleInvoiceFieldChange = (invId: string, field: keyof VendorInvoiceItem, val: any) => {
     setVendorInvoices((prev) => {
@@ -1383,10 +1392,12 @@ export default function CreatePaymentVoucherPage() {
                       {paginatedVouchers.map((v) => {
                         const statusKey = (v.status || '').toUpperCase();
                         const isDraft = statusKey === 'DRAFT';
-                        const isApproved = statusKey === 'APPROVED' || statusKey === 'PAID' || statusKey === 'COMPLETED';
+                        const isApproved = statusKey === 'APPROVED' || statusKey === 'PAID' || statusKey === 'COMPLETED' || statusKey === 'POSTED';
                         const isRejected = statusKey === 'REJECTED' || statusKey === 'CANCELLED';
-                        const tone = isDraft ? 'neutral' : isApproved ? 'success' : isRejected ? 'danger' : 'warning';
-                        const badgeLabel = isDraft ? 'Draft' : isApproved ? 'Approved' : isRejected ? 'Rejected' : 'Pending Approval';
+                        const isReturned = statusKey.includes('RETURN') || statusKey.includes('REVIEW') || statusKey === 'CHANGES_REQUESTED';
+                        const isEditable = isDraft || isReturned || isRejected;
+                        const tone = isDraft ? 'neutral' : isApproved ? 'success' : isRejected ? 'danger' : isReturned ? 'warning' : 'warning';
+                        const badgeLabel = isDraft ? 'Draft' : isApproved ? 'Approved' : isRejected ? 'Rejected' : isReturned ? 'Returned / Re-Review' : 'Pending Approval';
                         const isSelected = selectedVoucherIds.includes(String(v.id));
 
                         return (
@@ -1427,29 +1438,31 @@ export default function CreatePaymentVoucherPage() {
                                 >
                                   <Eye size={15} />
                                 </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  disabled={!canCreateVoucher}
-                                  title="Edit Payment Voucher"
-                                  onClick={() => {
-                                    if (!canCreateVoucher) return;
-                                    setVoucherNumber(v.paymentId);
-                                    setVendorName(v.vendor);
-                                    setInvoiceRef(v.invoiceRef || '');
-                                    setGrossAmount(v.amount);
-                                    if (v.method) setPaymentMethod(v.method);
-                                    if (v.bankName) setBankName(v.bankName);
-                                    if (v.accountNumber) setAccountNumber(v.accountNumber);
-                                    if (v.ifscCode) setIfscCode(v.ifscCode);
-                                    if (v.beneficiaryName) setBeneficiaryName(v.beneficiaryName);
-                                    if (v.remarks) setRemarks(v.remarks);
-                                    if (v.purpose) setPurpose(v.purpose);
-                                    setIsCreating(true);
-                                  }}
-                                >
-                                  <Pencil size={15} />
-                                </Button>
+                                {isEditable && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    disabled={!canCreateVoucher}
+                                    title="Edit Payment Voucher"
+                                    onClick={() => {
+                                      if (!canCreateVoucher) return;
+                                      setVoucherNumber(v.paymentId);
+                                      setVendorName(v.vendor);
+                                      setInvoiceRef(v.invoiceRef || '');
+                                      setGrossAmount(v.amount);
+                                      if (v.method) setPaymentMethod(v.method);
+                                      if (v.bankName) setBankName(v.bankName);
+                                      if (v.accountNumber) setAccountNumber(v.accountNumber);
+                                      if (v.ifscCode) setIfscCode(v.ifscCode);
+                                      if (v.beneficiaryName) setBeneficiaryName(v.beneficiaryName);
+                                      if (v.remarks) setRemarks(v.remarks);
+                                      if (v.purpose) setPurpose(v.purpose);
+                                      setIsCreating(true);
+                                    }}
+                                  >
+                                    <Pencil size={15} />
+                                  </Button>
+                                )}
                                 <Button
                                   variant="ghost"
                                   size="icon-sm"
@@ -1679,18 +1692,64 @@ export default function CreatePaymentVoucherPage() {
           </div>
           <div className="cpv-grid cpv-grid--4">
             <div className="cpv-field cpv-field--span-2">
-              <label>Supplier Name / Beneficiary <span>*</span></label>
-              <select
-                value={selectedVendorId}
-                onChange={(e) => handleVendorSelect(e.target.value)}
-              >
-                <option value="">Select Supplier from Database Master...</option>
-                {vendorsList.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name} ({v.category})
-                  </option>
-                ))}
-              </select>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <label style={{ margin: 0 }}>Supplier Name / Beneficiary <span>*</span></label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !isManualSupplier;
+                    setIsManualSupplier(next);
+                    if (next) {
+                      setSelectedVendorId('');
+                    }
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--primary-500, #0a6ed1)',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    padding: 0,
+                    textDecoration: 'underline',
+                  }}
+                >
+                  {isManualSupplier ? '📁 Choose from Database Master' : '✏️ Enter Supplier Manually'}
+                </button>
+              </div>
+              {isManualSupplier ? (
+                <input
+                  type="text"
+                  value={vendorName}
+                  onChange={(e) => {
+                    setVendorName(e.target.value);
+                    if (!beneficiaryName || beneficiaryName === vendorName) {
+                      setBeneficiaryName(e.target.value);
+                    }
+                  }}
+                  placeholder="e.g. Acme Technologies Pvt Ltd"
+                />
+              ) : (
+                <select
+                  value={selectedVendorId}
+                  onChange={(e) => {
+                    if (e.target.value === '__custom__') {
+                      setIsManualSupplier(true);
+                      setSelectedVendorId('');
+                    } else {
+                      handleVendorSelect(e.target.value);
+                    }
+                  }}
+                >
+                  <option value="">Select Supplier from Database Master...</option>
+                  {vendorsList.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name} ({v.category})
+                    </option>
+                  ))}
+                  <option value="__custom__">✏️ + Enter Custom / Unlisted Supplier</option>
+                </select>
+              )}
             </div>
             <div className="cpv-field cpv-field--span-2">
               <label>Reference (PO & Invoice Numbers)</label>
@@ -1761,15 +1820,6 @@ export default function CreatePaymentVoucherPage() {
                   >
                     ↩ Change Mode
                   </button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleAddCustomInvoice}
-                    className="h-8 gap-1 text-xs border-primary/40 text-primary hover:bg-primary/10"
-                  >
-                    <Plus size={14} /> Add Invoice Line
-                  </Button>
                   <button
                     type="button"
                     className={`cpv-mode-btn ${selectionMode === 'multiple' ? 'cpv-mode-btn--active' : ''}`}
@@ -1858,8 +1908,253 @@ export default function CreatePaymentVoucherPage() {
             </div>
           )}
 
-          {/* Invoice Table — shown after mode is selected */}
-          {invoiceEntryMode !== null && (
+          {/* Manual Entry Table & Controls — shown when Manual mode is selected */}
+          {invoiceEntryMode === 'MANUAL' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Manual Entry Notice Bar */}
+              <div style={{
+                padding: '16px 20px',
+                background: 'var(--surface-secondary, rgba(255,255,255,0.03))',
+                borderRadius: 10,
+                border: '1px solid var(--border-color, rgba(255,255,255,0.08))',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 12
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(34, 197, 94, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Edit3 size={18} style={{ color: '#22c55e' }} />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>Manual Payment Voucher Entry Active</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                      Enter invoice numbers, PO references, dates and disbursement amounts in the table below.
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <button
+                    type="button"
+                    className="cpv-btn cpv-btn--sm cpv-btn--success"
+                    onClick={() => handleAddCustomInvoice()}
+                    style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8 }}
+                  >
+                    <Plus size={14} /> Add Invoice
+                  </button>
+                  <button
+                    type="button"
+                    className="cpv-btn cpv-btn--sm cpv-btn--outline"
+                    onClick={() => handleSelectInvoiceMode('AUTO_FILL')}
+                    style={{ fontSize: 12, padding: '6px 12px', borderRadius: 8 }}
+                  >
+                    <Database size={13} style={{ marginRight: 4 }} /> Switch to Auto-Fill
+                  </button>
+                </div>
+              </div>
+
+              {/* Invoices Table or Empty State */}
+              {vendorInvoices.length === 0 ? (
+                <div style={{
+                  padding: '36px 20px',
+                  textAlign: 'center',
+                  background: 'var(--surface-secondary, rgba(255,255,255,0.02))',
+                  borderRadius: 10,
+                  border: '1px dashed var(--border-color, rgba(255,255,255,0.15))',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 12,
+                }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(10, 110, 209, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-500, #0a6ed1)' }}>
+                    <FileText size={22} />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>No Invoices Added Yet</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+                      Click below to add an invoice or bill reference to this payment voucher.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="cpv-btn cpv-btn--primary cpv-btn--sm"
+                    onClick={() => handleAddCustomInvoice()}
+                    style={{ marginTop: 4 }}
+                  >
+                    <Plus size={14} /> Add First Invoice
+                  </button>
+                </div>
+              ) : (
+                <div className="cpv-inv-table-wrap">
+                  <table className="cpv-inv-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: 40, textAlign: 'center' }}>
+                          {selectionMode === 'multiple' && (
+                            <input
+                              type="checkbox"
+                              checked={vendorInvoices.length > 0 && vendorInvoices.every((i) => i.selected)}
+                              onChange={(e) => handleSelectAllInvoices(e.target.checked)}
+                              style={{ cursor: 'pointer', width: 16, height: 16 }}
+                              title="Select / Deselect All"
+                            />
+                          )}
+                        </th>
+                        <th style={{ minWidth: 160 }}>Invoice Number *</th>
+                        <th style={{ minWidth: 140 }}>PO Reference</th>
+                        <th style={{ minWidth: 130 }}>GRN Reference</th>
+                        <th style={{ minWidth: 130 }}>Invoice Date</th>
+                        <th style={{ minWidth: 130 }}>Due Date</th>
+                        <th style={{ minWidth: 150, textAlign: 'right' }}>Amount ({currency}) *</th>
+                        <th style={{ minWidth: 120, textAlign: 'center' }}>3-Way Match</th>
+                        <th style={{ width: 50, textAlign: 'center' }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {vendorInvoices.map((inv, idx) => (
+                        <tr key={inv.id || idx} className={inv.selected ? 'cpv-inv-row--selected' : ''}>
+                          <td style={{ textAlign: 'center' }}>
+                            <input
+                              type={selectionMode === 'single' ? 'radio' : 'checkbox'}
+                              name="manual_inv_radio"
+                              checked={inv.selected}
+                              onChange={() => handleToggleSelectInvoice(inv.id)}
+                              style={{ cursor: 'pointer', width: 16, height: 16 }}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="text"
+                              className="cpv-table-input"
+                              value={inv.invoiceNumber}
+                              onChange={(e) => handleInvoiceFieldChange(inv.id, 'invoiceNumber', e.target.value)}
+                              placeholder={`INV-2026-${String(idx + 1).padStart(3, '0')}`}
+                              style={{ fontWeight: 600 }}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="text"
+                              className="cpv-table-input"
+                              value={inv.poNumber}
+                              onChange={(e) => handleInvoiceFieldChange(inv.id, 'poNumber', e.target.value)}
+                              placeholder="e.g. PO-2026-001"
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="text"
+                              className="cpv-table-input"
+                              value={inv.grnNumber}
+                              onChange={(e) => handleInvoiceFieldChange(inv.id, 'grnNumber', e.target.value)}
+                              placeholder="e.g. GRN-001 (optional)"
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="date"
+                              className="cpv-table-input"
+                              value={inv.invoiceDate ? String(inv.invoiceDate).slice(0, 10) : ''}
+                              onChange={(e) => handleInvoiceFieldChange(inv.id, 'invoiceDate', e.target.value)}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="date"
+                              className="cpv-table-input"
+                              value={inv.dueDate ? String(inv.dueDate).slice(0, 10) : ''}
+                              onChange={(e) => handleInvoiceFieldChange(inv.id, 'dueDate', e.target.value)}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              className="cpv-table-input cpv-table-input--num"
+                              value={inv.paymentAmount === 0 ? '' : inv.paymentAmount}
+                              onChange={(e) => handleInvoiceFieldChange(inv.id, 'paymentAmount', e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
+                              placeholder="0.00"
+                            />
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleInvoiceMatch(inv.id)}
+                              className={`cpv-match-tag cpv-match-tag--${inv.threeWayMatch === 'MATCHED' ? 'matched' : 'discrepancy'}`}
+                              style={{
+                                cursor: 'pointer',
+                                border: 'none',
+                                background: inv.threeWayMatch === 'MATCHED' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                                color: inv.threeWayMatch === 'MATCHED' ? '#10b981' : '#ef4444',
+                                padding: '4px 8px',
+                                borderRadius: '6px',
+                                fontWeight: 600,
+                                fontSize: '11px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                whiteSpace: 'nowrap',
+                              }}
+                              title="Click to toggle 3-Way Match status"
+                            >
+                              {inv.threeWayMatch === 'MATCHED' ? '✅ MATCHED' : '⚠️ DISCREPANCY'}
+                            </button>
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <button
+                              type="button"
+                              className="cpv-row-delete-btn"
+                              onClick={() => handleRemoveInvoice(inv.id)}
+                              title="Remove invoice row"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td colSpan={6} style={{ padding: '12px 14px' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleAddCustomInvoice()}
+                            style={{
+                              background: 'rgba(10, 110, 209, 0.1)',
+                              border: '1px solid rgba(10, 110, 209, 0.3)',
+                              color: 'var(--primary-500, #0a6ed1)',
+                              padding: '6px 14px',
+                              borderRadius: 6,
+                              fontSize: 12,
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                            }}
+                          >
+                            <Plus size={14} /> Add Another Invoice
+                          </button>
+                        </td>
+                        <td style={{ textAlign: 'right', padding: '12px 14px', fontWeight: 700, fontSize: 14 }}>
+                          {formatAmount(
+                            vendorInvoices.filter((i) => i.selected).reduce((sum, i) => sum + (i.paymentAmount || 0), 0),
+                            currency
+                          )}
+                        </td>
+                        <td colSpan={2}></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Invoice Table — shown when AUTO_FILL mode is selected */}
+          {invoiceEntryMode === 'AUTO_FILL' && (
           <>
           {loadingInvoices ? (
             <div style={{ padding: '16px' }}>
@@ -1869,18 +2164,7 @@ export default function CreatePaymentVoucherPage() {
             <div>
               {vendorInvoices.length === 0 ? (
                 <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '14px' }}>
-                  <p>{invoiceEntryMode === 'AUTO_FILL'
-                    ? (selectedVendorId ? 'No open database invoices found for this supplier.' : 'Select a supplier above to auto-load invoices.')
-                    : 'Click "Add Invoice Line" above to add a row.'}</p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleAddCustomInvoice}
-                    className="mt-3 gap-1.5"
-                  >
-                    <Plus size={14} /> Add Invoice Line
-                  </Button>
+                  <p>{selectedVendorId ? 'No open database invoices found for this supplier.' : 'Select a supplier above to auto-load invoices.'}</p>
                 </div>
               ) : (
                 <div className="cpv-inv-table-wrap">
@@ -1984,26 +2268,16 @@ export default function CreatePaymentVoucherPage() {
                   </table>
                 </div>
               )}
-              <div className="p-3 border-t border-border/60 bg-muted/20">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleAddCustomInvoice}
-                  className="gap-1.5 text-xs text-primary font-semibold hover:bg-primary/10"
-                >
-                  <Plus size={14} /> Add Another Invoice Line
-                </Button>
-              </div>
             </div>
           )}
           </>
           )}
         </div>
 
-        {/* Section 03: Automated 3-Way Multi-Match Verification Engine */}
-        {(() => {
+        {/* Section 03: Automated 3-Way Multi-Match Verification Engine (only for AUTO_FILL mode with selected invoices) */}
+        {invoiceEntryMode === 'AUTO_FILL' && (() => {
           const selectedInvs = vendorInvoices.filter((i) => i.selected);
+          if (selectedInvs.length === 0) return null;
           const billedTotal = selectedInvs.reduce((sum, i) => sum + (i.paymentAmount || 0), 0);
 
           // Build unified reconciled items from selected invoices

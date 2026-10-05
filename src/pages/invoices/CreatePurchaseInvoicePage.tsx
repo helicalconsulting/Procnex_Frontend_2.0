@@ -1324,9 +1324,10 @@ export default function CreatePurchaseInvoicePage() {
                         const isSelected = selectedInvoiceIds.includes(invIdStr);
                         const statusKey = (inv.status || 'DRAFT').toUpperCase();
                         const isDraft = statusKey === 'DRAFT' || statusKey === 'REGISTERED';
-                        const isApproved = statusKey === 'APPROVED' || statusKey === 'PAID';
+                        const isApproved = statusKey === 'APPROVED' || statusKey === 'PAID' || statusKey === 'COMPLETED' || statusKey === 'POSTED';
                         const isRejected = statusKey === 'REJECTED' || statusKey === 'CANCELLED';
-                        const isReturned = statusKey === 'RETURNED';
+                        const isReturned = statusKey.includes('RETURN') || statusKey.includes('REVIEW') || statusKey === 'CHANGES_REQUESTED';
+                        const isEditable = isDraft || isReturned || isRejected;
 
                         const tone =
                           isApproved
@@ -1400,18 +1401,20 @@ export default function CreatePurchaseInvoicePage() {
                                 >
                                   <Eye size={15} />
                                 </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  onClick={() => {
-                                    if (inv.poNumber) setSelectedPoId(inv.poNumber);
-                                    setCreationMode('linked');
-                                    setIsCreating(true);
-                                  }}
-                                  title="Edit Invoice Entry"
-                                >
-                                  <Pencil size={15} />
-                                </Button>
+                                {isEditable && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    onClick={() => {
+                                      if (inv.poNumber) setSelectedPoId(inv.poNumber);
+                                      setCreationMode('linked');
+                                      setIsCreating(true);
+                                    }}
+                                    title="Edit Invoice Entry"
+                                  >
+                                    <Pencil size={15} />
+                                  </Button>
+                                )}
                                 <Button
                                   variant="ghost"
                                   size="icon-sm"

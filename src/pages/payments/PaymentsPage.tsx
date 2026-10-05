@@ -611,13 +611,22 @@ export default function PaymentsPage() {
     const seen = new Set<string>();
     return list.filter((p) => {
       // Role-based visibility for sequential multi-level approval:
-      // If payment is PENDING (awaiting approval) and current user is not Admin:
-      // Hide from user if it is NOT currently their turn (canAct is false) AND they have NOT approved an earlier level (hasApprovedPriorLevel is false)
+      // Show ALL vouchers to:
+      //   - Admins always
+      //   - Any user with payment approval permission (canApprovePayment) — they are part of the workflow
+      //   - Non-admin users who canAct on the voucher (their turn)
+      //   - Non-admin users who have already approved a prior level
+      // Only hide PENDING vouchers from users who have NO connection whatsoever to the approval chain.
+      // NOTE: After Approver 1 (L1) approves, the voucher remains PENDING (for L2). Approver 1 should
+      //       still see it. Using canApprovePayment as the gate ensures all approvers always see all vouchers.
       if (!isAdmin && p.status === 'PENDING') {
-        const isActionableForMe = Boolean(p.canAct);
-        const didIApprovePrior = Boolean(p.hasApprovedPriorLevel);
-        if (!isActionableForMe && !didIApprovePrior) {
-          return false;
+        const hasApprovalPermission = Boolean(canApprovePayment);
+        if (!hasApprovalPermission) {
+          const isActionableForMe = Boolean(p.canAct);
+          const didIApprovePrior = Boolean(p.hasApprovedPriorLevel);
+          if (!isActionableForMe && !didIApprovePrior) {
+            return false;
+          }
         }
       }
 
@@ -628,7 +637,7 @@ export default function PaymentsPage() {
       seen.add(key);
       return true;
     });
-  }, [paymentsList, pendingActions, isAdmin]);
+  }, [paymentsList, pendingActions, isAdmin, canApprovePayment]);
 
   const summary = useMemo(
     () => ({
