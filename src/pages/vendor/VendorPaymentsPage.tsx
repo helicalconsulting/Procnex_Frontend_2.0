@@ -825,154 +825,159 @@ export default function VendorPaymentsPage() {
 
       {/* MODAL: RECORD PAYMENT RECEIVED */}
       <Dialog open={isRecordModalOpen} onOpenChange={setIsRecordModalOpen}>
-        <DialogContent className="max-w-xl sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <span className="grid size-9 place-items-center rounded-lg bg-primary/10 text-primary">
-                <CreditCard className="size-5" />
-              </span>
-              <span>Record Payment Received</span>
-            </DialogTitle>
-            <DialogDescription>
-              Manually register a payment received in your bank account against an invoice to keep your balance updated.
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-2xl sm:max-w-3xl p-0 gap-0 overflow-hidden flex flex-col">
+          {/* SAP-style header bar */}
+          <div className="flex items-center gap-3 px-6 py-4 border-b border-border/70 bg-muted/30">
+            <span className="grid size-9 place-items-center rounded-md bg-primary/10 text-primary shrink-0">
+              <CreditCard className="size-5" />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold text-foreground leading-tight">Record Payment Received</h2>
+              <p className="text-xs text-muted-foreground leading-tight mt-0.5">Register a received payment against an invoice</p>
+            </div>
+          </div>
 
-          <form onSubmit={handleSavePayment} className="space-y-4 pt-2">
-            {errorMsg && (
-              <div className="rounded-lg bg-destructive/10 p-3 text-xs text-destructive flex items-center gap-2">
-                <AlertTriangle className="size-4 shrink-0" />
-                <span>{errorMsg}</span>
-              </div>
-            )}
+          <form onSubmit={handleSavePayment} className="flex flex-col min-h-0">
+            <div className="px-6 py-6 space-y-6 overflow-y-auto max-h-[calc(100svh-200px)]">
+              {errorMsg && (
+                <div className="rounded-md bg-destructive/10 px-3 py-2.5 text-sm text-destructive flex items-center gap-2 border border-destructive/20">
+                  <AlertTriangle className="size-4 shrink-0" />
+                  <span>{errorMsg}</span>
+                </div>
+              )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Invoice Selection */}
-              <div className="space-y-1.5 sm:col-span-2">
-                <label className="text-xs font-semibold text-foreground flex items-center justify-between">
-                  <span>Target Invoice *</span>
-                  {formData.invoiceNumber && (
-                    <span className="text-[11px] text-muted-foreground font-normal">
-                      Outstanding:{' '}
-                      <strong>
-                        {amount(
-                          invoiceStatsMap.get(formData.invoiceNumber)?.balance ?? 0
-                        )}
-                      </strong>
-                    </span>
+              {/* Section: Invoice Reference */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Invoice Reference</span>
+                  <div className="flex-1 h-px bg-border/60" />
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-foreground">Target Invoice <span className="text-destructive">*</span></label>
+                    {formData.invoiceNumber && (
+                      <span className="text-xs text-muted-foreground">
+                        Outstanding: <span className="font-semibold text-foreground">{amount(invoiceStatsMap.get(formData.invoiceNumber)?.balance ?? 0)}</span>
+                      </span>
+                    )}
+                  </div>
+                  {(invoices || []).length > 0 ? (
+                    <select
+                      className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                      value={formData.invoiceNumber}
+                      onChange={(e) => handleInvoiceSelectChange(e.target.value)}
+                      required
+                    >
+                      <option value="">— Select Invoice —</option>
+                      {(invoices || []).map((inv) => {
+                        const stats = invoiceStatsMap.get(inv.invoiceNumber);
+                        const bal = stats ? stats.balance : inv.totalAmount || 0;
+                        return (
+                          <option key={inv.id || inv.invoiceNumber} value={inv.invoiceNumber}>
+                            {inv.invoiceNumber} | PO: {inv.poNumber} | Total: {amount(inv.totalAmount || 0)} | Due: {amount(bal)}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  ) : (
+                    <Input
+                      placeholder="Enter Invoice Number (e.g. INV-2026-001)"
+                      value={formData.invoiceNumber}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, invoiceNumber: e.target.value }))}
+                      required
+                      className="h-9"
+                    />
                   )}
-                </label>
-                {(invoices || []).length > 0 ? (
-                  <select
-                    className="w-full h-10 rounded-xl border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                    value={formData.invoiceNumber}
-                    onChange={(e) => handleInvoiceSelectChange(e.target.value)}
-                    required
-                  >
-                    <option value="">-- Select an Invoice --</option>
-                    {(invoices || []).map((inv) => {
-                      const stats = invoiceStatsMap.get(inv.invoiceNumber);
-                      const bal = stats ? stats.balance : inv.totalAmount || 0;
-                      return (
-                        <option key={inv.id || inv.invoiceNumber} value={inv.invoiceNumber}>
-                          {inv.invoiceNumber} | PO: {inv.poNumber} | Total: {amount(inv.totalAmount || 0)} | Due: {amount(bal)}
-                        </option>
-                      );
-                    })}
-                  </select>
-                ) : (
-                  <Input
-                    placeholder="Enter Invoice Number (e.g. INV-2026-001)"
-                    value={formData.invoiceNumber}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, invoiceNumber: e.target.value }))
-                    }
-                    required
-                  />
-                )}
-              </div>
-
-              {/* Amount Received */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-foreground">
-                  Payment Amount Received ({displayCurrency}) *
-                </label>
-                <div className="relative">
-                  <Input
-                    type="number"
-                    step="any"
-                    min="0.01"
-                    placeholder="0.00"
-                    value={formData.amount}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, amount: e.target.value }))}
-                    className="pl-8 font-semibold"
-                    required
-                  />
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">
-                    {displayCurrency === 'INR' ? '₹' : displayCurrency === 'USD' ? '$' : 'K'}
-                  </span>
                 </div>
               </div>
 
-              {/* Payment Date */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-foreground">Payment Date *</label>
-                <Input
-                  type="date"
-                  value={formData.paymentDate ? String(formData.paymentDate).slice(0, 10) : ''}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, paymentDate: e.target.value }))}
-                  required
-                />
+              {/* Section: Payment Details */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Payment Details</span>
+                  <div className="flex-1 h-px bg-border/60" />
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+                  {/* Amount + Currency Selector */}
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-foreground">Amount <span className="text-destructive">*</span></label>
+                    <div className="flex h-10 rounded-md border border-input bg-background overflow-hidden focus-within:ring-2 focus-within:ring-primary/50 focus-within:border-primary transition-all">
+                      <div className="shrink-0 border-r border-input">
+                        <CurrencySelector
+                          value={displayCurrency}
+                          onChange={setDisplayCurrency}
+                          size="sm"
+                        />
+                      </div>
+                      <input
+                        type="number"
+                        step="any"
+                        min="0.01"
+                        placeholder="0.00"
+                        value={formData.amount}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, amount: e.target.value }))}
+                        className="flex-1 min-w-0 px-3 text-sm font-semibold text-foreground bg-transparent outline-none placeholder:text-muted-foreground"
+                        required
+                      />
+                    </div>
+                  </div>
+                  {/* Date */}
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-foreground">Payment Date <span className="text-destructive">*</span></label>
+                    <Input
+                      type="date"
+                      value={formData.paymentDate ? String(formData.paymentDate).slice(0, 10) : ''}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, paymentDate: e.target.value }))}
+                      className="h-10 text-sm"
+                      required
+                    />
+                  </div>
+                  {/* Method */}
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-foreground">Payment Mode <span className="text-destructive">*</span></label>
+                    <select
+                      className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                      value={formData.method}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, method: e.target.value }))}
+                    >
+                      {PAYMENT_METHODS.map((m) => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {/* UTR */}
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-foreground">UTR / Txn ID / Cheque No.</label>
+                    <Input
+                      placeholder="e.g. UTR19283746592"
+                      value={formData.referenceNumber}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, referenceNumber: e.target.value }))}
+                      className="h-10 text-sm"
+                    />
+                  </div>
+                  {/* Bank */}
+                  <div className="space-y-1.5 col-span-2">
+                    <label className="text-sm font-medium text-foreground">
+                      Receiving Bank / Account{' '}
+                      <span className="text-muted-foreground font-normal text-xs">(Optional)</span>
+                    </label>
+                    <Input
+                      placeholder="e.g. HDFC Bank - A/C No. ****4829"
+                      value={formData.bankAccount}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, bankAccount: e.target.value }))}
+                      className="h-10 text-sm"
+                    />
+                  </div>
+                </div>
               </div>
 
-              {/* Payment Method */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-foreground">Payment Mode / Channel *</label>
-                <select
-                  className="w-full h-10 rounded-xl border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  value={formData.method}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, method: e.target.value }))}
-                >
-                  {PAYMENT_METHODS.map((m) => (
-                    <option key={m.value} value={m.value}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Transaction / UTR Ref */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-foreground">
-                  UTR / Transaction ID / Cheque No.
-                </label>
-                <Input
-                  placeholder="e.g. UTR19283746592 or CHQ-0045"
-                  value={formData.referenceNumber}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, referenceNumber: e.target.value }))
-                  }
-                />
-              </div>
-
-              {/* Receiving Bank / Account */}
-              <div className="space-y-1.5 sm:col-span-2">
-                <label className="text-xs font-semibold text-foreground">
-                  Receiving Bank / Account Details (Optional)
-                </label>
-                <Input
-                  placeholder="e.g. HDFC Bank - A/C No. ****4829 or State Bank of India"
-                  value={formData.bankAccount}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, bankAccount: e.target.value }))
-                  }
-                />
-              </div>
-
-              {/* Settlement Status */}
-              <div className="space-y-1.5 sm:col-span-2">
-                <label className="text-xs font-semibold text-foreground">Payment Status</label>
-                <div className="grid grid-cols-3 gap-2">
+              {/* Section: Settlement Status */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Settlement Status</span>
+                  <div className="flex-1 h-px bg-border/60" />
+                </div>
+                <div className="grid grid-cols-3 gap-3">
                   {[
                     { id: 'RECEIVED', label: 'Payment Received', desc: 'Credited to account' },
                     { id: 'CLEARED', label: 'Cleared in Bank', desc: 'Cheque/Txn cleared' },
@@ -983,43 +988,44 @@ export default function VendorPaymentsPage() {
                       type="button"
                       onClick={() => setFormData((prev) => ({ ...prev, status: s.id }))}
                       className={cn(
-                        'flex flex-col text-left p-2.5 rounded-xl border text-xs transition-all',
+                        'flex flex-col text-left px-3.5 py-3 rounded-md border transition-all',
                         formData.status === s.id
-                          ? 'border-primary bg-primary/10 ring-1 ring-primary'
-                          : 'border-border/70 hover:bg-secondary/40'
+                          ? 'border-primary/60 bg-primary/8 ring-1 ring-primary/30'
+                          : 'border-border hover:bg-muted/50'
                       )}
                     >
-                      <span className="font-semibold text-foreground">{s.label}</span>
-                      <span className="text-[10px] text-muted-foreground mt-0.5">{s.desc}</span>
+                      <span className={cn('font-semibold text-sm leading-snug', formData.status === s.id ? 'text-primary' : 'text-foreground')}>{s.label}</span>
+                      <span className="text-xs text-muted-foreground mt-1 leading-tight">{s.desc}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Remarks / Comments */}
-              <div className="space-y-1.5 sm:col-span-2">
-                <label className="text-xs font-semibold text-foreground">Remarks / Notes</label>
+              {/* Remarks */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">Remarks / Notes</label>
                 <Textarea
                   rows={2}
-                  placeholder="Add any additional payment verification details or notes..."
+                  placeholder="Add any payment verification details or notes..."
                   value={formData.comments}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, comments: e.target.value }))
-                  }
+                  onChange={(e) => setFormData((prev) => ({ ...prev, comments: e.target.value }))}
+                  className="resize-none text-sm"
                 />
               </div>
             </div>
 
-            <DialogFooter className="pt-3 border-t border-border/70">
+            {/* SAP-style footer */}
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border/70 bg-muted/20">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setIsRecordModalOpen(false)}
                 disabled={submitting}
+                className="min-w-24 h-10"
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={submitting} className="gap-1.5 bg-primary">
+              <Button type="submit" disabled={submitting} className="gap-2 min-w-44 h-10">
                 {submitting ? (
                   <span>Recording...</span>
                 ) : (
@@ -1028,7 +1034,7 @@ export default function VendorPaymentsPage() {
                   </>
                 )}
               </Button>
-            </DialogFooter>
+            </div>
           </form>
         </DialogContent>
       </Dialog>

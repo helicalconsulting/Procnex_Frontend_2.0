@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Printer, Download, X, CheckCircle2, ShieldCheck, Landmark, Building2, AlertCircle, Clock, Paperclip, Eye, FileText } from 'lucide-react';
+import { Printer, Download, X, CheckCircle2, ShieldCheck, Landmark, Building2, AlertCircle, Clock } from 'lucide-react';
 import { useCurrency } from '../shared/CurrencyMaster';
 import { useBranding } from '../../context/BrandingContext';
 import { signatureService } from '../../services/signatureService';
 import { printElementInIframe } from '../../utils/pdfDownload';
-import InvoiceDocumentViewerModal, { type DocumentAttachment } from '../invoices/InvoiceDocumentViewerModal';
+import type { DocumentAttachment } from '../invoices/InvoiceDocumentViewerModal';
 import procnexLogo from '../../assets/procnex.png';
 import defaultHeliflowLogo from '../../assets/heliflow.png';
 import './BankPaymentVoucherModal.css';
@@ -61,6 +61,112 @@ export interface PaymentVoucherDocData {
   }[];
 }
 
+function resolveApproversSynchronously(data: PaymentVoucherDocData): any[] {
+  if (data.approvers && data.approvers.length > 0) {
+    return data.approvers;
+  }
+
+  const pNo = String(data.voucherNumber || '').trim();
+  const invRef = String(data.invoiceRef || '').trim();
+  const invClean = invRef.includes('|') ? invRef.split('|')[0]?.trim() : invRef;
+
+  // 1. Gather all local doc signatures synchronously
+  const docSigs: any[] = [];
+  const savedSigs: any[] = [];
+
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      if (key.startsWith('heliflow_doc_signatures')) {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) docSigs.push(...parsed);
+        }
+      } else if (key.startsWith('heliflow_signatures') || key === 'signatures') {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) savedSigs.push(...parsed);
+        }
+      }
+    }
+  } catch {}
+
+  const signerMap = new Map<string, any>();
+  for (const s of docSigs) {
+    const sigUrl = s.dataUrl || s.signature?.dataUrl;
+    const refId = String(s.referenceId || '').trim();
+    const isMatchingRef =
+      (pNo && (refId === pNo || pNo.includes(refId) || refId.includes(pNo))) ||
+      (invClean && (refId === invClean || invClean.includes(refId) || refId.includes(invClean))) ||
+      (invRef && (refId === invRef || invRef.includes(refId) || refId.includes(invRef)));
+
+    if (!isMatchingRef) continue;
+
+    const signerKey = s.signedById ? String(s.signedById) : (sigUrl || s.signatureId || s.id || String(s.levelNumber));
+    if (!signerKey) continue;
+    if (!signerMap.has(signerKey) || (!signerMap.get(signerKey).dataUrl && sigUrl)) {
+      signerMap.set(signerKey, s);
+    }
+  }
+
+  const uniqueDocSigs = Array.from(signerMap.values()).sort((a: any, b: any) => {
+    const levA = Number(a.levelNumber) || 0;
+    const levB = Number(b.levelNumber) || 0;
+    if (levA && levB) return levA - levB;
+    const timeA = a.signedAt ? new Date(a.signedAt).getTime() : 0;
+    const timeB = b.signedAt ? new Date(b.signedAt).getTime() : 0;
+    return timeA - timeB;
+  });
+
+  const defaultSigUrl = savedSigs.find((s) => s.isDefault)?.dataUrl || savedSigs[0]?.dataUrl;
+
+  const getSigForLevel = (lvlNum: number, approverName?: string | null) => {
+    const match =
+      uniqueDocSigs.find((d: any) => Number(d.levelNumber) === Number(lvlNum)) ||
+      uniqueDocSigs.find((d: any) => Number(d.levelNumber || d.level) === Number(lvlNum));
+    if (match) return match.dataUrl || match.signature?.dataUrl;
+
+    if (approverName && approverName !== '—' && !approverName.toLowerCase().includes('pending') && !approverName.toLowerCase().includes('purchase clerk')) {
+      const cleanName = approverName.toLowerCase().trim();
+      const byName = uniqueDocSigs.find((d: any) => {
+        const sName = (d.signedBy?.fullName || d.signedByName || d.signature?.name || '').toLowerCase().trim();
+        return sName && (sName === cleanName || sName.includes(cleanName) || cleanName.includes(sName));
+      });
+      if (byName) return byName.dataUrl || byName.signature?.dataUrl;
+    }
+
+    return undefined;
+  };
+
+  const l1ApproverName = (data as any).approvedBy && (data as any).approvedBy !== '—' ? (data as any).approvedBy : 'Purchase Manager';
+  const sigL1 = getSigForLevel(1, l1ApproverName) || (uniqueDocSigs.length === 0 ? defaultSigUrl : uniqueDocSigs[0]?.dataUrl || defaultSigUrl);
+  const sigL2 = getSigForLevel(2, 'Purchase Clerk') || (uniqueDocSigs.length > 1 ? uniqueDocSigs[1]?.dataUrl : undefined);
+
+  return [
+    {
+      level: 'Level 1',
+      name: l1ApproverName,
+      role: 'Purchase Manager',
+      date: data.voucherDate,
+      status: 'APPROVED' as const,
+      comments: 'Approved & Digitally Signed',
+      signatureUrl: sigL1,
+    },
+    {
+      level: 'Level 2',
+      name: 'Purchase Clerk',
+      role: 'Purchase Clerk',
+      date: data.voucherDate,
+      status: sigL2 ? ('APPROVED' as const) : ('PENDING' as const),
+      comments: sigL2 ? 'Approved & Digitally Signed' : 'Awaiting Level 2 Approval',
+      signatureUrl: sigL2,
+    },
+  ];
+}
+
 interface BankPaymentVoucherModalProps {
   data: PaymentVoucherDocData;
   onClose: () => void;
@@ -96,40 +202,15 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
     }
   };
 
-  const [approversList, setApproversList] = useState<any[]>(data.approvers || []);
-  const [resolvedAttachments, setResolvedAttachments] = useState<DocumentAttachment[]>([]);
-  const [viewDocModalOpen, setViewDocModalOpen] = useState<boolean>(false);
-  const [activeDocIndex, setActiveDocIndex] = useState<number>(0);
+  // Instant synchronous initialization (0ms delay)
+  const [approversList, setApproversList] = useState<any[]>(() => resolveApproversSynchronously(data));
 
   useEffect(() => {
-    let list: DocumentAttachment[] = [];
-    if (data.attachments && data.attachments.length > 0) {
-      list = [...data.attachments];
-    } else {
-      const keys = [
-        data.voucherNumber ? `payment_attachments_${data.voucherNumber}` : null,
-        data.invoiceRef ? `invoice_attachments_${data.invoiceRef}` : null,
-        data.invoiceRef ? `invoice_attachments_${data.invoiceRef.split('|')[0]?.trim()}` : null,
-      ].filter(Boolean) as string[];
-      for (const k of keys) {
-        try {
-          const saved = localStorage.getItem(k);
-          if (saved) {
-            const parsed = JSON.parse(saved);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              list = parsed;
-              break;
-            }
-          }
-        } catch {}
-      }
-    }
-    setResolvedAttachments(list);
-  }, [data.attachments, data.voucherNumber, data.invoiceRef]);
+    // Instant synchronous set on every render / data change
+    const syncApprovers = resolveApproversSynchronously(data);
+    setApproversList(syncApprovers);
 
-  useEffect(() => {
     if (data.approvers && data.approvers.length > 0) {
-      setApproversList(data.approvers);
       return;
     }
     let isMounted = true;
@@ -184,8 +265,8 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
         };
 
         const l1ApproverName = (data as any).approvedBy && (data as any).approvedBy !== '—' ? (data as any).approvedBy : 'Purchase Manager';
-        const sigL1 = getSigForLevel(1, l1ApproverName) || (uniqueDocSigs.length === 0 ? defaultSigUrl : undefined);
-        const sigL2 = getSigForLevel(2, 'Purchase Clerk');
+        const sigL1 = getSigForLevel(1, l1ApproverName) || (uniqueDocSigs.length === 0 ? defaultSigUrl : uniqueDocSigs[0]?.dataUrl || defaultSigUrl);
+        const sigL2 = getSigForLevel(2, 'Purchase Clerk') || (uniqueDocSigs.length > 1 ? uniqueDocSigs[1]?.dataUrl : undefined);
 
         setApproversList([
           {
@@ -218,10 +299,7 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
   }, [data]);
 
   const defaultApprovers = useMemo(() => {
-    const list = approversList.length > 0 ? approversList : [
-      { level: 'Level 1', name: 'Purchase Manager', role: 'Purchase Manager', date: data.voucherDate, status: 'APPROVED' as const, comments: 'Approved & Digitally Signed' },
-      { level: 'Level 2', name: 'Purchase Clerk', role: 'Purchase Clerk', date: data.voucherDate, status: 'PENDING' as const, comments: 'Awaiting Level 2 Approval' },
-    ];
+    const list = approversList.length > 0 ? approversList : resolveApproversSynchronously(data);
 
     // Deduplicate by level to ensure only distinct levels (Level 1, Level 2) are displayed
     const seen = new Set<string>();
@@ -231,7 +309,7 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
       seen.add(key);
       return true;
     });
-  }, [approversList, data.voucherDate]);
+  }, [approversList, data]);
 
   const displayItems: PaymentVoucherItem[] = (data.items && data.items.length > 0)
     ? data.items
@@ -278,30 +356,6 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
             </span>
           </div>
           <div className="bpv-modal__topbar-actions">
-            {resolvedAttachments.length > 0 && (
-              <button
-                className="bpv-btn"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  background: '#f1f5f9',
-                  color: '#1e293b',
-                  border: '1px solid #cbd5e1',
-                  fontWeight: 600,
-                  padding: '8px 14px',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                }}
-                onClick={() => {
-                  setActiveDocIndex(0);
-                  setViewDocModalOpen(true);
-                }}
-              >
-                <Paperclip size={15} style={{ color: '#2563eb' }} />
-                <span>View Attachments ({resolvedAttachments.length})</span>
-              </button>
-            )}
             <button className="bpv-btn bpv-btn--primary" onClick={handlePrint}>
               <Printer size={16} /> Print / Save PDF for Bank
             </button>
@@ -566,85 +620,9 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
             </div>
           </div>
 
-          {/* Section 4: Attached Documents & Bank Advice (if any) */}
-          {resolvedAttachments.length > 0 && (
-            <div className="bpv-section" style={{ marginTop: 18 }}>
-              <div className="bpv-section__title">
-                <Paperclip size={15} /> ATTACHED DOCUMENTS & BANK ADVICE ({resolvedAttachments.length})
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10, marginTop: 10 }}>
-                {resolvedAttachments.map((att, idx) => (
-                  <div
-                    key={att.id || idx}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '10px 14px',
-                      borderRadius: '8px',
-                      border: '1px solid #e2e8f0',
-                      background: '#f8fafc',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                      <FileText size={18} style={{ color: '#2563eb', flexShrink: 0 }} />
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 125 }} title={att.name}>
-                          {att.name}
-                        </div>
-                        {att.size && <div style={{ fontSize: 11, color: '#64748b' }}>{att.size}</div>}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveDocIndex(idx);
-                        setViewDocModalOpen(true);
-                      }}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 4,
-                        padding: '4px 8px',
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: '#2563eb',
-                        background: '#eff6ff',
-                        border: '1px solid #bfdbfe',
-                        borderRadius: 6,
-                        cursor: 'pointer',
-                        flexShrink: 0,
-                      }}
-                      title="Preview Document"
-                    >
-                      <Eye size={13} /> View
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* End of Printable Document Sheet */}
         </div>
       </div>
-
-      {/* Invoice & Payment Document Viewer Modal */}
-      {viewDocModalOpen && (
-        <InvoiceDocumentViewerModal
-          open={viewDocModalOpen}
-          onClose={() => setViewDocModalOpen(false)}
-          invoice={{
-            paymentNumber: data.voucherNumber,
-            invoiceNumber: data.invoiceRef,
-            vendorName: data.vendorName,
-            amount: data.netAmount,
-            currency: data.currency,
-          }}
-          attachments={resolvedAttachments}
-          initialDocIndex={activeDocIndex}
-        />
-      )}
     </div>
   );
 }
