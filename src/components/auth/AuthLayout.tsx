@@ -46,7 +46,7 @@ export function AuthLayout({
         <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(circle_at_78%_18%,rgba(74,144,226,0.16),transparent_32%),radial-gradient(circle_at_18%_88%,rgba(45,212,191,0.08),transparent_30%)]" />
 
         <div className="relative z-10 flex items-center gap-3.5">
-          <img src={logoUrl || heliflowLogo} alt="" className="size-12 rounded-xl object-contain ring-1 ring-white/15" />
+          <img src={logoUrl || heliflowLogo} alt="" crossOrigin="anonymous" referrerPolicy="no-referrer" className="size-12 rounded-xl object-contain ring-1 ring-white/15" />
           <span className="text-2xl font-bold tracking-[-0.035em] text-white">{companyName}</span>
         </div>
 
@@ -98,7 +98,7 @@ export function AuthLayout({
 
         <div className="relative z-[1] w-full max-w-[440px]">
           <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <img src={logoUrl || heliflowLogo} alt="" className="size-11 rounded-xl object-contain ring-1 ring-border" />
+            <img src={logoUrl || heliflowLogo} alt="" crossOrigin="anonymous" referrerPolicy="no-referrer" className="size-11 rounded-xl object-contain ring-1 ring-border" />
             <span className="text-2xl font-bold tracking-[-0.035em] text-foreground">{companyName}</span>
           </div>
 

@@ -89,6 +89,7 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   'My Payments': <CreditCard size={19} />,
   Agreements: <FileSignature size={19} />,
   'My Profile': <UserCircle size={19} />,
+  'My Signature': <PenLine size={19} />,
   'Custom Form Builder': <FormInput size={19} />,
   Forms: <ClipboardList size={19} />,
   'Form Responses': <BarChart3 size={19} />,
@@ -122,6 +123,7 @@ const FR_NAV_MAP: Record<string, string> = {
   'Approval Levels': "Niveaux d'approbation",
   'Purchase Requisitions': "Demandes d'achat",
   Signature: 'Signature numérique',
+  'My Signature': 'Signature numérique',
   Forms: 'Formulaires',
   'My Profile': 'Mon profil',
 };
@@ -256,6 +258,9 @@ export default function Sidebar({
         ...menuItems
           .filter((item) => item.id === 'vendor-profile')
           .map((item) => ({ label: item.label, icon: ICON_MAP[item.label] || <UserCircle size={19} />, path: item.path })),
+        ...menuItems
+          .filter((item) => item.id === 'vendor-signature')
+          .map((item) => ({ label: item.label, icon: ICON_MAP[item.label] || <PenLine size={19} />, path: item.path })),
       ],
     },
     {
@@ -342,6 +347,8 @@ export default function Sidebar({
           <img
             src={logoUrl || heliflowLogo}
             alt={companyName}
+            crossOrigin="anonymous"
+            referrerPolicy="no-referrer"
             className="h-9 w-9 shrink-0 rounded-xl object-contain ring-1 ring-white/10"
           />
           <span

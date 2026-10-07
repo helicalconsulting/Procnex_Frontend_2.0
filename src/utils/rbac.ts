@@ -346,6 +346,12 @@ export const VENDOR_NAVIGATION_MENU: MenuItem[] = [
     path: '/vendor/profile',
     roles: [RoleName.VENDOR],
   },
+  {
+    id: 'vendor-signature',
+    label: 'My Signature',
+    path: '/vendor/signature',
+    roles: [RoleName.VENDOR],
+  },
 ];
 
 // ─── Permission Check Functions ─────────────────────────────

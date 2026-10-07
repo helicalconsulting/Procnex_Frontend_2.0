@@ -603,6 +603,27 @@
   background: var(--surface-card);
 }
 
+.pr-field--error label {
+  color: #ef4444 !important;
+}
+
+.pr-field--error input,
+.pr-field--error select,
+.pr-field--error textarea {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15) !important;
+  background: rgba(239, 68, 68, 0.04) !important;
+}
+
+.pr-field__error-msg {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #ef4444;
+  margin-top: 2px;
+  line-height: 1.3;
+}
+
 .pr-field select,
 .pr-select {
   appearance: none;

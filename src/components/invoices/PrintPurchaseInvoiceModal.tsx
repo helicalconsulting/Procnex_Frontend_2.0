@@ -5,10 +5,29 @@ import { useCurrency } from '../shared/CurrencyMaster';
 import { useBranding } from '../../context/BrandingContext';
 import { approvalService } from '../../services/approvalService';
 import { signatureService } from '../../services/signatureService';
+import { purchaseOrderService } from '../../services/purchaseOrderService';
+import { invoiceService } from '../../services/invoiceService';
 import { printElementInIframe } from '../../utils/pdfDownload';
 import procnexLogo from '../../assets/procnex.png';
 import defaultHeliflowLogo from '../../assets/heliflow.png';
 import './PrintPurchaseInvoiceModal.css';
+
+export interface InvoiceLineItem {
+  id?: number | string;
+  itemCode?: string;
+  itemName?: string;
+  name?: string;
+  description?: string;
+  quantity?: number;
+  qty?: number;
+  unit?: string;
+  unitPrice?: number;
+  rate?: number;
+  totalPrice?: number;
+  amount?: number;
+  poNumber?: string;
+  department?: string;
+}
 
 export interface PurchaseInvoicePrintData {
   id?: number | string;
@@ -27,6 +46,10 @@ export interface PurchaseInvoicePrintData {
   currentLevel?: number;
   totalLevels?: number;
   requiredRole?: string;
+  items?: InvoiceLineItem[];
+  lineItems?: InvoiceLineItem[];
+  purchaseOrder?: any;
+  grn?: any;
   approvers?: {
     level: string;
     name: string;
@@ -44,6 +67,44 @@ interface PrintPurchaseInvoiceModalProps {
   onClose: () => void;
 }
 
+function normalizeInvoiceItems(rawList: any[], data: PurchaseInvoicePrintData): InvoiceLineItem[] {
+  if (!Array.isArray(rawList) || rawList.length === 0) return [];
+  return rawList.map((item: any, idx: number) => {
+    const qty = Math.max(1, Number(item.quantity || item.qty || item.orderedQty || 1));
+    let unitPrice = Number(item.unitPrice || item.rate || item.price || item.targetPrice || 0);
+    let totalPrice = Number(item.totalPrice || item.total || item.grossAmount || item.amount || 0);
+
+    if (!totalPrice && unitPrice) {
+      totalPrice = unitPrice * qty;
+    }
+    if (!unitPrice && totalPrice) {
+      unitPrice = Number((totalPrice / qty).toFixed(2));
+    }
+    if (!unitPrice && !totalPrice && data.amount > 0) {
+      const share = data.amount / rawList.length;
+      totalPrice = Number(share.toFixed(2));
+      unitPrice = Number((totalPrice / qty).toFixed(2));
+    }
+
+    const name = item.itemName || item.name || item.description || (item.title ? item.title : `Line Item ${idx + 1}`);
+    const code = item.itemCode || item.code || `ITM-${String(idx + 1).padStart(3, '0')}`;
+    const desc = item.description && item.description !== name ? item.description : '';
+
+    return {
+      id: item.id || idx + 1,
+      itemCode: code,
+      name,
+      description: desc,
+      quantity: qty,
+      unit: item.unit || 'Pcs',
+      unitPrice,
+      totalPrice,
+      poNumber: item.poNumber || data.poNumber || '—',
+      department: item.department || data.department || '—',
+    };
+  });
+}
+
 export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp, onClose }: PrintPurchaseInvoiceModalProps) {
   const data = dataProp || invoiceProp;
   if (!data) return null;
@@ -51,6 +112,14 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
   const { companyName, logoUrl, profile } = useBranding();
   const printableRef = useRef<HTMLDivElement>(null);
   const [approversList, setApproversList] = useState<any[]>(data.approvers || []);
+
+  const [itemsList, setItemsList] = useState<InvoiceLineItem[]>(() => {
+    const direct = data.items || data.lineItems || (data as any).purchaseOrder?.items || (data as any).purchaseOrder?.rfq?.items;
+    if (Array.isArray(direct) && direct.length > 0) {
+      return normalizeInvoiceItems(direct, data);
+    }
+    return [];
+  });
 
   const displayCompanyName = (data as any).companyName || profile?.companyName || companyName || 'Company';
   const companyAddress = (data as any).companyAddress
@@ -76,6 +145,71 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
   const statusLabel = data.status || 'PENDING';
   const isApproved = statusLabel === 'APPROVED' || statusLabel === 'PAID';
 
+  // 1. Asynchronously resolve items from PO / Invoice service / localStorage if not already provided
+  useEffect(() => {
+    let isMounted = true;
+    const resolveItems = async () => {
+      if (itemsList.length > 0) return;
+
+      // Check localStorage caches
+      try {
+        const keys = [
+          data.invoiceNumber ? `invoice_items_${data.invoiceNumber}` : null,
+          data.poNumber ? `po_items_${data.poNumber}` : null,
+        ].filter(Boolean) as string[];
+
+        for (const k of keys) {
+          const raw = localStorage.getItem(k);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              if (isMounted) setItemsList(normalizeInvoiceItems(parsed, data));
+              return;
+            }
+          }
+        }
+      } catch {}
+
+      // Fetch from PO / Invoice service
+      try {
+        const [poRes, invRes] = await Promise.all([
+          data.poNumber ? purchaseOrderService.list().catch(() => ({ orders: [] })) : Promise.resolve({ orders: [] }),
+          invoiceService.list().catch(() => []),
+        ]);
+        if (!isMounted) return;
+
+        // Check matching PO
+        if (data.poNumber && poRes?.orders) {
+          const matchedPO = poRes.orders.find((p: any) =>
+            p.poNumber === data.poNumber || String(p.id) === data.poNumber || (p.poNumber && data.poNumber.includes(p.poNumber))
+          );
+          if (matchedPO?.items && matchedPO.items.length > 0) {
+            setItemsList(normalizeInvoiceItems(matchedPO.items, data));
+            return;
+          }
+        }
+
+        // Check matching Invoice
+        if (invRes && Array.isArray(invRes)) {
+          const matchedInv = invRes.find((i: any) =>
+            i.invoiceNumber === data.invoiceNumber || String(i.id) === String(data.id)
+          );
+          const foundItems = matchedInv?.items || matchedInv?.lineItems || (matchedInv?.purchaseOrder as any)?.items || (matchedInv?.purchaseOrder as any)?.rfq?.items;
+          if (foundItems && Array.isArray(foundItems) && foundItems.length > 0) {
+            setItemsList(normalizeInvoiceItems(foundItems, data));
+            return;
+          }
+        }
+      } catch {}
+    };
+
+    resolveItems();
+    return () => {
+      isMounted = false;
+    };
+  }, [data.invoiceNumber, data.poNumber, data.id]);
+
+  // 2. Fetch and match approver chain & signatures
   useEffect(() => {
     if (data.approvers && data.approvers.length > 0) {
       setApproversList(data.approvers);
@@ -277,6 +411,28 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
     };
   }, [data, isApproved, statusLabel]);
 
+  const finalDisplayItems = itemsList.length > 0 ? itemsList : [
+    {
+      id: 1,
+      itemCode: 'ITM-001',
+      name: `Purchase Goods & Services — Invoice ${data.invoiceNumber}`,
+      description: `Supplied by ${data.vendorName} per Purchase Order agreement`,
+      quantity: 1,
+      unit: 'Lump Sum',
+      unitPrice: data.amount,
+      totalPrice: data.amount,
+      poNumber: data.poNumber || '—',
+      department: data.department || '—',
+    },
+  ];
+
+  const computedSubtotal = finalDisplayItems.reduce((acc, it) => acc + (Number(it.totalPrice) || 0), 0) || data.amount;
+  const totalInvoiceAmount = data.amount || computedSubtotal;
+  const computedTax = (data as any).taxAmount !== undefined
+    ? Number((data as any).taxAmount)
+    : (totalInvoiceAmount > computedSubtotal ? Number((totalInvoiceAmount - computedSubtotal).toFixed(2)) : 0);
+  const taxPercentage = computedSubtotal > 0 && computedTax > 0 ? Math.round((computedTax / computedSubtotal) * 100) : 0;
+
   const handlePrint = () => {
     if (printableRef.current) {
       printElementInIframe(printableRef.current, `Tax_Purchase_Invoice_${data.invoiceNumber}`);
@@ -317,6 +473,8 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
                   <img
                     src={finalLogoUrl}
                     alt={displayCompanyName}
+                    crossOrigin="anonymous"
+                    referrerPolicy="no-referrer"
                     style={{ maxHeight: 48, maxWidth: 200, objectFit: 'contain', marginBottom: 8, display: 'block' }}
                     onError={(e) => {
                       const img = e.currentTarget as HTMLImageElement;
@@ -409,55 +567,75 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
             </div>
           </div>
 
-
-          {/* Table Breakdown */}
-          <table className="ppi-sheet__items-table">
-            <thead>
-              <tr>
-                <th style={{ width: '40px' }}>#</th>
-                <th>Item / Description</th>
-                <th>PO Reference</th>
-                <th>Department</th>
-                <th style={{ textAlign: 'right' }}>Total Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>1</td>
-                <td>
-                  <strong>Purchase Goods & Services — Invoice {data.invoiceNumber}</strong>
-                  <br />
-                  <span style={{ fontSize: 12, color: '#64748b' }}>
-                    Supplied by {data.vendorName} per Purchase Order agreement
-                  </span>
-                </td>
-                <td>{data.poNumber || '—'}</td>
-                <td>{data.department || '—'}</td>
-                <td style={{ textAlign: 'right', fontWeight: 700 }}>
-                  {formatAmount(data.amount, companyDefaultCurrency)}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          {/* Table Breakdown - All items dynamically listed */}
+          <div className="ppi-sheet__table-wrap">
+            <table className="ppi-sheet__items-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '38px', textAlign: 'center' }}>#</th>
+                  <th>Item / Description</th>
+                  <th style={{ width: '135px' }}>PO Reference</th>
+                  <th style={{ width: '110px' }}>Department</th>
+                  <th style={{ textAlign: 'center', width: '65px' }}>Qty</th>
+                  <th style={{ textAlign: 'right', width: '110px' }}>Unit Rate</th>
+                  <th style={{ textAlign: 'right', width: '125px' }}>Total Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {finalDisplayItems.map((item, idx) => {
+                  const qty = item.quantity || 1;
+                  const unitRate = item.unitPrice || (item.totalPrice ? Math.round(item.totalPrice / qty) : computedSubtotal);
+                  const lineTotal = item.totalPrice || (qty * unitRate);
+                  return (
+                    <tr key={idx}>
+                      <td style={{ textAlign: 'center', color: '#64748b', fontSize: '12px' }}>{idx + 1}</td>
+                      <td>
+                        <strong style={{ color: '#0f172a' }}>{item.name || item.itemName || `Line Item ${idx + 1}`}</strong>
+                        {item.itemCode && <span className="ppi-item-code"> [{item.itemCode}]</span>}
+                        {item.description ? (
+                          <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '2px', lineHeight: 1.35 }}>
+                            {item.description}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td style={{ fontSize: '12.5px', color: '#334155' }}>{item.poNumber || data.poNumber || '—'}</td>
+                      <td style={{ fontSize: '12.5px', color: '#334155' }}>{item.department || data.department || '—'}</td>
+                      <td style={{ textAlign: 'center', fontWeight: 600, fontSize: '13px' }}>
+                        {qty} {item.unit && item.unit !== 'Unit' && item.unit !== 'Units' ? <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 400 }}>{item.unit}</span> : ''}
+                      </td>
+                      <td style={{ textAlign: 'right', fontSize: '13px', color: '#334155' }}>
+                        {formatAmount(unitRate, companyDefaultCurrency)}
+                      </td>
+                      <td style={{ textAlign: 'right', fontWeight: 700, fontSize: '13.5px', color: '#0f172a' }}>
+                        {formatAmount(lineTotal, companyDefaultCurrency)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
 
           {/* Total Breakdown Box */}
           <div className="ppi-sheet__total-box">
             <div className="ppi-sheet__total-row">
               <span>Subtotal:</span>
-              <span>{formatAmount(data.amount, companyDefaultCurrency)}</span>
+              <span>{formatAmount(computedSubtotal, companyDefaultCurrency)}</span>
             </div>
             <div className="ppi-sheet__total-row">
-              <span>Tax / VAT:</span>
-              <span>Included / 0.00</span>
+              <span>Tax / VAT{taxPercentage > 0 ? ` (${taxPercentage}%):` : ':'}</span>
+              <span style={{ color: computedTax > 0 ? '#0f172a' : '#64748b' }}>
+                {computedTax > 0 ? `+ ${formatAmount(computedTax, companyDefaultCurrency)}` : formatAmount(0, companyDefaultCurrency)}
+              </span>
             </div>
             <div className="ppi-sheet__total-row ppi-sheet__total-row--grand">
               <span>Total Invoice Amount:</span>
-              <span>{formatAmount(data.amount, companyDefaultCurrency)}</span>
+              <span>{formatAmount(totalInvoiceAmount, companyDefaultCurrency)}</span>
             </div>
           </div>
 
           {data.comments && (
-            <div style={{ marginTop: 24, padding: 14, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+            <div style={{ marginTop: 20, padding: 14, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, breakInside: 'avoid', pageBreakInside: 'avoid' }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>
                 Approval / Audit Comments
               </div>

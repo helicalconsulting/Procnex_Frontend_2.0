@@ -305,6 +305,9 @@ export function mapApprovalToTableRow(a: Record<string, unknown>): ApprovalTable
     department: String(a.department || '—'),
     canAct: Boolean(a.canAct ?? false),
     isReturned: Boolean(a.isReturned || (a as any).isReReview || a.status === 'RETURNED' || (a.comments && /return/i.test(String(a.comments)))),
+    approverId: a.approverId ? String(a.approverId) : (a.approver as any)?.id ? String((a.approver as any).id) : undefined,
+    approverName: a.approverName ? String(a.approverName) : (a.approver as any)?.fullName ? String((a.approver as any).fullName) : undefined,
+    approverEmail: a.approverEmail ? String(a.approverEmail) : (a.approver as any)?.email ? String((a.approver as any).email) : undefined,
   };
 }
 

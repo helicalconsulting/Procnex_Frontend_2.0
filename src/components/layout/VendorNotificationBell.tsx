@@ -19,30 +19,14 @@ export default function VendorNotificationBell() {
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  const load = useCallback(async (deleteAfterLoad = false) => {
+  const load = useCallback(async () => {
     if (USE_MOCK) return;
     setLoading(true);
     try {
       const data = await vendorPortalService.listNotifications();
-      let nextNotifications = data.notifications || [];
-
-      if (deleteAfterLoad && nextNotifications.length > 0) {
-        // When opening the bell: show all, then delete from backend
-        setNotifications(nextNotifications);
-        setUnreadCount(data.unreadCount || 0);
-        try {
-          await vendorPortalService.deleteAllNotifications();
-          setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-          setUnreadCount(0);
-        } catch {
-          setUnreadCount(data.unreadCount || 0);
-        }
-      } else {
-        // SSE / polling refresh: only show unread notifications
-        // so already-read ones don't reappear in the bell
-        setNotifications(nextNotifications.filter((n) => !n.isRead));
-        setUnreadCount(data.unreadCount || 0);
-      }
+      const nextNotifications = data.notifications || [];
+      setNotifications(nextNotifications);
+      setUnreadCount(data.unreadCount || 0);
     } catch {
       setNotifications([]);
       setUnreadCount(0);
@@ -57,9 +41,8 @@ export default function VendorNotificationBell() {
       void load();
     }, 0);
 
-    // Polling fallback — SSE handles real-time delivery instantly,
-    // so a relaxed 3-minute safety net prevents network congestion.
-    const interval = setInterval(load, 180000);
+    // Responsive 4-second polling to guarantee real-time updates
+    const interval = setInterval(() => void load(), 4000);
 
     const triggerBounce = () => {
       setBouncing(true);
@@ -68,9 +51,15 @@ export default function VendorNotificationBell() {
       void load();
     };
 
-    // SSE real-time listener — instant notification delivery
+    // SSE real-time listeners — instant notification delivery
     const unsubscribe = sseClient.on('vendor_notification', triggerBounce);
     const unsubscribeGeneric = sseClient.on('notification', triggerBounce);
+    const unsubAny = typeof sseClient.onAny === 'function' ? sseClient.onAny(triggerBounce) : undefined;
+
+    // Window event listeners
+    window.addEventListener('heliflow:notification-updated', triggerBounce);
+    window.addEventListener('heliflow:approval-updated', triggerBounce);
+    window.addEventListener('storage', triggerBounce);
 
     return () => {
       window.clearTimeout(timeout);
@@ -78,6 +67,10 @@ export default function VendorNotificationBell() {
       clearTimeout(bounceTimer.current);
       unsubscribe();
       unsubscribeGeneric();
+      if (typeof unsubAny === 'function') unsubAny();
+      window.removeEventListener('heliflow:notification-updated', triggerBounce);
+      window.removeEventListener('heliflow:approval-updated', triggerBounce);
+      window.removeEventListener('storage', triggerBounce);
     };
   }, [load]);
 
@@ -86,16 +79,14 @@ export default function VendorNotificationBell() {
       setOpen(false);
       return;
     }
-
     setOpen(true);
-    load(true);
+    void load();
   };
 
   const openRfq = async (n: VendorNotification) => {
     if (!n.isRead) {
       await vendorPortalService.markNotificationRead(n.id);
-      // Enterprise pattern: remove notification from list after reading
-      setNotifications((prev) => prev.filter((x) => x.id !== n.id));
+      setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, isRead: true } : x)));
       setUnreadCount((c) => Math.max(0, c - 1));
     }
     setOpen(false);
@@ -107,8 +98,7 @@ export default function VendorNotificationBell() {
 
   const markAllRead = async () => {
     await vendorPortalService.markAllNotificationsRead();
-    await vendorPortalService.deleteAllNotifications();
-    setNotifications([]);
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     setUnreadCount(0);
   };
 

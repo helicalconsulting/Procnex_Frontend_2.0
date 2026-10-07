@@ -1,9 +1,11 @@
 import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
 import { vendorService } from '../../services/vendorService';
 import { localDataService, type Payment } from '../../services/localDataService';
+import { approvalService } from '../../services/approvalService';
+import { sseClient } from '../../services/sseClient';
 import { apiRequest } from '../../api/client';
 import { companySettingsService } from '../../services/companySettingsService';
 import { invoiceService, type APInvoice } from '../../services/invoiceService';
@@ -136,12 +138,142 @@ export default function CreatePaymentVoucherPage() {
     () => Boolean(vendorParam || invoiceRefParam || amountParam || modeParam === 'create')
   );
 
-  // Vouchers list for management table
-  const { data: vouchersList, loading: vouchersLoading, reload: refetchVouchers } = useServiceData(
-    () => localDataService.getPayments(),
-    [] as Payment[],
-    []
-  );
+  // Vouchers list for management table with live approval status integration
+  const [vouchersList, setVouchersList] = useState<Payment[]>([]);
+  const [vouchersLoading, setVouchersLoading] = useState(true);
+
+  const fetchVouchersData = useCallback(async () => {
+    try {
+      const [rawPayments, approvalRows] = await Promise.all([
+        localDataService.getPayments(),
+        approvalService.listTable({ module: 'Payments' }).catch(() => []),
+      ]);
+
+      const normalize = (v?: string | number | null) =>
+        v ? String(v).trim().toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+
+      const approvalGroups = new Map<string, typeof approvalRows>();
+      approvalRows.forEach((a) => {
+        const keys = [
+          a.referenceId,
+          a.referenceNumber,
+          a.id,
+          (a as any).entityId,
+          (a as any).documentId,
+        ].filter(Boolean) as (string | number)[];
+
+        keys.forEach((k) => {
+          const strKey = String(k);
+          const norm = normalize(strKey);
+          if (!approvalGroups.has(strKey)) approvalGroups.set(strKey, []);
+          if (!approvalGroups.get(strKey)!.includes(a)) {
+            approvalGroups.get(strKey)!.push(a);
+          }
+          if (norm && norm !== strKey) {
+            if (!approvalGroups.has(norm)) approvalGroups.set(norm, []);
+            if (!approvalGroups.get(norm)!.includes(a)) {
+              approvalGroups.get(norm)!.push(a);
+            }
+          }
+        });
+      });
+
+      const mapped = rawPayments.map((p) => {
+        const pStatusUpper = String(p.status || '').toUpperCase();
+        if (pStatusUpper === 'DRAFT') {
+          return { ...p, status: 'DRAFT' as const };
+        }
+
+        const pIdNorm = normalize(p.id);
+        const payIdNorm = normalize(p.paymentId);
+        const pNumNorm = normalize((p as any).paymentNumber);
+
+        let rows =
+          approvalGroups.get(String(p.id)) ||
+          (pIdNorm ? approvalGroups.get(pIdNorm) : undefined) ||
+          approvalGroups.get(p.paymentId) ||
+          (payIdNorm ? approvalGroups.get(payIdNorm) : undefined) ||
+          ((p as any).paymentNumber ? approvalGroups.get((p as any).paymentNumber) : undefined) ||
+          (pNumNorm ? approvalGroups.get(pNumNorm) : undefined) ||
+          [];
+
+        if (rows.length === 0) {
+          const matchByTitle = approvalRows.find((a) => {
+            const aNum = normalize(a.referenceNumber);
+            const aRef = normalize(a.referenceId);
+            const aTitle = normalize(a.title);
+
+            return (
+              (payIdNorm && (aNum === payIdNorm || aRef === payIdNorm || (aTitle && aTitle.includes(payIdNorm)))) ||
+              (pNumNorm && (aNum === pNumNorm || aRef === pNumNorm || (aTitle && aTitle.includes(pNumNorm)))) ||
+              (pIdNorm && (aNum === pIdNorm || aRef === pIdNorm))
+            );
+          });
+          if (matchByTitle) {
+            rows = [matchByTitle];
+          }
+        }
+
+        const pendingRow = rows.find((r) => r.status === 'PENDING');
+        const rejectedRow = rows.find((r) => r.status === 'REJECTED');
+        const returnedRow = rows.find((r) => r.status === 'RETURNED');
+        const activeApp = pendingRow || rejectedRow || returnedRow || rows[rows.length - 1];
+        const allApproved = rows.length > 0 && rows.every((r) => r.status === 'APPROVED');
+
+        let status = p.status;
+        if (rejectedRow) {
+          status = 'REJECTED';
+        } else if (returnedRow) {
+          status = 'RETURNED';
+        } else if (allApproved || (activeApp && activeApp.status === 'APPROVED') || pStatusUpper === 'APPROVED' || pStatusUpper === 'COMPLETED' || pStatusUpper === 'CONFIRMED' || pStatusUpper === 'PAID') {
+          status = 'APPROVED';
+        } else if (pendingRow || (activeApp && activeApp.status === 'PENDING') || pStatusUpper === 'PENDING' || pStatusUpper === 'PENDING_APPROVAL') {
+          status = 'PENDING';
+        }
+
+        return {
+          ...p,
+          status,
+        };
+      });
+
+      setVouchersList(mapped);
+    } catch {
+      try {
+        const fallback = await localDataService.getPayments();
+        setVouchersList(fallback);
+      } catch {}
+    } finally {
+      setVouchersLoading(false);
+    }
+  }, []);
+
+  const refetchVouchers = fetchVouchersData;
+
+  useEffect(() => {
+    fetchVouchersData();
+
+    const handleRefresh = () => {
+      fetchVouchersData();
+    };
+    window.addEventListener('heliflow:approval-updated', handleRefresh);
+    window.addEventListener('heliflow:payment-updated', handleRefresh);
+    window.addEventListener('storage', handleRefresh);
+
+    const unsubSse = typeof sseClient?.onAny === 'function'
+      ? sseClient.onAny(() => fetchVouchersData())
+      : (typeof sseClient?.on === 'function' ? sseClient.on('any', () => fetchVouchersData()) : undefined);
+
+    const interval = setInterval(fetchVouchersData, 3000);
+
+    return () => {
+      window.removeEventListener('heliflow:approval-updated', handleRefresh);
+      window.removeEventListener('heliflow:payment-updated', handleRefresh);
+      window.removeEventListener('storage', handleRefresh);
+      if (typeof unsubSse === 'function') unsubSse();
+      clearInterval(interval);
+    };
+  }, [fetchVouchersData]);
 
   // Search & Filter State for Management Table
   const [searchTerm, setSearchTerm] = useState('');
@@ -217,8 +349,9 @@ export default function CreatePaymentVoucherPage() {
   const [ifscCode, setIfscCode] = useState<string>('');
   const [beneficiaryName, setBeneficiaryName] = useState<string>('');
 
-  // Amounts & TDS
+  // Amounts, Tax & TDS
   const [grossAmount, setGrossAmount] = useState<number | ''>('');
+  const [taxPercent, setTaxPercent] = useState<number>(18);
   const [tdsPercent, setTdsPercent] = useState<number>(0);
   const [purpose, setPurpose] = useState<string>('');
   const [remarks, setRemarks] = useState<string>('');
@@ -276,12 +409,27 @@ export default function CreatePaymentVoucherPage() {
 
         const allGrns = grnResponse?.grns || [];
         
-        // Collect existing paid / vouchered invoice references
+        // Collect all known payment vouchers (both live table state and API)
+        const allKnownPayments: Payment[] = [...(vouchersList || []), ...(existingPayments || [])];
         const voucheredInvoiceKeys = new Set<string>();
-        (existingPayments || []).forEach((p) => {
+
+        allKnownPayments.forEach((p) => {
+          // If editing a specific voucher, don't filter out its own attached invoices
+          if (voucherNumber && (p.paymentId === voucherNumber || String(p.id) === voucherNumber)) {
+            return;
+          }
+          const pStatus = (p.status || '').toUpperCase();
+          if (pStatus === 'REJECTED' || pStatus === 'CANCELLED') {
+            return;
+          }
+
           if (p.invoiceRef) {
             p.invoiceRef.split(',').forEach((ref) => {
-              const clean = ref.replace(/^(Invoice:\s*|PO:\s*)/gi, '').trim().toLowerCase();
+              const clean = ref
+                .replace(/^(Invoice:\s*|PO:\s*)/gi, '')
+                .replace(/\(\d+\s*invoices?\)/gi, '')
+                .trim()
+                .toLowerCase();
               if (clean && clean !== '—' && clean !== '-') {
                 voucheredInvoiceKeys.add(clean);
               }
@@ -289,27 +437,61 @@ export default function CreatePaymentVoucherPage() {
           }
           if (Array.isArray(p.invoiceIds)) {
             p.invoiceIds.forEach((id) => {
-              if (id) voucheredInvoiceKeys.add(String(id).toLowerCase());
+              if (id) voucheredInvoiceKeys.add(String(id).trim().toLowerCase());
             });
           }
           if (Array.isArray(p.invoices)) {
             p.invoices.forEach((inv) => {
-              if (inv.invoiceId) voucheredInvoiceKeys.add(String(inv.invoiceId).toLowerCase());
+              if (inv.invoiceId) voucheredInvoiceKeys.add(String(inv.invoiceId).trim().toLowerCase());
               if (inv.invoiceNumber) voucheredInvoiceKeys.add(String(inv.invoiceNumber).trim().toLowerCase());
             });
           }
         });
 
-        // Filter out invoices that already have a payment voucher created or are marked as PAID
+        // Filter out invoices:
+        // 1. MUST BE APPROVED (Draft, Pending Approval, Under Review, or Rejected invoices are NOT ready for disbursement)
+        // 2. MUST NOT BE ALREADY PAID / SETTLED
+        // 3. MUST NOT ALREADY HAVE AN ACTIVE PAYMENT VOUCHER
         const unvoucheredInvoices = (fetchedInvoices || []).filter((inv) => {
-          const invId = String(inv.id || '').toLowerCase();
+          const invId = String(inv.id || '').trim().toLowerCase();
           const invNum = String(inv.invoiceNumber || '').trim().toLowerCase();
-          const isStatusPaid = (inv.status || '').toUpperCase() === 'PAID';
-          const isAmountPaid = (Number(inv.paidAmount) || 0) > 0 && (Number(inv.paidAmount) >= Number(inv.amount || 0));
+          const invStatus = (inv.status || '').toUpperCase();
+
+          // 1. Approval Check: Only APPROVED / POSTED invoices can be vouchered
+          const isApproved =
+            invStatus === 'APPROVED' ||
+            invStatus === 'POSTED' ||
+            invStatus === 'READY_FOR_PAYMENT' ||
+            invStatus === 'PAYMENT_PENDING' ||
+            invStatus === 'VERIFIED';
+          if (!isApproved) return false;
+
+          // 2. Paid / Settled Check
+          const isStatusPaid =
+            invStatus === 'PAID' ||
+            invStatus === 'VOUCHERED' ||
+            invStatus === 'SETTLED' ||
+            invStatus === 'PROCESSED';
+          const isAmountPaid =
+            (Number(inv.paidAmount) || 0) > 0 &&
+            Number(inv.paidAmount) >= Number(inv.amount || 0);
 
           if (isStatusPaid || isAmountPaid) return false;
+
+          // 3. Already Vouchered Check
           if (invId && voucheredInvoiceKeys.has(invId)) return false;
           if (invNum && voucheredInvoiceKeys.has(invNum)) return false;
+
+          // Check if invoice number is contained in any active voucher's invoice reference string
+          const isAlreadyInVoucher = allKnownPayments.some((p) => {
+            if (voucherNumber && (p.paymentId === voucherNumber || String(p.id) === voucherNumber)) return false;
+            const pStatus = (p.status || '').toUpperCase();
+            if (pStatus === 'REJECTED' || pStatus === 'CANCELLED') return false;
+            if (!p.invoiceRef) return false;
+            const refLower = p.invoiceRef.toLowerCase();
+            return invNum && refLower.includes(invNum);
+          });
+          if (isAlreadyInVoucher) return false;
 
           return true;
         });
@@ -377,12 +559,15 @@ export default function CreatePaymentVoucherPage() {
             const parsedItems: ReconciledItem[] = [];
 
             if (matchedGrn && Array.isArray(matchedGrn.items) && matchedGrn.items.length > 0) {
+              const invAmt = typeof inv.amount === 'number' ? inv.amount : (Number(inv.amount) || 0);
+              const totalGrnQty = matchedGrn.items.reduce((sum: number, gi: any) => sum + Number(gi.orderedQty ?? gi.quantity ?? 1), 0);
+
               matchedGrn.items.forEach((gi: any, gIdx: number) => {
-                const orderedQty = Number(gi.orderedQty ?? gi.quantity ?? 0);
-                const receivedQty = Number(gi.acceptedQty ?? gi.receivedQty ?? 0);
+                const orderedQty = Number(gi.orderedQty ?? gi.quantity ?? 1);
+                const receivedQty = Number(gi.acceptedQty ?? gi.receivedQty ?? orderedQty);
                 const shortfallQty = Math.max(0, orderedQty - receivedQty);
-                const unitPrice = Number(gi.unitPrice ?? gi.rate ?? (inv.amount && orderedQty > 0 ? inv.amount / orderedQty : 0));
-                const orderedValue = Number(gi.totalPrice ?? (orderedQty * unitPrice));
+                const unitPrice = totalGrnQty > 0 ? (invAmt / totalGrnQty) : (invAmt / (orderedQty || 1));
+                const orderedValue = orderedQty * unitPrice;
                 const receivedValue = receivedQty * unitPrice;
                 const shortfallValue = shortfallQty * unitPrice;
 
@@ -874,10 +1059,130 @@ export default function CreatePaymentVoucherPage() {
     }
   };
 
+  // Start creating a brand-new payment voucher (resets all fields cleanly)
+  const handleStartNewVoucher = () => {
+    if (!canCreateVoucher) return;
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    setVoucherNumber('');
+    companySettingsService.generateNextSequence('PAYMENT_VOUCHER')
+      .then((res) => { if (res?.formattedCode) setVoucherNumber(res.formattedCode); })
+      .catch(() => {});
+    setSelectedVendorId('');
+    setVendorName('');
+    setIsManualSupplier(false);
+    setInvoiceRef('');
+    setGrossAmount('');
+    setPaymentMethod('NEFT');
+    setBankName('');
+    setAccountNumber('');
+    setIfscCode('');
+    setBeneficiaryName('');
+    setRemarks('');
+    setPurpose('');
+    setAttachments([]);
+    setVendorInvoices([]);
+    setInvoiceEntryMode(null);
+    setTdsPercent(0);
+    setIsCreating(true);
+  };
+
+  // Edit an existing payment voucher (auto-fills vendor, bank details, invoices, and amounts)
+  const handleEditVoucher = (v: Payment) => {
+    if (!canCreateVoucher) return;
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    setVoucherNumber(v.paymentId || '');
+    setInvoiceRef(v.invoiceRef || '');
+    setGrossAmount(typeof v.amount === 'number' ? v.amount : (typeof v.grossAmount === 'number' ? v.grossAmount : ''));
+    if (v.method) setPaymentMethod(v.method);
+    if (v.remarks) setRemarks(v.remarks);
+    if (v.purpose) setPurpose(v.purpose);
+    if (v.paidAt) {
+      try {
+        const dt = new Date(v.paidAt);
+        if (!isNaN(dt.getTime())) {
+          setVoucherDate(dt.toISOString().slice(0, 10));
+          setScheduledDate(dt.toISOString().slice(0, 10));
+        }
+      } catch {}
+    }
+
+    // Auto-select Supplier from Database Master if matched, otherwise set as manual supplier
+    const rawVendor = (v.vendor || '').trim();
+    const matchedVendor = vendorsList.find(
+      (vnd) =>
+        vnd.id === rawVendor ||
+        vnd.name.toLowerCase() === rawVendor.toLowerCase() ||
+        (rawVendor && vnd.name.toLowerCase().includes(rawVendor.toLowerCase())) ||
+        (rawVendor && rawVendor.toLowerCase().includes(vnd.name.toLowerCase()))
+    );
+
+    if (matchedVendor) {
+      setSelectedVendorId(matchedVendor.id);
+      setIsManualSupplier(false);
+      setVendorName(matchedVendor.name);
+      setBeneficiaryName(v.beneficiaryName || matchedVendor.name);
+      setBankName(v.bankName || matchedVendor.bankName || '');
+      setAccountNumber(v.accountNumber || matchedVendor.bankAccountNumber || '');
+      setIfscCode(v.ifscCode || matchedVendor.bankIfscCode || '');
+    } else {
+      setSelectedVendorId('');
+      setIsManualSupplier(true);
+      setVendorName(rawVendor);
+      setBeneficiaryName(v.beneficiaryName || rawVendor);
+      setBankName(v.bankName || '');
+      setAccountNumber(v.accountNumber || '');
+      setIfscCode(v.ifscCode || '');
+    }
+
+    // Invoices / breakdown setup
+    if (v.invoices && v.invoices.length > 0) {
+      setInvoiceEntryMode('MANUAL');
+      setVendorInvoices(
+        v.invoices.map((inv, idx) => ({
+          id: inv.invoiceId || `inv_${idx}_${Date.now()}`,
+          invoiceNumber: inv.invoiceNumber || '',
+          poNumber: inv.poNumber || '',
+          grnNumber: inv.grnNumber || '',
+          amount: inv.amount || 0,
+          paidAmount: 0,
+          balanceDue: inv.amount || 0,
+          dueDate: '',
+          invoiceDate: inv.invoiceDate || '',
+          threeWayMatch: (inv.threeWayMatch as any) || 'MATCHED',
+          selected: true,
+          paymentAmount: inv.amount || 0,
+        }))
+      );
+    } else if (v.invoiceRef) {
+      setInvoiceEntryMode('MANUAL');
+    }
+
+    // Load attachments if present
+    if (v.attachments && v.attachments.length > 0) {
+      setAttachments(v.attachments);
+    } else {
+      try {
+        const cached = localStorage.getItem(`payment_attachments_${v.paymentId}`);
+        if (cached) setAttachments(JSON.parse(cached));
+      } catch {}
+    }
+
+    if (v.tdsAmount && v.amount) {
+      setTdsPercent(Math.round((v.tdsAmount / (v.grossAmount || v.amount)) * 100));
+    }
+
+    setIsCreating(true);
+  };
+
   // Calculations
-  const gross = typeof grossAmount === 'number' ? grossAmount : 0;
-  const tdsAmount = useMemo(() => (gross * (tdsPercent || 0)) / 100, [gross, tdsPercent]);
-  const netPayable = useMemo(() => gross, [gross]);
+  const subtotal = typeof grossAmount === 'number' ? grossAmount : 0;
+  const taxAmount = useMemo(() => Number(((subtotal * (taxPercent || 0)) / 100).toFixed(2)), [subtotal, taxPercent]);
+  const grossWithTax = useMemo(() => Number((subtotal + taxAmount).toFixed(2)), [subtotal, taxAmount]);
+  const tdsAmount = useMemo(() => Number(((subtotal * (tdsPercent || 0)) / 100).toFixed(2)), [subtotal, tdsPercent]);
+  const netPayable = useMemo(() => Number((grossWithTax - tdsAmount).toFixed(2)), [grossWithTax, tdsAmount]);
+  const gross = grossWithTax;
 
   // File Upload with Base64 encoding for document preview and persistence
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -915,7 +1220,7 @@ export default function CreatePaymentVoucherPage() {
       return false;
     }
     if (!grossAmount || grossAmount <= 0) {
-      setErrorMsg('Please enter a valid Gross Payment Amount greater than 0.');
+      setErrorMsg('Please enter a valid Payment Amount greater than 0.');
       return false;
     }
     return true;
@@ -942,18 +1247,28 @@ export default function CreatePaymentVoucherPage() {
       invoiceDate: i.invoiceDate,
     }));
 
-    const itemsList = selectedInvoices.map((inv, idx) => ({
-      id: idx + 1,
-      description: `Payment Disbursement against Invoice ${inv.invoiceNumber}`,
-      poNumber: inv.poNumber,
-      grnNumber: inv.grnNumber,
-      invoiceRef: inv.invoiceNumber,
-      quantity: 1,
-      unitPrice: inv.paymentAmount,
-      grossAmount: inv.paymentAmount,
-      tdsAmount: (inv.paymentAmount * (tdsPercent || 0)) / 100,
-      netAmount: inv.paymentAmount - (inv.paymentAmount * (tdsPercent || 0)) / 100,
-    }));
+    const itemsList = selectedInvoices.map((inv, idx) => {
+      const invSub = inv.paymentAmount;
+      const invTax = Number(((invSub * (taxPercent || 0)) / 100).toFixed(2));
+      const invGross = Number((invSub + invTax).toFixed(2));
+      const invTds = Number(((invSub * (tdsPercent || 0)) / 100).toFixed(2));
+      const invNet = Number((invGross - invTds).toFixed(2));
+      return {
+        id: idx + 1,
+        description: `Payment Disbursement against Invoice ${inv.invoiceNumber}`,
+        poNumber: inv.poNumber,
+        grnNumber: inv.grnNumber,
+        invoiceRef: inv.invoiceNumber,
+        quantity: 1,
+        unitPrice: invSub,
+        subtotal: invSub,
+        taxPercent: taxPercent,
+        taxAmount: invTax,
+        grossAmount: invGross,
+        tdsAmount: invTds,
+        netAmount: invNet,
+      };
+    });
 
     try {
       // 1. Send to Backend Database API (MongoDB via Express + Prisma)
@@ -967,6 +1282,11 @@ export default function CreatePaymentVoucherPage() {
             invoiceRef: invoiceRef || (selectedInvoices.length > 0 ? selectedInvoices.map(i => i.invoiceNumber).join(', ') : undefined),
             invoiceIds: selectedInvoiceIds,
             invoices: selectedInvoicesList,
+            subtotal,
+            taxPercent,
+            taxAmount,
+            grossAmount: grossWithTax,
+            tdsAmount,
             amount: netPayable,
             currency,
             method: paymentMethod,
@@ -1005,6 +1325,11 @@ export default function CreatePaymentVoucherPage() {
         invoiceRef: invoiceRef || (selectedInvoices.length > 0 ? selectedInvoices.map(i => i.invoiceNumber).join(', ') : '—'),
         invoiceIds: selectedInvoiceIds,
         invoices: selectedInvoicesList,
+        subtotal,
+        taxPercent,
+        taxAmount,
+        grossAmount: grossWithTax,
+        tdsAmount: tdsAmount,
         amount: netPayable,
         method: paymentMethod,
         status: 'PENDING',
@@ -1014,8 +1339,6 @@ export default function CreatePaymentVoucherPage() {
         ifscCode,
         beneficiaryName,
         purpose,
-        grossAmount: gross,
-        tdsAmount: tdsAmount,
         items: itemsList.length > 0 ? itemsList : undefined,
         attachments: attachments.length > 0 ? attachments : undefined,
       });
@@ -1029,7 +1352,10 @@ export default function CreatePaymentVoucherPage() {
         message: `Payment Voucher #${voucherNumber} saved to Database and submitted for payment workflow approval.`,
         details: [
           { label: 'Vendor / Payee', value: vendorName },
-          { label: 'Net Payable', value: `${formatAmount(netPayable)}` },
+          { label: 'Subtotal', value: `${formatAmount(subtotal)}` },
+          { label: `Tax / VAT (${taxPercent}%)`, value: `+ ${formatAmount(taxAmount)}` },
+          ...(tdsAmount > 0 ? [{ label: `TDS (${tdsPercent}%)`, value: `- ${formatAmount(tdsAmount)}` }] : []),
+          { label: 'Net Disbursement', value: `${formatAmount(netPayable)}` },
           { label: 'Payment Method', value: paymentMethod },
           { label: 'Beneficiary Bank', value: bankName || 'Bank Transfer' },
           ...(accountNumber ? [{ label: 'Account No.', value: accountNumber }] : []),
@@ -1096,6 +1422,9 @@ export default function CreatePaymentVoucherPage() {
 
   // Open voucher document modal for viewing
   const handleViewVoucherDoc = (voucher: Payment) => {
+    const vSubtotal = (voucher as any).subtotal || (voucher.grossAmount ? voucher.grossAmount : voucher.amount);
+    const vTaxAmount = (voucher as any).taxAmount || 0;
+    const vTaxPercent = (voucher as any).taxPercent !== undefined ? (voucher as any).taxPercent : 18;
     setSelectedVoucherForModal({
       voucherNumber: voucher.paymentId,
       voucherDate: voucher.paidAt || new Date().toISOString().slice(0, 10),
@@ -1106,6 +1435,9 @@ export default function CreatePaymentVoucherPage() {
       accountNumber: voucher.accountNumber || '',
       ifscCode: voucher.ifscCode || '',
       invoiceRef: voucher.invoiceRef || '—',
+      subtotal: vSubtotal,
+      taxPercent: vTaxPercent,
+      taxAmount: vTaxAmount,
       grossAmount: voucher.grossAmount || voucher.amount,
       tdsAmount: voucher.tdsAmount || 0,
       netAmount: voucher.amount,
@@ -1113,6 +1445,10 @@ export default function CreatePaymentVoucherPage() {
       matchStatus: voucher.remarks?.toLowerCase().includes('discrepancy') ? 'DISCREPANCY' : 'MATCHED',
       discrepancyReason: voucher.remarks,
       items: voucher.items || undefined,
+      invoices: voucher.invoices || undefined,
+      invoiceIds: voucher.invoiceIds || undefined,
+      poNumbers: (voucher as any).poNumbers || undefined,
+      grnNumbers: (voucher as any).grnNumbers || undefined,
       attachments: voucher.attachments || undefined,
     });
   };
@@ -1190,7 +1526,7 @@ export default function CreatePaymentVoucherPage() {
           description="Manage payment vouchers, bank disbursement entries and approval statuses"
           actions={
             <Button
-              onClick={() => setIsCreating(true)}
+              onClick={handleStartNewVoucher}
               disabled={!canCreateVoucher}
               title={!canCreateVoucher ? 'You do not have permission to create payment vouchers.' : 'Create new Voucher'}
             >
@@ -1444,21 +1780,7 @@ export default function CreatePaymentVoucherPage() {
                                     size="icon-sm"
                                     disabled={!canCreateVoucher}
                                     title="Edit Payment Voucher"
-                                    onClick={() => {
-                                      if (!canCreateVoucher) return;
-                                      setVoucherNumber(v.paymentId);
-                                      setVendorName(v.vendor);
-                                      setInvoiceRef(v.invoiceRef || '');
-                                      setGrossAmount(v.amount);
-                                      if (v.method) setPaymentMethod(v.method);
-                                      if (v.bankName) setBankName(v.bankName);
-                                      if (v.accountNumber) setAccountNumber(v.accountNumber);
-                                      if (v.ifscCode) setIfscCode(v.ifscCode);
-                                      if (v.beneficiaryName) setBeneficiaryName(v.beneficiaryName);
-                                      if (v.remarks) setRemarks(v.remarks);
-                                      if (v.purpose) setPurpose(v.purpose);
-                                      setIsCreating(true);
-                                    }}
+                                    onClick={() => handleEditVoucher(v)}
                                   >
                                     <Pencil size={15} />
                                   </Button>
@@ -1631,8 +1953,10 @@ export default function CreatePaymentVoucherPage() {
         </div>
         <div className="cpv-header__actions">
           <button
+            type="button"
             className="cpv-btn cpv-btn--primary"
             onClick={submitVoucher}
+            onMouseDown={(e) => e.stopPropagation()}
             disabled={savingDraft || submitting || !canCreateVoucher}
             title={!canCreateVoucher ? "You do not have permission to submit payment vouchers." : undefined}
           >
@@ -2965,7 +3289,7 @@ export default function CreatePaymentVoucherPage() {
               </div>
 
               <div className="cpv-field">
-                <label>Gross Amount <span>*</span></label>
+                <label>Base Subtotal Amount <span>*</span></label>
                 <input
                   type="number"
                   min="0"
@@ -2978,16 +3302,57 @@ export default function CreatePaymentVoucherPage() {
                 />
               </div>
 
-              <div className="cpv-summary-row">
-                <span>Gross Amount</span>
-                <span>{formatAmount(gross, currency)}</span>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div className="cpv-field">
+                  <label>Tax / VAT (%)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="1"
+                    placeholder="18"
+                    value={taxPercent}
+                    onChange={(e) => setTaxPercent(e.target.value === '' ? 0 : Math.max(0, parseFloat(e.target.value) || 0))}
+                  />
+                </div>
+                <div className="cpv-field">
+                  <label>TDS / WHT (%)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.5"
+                    placeholder="0"
+                    value={tdsPercent}
+                    onChange={(e) => setTdsPercent(e.target.value === '' ? 0 : Math.max(0, parseFloat(e.target.value) || 0))}
+                  />
+                </div>
               </div>
+
+              <div className="cpv-summary-row">
+                <span>Subtotal (Base)</span>
+                <span>{formatAmount(subtotal, currency)}</span>
+              </div>
+
+              <div className="cpv-summary-row" style={{ color: taxAmount > 0 ? '#047857' : undefined }}>
+                <span>Tax / VAT ({taxPercent}%)</span>
+                <span>{taxAmount > 0 ? `+ ${formatAmount(taxAmount, currency)}` : formatAmount(0, currency)}</span>
+              </div>
+
+              {tdsAmount > 0 && (
+                <div className="cpv-summary-row" style={{ color: '#e11d48' }}>
+                  <span>TDS Deducted ({tdsPercent}%)</span>
+                  <span>- {formatAmount(tdsAmount, currency)}</span>
+                </div>
+              )}
 
               <div className="cpv-summary-divider" />
 
               <div className="cpv-summary-grand">
-                <span className="cpv-summary-grand-label">Net Disbursement</span>
-                <span className="cpv-summary-grand-val">{formatAmount(netPayable, currency)}</span>
+                <div className="cpv-summary-grand-row">
+                  <span className="cpv-summary-grand-label">Net Disbursement</span>
+                  <span className="cpv-summary-grand-val">{formatAmount(netPayable, currency)}</span>
+                </div>
               </div>
 
               <div className="cpv-workflow-notice">
@@ -2997,8 +3362,10 @@ export default function CreatePaymentVoucherPage() {
             </div>
 
             <button
+              type="button"
               className="cpv-btn cpv-btn--primary cpv-btn--full"
               onClick={submitVoucher}
+              onMouseDown={(e) => e.stopPropagation()}
               disabled={savingDraft || submitting || !canCreateVoucher}
               title={!canCreateVoucher ? "You do not have permission to submit payment vouchers." : undefined}
             >

@@ -19,6 +19,7 @@ import {
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import { MessageStrip, inferMessageType } from '../../components/shared/MessageStrip';
 import { TableSkeleton } from '../../components/shared/Skeleton';
+import { getPaginationPages } from '../../components/shared/TablePagination';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
@@ -965,9 +966,13 @@ export default function UsersPage() {
                 </span>
                 <div className="users-pagination__btns">
                   <button className="users-pagination__btn" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)}><ChevronLeft size={14} /></button>
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                    <button key={p} className={`users-pagination__btn ${currentPage === p ? 'users-pagination__btn--active' : ''}`} onClick={() => setCurrentPage(p)}>{p}</button>
-                  ))}
+                  {getPaginationPages(currentPage, totalPages).map((p, idx) =>
+                    typeof p === 'number' ? (
+                      <button key={p} className={`users-pagination__btn ${currentPage === p ? 'users-pagination__btn--active' : ''}`} onClick={() => setCurrentPage(p)}>{p}</button>
+                    ) : (
+                      <span key={`ellipsis-${idx}`} className="px-1 text-xs text-muted-foreground select-none">…</span>
+                    )
+                  )}
                   <button className="users-pagination__btn" disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => p + 1)}><ChevronRight size={14} /></button>
                 </div>
               </div>
@@ -1095,9 +1100,13 @@ export default function UsersPage() {
                   </span>
                   <div className="users-pagination__btns">
                     <button className="users-pagination__btn" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)}><ChevronLeft size={14} /></button>
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                      <button key={p} className={`users-pagination__btn ${currentPage === p ? 'users-pagination__btn--active' : ''}`} onClick={() => setCurrentPage(p)}>{p}</button>
-                    ))}
+                    {getPaginationPages(currentPage, totalPages).map((p, idx) =>
+                      typeof p === 'number' ? (
+                        <button key={p} className={`users-pagination__btn ${currentPage === p ? 'users-pagination__btn--active' : ''}`} onClick={() => setCurrentPage(p)}>{p}</button>
+                      ) : (
+                        <span key={`ellipsis-${idx}`} className="px-1 text-xs text-muted-foreground select-none">…</span>
+                      )
+                    )}
                     <button className="users-pagination__btn" disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => p + 1)}><ChevronRight size={14} /></button>
                   </div>
                 </div>

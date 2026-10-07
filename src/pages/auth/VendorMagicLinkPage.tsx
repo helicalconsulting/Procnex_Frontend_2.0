@@ -73,7 +73,7 @@ export default function VendorMagicLinkPage() {
       <div className="sap-login__form-panel" style={{ flex: 1 }}>
         <div className="sap-login__form-container">
           <div className="sap-login__mobile-logo">
-            <img src={logoUrl || heliflowLogo} alt={companyName} className="sap-login__mobile-logo-icon" />
+            <img src={logoUrl || heliflowLogo} alt={companyName} crossOrigin="anonymous" referrerPolicy="no-referrer" className="sap-login__mobile-logo-icon" />
             <span className="sap-login__mobile-title">{companyName}</span>
           </div>
           <h2 className="sap-login__form-title">Opening your RFQ…</h2>

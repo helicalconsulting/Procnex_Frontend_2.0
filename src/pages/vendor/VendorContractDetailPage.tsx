@@ -770,10 +770,10 @@ export default function VendorContractDetailPage() {
 
                   {/* Draw Canvas */}
                   {mode === 'draw' && (
-                    <div className="relative rounded-xl border border-border/70 bg-background overflow-hidden">
+                    <div className="relative rounded-xl border-2 border-dashed border-primary/40 bg-white overflow-hidden shadow-xs">
                       <canvas
                         ref={canvasRef}
-                        className="w-full h-40 cursor-crosshair touch-none"
+                        className="w-full h-40 cursor-crosshair touch-none bg-white block"
                         width={480}
                         height={160}
                         onMouseDown={startDraw}
@@ -784,9 +784,10 @@ export default function VendorContractDetailPage() {
                         onTouchMove={draw}
                         onTouchEnd={stopDraw}
                       />
+                      <div className="absolute bottom-6 left-8 right-8 border-b border-dashed border-slate-300 pointer-events-none" />
                       {!hasDrawn && (
-                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 text-xs text-muted-foreground/60">
-                          <PenLine className="size-4" />
+                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 text-xs font-medium text-slate-500">
+                          <PenLine className="size-4 text-primary/70" />
                           <span>Sign here using your mouse or touch screen</span>
                         </div>
                       )}
@@ -796,13 +797,13 @@ export default function VendorContractDetailPage() {
                   {/* Upload Signature Container */}
                   {mode === 'upload' && (
                     <div
-                      className="rounded-xl border border-dashed border-border/80 bg-background p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                      className="rounded-xl border-2 border-dashed border-primary/40 bg-white p-6 text-center cursor-pointer hover:border-primary transition-colors shadow-xs"
                       onClick={() => fileInputRef.current?.click()}
                     >
                       {uploadedImage ? (
                         <img src={uploadedImage} alt="Uploaded signature" className="max-h-24 mx-auto object-contain" />
                       ) : (
-                        <div className="space-y-1 text-xs text-muted-foreground">
+                        <div className="space-y-1 text-xs text-slate-500 font-medium">
                           <Upload className="size-6 mx-auto text-primary" />
                           <span>Click to upload PNG or JPG signature image</span>
                         </div>

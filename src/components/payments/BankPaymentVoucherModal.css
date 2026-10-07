@@ -12,7 +12,7 @@
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 30px 15px;
+  padding: 24px 15px;
   overflow-y: auto;
 }
 
@@ -21,17 +21,23 @@
   border: 1px solid #334155;
   border-radius: 16px;
   width: 100%;
-  max-width: 900px;
+  max-width: 920px;
+  max-height: 92vh;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-  overflow: hidden;
+  overflow-y: auto;
   color: #f8fafc;
+  display: flex;
+  flex-direction: column;
 }
 
 .bpv-modal__topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
+  padding: 14px 22px;
   background: #1e293b;
   border-bottom: 1px solid #334155;
 }
@@ -40,7 +46,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 1.1625rem;
+  font-size: 1.15rem;
   font-weight: 700;
   color: #f8fafc;
 }
@@ -52,7 +58,7 @@
 .bpv-badge {
   padding: 3px 10px;
   border-radius: 20px;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
 }
@@ -81,7 +87,7 @@
   gap: 8px;
   padding: 8px 16px;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -113,9 +119,9 @@
 .bpv-sheet {
   background: #ffffff;
   color: #0f172a;
-  padding: 24px 32px;
+  padding: 28px 36px;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.05);
+  flex: 1;
 }
 
 .bpv-sheet__header {
@@ -157,7 +163,7 @@
 }
 
 .bpv-sheet__voucher-no {
-  font-size: 1.18rem;
+  font-size: 1.15rem;
   font-weight: 800;
   color: #0f172a;
   font-family: monospace;
@@ -181,9 +187,7 @@
 
 /* ── Section Styling ── */
 .bpv-section {
-  margin-bottom: 14px;
-  break-inside: avoid;
-  page-break-inside: avoid;
+  margin-bottom: 16px;
 }
 
 .bpv-section__title {
@@ -199,9 +203,10 @@
   padding-bottom: 3px;
 }
 
+/* Grid layout */
 .bpv-grid {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .bpv-grid--2 {
@@ -211,58 +216,54 @@
 .bpv-box {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  padding: 10px 14px;
-  break-inside: avoid;
-  page-break-inside: avoid;
+  border-radius: 8px;
+  padding: 12px 14px;
 }
 
 .bpv-box__title {
   font-size: 11px;
   font-weight: 800;
-  color: #475569;
-  letter-spacing: 0.05em;
-  margin-bottom: 6px;
-  border-bottom: 1px dashed #cbd5e1;
-  padding-bottom: 3px;
+  color: #64748b;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+  text-transform: uppercase;
 }
 
 .bpv-box__row {
   display: flex;
   justify-content: space-between;
-  font-size: 12.5px;
+  font-size: 12px;
   margin-bottom: 4px;
-}
-
-.bpv-box__row span {
-  color: #64748b;
+  color: #475569;
 }
 
 .bpv-box__row strong {
   color: #0f172a;
+  text-align: right;
+  max-width: 65%;
+  word-break: break-word;
 }
 
 .bpv-highlight {
-  color: #0284c7 !important;
+  color: #2563eb !important;
+  font-weight: 800;
 }
 
-/* ── Match Strip ── */
+/* Match Strip */
 .bpv-match-strip {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 12px;
+  padding: 8px 12px;
   border-radius: 6px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   font-size: 12px;
-  break-inside: avoid;
-  page-break-inside: avoid;
 }
 
 .bpv-match-strip--success {
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
-  color: #065f46;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
 }
 
 .bpv-match-strip--warning {
@@ -273,71 +274,70 @@
 
 .bpv-match-strip p {
   margin: 1px 0 0 0;
-  font-size: 11.5px;
+  font-size: 11px;
+  opacity: 0.9;
 }
 
-/* ── Tables ── */
+/* Table */
 .bpv-table {
   width: 100%;
   border-collapse: collapse;
-  margin-bottom: 10px;
-  font-size: 12px;
+  font-size: 12.5px;
+  margin-bottom: 12px;
 }
 
 .bpv-table th {
-  background: #f1f5f9;
-  color: #334155;
+  background: #0f172a;
+  color: #ffffff;
+  padding: 8px 10px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
   font-weight: 700;
   text-align: left;
-  padding: 6px 8px;
-  border-top: 1px solid #cbd5e1;
-  border-bottom: 2px solid #cbd5e1;
-  font-size: 11px;
 }
 
 .bpv-table td {
-  padding: 6px 8px;
+  padding: 8px 10px;
   border-bottom: 1px solid #e2e8f0;
   color: #1e293b;
-  font-size: 12px;
+  vertical-align: middle;
 }
 
-.bpv-table tr {
-  break-inside: avoid;
-  page-break-inside: avoid;
+.bpv-table tr:nth-child(even) td {
+  background: #f8fafc;
 }
 
 .bpv-table-total-row td {
-  background: #f8fafc;
-  border-top: 2px solid #cbd5e1 !important;
-  border-bottom: 2px solid #cbd5e1 !important;
-  padding: 8px 10px;
-  color: #0f172a;
+  background: #f1f5f9 !important;
+  border-top: 2px solid #0f172a !important;
+  border-bottom: 2px solid #0f172a !important;
+  padding: 10px 10px !important;
 }
 
+/* Totals Box */
 .bpv-totals-box {
   display: flex;
   justify-content: space-between;
   align-items: center;
   background: #f8fafc;
-  border: 1.5px solid #cbd5e1;
-  border-radius: 6px;
-  padding: 8px 14px;
-  margin-top: 6px;
-  break-inside: avoid;
-  page-break-inside: avoid;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-top: 10px;
 }
 
-.bpv-totals-box__words span {
-  display: block;
-  font-size: 11px;
-  color: #64748b;
-  font-weight: 600;
+.bpv-totals-box__words {
+  font-size: 12px;
+  color: #475569;
+  max-width: 60%;
 }
 
 .bpv-totals-box__words strong {
-  font-size: 12.5px;
+  display: block;
+  font-size: 13px;
   color: #0f172a;
+  margin-top: 2px;
   font-style: italic;
 }
 
@@ -348,44 +348,34 @@
 .bpv-totals-box__grand span {
   font-size: 11px;
   font-weight: 800;
-  color: #475569;
-  letter-spacing: 0.05em;
+  color: #64748b;
+  letter-spacing: 0.04em;
 }
 
 .bpv-totals-box__grand h2 {
-  margin: 1px 0 0 0;
-  font-size: 1.35rem;
-  font-weight: 800;
+  margin: 2px 0 0 0;
+  font-size: 1.4rem;
+  font-weight: 900;
   color: #059669;
 }
 
-/* ── Approval Stamps ("Kisne Kisne Approve Kiya") ── */
+/* Stamps Grid */
 .bpv-stamps-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 10px;
-  break-inside: avoid;
-  page-break-inside: avoid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
 }
 
 .bpv-stamp-card {
   background: #f8fafc;
   border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  padding: 8px 10px;
+  border-radius: 8px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 4px;
+  gap: 6px;
   position: relative;
-  break-inside: avoid !important;
-  page-break-inside: avoid !important;
-  box-sizing: border-box;
-}
-
-.bpv-stamp-card:hover {
-  border-color: #94a3b8;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .bpv-stamp-card__header {
@@ -401,29 +391,30 @@
   font-weight: 800;
   color: #1e293b;
   background: #e2e8f0;
-  padding: 1px 5px;
+  padding: 2px 5px;
   border-radius: 4px;
-  letter-spacing: 0.05em;
 }
 
 .bpv-stamp-status-tag {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+.bpv-stamp-status-tag--approved {
   color: #059669;
   background: #ecfdf5;
   border: 1px solid #a7f3d0;
-  padding: 1px 5px;
-  border-radius: 4px;
-  letter-spacing: 0.02em;
 }
 
 .bpv-stamp-status-tag--pending {
   color: #d97706;
   background: #fffbe3;
-  border-color: #fde68a;
+  border: 1px solid #fde68a;
 }
 
 .bpv-stamp-card__details {
@@ -436,38 +427,27 @@
   font-size: 11.5px;
   font-weight: 800;
   color: #0f172a;
-  line-height: 1.2;
-}
-
-.bpv-stamp-name {
-  font-size: 10.5px;
-  color: #475569;
-  font-weight: 500;
 }
 
 .bpv-stamp-date {
   font-size: 10px;
   color: #64748b;
-  margin-top: 1px;
 }
 
 .bpv-stamp-card__signature {
   background: #ffffff;
   border: 1px dashed #cbd5e1;
-  border-radius: 4px;
-  padding: 3px 6px;
-  margin-top: 2px;
+  border-radius: 6px;
+  padding: 4px 8px;
   text-align: center;
-  min-height: 46px;
+  min-height: 54px;
   display: flex;
   align-items: center;
   justify-content: center;
-  break-inside: avoid !important;
-  page-break-inside: avoid !important;
 }
 
 .bpv-stamp-sig-pending {
-  font-size: 10px;
+  font-size: 10.5px;
   font-style: italic;
   color: #94a3b8;
 }
@@ -476,24 +456,22 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
+  gap: 2px;
   width: 100%;
 }
 
 .bpv-stamp-sig-img {
-  max-height: 38px;
-  min-height: 28px;
-  max-width: 170px;
+  max-height: 48px;
+  min-height: 36px;
+  max-width: 180px;
   width: auto;
   object-fit: contain;
-  margin: 1px 0;
-  display: block;
 }
 
 .bpv-stamp-sig-svg-wrap {
   width: 100%;
-  max-width: 160px;
-  height: 34px;
+  max-width: 170px;
+  height: 36px;
 }
 
 .bpv-stamp-sig-svg {
@@ -510,7 +488,6 @@
   font-weight: 700;
   color: #0284c7;
   letter-spacing: 0.02em;
-  margin-top: 1px;
 }
 
 .bpv-seal-icon {
@@ -519,28 +496,19 @@
 
 /* ── Footer ── */
 .bpv-sheet__footer {
-  margin-top: 20px;
-  padding-top: 10px;
+  margin-top: 16px;
+  padding-top: 8px;
   border-top: 1px solid #e2e8f0;
   text-align: center;
   font-size: 11px;
   color: #64748b;
-  break-inside: avoid;
-  page-break-inside: avoid;
 }
 
-.bpv-sheet__system-id {
-  font-family: monospace;
-  font-size: 10px !important;
-  color: #94a3b8 !important;
-  margin-top: 2px !important;
-}
-
-/* ── Media Print Overrides ── */
+/* ── Media Print Overrides & Multi-page Handling ── */
 @media print {
   @page {
     size: A4 portrait;
-    margin: 6mm 8mm;
+    margin: 8mm 10mm;
   }
 
   html, body {
@@ -551,6 +519,10 @@
     height: auto !important;
     min-height: 100% !important;
     overflow: visible !important;
+  }
+
+  body * {
+    visibility: hidden;
   }
 
   .no-print,
@@ -573,11 +545,16 @@
     border: none !important;
     box-shadow: none !important;
     max-width: 100% !important;
+    max-height: none !important;
     width: 100% !important;
     margin: 0 !important;
     padding: 0 !important;
     background: #ffffff !important;
     overflow: visible !important;
+  }
+
+  .bpv-sheet, .bpv-sheet * {
+    visibility: visible !important;
   }
 
   .bpv-sheet {
@@ -592,14 +569,16 @@
     color: #0f172a !important;
   }
 
+  .bpv-sheet__header,
   .bpv-section,
   .bpv-box,
-  .bpv-table,
+  .bpv-match-strip,
   .bpv-table tr,
   .bpv-totals-box,
   .bpv-stamps-grid,
   .bpv-stamp-card,
-  .bpv-stamp-card__signature {
+  .bpv-stamp-card__signature,
+  .bpv-sheet__footer {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }

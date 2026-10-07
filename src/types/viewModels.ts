@@ -145,6 +145,9 @@ export interface ApprovalTableRow {
   canAct?: boolean;
   isReturned?: boolean;
   isReReview?: boolean;
+  approverId?: string;
+  approverName?: string;
+  approverEmail?: string;
 }
 
 export interface NotificationRow {

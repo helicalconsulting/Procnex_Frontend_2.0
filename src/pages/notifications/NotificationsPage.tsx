@@ -12,6 +12,7 @@ import {
   Users, Shield, ChevronLeft, ChevronRight, MailOpen, Mail, ExternalLink,
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
+import { getPaginationPages } from '../../components/shared/TablePagination';
 import { PageFrame, PageLead, MetricCard, EmptyState } from '../../components/ui/product';
 import { Card } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
@@ -70,13 +71,26 @@ export default function NotificationsPage() {
 
   const pollingRef = useRef<ReturnType<typeof setInterval>>();
   useEffect(() => {
-    pollingRef.current = setInterval(() => reload(), 30000);
+    pollingRef.current = setInterval(() => reload(), 4000);
     return () => { clearInterval(pollingRef.current); };
   }, [reload]);
 
   useEffect(() => {
-    const unsubscribe = sseClient.on('notification', () => reload());
-    return () => unsubscribe();
+    const handleRefresh = () => reload();
+    const unsubNotification = sseClient.on('notification', handleRefresh);
+    const unsubAny = typeof sseClient.onAny === 'function' ? sseClient.onAny(handleRefresh) : undefined;
+
+    window.addEventListener('heliflow:notification-updated', handleRefresh);
+    window.addEventListener('heliflow:approval-updated', handleRefresh);
+    window.addEventListener('storage', handleRefresh);
+
+    return () => {
+      unsubNotification();
+      if (typeof unsubAny === 'function') unsubAny();
+      window.removeEventListener('heliflow:notification-updated', handleRefresh);
+      window.removeEventListener('heliflow:approval-updated', handleRefresh);
+      window.removeEventListener('storage', handleRefresh);
+    };
   }, [reload]);
 
   const [search, setSearch] = useState('');
@@ -280,17 +294,23 @@ export default function NotificationsPage() {
               <Button variant="outline" size="sm" disabled={currentPage===1} onClick={() => setCurrentPage(p=>p-1)} className="h-8 w-8 p-0">
                 <ChevronLeft className="size-4" />
               </Button>
-              {Array.from({length:totalPages},(_,i)=>i+1).map(p=>(
-                <Button
-                  key={p}
-                  variant={currentPage===p?'default':'outline'}
-                  size="sm"
-                  onClick={()=>setCurrentPage(p)}
-                  className="h-8 w-8 p-0"
-                >
-                  {p}
-                </Button>
-              ))}
+              {getPaginationPages(currentPage, totalPages).map((p, idx) =>
+                typeof p === 'number' ? (
+                  <Button
+                    key={p}
+                    variant={currentPage === p ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setCurrentPage(p)}
+                    className="h-8 w-8 p-0"
+                  >
+                    {p}
+                  </Button>
+                ) : (
+                  <span key={`ellipsis-${idx}`} className="px-1.5 text-xs text-muted-foreground select-none">
+                    …
+                  </span>
+                )
+              )}
               <Button variant="outline" size="sm" disabled={currentPage===totalPages} onClick={()=>setCurrentPage(p=>p+1)} className="h-8 w-8 p-0">
                 <ChevronRight className="size-4" />
               </Button>

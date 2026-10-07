@@ -20,26 +20,16 @@ export default function AdminNotificationBell() {
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  const load = useCallback(async (deleteAfterLoad = false) => {
+  const load = useCallback(async () => {
     if (USE_MOCK) return;
     setLoading(true);
     try {
       const [list, count] = await Promise.all([
-      notificationService.list() as Promise<NotificationRow[]>,
-      notificationService.unreadCount() as Promise<number>,
-    ]);
+        notificationService.list() as Promise<NotificationRow[]>,
+        notificationService.unreadCount() as Promise<number>,
+      ]);
       setNotifications(list);
       setUnreadCount(count);
-
-      if (deleteAfterLoad && list.length > 0) {
-        try {
-          await notificationService.deleteAll();
-          setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-          setUnreadCount(0);
-        } catch {
-          setUnreadCount(count);
-        }
-      }
     } catch {
       setNotifications([]);
       setUnreadCount(0);
@@ -52,25 +42,49 @@ export default function AdminNotificationBell() {
     // Initial load
     void load();
 
-    // Polling fallback — SSE handles real-time delivery instantly,
-    // so a relaxed 3-minute safety net prevents network congestion.
-    const interval = setInterval(load, 180000);
+    // Responsive 4-second polling to guarantee real-time updates across multiple tabs
+    const interval = setInterval(() => void load(), 4000);
 
-    // SSE real-time listener — instant notification on vendor accept, etc.
-    // SSE connection is managed centrally by AppLayout
-    const unsubscribe = sseClient.on('notification', () => {
-      // Trigger the bounce animation
+    const triggerRefresh = () => {
       setBouncing(true);
       clearTimeout(bounceTimer.current);
       bounceTimer.current = setTimeout(() => setBouncing(false), 600);
-      // Immediately re-fetch notifications when a real-time event arrives
       void load();
-    });
+    };
+
+    // SSE real-time listeners for instant notification delivery
+    const unsubNotification = sseClient.on('notification', triggerRefresh);
+    const unsubApprovalReq = sseClient.on('approval_required', triggerRefresh);
+    const unsubApprovalChain = sseClient.on('approval_chain_complete', triggerRefresh);
+    const unsubApprovalLevel = sseClient.on('approval_level_complete', triggerRefresh);
+    const unsubPoCreated = sseClient.on('po_created', triggerRefresh);
+    const unsubPoStatus = sseClient.on('po_status_changed', triggerRefresh);
+    const unsubQuotation = sseClient.on('quotation_received', triggerRefresh);
+    const unsubRfq = sseClient.on('rfq_status_changed', triggerRefresh);
+    const unsubAny = typeof sseClient.onAny === 'function' ? sseClient.onAny(triggerRefresh) : undefined;
+
+    // Window event listeners for instant local synchronization
+    window.addEventListener('heliflow:notification-updated', triggerRefresh);
+    window.addEventListener('heliflow:approval-updated', triggerRefresh);
+    window.addEventListener('heliflow:payment-updated', triggerRefresh);
+    window.addEventListener('storage', triggerRefresh);
 
     return () => {
       clearInterval(interval);
       clearTimeout(bounceTimer.current);
-      unsubscribe();
+      unsubNotification();
+      unsubApprovalReq();
+      unsubApprovalChain();
+      unsubApprovalLevel();
+      unsubPoCreated();
+      unsubPoStatus();
+      unsubQuotation();
+      unsubRfq();
+      if (typeof unsubAny === 'function') unsubAny();
+      window.removeEventListener('heliflow:notification-updated', triggerRefresh);
+      window.removeEventListener('heliflow:approval-updated', triggerRefresh);
+      window.removeEventListener('heliflow:payment-updated', triggerRefresh);
+      window.removeEventListener('storage', triggerRefresh);
     };
   }, [load]);
 
@@ -79,16 +93,14 @@ export default function AdminNotificationBell() {
       setOpen(false);
       return;
     }
-
     setOpen(true);
-    load(true);
+    void load();
   };
 
   const openNotification = async (n: NotificationRow) => {
     if (!n.isRead) {
       await notificationService.markRead(n.id);
-      // Enterprise pattern: remove notification from list after reading
-      setNotifications((prev) => prev.filter((x) => x.id !== n.id));
+      setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, isRead: true } : x)));
       setUnreadCount((c) => Math.max(0, c - 1));
     }
     setOpen(false);

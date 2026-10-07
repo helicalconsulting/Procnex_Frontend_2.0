@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TableSkeleton, SkeletonList } from '../../components/shared/Skeleton';
+import { getPaginationPages } from '../../components/shared/TablePagination';
 import { AuditExportModal } from './AuditExportModal';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -691,17 +692,23 @@ export default function AuditTrailPage() {
                 >
                   <ChevronLeft className="size-4" />
                 </Button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                  <Button
-                    key={p}
-                    variant={safePage === p ? 'default' : 'outline'}
-                    size="icon-sm"
-                    className="text-xs font-semibold"
-                    onClick={() => setCurrentPage(p)}
-                  >
-                    {p}
-                  </Button>
-                ))}
+                {getPaginationPages(safePage, totalPages).map((p, idx) =>
+                  typeof p === 'number' ? (
+                    <Button
+                      key={p}
+                      variant={safePage === p ? 'default' : 'outline'}
+                      size="icon-sm"
+                      className="text-xs font-semibold"
+                      onClick={() => setCurrentPage(p)}
+                    >
+                      {p}
+                    </Button>
+                  ) : (
+                    <span key={`ellipsis-${idx}`} className="px-2 text-xs text-muted-foreground select-none">
+                      …
+                    </span>
+                  )
+                )}
                 <Button
                   variant="outline"
                   size="icon-sm"

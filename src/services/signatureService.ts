@@ -35,8 +35,11 @@ function getSigStorageKey(): string {
   try {
     const userStr = localStorage.getItem('heliflow_user');
     const user = userStr ? JSON.parse(userStr) : null;
-    const code = user?.companyCode || 'DEFAULT';
-    return `heliflow_signatures_${code}`;
+    const vendorStr = localStorage.getItem('heliflow_vendor_session') || localStorage.getItem('heliflow_vendor_user');
+    const vendor = vendorStr ? JSON.parse(vendorStr) : null;
+    const code = (user?.companyCode || vendor?.companyCode || vendor?.tenantId || 'DEFAULT').toUpperCase();
+    const id = user?.id || vendor?.id || vendor?.vendorId || 'USER';
+    return `heliflow_signatures_${code}_${id}`;
   } catch {
     return 'heliflow_signatures';
   }
@@ -46,8 +49,11 @@ function getDocSigStorageKey(): string {
   try {
     const userStr = localStorage.getItem('heliflow_user');
     const user = userStr ? JSON.parse(userStr) : null;
-    const code = user?.companyCode || 'DEFAULT';
-    return `heliflow_doc_signatures_${code}`;
+    const vendorStr = localStorage.getItem('heliflow_vendor_session') || localStorage.getItem('heliflow_vendor_user');
+    const vendor = vendorStr ? JSON.parse(vendorStr) : null;
+    const code = (user?.companyCode || vendor?.companyCode || vendor?.tenantId || 'DEFAULT').toUpperCase();
+    const id = user?.id || vendor?.id || vendor?.vendorId || 'USER';
+    return `heliflow_doc_signatures_${code}_${id}`;
   } catch {
     return 'heliflow_doc_signatures';
   }

@@ -25,9 +25,31 @@ import { jsPDF } from 'jspdf';
 import { useAuth } from '../../context/AuthContext';
 import ActionSendingOverlay from '../../components/shared/ActionSendingOverlay';
 import { DetailSkeleton } from '../../components/shared/Skeleton';
+import PhoneInput from '../../components/shared/PhoneInput';
+import { COUNTRY_CODES } from '../../config/countryCodes';
 import './PurchaseRequisitionPage.css';
 
 // ─── Helper ─────────────────────────────────────────────────
+
+function detectCountryCode(fullPhone: string = '', fallback: string = '+91'): string {
+  const trimmed = (fullPhone || '').trim();
+  if (!trimmed) return fallback;
+  const matched = COUNTRY_CODES.find(cc => trimmed.startsWith(cc.dial));
+  return matched ? matched.dial : fallback;
+}
+
+function getPhoneNumberOnly(fullPhone: string = '', countryCode: string = '+91'): string {
+  const trimmed = (fullPhone || '').trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith(countryCode)) {
+    return trimmed.slice(countryCode.length).trim();
+  }
+  const matched = COUNTRY_CODES.find(cc => trimmed.startsWith(cc.dial));
+  if (matched) {
+    return trimmed.slice(matched.dial.length).trim();
+  }
+  return trimmed;
+}
 
 function generatePONumber(): string {
   const now = new Date();
@@ -102,6 +124,33 @@ export default function PurchaseRequisitionPage() {
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [itemValidationErrors, setItemValidationErrors] = useState<Record<number, Record<string, string>>>({});
 
+  // Clear errors when user edits fields
+  const clearFieldError = useCallback((field: string) => {
+    setValidationErrors(prev => {
+      const copy = { ...prev };
+      delete copy[field];
+      return copy;
+    });
+  }, []);
+
+  const clearItemError = useCallback((idx: number, field: string) => {
+    setItemValidationErrors(prev => {
+      const copy = { ...prev };
+      if (copy[idx]) {
+        const iCopy = { ...copy[idx] };
+        delete iCopy[field];
+        if (Object.keys(iCopy).length === 0) delete copy[idx];
+        else copy[idx] = iCopy;
+      }
+      return copy;
+    });
+  }, []);
+
+  // Country Codes for Phone Inputs
+  const [companyCountryCode, setCompanyCountryCode] = useState('+91');
+  const [vendorCountryCode, setVendorCountryCode] = useState('+91');
+  const [shipToCountryCode, setShipToCountryCode] = useState('+91');
+
   // Company settings & Warehouses for auto-fill
   const [companyProfile, setCompanyProfile] = useState<Record<string, any> | null>(null);
   const [vendorsList, setVendorsList] = useState<any[]>([]);
@@ -128,9 +177,33 @@ export default function PurchaseRequisitionPage() {
       })
       .catch(() => {});
 
-    companySettingsService.listWarehouses()
+    companySettingsService.listWarehouses(true)
       .then((whs) => {
-        setWarehouses(whs || []);
+        const list = whs || [];
+        setWarehouses(list);
+        if (list.length > 0) {
+          setPr(prev => {
+            if (!prev) return prev;
+            if (!prev.shipToWarehouse || prev.shipToWarehouse === '') {
+              const defWh = list.find(w => w.isDefault && w.isActive) || list.find(w => w.isActive) || list[0];
+              if (defWh) {
+                setSelectedWarehouseId(defWh.id);
+                const fullAddress = [defWh.address, defWh.city, defWh.country].filter(Boolean).join(', ');
+                if (defWh.phone) {
+                  setShipToCountryCode(detectCountryCode(defWh.phone, '+91'));
+                }
+                return {
+                  ...prev,
+                  shipToWarehouse: `${defWh.code} — ${defWh.name}`,
+                  shipToAddress: fullAddress || prev.shipToAddress,
+                  shipToContact: defWh.contactPerson || prev.shipToContact,
+                  shipToPhone: defWh.phone || prev.shipToPhone,
+                };
+              }
+            }
+            return prev;
+          });
+        }
       })
       .catch(() => {});
 
@@ -470,21 +543,29 @@ export default function PurchaseRequisitionPage() {
   const handleWarehouseChange = useCallback((whId: string) => {
     if (!pr || isReadOnly) return;
     setSelectedWarehouseId(whId);
+    if (whId === '__custom__') {
+      setPr(prev => prev ? { ...prev, shipToWarehouse: '' } : null);
+      return;
+    }
     const wh = warehouses.find(w => w.id === whId);
     if (wh) {
       const whLabel = `${wh.code} — ${wh.name}`;
       const fullAddress = [wh.address, wh.city, wh.country].filter(Boolean).join(', ');
+      if (wh.phone) {
+        setShipToCountryCode(detectCountryCode(wh.phone, '+91'));
+      }
       setPr(prev => prev ? {
         ...prev,
         shipToWarehouse: whLabel,
-        ...(fullAddress ? { shipToAddress: fullAddress } : {}),
-        ...(wh.contactPerson ? { shipToContact: wh.contactPerson } : {}),
-        ...(wh.phone ? { shipToPhone: wh.phone } : {}),
+        shipToAddress: fullAddress || prev.shipToAddress,
+        shipToContact: wh.contactPerson || prev.shipToContact,
+        shipToPhone: wh.phone || prev.shipToPhone,
       } : null);
+      clearFieldError('shipToPhone');
     } else {
       updateField('shipToWarehouse', '');
     }
-  }, [pr, isReadOnly, warehouses, updateField]);
+  }, [pr, isReadOnly, warehouses, updateField, clearFieldError]);
 
   const [erpStockItems, setErpStockItems] = useState<ERPStockItem[]>([]);
 
@@ -584,6 +665,79 @@ export default function PurchaseRequisitionPage() {
 
   // ── Validation ──────────────────────────────────────────────
 
+  const isValidEmail = (email?: string): boolean => {
+    if (!email || !email.trim()) return true;
+    return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email.trim());
+  };
+
+  const isValidPhone = (phone?: string): boolean => {
+    if (!phone || !phone.trim()) return true;
+    const trimmed = phone.trim();
+    if (!/^[+]?[\d\s().-]{7,25}$/.test(trimmed)) return false;
+    const digits = trimmed.replace(/\D/g, '');
+    return digits.length >= 7 && digits.length <= 15;
+  };
+
+  const handlePhoneChange = (field: 'companyPhone' | 'vendorPhone' | 'shipToPhone', rawValue: string) => {
+    // Restrict input to numbers and standard phone formatting characters (+, -, (), space)
+    const sanitized = rawValue.replace(/[^0-9+\-()\s]/g, '');
+    updateField(field, sanitized);
+    const trimmed = sanitized.trim();
+    if (!trimmed) {
+      clearFieldError(field);
+    } else if (!isValidPhone(trimmed)) {
+      setValidationErrors(prev => ({
+        ...prev,
+        [field]: 'Please enter a valid phone number (7 to 15 digits)',
+      }));
+    } else {
+      clearFieldError(field);
+    }
+  };
+
+  const handlePhoneBlur = (field: 'companyPhone' | 'vendorPhone' | 'shipToPhone', value?: string) => {
+    const trimmed = (value || '').trim();
+    if (!trimmed) {
+      clearFieldError(field);
+    } else if (!isValidPhone(trimmed)) {
+      setValidationErrors(prev => ({
+        ...prev,
+        [field]: 'Please enter a valid phone number (7 to 15 digits)',
+      }));
+    } else {
+      clearFieldError(field);
+    }
+  };
+
+  const handleEmailChange = (field: 'companyEmail' | 'vendorEmail', value: string) => {
+    updateField(field, value);
+    const trimmed = value.trim();
+    if (!trimmed) {
+      clearFieldError(field);
+    } else if (!isValidEmail(trimmed)) {
+      setValidationErrors(prev => ({
+        ...prev,
+        [field]: 'Please enter a valid email address (e.g. name@domain.com)',
+      }));
+    } else {
+      clearFieldError(field);
+    }
+  };
+
+  const handleEmailBlur = (field: 'companyEmail' | 'vendorEmail', value?: string) => {
+    const trimmed = (value || '').trim();
+    if (!trimmed) {
+      clearFieldError(field);
+    } else if (!isValidEmail(trimmed)) {
+      setValidationErrors(prev => ({
+        ...prev,
+        [field]: 'Please enter a valid email address (e.g. name@domain.com)',
+      }));
+    } else {
+      clearFieldError(field);
+    }
+  };
+
   const validate = useCallback((): boolean => {
     if (!pr) return false;
     const errors: Record<string, string> = {};
@@ -591,6 +745,25 @@ export default function PurchaseRequisitionPage() {
 
     if (!pr.vendorName.trim()) errors.vendorName = 'Vendor name is required';
     if (!pr.poDate) errors.poDate = 'PO date is required';
+
+    // Email format validations
+    if (pr.companyEmail && !isValidEmail(pr.companyEmail)) {
+      errors.companyEmail = 'Please enter a valid email address (e.g. contact@company.com)';
+    }
+    if (pr.vendorEmail && !isValidEmail(pr.vendorEmail)) {
+      errors.vendorEmail = 'Please enter a valid email address (e.g. vendor@domain.com)';
+    }
+
+    // Phone format validations
+    if (pr.companyPhone && !isValidPhone(pr.companyPhone)) {
+      errors.companyPhone = 'Please enter a valid phone number (7 to 15 digits)';
+    }
+    if (pr.vendorPhone && !isValidPhone(pr.vendorPhone)) {
+      errors.vendorPhone = 'Please enter a valid phone number (7 to 15 digits)';
+    }
+    if (pr.shipToPhone && !isValidPhone(pr.shipToPhone)) {
+      errors.shipToPhone = 'Please enter a valid phone number (7 to 15 digits)';
+    }
 
     if (pr.items.length === 0) {
       errors.items = 'At least one item is required';
@@ -623,28 +796,6 @@ export default function PurchaseRequisitionPage() {
       firstErrEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [validationErrors]);
-
-  // Clear errors when user edits fields
-  const clearFieldError = useCallback((field: string) => {
-    setValidationErrors(prev => {
-      const copy = { ...prev };
-      delete copy[field];
-      return copy;
-    });
-  }, []);
-
-  const clearItemError = useCallback((idx: number, field: string) => {
-    setItemValidationErrors(prev => {
-      const copy = { ...prev };
-      if (copy[idx]) {
-        const iCopy = { ...copy[idx] };
-        delete iCopy[field];
-        if (Object.keys(iCopy).length === 0) delete copy[idx];
-        else copy[idx] = iCopy;
-      }
-      return copy;
-    });
-  }, []);
 
   // Save Draft
   const handleSave = async () => {
@@ -901,6 +1052,11 @@ export default function PurchaseRequisitionPage() {
           <ul>
             {validationErrors.vendorName && <li>Vendor name is required</li>}
             {validationErrors.poDate && <li>PO date is required</li>}
+            {validationErrors.companyEmail && <li>Company Email: {validationErrors.companyEmail}</li>}
+            {validationErrors.companyPhone && <li>Company Phone: {validationErrors.companyPhone}</li>}
+            {validationErrors.vendorEmail && <li>Vendor Email: {validationErrors.vendorEmail}</li>}
+            {validationErrors.vendorPhone && <li>Vendor Phone: {validationErrors.vendorPhone}</li>}
+            {validationErrors.shipToPhone && <li>Ship-To Phone: {validationErrors.shipToPhone}</li>}
             {validationErrors.items && (
               <li>
                 {validationErrors.items === 'Some items have invalid values'
@@ -1156,8 +1312,40 @@ export default function PurchaseRequisitionPage() {
             <div className="pr-field"><label>Company Name</label><input value={pr.companyName} disabled={isReadOnly} onChange={e => updateField('companyName', e.target.value)} /></div>
             <div className="pr-field"><label>Website</label><input value={pr.companyWebsite} disabled={isReadOnly} onChange={e => updateField('companyWebsite', e.target.value)} /></div>
             <div className="pr-field pr-field--wide"><label>Address</label><input value={pr.companyAddress} disabled={isReadOnly} onChange={e => updateField('companyAddress', e.target.value)} /></div>
-            <div className="pr-field"><label>Phone</label><input value={pr.companyPhone} disabled={isReadOnly} onChange={e => updateField('companyPhone', e.target.value)} /></div>
-            <div className="pr-field"><label>Email</label><input value={pr.companyEmail} disabled={isReadOnly} onChange={e => updateField('companyEmail', e.target.value)} /></div>
+            <div className={`pr-field ${validationErrors.companyPhone ? 'pr-field--error' : ''}`}>
+              <label>Phone</label>
+              <PhoneInput
+                disabled={isReadOnly}
+                countryCode={companyCountryCode}
+                onCountryCodeChange={(code) => {
+                  setCompanyCountryCode(code);
+                  const num = getPhoneNumberOnly(pr.companyPhone, companyCountryCode);
+                  const combined = num.trim() ? `${code} ${num.trim()}` : '';
+                  handlePhoneChange('companyPhone', combined);
+                }}
+                value={getPhoneNumberOnly(pr.companyPhone, companyCountryCode)}
+                onChange={(val) => {
+                  const sanitized = val.replace(/[^0-9\s-()]/g, '');
+                  const combined = sanitized.trim() ? `${companyCountryCode} ${sanitized.trim()}` : '';
+                  handlePhoneChange('companyPhone', combined);
+                }}
+                hasError={Boolean(validationErrors.companyPhone)}
+                placeholder="e.g. 9820112345"
+              />
+              {validationErrors.companyPhone && <span className="pr-field__error-msg">{validationErrors.companyPhone}</span>}
+            </div>
+            <div className={`pr-field ${validationErrors.companyEmail ? 'pr-field--error' : ''}`}>
+              <label>Email</label>
+              <input
+                type="email"
+                value={pr.companyEmail}
+                disabled={isReadOnly}
+                placeholder="e.g. company@domain.com"
+                onChange={e => handleEmailChange('companyEmail', e.target.value)}
+                onBlur={e => handleEmailBlur('companyEmail', e.target.value)}
+              />
+              {validationErrors.companyEmail && <span className="pr-field__error-msg">{validationErrors.companyEmail}</span>}
+            </div>
           </div>
         </section>
 
@@ -1173,6 +1361,9 @@ export default function PurchaseRequisitionPage() {
                 onChange={(e) => {
                   const v = vendorsList.find(item => item.id === e.target.value);
                   if (v) {
+                    if (v.phone) {
+                      setVendorCountryCode(detectCountryCode(v.phone, '+91'));
+                    }
                     setPr(prev => prev ? {
                       ...prev,
                       vendorName: v.name,
@@ -1183,6 +1374,8 @@ export default function PurchaseRequisitionPage() {
                       vendorGstVat: v.gstNumber || v.panNumber || prev.vendorGstVat,
                     } : prev);
                     clearFieldError('vendorName');
+                    clearFieldError('vendorEmail');
+                    clearFieldError('vendorPhone');
                   }
                 }}
               >
@@ -1203,8 +1396,40 @@ export default function PurchaseRequisitionPage() {
             </div>
             <div className="pr-field"><label>Contact Person</label><input value={pr.vendorContactPerson} disabled={isReadOnly} onChange={e => updateField('vendorContactPerson', e.target.value)} /></div>
             <div className="pr-field pr-field--wide"><label>Address</label><input value={pr.vendorAddress} disabled={isReadOnly} onChange={e => updateField('vendorAddress', e.target.value)} /></div>
-            <div className="pr-field"><label>Phone</label><input value={pr.vendorPhone} disabled={isReadOnly} onChange={e => updateField('vendorPhone', e.target.value)} /></div>
-            <div className="pr-field"><label>Email</label><input value={pr.vendorEmail} disabled={isReadOnly} onChange={e => updateField('vendorEmail', e.target.value)} /></div>
+            <div className={`pr-field ${validationErrors.vendorPhone ? 'pr-field--error' : ''}`}>
+              <label>Phone</label>
+              <PhoneInput
+                disabled={isReadOnly}
+                countryCode={vendorCountryCode}
+                onCountryCodeChange={(code) => {
+                  setVendorCountryCode(code);
+                  const num = getPhoneNumberOnly(pr.vendorPhone, vendorCountryCode);
+                  const combined = num.trim() ? `${code} ${num.trim()}` : '';
+                  handlePhoneChange('vendorPhone', combined);
+                }}
+                value={getPhoneNumberOnly(pr.vendorPhone, vendorCountryCode)}
+                onChange={(val) => {
+                  const sanitized = val.replace(/[^0-9\s-()]/g, '');
+                  const combined = sanitized.trim() ? `${vendorCountryCode} ${sanitized.trim()}` : '';
+                  handlePhoneChange('vendorPhone', combined);
+                }}
+                hasError={Boolean(validationErrors.vendorPhone)}
+                placeholder="e.g. 9820112345"
+              />
+              {validationErrors.vendorPhone && <span className="pr-field__error-msg">{validationErrors.vendorPhone}</span>}
+            </div>
+            <div className={`pr-field ${validationErrors.vendorEmail ? 'pr-field--error' : ''}`}>
+              <label>Email</label>
+              <input
+                type="email"
+                value={pr.vendorEmail}
+                disabled={isReadOnly}
+                placeholder="e.g. vendor@domain.com"
+                onChange={e => handleEmailChange('vendorEmail', e.target.value)}
+                onBlur={e => handleEmailBlur('vendorEmail', e.target.value)}
+              />
+              {validationErrors.vendorEmail && <span className="pr-field__error-msg">{validationErrors.vendorEmail}</span>}
+            </div>
             <div className="pr-field"><label>GST/VAT</label><input value={pr.vendorGstVat} disabled={isReadOnly} onChange={e => updateField('vendorGstVat', e.target.value)} /></div>
           </div>
         </section>
@@ -1216,14 +1441,13 @@ export default function PurchaseRequisitionPage() {
             <div className="pr-field"><label>Company</label><input value={pr.shipToCompany} disabled={isReadOnly} onChange={e => updateField('shipToCompany', e.target.value)} /></div>
             <div className="pr-field">
               <label>Warehouse</label>
-              {warehouses.length > 0 && !isReadOnly ? (
+              {!isReadOnly ? (
                 <select
                   className="pr-select"
                   style={{ width: '100%' }}
                   value={
-                    warehouses.find(w => `${w.code} — ${w.name}` === pr.shipToWarehouse || w.name === pr.shipToWarehouse || w.id === selectedWarehouseId)?.id || ''
+                    warehouses.find(w => `${w.code} — ${w.name}` === pr.shipToWarehouse || w.name === pr.shipToWarehouse || w.id === selectedWarehouseId)?.id || (selectedWarehouseId === '__custom__' ? '__custom__' : '')
                   }
-                  disabled={isReadOnly}
                   onChange={e => handleWarehouseChange(e.target.value)}
                 >
                   <option value="">-- Select Warehouse from Company Settings --</option>
@@ -1232,19 +1456,48 @@ export default function PurchaseRequisitionPage() {
                       {wh.code} — {wh.name} {wh.city ? `(${wh.city})` : ''} {wh.isDefault ? '★ Default' : ''}
                     </option>
                   ))}
+                  <option value="__custom__">Custom / Other Location...</option>
                 </select>
               ) : (
                 <input
                   value={pr.shipToWarehouse}
-                  disabled={isReadOnly}
-                  placeholder="Enter warehouse name..."
+                  disabled={true}
+                  placeholder="No warehouse selected"
+                />
+              )}
+              {!isReadOnly && (selectedWarehouseId === '__custom__' || (warehouses.length > 0 && !warehouses.some(w => `${w.code} — ${w.name}` === pr.shipToWarehouse || w.name === pr.shipToWarehouse || w.id === selectedWarehouseId) && pr.shipToWarehouse)) && (
+                <input
+                  style={{ marginTop: 6 }}
+                  value={pr.shipToWarehouse}
+                  placeholder="Enter custom warehouse name..."
                   onChange={e => updateField('shipToWarehouse', e.target.value)}
                 />
               )}
             </div>
             <div className="pr-field pr-field--wide"><label>Address</label><input value={pr.shipToAddress} disabled={isReadOnly} onChange={e => updateField('shipToAddress', e.target.value)} /></div>
             <div className="pr-field"><label>Contact Person</label><input value={pr.shipToContact} disabled={isReadOnly} onChange={e => updateField('shipToContact', e.target.value)} /></div>
-            <div className="pr-field"><label>Phone</label><input value={pr.shipToPhone} disabled={isReadOnly} onChange={e => updateField('shipToPhone', e.target.value)} /></div>
+            <div className={`pr-field ${validationErrors.shipToPhone ? 'pr-field--error' : ''}`}>
+              <label>Phone</label>
+              <PhoneInput
+                disabled={isReadOnly}
+                countryCode={shipToCountryCode}
+                onCountryCodeChange={(code) => {
+                  setShipToCountryCode(code);
+                  const num = getPhoneNumberOnly(pr.shipToPhone, shipToCountryCode);
+                  const combined = num.trim() ? `${code} ${num.trim()}` : '';
+                  handlePhoneChange('shipToPhone', combined);
+                }}
+                value={getPhoneNumberOnly(pr.shipToPhone, shipToCountryCode)}
+                onChange={(val) => {
+                  const sanitized = val.replace(/[^0-9\s-()]/g, '');
+                  const combined = sanitized.trim() ? `${shipToCountryCode} ${sanitized.trim()}` : '';
+                  handlePhoneChange('shipToPhone', combined);
+                }}
+                hasError={Boolean(validationErrors.shipToPhone)}
+                placeholder="e.g. 9820112345"
+              />
+              {validationErrors.shipToPhone && <span className="pr-field__error-msg">{validationErrors.shipToPhone}</span>}
+            </div>
           </div>
         </section>
 

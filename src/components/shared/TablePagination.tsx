@@ -11,6 +11,19 @@ export interface TablePaginationProps {
   className?: string;
 }
 
+export function getPaginationPages(currentPage: number, totalPages: number): (number | string)[] {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+  if (currentPage <= 4) {
+    return [1, 2, 3, 4, 5, '...', totalPages];
+  }
+  if (currentPage >= totalPages - 3) {
+    return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+  }
+  return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
+}
+
 export function TablePagination({
   currentPage,
   totalItems,
@@ -25,22 +38,7 @@ export function TablePagination({
   const startItem = (safePage - 1) * perPage + 1;
   const endItem = Math.min(safePage * perPage, totalItems);
 
-  const getPageNumbers = () => {
-    if (totalPages <= 7) {
-      return Array.from({ length: totalPages }, (_, i) => i + 1);
-    }
-    const pages: (number | string)[] = [];
-    pages.push(1);
-    if (safePage > 3) pages.push('...');
-    const start = Math.max(2, safePage - 1);
-    const end = Math.min(totalPages - 1, safePage + 1);
-    for (let i = start; i <= end; i++) {
-      pages.push(i);
-    }
-    if (safePage < totalPages - 2) pages.push('...');
-    pages.push(totalPages);
-    return pages;
-  };
+  const pages = getPaginationPages(safePage, totalPages);
 
   return (
     <div
@@ -62,7 +60,7 @@ export function TablePagination({
         >
           <ChevronLeft className="size-4" />
         </Button>
-        {getPageNumbers().map((p, idx) =>
+        {pages.map((p, idx) =>
           typeof p === 'number' ? (
             <Button
               key={p}

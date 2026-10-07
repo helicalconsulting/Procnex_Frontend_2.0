@@ -1030,10 +1030,11 @@
 }
 
 .ctr-sign-modal__canvas-wrap {
-  border: 2px dashed var(--border);
+  border: 1.5px dashed rgba(10, 110, 209, 0.4);
   border-radius: 12px;
   padding: 4px;
-  background: var(--surface-elevated, rgba(0, 0, 0, 0.02));
+  background: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .ctr-sign-modal__canvas {
@@ -1042,7 +1043,7 @@
   height: 140px;
   touch-action: none;
   cursor: crosshair;
-  background: #ffffff;
+  background: #ffffff !important;
   border-radius: 8px;
 }
 

@@ -82,6 +82,10 @@ interface APInvoice {
   canAct: boolean;
   comments?: string;
   attachments?: any[];
+  items?: any[];
+  lineItems?: any[];
+  purchaseOrder?: any;
+  grn?: any;
   hasApprovedPriorLevel?: boolean;
 }
 
@@ -168,14 +172,19 @@ const isRoleMatching = (requiredRole?: string, userRoles?: string[]): boolean =>
   const reqClean = stripPrefix(requiredRole);
 
   const aliases: Record<string, string[]> = {
-    purchasemanager: ['purchasemanager', 'purchase_manager', 'procurementmanager', 'procurement_manager', 'l1user', 'l1_user', 'l1', 'approver1', 'level1user', 'level1', 'procurement', 'buyer'],
-    l1user: ['l1user', 'l1_user', 'l1', 'approver1', 'level1user', 'level1', 'purchasemanager', 'purchase_manager', 'procurementmanager', 'procurement_manager', 'procurement', 'purchaseclerk', 'buyer'],
-    financeapprover: ['financeapprover', 'financemanager', 'finance_approver', 'finance_manager', 'finance', 'l2user', 'l2_user', 'l2', 'approver2', 'level2user', 'level2'],
-    l2user: ['l2user', 'l2_user', 'l2', 'approver2', 'level2user', 'level2', 'financeapprover', 'financemanager', 'finance_approver', 'finance_manager', 'finance'],
+    purchasemanager: ['purchasemanager', 'purchase_manager', 'procurementmanager', 'procurement_manager', 'l1user', 'l1_user', 'l1', 'approver1', 'level1user', 'level1', 'procurement', 'buyer', 'analyst', 'purchaseclerk', 'purchase_clerk'],
+    l1user: ['l1user', 'l1_user', 'l1', 'approver1', 'level1user', 'level1', 'purchasemanager', 'purchase_manager', 'procurementmanager', 'procurement_manager', 'procurement', 'purchaseclerk', 'buyer', 'analyst'],
+    analyst: ['analyst', 'purchasemanager', 'purchase_manager', 'procurementmanager', 'procurement_manager', 'l1user', 'l1_user', 'l1', 'approver1', 'level1user', 'level1', 'procurement', 'buyer', 'purchaseclerk'],
+    purchaseclerk: ['purchaseclerk', 'purchase_clerk', 'procurementclerk', 'procurement_clerk', 'buyer', 'analyst', 'purchasemanager', 'l1user'],
+    financeapprover: ['financeapprover', 'financemanager', 'finance_approver', 'finance_manager', 'finance', 'l2user', 'l2_user', 'l2', 'approver2', 'level2user', 'level2', 'developer'],
+    l2user: ['l2user', 'l2_user', 'l2', 'approver2', 'level2user', 'level2', 'financeapprover', 'financemanager', 'finance_approver', 'finance_manager', 'finance', 'developer'],
+    developer: ['developer', 'l2user', 'l2_user', 'l2', 'approver2', 'level2user', 'level2', 'financeapprover', 'financemanager', 'finance_approver', 'finance_manager', 'finance'],
+    admin: ['admin', 'administrator', 'superadmin'],
   };
 
   return userRoles.some((r) => {
     const usrClean = stripPrefix(r);
+    if (usrClean === 'admin' || usrClean === 'administrator' || usrClean === 'superadmin') return true;
     if (reqClean === usrClean) return true;
     if (aliases[reqClean] && aliases[reqClean].includes(usrClean)) return true;
     if (aliases[usrClean] && aliases[usrClean].includes(reqClean)) return true;
@@ -203,7 +212,8 @@ export default function AccountsPayablePage() {
     hasPermission('Invoices', 'canApprove') ||
     hasPermission('Accounts Payable', 'canCreate') ||
     isRoleMatching('Purchase Clerk', authRoles) ||
-    isRoleMatching('Purchase Manager', authRoles);
+    isRoleMatching('Purchase Manager', authRoles) ||
+    isRoleMatching('Analyst', authRoles);
 
   const [invoicesList, setInvoicesList] = useState<APInvoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -257,10 +267,17 @@ export default function AccountsPayablePage() {
         invoiceService.list().catch(() => [] as ServiceAPInvoice[]),
       ]);
 
-      // Group approval rows by referenceId / referenceNumber
+      // Group approval rows by matching invoice
       const approvalGroups = new Map<string, ApprovalTableRow[]>();
       approvalRows.forEach((a) => {
-        const key = String(a.referenceId || a.referenceNumber || a.id);
+        const matchedRaw = rawInvoices.find(
+          (inv) =>
+            String(inv.id) === String(a.referenceId) ||
+            inv.invoiceNumber === a.referenceNumber ||
+            inv.invoiceNumber === a.referenceId ||
+            (a.title && a.title.includes(inv.invoiceNumber))
+        );
+        const key = matchedRaw ? matchedRaw.invoiceNumber : String(a.referenceNumber || a.referenceId || a.id);
         if (!approvalGroups.has(key)) approvalGroups.set(key, []);
         approvalGroups.get(key)!.push(a);
       });
@@ -269,29 +286,39 @@ export default function AccountsPayablePage() {
       const merged: APInvoice[] = [];
 
       approvalGroups.forEach((rows, key) => {
+        if (processedRefKeys.has(key)) return;
         processedRefKeys.add(key);
+
+        const matchingRaw = rawInvoices.find(
+          (inv) =>
+            inv.invoiceNumber === key ||
+            String(inv.id) === key ||
+            rows.some((r) => r.referenceId === String(inv.id) || r.referenceNumber === inv.invoiceNumber)
+        );
+
+        if (matchingRaw) {
+          processedRefKeys.add(String(matchingRaw.id));
+          processedRefKeys.add(matchingRaw.invoiceNumber);
+        }
+
         // Find active pending row if any
         const pendingRow = rows.find((r) => r.status === 'PENDING');
         const rejectedRow = rows.find((r) => r.status === 'REJECTED');
         const returnedRow = rows.find((r) => r.status === 'RETURNED');
+        const allApproved = rows.length > 0 && rows.every((r) => r.status === 'APPROVED');
         const activeApp = pendingRow || rejectedRow || returnedRow || rows[rows.length - 1];
 
-        const matchingRaw = rawInvoices.find(
-          (inv) => inv.id === activeApp.referenceId || inv.invoiceNumber === activeApp.referenceNumber || String(inv.id) === key || inv.invoiceNumber === key
-        );
-
-        if (matchingRaw) processedRefKeys.add(String(matchingRaw.id));
-        if (matchingRaw?.invoiceNumber) processedRefKeys.add(matchingRaw.invoiceNumber);
-
-        const invNo = activeApp.referenceNumber || matchingRaw?.invoiceNumber || `INV-${activeApp.id.slice(-6)}`;
+        const invNo = matchingRaw?.invoiceNumber || activeApp.referenceNumber || `INV-${activeApp.id.slice(-6)}`;
         const vName = matchingRaw?.vendorName || activeApp.requestedBy || 'Vendor';
         const initials = vName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() || 'VN';
 
         const isReturnedChain = Boolean(returnedRow) || matchingRaw?.status === 'RETURNED';
 
         let status: APStatus;
-        if (matchingRaw?.status && ['PAID', 'PARTIAL', 'OVERDUE', 'APPROVED'].includes(matchingRaw.status)) {
+        if (matchingRaw?.status && ['PAID', 'PARTIAL', 'OVERDUE'].includes(matchingRaw.status)) {
           status = matchingRaw.status as APStatus;
+        } else if (matchingRaw?.status === 'APPROVED' || allApproved) {
+          status = 'APPROVED';
         } else if (pendingRow) {
           status = isReturnedChain ? 'RETURNED' : 'PENDING';
         } else if (rejectedRow) {
@@ -307,8 +334,8 @@ export default function AccountsPayablePage() {
             ? activeApp.amount
             : parseFloat(String(activeApp.amount).replace(/[^0-9.]/g, '')) || matchingRaw?.amount || 0;
 
-        const currentLevel = status === 'APPROVED' ? 2 : (pendingRow?.currentLevel || (status === 'RETURNED' ? 1 : (activeApp.currentLevel || 1)));
         const totalLevels = activeApp.totalLevels || 2;
+        const currentLevel = status === 'APPROVED' ? totalLevels : (pendingRow?.currentLevel || (status === 'RETURNED' ? 1 : (activeApp.currentLevel || 1)));
         const reqRole = status === 'APPROVED' ? '' : (pendingRow?.requiredRole || (status === 'RETURNED' ? 'Purchase Manager' : (activeApp.requiredRole || 'Purchase Manager')));
 
         // Approver permissions:
@@ -318,19 +345,35 @@ export default function AccountsPayablePage() {
           if (pendingRow) {
             effectiveCanAct = pendingRow.canAct !== undefined ? Boolean(pendingRow.canAct) : isRoleMatching(pendingRow.requiredRole, authRoles);
           } else if (status === 'RETURNED') {
-            effectiveCanAct = isRoleMatching('Purchase Clerk', authRoles) || isRoleMatching('Purchase Manager', authRoles);
+            effectiveCanAct = isRoleMatching('Purchase Clerk', authRoles) || isRoleMatching('Purchase Manager', authRoles) || isRoleMatching('Analyst', authRoles);
           } else if (activeApp) {
             effectiveCanAct = activeApp.canAct !== undefined ? Boolean(activeApp.canAct) : isRoleMatching(activeApp.requiredRole, authRoles);
           }
         }
 
         const hasApprovedPriorLevel =
-          (currentLevel > 1 && isRoleMatching('Purchase Clerk', authRoles)) ||
+          allApproved ||
           rows.some(
             (r) =>
               r.status === 'APPROVED' &&
-              (isRoleMatching(r.requiredRole, authRoles) || (user?.id && r.approverId && String(r.approverId) === String(user.id)))
-          );
+              (
+                isRoleMatching(r.requiredRole, authRoles) ||
+                (user?.id && r.approverId && String(r.approverId) === String(user.id)) ||
+                ((user as any)?._id && r.approverId && String(r.approverId) === String((user as any)._id)) ||
+                (user?.name && r.approverName && r.approverName.toLowerCase() === user.name.toLowerCase()) ||
+                (user?.email && (r as any).approverEmail && (r as any).approverEmail.toLowerCase() === user.email.toLowerCase())
+              )
+          ) ||
+          (currentLevel > 1 && (
+            isRoleMatching('Purchase Manager', authRoles) ||
+            isRoleMatching('Purchase Clerk', authRoles) ||
+            isRoleMatching('Analyst', authRoles) ||
+            isRoleMatching('L1 User', authRoles)
+          ));
+
+        if (status === 'APPROVED' || (hasApprovedPriorLevel && pendingRow && !isRoleMatching(pendingRow.requiredRole, authRoles))) {
+          effectiveCanAct = false;
+        }
 
         const resolvedDept =
           activeApp.department ||
@@ -362,6 +405,10 @@ export default function AccountsPayablePage() {
           canAct: effectiveCanAct,
           comments: activeApp.comments,
           attachments: matchingRaw?.attachments || (activeApp as any)?.attachments || (activeApp as any)?.data?.attachments,
+          items: matchingRaw?.items || matchingRaw?.lineItems || (matchingRaw?.purchaseOrder as any)?.items || (matchingRaw?.purchaseOrder as any)?.rfq?.items || (activeApp as any)?.data?.items || (activeApp as any)?.items,
+          lineItems: matchingRaw?.lineItems || matchingRaw?.items || (matchingRaw?.purchaseOrder as any)?.items || (matchingRaw?.purchaseOrder as any)?.rfq?.items || (activeApp as any)?.data?.lineItems || (activeApp as any)?.lineItems,
+          purchaseOrder: matchingRaw?.purchaseOrder,
+          grn: matchingRaw?.grn,
           hasApprovedPriorLevel,
         });
       });
@@ -389,7 +436,7 @@ export default function AccountsPayablePage() {
           };
           const status = statusMap[inv.status] || (inv.status === 'DRAFT' ? 'DRAFT' : 'PENDING');
           const isActionable = status === 'PENDING' || status === 'RETURNED';
-          const effectiveCanAct = isActionable && isRoleMatching('Purchase Clerk', authRoles);
+          const effectiveCanAct = isActionable && (isRoleMatching('Purchase Clerk', authRoles) || isRoleMatching('Purchase Manager', authRoles) || isRoleMatching('Analyst', authRoles));
 
           const resolvedDept =
             inv.department ||
@@ -419,6 +466,10 @@ export default function AccountsPayablePage() {
             canAct: effectiveCanAct,
             comments: inv.comments,
             attachments: inv.attachments,
+            items: inv.items || inv.lineItems || (inv.purchaseOrder as any)?.items || (inv.purchaseOrder as any)?.rfq?.items,
+            lineItems: inv.lineItems || inv.items || (inv.purchaseOrder as any)?.items || (inv.purchaseOrder as any)?.rfq?.items,
+            purchaseOrder: inv.purchaseOrder,
+            grn: inv.grn,
             hasApprovedPriorLevel: false,
           });
         }
@@ -493,7 +544,7 @@ export default function AccountsPayablePage() {
     setInvoicesList((prev) =>
       prev.map((inv) =>
         inv.id === targetInvoice.id || inv.invoiceNumber === targetInvoice.invoiceNumber || (approvalId && inv.approvalId === approvalId)
-          ? { ...inv, status: newStatus, canAct: false }
+          ? { ...inv, status: newStatus, canAct: false, hasApprovedPriorLevel: true }
           : inv
       )
     );
@@ -532,31 +583,19 @@ export default function AccountsPayablePage() {
           );
           if (pendingRow) {
             approvalId = pendingRow.id;
-          } else {
-            const created = await approvalService.resubmit('AccountsPayable', targetInvoice.invoiceNumber || String(targetInvoice.id), 1).catch(() => null);
-            if (created && (created as any).id) {
-              approvalId = (created as any).id;
-            } else {
-              const updatedList = await approvalService.listTable({ module: 'AccountsPayable' }).catch(() => []);
-              const updatedPending = updatedList.find(
-                (r: any) =>
-                  r.status === 'PENDING' &&
-                  (r.referenceId === String(targetInvoice.id) ||
-                    r.referenceNumber === targetInvoice.invoiceNumber ||
-                    r.referenceId === targetInvoice.invoiceNumber)
-              );
-              if (updatedPending) approvalId = updatedPending.id;
-            }
           }
         } catch {}
 
         if (approvalId) {
           if (act === 'approve') {
             const res = await approvalService.approve(approvalId, comment);
-            const isFinal = res?.nextLevel === false || targetInvoice.currentLevel >= targetInvoice.totalLevels;
+            const isFinal = res?.nextLevel === false || targetInvoice.currentLevel >= targetInvoice.totalLevels || targetInvoice.currentLevel === 2;
 
             if (isFinal) {
               await invoiceService.updateStatus(targetInvoice.id, 'APPROVED').catch(() => {});
+              if (targetInvoice.invoiceNumber) {
+                await invoiceService.updateStatus(targetInvoice.invoiceNumber, 'APPROVED').catch(() => {});
+              }
               setGeneratedVoucherBanner({
                 voucherNumber: targetInvoice.invoiceNumber,
                 invoiceNumber: targetInvoice.invoiceNumber,
@@ -578,13 +617,22 @@ export default function AccountsPayablePage() {
           } else if (act === 'reject') {
             await approvalService.reject(approvalId, comment);
             await invoiceService.updateStatus(targetInvoice.id, 'REJECTED').catch(() => {});
+            if (targetInvoice.invoiceNumber) {
+              await invoiceService.updateStatus(targetInvoice.invoiceNumber, 'REJECTED').catch(() => {});
+            }
           } else {
             await approvalService.return(approvalId, comment, 'ORIGINATOR');
             await invoiceService.updateStatus(targetInvoice.id, 'RETURNED').catch(() => {});
+            if (targetInvoice.invoiceNumber) {
+              await invoiceService.updateStatus(targetInvoice.invoiceNumber, 'RETURNED').catch(() => {});
+            }
           }
         } else {
           const statusToSet = act === 'approve' ? 'APPROVED' : act === 'reject' ? 'REJECTED' : 'RETURNED';
-          await invoiceService.updateStatus(targetInvoice.id, statusToSet);
+          await invoiceService.updateStatus(targetInvoice.id, statusToSet).catch(() => {});
+          if (targetInvoice.invoiceNumber) {
+            await invoiceService.updateStatus(targetInvoice.invoiceNumber, statusToSet).catch(() => {});
+          }
         }
 
         window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));

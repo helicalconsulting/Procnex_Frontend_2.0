@@ -180,6 +180,9 @@ export function applyFavicon(faviconUrl: string | null, logoUrl: string | null =
   const rawTarget = faviconUrl || logoUrl;
   const isValidUrl = rawTarget && (rawTarget.startsWith('http://') || rawTarget.startsWith('https://') || rawTarget.startsWith('data:') || rawTarget.startsWith('/'));
   const targetUrl = isValidUrl ? rawTarget : '/Procnex-logo.jpeg';
+  if (link.getAttribute('href') === targetUrl) {
+    return;
+  }
   if (targetUrl.endsWith('.svg')) {
     link.type = 'image/svg+xml';
   } else if (targetUrl.endsWith('.jpeg') || targetUrl.endsWith('.jpg')) {
@@ -189,6 +192,8 @@ export function applyFavicon(faviconUrl: string | null, logoUrl: string | null =
   } else {
     link.type = 'image/png';
   }
+  link.crossOrigin = 'anonymous';
+  link.referrerPolicy = 'no-referrer';
   link.href = targetUrl;
 }
 

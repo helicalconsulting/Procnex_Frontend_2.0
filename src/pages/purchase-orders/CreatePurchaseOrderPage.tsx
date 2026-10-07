@@ -17,7 +17,29 @@ import { useBranding } from '../../context/BrandingContext';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { useAuth } from '../../context/AuthContext';
 import ActionSendingOverlay from '../../components/shared/ActionSendingOverlay';
+import PhoneInput from '../../components/shared/PhoneInput';
+import { COUNTRY_CODES } from '../../config/countryCodes';
 import './CreatePurchaseOrderPage.css';
+
+function detectCountryCode(fullPhone: string = '', fallback: string = '+91'): string {
+  const trimmed = (fullPhone || '').trim();
+  if (!trimmed) return fallback;
+  const matched = COUNTRY_CODES.find(cc => trimmed.startsWith(cc.dial));
+  return matched ? matched.dial : fallback;
+}
+
+function getPhoneNumberOnly(fullPhone: string = '', countryCode: string = '+91'): string {
+  const trimmed = (fullPhone || '').trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith(countryCode)) {
+    return trimmed.slice(countryCode.length).trim();
+  }
+  const matched = COUNTRY_CODES.find(cc => trimmed.startsWith(cc.dial));
+  if (matched) {
+    return trimmed.slice(matched.dial.length).trim();
+  }
+  return trimmed;
+}
 
 interface VendorOption {
   id: string;
@@ -63,22 +85,28 @@ export default function CreatePurchaseOrderPage() {
   const [shipToAddress, setShipToAddress] = useState('Central Depot');
   const [shipToContact, setShipToContact] = useState('Warehouse Manager');
   const [shipToPhone, setShipToPhone] = useState(brandingPhone || '');
+  const [shipToCountryCode, setShipToCountryCode] = useState('+91');
+  const [shipToPhoneError, setShipToPhoneError] = useState<string | null>(null);
 
   // ── Fetch Warehouses dynamically from Company Settings DB ──
   useEffect(() => {
     setLoadingWarehouses(true);
-    companySettingsService.listWarehouses()
+    companySettingsService.listWarehouses(true)
       .then((whs) => {
-        setWarehouses(whs);
-        if (whs.length > 0) {
-          const defWh = whs.find((w) => w.isDefault && w.isActive) || whs.find((w) => w.isActive) || whs[0];
+        const list = whs || [];
+        setWarehouses(list);
+        if (list.length > 0) {
+          const defWh = list.find((w) => w.isDefault && w.isActive) || list.find((w) => w.isActive) || list[0];
           if (defWh) {
             setSelectedWarehouseId(defWh.id);
             setShipToWarehouse(`${defWh.code} — ${defWh.name}`);
             const fullAddress = [defWh.address, defWh.city, defWh.country].filter(Boolean).join(', ');
             setShipToAddress(fullAddress || 'Central Depot');
             if (defWh.contactPerson) setShipToContact(defWh.contactPerson);
-            if (defWh.phone) setShipToPhone(defWh.phone);
+            if (defWh.phone) {
+              setShipToCountryCode(detectCountryCode(defWh.phone, '+91'));
+              setShipToPhone(defWh.phone);
+            }
           }
         }
       })
@@ -88,13 +116,29 @@ export default function CreatePurchaseOrderPage() {
 
   const handleWarehouseSelect = (whId: string) => {
     setSelectedWarehouseId(whId);
+    if (whId === '__custom__') {
+      setShipToWarehouse('');
+      setShipToAddress('');
+      setShipToContact('');
+      setShipToPhone('');
+      setShipToPhoneError(null);
+      return;
+    }
     const wh = warehouses.find((w) => w.id === whId);
     if (wh) {
       setShipToWarehouse(`${wh.code} — ${wh.name}`);
       const fullAddress = [wh.address, wh.city, wh.country].filter(Boolean).join(', ');
       setShipToAddress(fullAddress || '');
       setShipToContact(wh.contactPerson || '');
-      setShipToPhone(wh.phone || '');
+      if (wh.phone) {
+        setShipToCountryCode(detectCountryCode(wh.phone, '+91'));
+        setShipToPhone(wh.phone);
+      } else {
+        setShipToPhone('');
+      }
+      setShipToPhoneError(null);
+    } else {
+      setShipToWarehouse('');
     }
   };
 
@@ -138,6 +182,22 @@ export default function CreatePurchaseOrderPage() {
   const [contactPerson, setContactPerson] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactPhone, setContactPhone] = useState('');
+  const [contactCountryCode, setContactCountryCode] = useState('+91');
+  const [contactEmailError, setContactEmailError] = useState<string | null>(null);
+  const [contactPhoneError, setContactPhoneError] = useState<string | null>(null);
+
+  const isValidEmail = (email?: string): boolean => {
+    if (!email || !email.trim()) return true;
+    return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email.trim());
+  };
+
+  const isValidPhone = (phone?: string): boolean => {
+    if (!phone || !phone.trim()) return true;
+    const trimmed = phone.trim();
+    if (!/^[+]?[\d\s().-]{7,25}$/.test(trimmed)) return false;
+    const digits = trimmed.replace(/\D/g, '');
+    return digits.length >= 7 && digits.length <= 15;
+  };
 
   // Predictive Vendor Search State & Ref
   const [vendorSearchQuery, setVendorSearchQuery] = useState('');
@@ -299,6 +359,9 @@ export default function CreatePurchaseOrderPage() {
     setContactPerson(v.contactPerson || '');
     setContactEmail(v.email || '');
     setContactPhone(v.phone || '');
+    if (v.phone) {
+      setContactCountryCode(detectCountryCode(v.phone, '+91'));
+    }
     if ((v as any).category || (v as any).categoryName || (v as any).supplierType) {
       setSupplierType((v as any).category || (v as any).categoryName || (v as any).supplierType);
     }
@@ -510,6 +573,22 @@ export default function CreatePurchaseOrderPage() {
     }
     if (items.some((i) => Number(i.unitPrice) <= 0)) {
       setMsg({ text: 'Please enter a valid Unit Price (greater than 0) for all items.', type: 'error' });
+      return;
+    }
+
+    if (contactEmail && !isValidEmail(contactEmail)) {
+      setContactEmailError('Please enter a valid email address (e.g. name@supplier.com)');
+      setMsg({ text: 'Please enter a valid Contact Email address (e.g. name@supplier.com).', type: 'error' });
+      return;
+    }
+    if (contactPhone && !isValidPhone(contactPhone)) {
+      setContactPhoneError('Please enter a valid phone number (7 to 15 digits)');
+      setMsg({ text: 'Please enter a valid Contact Phone number (7 to 15 digits).', type: 'error' });
+      return;
+    }
+    if (shipToPhone && !isValidPhone(shipToPhone)) {
+      setShipToPhoneError('Please enter a valid phone number (7 to 15 digits)');
+      setMsg({ text: 'Please enter a valid Receiving Contact Phone number (7 to 15 digits).', type: 'error' });
       return;
     }
 
@@ -1084,13 +1163,68 @@ export default function CreatePurchaseOrderPage() {
               <label>CONTACT PERSON</label>
               <input type="text" value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} placeholder="Full name" />
             </div>
-            <div className="cpo-field">
+            <div className={`cpo-field ${contactEmailError ? 'cpo-field--error' : ''}`}>
               <label>CONTACT EMAIL</label>
-              <input type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="name@supplier.com" />
+              <input
+                type="email"
+                value={contactEmail}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setContactEmail(val);
+                  const trimmed = val.trim();
+                  if (!trimmed) {
+                    setContactEmailError(null);
+                  } else if (!isValidEmail(trimmed)) {
+                    setContactEmailError('Please enter a valid email address (e.g. name@supplier.com)');
+                  } else {
+                    setContactEmailError(null);
+                  }
+                }}
+                onBlur={(e) => {
+                  const trimmed = e.target.value.trim();
+                  if (!trimmed) {
+                    setContactEmailError(null);
+                  } else if (!isValidEmail(trimmed)) {
+                    setContactEmailError('Please enter a valid email address (e.g. name@supplier.com)');
+                  } else {
+                    setContactEmailError(null);
+                  }
+                }}
+                placeholder="name@supplier.com"
+              />
+              {contactEmailError && <span className="cpo-field__error-msg">{contactEmailError}</span>}
             </div>
-            <div className="cpo-field">
+            <div className={`cpo-field ${contactPhoneError ? 'cpo-field--error' : ''}`}>
               <label>CONTACT PHONE</label>
-              <input type="text" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="+1 000 000 0000" />
+              <PhoneInput
+                countryCode={contactCountryCode}
+                onCountryCodeChange={(code) => {
+                  setContactCountryCode(code);
+                  const num = getPhoneNumberOnly(contactPhone, contactCountryCode);
+                  const combined = num.trim() ? `${code} ${num.trim()}` : '';
+                  setContactPhone(combined);
+                  if (contactPhoneError && (!num.trim() || isValidPhone(combined))) {
+                    setContactPhoneError(null);
+                  }
+                }}
+                value={getPhoneNumberOnly(contactPhone, contactCountryCode)}
+                onChange={(val) => {
+                  const sanitized = val.replace(/[^0-9\s-()]/g, '');
+                  const combined = sanitized.trim() ? `${contactCountryCode} ${sanitized.trim()}` : '';
+                  setContactPhone(combined);
+                  const trimmed = sanitized.trim();
+                  if (!trimmed) {
+                    setContactPhoneError(null);
+                  } else if (!isValidPhone(combined)) {
+                    setContactPhoneError('Please enter a valid phone number (7 to 15 digits)');
+                  } else {
+                    setContactPhoneError(null);
+                  }
+                }}
+                hasError={Boolean(contactPhoneError)}
+                placeholder="e.g. 9820112345"
+              />
+              {contactPhoneError && <span className="cpo-field__error-msg">{contactPhoneError}</span>}
             </div>
           </div>
         </div>
@@ -1117,7 +1251,17 @@ export default function CreatePurchaseOrderPage() {
                     {wh.code} — {wh.name} {wh.isDefault ? '(Default Master)' : ''}
                   </option>
                 ))}
+                <option value="__custom__">+ Enter Custom Warehouse Manually...</option>
               </select>
+              {selectedWarehouseId === '__custom__' && (
+                <input
+                  style={{ marginTop: 6 }}
+                  type="text"
+                  value={shipToWarehouse}
+                  onChange={(e) => setShipToWarehouse(e.target.value)}
+                  placeholder="Enter custom warehouse / location name..."
+                />
+              )}
             </div>
             <div className="cpo-field">
               <label>RECEIVING CONTACT PERSON</label>
@@ -1128,14 +1272,37 @@ export default function CreatePurchaseOrderPage() {
                 placeholder="Warehouse Manager / Store Incharge"
               />
             </div>
-            <div className="cpo-field">
+            <div className={`cpo-field ${shipToPhoneError ? 'cpo-field--error' : ''}`}>
               <label>RECEIVING CONTACT PHONE</label>
-              <input
-                type="text"
-                value={shipToPhone}
-                onChange={(e) => setShipToPhone(e.target.value)}
-                placeholder="+91 800-PROCNEX"
+              <PhoneInput
+                countryCode={shipToCountryCode}
+                onCountryCodeChange={(code) => {
+                  setShipToCountryCode(code);
+                  const num = getPhoneNumberOnly(shipToPhone, shipToCountryCode);
+                  const combined = num.trim() ? `${code} ${num.trim()}` : '';
+                  setShipToPhone(combined);
+                  if (shipToPhoneError && (!num.trim() || isValidPhone(combined))) {
+                    setShipToPhoneError(null);
+                  }
+                }}
+                value={getPhoneNumberOnly(shipToPhone, shipToCountryCode)}
+                onChange={(val) => {
+                  const sanitized = val.replace(/[^0-9\s-()]/g, '');
+                  const combined = sanitized.trim() ? `${shipToCountryCode} ${sanitized.trim()}` : '';
+                  setShipToPhone(combined);
+                  const trimmed = sanitized.trim();
+                  if (!trimmed) {
+                    setShipToPhoneError(null);
+                  } else if (!isValidPhone(combined)) {
+                    setShipToPhoneError('Please enter a valid phone number (7 to 15 digits)');
+                  } else {
+                    setShipToPhoneError(null);
+                  }
+                }}
+                hasError={Boolean(shipToPhoneError)}
+                placeholder="e.g. 9820112345"
               />
+              {shipToPhoneError && <span className="cpo-field__error-msg">{shipToPhoneError}</span>}
             </div>
           </div>
 

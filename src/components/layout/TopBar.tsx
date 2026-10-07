@@ -67,6 +67,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/vendor/contracts': 'Contracts',
   '/vendor/agreements': 'Agreements',
   '/vendor/profile': 'Profile',
+  '/vendor/signature': 'My Signature',
   '/profile': 'My Profile',
   '/signature': 'Signature',
   '/reports': 'Reports',
@@ -108,6 +109,7 @@ const SECTION_MAP: Record<string, string> = {
   '/vendor/contracts': 'Vendor Portal',
   '/vendor/agreements': 'Vendor Portal',
   '/vendor/profile': 'Vendor Portal',
+  '/vendor/signature': 'Vendor Portal',
   '/profile': 'System',
 };
 

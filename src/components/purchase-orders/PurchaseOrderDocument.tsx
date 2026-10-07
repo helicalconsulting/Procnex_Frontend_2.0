@@ -56,6 +56,8 @@ export default function PurchaseOrderDocument({ pr }: Props) {
             <img
               src={finalLogoUrl}
               alt={finalCompanyName}
+              crossOrigin="anonymous"
+              referrerPolicy="no-referrer"
               className="po-doc__logo"
               onError={(e) => {
                 (e.currentTarget as HTMLImageElement).src = procnexLogo || defaultHeliflowLogo;

@@ -278,7 +278,7 @@ function getCustomPaymentsKey(): string {
 export const localDataService = {
   getPayments: async (): Promise<Payment[]> => {
     try {
-      const data = await apiRequest<{ payments: Array<Record<string, any>> }>('/payments');
+      const data = await apiRequest<{ payments: Array<Record<string, any>> }>('/payments?limit=1000');
       if (data.payments && Array.isArray(data.payments)) {
         const mappedList = data.payments.map((p, idx) => ({
           id: p.id || idx + 1,

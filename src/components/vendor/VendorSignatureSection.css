@@ -1,0 +1,91 @@
+/* Vendor Signature Section Styles */
+
+.sig-canvas-container {
+  position: relative;
+  width: 100%;
+  height: 240px;
+  background-color: #ffffff !important;
+  border: 1.5px dashed rgba(10, 110, 209, 0.35);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), inset 0 1px 2px rgba(0, 0, 0, 0.02);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sig-canvas-container:hover {
+  border-color: rgba(10, 110, 209, 0.7);
+  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.1);
+}
+
+.sig-interactive-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: crosshair;
+  touch-action: none;
+  background-color: #ffffff !important;
+}
+
+.sig-placeholder-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: transparent !important;
+  gap: 8px;
+  user-select: none;
+}
+
+.sig-placeholder-icon {
+  color: #0a6ed1;
+  opacity: 0.45;
+}
+
+.sig-placeholder-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: #475569 !important;
+  letter-spacing: -0.01em;
+}
+
+.sig-canvas-baseline {
+  position: absolute;
+  bottom: 40px;
+  left: 36px;
+  right: 36px;
+  height: 1px;
+  background-color: rgba(100, 116, 139, 0.25);
+  pointer-events: none;
+}
+
+.sig-canvas-baseline::after {
+  content: '✕';
+  position: absolute;
+  left: -20px;
+  top: -9px;
+  font-size: 12px;
+  color: rgba(100, 116, 139, 0.45);
+  font-family: system-ui, sans-serif;
+  font-weight: 600;
+}
+
+/* Dark mode overrides ensuring solid white canvas pad */
+.dark .sig-canvas-container {
+  background-color: #ffffff !important;
+  border-color: rgba(96, 165, 250, 0.5);
+}
+
+.dark .sig-interactive-canvas {
+  background-color: #ffffff !important;
+}
+
+.dark .sig-placeholder-overlay {
+  background: transparent !important;
+}
+
+.dark .sig-placeholder-text {
+  color: #475569 !important;
+}

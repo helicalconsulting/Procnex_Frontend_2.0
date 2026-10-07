@@ -12,7 +12,7 @@
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 30px 15px;
+  padding: 24px 15px;
   overflow-y: auto;
 }
 
@@ -21,17 +21,23 @@
   border: 1px solid #334155;
   border-radius: 16px;
   width: 100%;
-  max-width: 880px;
+  max-width: 920px;
+  max-height: 92vh;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-  overflow: hidden;
+  overflow-y: auto;
   color: #f8fafc;
+  display: flex;
+  flex-direction: column;
 }
 
 .ppi-modal__topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
+  padding: 14px 22px;
   background: #1e293b;
   border-bottom: 1px solid #334155;
 }
@@ -40,7 +46,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 1.1125rem;
+  font-size: 1.1rem;
   font-weight: 700;
   color: #f8fafc;
 }
@@ -87,7 +93,7 @@
   gap: 8px;
   padding: 8px 16px;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -102,22 +108,6 @@
 
 .ppi-btn--primary:hover {
   background: #059669;
-}
-
-.ppi-btn--secondary {
-  background: #334155;
-  color: #f1f5f9;
-  border: 1px solid #475569;
-}
-
-.ppi-btn--secondary:hover:not(:disabled) {
-  background: #475569;
-  color: #ffffff;
-}
-
-.ppi-btn--secondary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 .ppi-btn--close {
@@ -135,21 +125,22 @@
 .ppi-sheet {
   background: #ffffff;
   color: #0f172a;
-  padding: 40px;
+  padding: 36px 40px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.5;
+  flex: 1;
 }
 
 .ppi-sheet__header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding-bottom: 24px;
+  padding-bottom: 20px;
   border-bottom: 2px solid #0a2342;
 }
 
 .ppi-sheet__company h2 {
-  font-size: 23px;
+  font-size: 22px;
   font-weight: 800;
   color: #0a2342;
   margin: 0 0 4px 0;
@@ -157,7 +148,7 @@
 }
 
 .ppi-sheet__company p {
-  font-size: 13px;
+  font-size: 12.5px;
   color: #475569;
   margin: 2px 0;
 }
@@ -182,13 +173,13 @@
 }
 
 .ppi-sheet__meta-table {
-  margin-top: 12px;
+  margin-top: 10px;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 12.5px;
 }
 
 .ppi-sheet__meta-table td {
-  padding: 3px 8px;
+  padding: 2px 6px;
 }
 
 .ppi-sheet__meta-label {
@@ -207,77 +198,52 @@
 .ppi-sheet__parties {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 24px;
-  margin: 24px 0;
+  gap: 20px;
+  margin: 20px 0;
 }
 
 .ppi-sheet__party-box {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
-  padding: 16px;
+  padding: 14px 16px;
 }
 
 .ppi-sheet__party-heading {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 800;
   color: #64748b;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  margin: 0 0 8px 0;
-  padding-bottom: 6px;
+  margin: 0 0 6px 0;
+  padding-bottom: 5px;
   border-bottom: 1px solid #cbd5e1;
 }
 
 .ppi-sheet__party-name {
-  font-size: 15px;
+  font-size: 14.5px;
   font-weight: 700;
   color: #0f172a;
-  margin: 0 0 6px 0;
+  margin: 0 0 4px 0;
 }
 
 .ppi-sheet__party-detail {
-  font-size: 13px;
+  font-size: 12.5px;
   color: #475569;
-  margin: 3px 0;
-}
-
-/* Info Grid */
-.ppi-sheet__info-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 24px;
-}
-
-.ppi-sheet__info-item {
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  padding: 10px 12px;
-}
-
-.ppi-sheet__info-label {
-  display: block;
-  font-size: 11.5px;
-  font-weight: 700;
-  color: #64748b;
-  text-transform: uppercase;
-  margin-bottom: 4px;
-}
-
-.ppi-sheet__info-val {
-  font-size: 14px;
-  font-weight: 700;
-  color: #0f172a;
+  margin: 2px 0;
 }
 
 /* Items Table */
+.ppi-sheet__table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  margin: 18px 0;
+}
+
 .ppi-sheet__items-table {
   width: 100%;
   border-collapse: collapse;
-  margin: 24px 0;
-  font-size: 13.5px;
+  font-size: 13px;
 }
 
 .ppi-sheet__items-table th {
@@ -285,20 +251,27 @@
   color: #ffffff;
   font-weight: 700;
   text-align: left;
-  padding: 10px 14px;
-  font-size: 12.5px;
+  padding: 9px 12px;
+  font-size: 11.5px;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
 
 .ppi-sheet__items-table td {
-  padding: 12px 14px;
+  padding: 10px 12px;
   border-bottom: 1px solid #e2e8f0;
   color: #1e293b;
+  vertical-align: top;
 }
 
 .ppi-sheet__items-table tr:nth-child(even) td {
   background: #f8fafc;
+}
+
+.ppi-item-code {
+  font-size: 11px;
+  color: #2563eb;
+  font-weight: 600;
 }
 
 /* Total Box */
@@ -308,53 +281,41 @@
   background: #f8fafc;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
-  padding: 16px;
-  margin-top: 16px;
+  padding: 14px 16px;
+  margin-top: 14px;
 }
 
 .ppi-sheet__total-row {
   display: flex;
   justify-content: space-between;
-  padding: 6px 0;
-  font-size: 14px;
+  padding: 5px 0;
+  font-size: 13.5px;
   color: #475569;
 }
 
 .ppi-sheet__total-row--grand {
   border-top: 2px solid #0a2342;
-  margin-top: 8px;
-  padding-top: 10px;
-  font-size: 17px;
+  margin-top: 6px;
+  padding-top: 8px;
+  font-size: 16px;
   font-weight: 800;
   color: #0a2342;
 }
 
-/* Footer */
-.ppi-sheet__footer {
-  margin-top: 40px;
-  padding-top: 20px;
-  border-top: 1px solid #e2e8f0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 12px;
-  color: #64748b;
-}
-
 /* ── Approval Stamps Grid for Invoice ── */
 .ppi-stamps-section {
-  margin-top: 24px;
+  margin-top: 22px;
 }
 
 .ppi-stamps-title {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 700;
   color: #1e293b;
   letter-spacing: 0.05em;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   border-bottom: 1px solid #cbd5e1;
   padding-bottom: 4px;
 }
@@ -382,7 +343,7 @@
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid #e2e8f0;
-  padding-bottom: 6px;
+  padding-bottom: 5px;
 }
 
 .ppi-stamp-level-pill {
@@ -399,7 +360,7 @@
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 700;
   color: #059669;
   background: #ecfdf5;
@@ -421,14 +382,14 @@
 }
 
 .ppi-stamp-role {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 800;
   color: #0f172a;
   line-height: 1.25;
 }
 
 .ppi-stamp-date {
-  font-size: 10.5px;
+  font-size: 10px;
   color: #64748b;
   margin-top: 1px;
 }
@@ -437,10 +398,10 @@
   background: #ffffff;
   border: 1px dashed #cbd5e1;
   border-radius: 6px;
-  padding: 8px 12px;
+  padding: 6px 10px;
   margin-top: 4px;
   text-align: center;
-  min-height: 70px;
+  min-height: 60px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -456,14 +417,14 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   width: 100%;
 }
 
 .ppi-stamp-sig-img {
-  max-height: 60px;
-  min-height: 44px;
-  max-width: 220px;
+  max-height: 52px;
+  min-height: 38px;
+  max-width: 200px;
   width: auto;
   object-fit: contain;
   margin: 2px 0;
@@ -472,14 +433,19 @@
 .ppi-stamp-sig-seal {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 10.5px;
+  gap: 3px;
+  font-size: 9.5px;
   font-weight: 700;
   color: #0284c7;
 }
 
-/* Print Overrides */
+/* ── Print Overrides & Multi-page Handling ── */
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm 10mm;
+  }
+
   html, body {
     margin: 0 !important;
     padding: 0 !important;
@@ -488,12 +454,15 @@
     height: auto !important;
     overflow: visible !important;
   }
+
   body * {
     visibility: hidden;
   }
+
   .no-print {
     display: none !important;
   }
+
   .ppi-modal-backdrop {
     position: static !important;
     background: transparent !important;
@@ -502,17 +471,22 @@
     backdrop-filter: none !important;
     overflow: visible !important;
   }
+
   .ppi-modal {
+    position: static !important;
     border: none !important;
     box-shadow: none !important;
     max-width: 100% !important;
+    max-height: none !important;
     width: 100% !important;
     background: transparent !important;
     overflow: visible !important;
   }
+
   .ppi-sheet, .ppi-sheet * {
     visibility: visible !important;
   }
+
   .ppi-sheet {
     display: block !important;
     position: static !important;
@@ -522,16 +496,19 @@
     box-shadow: none !important;
     background: #ffffff !important;
     color: #0f172a !important;
+    overflow: visible !important;
   }
 
+  .ppi-sheet__header,
+  .ppi-sheet__parties,
+  .ppi-sheet__party-box,
+  .ppi-sheet__table-wrap,
+  .ppi-sheet__items-table tr,
+  .ppi-sheet__total-box,
   .ppi-stamps-section,
   .ppi-stamps-grid,
   .ppi-stamp-card,
-  .ppi-stamp-card__signature,
-  .ppi-sheet__parties,
-  .ppi-sheet__party-box,
-  .ppi-sheet__totals,
-  .ppi-sheet__table tr {
+  .ppi-stamp-card__signature {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }

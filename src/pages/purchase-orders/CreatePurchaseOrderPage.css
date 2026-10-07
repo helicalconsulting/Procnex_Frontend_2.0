@@ -299,6 +299,27 @@
   background-color: var(--surface-card);
 }
 
+.cpo-field--error label {
+  color: #ef4444 !important;
+}
+
+.cpo-field--error input,
+.cpo-field--error select,
+.cpo-field--error textarea {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15) !important;
+  background-color: rgba(239, 68, 68, 0.04) !important;
+}
+
+.cpo-field__error-msg {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #ef4444;
+  margin-top: 2px;
+  line-height: 1.3;
+}
+
 .cpo-input--readonly {
   background: var(--surface-elevated, #f8fafc) !important;
   color: var(--text-secondary) !important;

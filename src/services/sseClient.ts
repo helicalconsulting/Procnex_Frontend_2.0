@@ -68,16 +68,18 @@ class SSEClient {
    */
   private getStreamEndpoint(token: string): string | null {
     const payload = decodeTokenPayload(token);
-    if (!payload?.type) return null;
-
-    const endpoint = payload.type === 'vendor' ? '/vendors/stream' : '/dashboard/stream';
+    const isVendor = payload?.type === 'vendor' || !!localStorage.getItem('heliflow_vendor_token');
+    const endpoint = isVendor ? '/vendors/stream' : '/dashboard/stream';
     return `${API_BASE}${endpoint}?token=${encodeURIComponent(token)}`;
   }
 
   connect(): void {
     if (this.eventSource) return; // already connected
 
-    const token = localStorage.getItem('heliflow_token');
+    const token =
+      localStorage.getItem('heliflow_token') ||
+      localStorage.getItem('heliflow_vendor_token') ||
+      localStorage.getItem('auth_token');
     if (!token) return; // not logged in
 
     const streamUrl = this.getStreamEndpoint(token);
@@ -183,6 +185,14 @@ class SSEClient {
         if (handlers.size === 0) this.listeners.delete(event);
       }
     };
+  }
+
+  /**
+   * Subscribe to all SSE events.
+   * Returns an unsubscribe function.
+   */
+  onAny(handler: SSEEventHandler): () => void {
+    return this.on('any', handler);
   }
 
   /**

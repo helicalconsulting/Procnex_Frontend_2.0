@@ -853,7 +853,7 @@ export default function VendorCreateInvoicePage() {
         <div className="po-doc__header">
           <div className="po-doc__header-left">
             {finalLogoUrl ? (
-              <img src={finalLogoUrl} alt={buyerName || companyName || 'Company'} className="po-doc__logo" />
+              <img src={finalLogoUrl} alt={buyerName || companyName || 'Company'} crossOrigin="anonymous" referrerPolicy="no-referrer" className="po-doc__logo" />
             ) : (
               <div style={{
                 width: 40,

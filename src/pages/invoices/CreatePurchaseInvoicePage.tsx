@@ -905,7 +905,7 @@ export default function CreatePurchaseInvoicePage() {
   // Validation
   const validateForm = (): boolean => {
     setErrorMsg(null);
-    if (!invoiceNumber.trim()) {
+    if (!invoiceNumber || !invoiceNumber.trim()) {
       setErrorMsg('Invoice Number is required.');
       return false;
     }
@@ -918,7 +918,7 @@ export default function CreatePurchaseInvoicePage() {
       return false;
     }
     const validItems = lineItems.filter(
-      (item) => item.itemName.trim() && typeof item.supplierQty === 'number' && item.supplierQty > 0
+      (item) => (item.itemName || '').trim().length > 0 && Number(item.supplierQty || 0) > 0
     );
     if (validItems.length === 0) {
       setErrorMsg('Please add at least one line item with a valid item name and supplier quantity.');
@@ -929,6 +929,7 @@ export default function CreatePurchaseInvoicePage() {
 
   // Submission
   const submitInvoiceToAPI = async (isDraft: boolean) => {
+    if (submitting || savingDraft) return;
     if (!validateForm()) return;
 
     if (isDraft) {
@@ -1656,16 +1657,20 @@ export default function CreatePurchaseInvoicePage() {
                   <Printer size={15} /> Print Document
                 </button>
                 <button
+                  type="button"
                   className="cpi-btn cpi-btn--outline"
                   onClick={() => submitInvoiceToAPI(true)}
+                  onMouseDown={(e) => e.stopPropagation()}
                   disabled={savingDraft || submitting || !canCreateInvoice}
                   title={!canCreateInvoice ? 'Admin permission required to save draft purchase invoices.' : undefined}
                 >
                   <Save size={15} /> {savingDraft ? 'Saving…' : 'Save Draft'}
                 </button>
                 <button
+                  type="button"
                   className="cpi-btn cpi-btn--primary"
                   onClick={() => submitInvoiceToAPI(false)}
+                  onMouseDown={(e) => e.stopPropagation()}
                   disabled={savingDraft || submitting || !canCreateInvoice}
                   title={!canCreateInvoice ? 'Admin permission required to submit purchase invoices.' : undefined}
                 >
@@ -2250,9 +2255,11 @@ export default function CreatePurchaseInvoicePage() {
 
             <div style={{ marginTop: 8 }}>
               <button
+                type="button"
                 className="cpi-btn cpi-btn--primary"
                 style={{ width: '100%', padding: '12px 20px', fontSize: 15 }}
                 onClick={() => submitInvoiceToAPI(false)}
+                onMouseDown={(e) => e.stopPropagation()}
                 disabled={savingDraft || submitting}
               >
                 <Send size={16} /> {submitting ? 'Submitting…' : 'Submit Purchase Invoice'}
@@ -2266,7 +2273,7 @@ export default function CreatePurchaseInvoicePage() {
       <div className="grn-print-document po-document">
         <div className="po-doc__header">
           <div className="po-doc__header-left">
-            <img src={finalLogoUrl} alt={profile?.companyName || companyName || 'Procnex'} className="po-doc__logo" />
+            <img src={finalLogoUrl} alt={profile?.companyName || companyName || 'Procnex'} crossOrigin="anonymous" referrerPolicy="no-referrer" className="po-doc__logo" />
             <div className="po-doc__company-info">
               <h1 className="po-doc__company-name">
                 {profile?.companyName || companyName || 'Procnex'}

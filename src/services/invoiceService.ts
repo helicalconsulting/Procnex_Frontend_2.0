@@ -77,9 +77,20 @@ async function apiList(params?: { poId?: string; vendorId?: string; search?: str
       })(),
       matchStatus: inv.matchStatus ? String(inv.matchStatus) : undefined,
       department: inv.department ? String(inv.department) : undefined,
-      paymentTerms: inv.paymentTerms ? String(inv.paymentTerms) : undefined,
-      lineItems: (inv.lineItems || inv.items) as any[] | undefined,
-      items: (inv.items || inv.lineItems) as any[] | undefined,
+      lineItems: (() => {
+        let raw = inv.lineItems || inv.items || (inv.purchaseOrder as any)?.rfq?.items || (inv.purchaseOrder as any)?.items || (inv.grn as any)?.items;
+        if (typeof raw === 'string') {
+          try { raw = JSON.parse(raw); } catch {}
+        }
+        return Array.isArray(raw) ? raw : undefined;
+      })(),
+      items: (() => {
+        let raw = inv.items || inv.lineItems || (inv.purchaseOrder as any)?.rfq?.items || (inv.purchaseOrder as any)?.items || (inv.grn as any)?.items;
+        if (typeof raw === 'string') {
+          try { raw = JSON.parse(raw); } catch {}
+        }
+        return Array.isArray(raw) ? raw : undefined;
+      })(),
       attachments: inv.attachments as any[] | undefined,
       comments: inv.comments ? String(inv.comments) : undefined,
       grn: inv.grn,

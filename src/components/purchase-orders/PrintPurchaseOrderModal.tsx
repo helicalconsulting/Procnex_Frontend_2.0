@@ -118,6 +118,8 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
                   <img
                     src={finalLogoUrl}
                     alt={displayCompanyName}
+                    crossOrigin="anonymous"
+                    referrerPolicy="no-referrer"
                     style={{ maxHeight: 48, maxWidth: 160, objectFit: 'contain', marginBottom: 8, display: 'block' }}
                     onError={(e) => {
                       const img = e.currentTarget as HTMLImageElement;

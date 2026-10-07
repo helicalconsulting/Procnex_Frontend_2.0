@@ -3393,7 +3393,7 @@ export default function CompanySettingsPage() {
                   <div className="cs-upload-row">
                     {brandingLogoUrl && (
                       <div className="cs-logo-preview cs-logo-preview--uploaded">
-                        <img src={brandingLogoUrl} alt="Logo" className="cs-logo-preview__img" />
+                        <img src={brandingLogoUrl} alt="Logo" crossOrigin="anonymous" referrerPolicy="no-referrer" className="cs-logo-preview__img" />
                       </div>
                     )}
                     <label

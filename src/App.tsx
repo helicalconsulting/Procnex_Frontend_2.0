@@ -59,6 +59,9 @@ const VendorCreateInvoicePage = lazy(
 const VendorProfilePage = lazy(
   () => import("./pages/vendor/VendorProfilePage"),
 );
+const VendorSignaturePage = lazy(
+  () => import("./pages/vendor/VendorSignaturePage"),
+);
 const VendorContractsPage = lazy(() => import("./pages/vendor/VendorContractsPage"));
 const VendorContractDetailPage = lazy(() => import("./pages/vendor/VendorContractDetailPage"));
 const VendorAgreementsPage = lazy(() => import("./pages/vendor/VendorAgreementsPage"));
@@ -185,6 +188,7 @@ export default function App() {
                         <Route path="/v/:companyCode/payments" element={page(VendorPaymentsPage)} />
                         <Route path="/v/:companyCode/create-invoice" element={page(VendorCreateInvoicePage)} />
                         <Route path="/v/:companyCode/profile" element={page(VendorProfilePage)} />
+                        <Route path="/v/:companyCode/signature" element={page(VendorSignaturePage)} />
                         <Route path="/v/:companyCode/contracts" element={page(VendorContractsPage)} />
                         <Route path="/v/:companyCode/contracts/:id" element={page(VendorContractDetailPage)} />
                         <Route path="/v/:companyCode/agreements" element={page(VendorAgreementsPage)} />
@@ -198,6 +202,7 @@ export default function App() {
                         <Route path="/vendor/payments" element={page(VendorPaymentsPage)} />
                         <Route path="/vendor/create-invoice" element={page(VendorCreateInvoicePage)} />
                         <Route path="/vendor/profile" element={page(VendorProfilePage)} />
+                        <Route path="/vendor/signature" element={page(VendorSignaturePage)} />
                         <Route path="/vendor/contracts" element={page(VendorContractsPage)} />
                         <Route path="/vendor/contracts/:id" element={page(VendorContractDetailPage)} />
                         <Route path="/vendor/agreements" element={page(VendorAgreementsPage)} />

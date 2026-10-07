@@ -727,87 +727,158 @@ export default function ApprovalsPage() {
       {/* Action Dialog */}
       <Dialog open={!!actionModal} onOpenChange={() => setActionModal(null)}>
         {actionModal && (
-          <DialogContent className="sm:max-w-[440px]">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                {actionModal.action === 'approve' ? (
-                  <ThumbsUp className="size-5 text-emerald-600" />
-                ) : actionModal.action === 'return' ? (
-                  <RotateCcw className="size-5 text-amber-600" />
-                ) : (
-                  <ThumbsDown className="size-5 text-destructive" />
+          <DialogContent className="sm:max-w-[540px] p-6 sm:p-7 gap-5 overflow-hidden">
+            {/* Header with Visual Status Badge */}
+            <div className="flex items-start gap-4 pr-6">
+              <div
+                className={cn(
+                  "size-12 rounded-2xl flex items-center justify-center shrink-0 shadow-xs",
+                  actionModal.action === 'approve' && "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 dark:bg-emerald-500/15 dark:text-emerald-400",
+                  actionModal.action === 'return' && "bg-amber-500/10 text-amber-600 border border-amber-500/20 dark:bg-amber-500/15 dark:text-amber-400",
+                  actionModal.action === 'reject' && "bg-rose-500/10 text-rose-600 border border-rose-500/20 dark:bg-rose-500/15 dark:text-rose-400"
                 )}
-                {actionModal.action === 'approve' ? 'Approve Request' : actionModal.action === 'reject' ? 'Reject Request' : 'Return Request'}
-              </DialogTitle>
-              <DialogDescription>
-                Confirm decision for request <strong>{actionModal.request.referenceNumber}</strong>.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-4 py-2 text-xs">
-              <div className="rounded-lg border border-border/50 bg-muted/30 p-3 space-y-1.5">
-                <div className="flex justify-between"><span className="text-muted-foreground">Title:</span> <strong className="text-foreground">{actionModal.request.title}</strong></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Amount:</span> <strong className="text-foreground font-mono">{actionModal.request.amount}</strong></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Requested By:</span> <strong className="text-foreground">{actionModal.request.requestedBy}</strong></div>
+              >
+                {actionModal.action === 'approve' ? (
+                  <ThumbsUp className="size-6" />
+                ) : actionModal.action === 'return' ? (
+                  <RotateCcw className="size-6" />
+                ) : (
+                  <ThumbsDown className="size-6" />
+                )}
               </div>
-
-              {actionModal.action === 'return' && (
-                <div className="space-y-1.5">
-                  <label className="font-semibold text-foreground">Return Destination</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      className={cn(
-                        "rounded-md border p-2 text-left text-xs font-medium transition-colors",
-                        actionReturnTarget === 'ORIGINATOR' || actionReturnTarget === 'VENDOR'
-                          ? "border-amber-500 bg-amber-500/10 text-amber-700 dark:text-amber-400 font-semibold"
-                          : "border-border bg-background hover:bg-accent/40"
-                      )}
-                      onClick={() => setActionReturnTarget((actionModal.request.module === 'Quotation' || actionModal.request.module === 'Quotations') ? 'VENDOR' : 'ORIGINATOR')}
-                    >
-                      <div className="font-semibold">{(actionModal.request.module === 'Quotation' || actionModal.request.module === 'Quotations') ? 'Vendor' : 'Originator'}</div>
-                      <div className="text-[10px] text-muted-foreground mt-0.5">Send back for revision</div>
-                    </button>
-                    {(actionModal.request.currentLevel || 1) > 1 && (
-                      <button
-                        type="button"
-                        className={cn(
-                          "rounded-md border p-2 text-left text-xs font-medium transition-colors",
-                          actionReturnTarget === 'LEVEL_1'
-                            ? "border-amber-500 bg-amber-500/10 text-amber-700 dark:text-amber-400 font-semibold"
-                            : "border-border bg-background hover:bg-accent/40"
-                        )}
-                        onClick={() => setActionReturnTarget('LEVEL_1')}
-                      >
-                        <div className="font-semibold">Level 1 Approver</div>
-                        <div className="text-[10px] text-muted-foreground mt-0.5">Restart chain at L1</div>
-                      </button>
-                    )}
-                  </div>
+              <div className="space-y-1 min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <DialogTitle className="text-lg font-bold text-foreground tracking-tight">
+                    {actionModal.action === 'approve' ? 'Approve Request' : actionModal.action === 'reject' ? 'Reject Request' : 'Return Request'}
+                  </DialogTitle>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-muted text-muted-foreground border border-border/60">
+                    {actionModal.request.module}
+                  </span>
                 </div>
-              )}
-
-              <div className="space-y-1.5">
-                <label className="font-semibold text-foreground flex items-center gap-1">
-                  <MessageSquare className="size-3.5" /> Comments {actionModal.action === 'return' && <span className="text-destructive">*</span>}
-                </label>
-                <textarea
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring min-h-[80px]"
-                  placeholder={actionModal.action === 'return' ? "Please provide reason for return..." : "Optional comments or notes..."}
-                  value={actionComment}
-                  onChange={(e) => setActionComment(e.target.value)}
-                />
+                <DialogDescription className="text-xs text-muted-foreground">
+                  Confirm decision for request <span className="font-mono font-bold text-foreground">{actionModal.request.referenceNumber}</span>
+                </DialogDescription>
               </div>
             </div>
 
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setActionModal(null)}>Cancel</Button>
+            {/* Clean Structured Request Card */}
+            <div className="rounded-2xl border border-border/80 bg-muted/30 dark:bg-muted/15 p-4 space-y-3.5 shadow-2xs">
+              {/* Title / Description */}
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Subject / Title</span>
+                <p className="text-xs sm:text-sm font-semibold text-foreground leading-snug break-words">
+                  {actionModal.request.title}
+                </p>
+              </div>
+
+              {/* Grid Metadata */}
+              <div className="grid grid-cols-2 gap-3 pt-3 border-t border-border/60">
+                <div className="space-y-0.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Amount</span>
+                  <div className="text-sm sm:text-base font-bold text-foreground font-mono tracking-tight">
+                    {actionModal.request.amount}
+                  </div>
+                </div>
+
+                <div className="space-y-0.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Requested By</span>
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground truncate mt-0.5">
+                    <div className="size-5 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 text-[10px] font-bold">
+                      {actionModal.request.requestedBy ? actionModal.request.requestedBy.charAt(0).toUpperCase() : <User className="size-3" />}
+                    </div>
+                    <span className="truncate">{actionModal.request.requestedBy || '—'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Return Destination (if return mode) */}
+            {actionModal.action === 'return' && (
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-foreground flex items-center justify-between">
+                  <span>Return Destination</span>
+                  <span className="text-[10px] text-muted-foreground font-normal">Select where this request goes back to</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    className={cn(
+                      "rounded-xl border p-3 text-left transition-all relative",
+                      actionReturnTarget === 'ORIGINATOR' || actionReturnTarget === 'VENDOR'
+                        ? "border-amber-500 bg-amber-500/10 text-amber-900 dark:text-amber-200 ring-2 ring-amber-500/20 font-semibold"
+                        : "border-border/80 bg-card hover:bg-muted/40 text-foreground"
+                    )}
+                    onClick={() => setActionReturnTarget((actionModal.request.module === 'Quotation' || actionModal.request.module === 'Quotations') ? 'VENDOR' : 'ORIGINATOR')}
+                  >
+                    <div className="text-xs font-bold">{(actionModal.request.module === 'Quotation' || actionModal.request.module === 'Quotations') ? 'Vendor' : 'Originator'}</div>
+                    <div className="text-[11px] text-muted-foreground mt-0.5 leading-tight">Send back for revision</div>
+                  </button>
+                  {(actionModal.request.currentLevel || 1) > 1 && (
+                    <button
+                      type="button"
+                      className={cn(
+                        "rounded-xl border p-3 text-left transition-all relative",
+                        actionReturnTarget === 'LEVEL_1'
+                          ? "border-amber-500 bg-amber-500/10 text-amber-900 dark:text-amber-200 ring-2 ring-amber-500/20 font-semibold"
+                          : "border-border/80 bg-card hover:bg-muted/40 text-foreground"
+                      )}
+                      onClick={() => setActionReturnTarget('LEVEL_1')}
+                    >
+                      <div className="text-xs font-bold">Level 1 Approver</div>
+                      <div className="text-[11px] text-muted-foreground mt-0.5 leading-tight">Restart chain at L1</div>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Comments Box */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-foreground flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <MessageSquare className="size-3.5 text-muted-foreground" />
+                  Decision Comments {actionModal.action === 'return' ? <span className="text-destructive">*</span> : <span className="text-muted-foreground font-normal">(Optional)</span>}
+                </span>
+              </label>
+              <textarea
+                className="w-full rounded-xl border border-input bg-card px-3.5 py-2.5 text-xs sm:text-sm shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 min-h-[90px] resize-none transition-all placeholder:text-muted-foreground/60"
+                placeholder={actionModal.action === 'return' ? "Please explain why this request is being returned for revision..." : "Add any notes, remarks, or reference comments..."}
+                value={actionComment}
+                onChange={(e) => setActionComment(e.target.value)}
+              />
+            </div>
+
+            {/* Action Buttons Footer */}
+            <DialogFooter className="gap-2 sm:gap-0 pt-1">
+              <Button
+                variant="outline"
+                className="rounded-xl h-10 px-5 text-xs font-semibold"
+                onClick={() => setActionModal(null)}
+              >
+                Cancel
+              </Button>
               <Button
                 variant={actionModal.action === 'reject' ? 'destructive' : 'default'}
-                className={actionModal.action === 'return' ? 'bg-amber-600 hover:bg-amber-700 text-white' : ''}
+                className={cn(
+                  "rounded-xl h-10 px-5 text-xs font-semibold shadow-xs gap-2 transition-all",
+                  actionModal.action === 'approve' && "bg-emerald-600 hover:bg-emerald-700 text-white",
+                  actionModal.action === 'return' && "bg-amber-600 hover:bg-amber-700 text-white"
+                )}
                 onClick={handleAction}
               >
-                {actionModal.action === 'approve' ? 'Confirm Approval' : actionModal.action === 'reject' ? 'Confirm Rejection' : 'Confirm Return'}
+                {actionModal.action === 'approve' ? (
+                  <>
+                    <ThumbsUp className="size-3.5" /> Confirm Approval
+                  </>
+                ) : actionModal.action === 'reject' ? (
+                  <>
+                    <ThumbsDown className="size-3.5" /> Confirm Rejection
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="size-3.5" /> Confirm Return
+                  </>
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>
