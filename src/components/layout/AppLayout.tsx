@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'motion/react';
+import { useQueryClient } from '@tanstack/react-query';
 import { sseClient } from '../../services/sseClient';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
@@ -14,6 +15,7 @@ export default function AppLayout() {
   const previousPathRef = useRef(location.pathname);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isSidebarHovered, setIsSidebarHovered] = useState(false);
+  const queryClient = useQueryClient();
 
   const handleMobileOpen = useCallback(() => {
     setMobileOpen(true);
@@ -23,13 +25,58 @@ export default function AppLayout() {
     setMobileOpen(false);
   }, []);
 
-  // Centralize SSE connection — stays connected for the entire authenticated session
+  // Centralize SSE connection & Global Real-Time Event Dispatcher across all screens
   useEffect(() => {
     sseClient.connect();
+
+    // Global handler when any real-time SSE event is received
+    const handleGlobalSSE = (eventData: any) => {
+      // 1. Immediately invalidate all active services queries so visible pages refetch without reload
+      queryClient.invalidateQueries({ queryKey: ['svc'] });
+      queryClient.refetchQueries({ queryKey: ['svc'], type: 'active' });
+
+      // 2. Dispatch custom events for components listening on window
+      window.dispatchEvent(new CustomEvent('heliflow:sse-event', { detail: eventData }));
+      window.dispatchEvent(new CustomEvent('heliflow:notification-updated'));
+      window.dispatchEvent(new CustomEvent('heliflow:rfq-updated'));
+      window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
+      window.dispatchEvent(new CustomEvent('heliflow:po-updated'));
+      window.dispatchEvent(new CustomEvent('heliflow:quotation-updated'));
+      window.dispatchEvent(new CustomEvent('heliflow:payment-updated'));
+      window.dispatchEvent(new CustomEvent('heliflow:vendor-updated'));
+      window.dispatchEvent(new CustomEvent('heliflow:grn-updated'));
+      window.dispatchEvent(new CustomEvent('heliflow:dashboard-updated'));
+    };
+
+    const unsubAny = typeof sseClient.onAny === 'function' ? sseClient.onAny(handleGlobalSSE) : () => {};
+    const unsubNotification = sseClient.on('notification', handleGlobalSSE);
+    const unsubRfq = sseClient.on('rfq_status_changed', handleGlobalSSE);
+    const unsubApprovalReq = sseClient.on('approval_required', handleGlobalSSE);
+    const unsubApprovalLvl = sseClient.on('approval_level_complete', handleGlobalSSE);
+    const unsubApprovalChain = sseClient.on('approval_chain_complete', handleGlobalSSE);
+    const unsubPo = sseClient.on('po_created', handleGlobalSSE);
+    const unsubPoStatus = sseClient.on('po_status_changed', handleGlobalSSE);
+    const unsubQuotation = sseClient.on('quotation_received', handleGlobalSSE);
+    const unsubQuotationStatus = sseClient.on('quotation_status_changed', handleGlobalSSE);
+    const unsubVendor = sseClient.on('vendor_approved', handleGlobalSSE);
+    const unsubGrn = sseClient.on('grn_created', handleGlobalSSE);
+
     return () => {
+      unsubAny();
+      unsubNotification();
+      unsubRfq();
+      unsubApprovalReq();
+      unsubApprovalLvl();
+      unsubApprovalChain();
+      unsubPo();
+      unsubPoStatus();
+      unsubQuotation();
+      unsubQuotationStatus();
+      unsubVendor();
+      unsubGrn();
       sseClient.disconnect();
     };
-  }, []);
+  }, [queryClient]);
 
   useEffect(() => {
     if (previousPathRef.current !== location.pathname) {

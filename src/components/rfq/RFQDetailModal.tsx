@@ -275,20 +275,6 @@ export default function RFQDetailModal({
       return;
     }
 
-    const currentUserId = String(user?.id || (user as any)?._id || '');
-    const creatorId = String((rfq as any).createdBy || (rfq as any).creatorId || (rfq as any).creator?.id || '');
-    const userFullName = (user?.fullName || (user as any)?.name || (user as any)?.username || '').trim().toLowerCase();
-    const rfqCreatorName = (rfq.creator || '').trim().toLowerCase();
-    const isCreator = Boolean(
-      (creatorId && currentUserId && creatorId === currentUserId) ||
-      (rfqCreatorName && userFullName && rfqCreatorName === userFullName)
-    );
-
-    if (isCreator) {
-      setPendingApproval(null);
-      return;
-    }
-
     approvalService.listTable({ module: 'RFQ', status: 'PENDING' })
       .then((pendingRows) => {
         const pendingFound = pendingRows.find(
@@ -306,28 +292,31 @@ export default function RFQDetailModal({
     const approvalId = pendingApproval.id;
     const comment = approvalComment;
     
-    // Instant optimistic update
-    setPendingApproval(null);
-    rfq.status = 'APPROVED';
-    (rfq as any)._isApprovedByMe = true;
-    (rfq as any).canUserAct = false;
+    // Optimistic state
     setShowCommentBox(null);
     setApprovalComment('');
     setApprovalActionLoading(true);
     setApprovalActionError(null);
-    setApprovalActionSuccess('RFQ Level approved successfully!');
-    window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
 
     try {
       const res = await approvalService.approve(approvalId, comment);
-      if (res?.message) setApprovalActionSuccess(res.message);
-      if (res?.nextLevel) {
+      const hasNextLevel = Boolean(res?.nextLevel);
+      if (hasNextLevel) {
+        rfq.status = 'PENDING_APPROVAL';
+        setApprovalActionSuccess(res?.message || 'RFQ Level approved successfully! Forwarded to next level.');
         const rows = await approvalService.listTable({ module: 'RFQ', status: 'PENDING' });
         const found = rows.find((r) => (String(r.referenceId) === String(rfq.id) || r.referenceNumber === rfq.rfqNumber) && r.canAct);
-        if (found) setPendingApproval(found);
+        setPendingApproval(found || null);
+      } else {
+        rfq.status = 'APPROVED';
+        (rfq as any)._isApprovedByMe = true;
+        (rfq as any).canUserAct = false;
+        setPendingApproval(null);
+        setApprovalActionSuccess(res?.message || 'RFQ fully approved & dispatched!');
       }
       fetchApprovalChain();
       window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
+      window.dispatchEvent(new CustomEvent('heliflow:rfq-updated'));
     } catch (err) {
       setApprovalActionError(err instanceof Error ? err.message : 'Failed to approve RFQ');
     } finally {

@@ -390,7 +390,13 @@ export default function RFQPage() {
         : await approvalService.return(approvalId, comment, actionReturnTarget);
 
       // ⚡ INSTANT Optimistic State Updates in local maps
-      const optimisticStatus: RFQStatus = action === 'approve' ? 'APPROVED' : action === 'reject' ? 'REJECTED' : 'RETURNED';
+      const hasNextLevel = Boolean(res?.nextLevel);
+      const optimisticStatus: RFQStatus = action === 'approve'
+        ? (hasNextLevel ? 'PENDING_APPROVAL' : 'APPROVED')
+        : action === 'reject'
+        ? 'REJECTED'
+        : 'RETURNED';
+
       setLocalStatusMap((prev) => {
         const next = new Map(prev);
         next.set(String(rfq.id), optimisticStatus);
@@ -399,13 +405,15 @@ export default function RFQPage() {
         return next;
       });
 
-      setPendingApprovalsMap((prev) => {
-        const next = new Map(prev);
-        next.delete(String(rfq.id));
-        if (rfq.rfqNumber) next.delete(rfq.rfqNumber);
-        next.delete(approvalId);
-        return next;
-      });
+      if (!hasNextLevel) {
+        setPendingApprovalsMap((prev) => {
+          const next = new Map(prev);
+          next.delete(String(rfq.id));
+          if (rfq.rfqNumber) next.delete(rfq.rfqNumber);
+          next.delete(approvalId);
+          return next;
+        });
+      }
 
       setActionSuccessData({
         actionType: modalType,
@@ -859,8 +867,7 @@ export default function RFQPage() {
 
                     const pendingApproval = pendingApprovalsMap.get(String(rfq.id)) || pendingApprovalsMap.get(rfq.rfqNumber);
                     const isPending = (rfq.status === 'PENDING_APPROVAL' || rfq.status === 'RE_REVIEW' || Boolean((rfq as any)._isReturnedForReReview)) && !rfq._isReturnedByMe && !rfq._isRejectedByMe;
-                    // Creator should NEVER approve/return/reject their own RFQ
-                    const canUserActOnRFQ = isPending && !isCreator && (Boolean(pendingApproval?.canAct) || Boolean(rfq.canUserAct)) && (!rfq._isApprovedByMe || Boolean(pendingApproval?.canAct));
+                    const canUserActOnRFQ = isPending && (Boolean(pendingApproval?.canAct) || Boolean(rfq.canUserAct));
                     const canEditThisRFQ = isCreator || isUserAdmin;
 
                     return (

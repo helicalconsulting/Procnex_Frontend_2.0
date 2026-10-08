@@ -26,7 +26,7 @@ interface UseServiceDataOptions {
   enabled?: boolean;
 }
 
-const DEFAULT_STALE_TIME_MS = 5 * 60 * 1000; // 5 min
+const DEFAULT_STALE_TIME_MS = 15 * 1000; // 15s responsive cache, real-time invalidated via SSE
 
 function hashKey(input: string): string {
   let hash = 5381;
@@ -68,7 +68,7 @@ export function useServiceData<T>(
 
   const cacheDisabled = options.cacheTtlMs === 0;
   const staleTime = cacheDisabled ? 0 : (options.cacheTtlMs ?? DEFAULT_STALE_TIME_MS);
-  const gcTime = cacheDisabled ? 0 : (options.cacheTtlMs ?? DEFAULT_STALE_TIME_MS);
+  const gcTime = cacheDisabled ? 0 : Math.max(options.cacheTtlMs ?? DEFAULT_STALE_TIME_MS, 60000);
   const maxRetries = cacheDisabled ? 0 : (options.maxRetries ?? 2);
 
   const {
@@ -86,10 +86,8 @@ export function useServiceData<T>(
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
     // Keep previous data when refetching — avoids showing empty [] on navigation back
     placeholderData: (prev: T | undefined) => prev ?? initial as NonNullable<T> | undefined,
-    // refetchOnWindowFocus: enabled when cache is disabled so pages like Approvals
-    // always show fresh data when the user switches back to the browser tab.
-    refetchOnWindowFocus: cacheDisabled ? true : false,
-    refetchOnReconnect: !cacheDisabled,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
     enabled: options.enabled ?? true,
   });
 

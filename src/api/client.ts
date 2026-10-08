@@ -54,8 +54,8 @@ type CacheEntry = {
   value: unknown;
 };
 
-// FIX 1: Raised from 30s → 2 min so components don't re-fetch on every mount
-const DEFAULT_GET_CACHE_TTL_MS = Number(import.meta.env.VITE_API_CACHE_TTL_MS || 120_000);
+// Real-time enabled: no stale in-memory GET caching so multi-user events reflect instantly
+const DEFAULT_GET_CACHE_TTL_MS = Number(import.meta.env.VITE_API_CACHE_TTL_MS || 0);
 const apiCache = new Map<string, CacheEntry>();
 const inFlightRequests = new Map<string, Promise<unknown>>();
 
