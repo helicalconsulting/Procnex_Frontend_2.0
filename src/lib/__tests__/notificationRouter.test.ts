@@ -121,6 +121,22 @@ describe('notificationRouter', () => {
         '/quotations?rfq=RFQ-100'
       );
     });
+
+    it('should route Payment Voucher notifications to /procurement/create-payment-voucher or /payments', () => {
+      expect(
+        getNotificationTargetUrl(
+          'Payment Voucher Created',
+          'Draft Payment Voucher #PAY-20260408-1234 has been automatically created for approved Invoice #PI-2026-0001 (Acme Corp, KES 50,000).'
+        )
+      ).toBe('/procurement/create-payment-voucher?search=PAY-20260408-1234');
+
+      expect(
+        getNotificationTargetUrl(
+          'Payment Voucher Approval Required',
+          'Payment Voucher PAY-20260408-1234 requires your Level 1 review.'
+        )
+      ).toBe('/payments?search=PAY-20260408-1234');
+    });
   });
 
   describe('Vendor notification routing (getVendorNotificationTargetUrl)', () => {
@@ -133,6 +149,62 @@ describe('notificationRouter', () => {
     it('should route signed contract notifications to /contracts', () => {
       const url = getVendorNotificationTargetUrl('Contract Signed', 'Agreement signed', undefined, 'HEL');
       expect(url).toBe('/v/HEL/contracts');
+    });
+
+    it('should route "Quotation Submitted" notification to My Quotations (/vendor/quotations)', () => {
+      const url = getVendorNotificationTargetUrl(
+        'Quotation Submitted',
+        'Your quotation for RFQ #HCL-RFQ-0061 has been submitted successfully and is now under review.',
+        'rfq_123',
+        undefined
+      );
+      expect(url).toBe('/vendor/quotations?search=HCL-RFQ-0061');
+    });
+
+    it('should route branded "Quotation Submitted" notification to /v/:companyCode/quotations', () => {
+      const url = getVendorNotificationTargetUrl(
+        'Quotation Submitted',
+        'Your quotation for RFQ #HCL-RFQ-0061 has been submitted successfully and is now under review.',
+        'rfq_123',
+        'HEL'
+      );
+      expect(url).toBe('/v/HEL/quotations?search=HCL-RFQ-0061');
+    });
+
+    it('should route quotation status updates to /vendor/quotations', () => {
+      expect(
+        getVendorNotificationTargetUrl(
+          '🎉 Quotation Approved — You Are the Winning Vendor!',
+          'Congratulations! Your quotation for RFQ #HCL-RFQ-0061 has been fully approved.',
+          'rfq_123'
+        )
+      ).toBe('/vendor/quotations?search=HCL-RFQ-0061');
+
+      expect(
+        getVendorNotificationTargetUrl(
+          'Quotation Update — Not Selected',
+          'Thank you for your quotation for RFQ #HCL-RFQ-0061.',
+          'rfq_123'
+        )
+      ).toBe('/vendor/quotations?search=HCL-RFQ-0061');
+
+      expect(
+        getVendorNotificationTargetUrl(
+          'Quotation Returned — Resubmission Required',
+          'Your quotation for RFQ #HCL-RFQ-0061 has been returned by the approver.',
+          'rfq_123'
+        )
+      ).toBe('/vendor/quotations?search=HCL-RFQ-0061');
+    });
+
+    it('should route RFQ invitations to /vendor/rfqs', () => {
+      expect(
+        getVendorNotificationTargetUrl(
+          'New RFQ: HCL-RFQ-0061',
+          'You have been invited to submit a quotation for "Office Supplies".',
+          'rfq_123'
+        )
+      ).toBe('/vendor/rfqs?rfq=rfq_123');
     });
   });
 });

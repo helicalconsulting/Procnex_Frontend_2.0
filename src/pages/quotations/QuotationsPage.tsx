@@ -2256,8 +2256,11 @@ function ActionModalInner({
 
   const { formatAmount } = useCurrency();
 
-  const formatDate = (d: string) =>
-    new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  const formatDate = (d?: string | null) => {
+    if (!d) return '—';
+    const date = new Date(d);
+    return isNaN(date.getTime()) ? '—' : date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
 
   const config = {
     view: {
@@ -2315,11 +2318,11 @@ function ActionModalInner({
         <div className="quot-action-modal__body">
           <div className="quot-action-modal__info-card">
             {[
-              { label: 'Vendor',      value: q.vendorName },
-              { label: 'RFQ',         value: q.rfqNumber },
+              { label: 'Vendor',      value: q.vendorName || '—' },
+              { label: 'RFQ',         value: q.rfqNumber || '—' },
               { label: 'Total Price', value: q.totalPrice, highlight: true, isPrice: true, currency: q.currency || DEFAULT_CURRENCY },
-              { label: 'Lead Time',   value: `${q.leadTimeDays} days` },
-              { label: 'Payment',     value: q.paymentTerms, isPaymentTerms: true, paymentPlanSnapshot: q.paymentPlanSnapshot },
+              { label: 'Lead Time',   value: q.leadTimeDays ? `${q.leadTimeDays} days` : '—' },
+              { label: 'Payment',     value: q.paymentTerms || '—', isPaymentTerms: true, paymentPlanSnapshot: q.paymentPlanSnapshot },
               { label: 'Submitted',   value: formatDate(q.submittedAt) },
             ].map(row => (
               <div key={row.label} className="quot-action-modal__info-row">

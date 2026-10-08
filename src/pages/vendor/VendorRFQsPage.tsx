@@ -32,7 +32,7 @@ import '../../components/vendor/vendor-rfq-workspace.css';
 
 // ─── Types ──────────────────────────────────────────────────
 
-type RFQStatus = 'OPEN' | 'SUBMITTED' | 'CLOSED' | 'CANCELLED' | 'RETURNED';
+type RFQStatus = 'OPEN' | 'SUBMITTED' | 'CLOSED' | 'CANCELLED' | 'RETURNED' | 'ACCEPTED' | 'REJECTED';
 type VquotModalState = 'open' | 'expanded' | 'minimized';
 
 interface EvalCategoryInfo {
@@ -118,13 +118,26 @@ function mapVendorRfq(r: RFQ & {
     SENT: 'OPEN',
     IN_PROGRESS: 'OPEN',
     QUOTATIONS_RECEIVED: 'OPEN',
+    UNDER_EVALUATION: 'OPEN',
+    PO_CREATED: 'ACCEPTED',
+    AWARDED: 'ACCEPTED',
+    COMPLETED: 'CLOSED',
     DRAFT: 'OPEN',
     CLOSED: 'CLOSED',
     CANCELLED: 'CANCELLED',
+    REJECTED: 'REJECTED',
   };
   let status: RFQStatus = statusMap[r.status] || 'OPEN';
-  if (r.hasSubmittedQuotation && !r.needsResubmit) status = 'SUBMITTED';
-  if (r.needsResubmit) status = 'RETURNED';
+  if (r.latestQuotationStatus === 'REJECTED' || r.status === 'REJECTED') {
+    status = 'REJECTED';
+  } else if (r.latestQuotationStatus === 'ACCEPTED' || r.latestQuotationStatus === 'APPROVED' || r.status === 'PO_CREATED' || r.status === 'AWARDED') {
+    status = 'ACCEPTED';
+  } else if (r.hasSubmittedQuotation && !r.needsResubmit) {
+    status = 'SUBMITTED';
+  }
+  if (r.needsResubmit || r.latestQuotationStatus === 'RETURNED' || r.status === 'RETURNED') {
+    status = 'RETURNED';
+  }
 
   return {
     id: r.id,
@@ -146,6 +159,7 @@ function mapVendorRfq(r: RFQ & {
     department: ext.department || '—',
     rfqType: r.rfqType || 'RFQ',
     needsResubmit: r.needsResubmit || false,
+    latestQuotationId: r.latestQuotationId || null,
     customFields: (r.customFields || []).map((cf: any) => {
       let parsed: any = {};
       if (typeof cf.value === 'string' && cf.value.trim().startsWith('{')) {
@@ -192,8 +206,10 @@ function mapVendorRfq(r: RFQ & {
 
 const STATUS_MAP: Record<RFQStatus, { label: string; tone: 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info' }> = {
   OPEN: { label: 'Pending Response', tone: 'warning' },
-  SUBMITTED: { label: 'Submitted', tone: 'success' },
-  CLOSED: { label: 'Closed', tone: 'info' },
+  SUBMITTED: { label: 'Submitted', tone: 'info' },
+  ACCEPTED: { label: 'Accepted', tone: 'success' },
+  REJECTED: { label: 'Rejected', tone: 'danger' },
+  CLOSED: { label: 'Closed', tone: 'neutral' },
   CANCELLED: { label: 'Cancelled', tone: 'danger' },
   RETURNED: { label: 'Returned', tone: 'danger' },
 };
@@ -385,7 +401,7 @@ export default function VendorRFQsPage() {
   const summary = useMemo(() => ({
     total: rfqs.length,
     open: rfqs.filter(r => r.status === 'OPEN').length,
-    submitted: rfqs.filter(r => r.status === 'SUBMITTED').length,
+    submitted: rfqs.filter(r => ['SUBMITTED', 'ACCEPTED', 'REJECTED'].includes(r.status) || Boolean(r.latestQuotationId)).length,
     returned: rfqs.filter(r => r.status === 'RETURNED').length,
     deadlineSoon: rfqs.filter(dueSoon).length,
   }), [rfqs]);
@@ -395,6 +411,8 @@ export default function VendorRFQsPage() {
     let list = rfqs;
     if (kpiFilter === 'DEADLINE_SOON') {
       list = list.filter(dueSoon);
+    } else if (kpiFilter === 'SUBMITTED') {
+      list = list.filter(r => ['SUBMITTED', 'ACCEPTED', 'REJECTED'].includes(r.status) || Boolean(r.latestQuotationId));
     } else if (kpiFilter) {
       list = list.filter(r => r.status === kpiFilter);
     }
@@ -612,10 +630,10 @@ export default function VendorRFQsPage() {
     // Also reset card-body bid security upload state to prevent stale loading indicator
     setBidSecurityUploadingRfqId(prev => prev === currentRfq.id ? null : prev);
     setBidSecurityErrors(prev => { const n = { ...prev }; delete n[currentRfq.id]; return n; });
-    if (currentRfq.status === 'SUBMITTED' && !currentRfq.needsResubmit) {
-      setQuotModalTitle('View Quotation');
-    } else if (currentRfq.needsResubmit) {
+    if (currentRfq.needsResubmit) {
       setQuotModalTitle('Resubmit Quotation');
+    } else if (['SUBMITTED', 'ACCEPTED', 'REJECTED', 'CLOSED', 'CANCELLED'].includes(currentRfq.status) || Boolean(currentRfq.latestQuotationId)) {
+      setQuotModalTitle('View Quotation');
     } else {
       setQuotModalTitle('Submit Quotation');
     }
@@ -632,7 +650,7 @@ export default function VendorRFQsPage() {
     }, 0);
   }, [quotModal, quotPrices, itemCurrencies, companyDefaultCurrency, currency, convert]);
 
-  const isQuotReadOnly = Boolean(quotModal?.status === 'SUBMITTED' && !quotModal?.needsResubmit);
+  const isQuotReadOnly = Boolean((['SUBMITTED', 'ACCEPTED', 'REJECTED', 'CLOSED', 'CANCELLED'].includes(quotModal?.status || '') || Boolean(quotModal?.latestQuotationId)) && !quotModal?.needsResubmit);
 
   const activePrevQuote = previousQuotationsList.find(q => q.snapshotKey === selectedPrevVersionId) || previousQuotation;
   const closeQuote = () => { if (submitting || isDeleting || showCustomPlanModal) return; quoteRequest.current += 1; setQuotModal(null); };
@@ -893,7 +911,9 @@ export default function VendorRFQsPage() {
                 <div className="rfq-register__dates"><span className="text-sm font-semibold">{quoteDate(rfq.deadline)}</span><span className={cn('text-xs', ['OPEN', 'RETURNED'].includes(rfq.status) ? `rfq-deadline--${deadline.cls}` : 'rfq-muted')}>{['OPEN', 'RETURNED'].includes(rfq.status) ? deadline.text : `Created ${quoteDate(rfq.createdAt)}`}</span></div>
                 <div className="rfq-register__actions">
                   {rfq.status === 'OPEN' && <Button size="sm" onClick={() => openQuotModal(rfq)}><Send size={14} /> Submit Quote</Button>}
-                  {rfq.status === 'SUBMITTED' && <Button variant="outline" size="sm" onClick={() => openQuotModal(rfq)}><Eye size={14} /> View Quote</Button>}
+                  {['SUBMITTED', 'ACCEPTED', 'REJECTED', 'CLOSED', 'CANCELLED'].includes(rfq.status) && (
+                    <Button variant="outline" size="sm" onClick={() => openQuotModal(rfq)}><Eye size={14} /> View Quote</Button>
+                  )}
                   {rfq.status === 'RETURNED' && <Button size="sm" onClick={() => openQuotModal(rfq)}><RotateCcw size={14} /> Resubmit Quote</Button>}
                   <button className="rfq-details-link text-xs" aria-expanded={expanded} aria-controls={`rfq-details-${rfq.id}`} onClick={() => setExpandedRFQ(expanded ? null : rfq.id)}>{expanded ? 'Hide requirements' : 'View requirements'}<ChevronDown size={14} style={{ transform: expanded ? 'rotate(180deg)' : undefined }} /></button>
                 </div>

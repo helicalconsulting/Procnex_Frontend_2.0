@@ -14,14 +14,18 @@ export function getNotificationTargetUrl(
   const prMatch = combined.match(/\bpr[q]?-[a-z0-9_-]+\b/i);
   const rfqMatch = combined.match(/\brfq-[a-z0-9_-]+\b/i);
   const piMatch = combined.match(/\bpi-[a-z0-9_-]+\b/i);
-  const payMatch = combined.match(/\b(pay|pv)-[a-z0-9_-]+\b/i);
-  const contractMatch = combined.match(/\b(cnt|ctr|cont)-[a-z0-9_-]+\b/i);
+  const payMatch = combined.match(/\b(?:pay|pv)-[a-z0-9_-]+\b/i) || combined.match(/\b(?:pay|pv)[0-9_-]+\b/i);
+  const contractMatch = combined.match(/\b(?:cnt|ctr|cont)-[a-z0-9_-]+\b/i);
   const qtnMatch = combined.match(/\bqtn-[a-z0-9_-]+\b/i);
 
   // Special: Returned for Revision (Direct to Creator edit page)
   if (lower.includes('returned for revision') || (lower.includes('returned') && !lower.includes('re-review'))) {
     if (lower.includes('form') || lower.includes('custom form')) {
       return '/forms?tab=returned';
+    }
+    if (lower.includes('payment') || lower.includes('voucher') || payMatch) {
+      if (payMatch) return `/procurement/create-payment-voucher?search=${encodeURIComponent(payMatch[0])}`;
+      return '/procurement/create-payment-voucher';
     }
     if (lower.includes('quotation') || qtnMatch) {
       if (rfqMatch) return `/quotations?rfq=${encodeURIComponent(rfqMatch[0])}`;
@@ -39,13 +43,30 @@ export function getNotificationTargetUrl(
       if (piMatch) return `/accounts-payable?search=${encodeURIComponent(piMatch[0])}`;
       return '/accounts-payable';
     }
-    if (lower.includes('payment') || lower.includes('voucher') || payMatch) {
+  }
+
+  // 1. Payment Vouchers & Payment Approvals (MUST BE FIRST because Payment Voucher notifications often mention approved Invoices & PO numbers)
+  if (
+    lower.includes('payment voucher') ||
+    lower.includes('voucher') ||
+    lower.includes('payment') ||
+    payMatch
+  ) {
+    if (
+      lower.includes('approval') ||
+      lower.includes('approver') ||
+      lower.includes('level') ||
+      lower.includes('pending review')
+    ) {
       if (payMatch) return `/payments?search=${encodeURIComponent(payMatch[0])}`;
       return '/payments';
     }
+    if (payMatch) return `/procurement/create-payment-voucher?search=${encodeURIComponent(payMatch[0])}`;
+    if (piMatch) return `/procurement/create-payment-voucher?search=${encodeURIComponent(piMatch[0])}`;
+    return '/procurement/create-payment-voucher';
   }
 
-  // 1. Quotations & Quotation Approvals (Quotation Approval Module -> /quotations)
+  // 2. Quotations & Quotation Approvals (Quotation Approval Module -> /quotations)
   if (
     lower.includes('quotation') ||
     lower.includes('quote') ||
@@ -58,13 +79,13 @@ export function getNotificationTargetUrl(
     return '/quotations';
   }
 
-  // 2. RFQ & RFQ Approvals (RFQ Module -> /rfq)
+  // 3. RFQ & RFQ Approvals (RFQ Module -> /rfq)
   if (lower.includes('rfq') || rfqMatch) {
     if (rfqMatch) return `/rfq?search=${encodeURIComponent(rfqMatch[0])}`;
     return '/rfq';
   }
 
-  // 3. Accounts Payable / Purchase Invoices & PI Approvals (Must be before PO because invoice notifications often mention PO references)
+  // 4. Accounts Payable / Purchase Invoices & PI Approvals (Must be after Payment Vouchers and before POs)
   if (
     lower.includes('purchase invoice') ||
     lower.includes('invoice') ||
@@ -73,12 +94,6 @@ export function getNotificationTargetUrl(
   ) {
     if (piMatch) return `/accounts-payable?search=${encodeURIComponent(piMatch[0])}`;
     return '/accounts-payable';
-  }
-
-  // 4. Payment Vouchers & Payment Approvals
-  if (lower.includes('payment') || lower.includes('voucher') || payMatch) {
-    if (payMatch) return `/payments?search=${encodeURIComponent(payMatch[0])}`;
-    return '/payments';
   }
 
   // 5. Purchase Orders & PO Approvals
@@ -212,12 +227,27 @@ export function getVendorNotificationTargetUrl(
   rfqId?: string,
   companyCode?: string
 ): string {
-  const combined = `${title} ${message}`.toLowerCase();
+  const rawCombined = `${title} ${message}`.trim();
+  const combined = rawCombined.toLowerCase();
   const base = companyCode ? `/v/${companyCode}` : '/vendor';
 
-  // 1. RFQ Invitations & Requests for Quotation (Always routes to "My RFQs" so vendor can view details & submit quotation)
+  // Extract RFQ/entity identifiers if present in text
+  const rfqMatch = rawCombined.match(/\b(?:[a-z0-9]+-)?rfq-[a-z0-9_-]+\b/i) || rawCombined.match(/\brfq-[a-z0-9_-]+\b/i);
+  const qtnMatch = rawCombined.match(/\b(?:[a-z0-9]+-)?qtn-[a-z0-9_-]+\b/i) || rawCombined.match(/\bqtn-[a-z0-9_-]+\b/i);
+  const effectiveSearch = rfqMatch ? rfqMatch[0] : (rfqId || '');
+
+  // 1. Quotations (Submitted, Awarded, Approved, Rejected, Returned, Under Review, Shortlisted, etc.)
+  // If the notification relates to a quotation action, route to My Quotations (/vendor/quotations)
+  const isQuotationNotification =
+    combined.includes('quotation') ||
+    combined.includes('quote') ||
+    combined.includes('winning vendor') ||
+    combined.includes('not selected') ||
+    combined.includes('resubmission required') ||
+    Boolean(qtnMatch);
+
+  // Check if this is specifically an RFQ Invitation (vendor invited to submit a new quote)
   const isRfqInvitation =
-    Boolean(rfqId) ||
     combined.includes('new rfq') ||
     combined.includes('rfq invited') ||
     combined.includes('rfq_invited') ||
@@ -226,33 +256,33 @@ export function getVendorNotificationTargetUrl(
     combined.includes('submit quotation') ||
     combined.includes('submit your quotation') ||
     combined.includes('request for quotation') ||
-    combined.includes('rfq invitation') ||
-    combined.includes('rfq-');
+    combined.includes('rfq invitation');
 
-  if (
-    isRfqInvitation &&
-    !combined.includes('quotation awarded') &&
-    !combined.includes('quotation approved') &&
-    !combined.includes('quotation rejected') &&
-    !combined.includes('quotation under review') &&
-    !combined.includes('quotation shortlisted')
-  ) {
+  // If it's a quotation submission/update/status notification (even if it mentions RFQ), route to My Quotations
+  if (isQuotationNotification && !isRfqInvitation) {
+    if (effectiveSearch) {
+      return `${base}/quotations?search=${encodeURIComponent(effectiveSearch)}`;
+    }
+    return `${base}/quotations`;
+  }
+
+  // 2. RFQ Invitations & Requests for Quotation (Always routes to "My RFQs" so vendor can view details & submit quotation)
+  if (isRfqInvitation) {
     if (rfqId) {
       return `${base}/rfqs?rfq=${encodeURIComponent(rfqId)}`;
     }
-    const rfqMatch = combined.match(/\brfq-[a-z0-9_-]+\b/i);
     if (rfqMatch) {
       return `${base}/rfqs?search=${encodeURIComponent(rfqMatch[0])}`;
     }
     return `${base}/rfqs`;
   }
 
-  // 2. Forms & Digital Agreements
+  // 3. Forms & Digital Agreements
   if (combined.includes('form') || combined.includes('forms')) {
     return `${base}/agreements`;
   }
 
-  // 3. Contracts & Digital Agreements
+  // 4. Contracts & Digital Agreements
   const isVendorSignature = /\b(signed|signature|countersigned|counter-signed)\b/i.test(combined);
   if (
     combined.includes('contract') ||
@@ -264,27 +294,40 @@ export function getVendorNotificationTargetUrl(
     return `${base}/contracts`;
   }
 
-  // 4. Invoices & Payments
-  if (combined.includes('invoice') || combined.includes('payment') || combined.includes('voucher')) {
+  // 5. Payments
+  if (
+    combined.includes('payment') ||
+    combined.includes('voucher') ||
+    combined.includes('pay-') ||
+    combined.includes('pv-')
+  ) {
+    return `${base}/payments`;
+  }
+
+  // 6. Invoices
+  if (combined.includes('invoice') || combined.includes('pi-')) {
     return `${base}/invoices`;
   }
 
-  // 5. Purchase Orders
+  // 6. Purchase Orders
   if (combined.includes('purchase order') || combined.includes('po-') || combined.includes('order')) {
     return `${base}/orders`;
   }
 
-  // 6. Existing Quotations (Awards, approvals, rejections, reviews, revisions)
+  // 7. General Quotations Fallback
   if (
     combined.includes('quotation') ||
     combined.includes('quote') ||
     combined.includes('qtn-') ||
     combined.includes('bid')
   ) {
+    if (effectiveSearch) {
+      return `${base}/quotations?search=${encodeURIComponent(effectiveSearch)}`;
+    }
     return `${base}/quotations`;
   }
 
-  // 7. Vendor Profile & Compliance
+  // 8. Vendor Profile & Compliance
   if (combined.includes('profile') || combined.includes('bank') || combined.includes('document')) {
     return `${base}/profile`;
   }

@@ -97,21 +97,28 @@ export default function AdminNotificationBell() {
     void load();
   };
 
-  const openNotification = async (n: NotificationRow) => {
-    if (!n.isRead) {
-      await notificationService.markRead(n.id);
-      setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, isRead: true } : x)));
-      setUnreadCount((c) => Math.max(0, c - 1));
-    }
+  const openNotification = (n: NotificationRow) => {
+    // 1. Immediately close dropdown, update local count, and navigate with 0ms delay
     setOpen(false);
+    setNotifications((prev) => prev.filter((x) => x.id !== n.id));
+    setUnreadCount((c) => Math.max(0, c - 1));
     const targetUrl = getNotificationTargetUrl(n.title, n.message, n.linkedRef);
     navigate(targetUrl);
+
+    // 2. Perform background async markRead & notify listeners
+    void notificationService.markRead(n.id).catch(() => {});
+    window.dispatchEvent(new CustomEvent('heliflow:notification-updated'));
   };
 
   const markAllRead = async () => {
-    await notificationService.markAllRead();
-    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    try {
+      await notificationService.deleteAll();
+    } catch {
+      await notificationService.markAllRead().catch(() => {});
+    }
+    setNotifications([]);
     setUnreadCount(0);
+    window.dispatchEvent(new CustomEvent('heliflow:notification-updated'));
   };
 
   const iconFor = (n: NotificationRow) => {
@@ -155,7 +162,7 @@ export default function AdminNotificationBell() {
       >
         <div className="vnotif__header">
           <span className="vnotif__title">Notifications</span>
-          {unreadCount > 0 && (
+          {notifications.length > 0 && (
             <button type="button" className="vnotif__mark-all" onClick={markAllRead}>
               <Check size={14} /> Mark all read
             </button>

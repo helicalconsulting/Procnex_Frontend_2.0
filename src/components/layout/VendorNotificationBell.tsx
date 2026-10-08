@@ -83,13 +83,14 @@ export default function VendorNotificationBell() {
     void load();
   };
 
-  const openRfq = async (n: VendorNotification) => {
+  const openRfq = (n: VendorNotification) => {
+    // 1. Immediately close dropdown, update local count, and navigate with 0ms delay
+    setOpen(false);
     if (!n.isRead) {
-      await vendorPortalService.markNotificationRead(n.id);
       setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, isRead: true } : x)));
       setUnreadCount((c) => Math.max(0, c - 1));
+      void vendorPortalService.markNotificationRead(n.id).catch(() => {});
     }
-    setOpen(false);
     const rfqId = n.metadata?.rfqId || n.metadata?.rfqNumber || (n.metadata as any)?.referenceId;
     const companyCode = (n.metadata as any)?.companyCode;
     const targetUrl = getVendorNotificationTargetUrl(n.title, n.message || '', rfqId, companyCode);
@@ -97,8 +98,12 @@ export default function VendorNotificationBell() {
   };
 
   const markAllRead = async () => {
-    await vendorPortalService.markAllNotificationsRead();
-    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    try {
+      await vendorPortalService.deleteAllNotifications();
+    } catch {
+      await vendorPortalService.markAllNotificationsRead().catch(() => {});
+    }
+    setNotifications([]);
     setUnreadCount(0);
   };
 

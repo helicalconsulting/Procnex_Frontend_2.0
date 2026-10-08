@@ -92,14 +92,15 @@ export default function PurchaseRequisitionPage() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const contractId = searchParams.get('contractId');
-  const isReadOnly = searchParams.get('mode') === 'view' || searchParams.get('readOnly') === 'true' || Boolean((location.state as any)?.readOnly);
   const { roles, hasPermission } = useAuth();
   const canCreatePO = hasPermission('PO Creation', 'canCreate') || hasPermission('Goods Received Note', 'canCreate') || hasPermission('GRN', 'canCreate');
-  const isFormDisabled = isReadOnly || !canCreatePO;
   const { formatAmount, companyDefaultCurrency } = useCurrency();
   const branding = useBranding();
 
   const [pr, setPr] = useState<PurchaseRequisition | null>(null);
+  const isPrEditable = !pr || !['APPROVED', 'COMPLETED', 'SENT_TO_VENDOR', 'PO_CREATED', 'REJECTED', 'CANCELLED'].includes(pr.status);
+  const isReadOnly = searchParams.get('mode') === 'view' || searchParams.get('readOnly') === 'true' || Boolean((location.state as any)?.readOnly) || !isPrEditable;
+  const isFormDisabled = isReadOnly || !canCreatePO;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

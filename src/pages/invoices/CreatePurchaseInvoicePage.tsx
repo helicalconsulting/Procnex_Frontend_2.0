@@ -99,6 +99,7 @@ export default function CreatePurchaseInvoicePage() {
 
   // Main Page View Mode: List / Overview Table vs Entry Form
   const [isCreating, setIsCreating] = useState<boolean>(() => Boolean(poIdParam || grnIdParam || modeParam));
+  const [isReadOnly, setIsReadOnly] = useState<boolean>(false);
   const [creationMode, setCreationMode] = useState<'linked' | 'manual' | null>(() => {
     if (modeParam === 'manual') return 'manual';
     if (modeParam === 'linked' || poIdParam || grnIdParam) return 'linked';
@@ -247,6 +248,81 @@ export default function CreatePurchaseInvoicePage() {
 
     return Array.from(map.values());
   }, [vendorsList, poList]);
+
+  // Open invoice entry in either Read-Only View mode or Edit mode
+  const openInvoiceEntry = (inv: APInvoice, mode: 'view' | 'edit') => {
+    setIsReadOnly(mode === 'view');
+    if (inv.poNumber && inv.poNumber !== '—') {
+      setSelectedPoId(inv.poNumber);
+    } else if (inv.poId) {
+      setSelectedPoId(inv.poId);
+    }
+    if (inv.vendorName && inv.vendorName !== '—') {
+      setVendorName(inv.vendorName);
+      const matchedVendor = allSuppliers.find(
+        (v) => v.name.toLowerCase() === inv.vendorName.toLowerCase() || String(v.id) === String((inv as any).vendorId)
+      );
+      if (matchedVendor) {
+        setSelectedVendorId(matchedVendor.id);
+      }
+    }
+    if (inv.invoiceNumber) {
+      setInvoiceNumber(inv.invoiceNumber);
+    }
+    if (inv.dueDate) {
+      setDueDate(typeof inv.dueDate === 'string' ? inv.dueDate.slice(0, 10) : inv.dueDate);
+    }
+    if (inv.invoiceDate || inv.submittedAt) {
+      const invD = inv.invoiceDate || inv.submittedAt;
+      setInvoiceDate(typeof invD === 'string' ? invD.slice(0, 10) : invD);
+    }
+    if (inv.paymentTerms) {
+      setPaymentTerms(inv.paymentTerms);
+    }
+    if (inv.department) {
+      setDepartment(inv.department);
+    }
+    if ((inv as any).currency) {
+      setCurrency((inv as any).currency);
+    }
+    if (inv.comments) {
+      setNotes(inv.comments);
+    }
+    if (inv.attachments && Array.isArray(inv.attachments)) {
+      setAttachments(inv.attachments);
+    } else if (inv.invoiceNumber) {
+      try {
+        const cached = localStorage.getItem(`invoice_attachments_${inv.invoiceNumber}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setAttachments(parsed);
+          }
+        }
+      } catch {}
+    }
+    const rawItems = inv.lineItems || inv.items;
+    if (rawItems && Array.isArray(rawItems) && rawItems.length > 0) {
+      setLineItems(
+        rawItems.map((item: any, idx: number) => ({
+          id: item.id || `inv_item_${idx}_${Date.now()}`,
+          itemCode: item.itemCode || `ITM-${String(idx + 1).padStart(3, '0')}`,
+          itemName: item.itemName || item.name || item.description || `Line Item ${idx + 1}`,
+          description: item.description || item.remarks || '',
+          poQty: Number(item.poQty ?? item.quantity ?? item.orderedQty ?? 1),
+          grnQty: Number(item.grnQty ?? item.receivedQty ?? item.invoicedQty ?? item.supplierQty ?? 1),
+          supplierQty: Number(item.supplierQty ?? item.invoicedQty ?? item.quantity ?? 1),
+          unitPrice: Number(item.unitPrice ?? item.price ?? 0),
+          taxPercent: Number(item.taxPercent ?? 18),
+        }))
+      );
+    }
+    if (inv.grnNumber) {
+      setSelectedGrnId(inv.grnNumber);
+    }
+    setCreationMode('linked');
+    setIsCreating(true);
+  };
 
   // Filter POs by selected Vendor
   const availablePOs = useMemo(() => {
@@ -1116,6 +1192,7 @@ export default function CreatePurchaseInvoicePage() {
           actions={
             <Button
               onClick={() => {
+                setIsReadOnly(false);
                 if (!poIdParam && !grnIdParam) {
                   setSelectedVendorId('');
                   setSelectedPoId('');
@@ -1367,11 +1444,7 @@ export default function CreatePurchaseInvoicePage() {
                             <td className="px-3 py-3.5">
                               <button
                                 className="font-semibold text-primary transition-colors hover:text-primary/75 hover:underline"
-                                onClick={() => {
-                                  if (inv.poNumber) setSelectedPoId(inv.poNumber);
-                                  setCreationMode('linked');
-                                  setIsCreating(true);
-                                }}
+                                onClick={() => openInvoiceEntry(inv, 'view')}
                               >
                                 {inv.invoiceNumber}
                               </button>
@@ -1393,11 +1466,7 @@ export default function CreatePurchaseInvoicePage() {
                                 <Button
                                   variant="ghost"
                                   size="icon-sm"
-                                  onClick={() => {
-                                    if (inv.poNumber) setSelectedPoId(inv.poNumber);
-                                    setCreationMode('linked');
-                                    setIsCreating(true);
-                                  }}
+                                  onClick={() => openInvoiceEntry(inv, 'view')}
                                   title="View Invoice Entry"
                                 >
                                   <Eye size={15} />
@@ -1406,11 +1475,7 @@ export default function CreatePurchaseInvoicePage() {
                                   <Button
                                     variant="ghost"
                                     size="icon-sm"
-                                    onClick={() => {
-                                      if (inv.poNumber) setSelectedPoId(inv.poNumber);
-                                      setCreationMode('linked');
-                                      setIsCreating(true);
-                                    }}
+                                    onClick={() => openInvoiceEntry(inv, 'edit')}
                                     title="Edit Invoice Entry"
                                   >
                                     <Pencil size={15} />
@@ -1643,43 +1708,65 @@ export default function CreatePurchaseInvoicePage() {
       {/* Header */}
       <div className="cpi-page-header">
         <div className="cpi-header-left">
-          <button className="cpi-back-btn" onClick={() => setIsCreating(false)} title="Back" aria-label="Back">
+          <button className="cpi-back-btn" onClick={() => { setIsCreating(false); setIsReadOnly(false); }} title="Back" aria-label="Back">
             <ArrowLeft size={18} />
           </button>
           <div className="cpi-header-main">
             <div className="cpi-header-top-row">
-              <h1 className="cpi-header-title">Create Purchase Invoice Entry</h1>
-              <div className="cpi-header-actions">
-                <button type="button" className="cpi-btn cpi-btn--outline" onClick={() => setShowModeModal(true)}>
-                  <Receipt size={15} /> Switch Mode
-                </button>
-                <button type="button" className="cpi-btn cpi-btn--outline" onClick={() => window.print()}>
-                  <Printer size={15} /> Print Document
-                </button>
-                <button
-                  type="button"
-                  className="cpi-btn cpi-btn--outline"
-                  onClick={() => submitInvoiceToAPI(true)}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  disabled={savingDraft || submitting || !canCreateInvoice}
-                  title={!canCreateInvoice ? 'Admin permission required to save draft purchase invoices.' : undefined}
-                >
-                  <Save size={15} /> {savingDraft ? 'Saving…' : 'Save Draft'}
-                </button>
-                <button
-                  type="button"
-                  className="cpi-btn cpi-btn--primary"
-                  onClick={() => submitInvoiceToAPI(false)}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  disabled={savingDraft || submitting || !canCreateInvoice}
-                  title={!canCreateInvoice ? 'Admin permission required to submit purchase invoices.' : undefined}
-                >
-                  <Send size={15} /> {submitting ? 'Submitting…' : 'Submit Invoice for Approval'}
-                </button>
-              </div>
+              <h1 className="cpi-header-title">
+                {isReadOnly ? 'View Purchase Invoice Details' : 'Create Purchase Invoice Entry'}
+              </h1>
+              {isReadOnly ? (
+                <div className="cpi-header-actions">
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '6px 14px',
+                      borderRadius: 8,
+                      background: 'rgba(59, 130, 246, 0.1)',
+                      color: '#2563eb',
+                      fontWeight: 600,
+                      fontSize: 13,
+                      border: '1px solid rgba(59, 130, 246, 0.25)',
+                    }}
+                  >
+                    <Eye size={15} /> Read-Only View
+                  </span>
+                </div>
+              ) : (
+                <div className="cpi-header-actions">
+                  <button type="button" className="cpi-btn cpi-btn--outline" onClick={() => setShowModeModal(true)}>
+                    <Receipt size={15} /> Switch Mode
+                  </button>
+                  <button
+                    type="button"
+                    className="cpi-btn cpi-btn--outline"
+                    onClick={() => submitInvoiceToAPI(true)}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    disabled={savingDraft || submitting || !canCreateInvoice}
+                    title={!canCreateInvoice ? 'Admin permission required to save draft purchase invoices.' : undefined}
+                  >
+                    <Save size={15} /> {savingDraft ? 'Saving…' : 'Save Draft'}
+                  </button>
+                  <button
+                    type="button"
+                    className="cpi-btn cpi-btn--primary"
+                    onClick={() => submitInvoiceToAPI(false)}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    disabled={savingDraft || submitting || !canCreateInvoice}
+                    title={!canCreateInvoice ? 'Admin permission required to submit purchase invoices.' : undefined}
+                  >
+                    <Send size={15} /> {submitting ? 'Submitting…' : 'Submit Invoice for Approval'}
+                  </button>
+                </div>
+              )}
             </div>
             <p className="cpi-header-subtitle">
-              {creationMode === 'manual'
+              {isReadOnly
+                ? 'Read-only view of purchase invoice entry, quantities, and attachments'
+                : creationMode === 'manual'
                 ? 'Custom manual invoice creation mode (Cascade Reference Bypassed)'
                 : 'Enter vendor invoice with 3-way quantity matching & Approval Workflow'}
             </p>
@@ -1708,7 +1795,7 @@ export default function CreatePurchaseInvoicePage() {
                 <label>
                   1. SUPPLIER SELECTION <span className="required">*</span>
                 </label>
-                <select value={selectedVendorId} onChange={(e) => handleVendorSelect(e.target.value)}>
+                <select value={selectedVendorId} onChange={(e) => handleVendorSelect(e.target.value)} disabled={isReadOnly}>
                   <option value="">-- Select Supplier (e.g. Telematics) --</option>
                   {allSuppliers.map((v) => (
                     <option key={v.id} value={v.id}>
@@ -1726,6 +1813,7 @@ export default function CreatePurchaseInvoicePage() {
                 </label>
                 <select
                   value={selectedPoId}
+                  disabled={isReadOnly}
                   onChange={(e) => {
                     setSelectedPoId(e.target.value);
                     setSelectedGrnId('');
@@ -1787,7 +1875,7 @@ export default function CreatePurchaseInvoicePage() {
                 <label>
                   SUPPLIER / VENDOR <span className="required">*</span>
                 </label>
-                <select value={selectedVendorId} onChange={(e) => handleVendorSelect(e.target.value)}>
+                <select value={selectedVendorId} onChange={(e) => handleVendorSelect(e.target.value)} disabled={isReadOnly}>
                   <option value="">-- Select Supplier --</option>
                   {allSuppliers.map((v) => (
                     <option key={v.id} value={v.id}>
@@ -1806,6 +1894,7 @@ export default function CreatePurchaseInvoicePage() {
               <input
                 type="text"
                 value={invoiceNumber}
+                disabled={isReadOnly}
                 onChange={(e) => setInvoiceNumber(e.target.value)}
                 placeholder="e.g. INV-2026-0042"
               />
@@ -1816,19 +1905,19 @@ export default function CreatePurchaseInvoicePage() {
               <label>
                 INVOICE DATE <span className="required">*</span>
               </label>
-              <input type="date" value={invoiceDate ? invoiceDate.slice(0, 10) : ''} onChange={(e) => setInvoiceDate(e.target.value)} />
+              <input type="date" value={invoiceDate ? invoiceDate.slice(0, 10) : ''} disabled={isReadOnly} onChange={(e) => setInvoiceDate(e.target.value)} />
             </div>
 
             <div className="cpi-field">
               <label>
                 DUE DATE <span className="required">*</span>
               </label>
-              <input type="date" value={dueDate ? dueDate.slice(0, 10) : ''} onChange={(e) => setDueDate(e.target.value)} />
+              <input type="date" value={dueDate ? dueDate.slice(0, 10) : ''} disabled={isReadOnly} onChange={(e) => setDueDate(e.target.value)} />
             </div>
 
             <div className="cpi-field">
               <label>PAYMENT TERMS</label>
-              <select value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)}>
+              <select value={paymentTerms} disabled={isReadOnly} onChange={(e) => setPaymentTerms(e.target.value)}>
                 <option value="Immediate">Immediate</option>
                 <option value="Net 15">Net 15</option>
                 <option value="Net 30">Net 30</option>
@@ -1848,9 +1937,11 @@ export default function CreatePurchaseInvoicePage() {
                 <h3 className="cpi-section-title">Items Listing & 3-Quantity Matching</h3>
               </div>
             </div>
-            <button type="button" className="cpi-btn cpi-btn--outline cpi-btn--sm" onClick={handleAddLineItem}>
-              <Plus size={14} /> Add Line Item
-            </button>
+            {!isReadOnly && (
+              <button type="button" className="cpi-btn cpi-btn--outline cpi-btn--sm" onClick={handleAddLineItem}>
+                <Plus size={14} /> Add Line Item
+              </button>
+            )}
           </div>
 
           <div className="cpi-items-table-wrap">
@@ -1870,7 +1961,7 @@ export default function CreatePurchaseInvoicePage() {
                   <th style={{ width: '130px' }}>Unit Price ({currency})</th>
                   <th style={{ width: '80px' }}>Tax %</th>
                   <th style={{ width: '185px', textAlign: 'right', paddingRight: '16px' }}>Total ({currency})</th>
-                  <th style={{ width: '48px' }}></th>
+                  {!isReadOnly && <th style={{ width: '48px' }}></th>}
                 </tr>
               </thead>
               <tbody>
@@ -1887,6 +1978,7 @@ export default function CreatePurchaseInvoicePage() {
                           className="cpi-table-input"
                           placeholder="Item description..."
                           value={item.itemName}
+                          disabled={isReadOnly}
                           onChange={(e) => handleUpdateLineItem(item.id, 'itemName', e.target.value)}
                         />
                       </td>
@@ -1902,6 +1994,7 @@ export default function CreatePurchaseInvoicePage() {
                           min="1"
                           className="cpi-table-input cpi-table-input--supplier-qty"
                           value={item.supplierQty}
+                          disabled={isReadOnly}
                           onChange={(e) =>
                             handleUpdateLineItem(
                               item.id,
@@ -1919,6 +2012,7 @@ export default function CreatePurchaseInvoicePage() {
                           className="cpi-table-input"
                           placeholder="0.00"
                           value={item.unitPrice}
+                          disabled={isReadOnly}
                           onChange={(e) =>
                             handleUpdateLineItem(
                               item.id,
@@ -1935,6 +2029,7 @@ export default function CreatePurchaseInvoicePage() {
                           max="100"
                           className="cpi-table-input"
                           value={item.taxPercent}
+                          disabled={isReadOnly}
                           onChange={(e) =>
                             handleUpdateLineItem(
                               item.id,
@@ -1947,16 +2042,18 @@ export default function CreatePurchaseInvoicePage() {
                       <td style={{ textAlign: 'right', fontWeight: 700, fontFamily: 'var(--font-mono, monospace)' }}>
                         {formatAmount(lineTotal, currency)}
                       </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <button
-                          type="button"
-                          className="cpi-action-icon-btn cpi-action-icon-btn--delete"
-                          onClick={() => handleRemoveLineItem(item.id)}
-                          disabled={lineItems.length <= 1}
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </td>
+                      {!isReadOnly && (
+                        <td style={{ textAlign: 'center' }}>
+                          <button
+                            type="button"
+                            className="cpi-action-icon-btn cpi-action-icon-btn--delete"
+                            onClick={() => handleRemoveLineItem(item.id)}
+                            disabled={lineItems.length <= 1}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -1982,6 +2079,7 @@ export default function CreatePurchaseInvoicePage() {
               <textarea
                 rows={3}
                 value={notes}
+                disabled={isReadOnly}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Add notes for finance approvers regarding quantity discrepancies or invoice details..."
               />
@@ -2137,43 +2235,47 @@ export default function CreatePurchaseInvoicePage() {
                         >
                           <Printer size={13} /> Print
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveAttachment(att.id)}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            color: '#94a3b8',
-                            cursor: 'pointer',
-                            padding: 4,
-                            display: 'flex',
-                            alignItems: 'center',
-                          }}
-                          title="Remove"
-                        >
-                          <X size={15} />
-                        </button>
+                        {!isReadOnly && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveAttachment(att.id)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: '#94a3b8',
+                              cursor: 'pointer',
+                              padding: 4,
+                              display: 'flex',
+                              alignItems: 'center',
+                            }}
+                            title="Remove"
+                          >
+                            <X size={15} />
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
 
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
-                    <label
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 5,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: 'var(--primary-500, #0a6ed1)',
-                        cursor: 'pointer',
-                        padding: '4px 8px',
-                      }}
-                    >
-                      <Plus size={13} /> Attach additional supporting file
-                      <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg" onChange={handleFileUpload} hidden />
-                    </label>
-                  </div>
+                  {!isReadOnly && (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+                      <label
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 5,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: 'var(--primary-500, #0a6ed1)',
+                          cursor: 'pointer',
+                          padding: '4px 8px',
+                        }}
+                      >
+                        <Plus size={13} /> Attach additional supporting file
+                        <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg" onChange={handleFileUpload} hidden />
+                      </label>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div
@@ -2195,23 +2297,25 @@ export default function CreatePurchaseInvoicePage() {
                       No physical invoice document attached by vendor yet.
                     </span>
                   </div>
-                  <label
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 5,
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: 'var(--primary-600, #2563eb)',
-                      cursor: 'pointer',
-                      padding: '5px 10px',
-                      background: 'rgba(37, 99, 235, 0.08)',
-                      borderRadius: 6,
-                    }}
-                  >
-                    <Upload size={13} /> + Attach Supporting Document (Optional)
-                    <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg" onChange={handleFileUpload} hidden />
-                  </label>
+                  {!isReadOnly && (
+                    <label
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: 'var(--primary-600, #2563eb)',
+                        cursor: 'pointer',
+                        padding: '5px 10px',
+                        background: 'rgba(37, 99, 235, 0.08)',
+                        borderRadius: 6,
+                      }}
+                    >
+                      <Upload size={13} /> + Attach Supporting Document (Optional)
+                      <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg" onChange={handleFileUpload} hidden />
+                    </label>
+                  )}
                 </div>
               )}
             </div>
@@ -2229,7 +2333,7 @@ export default function CreatePurchaseInvoicePage() {
 
             <div className="cpi-field">
               <label>CURRENCY</label>
-              <CurrencySelector value={currency} onChange={setCurrency} />
+              <CurrencySelector value={currency} onChange={setCurrency} disabled={isReadOnly} />
             </div>
 
             <div className="cpi-totals-row">
@@ -2253,18 +2357,20 @@ export default function CreatePurchaseInvoicePage() {
               <span>Triggers AccountsPayable Approval Workflow</span>
             </div>
 
-            <div style={{ marginTop: 8 }}>
-              <button
-                type="button"
-                className="cpi-btn cpi-btn--primary"
-                style={{ width: '100%', padding: '12px 20px', fontSize: 15 }}
-                onClick={() => submitInvoiceToAPI(false)}
-                onMouseDown={(e) => e.stopPropagation()}
-                disabled={savingDraft || submitting}
-              >
-                <Send size={16} /> {submitting ? 'Submitting…' : 'Submit Purchase Invoice'}
-              </button>
-            </div>
+            {!isReadOnly && (
+              <div style={{ marginTop: 8 }}>
+                <button
+                  type="button"
+                  className="cpi-btn cpi-btn--primary"
+                  style={{ width: '100%', padding: '12px 20px', fontSize: 15 }}
+                  onClick={() => submitInvoiceToAPI(false)}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  disabled={savingDraft || submitting}
+                >
+                  <Send size={16} /> {submitting ? 'Submitting…' : 'Submit Purchase Invoice'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -2498,6 +2604,7 @@ export default function CreatePurchaseInvoicePage() {
               <div
                 className={`cpi-mode-option ${creationMode === 'linked' ? 'cpi-mode-option--selected' : ''}`}
                 onClick={() => {
+                  setIsReadOnly(false);
                   if (!poIdParam && !grnIdParam) {
                     setSelectedVendorId('');
                     setSelectedPoId('');
@@ -2524,6 +2631,7 @@ export default function CreatePurchaseInvoicePage() {
               <div
                 className={`cpi-mode-option ${creationMode === 'manual' ? 'cpi-mode-option--selected' : ''}`}
                 onClick={() => {
+                  setIsReadOnly(false);
                   setSelectedVendorId('');
                   setSelectedPoId('');
                   setSelectedGrnId('');

@@ -315,6 +315,10 @@
   padding: 10px 10px !important;
 }
 
+.bpv-table tfoot {
+  display: table-row-group !important;
+}
+
 /* Totals Box */
 .bpv-totals-box {
   display: flex;
@@ -569,8 +573,69 @@
     color: #0f172a !important;
   }
 
+  .bpv-section {
+    margin-bottom: 12px !important;
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+
+  .bpv-grid--2 {
+    gap: 10px !important;
+  }
+
+  .bpv-box {
+    padding: 8px 12px !important;
+  }
+
+  .bpv-box__row {
+    font-size: 11.5px !important;
+    margin-bottom: 2px !important;
+  }
+
+  .bpv-match-strip {
+    padding: 6px 10px !important;
+    margin-bottom: 8px !important;
+    font-size: 11px !important;
+  }
+
+  .bpv-table {
+    margin-bottom: 8px !important;
+    font-size: 11.5px !important;
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+
+  .bpv-table th {
+    padding: 6px 8px !important;
+    font-size: 10px !important;
+  }
+
+  .bpv-table td {
+    padding: 5px 8px !important;
+  }
+
+  .bpv-table-total-row td {
+    padding: 7px 8px !important;
+  }
+
+  .bpv-totals-box {
+    padding: 8px 12px !important;
+    margin-top: 6px !important;
+  }
+
+  .bpv-stamps-grid {
+    gap: 8px !important;
+  }
+
+  .bpv-stamp-card {
+    padding: 8px 10px !important;
+  }
+
+  .bpv-stamp-card__signature {
+    min-height: 44px !important;
+  }
+
   .bpv-sheet__header,
-  .bpv-section,
   .bpv-box,
   .bpv-match-strip,
   .bpv-table tr,

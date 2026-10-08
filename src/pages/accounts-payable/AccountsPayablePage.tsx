@@ -313,11 +313,12 @@ export default function AccountsPayablePage() {
         const initials = vName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() || 'VN';
 
         const isReturnedChain = Boolean(returnedRow) || matchingRaw?.status === 'RETURNED';
+        const hasApprovedLevel2 = rows.some((r) => ((r.currentLevel || 0) >= 2 || (r.levelNumber || 0) >= 2) && r.status === 'APPROVED');
 
         let status: APStatus;
         if (matchingRaw?.status && ['PAID', 'PARTIAL', 'OVERDUE'].includes(matchingRaw.status)) {
           status = matchingRaw.status as APStatus;
-        } else if (matchingRaw?.status === 'APPROVED' || allApproved) {
+        } else if (matchingRaw?.status === 'APPROVED' || allApproved || hasApprovedLevel2) {
           status = 'APPROVED';
         } else if (pendingRow) {
           status = isReturnedChain ? 'RETURNED' : 'PENDING';
@@ -434,7 +435,7 @@ export default function AccountsPayablePage() {
             DRAFT: 'DRAFT',
             REGISTERED: 'DRAFT',
           };
-          const status = statusMap[inv.status] || (inv.status === 'DRAFT' ? 'DRAFT' : 'PENDING');
+          const status = statusMap[inv.status] || (inv.status === 'DRAFT' ? 'DRAFT' : inv.status === 'APPROVED' ? 'APPROVED' : 'PENDING');
           const isActionable = status === 'PENDING' || status === 'RETURNED';
           const effectiveCanAct = isActionable && (isRoleMatching('Purchase Clerk', authRoles) || isRoleMatching('Purchase Manager', authRoles) || isRoleMatching('Analyst', authRoles));
 
@@ -460,10 +461,10 @@ export default function AccountsPayablePage() {
             status,
             paymentTerms: inv.paymentTerms || 'Net 30',
             department: resolvedDept,
-            currentLevel: isActionable ? 1 : 0,
-            totalLevels: isActionable ? 2 : 0,
-            requiredRole: isActionable ? 'Purchase Manager' : '',
-            canAct: effectiveCanAct,
+            currentLevel: status === 'APPROVED' ? 2 : (isActionable ? 1 : 0),
+            totalLevels: isActionable || status === 'APPROVED' ? 2 : 0,
+            requiredRole: status === 'APPROVED' ? '' : (isActionable ? 'Purchase Manager' : ''),
+            canAct: status === 'APPROVED' ? false : effectiveCanAct,
             comments: inv.comments,
             attachments: inv.attachments,
             items: inv.items || inv.lineItems || (inv.purchaseOrder as any)?.items || (inv.purchaseOrder as any)?.rfq?.items,
@@ -690,21 +691,6 @@ export default function AccountsPayablePage() {
             );
             if (pendingRow) {
               approvalId = pendingRow.id;
-            } else {
-              const created = await approvalService.resubmit('AccountsPayable', targetInvoice.invoiceNumber || String(targetInvoice.id), 1).catch(() => null);
-              if (created && (created as any).id) {
-                approvalId = (created as any).id;
-              } else {
-                const updatedList = await approvalService.listTable({ module: 'AccountsPayable' }).catch(() => []);
-                const updatedPending = updatedList.find(
-                  (r: any) =>
-                    r.status === 'PENDING' &&
-                    (r.referenceId === String(targetInvoice.id) ||
-                      r.referenceNumber === targetInvoice.invoiceNumber ||
-                      r.referenceId === targetInvoice.invoiceNumber)
-                );
-                if (updatedPending) approvalId = updatedPending.id;
-              }
             }
           } catch {}
 
@@ -719,9 +705,13 @@ export default function AccountsPayablePage() {
 
           let approvePromise;
           if (approvalId) {
-            approvePromise = approvalService.approve(approvalId, comment).then((res) => {
-              const isFinal = res?.nextLevel === false || targetInvoice.currentLevel >= targetInvoice.totalLevels;
+            approvePromise = approvalService.approve(approvalId, comment).then(async (res) => {
+              const isFinal = res?.nextLevel === false || targetInvoice.currentLevel >= targetInvoice.totalLevels || targetInvoice.currentLevel === 2;
               if (isFinal) {
+                await invoiceService.updateStatus(targetInvoice.id, 'APPROVED').catch(() => {});
+                if (targetInvoice.invoiceNumber) {
+                  await invoiceService.updateStatus(targetInvoice.invoiceNumber, 'APPROVED').catch(() => {});
+                }
                 setGeneratedVoucherBanner({
                   voucherNumber: targetInvoice.invoiceNumber,
                   invoiceNumber: targetInvoice.invoiceNumber,
@@ -742,7 +732,11 @@ export default function AccountsPayablePage() {
               }
             });
           } else {
-            approvePromise = invoiceService.updateStatus(targetInvoice.id, 'APPROVED');
+            approvePromise = invoiceService.updateStatus(targetInvoice.id, 'APPROVED').then(() => {
+              if (targetInvoice.invoiceNumber) {
+                return invoiceService.updateStatus(targetInvoice.invoiceNumber, 'APPROVED').catch(() => {});
+              }
+            });
           }
 
           await Promise.all([signPromise, approvePromise]);

@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useServiceData } from '../../hooks/useServiceData';
 import { grnService, type GoodsReceivedNote } from '../../services/grnService';
+import { sseClient } from '../../services/sseClient';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
 import { purchaseRequisitionService } from '../../services/purchaseRequisitionService';
 import { invoiceService } from '../../services/invoiceService';
@@ -96,11 +97,11 @@ export default function CompanyGRNListPage() {
   });
   const [selectedGrn, setSelectedGrn] = useState<GoodsReceivedNote | null>(null);
 
-  // Load GRNs with fresh cache
+  // Load GRNs with fresh cache (fetches complete registry to ensure accurate pending/recorded separation)
   const { data: grnData, loading: grnLoading, forceRefresh: forceRefreshGrns } = useServiceData(
-    () => grnService.list({ search }),
+    () => grnService.list({ limit: 1000 }),
     { grns: [], total: 0 },
-    [search],
+    [],
     { cacheTtlMs: 0 }
   );
   const grns = grnData.grns || [];
@@ -135,6 +136,33 @@ export default function CompanyGRNListPage() {
     // Always trigger fresh refetch when landing on GRN management page
     queryClient.invalidateQueries({ queryKey: ['svc'] });
   }, [searchParams, location.state, queryClient]);
+
+  // Real-time synchronization across tabs & components
+  useEffect(() => {
+    const handleRefresh = () => {
+      forceRefreshGrns();
+      forceRefreshPOs();
+      forceRefreshReqs();
+      queryClient.invalidateQueries({ queryKey: ['svc'] });
+    };
+
+    const unsubGrn = sseClient.on('grn_created', handleRefresh);
+    const unsubPo = sseClient.on('po_status_changed', handleRefresh);
+    const unsubAny = typeof sseClient.onAny === 'function' ? sseClient.onAny(handleRefresh) : undefined;
+
+    window.addEventListener('heliflow:grn-updated', handleRefresh);
+    window.addEventListener('heliflow:po-updated', handleRefresh);
+    window.addEventListener('storage', handleRefresh);
+
+    return () => {
+      unsubGrn();
+      unsubPo();
+      if (typeof unsubAny === 'function') unsubAny();
+      window.removeEventListener('heliflow:grn-updated', handleRefresh);
+      window.removeEventListener('heliflow:po-updated', handleRefresh);
+      window.removeEventListener('storage', handleRefresh);
+    };
+  }, [forceRefreshGrns, forceRefreshPOs, forceRefreshReqs, queryClient]);
 
   const poLoading = poLoading1 || poLoading2;
 
@@ -215,9 +243,17 @@ export default function CompanyGRNListPage() {
   const posWithGrn = useMemo(() => {
     const set = new Set<string>();
     (grns || []).forEach((g) => {
-      if (g.poId) set.add(String(g.poId).toLowerCase());
-      if (g.purchaseOrder?.id) set.add(String(g.purchaseOrder.id).toLowerCase());
-      if (g.purchaseOrder?.poNumber) set.add(String(g.purchaseOrder.poNumber).toLowerCase());
+      if (g.poId) set.add(String(g.poId).toLowerCase().trim());
+      if (g.purchaseOrder?.id) set.add(String(g.purchaseOrder.id).toLowerCase().trim());
+      if (g.purchaseOrder?.poNumber) set.add(String(g.purchaseOrder.poNumber).toLowerCase().trim());
+      if (g.vendorInvoiceNumber) set.add(String(g.vendorInvoiceNumber).toLowerCase().trim());
+      if (g.dispatchNoteNumber) set.add(String(g.dispatchNoteNumber).toLowerCase().trim());
+      if (g.notes) {
+        const matches = g.notes.match(/po-[a-z0-9_-]+/gi);
+        if (matches) {
+          matches.forEach((m) => set.add(m.toLowerCase().trim()));
+        }
+      }
     });
     return set;
   }, [grns]);
@@ -274,11 +310,13 @@ export default function CompanyGRNListPage() {
 
     if (kpiFilter === 'PENDING') {
       list = list.filter((po) => {
-        const poIdStr = String(po.id || '').toLowerCase();
-        const poNumStr = String(po.poNumber || '').toLowerCase();
-        const hasGrn = (poIdStr && posWithGrn.has(poIdStr)) || (poNumStr && posWithGrn.has(poNumStr));
-        const s = String(po?.status || '').toUpperCase();
-        return !hasGrn && s !== 'GRN_RECEIVED' && s !== 'DELIVERED';
+        const poIdStr = String(po.id || '').toLowerCase().trim();
+        const poNumStr = String(po.poNumber || '').toLowerCase().trim();
+        const hasGrn =
+          (poIdStr && posWithGrn.has(poIdStr)) ||
+          (poNumStr && posWithGrn.has(poNumStr));
+        const s = String(po?.status || '').toUpperCase().trim();
+        return !hasGrn && s !== 'GRN_RECEIVED' && s !== 'DELIVERED' && s !== 'CLOSED';
       });
     }
 
@@ -322,18 +360,20 @@ export default function CompanyGRNListPage() {
     });
 
     if (!search.trim()) return list;
-    const q = search.toLowerCase();
+    const q = search.toLowerCase().trim();
     return list.filter((g) => {
       const gNum = String(g?.grnNumber || '');
-      const poNum = String(g?.purchaseOrder?.poNumber || '');
+      const poNum = String(g?.purchaseOrder?.poNumber || g?.poId || '');
       const vName =
         typeof g?.purchaseOrder?.vendor === 'object' && g?.purchaseOrder?.vendor?.name
           ? String(g.purchaseOrder.vendor.name)
-          : '';
+          : String(g?.vendorName || '');
+      const notesStr = String(g?.notes || '');
       return (
         gNum.toLowerCase().includes(q) ||
         poNum.toLowerCase().includes(q) ||
-        vName.toLowerCase().includes(q)
+        vName.toLowerCase().includes(q) ||
+        notesStr.toLowerCase().includes(q)
       );
     });
   }, [grns, search]);
@@ -399,14 +439,27 @@ export default function CompanyGRNListPage() {
     });
   }, [poList]);
 
+  // Accurate pending orders count
+  const pendingOrdersCount = useMemo(() => {
+    return approvedOrders.filter((po) => {
+      const poIdStr = String(po.id || '').toLowerCase().trim();
+      const poNumStr = String(po.poNumber || '').toLowerCase().trim();
+      const hasGrn =
+        (poIdStr && posWithGrn.has(poIdStr)) ||
+        (poNumStr && posWithGrn.has(poNumStr));
+      const s = String(po?.status || '').toUpperCase().trim();
+      return !hasGrn && s !== 'GRN_RECEIVED' && s !== 'DELIVERED' && s !== 'CLOSED';
+    }).length;
+  }, [approvedOrders, posWithGrn]);
+
   // KPIs
   const kpis = useMemo(() => {
     return {
       totalOrders: approvedOrders.length,
       recordedGrns: grns.length,
-      pendingGrns: Math.max(0, approvedOrders.length - grns.length),
+      pendingGrns: pendingOrdersCount,
     };
-  }, [approvedOrders, grns]);
+  }, [approvedOrders.length, grns.length, pendingOrdersCount]);
 
   // Dynamic fallback for modal items if selectedGrn.items is missing or empty
   const modalItems = useMemo(() => {

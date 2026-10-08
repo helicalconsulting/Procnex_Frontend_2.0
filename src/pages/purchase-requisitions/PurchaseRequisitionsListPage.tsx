@@ -266,13 +266,16 @@ export default function PurchaseRequisitionsListPage() {
   );
 
   const openDocument = (requisition: ListPurchaseRequisition, mode: 'view' | 'edit') => {
+    const isEditable = !['APPROVED', 'COMPLETED', 'SENT_TO_VENDOR', 'PO_CREATED', 'REJECTED', 'CANCELLED'].includes(requisition.status);
+    const effectiveMode = isEditable ? mode : 'view';
+
     if (isStandaloneDocument(requisition)) {
       const documentId = requisition.id || requisition.rfqId;
-      navigate(`/procurement/create-purchase-order?id=${encodeURIComponent(documentId)}${mode === 'view' ? '&mode=view' : ''}`);
+      navigate(`/procurement/create-purchase-order?id=${encodeURIComponent(documentId)}${effectiveMode === 'view' ? '&mode=view' : ''}`);
       return;
     }
-    navigate(`/procurement/purchase-requisition/${encodeURIComponent(requisition.rfqId)}?mode=${mode}`, {
-      state: { readOnly: mode === 'view' },
+    navigate(`/procurement/purchase-requisition/${encodeURIComponent(requisition.rfqId)}?mode=${effectiveMode}`, {
+      state: { readOnly: effectiveMode === 'view' },
     });
   };
 
@@ -582,15 +585,17 @@ export default function PurchaseRequisitionsListPage() {
                               >
                                 <Eye className="size-4" />
                               </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                disabled={!canCreatePO}
-                                onClick={() => canCreatePO && openDocument(requisition, 'edit')}
-                                title={canCreatePO ? 'Edit purchase order' : 'Permission denied'}
-                              >
-                                <Pencil className="size-4" />
-                              </Button>
+                              {!['APPROVED', 'COMPLETED', 'SENT_TO_VENDOR', 'PO_CREATED', 'REJECTED', 'CANCELLED'].includes(requisition.status) && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  disabled={!canCreatePO}
+                                  onClick={() => canCreatePO && openDocument(requisition, 'edit')}
+                                  title={canCreatePO ? 'Edit purchase order' : 'Permission denied'}
+                                >
+                                  <Pencil className="size-4" />
+                                </Button>
+                              )}
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
@@ -628,7 +633,9 @@ export default function PurchaseRequisitionsListPage() {
                     </button>
                     <div className="mt-4 flex gap-2 border-t border-border/60 pt-3">
                       <Button variant="outline" size="sm" className="flex-1" onClick={() => openDocument(requisition, 'view')}><Eye /> View</Button>
-                      <Button variant="outline" size="sm" className="flex-1" disabled={!canCreatePO} onClick={() => canCreatePO && openDocument(requisition, 'edit')}><Pencil /> Edit</Button>
+                      {!['APPROVED', 'COMPLETED', 'SENT_TO_VENDOR', 'PO_CREATED', 'REJECTED', 'CANCELLED'].includes(requisition.status) && (
+                        <Button variant="outline" size="sm" className="flex-1" disabled={!canCreatePO} onClick={() => canCreatePO && openDocument(requisition, 'edit')}><Pencil /> Edit</Button>
+                      )}
                       <Button variant="ghost" size="icon-sm" disabled={!canCreatePO} className="text-destructive hover:bg-destructive/10" onClick={() => canCreatePO && setDeleteTarget(requisition)}><Trash2 /></Button>
                     </div>
                   </article>

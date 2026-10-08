@@ -187,6 +187,32 @@ export default function CreateGRNPage() {
     []
   );
 
+  // Load existing GRNs to detect and prevent duplicate GRN creation
+  const { data: existingGrnData } = useServiceData(
+    () => grnService.list({ limit: 1000 }),
+    { grns: [], total: 0 },
+    []
+  );
+  const existingGrns = existingGrnData.grns || [];
+
+  const posWithExistingGrn = useMemo(() => {
+    const set = new Set<string>();
+    existingGrns.forEach((g) => {
+      if (g.poId) set.add(String(g.poId).toLowerCase().trim());
+      if (g.purchaseOrder?.id) set.add(String(g.purchaseOrder.id).toLowerCase().trim());
+      if (g.purchaseOrder?.poNumber) set.add(String(g.purchaseOrder.poNumber).toLowerCase().trim());
+      if (g.vendorInvoiceNumber) set.add(String(g.vendorInvoiceNumber).toLowerCase().trim());
+      if (g.dispatchNoteNumber) set.add(String(g.dispatchNoteNumber).toLowerCase().trim());
+      if (g.notes) {
+        const matches = g.notes.match(/po-[a-z0-9_-]+/gi);
+        if (matches) {
+          matches.forEach((m) => set.add(m.toLowerCase().trim()));
+        }
+      }
+    });
+    return set;
+  }, [existingGrns]);
+
   // Form State
   const [grnNumber, setGrnNumber] = useState<string>(() => `GRN-2026-${Math.floor(1000 + Math.random() * 9000)}`);
   const [selectedPoId, setSelectedPoId] = useState<string>(() => safeStr(poIdParam));
@@ -257,6 +283,21 @@ export default function CreateGRNPage() {
     );
   }, [poFromState, fetchedDirectPO, rawPoList, selectedPoId]);
 
+  // Check if the selected PO has already been received
+  const isSelectedPoAlreadyReceived = useMemo(() => {
+    if (!selectedPoId && !selectedPO) return false;
+    const poIdStr = safeStr(selectedPO?.id || selectedPoId).toLowerCase().trim();
+    const poNumStr = safeStr(selectedPO?.poNumber).toLowerCase().trim();
+    const s = String(selectedPO?.status || '').toUpperCase().trim();
+    return (
+      (poIdStr && posWithExistingGrn.has(poIdStr)) ||
+      (poNumStr && posWithExistingGrn.has(poNumStr)) ||
+      s === 'GRN_RECEIVED' ||
+      s === 'DELIVERED' ||
+      s === 'CLOSED'
+    );
+  }, [selectedPoId, selectedPO, posWithExistingGrn]);
+
   // Keep selectedPoId in sync with selectedPO id/poNumber
   useEffect(() => {
     if (selectedPO) {
@@ -267,9 +308,16 @@ export default function CreateGRNPage() {
     }
   }, [selectedPO]);
 
-  // Display options for PO select dropdown (includes selectedPO if missing from approvedPOs)
+  // Display options for PO select dropdown (filters out already received POs while keeping selectedPO)
   const displayPOOptions = useMemo(() => {
-    const list = [...approvedPOs];
+    const list = approvedPOs.filter((po) => {
+      const pId = safeStr(po.id).toLowerCase().trim();
+      const pNum = safeStr(po.poNumber).toLowerCase().trim();
+      const s = String(po?.status || '').toUpperCase().trim();
+      const hasGrn = (pId && posWithExistingGrn.has(pId)) || (pNum && posWithExistingGrn.has(pNum));
+      const isCurrentSelected = selectedPO && (pId === safeStr(selectedPO.id).toLowerCase().trim() || pNum === safeStr(selectedPO.poNumber).toLowerCase().trim());
+      return isCurrentSelected || (!hasGrn && s !== 'GRN_RECEIVED' && s !== 'DELIVERED' && s !== 'CLOSED');
+    });
     if (selectedPO) {
       const selId = safeStr(selectedPO.id || selectedPO.poNumber).toLowerCase().trim();
       if (!list.some((p) => safeStr(p.id || p.poNumber).toLowerCase().trim() === selId)) {
@@ -277,7 +325,7 @@ export default function CreateGRNPage() {
       }
     }
     return list;
-  }, [approvedPOs, selectedPO]);
+  }, [approvedPOs, selectedPO, posWithExistingGrn]);
 
   // Fetch single PO directly from API if poIdParam is present but not found in state or rawPoList
   useEffect(() => {
@@ -590,6 +638,10 @@ export default function CreateGRNPage() {
   // Form Validation
   const validateForm = (): boolean => {
     setErrorMsg(null);
+    if (isSelectedPoAlreadyReceived) {
+      setErrorMsg(`A Goods Receipt Note has already been recorded for Purchase Order #${selectedPO?.poNumber || selectedPoId}. Duplicate GRN is not allowed.`);
+      return false;
+    }
     if (!selectedPoId && entryMode === 'MANUAL' && lineItems.length === 0) {
       setErrorMsg('Please select a Purchase Order or enter line items.');
       return false;
@@ -634,6 +686,8 @@ export default function CreateGRNPage() {
       });
 
       // Immediately invalidate and trigger fresh refetch across all service caches
+      window.dispatchEvent(new CustomEvent('heliflow:grn-updated'));
+      window.dispatchEvent(new CustomEvent('heliflow:po-updated'));
       await queryClient.invalidateQueries({ queryKey: ['svc'] });
       queryClient.refetchQueries({ queryKey: ['svc'] });
 
@@ -677,6 +731,14 @@ export default function CreateGRNPage() {
         </div>
       )}
 
+      {isSelectedPoAlreadyReceived && (
+        <div className="mb-4">
+          <MessageStrip type="warning">
+            A Goods Receipt Note has already been recorded for this Purchase Order (#{selectedPO?.poNumber || selectedPoId}). You can view the verified document in Recorded GRNs. Duplicate GRN creation is disabled.
+          </MessageStrip>
+        </div>
+      )}
+
       {/* Page Header */}
       <PageLead
         title={
@@ -708,10 +770,10 @@ export default function CreateGRNPage() {
             variant="default"
             size="sm"
             onClick={handleSubmit}
-            disabled={submitting}
+            disabled={submitting || isSelectedPoAlreadyReceived}
             className="gap-2 shadow-sm font-semibold"
           >
-            <Send className="size-4" /> {submitting ? 'Posting GRN…' : 'Save & Post GRN'}
+            <Send className="size-4" /> {submitting ? 'Posting GRN…' : isSelectedPoAlreadyReceived ? 'GRN Already Recorded' : 'Save & Post GRN'}
           </Button>
         </div>
       </PageLead>

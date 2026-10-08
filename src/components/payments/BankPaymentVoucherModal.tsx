@@ -765,8 +765,6 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
                   <tr>
                     <th style={{ width: '35px', textAlign: 'center' }}>#</th>
                     <th>Item / Particulars Description</th>
-                    <th>PO Ref</th>
-                    <th>GRN Ref</th>
                     <th>Invoice Ref</th>
                     <th style={{ textAlign: 'center', width: '45px' }}>Qty</th>
                     <th style={{ textAlign: 'right' }}>Unit Rate</th>
@@ -791,8 +789,6 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
                           <strong>{item.description}</strong>
                           {item.itemCode && <span style={{ fontSize: '11px', color: '#2563eb', marginLeft: '4px' }}>[{item.itemCode}]</span>}
                         </td>
-                        <td style={{ fontSize: '12px' }}>{item.poNumber || (data.poNumbers && data.poNumbers[0]) || '—'}</td>
-                        <td style={{ fontSize: '12px' }}>{item.grnNumber || (data.grnNumbers && data.grnNumbers[0]) || '—'}</td>
                         <td style={{ fontSize: '12px' }}>{item.invoiceRef || data.invoiceRef || '—'}</td>
                         <td style={{ textAlign: 'center', fontWeight: 600 }}>{qty}</td>
                         <td style={{ textAlign: 'right' }}>{formatAmount(unitPrice, currency)}</td>
@@ -809,10 +805,8 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
                       </tr>
                     );
                   })}
-                </tbody>
-                <tfoot>
                   <tr className="bpv-table-total-row">
-                    <td colSpan={7} style={{ textAlign: 'right', fontWeight: 800, textTransform: 'uppercase', fontSize: '12px', letterSpacing: '0.04em' }}>
+                    <td colSpan={5} style={{ textAlign: 'right', fontWeight: 800, textTransform: 'uppercase', fontSize: '12px', letterSpacing: '0.04em' }}>
                       Grand Total Disbursement:
                     </td>
                     <td style={{ textAlign: 'right', fontWeight: 800 }}>{formatAmount(grandSubtotal, currency)}</td>
@@ -826,7 +820,7 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
                       {formatAmount(grandNet, currency)}
                     </td>
                   </tr>
-                </tfoot>
+                </tbody>
               </table>
             </div>
 

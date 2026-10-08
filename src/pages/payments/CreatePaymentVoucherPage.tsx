@@ -126,7 +126,7 @@ export default function CreatePaymentVoucherPage() {
   const { hasPermission } = useAuth();
   const canCreateVoucher = hasPermission('Payments', 'canCreate') || hasPermission('Payments', 'canApprove') || hasPermission('Accounts Payable', 'canCreate');
   const [searchParams] = useSearchParams();
-  const { companyDefaultCurrency, formatAmount } = useCurrency();
+  const { companyDefaultCurrency, formatAmount, convert } = useCurrency();
 
   const vendorParam = searchParams.get('vendorName');
   const invoiceRefParam = searchParams.get('invoiceRef');
@@ -276,11 +276,18 @@ export default function CreatePaymentVoucherPage() {
   }, [fetchVouchersData]);
 
   // Search & Filter State for Management Table
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get('search') || '');
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [selectedVoucherIds, setSelectedVoucherIds] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
+
+  useEffect(() => {
+    const qSearch = searchParams.get('search');
+    if (qSearch !== null && qSearch !== undefined) {
+      setSearchTerm(qSearch);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -898,6 +905,66 @@ export default function CreatePaymentVoucherPage() {
     });
   };
 
+  const handleCurrencyChange = (newCurrency: string) => {
+    if (!newCurrency || newCurrency === currency) return;
+    const prevCurrency = currency;
+    setCurrency(newCurrency);
+
+    // Convert vendor invoices and reconciled line item values
+    let totalGrossFromInvoices = 0;
+    let hasSelectedInvoices = false;
+
+    if (vendorInvoices.length > 0) {
+      const updatedInvoices = vendorInvoices.map((inv) => {
+        const nextAmt = Number(convert(inv.amount, prevCurrency, newCurrency).toFixed(2));
+        const nextPaid = Number(convert(inv.paidAmount, prevCurrency, newCurrency).toFixed(2));
+        const nextBal = Math.max(0, nextAmt - nextPaid);
+        const nextPayAmt = Number(convert(inv.paymentAmount, prevCurrency, newCurrency).toFixed(2));
+        const nextGrnRecAmt = inv.grnReceivedAmount
+          ? Number(convert(inv.grnReceivedAmount, prevCurrency, newCurrency).toFixed(2))
+          : undefined;
+
+        if (inv.selected) {
+          hasSelectedInvoices = true;
+          totalGrossFromInvoices += nextPayAmt;
+        }
+
+        const updatedItems = inv.items?.map((it) => {
+          const itUnitPrice = Number(convert(it.unitPrice, prevCurrency, newCurrency).toFixed(2));
+          const itOrdVal = Number(convert(it.orderedValue, prevCurrency, newCurrency).toFixed(2));
+          const itRecVal = Number(convert(it.receivedValue, prevCurrency, newCurrency).toFixed(2));
+          const itShortVal = Number(convert(it.shortfallValue, prevCurrency, newCurrency).toFixed(2));
+          return {
+            ...it,
+            unitPrice: itUnitPrice,
+            orderedValue: itOrdVal,
+            receivedValue: itRecVal,
+            shortfallValue: itShortVal,
+          };
+        });
+
+        return {
+          ...inv,
+          amount: nextAmt,
+          paidAmount: nextPaid,
+          balanceDue: nextBal,
+          paymentAmount: nextPayAmt,
+          grnReceivedAmount: nextGrnRecAmt,
+          items: updatedItems,
+        };
+      });
+
+      setVendorInvoices(updatedInvoices);
+    }
+
+    if (hasSelectedInvoices) {
+      setGrossAmount(Number(totalGrossFromInvoices.toFixed(2)));
+    } else if (typeof grossAmount === 'number' && grossAmount > 0) {
+      const convertedGross = convert(grossAmount, prevCurrency, newCurrency);
+      setGrossAmount(Number(convertedGross.toFixed(2)));
+    }
+  };
+
   const handleAddCustomInvoice = (defaults?: Partial<VendorInvoiceItem>) => {
     const nextIdx = vendorInvoices.length + 1;
     const invAmt = defaults?.paymentAmount ?? 0;
@@ -1094,6 +1161,7 @@ export default function CreatePaymentVoucherPage() {
     setSuccessMsg(null);
     setVoucherNumber(v.paymentId || '');
     setInvoiceRef(v.invoiceRef || '');
+    if (v.currency) setCurrency(v.currency);
     setGrossAmount(typeof v.amount === 'number' ? v.amount : (typeof v.grossAmount === 'number' ? v.grossAmount : ''));
     if (v.method) setPaymentMethod(v.method);
     if (v.remarks) setRemarks(v.remarks);
@@ -3285,7 +3353,7 @@ export default function CreatePaymentVoucherPage() {
             <div className="cpv-summary-box">
               <div className="cpv-field">
                 <label>Currency</label>
-                <CurrencySelector value={currency} onChange={setCurrency} />
+                <CurrencySelector value={currency} onChange={handleCurrencyChange} />
               </div>
 
               <div className="cpv-field">

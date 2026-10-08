@@ -355,14 +355,23 @@ async function apiListTyped(): Promise<Notification[]> {
   return pickList<Notification>(data, ['notifications']);
 }
 
-async function markRead(id: string): Promise<void> {
+async function markRead(id: string | number): Promise<void> {
   if (USE_MOCK) return;
   await apiRequest(`/notifications/${id}/read`, { method: 'PUT' });
 }
 
+async function deleteNotification(id: string | number): Promise<void> {
+  if (USE_MOCK) return;
+  await apiRequest(`/notifications/${id}`, { method: 'DELETE' });
+}
+
 async function markAllRead(): Promise<void> {
   if (USE_MOCK) return;
-  await apiRequest('/notifications/read-all', { method: 'PUT' });
+  try {
+    await apiRequest('/notifications', { method: 'DELETE' });
+  } catch {
+    await apiRequest('/notifications/read-all', { method: 'PUT' }).catch(() => {});
+  }
 }
 
 async function deleteAll(): Promise<void> {
@@ -384,6 +393,7 @@ export const notificationService = {
   listTyped: USE_MOCK ? mockListTyped : apiListTyped,
   unreadCount: USE_MOCK ? mockUnreadCount : apiUnreadCount,
   markRead,
+  deleteNotification,
   markAllRead,
   deleteAll,
   sendEmail: sendSystemEmail,

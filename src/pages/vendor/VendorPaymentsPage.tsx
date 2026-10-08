@@ -66,7 +66,7 @@ export default function VendorPaymentsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { showSuccess } = useSuccessModal();
-  const { formatAmount, companyDefaultCurrency } = useCurrency();
+  const { formatAmount, companyDefaultCurrency, convert } = useCurrency();
   const [displayCurrency, setDisplayCurrency] = useState(companyDefaultCurrency);
 
   // Active view: 'LEDGER' (Recorded Payments) vs 'INVOICES' (Invoice-wise status)
@@ -149,8 +149,8 @@ export default function VendorPaymentsPage() {
     const invList = invoices || [];
     const payList = payments || [];
 
-    const totalInvoiced = invList.reduce((acc, inv) => acc + (inv.totalAmount || inv.amount || 0), 0);
-    const totalReceived = payList.reduce((acc, pay) => acc + (pay.amount || 0), 0);
+    const totalInvoiced = invList.reduce((acc, inv) => acc + convert(inv.totalAmount || inv.amount || 0, (inv as any).currency || companyDefaultCurrency, displayCurrency), 0);
+    const totalReceived = payList.reduce((acc, pay) => acc + convert(pay.amount || 0, (pay as any).currency || companyDefaultCurrency, displayCurrency), 0);
     const pendingBalance = Math.max(0, totalInvoiced - totalReceived);
     const fullyPaidInvoices = invList.filter((inv) => inv.status === 'PAID').length;
 
@@ -162,7 +162,7 @@ export default function VendorPaymentsPage() {
       fullyPaidInvoices,
       totalInvoices: invList.length,
     };
-  }, [invoices, payments]);
+  }, [invoices, payments, displayCurrency, companyDefaultCurrency, convert]);
 
   // Invoice balance lookup map
   const invoiceStatsMap = useMemo(() => {
@@ -250,7 +250,7 @@ export default function VendorPaymentsPage() {
     return filteredInvoices.slice(start, start + pageSize);
   }, [filteredInvoices, invoicesPage, pageSize]);
 
-  const amount = (val: number) => formatAmount(val, displayCurrency);
+  const amount = (val: number, fromCurrency?: string) => formatAmount(convert(val, fromCurrency || companyDefaultCurrency, displayCurrency), displayCurrency);
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return '—';
     const d = new Date(dateStr);
@@ -445,21 +445,21 @@ export default function VendorPaymentsPage() {
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Total Invoiced"
-          value={amount(summary.totalInvoiced)}
+          value={formatAmount(summary.totalInvoiced, displayCurrency)}
           detail={`${summary.totalInvoices} invoices submitted`}
           icon={Receipt}
           aria-pressed={true}
         />
         <MetricCard
           label="Payments Received"
-          value={amount(summary.totalReceived)}
+          value={formatAmount(summary.totalReceived, displayCurrency)}
           detail={`${summary.paymentsCount} payments recorded`}
           icon={CheckCircle2}
           tone="success"
         />
         <MetricCard
           label="Outstanding Balance"
-          value={amount(summary.pendingBalance)}
+          value={formatAmount(summary.pendingBalance, displayCurrency)}
           detail={summary.pendingBalance === 0 ? 'All cleared' : 'Awaiting payment'}
           icon={Clock}
           tone={summary.pendingBalance > 0 ? 'warning' : 'success'}
@@ -645,7 +645,7 @@ export default function VendorPaymentsPage() {
                           {pay.referenceNumber || '—'}
                         </td>
                         <td className="px-4 py-3.5 font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                          + {amount(pay.amount)} <CurrencyBadge currency={displayCurrency} size="sm" />
+                          + {amount(pay.amount, (pay as any).currency)} <CurrencyBadge currency={displayCurrency} size="sm" />
                         </td>
                         <td className="px-4 py-3.5">
                           <span
@@ -764,14 +764,14 @@ export default function VendorPaymentsPage() {
                             {formatDate(inv.dueDate)}
                           </td>
                           <td className="px-4 py-3.5 font-semibold tabular-nums">
-                            {amount(stats.totalAmount)}
+                            {amount(stats.totalAmount, (inv as any).currency)}
                           </td>
                           <td className="px-4 py-3.5 font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                            {amount(stats.paidAmount)}
+                            {amount(stats.paidAmount, (inv as any).currency)}
                           </td>
                           <td className="px-4 py-3.5 font-bold tabular-nums">
                             <span className={stats.balance > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}>
-                              {amount(stats.balance)}
+                              {amount(stats.balance, (inv as any).currency)}
                             </span>
                           </td>
                           <td className="px-4 py-3.5">

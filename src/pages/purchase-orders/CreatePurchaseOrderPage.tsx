@@ -72,7 +72,6 @@ export default function CreatePurchaseOrderPage() {
   const canCreatePO = hasPermission('PO Creation', 'canCreate') || hasPermission('Purchase Orders', 'canCreate') || hasPermission('PO', 'canCreate');
   const [searchParams] = useSearchParams();
   const editId = searchParams.get('id');
-  const isReadOnly = searchParams.get('mode') === 'view';
   const { formatAmount, companyDefaultCurrency } = useCurrency();
   const { companyName: brandingCompanyName, companyPhone: brandingPhone, companyEmail: brandingEmail, profile } = useBranding();
 
@@ -148,6 +147,8 @@ export default function CreatePurchaseOrderPage() {
   const [revisionNo, setRevisionNo] = useState('0');
   const [poDate, setPoDate] = useState(new Date().toISOString().slice(0, 10));
   const [status, setStatus] = useState<string>('Draft');
+  const isApprovedOrRejected = ['Approved', 'Approved & Released', 'APPROVED', 'COMPLETED', 'SENT_TO_VENDOR', 'PO_CREATED', 'Rejected', 'REJECTED', 'Cancelled', 'CANCELLED'].includes(status);
+  const isReadOnly = searchParams.get('mode') === 'view' || (Boolean(editId) && isApprovedOrRejected);
 
   // Auto-generate PO number from sequence (new PO only)
   useEffect(() => {

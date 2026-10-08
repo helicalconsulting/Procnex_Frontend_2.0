@@ -440,13 +440,55 @@ function formatAmount(amount: any, currency: any): string {
   }
 }
 
+const FALLBACK_USD_RATES: Record<string, number> = {
+  USD: 1,
+  KES: 130.0,
+  INR: 86.5,
+  EUR: 0.92,
+  GBP: 0.79,
+  AED: 3.67,
+  SAR: 3.75,
+  UGX: 3750.0,
+  TZS: 2600.0,
+  RWF: 1350.0,
+  NGN: 1500.0,
+  GHS: 15.5,
+  ZAR: 18.2,
+  CAD: 1.38,
+  AUD: 1.52,
+  SGD: 1.34,
+  JPY: 150.0,
+  CNY: 7.25,
+  CHF: 0.90,
+  QAR: 3.64,
+  KWD: 0.31,
+  BHD: 0.38,
+  OMR: 0.38,
+  EGP: 48.5,
+};
+
+function getRateToUSD(currency: string, rates: CurrencyRates | null): number | undefined {
+  if (!currency) return undefined;
+  if (currency === 'USD') return 1;
+  if (rates?.rates) {
+    if (rates.base === 'USD' && rates.rates[currency]) {
+      return rates.rates[currency];
+    }
+    if (rates.base && rates.rates[currency] && rates.rates['USD']) {
+      return rates.rates[currency] / rates.rates['USD'];
+    }
+  }
+  return FALLBACK_USD_RATES[currency];
+}
+
 function convertAmount(amount: number, from: string, to: string, rates: CurrencyRates | null): number {
-  if (!rates || from === to) return amount;
-  // Convert via base currency (EUR)
-  const fromRate = from === rates.base ? 1 : rates.rates[from];
-  const toRate = to === rates.base ? 1 : rates.rates[to];
-  if (!fromRate || !toRate) return amount;
-  return (amount / fromRate) * toRate;
+  if (!amount || isNaN(amount) || from === to) return amount;
+  const fromUsdRate = getRateToUSD(from, rates);
+  const toUsdRate = getRateToUSD(to, rates);
+  if (fromUsdRate && toUsdRate) {
+    return (amount / fromUsdRate) * toUsdRate;
+  }
+  return amount;
 }
 
 // ─── Provider ───────────────────────────────────────────────

@@ -168,13 +168,11 @@ export default function PurchaseOrderDocument({ pr }: Props) {
         <table className="po-doc__items-table">
           <colgroup>
             <col style={{ width: '5%' }} />
-            <col style={{ width: '28%' }} />
-            <col style={{ width: '10%' }} />
+            <col style={{ width: '36%' }} />
+            <col style={{ width: '9%' }} />
             <col style={{ width: '8%' }} />
-            <col style={{ width: '16%' }} />
-            <col style={{ width: '8%' }} />
-            <col style={{ width: '8%' }} />
-            <col style={{ width: '17%' }} />
+            <col style={{ width: '21%' }} />
+            <col style={{ width: '21%' }} />
           </colgroup>
           <thead>
             <tr>
@@ -183,8 +181,6 @@ export default function PurchaseOrderDocument({ pr }: Props) {
               <th className="po-doc__th--qty">Quantity</th>
               <th className="po-doc__th--unit">Unit</th>
               <th className="po-doc__th--price">Unit Price</th>
-              <th className="po-doc__th--tax">Tax %</th>
-              <th className="po-doc__th--disc">Disc %</th>
               <th className="po-doc__th--total">Total</th>
             </tr>
           </thead>
@@ -196,8 +192,6 @@ export default function PurchaseOrderDocument({ pr }: Props) {
                 <td className="po-doc__td--qty">{item.quantity}</td>
                 <td className="po-doc__td--unit">{val(item.unit)}</td>
                 <td className="po-doc__td--price">{formatCurrency(item.unitPrice, pr.currency)}</td>
-                <td className="po-doc__td--tax">{item.taxPercent}%</td>
-                <td className="po-doc__td--disc">{item.discount > 0 ? `${item.discount}%` : '—'}</td>
                 <td className="po-doc__td--total">{formatCurrency(item.total, pr.currency)}</td>
               </tr>
             ))}
@@ -208,29 +202,6 @@ export default function PurchaseOrderDocument({ pr }: Props) {
       {/* ── Totals ── */}
       <div className="po-doc__totals">
         <div className="po-doc__totals-table">
-          <div className="po-doc__total-row">
-            <span className="po-doc__total-label">Subtotal</span>
-            <span className="po-doc__total-value">{formatCurrency(pr.subtotal, pr.currency)}</span>
-          </div>
-          <div className="po-doc__total-row">
-            <span className="po-doc__total-label">Discount</span>
-            <span className={`po-doc__total-value ${pr.discountTotal > 0 ? 'po-doc__total-value--negative' : ''}`}>
-              {pr.discountTotal > 0 ? `-${formatCurrency(pr.discountTotal, pr.currency)}` : formatCurrency(0, pr.currency)}
-            </span>
-          </div>
-          <div className="po-doc__total-row">
-            <span className="po-doc__total-label">Tax</span>
-            <span className="po-doc__total-value">{formatCurrency(pr.taxTotal, pr.currency)}</span>
-          </div>
-          <div className="po-doc__total-row">
-            <span className="po-doc__total-label">Shipping Charges</span>
-            <span className="po-doc__total-value">{formatCurrency(pr.shippingCharges || 0, pr.currency)}</span>
-          </div>
-          <div className="po-doc__total-row">
-            <span className="po-doc__total-label">Other Charges</span>
-            <span className="po-doc__total-value">{formatCurrency(pr.otherCharges || 0, pr.currency)}</span>
-          </div>
-          <div className="po-doc__total-divider" />
           <div className="po-doc__total-row po-doc__total-row--grand">
             <span className="po-doc__total-label po-doc__total-label--grand">Grand Total</span>
             <span className="po-doc__total-value po-doc__total-value--grand">{formatCurrency(pr.grandTotal, pr.currency)}</span>

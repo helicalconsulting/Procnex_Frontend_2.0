@@ -18,7 +18,7 @@ import { TableSkeleton } from '@/components/shared/Skeleton';
 
 export default function VendorInvoicesPage() {
   const navigate = useNavigate();
-  const { formatAmount, companyDefaultCurrency } = useCurrency();
+  const { formatAmount, companyDefaultCurrency, convert } = useCurrency();
   const [displayCurrency, setDisplayCurrency] = useState(companyDefaultCurrency);
   const { data: invoices, loading, error, forceRefresh } = useServiceData(
     () => vendorPortalService.listInvoices(),
@@ -52,11 +52,11 @@ export default function VendorInvoicesPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
   const summary = useMemo(() => ({
-    totalAmount: (invoices || []).reduce((sum, invoice) => sum + (invoice.totalAmount || 0), 0),
-    paid: (invoices || []).filter((invoice) => invoice.status === 'PAID').reduce((sum, invoice) => sum + (invoice.totalAmount || 0), 0),
-    pending: (invoices || []).filter((invoice) => ['PENDING', 'APPROVED'].includes(invoice.status)).reduce((sum, invoice) => sum + (invoice.totalAmount || 0), 0),
-    overdue: (invoices || []).filter((invoice) => invoice.status === 'OVERDUE').reduce((sum, invoice) => sum + (invoice.totalAmount || 0), 0),
-  }), [invoices]);
+    totalAmount: (invoices || []).reduce((sum, invoice) => sum + convert(invoice.totalAmount || 0, (invoice as any).currency || companyDefaultCurrency, displayCurrency), 0),
+    paid: (invoices || []).filter((invoice) => invoice.status === 'PAID').reduce((sum, invoice) => sum + convert(invoice.totalAmount || 0, (invoice as any).currency || companyDefaultCurrency, displayCurrency), 0),
+    pending: (invoices || []).filter((invoice) => ['PENDING', 'APPROVED'].includes(invoice.status)).reduce((sum, invoice) => sum + convert(invoice.totalAmount || 0, (invoice as any).currency || companyDefaultCurrency, displayCurrency), 0),
+    overdue: (invoices || []).filter((invoice) => invoice.status === 'OVERDUE').reduce((sum, invoice) => sum + convert(invoice.totalAmount || 0, (invoice as any).currency || companyDefaultCurrency, displayCurrency), 0),
+  }), [invoices, displayCurrency, companyDefaultCurrency, convert]);
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return invoices || [];
@@ -69,7 +69,7 @@ export default function VendorInvoicesPage() {
     return filtered.slice(start, start + itemsPerPage);
   }, [filtered, currentPage, itemsPerPage]);
 
-  const amount = (value: number) => formatAmount(value, displayCurrency);
+  const amount = (value: number, fromCurrency?: string) => formatAmount(convert(value, fromCurrency || companyDefaultCurrency, displayCurrency), displayCurrency);
   const formatDate = (date: string) => new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
   return (
@@ -98,10 +98,10 @@ export default function VendorInvoicesPage() {
       />
       {error && <Card className="mb-4 border-destructive/25 bg-destructive/8 p-4 text-sm text-destructive">{error}</Card>}
       <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Total invoiced" value={amount(summary.totalAmount)} detail={`${(invoices || []).length} invoices`} icon={Receipt} aria-pressed={true} />
-        <MetricCard label="Paid" value={amount(summary.paid)} detail="Received" icon={CheckCircle2} tone="success" />
-        <MetricCard label="Pending" value={amount(summary.pending)} detail="Awaiting payment" icon={Clock} tone="warning" />
-        <MetricCard label="Overdue" value={amount(summary.overdue)} detail="Past due date" icon={AlertTriangle} tone="danger" />
+        <MetricCard label="Total invoiced" value={formatAmount(summary.totalAmount, displayCurrency)} detail={`${(invoices || []).length} invoices`} icon={Receipt} aria-pressed={true} />
+        <MetricCard label="Paid" value={formatAmount(summary.paid, displayCurrency)} detail="Received" icon={CheckCircle2} tone="success" />
+        <MetricCard label="Pending" value={formatAmount(summary.pending, displayCurrency)} detail="Awaiting payment" icon={Clock} tone="warning" />
+        <MetricCard label="Overdue" value={formatAmount(summary.overdue, displayCurrency)} detail="Past due date" icon={AlertTriangle} tone="danger" />
       </div>
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -159,9 +159,9 @@ export default function VendorInvoicesPage() {
                       <td className="px-4 py-3.5"><div className="flex items-center gap-2.5"><span className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary"><FileText className="size-4" /></span><div><div className="font-semibold text-primary">{invoice.invoiceNumber}</div><div className="mt-0.5 text-[12px] text-muted-foreground">{invoice.rfqNumber}</div></div></div></td>
                       <td className="px-4 py-3.5 font-medium">{invoice.poNumber}</td>
                       <td className="max-w-48 truncate px-4 py-3.5 text-xs text-muted-foreground" title={invoice.description}>{invoice.description}</td>
-                      <td className="px-4 py-3.5 font-medium tabular-nums">{amount(invoice.amount)}</td>
-                      <td className="px-4 py-3.5 text-xs text-muted-foreground tabular-nums">{amount(invoice.gst)}</td>
-                      <td className="px-4 py-3.5 font-semibold tabular-nums">{amount(invoice.totalAmount)} <CurrencyBadge currency={displayCurrency} size="sm" /></td>
+                      <td className="px-4 py-3.5 font-medium tabular-nums">{amount(invoice.amount, (invoice as any).currency)}</td>
+                      <td className="px-4 py-3.5 text-xs text-muted-foreground tabular-nums">{amount(invoice.gst, (invoice as any).currency)}</td>
+                      <td className="px-4 py-3.5 font-semibold tabular-nums">{amount(invoice.totalAmount, (invoice as any).currency)} <CurrencyBadge currency={displayCurrency} size="sm" /></td>
                       <td className="px-4 py-3.5 text-xs text-muted-foreground"><span className="flex items-center gap-1"><Calendar className="size-3" />{formatDate(invoice.submittedDate)}</span></td>
                       <td className="px-4 py-3.5 text-xs text-muted-foreground"><div>{formatDate(invoice.dueDate)}</div>{invoice.paymentDate && <div className="mt-1 font-semibold text-emerald-600">Paid {formatDate(invoice.paymentDate)}</div>}</td>
                       <td className="px-4 py-3.5"><RecordStatusBadge kind="invoice" status={invoice.status} /></td>
@@ -178,8 +178,8 @@ export default function VendorInvoicesPage() {
                 <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="font-semibold text-primary">{invoice.invoiceNumber}</div><div className="mt-1 truncate text-xs text-muted-foreground">PO {invoice.poNumber} · {invoice.rfqNumber}</div></div><RecordStatusBadge kind="invoice" status={invoice.status} /></div>
                 <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-muted-foreground">{invoice.description}</p>
                 <dl className="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-secondary/45 p-3 text-xs">
-                  <div><dt className="text-muted-foreground">Total</dt><dd className="mt-1 font-semibold tabular-nums">{amount(invoice.totalAmount)}</dd></div>
-                  <div><dt className="text-muted-foreground">GST</dt><dd className="mt-1 font-medium tabular-nums">{amount(invoice.gst)}</dd></div>
+                  <div><dt className="text-muted-foreground">Total</dt><dd className="mt-1 font-semibold tabular-nums">{amount(invoice.totalAmount, (invoice as any).currency)}</dd></div>
+                  <div><dt className="text-muted-foreground">GST</dt><dd className="mt-1 font-medium tabular-nums">{amount(invoice.gst, (invoice as any).currency)}</dd></div>
                   <div><dt className="text-muted-foreground">Submitted</dt><dd className="mt-1 font-medium">{formatDate(invoice.submittedDate)}</dd></div>
                   <div><dt className="text-muted-foreground">Due</dt><dd className="mt-1 font-medium">{formatDate(invoice.dueDate)}</dd></div>
                 </dl>

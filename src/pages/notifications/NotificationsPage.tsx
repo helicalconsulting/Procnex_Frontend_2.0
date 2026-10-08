@@ -126,18 +126,20 @@ export default function NotificationsPage() {
 
   const markRead = useCallback((id: number) => {
     setLocalNotis(prev => prev.filter(n => n.id !== id));
-    void notificationService.markRead(id);
+    void notificationService.deleteNotification(id).catch(() => notificationService.markRead(id));
+    window.dispatchEvent(new CustomEvent('heliflow:notification-updated'));
   }, []);
 
   const markAllRead = useCallback(() => {
-    const currentIds = new Set(localNotis.filter(n => !n.isRead).map(n => n.id));
-    if (currentIds.size === 0) return;
-    setLocalNotis(prev => prev.filter(n => n.isRead));
-    void notificationService.markAllRead();
-  }, [localNotis]);
+    setLocalNotis([]);
+    void notificationService.deleteAll().catch(() => notificationService.markAllRead());
+    window.dispatchEvent(new CustomEvent('heliflow:notification-updated'));
+  }, []);
 
   const deleteNoti = useCallback((id: number) => {
     setLocalNotis(prev => prev.filter(n => n.id !== id));
+    void notificationService.deleteNotification(id);
+    window.dispatchEvent(new CustomEvent('heliflow:notification-updated'));
   }, []);
 
   const timeAgo = (d: string) => {
@@ -163,7 +165,7 @@ export default function NotificationsPage() {
         title="Notifications"
         description="Stay updated with approvals, orders, and system alerts"
         actions={
-          summary.unread > 0 ? (
+          displayNotis.length > 0 ? (
             <Button onClick={markAllRead} variant="outline" size="sm">
               <CheckCheck className="mr-2 size-4" /> Mark All Read
             </Button>

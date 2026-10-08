@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useDialogFocus } from '../../hooks/useDialogFocus';
 import { quoteDate } from '../../components/vendor/quotationFormatting';
@@ -196,12 +197,23 @@ function StatusBadge({ status }: { status: QuotStatus | string }) {
 
 export default function VendorQuotationsPage() {
   useAuth();
+  const [searchParams] = useSearchParams();
+  const urlSearch = searchParams.get('search') || searchParams.get('rfq') || '';
+
   const { data: quotations, loading, error } = useServiceData(
     () => vendorPortalService.listQuotations().then((list) => list.map(mapRow)),
     [] as VendorQuotation[]
   );
 
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(urlSearch);
+
+  useEffect(() => {
+    const q = searchParams.get('search') || searchParams.get('rfq');
+    if (q !== null && q !== undefined) {
+      setSearch(q);
+    }
+  }, [searchParams]);
+
   const [kpiFilter, setKpiFilter] = useState<QuotStatus | null>(null);
   const [expandedQuot, setExpandedQuot] = useState<string | number | null>(null);
 
@@ -267,9 +279,15 @@ export default function VendorQuotationsPage() {
     let list = quotations;
     if (kpiFilter) list = list.filter((q) => q.status === kpiFilter);
     if (search.trim()) {
-      const s = search.toLowerCase();
+      const s = search.toLowerCase().trim();
       list = list.filter(
-        (q) => q.rfqNumber.toLowerCase().includes(s) || q.rfqTitle.toLowerCase().includes(s) || (q.vendorQuotationNumber && q.vendorQuotationNumber.toLowerCase().includes(s))
+        (q) =>
+          q.rfqNumber.toLowerCase().includes(s) ||
+          q.rfqTitle.toLowerCase().includes(s) ||
+          (q.vendorQuotationNumber && q.vendorQuotationNumber.toLowerCase().includes(s)) ||
+          (q.qNo && q.qNo.toLowerCase().includes(s)) ||
+          String(q.rfqId).toLowerCase().includes(s) ||
+          String(q.id).toLowerCase().includes(s)
       );
     }
     return list;
