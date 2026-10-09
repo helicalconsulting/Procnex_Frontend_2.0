@@ -167,7 +167,10 @@ export default function PurchaseOrdersPage() {
   );
 
   useEffect(() => {
-    const handleRefresh = () => forceRefresh();
+    const handleRefresh = () => {
+      forceRefresh();
+      fetchPendingApprovals();
+    };
     window.addEventListener('heliflow:approval-updated', handleRefresh);
     window.addEventListener('heliflow:po-updated', handleRefresh);
     window.addEventListener('heliflow:po-created', handleRefresh);
@@ -187,6 +190,31 @@ export default function PurchaseOrdersPage() {
   }, [forceRefresh]);
 
   const [optimisticOverrides, setOptimisticOverrides] = useState<Record<string | number, POStatus>>({});
+  const [pendingApprovalsMap, setPendingApprovalsMap] = useState<Map<string, any>>(new Map());
+
+  const fetchPendingApprovals = useCallback(async () => {
+    try {
+      const pendingRows = await approvalService.listTable({ module: 'PurchaseOrders', status: 'PENDING' });
+      const map = new Map<string, any>();
+      pendingRows.forEach((r) => {
+        if (r.referenceId) map.set(String(r.referenceId), r);
+        if (r.referenceNumber) map.set(String(r.referenceNumber), r);
+        if (r.id) map.set(String(r.id), r);
+      });
+      setPendingApprovalsMap(map);
+    } catch {
+      setPendingApprovalsMap(new Map());
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPendingApprovals();
+  }, [fetchPendingApprovals]);
+
+  const getPendingApprovalForPO = useCallback((order: MockPO | null) => {
+    if (!order) return null;
+    return pendingApprovalsMap.get(String(order.id)) || (order.poNumber ? pendingApprovalsMap.get(order.poNumber) : null);
+  }, [pendingApprovalsMap]);
 
   const effectivePOResult = useMemo(() => {
     return poResult.map((p) => {
@@ -839,7 +867,10 @@ export default function PurchaseOrdersPage() {
                             >
                               <Eye className="size-4" />
                             </Button>
-                            {['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW'].includes(order.status) && canApprovePO && (
+                            {(() => {
+                              const pendingApp = getPendingApprovalForPO(order);
+                              const canActOnThisPO = Boolean(pendingApp && pendingApp.canAct && ['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW'].includes(order.status));
+                              return canActOnThisPO ? (
                               <>
                                 <Button
                                   variant="ghost"
@@ -868,7 +899,7 @@ export default function PurchaseOrdersPage() {
                                   <RotateCcw className="size-4" />
                                 </Button>
                               </>
-                            )}
+                            ) : null; })()}
                             <Button
                               variant="ghost"
                               size="icon-sm"
@@ -943,7 +974,10 @@ export default function PurchaseOrdersPage() {
                       <Download /> PDF
                     </Button>
                   </div>
-                  {['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW'].includes(order.status) && canApprovePO && (
+                  {(() => {
+                    const pendingApp = getPendingApprovalForPO(order);
+                    const canActOnThisPO = Boolean(pendingApp && pendingApp.canAct && ['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW'].includes(order.status));
+                    return canActOnThisPO ? (
                     <div className="flex gap-1">
                       <Button size="sm" onClick={() => openAction(order, 'approve')}>
                         <ThumbsUp /> Approve
@@ -955,7 +989,7 @@ export default function PurchaseOrdersPage() {
                         <RotateCcw /> Return
                       </Button>
                     </div>
-                  )}
+                  ) : null; })()}
                   {canCreatePO && (
                     <Button variant="ghost" size="icon-sm" className="text-destructive" onClick={() => setDeleteTarget(order)}>
                       <Trash2 className="size-4" />
@@ -1135,7 +1169,10 @@ export default function PurchaseOrdersPage() {
                 <Clock className="size-4" /> View Approval Chain
               </Button>
               <div className="flex flex-wrap items-center gap-2">
-                {['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW'].includes(detailPO.status) && canApprovePO && (
+                {(() => {
+                  const pendingApp = getPendingApprovalForPO(detailPO);
+                  const canActOnThisPO = Boolean(pendingApp && pendingApp.canAct && ['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW'].includes(detailPO.status));
+                  return canActOnThisPO ? (
                   <>
                     <Button
                       variant="outline"
@@ -1173,7 +1210,7 @@ export default function PurchaseOrdersPage() {
                       <ThumbsUp className="size-3.5 mr-1" /> Approve
                     </Button>
                   </>
-                )}
+                ) : null; })()}
                 <Button onClick={() => downloadPurchaseOrderAsPdf(detailPO, formatAmount, companyDefaultCurrency)}>
                   <Download className="size-4" /> Download PDF Document
                 </Button>

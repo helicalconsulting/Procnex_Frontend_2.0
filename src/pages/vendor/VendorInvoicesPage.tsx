@@ -51,17 +51,93 @@ export default function VendorInvoicesPage() {
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
+
+  const normalizedInvoices = useMemo(() => {
+    const rawList = invoices || [];
+    const isInternalPattern = (num: string) =>
+      /^[A-Za-z0-9]+-INV-\d+/i.test(num) || /^COMP-INV/i.test(num) || /^[A-Za-z]{2,5}-INV-/i.test(num);
+
+    const poGroups = new Map<string, any[]>();
+    const nonPoInvoices: any[] = [];
+
+    rawList.forEach((inv) => {
+      const poKey = (inv.poNumber && inv.poNumber !== '—') ? inv.poNumber : (inv.poId && String(inv.poId) !== '—' ? String(inv.poId) : null);
+      if (poKey) {
+        if (!poGroups.has(poKey)) poGroups.set(poKey, []);
+        poGroups.get(poKey)!.push(inv);
+      } else {
+        nonPoInvoices.push(inv);
+      }
+    });
+
+    const result: any[] = [];
+
+    for (const [poKey, group] of poGroups.entries()) {
+      let bestVendorInvoiceNumber = '';
+      const withErpRef = group.find((i) => i.erpInvoiceRef && !isInternalPattern(i.erpInvoiceRef));
+      if (withErpRef) bestVendorInvoiceNumber = withErpRef.erpInvoiceRef;
+
+      if (!bestVendorInvoiceNumber) {
+        const vendorInv = group.find((i) => i.invoiceNumber && !isInternalPattern(i.invoiceNumber));
+        if (vendorInv) bestVendorInvoiceNumber = vendorInv.invoiceNumber;
+      }
+
+      if (!bestVendorInvoiceNumber) {
+        const anyRef = group.find((i) => i.erpInvoiceRef);
+        if (anyRef) bestVendorInvoiceNumber = anyRef.erpInvoiceRef;
+      }
+
+      if (!bestVendorInvoiceNumber) {
+        bestVendorInvoiceNumber = group[0].invoiceNumber;
+      }
+
+      const hasPaid = group.some((i) => ['PAID', 'COMPLETED', 'CONFIRMED', 'SETTLED'].includes(String(i.status || '').toUpperCase()));
+      const hasApproved = group.some((i) => ['APPROVED', 'POSTED', 'REGISTERED'].includes(String(i.status || '').toUpperCase()));
+      const hasRejected = group.some((i) => ['REJECTED', 'CANCELLED'].includes(String(i.status || '').toUpperCase()));
+
+      let resolvedStatus = 'PENDING';
+      if (hasPaid) resolvedStatus = 'PAID';
+      else if (hasApproved) resolvedStatus = 'APPROVED';
+      else if (hasRejected) resolvedStatus = 'REJECTED';
+      else if (group.some((i) => i.status)) resolvedStatus = group.find((i) => i.status)?.status || 'PENDING';
+
+      const primary =
+        group.find((i) => ['PAID', 'COMPLETED', 'CONFIRMED'].includes(String(i.status || '').toUpperCase())) ||
+        group.find((i) => ['APPROVED', 'POSTED'].includes(String(i.status || '').toUpperCase())) ||
+        group[0];
+
+      result.push({
+        ...primary,
+        invoiceNumber: bestVendorInvoiceNumber,
+        status: resolvedStatus,
+      });
+    }
+
+    nonPoInvoices.forEach((inv) => {
+      const invNum = inv.erpInvoiceRef && !isInternalPattern(inv.erpInvoiceRef)
+        ? inv.erpInvoiceRef
+        : inv.invoiceNumber;
+      result.push({
+        ...inv,
+        invoiceNumber: invNum,
+      });
+    });
+
+    return result;
+  }, [invoices]);
+
   const summary = useMemo(() => ({
-    totalAmount: (invoices || []).reduce((sum, invoice) => sum + convert(invoice.totalAmount || 0, (invoice as any).currency || companyDefaultCurrency, displayCurrency), 0),
-    paid: (invoices || []).filter((invoice) => invoice.status === 'PAID').reduce((sum, invoice) => sum + convert(invoice.totalAmount || 0, (invoice as any).currency || companyDefaultCurrency, displayCurrency), 0),
-    pending: (invoices || []).filter((invoice) => ['PENDING', 'APPROVED'].includes(invoice.status)).reduce((sum, invoice) => sum + convert(invoice.totalAmount || 0, (invoice as any).currency || companyDefaultCurrency, displayCurrency), 0),
-    overdue: (invoices || []).filter((invoice) => invoice.status === 'OVERDUE').reduce((sum, invoice) => sum + convert(invoice.totalAmount || 0, (invoice as any).currency || companyDefaultCurrency, displayCurrency), 0),
-  }), [invoices, displayCurrency, companyDefaultCurrency, convert]);
+    totalAmount: normalizedInvoices.reduce((sum, invoice) => sum + convert(invoice.totalAmount || 0, (invoice as any).currency || companyDefaultCurrency, displayCurrency), 0),
+    paid: normalizedInvoices.filter((invoice) => invoice.status === 'PAID').reduce((sum, invoice) => sum + convert(invoice.totalAmount || 0, (invoice as any).currency || companyDefaultCurrency, displayCurrency), 0),
+    pending: normalizedInvoices.filter((invoice) => ['PENDING', 'APPROVED'].includes(invoice.status)).reduce((sum, invoice) => sum + convert(invoice.totalAmount || 0, (invoice as any).currency || companyDefaultCurrency, displayCurrency), 0),
+    overdue: normalizedInvoices.filter((invoice) => invoice.status === 'OVERDUE').reduce((sum, invoice) => sum + convert(invoice.totalAmount || 0, (invoice as any).currency || companyDefaultCurrency, displayCurrency), 0),
+  }), [normalizedInvoices, displayCurrency, companyDefaultCurrency, convert]);
+
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return invoices || [];
-    return (invoices || []).filter((invoice) => [invoice.invoiceNumber, invoice.poNumber, invoice.description].some((field) => (field || '').toLowerCase().includes(query)));
-  }, [invoices, search]);
+    if (!query) return normalizedInvoices;
+    return normalizedInvoices.filter((invoice) => [invoice.invoiceNumber, invoice.poNumber, invoice.description].some((field) => (field || '').toLowerCase().includes(query)));
+  }, [normalizedInvoices, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage));
   const paginatedInvoices = useMemo(() => {

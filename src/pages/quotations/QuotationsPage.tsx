@@ -18,7 +18,7 @@ import {
   Crown, GitCompareArrows, ArrowDownNarrowWide, X, RotateCcw,
   MessageSquare, AlertTriangle, ArrowRightLeft, Shield, Check, X as XIcon,
   Maximize2, Minimize2, Minus, ChevronUp, BarChart3, Loader2, LayoutGrid, LayoutList,
-  Download, FileCheck, ShoppingCart, GitBranch, Building2, Paperclip, History, Save,
+  Download, FileCheck, ShoppingCart, GitBranch, Building2, Paperclip, History, Save, Send,
 } from 'lucide-react';
 import { downloadDocument } from '../../utils/download';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
@@ -1893,6 +1893,8 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
       <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
         {displayItems.map((level, idx) => {
           const isLast = idx === displayItems.length - 1;
+          const isOriginator = level.levelNumber === 0 || level.status === 'SUBMITTED' || level.status === 'RESUBMITTED' || /originator/i.test(level.requiredRole);
+          const isResubmitted = level.status === 'RESUBMITTED';
           const isOverallRejected = historyData.isRejected;
           const status = isOverallRejected && (level.status === 'PENDING' || level.status === 'NOT_STARTED')
             ? 'AUTO_REJECTED'
@@ -1901,6 +1903,8 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
           const isRejected = status === 'REJECTED' || status === 'AUTO_REJECTED';
           const comments = isOverallRejected && (level.status === 'PENDING' || level.status === 'NOT_STARTED')
             ? (level.comments || 'Automatically rejected (quotation not awarded)')
+            : isOriginator
+            ? (level.comments || (isResubmitted ? 'Revised quotation resubmitted by vendor' : 'Quotation submitted by vendor for RFQ evaluation'))
             : level.comments;
 
           return (
@@ -1918,10 +1922,10 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
                 position: 'absolute', left: 4, top: 4, width: 16, height: 16,
                 borderRadius: '50%',
                 background: isActive ? 'var(--quotation-warning)' : level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED'
-                  ? 'var(--quotation-success)' : isRejected ? 'var(--quotation-danger)' : 'var(--surface-card)',
+                  ? 'var(--quotation-success)' : isRejected ? 'var(--quotation-danger)' : isOriginator ? 'var(--primary)' : 'var(--surface-card)',
                 border: `2px solid ${
                   isActive ? 'var(--quotation-warning)' : level.status === 'APPROVED' || level.status === 'AUTO_FORWARDED'
-                    ? 'var(--quotation-success)' : isRejected ? 'var(--quotation-danger)' : 'var(--border)'
+                    ? 'var(--quotation-success)' : isRejected ? 'var(--quotation-danger)' : isOriginator ? 'var(--primary)' : 'var(--border)'
                 }`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
@@ -1929,6 +1933,8 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
                   <CheckCircle2 size={10} style={{ color: 'var(--card)' }} />
                 ) : isRejected ? (
                   <XCircle size={10} style={{ color: 'var(--card)' }} />
+                ) : isOriginator ? (
+                  <Send size={9} style={{ color: '#ffffff' }} />
                 ) : (
                   <span style={{ fontSize: 10, fontWeight: 700, color: isActive ? 'var(--card)' : 'var(--text-secondary)' }}>{level.levelNumber}</span>
                 )}
@@ -1944,33 +1950,41 @@ function ApprovalHistoryView({ quotationId, rfqNumber, vendorName }: { quotation
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                   <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-                    Level {level.levelNumber} — {level.requiredRole.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                    {isOriginator
+                      ? (isResubmitted ? 'Quotation Resubmission' : 'Quotation Received')
+                      : `Level ${level.levelNumber} — ${level.requiredRole.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}`}
                   </span>
                   <span style={{
                     fontSize: 12, fontWeight: 600, color: statusColor(status),
                     display: 'inline-flex', alignItems: 'center', gap: 3,
                   }}>
                     {statusIcon(status)}
-                    {statusLabel(status)}
+                    {isOriginator ? (isResubmitted ? 'Resubmitted' : 'Submitted') : statusLabel(status)}
                   </span>
                 </div>
-                {level.approverName && (
+                {(level.approverName || isOriginator) && (
                   <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>
-                    By: <strong>{level.approverName}</strong>
+                    {isOriginator ? (
+                      <>Vendor: <strong>{vendorName || level.approverName || 'Vendor'}</strong></>
+                    ) : (
+                      <>By: <strong>{level.approverName}</strong></>
+                    )}
                   </div>
                 )}
-                {level.comments && (
+                {comments && (
                   <div style={{
                     fontSize: 13, color: 'var(--text-primary)',
                     padding: '6px 10px', marginTop: 4,
                     background: 'var(--surface-card)', borderRadius: 4,
                     border: '1px solid var(--border)',
                   }}>
-                    "{level.comments}"
+                    "{comments}"
                   </div>
                 )}
                 <div style={{ fontSize: 12, color: 'var(--muted-foreground)', marginTop: 6 }}>
-                  {level.actionAt ? `Acted: ${formatDt(level.actionAt)}` : `Created: ${formatDt(level.createdAt)}`}
+                  {isOriginator
+                    ? (isResubmitted ? `Resubmitted: ${formatDt(level.actionAt || level.createdAt)}` : `Received: ${formatDt(level.actionAt || level.createdAt)}`)
+                    : (level.actionAt ? `Acted: ${formatDt(level.actionAt)}` : `Created: ${formatDt(level.createdAt)}`)}
                 </div>
               </div>
             </div>

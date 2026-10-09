@@ -6,12 +6,12 @@
 .action-sending-overlay {
   position: fixed;
   inset: 0;
-  z-index: 999999;
+  z-index: 2147483647 !important;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 20px;
-  background: rgba(10, 15, 29, 0.82);
+  background: rgba(10, 15, 29, 0.88);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   overflow: hidden;
@@ -62,6 +62,9 @@
 }
 .action-sending-overlay__glow--grn {
   background: radial-gradient(circle, rgba(249, 115, 22, 0.5) 0%, rgba(234, 179, 8, 0.25) 70%, transparent 100%);
+}
+.action-sending-overlay__glow--quotation {
+  background: radial-gradient(circle, rgba(14, 165, 233, 0.55) 0%, rgba(99, 102, 241, 0.25) 70%, transparent 100%);
 }
 
 @keyframes action-glow-pulse {
@@ -173,6 +176,17 @@
   color: #ea580c;
 }
 
+.action-sending-card__pill--quotation {
+  background: rgba(14, 165, 233, 0.16);
+  border: 1px solid rgba(14, 165, 233, 0.35);
+  color: #38bdf8;
+}
+[data-theme="light"] .action-sending-card__pill--quotation {
+  background: rgba(14, 165, 233, 0.1);
+  border-color: rgba(14, 165, 233, 0.3);
+  color: #0284c7;
+}
+
 /* Radar & Hero Icon */
 .action-sending-hero {
   position: relative;
@@ -263,6 +277,13 @@
 .action-sending-hero__icon-wrap--grn {
   background: linear-gradient(135deg, #ea580c 0%, #f97316 50%, #eab308 100%);
   box-shadow: 0 10px 25px -4px rgba(249, 115, 22, 0.55),
+              0 0 0 3px rgba(255, 255, 255, 0.18),
+              inset 0 2px 4px rgba(255, 255, 255, 0.35);
+}
+
+.action-sending-hero__icon-wrap--quotation {
+  background: linear-gradient(135deg, #0284c7 0%, #38bdf8 50%, #6366f1 100%);
+  box-shadow: 0 10px 25px -4px rgba(14, 165, 233, 0.55),
               0 0 0 3px rgba(255, 255, 255, 0.18),
               inset 0 2px 4px rgba(255, 255, 255, 0.35);
 }
@@ -470,4 +491,69 @@
 
 [data-theme="light"] .action-sending-card__footer {
   color: #94a3b8;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Mode Modifiers (Reject, Return, Approve)
+   ═══════════════════════════════════════════════════════════ */
+
+.action-sending-overlay__glow--mode-reject {
+  background: radial-gradient(circle, rgba(239, 68, 68, 0.55) 0%, rgba(225, 29, 72, 0.25) 70%, transparent 100%) !important;
+}
+.action-sending-overlay__glow--mode-return {
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.55) 0%, rgba(217, 119, 6, 0.25) 70%, transparent 100%) !important;
+}
+.action-sending-overlay__glow--mode-approve {
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.55) 0%, rgba(5, 150, 105, 0.25) 70%, transparent 100%) !important;
+}
+
+.action-sending-hero__icon-wrap--mode-reject {
+  background: linear-gradient(135deg, #dc2626 0%, #ef4444 50%, #b91c1c 100%) !important;
+  box-shadow: 0 10px 25px -4px rgba(239, 68, 68, 0.65),
+              0 0 0 3px rgba(255, 255, 255, 0.18),
+              inset 0 2px 4px rgba(255, 255, 255, 0.35) !important;
+}
+.action-sending-hero__icon-wrap--mode-return {
+  background: linear-gradient(135deg, #d97706 0%, #f59e0b 50%, #b45309 100%) !important;
+  box-shadow: 0 10px 25px -4px rgba(245, 158, 11, 0.65),
+              0 0 0 3px rgba(255, 255, 255, 0.18),
+              inset 0 2px 4px rgba(255, 255, 255, 0.35) !important;
+}
+.action-sending-hero__icon-wrap--mode-approve {
+  background: linear-gradient(135deg, #059669 0%, #10b981 50%, #047857 100%) !important;
+  box-shadow: 0 10px 25px -4px rgba(16, 185, 129, 0.65),
+              0 0 0 3px rgba(255, 255, 255, 0.18),
+              inset 0 2px 4px rgba(255, 255, 255, 0.35) !important;
+}
+
+.action-sending-card__pill--mode-reject {
+  background: rgba(239, 68, 68, 0.16) !important;
+  border: 1px solid rgba(239, 68, 68, 0.4) !important;
+  color: #f87171 !important;
+}
+.action-sending-card__pill--mode-return {
+  background: rgba(245, 158, 11, 0.16) !important;
+  border: 1px solid rgba(245, 158, 11, 0.4) !important;
+  color: #fbbf24 !important;
+}
+.action-sending-card__pill--mode-approve {
+  background: rgba(16, 185, 129, 0.16) !important;
+  border: 1px solid rgba(16, 185, 129, 0.4) !important;
+  color: #34d399 !important;
+}
+
+[data-theme="light"] .action-sending-card__pill--mode-reject {
+  background: rgba(239, 68, 68, 0.1) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+  color: #dc2626 !important;
+}
+[data-theme="light"] .action-sending-card__pill--mode-return {
+  background: rgba(245, 158, 11, 0.1) !important;
+  border-color: rgba(245, 158, 11, 0.3) !important;
+  color: #d97706 !important;
+}
+[data-theme="light"] .action-sending-card__pill--mode-approve {
+  background: rgba(16, 185, 129, 0.1) !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+  color: #059669 !important;
 }

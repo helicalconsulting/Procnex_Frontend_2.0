@@ -113,6 +113,18 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
   const printableRef = useRef<HTMLDivElement>(null);
   const [approversList, setApproversList] = useState<any[]>(data.approvers || []);
 
+  const [resolvedPaymentTerms, setResolvedPaymentTerms] = useState<string>(() => {
+    if (data.paymentTerms && data.paymentTerms !== 'Net 30') return data.paymentTerms;
+    const poTerms =
+      (data as any).purchaseOrder?.rfq?.selectedQuotation?.paymentTerms ||
+      (data as any).purchaseOrder?.paymentTerms ||
+      (data as any).purchaseOrder?.rfq?.selectedQuotation?.paymentPlanSnapshot;
+    if (poTerms) {
+      return typeof poTerms === 'object' ? JSON.stringify(poTerms) : String(poTerms);
+    }
+    return data.paymentTerms || 'Net 30';
+  });
+
   const [itemsList, setItemsList] = useState<InvoiceLineItem[]>(() => {
     const direct = data.items || data.lineItems || (data as any).purchaseOrder?.items || (data as any).purchaseOrder?.rfq?.items;
     if (Array.isArray(direct) && direct.length > 0) {
@@ -149,6 +161,58 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
   useEffect(() => {
     let isMounted = true;
     const resolveItems = async () => {
+      // Fetch from PO / Invoice service
+      try {
+        const [poRes, invRes] = await Promise.all([
+          data.poNumber ? purchaseOrderService.list().catch(() => ({ orders: [] })) : Promise.resolve({ orders: [] }),
+          invoiceService.list().catch(() => []),
+        ]);
+        if (!isMounted) return;
+
+        // Check matching PO
+        if (data.poNumber && poRes?.orders) {
+          const matchedPO = poRes.orders.find((p: any) =>
+            p.poNumber === data.poNumber || String(p.id) === data.poNumber || (p.poNumber && data.poNumber.includes(p.poNumber))
+          );
+          if (matchedPO) {
+            const quoteTerms =
+              matchedPO.rfq?.selectedQuotation?.paymentTerms ||
+              matchedPO.paymentTerms ||
+              (matchedPO as any).payment_terms;
+            if (quoteTerms && quoteTerms !== 'Net 30') {
+              setResolvedPaymentTerms(quoteTerms);
+            }
+            if (itemsList.length === 0 && matchedPO.items && matchedPO.items.length > 0) {
+              setItemsList(normalizeInvoiceItems(matchedPO.items, data));
+              return;
+            }
+          }
+        }
+
+        // Check matching Invoice
+        if (invRes && Array.isArray(invRes)) {
+          const matchedInv = invRes.find((i: any) =>
+            i.invoiceNumber === data.invoiceNumber || String(i.id) === String(data.id)
+          );
+          if (matchedInv) {
+            const invTerms =
+              (matchedInv.paymentTerms && matchedInv.paymentTerms !== 'Net 30' ? matchedInv.paymentTerms : null) ||
+              (matchedInv.purchaseOrder as any)?.rfq?.selectedQuotation?.paymentTerms ||
+              (matchedInv.purchaseOrder as any)?.paymentTerms;
+            if (invTerms && invTerms !== 'Net 30') {
+              setResolvedPaymentTerms(invTerms);
+            }
+            if (itemsList.length === 0) {
+              const foundItems = matchedInv?.items || matchedInv?.lineItems || (matchedInv?.purchaseOrder as any)?.items || (matchedInv?.purchaseOrder as any)?.rfq?.items;
+              if (foundItems && Array.isArray(foundItems) && foundItems.length > 0) {
+                setItemsList(normalizeInvoiceItems(foundItems, data));
+                return;
+              }
+            }
+          }
+        }
+      } catch {}
+
       if (itemsList.length > 0) return;
 
       // Check localStorage caches
@@ -166,38 +230,6 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
               if (isMounted) setItemsList(normalizeInvoiceItems(parsed, data));
               return;
             }
-          }
-        }
-      } catch {}
-
-      // Fetch from PO / Invoice service
-      try {
-        const [poRes, invRes] = await Promise.all([
-          data.poNumber ? purchaseOrderService.list().catch(() => ({ orders: [] })) : Promise.resolve({ orders: [] }),
-          invoiceService.list().catch(() => []),
-        ]);
-        if (!isMounted) return;
-
-        // Check matching PO
-        if (data.poNumber && poRes?.orders) {
-          const matchedPO = poRes.orders.find((p: any) =>
-            p.poNumber === data.poNumber || String(p.id) === data.poNumber || (p.poNumber && data.poNumber.includes(p.poNumber))
-          );
-          if (matchedPO?.items && matchedPO.items.length > 0) {
-            setItemsList(normalizeInvoiceItems(matchedPO.items, data));
-            return;
-          }
-        }
-
-        // Check matching Invoice
-        if (invRes && Array.isArray(invRes)) {
-          const matchedInv = invRes.find((i: any) =>
-            i.invoiceNumber === data.invoiceNumber || String(i.id) === String(data.id)
-          );
-          const foundItems = matchedInv?.items || matchedInv?.lineItems || (matchedInv?.purchaseOrder as any)?.items || (matchedInv?.purchaseOrder as any)?.rfq?.items;
-          if (foundItems && Array.isArray(foundItems) && foundItems.length > 0) {
-            setItemsList(normalizeInvoiceItems(foundItems, data));
-            return;
           }
         }
       } catch {}
@@ -543,7 +575,7 @@ export function PrintPurchaseInvoiceModal({ data: dataProp, invoice: invoiceProp
                   </tr>
                   <tr>
                     <td className="ppi-sheet__meta-label">Payment Terms:</td>
-                    <td className="ppi-sheet__meta-val">{data.paymentTerms || 'Net 30'}</td>
+                    <td className="ppi-sheet__meta-val">{resolvedPaymentTerms || data.paymentTerms || 'Net 30'}</td>
                   </tr>
                 </tbody>
               </table>

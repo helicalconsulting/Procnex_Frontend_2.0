@@ -75,6 +75,11 @@ function formatDate(value?: string): string {
   return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+function isPOEditable(status?: string): boolean {
+  const s = String(status || '').toUpperCase();
+  return ['DRAFT', 'RETURNED', 'RE_REVIEW', 'RETURN_FOR_RE_REVIEW', 'REVISION_REQUESTED'].includes(s);
+}
+
 function isStandaloneDocument(requisition: ListPurchaseRequisition): boolean {
   const rfqId = (requisition.rfqId || '').toLowerCase();
   return Boolean(
@@ -266,7 +271,7 @@ export default function PurchaseRequisitionsListPage() {
   );
 
   const openDocument = (requisition: ListPurchaseRequisition, mode: 'view' | 'edit') => {
-    const isEditable = !['APPROVED', 'COMPLETED', 'SENT_TO_VENDOR', 'PO_CREATED', 'REJECTED', 'CANCELLED'].includes(requisition.status);
+    const isEditable = isPOEditable(requisition.status);
     const effectiveMode = isEditable ? mode : 'view';
 
     if (isStandaloneDocument(requisition)) {
@@ -585,7 +590,7 @@ export default function PurchaseRequisitionsListPage() {
                               >
                                 <Eye className="size-4" />
                               </Button>
-                              {!['APPROVED', 'COMPLETED', 'SENT_TO_VENDOR', 'PO_CREATED', 'REJECTED', 'CANCELLED'].includes(requisition.status) && (
+                              {isPOEditable(requisition.status) && (
                                 <Button
                                   variant="ghost"
                                   size="icon-sm"
@@ -621,7 +626,7 @@ export default function PurchaseRequisitionsListPage() {
                     <button type="button" className="w-full text-left" onClick={() => openDocument(requisition, 'view')}>
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-primary">{requisition.poNumber || 'Number pending'}</p>
+                           <p className="truncate text-sm font-semibold text-primary">{requisition.poNumber || 'Number pending'}</p>
                           <p className="mt-1 truncate text-sm font-medium">{requisition.vendorName || 'Vendor not assigned'}</p>
                         </div>
                         <Badge tone={getStatusTone(requisition.status)} className="shrink-0">{getStatusLabel(requisition.status)}</Badge>
@@ -633,7 +638,7 @@ export default function PurchaseRequisitionsListPage() {
                     </button>
                     <div className="mt-4 flex gap-2 border-t border-border/60 pt-3">
                       <Button variant="outline" size="sm" className="flex-1" onClick={() => openDocument(requisition, 'view')}><Eye /> View</Button>
-                      {!['APPROVED', 'COMPLETED', 'SENT_TO_VENDOR', 'PO_CREATED', 'REJECTED', 'CANCELLED'].includes(requisition.status) && (
+                      {isPOEditable(requisition.status) && (
                         <Button variant="outline" size="sm" className="flex-1" disabled={!canCreatePO} onClick={() => canCreatePO && openDocument(requisition, 'edit')}><Pencil /> Edit</Button>
                       )}
                       <Button variant="ghost" size="icon-sm" disabled={!canCreatePO} className="text-destructive hover:bg-destructive/10" onClick={() => canCreatePO && setDeleteTarget(requisition)}><Trash2 /></Button>

@@ -144,51 +144,125 @@ function normalizeVoucherItems(rawItems: any[], data: PaymentVoucherDocData): Pa
   });
 }
 
-function generateItemizedBreakdownForVoucher(data: PaymentVoucherDocData): PaymentVoucherItem[] {
+function generateSingleLineItemForVoucher(data: PaymentVoucherDocData): PaymentVoucherItem[] {
   const taxRate = data.taxPercent !== undefined ? Number(data.taxPercent) : (data.taxRate !== undefined ? Number(data.taxRate) : 18);
   const total = Number(data.netAmount || data.grossAmount || 0);
   const baseSubtotal = data.subtotal ? Number(data.subtotal) : (data.taxAmount ? total - data.taxAmount : Number((total / (1 + taxRate / 100)).toFixed(2)));
-  const tdsTotal = Number(data.tdsAmount || 0);
-  const invRef = data.invoiceRef?.includes('|') ? data.invoiceRef.split('|')[0]?.trim() : data.invoiceRef || '—';
-  const poRef = (data.poNumbers && data.poNumbers[0]) || (data.invoiceRef?.includes('PO:') ? data.invoiceRef.split('PO:')[1]?.trim() : 'PO-20260824-3714');
-  const grnRef = (data.grnNumbers && data.grnNumbers[0]) || 'GRN-2026-0182';
+  const taxAmt = data.taxAmount !== undefined ? Number(data.taxAmount) : Number(((baseSubtotal * taxRate) / 100).toFixed(2));
+  const grossAmt = Number(data.grossAmount || (baseSubtotal + taxAmt));
+  const tdsAmt = Number(data.tdsAmount || 0);
+  const netAmt = Number(data.netAmount || (grossAmt - tdsAmt));
+  const invRef = data.invoiceRef?.includes('|') ? data.invoiceRef.split('|')[0]?.trim() : (data.invoiceRef || '—');
+  const poRef = (data.poNumbers && data.poNumbers[0]) || (data.invoiceRef?.includes('PO:') ? data.invoiceRef.split('PO:')[1]?.trim() : '—');
+  const grnRef = (data.grnNumbers && data.grnNumbers[0]) || '—';
 
-  const defaultProportions = [
-    { ratio: 0.40, code: 'ITM-SRV-101', desc: 'Enterprise Server Compute Units & Blade Nodes', qty: 4, unit: 'Units' },
-    { ratio: 0.30, code: 'ITM-STR-204', desc: 'High-Throughput NVMe SAN Storage Arrays', qty: 2, unit: 'Sets' },
-    { ratio: 0.20, code: 'ITM-NET-309', desc: '100GbE Managed Top-of-Rack Network Switches', qty: 2, unit: 'Units' },
-    { ratio: 0.10, code: 'ITM-LIC-401', desc: 'Enterprise Infrastructure License & SLA Support', qty: 1, unit: 'Lot' },
-  ];
-
-  let allocatedBase = 0;
-  return defaultProportions.map((p, idx) => {
-    const isLast = idx === defaultProportions.length - 1;
-    const itemSub = isLast ? Number((baseSubtotal - allocatedBase).toFixed(2)) : Number((baseSubtotal * p.ratio).toFixed(2));
-    allocatedBase += itemSub;
-    const unitPrice = Number((itemSub / p.qty).toFixed(2));
-    const itemTax = Number(((itemSub * taxRate) / 100).toFixed(2));
-    const itemGross = Number((itemSub + itemTax).toFixed(2));
-    const itemTds = Number((itemGross * (tdsTotal > 0 && total > 0 ? tdsTotal / total : 0)).toFixed(2));
-    const itemNet = Number((itemGross - itemTds).toFixed(2));
-
-    return {
-      id: idx + 1,
-      itemCode: p.code,
-      description: p.desc,
+  return [
+    {
+      id: 1,
+      itemCode: 'DISB-001',
+      description: `Payment Disbursement against ${invRef && invRef !== '—' ? `Invoice ${invRef}` : `Voucher ${data.voucherNumber}`}`,
       poNumber: poRef,
       grnNumber: grnRef,
       invoiceRef: invRef,
-      quantity: p.qty,
-      unit: p.unit,
-      unitPrice,
-      subtotal: itemSub,
+      quantity: 1,
+      unit: 'Lot',
+      unitPrice: baseSubtotal,
+      subtotal: baseSubtotal,
       taxPercent: taxRate,
-      taxAmount: itemTax,
-      grossAmount: itemGross,
-      tdsAmount: itemTds,
-      netAmount: itemNet,
-    };
-  });
+      taxAmount: taxAmt,
+      grossAmount: grossAmt,
+      tdsAmount: tdsAmt,
+      netAmount: netAmt,
+    },
+  ];
+}
+
+function resolveVoucherItemsSynchronously(data: PaymentVoucherDocData): PaymentVoucherItem[] {
+  if (
+    data.items &&
+    data.items.length > 0 &&
+    !data.items.every((it) => (it.description || '').toLowerCase().startsWith('payment disbursement against'))
+  ) {
+    return normalizeVoucherItems(data.items, data);
+  }
+
+  const pNo = String(data.voucherNumber || '').trim();
+  const invTarget = String(data.invoiceRef || '').trim();
+  const cleanInvRefs = invTarget
+    .split(/[,|]/)
+    .map((s) => s.trim().replace(/^invoice:\s*/i, '').replace(/^po:\s*/i, ''))
+    .filter(Boolean);
+
+  const collectedItems: any[] = [];
+
+  try {
+    const searchKeys = [
+      ...cleanInvRefs.map((r) => `invoice_items_${r}`),
+      ...cleanInvRefs.map((r) => `items_INV_${r}`),
+      ...(data.poNumbers || []).map((p) => `po_items_${p}`),
+      pNo ? `payment_items_${pNo}` : null,
+      pNo ? `voucher_items_${pNo}` : null,
+    ].filter(Boolean) as string[];
+
+    for (const k of searchKeys) {
+      const raw = localStorage.getItem(k);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          parsed.forEach((sub: any) => collectedItems.push(sub));
+          break;
+        }
+      }
+    }
+
+    // Also check cached invoices in localStorage
+    if (collectedItems.length === 0) {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key) continue;
+        if (key.includes('invoice') || key.includes('heliflow_invoices')) {
+          try {
+            const raw = localStorage.getItem(key);
+            if (!raw) continue;
+            const parsed = JSON.parse(raw);
+            const list = Array.isArray(parsed) ? parsed : (parsed?.invoices || parsed?.data || []);
+            if (Array.isArray(list)) {
+              for (const ref of cleanInvRefs) {
+                const invMatch = list.find((it: any) =>
+                  it.invoiceNumber === ref ||
+                  String(it.id) === ref ||
+                  (it.invoiceNumber && (ref.includes(it.invoiceNumber) || it.invoiceNumber.includes(ref)))
+                );
+                if (invMatch) {
+                  let sub = invMatch.items || invMatch.lineItems || invMatch.purchaseOrder?.items || invMatch.purchaseOrder?.rfq?.items;
+                  if (typeof sub === 'string') {
+                    try { sub = JSON.parse(sub); } catch {}
+                  }
+                  if (Array.isArray(sub) && sub.length > 0) {
+                    sub.forEach((item: any) => {
+                      collectedItems.push({
+                        ...item,
+                        invoiceRef: invMatch.invoiceNumber || ref,
+                        poNumber: invMatch.poNumber || (invMatch.purchaseOrder as any)?.poNumber,
+                      });
+                    });
+                    break;
+                  }
+                }
+              }
+            }
+          } catch {}
+        }
+        if (collectedItems.length > 0) break;
+      }
+    }
+  } catch {}
+
+  if (collectedItems.length > 0) {
+    return normalizeVoucherItems(collectedItems, data);
+  }
+
+  return [];
 }
 
 function resolveApproversSynchronously(data: PaymentVoucherDocData): any[] {
@@ -336,32 +410,35 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
   const [approversList, setApproversList] = useState<any[]>(() => resolveApproversSynchronously(data));
 
   // Resolved line items state
-  // Resolved line items state
-  const [resolvedItems, setResolvedItems] = useState<PaymentVoucherItem[]>(() => {
-    if (
-      data.items &&
-      data.items.length > 0 &&
-      !data.items.every((it) => (it.description || '').toLowerCase().startsWith('payment disbursement against'))
-    ) {
-      return normalizeVoucherItems(data.items, data);
-    }
-    return [];
+  const [resolvedItems, setResolvedItems] = useState<PaymentVoucherItem[]>(() => resolveVoucherItemsSynchronously(data));
+  const [loadingItems, setLoadingItems] = useState<boolean>(() => {
+    const sync = resolveVoucherItemsSynchronously(data);
+    return sync.length === 0 && Boolean(data.invoiceRef && data.invoiceRef !== '—');
   });
+
+  // Re-sync items when data props change
+  useEffect(() => {
+    const sync = resolveVoucherItemsSynchronously(data);
+    setResolvedItems(sync);
+    setLoadingItems(sync.length === 0 && Boolean(data.invoiceRef && data.invoiceRef !== '—'));
+  }, [data.voucherNumber, data.invoiceRef, data.items]);
 
   // Asynchronously resolve all sub-items from invoice / PO services and database
   useEffect(() => {
     let isMounted = true;
     const fetchLineItems = async () => {
       // If we already have multiple genuine itemized lines, skip
-      if (
-        data.items &&
-        data.items.length > 1 &&
-        !data.items.every((it) => (it.description || '').toLowerCase().startsWith('payment disbursement against'))
-      ) {
+      const currentSync = resolveVoucherItemsSynchronously(data);
+      if (currentSync.length > 0) {
+        if (isMounted) {
+          setResolvedItems(currentSync);
+          setLoadingItems(false);
+        }
         return;
       }
 
       try {
+        setLoadingItems(true);
         const invTarget = data.invoiceRef || '';
         const cleanInvRefs = invTarget
           .split(/[,|]/)
@@ -472,30 +549,16 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
               }
             }
           }
-
-          // If still no items, check POs by vendor name or similar amount
-          if (collectedItems.length === 0 && poList?.orders && data.vendorName) {
-            const vNameNorm = data.vendorName.toLowerCase().trim();
-            const vendorPo = poList.orders.find((p: any) =>
-              (p.vendorName && p.vendorName.toLowerCase().trim() === vNameNorm) ||
-              (p.vendor && p.vendor.toLowerCase().trim() === vNameNorm)
-            );
-            if (vendorPo?.items && vendorPo.items.length > 0) {
-              vendorPo.items.forEach((sub: any) => {
-                collectedItems.push({
-                  ...sub,
-                  invoiceRef: cleanInvRefs[0] || data.invoiceRef,
-                  poNumber: vendorPo.poNumber,
-                });
-              });
-            }
-          }
         }
 
         if (collectedItems.length > 0 && isMounted) {
           setResolvedItems(normalizeVoucherItems(collectedItems, data));
         }
-      } catch {}
+      } catch {} finally {
+        if (isMounted) {
+          setLoadingItems(false);
+        }
+      }
     };
 
     fetchLineItems();
@@ -609,11 +672,12 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
     });
   }, [approversList, data]);
 
-  const displayItems: PaymentVoucherItem[] =
-    resolvedItems.length > 0 &&
-    !resolvedItems.every((it) => (it.description || '').toLowerCase().startsWith('payment disbursement against'))
-      ? resolvedItems
-      : generateItemizedBreakdownForVoucher(data);
+  const hasItemizedBreakdown = resolvedItems.length > 0;
+  const displayItems: PaymentVoucherItem[] = hasItemizedBreakdown
+    ? resolvedItems
+    : (data.items && data.items.length > 0 && !data.items.every((it) => (it.description || '').toLowerCase().startsWith('payment disbursement against')))
+      ? normalizeVoucherItems(data.items, data)
+      : (loadingItems ? [] : generateSingleLineItemForVoucher(data));
 
   const grandSubtotal = displayItems.reduce((acc, it) => acc + (Number(it.subtotal) || (Number(it.unitPrice || 0) * Number(it.quantity || 1)) || 0), 0) || (data as any).subtotal || (grandGross - grandTax);
   const grandTax = displayItems.reduce((acc, it) => acc + (Number(it.taxAmount) || 0), 0) || (data as any).taxAmount || 0;
@@ -775,7 +839,16 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
                   </tr>
                 </thead>
                 <tbody>
-                  {displayItems.map((item, index) => {
+                  {loadingItems && displayItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} style={{ textAlign: 'center', padding: '32px 16px', color: '#64748b' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 500 }}>
+                          <Clock size={16} /> Loading itemized invoice breakdown...
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    displayItems.map((item, index) => {
                     const qty = item.quantity || 1;
                     const subtotal = item.subtotal || (item.unitPrice ? item.unitPrice * qty : item.grossAmount);
                     const unitPrice = item.unitPrice || Math.round(subtotal / qty);
@@ -804,7 +877,7 @@ export default function BankPaymentVoucherModal({ data, onClose }: BankPaymentVo
                         </td>
                       </tr>
                     );
-                  })}
+                  }))}
                   <tr className="bpv-table-total-row">
                     <td colSpan={5} style={{ textAlign: 'right', fontWeight: 800, textTransform: 'uppercase', fontSize: '12px', letterSpacing: '0.04em' }}>
                       Grand Total Disbursement:

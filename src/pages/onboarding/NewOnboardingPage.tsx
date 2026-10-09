@@ -997,7 +997,7 @@ export default function NewOnboardingPage() {
       )}
 
       <PageLead
-        title="New Onboarding"
+        title="Vendor Onboarding"
         description="Send invitations to suppliers — they register and enter the approval queue."
         actions={
           <Button variant="outline" onClick={() => navigate('/onboarding/queue')}>

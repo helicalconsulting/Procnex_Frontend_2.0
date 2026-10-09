@@ -147,8 +147,8 @@ export default function CreatePurchaseOrderPage() {
   const [revisionNo, setRevisionNo] = useState('0');
   const [poDate, setPoDate] = useState(new Date().toISOString().slice(0, 10));
   const [status, setStatus] = useState<string>('Draft');
-  const isApprovedOrRejected = ['Approved', 'Approved & Released', 'APPROVED', 'COMPLETED', 'SENT_TO_VENDOR', 'PO_CREATED', 'Rejected', 'REJECTED', 'Cancelled', 'CANCELLED'].includes(status);
-  const isReadOnly = searchParams.get('mode') === 'view' || (Boolean(editId) && isApprovedOrRejected);
+  const isEditable = !status || ['Draft', 'DRAFT', 'Returned', 'RETURNED', 'RE_REVIEW', 'RETURN_FOR_RE_REVIEW', 'REVISION_REQUESTED'].includes(status);
+  const isReadOnly = searchParams.get('mode') === 'view' || (Boolean(editId) && !isEditable);
 
   // Auto-generate PO number from sequence (new PO only)
   useEffect(() => {

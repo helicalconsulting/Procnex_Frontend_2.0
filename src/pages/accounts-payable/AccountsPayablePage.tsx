@@ -184,7 +184,6 @@ const isRoleMatching = (requiredRole?: string, userRoles?: string[]): boolean =>
 
   return userRoles.some((r) => {
     const usrClean = stripPrefix(r);
-    if (usrClean === 'admin' || usrClean === 'administrator' || usrClean === 'superadmin') return true;
     if (reqClean === usrClean) return true;
     if (aliases[reqClean] && aliases[reqClean].includes(usrClean)) return true;
     if (aliases[usrClean] && aliases[usrClean].includes(reqClean)) return true;
@@ -398,7 +397,13 @@ export default function AccountsPayablePage() {
           dueDate: matchingRaw?.dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
           invoiceDate: activeApp.submittedAt || matchingRaw?.submittedAt || new Date().toISOString(),
           status,
-          paymentTerms: matchingRaw?.paymentTerms || 'Net 30',
+          paymentTerms:
+            (matchingRaw?.paymentTerms && matchingRaw.paymentTerms !== 'Net 30' ? matchingRaw.paymentTerms : null) ||
+            (matchingRaw?.purchaseOrder as any)?.rfq?.selectedQuotation?.paymentTerms ||
+            (matchingRaw?.purchaseOrder as any)?.paymentTerms ||
+            (activeApp as any)?.data?.paymentTerms ||
+            matchingRaw?.paymentTerms ||
+            'Net 30',
           department: resolvedDept,
           currentLevel,
           totalLevels,
@@ -459,7 +464,12 @@ export default function AccountsPayablePage() {
             dueDate: inv.dueDate,
             invoiceDate: inv.submittedAt || new Date().toISOString(),
             status,
-            paymentTerms: inv.paymentTerms || 'Net 30',
+            paymentTerms:
+              (inv.paymentTerms && inv.paymentTerms !== 'Net 30' ? inv.paymentTerms : null) ||
+              (inv.purchaseOrder as any)?.rfq?.selectedQuotation?.paymentTerms ||
+              (inv.purchaseOrder as any)?.paymentTerms ||
+              inv.paymentTerms ||
+              'Net 30',
             department: resolvedDept,
             currentLevel: status === 'APPROVED' ? 2 : (isActionable ? 1 : 0),
             totalLevels: isActionable || status === 'APPROVED' ? 2 : 0,

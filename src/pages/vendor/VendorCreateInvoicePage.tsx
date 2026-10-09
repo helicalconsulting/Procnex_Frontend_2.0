@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
+import ActionSendingOverlay from '../../components/shared/ActionSendingOverlay';
 import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyMaster';
 import { useBranding } from '../../context/BrandingContext';
 import { Button } from '../../components/ui/button';
@@ -91,7 +92,7 @@ export default function VendorCreateInvoicePage() {
   });
   const [paymentTerms, setPaymentTerms] = useState<string>('Net 30');
   const [currency, setCurrency] = useState<string>(companyDefaultCurrency);
-  const [buyerName, setBuyerName] = useState<string>('');
+  const [buyerName, setBuyerName] = useState<string>(() => (companyName && companyName !== 'Organization') ? companyName : '');
   const [notes, setNotes] = useState<string>('');
 
   // Line items state
@@ -185,7 +186,9 @@ export default function VendorCreateInvoicePage() {
       ]);
       setGrnOptions([]);
       setSelectedGrnId('');
-      setBuyerName('');
+      if (companyName && companyName !== 'Organization') {
+        setBuyerName(companyName);
+      }
       return;
     }
 
@@ -285,23 +288,26 @@ export default function VendorCreateInvoicePage() {
     }
   }, [selectedGrnId, grnOptions, selectedPO]);
 
-  // Populate Buyer/Client Name ONLY if explicitly set on PO; otherwise keep completely blank (no auto text)
+  // Populate Buyer/Client Name: from selected PO (buyerCompany / buyerName / clientName / buyer.name) or fallback to tenant Buyer companyName
   useEffect(() => {
     if (selectedPO && selectedPoId) {
       const explicitBuyer =
+        (selectedPO as any).buyerCompany ||
         (selectedPO as any).buyerName ||
         (selectedPO as any).clientName ||
         (selectedPO as any).companyName ||
-        (selectedPO as any).buyerCompany ||
-        (selectedPO as any).buyer?.name;
+        (selectedPO as any).buyer?.name ||
+        (selectedPO as any).rfq?.buyerCompany;
 
-      if (explicitBuyer && String(explicitBuyer).toUpperCase() !== 'VENDOR') {
-        setBuyerName(String(explicitBuyer));
+      if (explicitBuyer && String(explicitBuyer).trim() && String(explicitBuyer).toUpperCase() !== 'VENDOR') {
+        setBuyerName(String(explicitBuyer).trim());
         return;
       }
     }
-    setBuyerName('');
-  }, [selectedPO, selectedPoId]);
+    if (companyName && companyName !== 'Organization') {
+      setBuyerName(companyName);
+    }
+  }, [selectedPO, selectedPoId, companyName]);
 
   // Update Line Item Values
   const handleUpdateLineItem = useCallback((id: number | string, field: keyof LineItem, value: any) => {
@@ -445,6 +451,9 @@ export default function VendorCreateInvoicePage() {
         bc.postMessage({ type: 'INVOICE_CREATED', timestamp: Date.now() });
         bc.close();
       } catch {}
+
+      // Allow multi-step packaging animation to complete smoothly
+      await new Promise((resolve) => setTimeout(resolve, 1800));
 
       if (isDraft) {
         setActionSuccessModalData({
@@ -838,6 +847,22 @@ export default function VendorCreateInvoicePage() {
           </Card>
         </div>
       </div>
+
+      <ActionSendingOverlay
+        isOpen={submitting || savingDraft}
+        docType="invoice"
+        docNumber={invoiceNumber}
+        title={savingDraft ? 'Saving Draft Invoice...' : 'Submitting Invoice to Buyer...'}
+        subtitle={
+          savingDraft
+            ? 'Securely saving your draft invoice details.'
+            : `Dispatching Tax Invoice #${invoiceNumber} to ${buyerName || companyName || 'Buyer'} procurement & accounts team.`
+        }
+        vendorName={user?.fullName || selectedPO?.vendor?.name || selectedPO?.vendorName || 'Supplier'}
+        amount={calculations.grandTotal}
+        currency={currency}
+        mode={savingDraft ? 'draft' : 'send'}
+      />
 
       <ActionSuccessModal
         data={actionSuccessModalData}

@@ -56,7 +56,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/procurement/create-payment-voucher': 'Create Payment Voucher',
   '/payments': 'Payment Voucher Approval',
   '/sales-orders': 'Sales Orders',
-  '/onboarding/new': 'New Onboarding',
+  '/onboarding/new': 'Vendor Onboarding',
   '/onboarding/queue': 'Onboarding Queue',
   '/vendor/dashboard': 'Vendor Dashboard',
   '/vendor/rfqs': 'My RFQs',

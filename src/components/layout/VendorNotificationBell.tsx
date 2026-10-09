@@ -19,36 +19,43 @@ export default function VendorNotificationBell() {
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (silent = false) => {
     if (USE_MOCK) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const data = await vendorPortalService.listNotifications();
-      const nextNotifications = data.notifications || [];
-      setNotifications(nextNotifications);
+      const rawNotifications = data.notifications || [];
+      const seen = new Set<string>();
+      const deduplicated = rawNotifications.filter((n) => {
+        const key = n.id ? String(n.id) : `${n.title}_${n.message}_${n.createdAt || ''}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      setNotifications(deduplicated);
       setUnreadCount(data.unreadCount || 0);
     } catch {
-      setNotifications([]);
+      if (!silent) setNotifications([]);
       setUnreadCount(0);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     // Initial load
     const timeout = window.setTimeout(() => {
-      void load();
+      void load(false);
     }, 0);
 
-    // Responsive 4-second polling to guarantee real-time updates
-    const interval = setInterval(() => void load(), 4000);
+    // Responsive 4-second polling to guarantee real-time updates (silent)
+    const interval = setInterval(() => void load(true), 4000);
 
     const triggerBounce = () => {
       setBouncing(true);
       clearTimeout(bounceTimer.current);
       bounceTimer.current = setTimeout(() => setBouncing(false), 600);
-      void load();
+      void load(true);
     };
 
     // SSE real-time listeners — instant notification delivery
@@ -80,7 +87,7 @@ export default function VendorNotificationBell() {
       return;
     }
     setOpen(true);
-    void load();
+    void load(true);
   };
 
   const openRfq = (n: VendorNotification) => {
@@ -148,27 +155,26 @@ export default function VendorNotificationBell() {
           )}
         </div>
         <div className="vnotif__list">
-          {loading && <p className="vnotif__empty">Loading…</p>}
+          {loading && notifications.length === 0 && <p className="vnotif__empty">Loading…</p>}
           {!loading && notifications.length === 0 && (
             <p className="vnotif__empty">No notifications yet.</p>
           )}
-          {!loading &&
-            notifications.map((n) => (
-              <button
-                key={n.id}
-                type="button"
-                className={`vnotif__item ${n.isRead ? '' : 'vnotif__item--unread'}`}
-                onClick={() => openRfq(n)}
-              >
-                <span className="vnotif__item-icon">
-                  <FileText size={16} />
-                </span>
-                <span className="vnotif__item-body">
-                  <span className="vnotif__item-title">{n.title}</span>
-                  {n.message && <span className="vnotif__item-msg">{n.message}</span>}
-                </span>
-              </button>
-            ))}
+          {notifications.map((n) => (
+            <button
+              key={n.id}
+              type="button"
+              className={`vnotif__item ${n.isRead ? '' : 'vnotif__item--unread'}`}
+              onClick={() => openRfq(n)}
+            >
+              <span className="vnotif__item-icon">
+                <FileText size={16} />
+              </span>
+              <span className="vnotif__item-body">
+                <span className="vnotif__item-title">{n.title}</span>
+                {n.message && <span className="vnotif__item-msg">{n.message}</span>}
+              </span>
+            </button>
+          ))}
         </div>
       </FloatingMenu>
     </div>

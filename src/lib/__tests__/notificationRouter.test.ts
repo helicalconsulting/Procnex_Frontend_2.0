@@ -132,10 +132,40 @@ describe('notificationRouter', () => {
 
       expect(
         getNotificationTargetUrl(
+          'Payment Voucher Created',
+          'Draft Payment Voucher #PAY-20261009-9876 has been automatically created for approved Invoice #INV-2026-0095 (Apex Cloud Technologies, KES 50,000). Please review/edit and submit for approval.'
+        )
+      ).toBe('/procurement/create-payment-voucher?search=PAY-20261009-9876');
+
+      expect(
+        getNotificationTargetUrl(
           'Payment Voucher Approval Required',
           'Payment Voucher PAY-20260408-1234 requires your Level 1 review.'
         )
       ).toBe('/payments?search=PAY-20260408-1234');
+
+      expect(
+        getNotificationTargetUrl(
+          'Payment Voucher Approval — Level 2',
+          'Payment Voucher #PAY-20261009-9876 has passed Level 1 and now requires Level 2 approval.'
+        )
+      ).toBe('/payments?search=PAY-20261009-9876');
+    });
+
+    it('should route "Vendor Invoice / Dispatch Note Received" notifications to /procurement/create-purchase-invoice', () => {
+      expect(
+        getNotificationTargetUrl(
+          'Vendor Invoice / Dispatch Note Received: #INV-2026-0095',
+          'Vendor Apex Cloud Technologies has submitted Tax Invoice / Dispatch Note #INV-2026-0095 for PO #PO-20261008-5382. Please review and generate GRN & Purchase Invoice in the company system.'
+        )
+      ).toBe('/procurement/create-purchase-invoice?poId=PO-20261008-5382');
+
+      expect(
+        getNotificationTargetUrl(
+          'Vendor Invoice Received',
+          'New invoice submitted by supplier without PO ref'
+        )
+      ).toBe('/procurement/create-purchase-invoice');
     });
   });
 

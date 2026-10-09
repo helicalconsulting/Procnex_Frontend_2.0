@@ -15,6 +15,7 @@ import {
   XCircle, Undo2, Clock, ArrowLeft, Send, ChevronRight, PenLine, RotateCcw,
 } from 'lucide-react';
 import { useCurrency, CurrencySelector, CurrencyBadge, DEFAULT_CURRENCY } from '../../components/shared/CurrencyMaster';
+import ActionSendingOverlay from '../shared/ActionSendingOverlay';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import ViewPaymentPlanModal from '../vendor/ViewPaymentPlanModal';
 import { Badge } from '../../components/ui/badge';
@@ -253,6 +254,12 @@ export default function RFQDetailModal({
   const [approvalChain, setApprovalChain] = useState<{ levels?: any[]; history?: any[]; timeline?: any[]; totalLevels?: number } | null>(null);
   const [approvalChainLoading, setApprovalChainLoading] = useState(false);
 
+  const [actionSendingState, setActionSendingState] = useState<{
+    isOpen: boolean;
+    docNumber: string;
+    mode: 'approve' | 'reject' | 'return';
+  } | null>(null);
+
   const fetchApprovalChain = useCallback(() => {
     if (!rfq?.id) return;
     setApprovalChainLoading(true);
@@ -297,9 +304,17 @@ export default function RFQDetailModal({
     setApprovalComment('');
     setApprovalActionLoading(true);
     setApprovalActionError(null);
+    setActionSendingState({
+      isOpen: true,
+      docNumber: rfq.rfqNumber || String(rfq.id),
+      mode: 'approve',
+    });
 
     try {
       const res = await approvalService.approve(approvalId, comment);
+      await new Promise((resolve) => setTimeout(resolve, 1800));
+      setActionSendingState(null);
+
       const hasNextLevel = Boolean(res?.nextLevel);
       if (hasNextLevel) {
         rfq.status = 'PENDING_APPROVAL';
@@ -318,6 +333,7 @@ export default function RFQDetailModal({
       window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
       window.dispatchEvent(new CustomEvent('heliflow:rfq-updated'));
     } catch (err) {
+      setActionSendingState(null);
       setApprovalActionError(err instanceof Error ? err.message : 'Failed to approve RFQ');
     } finally {
       setApprovalActionLoading(false);
@@ -343,14 +359,22 @@ export default function RFQDetailModal({
     setApprovalActionLoading(true);
     setApprovalActionError(null);
     setApprovalActionSuccess('RFQ Rejected.');
+    setActionSendingState({
+      isOpen: true,
+      docNumber: rfq.rfqNumber || String(rfq.id),
+      mode: 'reject',
+    });
     window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
 
     try {
       const res = await approvalService.reject(approvalId, comment);
+      await new Promise((resolve) => setTimeout(resolve, 1800));
+      setActionSendingState(null);
       if (res?.message) setApprovalActionSuccess(res.message);
       fetchApprovalChain();
       window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
     } catch (err) {
+      setActionSendingState(null);
       setApprovalActionError(err instanceof Error ? err.message : 'Failed to reject RFQ');
     } finally {
       setApprovalActionLoading(false);
@@ -376,14 +400,22 @@ export default function RFQDetailModal({
     setApprovalActionLoading(true);
     setApprovalActionError(null);
     setApprovalActionSuccess('RFQ Returned for revision.');
+    setActionSendingState({
+      isOpen: true,
+      docNumber: rfq.rfqNumber || String(rfq.id),
+      mode: 'return',
+    });
     window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
 
     try {
       const res = await approvalService.return(approvalId, comment, actionReturnTarget);
+      await new Promise((resolve) => setTimeout(resolve, 1800));
+      setActionSendingState(null);
       if (res?.message) setApprovalActionSuccess(res.message);
       fetchApprovalChain();
       window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
     } catch (err) {
+      setActionSendingState(null);
       setApprovalActionError(err instanceof Error ? err.message : 'Failed to return RFQ');
     } finally {
       setApprovalActionLoading(false);
@@ -620,6 +652,13 @@ export default function RFQDetailModal({
   const formatDate = (d: string) =>
     d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
+  const formatDateTime = (d: string | Date | null | undefined) => {
+    if (!d) return '—';
+    const date = new Date(d);
+    if (isNaN(date.getTime())) return '—';
+    return `${date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}, ${date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}`;
+  };
+
   const isPage = variant === 'page';
   const isOpen = !!rfq && modalState === 'open';
   const isExpanded = !!rfq && modalState === 'expanded';
@@ -662,9 +701,22 @@ export default function RFQDetailModal({
               <div className="flex flex-wrap items-center gap-2.5">
                 <h1 className="text-2xl font-bold tracking-tight text-foreground">{rfq.rfqNumber}</h1>
                 {(() => {
-                  const isReturnedByMe = (rfq as any)._isReturnedByMe || rfq.status === 'RETURNED' || rfq.status === 'RETURN_FOR_RE_REVIEW';
-                  const isReturnedForReReview = (rfq as any)._isReturnedForReReview || rfq.status === 'RE_REVIEW' || Boolean(pendingApproval?.isReturned || (pendingApproval?.comments && /return/i.test(pendingApproval.comments)));
-                  const displayStatus = isReturnedByMe ? 'RETURNED' : isReturnedForReReview ? 'RE_REVIEW' : rfq.status;
+                  const currentPendingLevel = pendingApproval?.currentLevel || pendingApproval?.levelNumber || approvalChain?.currentLevel || 1;
+                  const historyItems = approvalChain?.history || [];
+                  const lastReturnIdx = historyItems.map((h: any) => h.status).lastIndexOf('RETURNED');
+                  const hasApprovalAfterReturn = lastReturnIdx !== -1 && historyItems.slice(lastReturnIdx + 1).some((h: any) => h.status === 'APPROVED');
+                  const isCurrentStepReReview = (rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW' || (lastReturnIdx !== -1 && !hasApprovalAfterReturn)) && currentPendingLevel === 1;
+
+                  const isApprovedByMe = (rfq as any)._isApprovedByMe;
+                  const isReturnedByMe = (rfq as any)._isReturnedByMe || (rfq.status === 'RETURNED' && !isApprovedByMe);
+                  const displayStatus = isApprovedByMe
+                    ? 'APPROVED'
+                    : isReturnedByMe
+                    ? 'RETURNED'
+                    : isCurrentStepReReview
+                    ? 'RE_REVIEW'
+                    : rfq.status;
+
                   return (
                     <Badge tone={getStatusTone(displayStatus)}>
                       {STATUS_LABELS[displayStatus] || displayStatus}
@@ -796,14 +848,17 @@ export default function RFQDetailModal({
           );
         })()}
 
-        {/* ── 2. PENDING APPROVAL INTERACTIVE CARD (If PENDING_APPROVAL or RE_REVIEW) ── */}
+        {/* ── 3. PENDING APPROVAL INTERACTIVE CARD (If PENDING_APPROVAL or RE_REVIEW) ── */}
         {(rfq.status === 'PENDING_APPROVAL' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW') && pendingApproval && pendingApproval.canAct && (() => {
-          const latestReturnEntry = approvalChain?.history?.slice().reverse().find((h: any) => h.status === 'RETURNED');
-          const isReturned = Boolean(
-            pendingApproval.isReturned ||
-            (pendingApproval.comments && /return/i.test(pendingApproval.comments)) ||
-            latestReturnEntry
-          );
+          const currentPendingLevel = pendingApproval.currentLevel || pendingApproval.levelNumber || approvalChain?.currentLevel || 1;
+          const historyItems = approvalChain?.history || [];
+          const lastReturnIdx = historyItems.map((h: any) => h.status).lastIndexOf('RETURNED');
+          const hasApprovalAfterReturn = lastReturnIdx !== -1 && historyItems.slice(lastReturnIdx + 1).some((h: any) => h.status === 'APPROVED');
+
+          // An active approval is a Re-Review ONLY if there has been no approval since the return and this is Level 1
+          const isReturned = (rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW' || (lastReturnIdx !== -1 && !hasApprovalAfterReturn)) && currentPendingLevel === 1;
+
+          const latestReturnEntry = isReturned && lastReturnIdx !== -1 ? historyItems[lastReturnIdx] : null;
           const returnComment = (pendingApproval.comments && /return/i.test(pendingApproval.comments) ? pendingApproval.comments : null) || latestReturnEntry?.comments;
           const returnedBy = latestReturnEntry?.approverName || (latestReturnEntry?.levelNumber ? `Level ${latestReturnEntry.levelNumber} Approver` : 'Approver');
 
@@ -822,7 +877,7 @@ export default function RFQDetailModal({
                   </div>
                   <div>
                     <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                      {isReturned ? `Action Required: Level ${pendingApproval.levelNumber || 1} Re-Review (Returned)` : 'Action Required: Internal Approval'}
+                      {isReturned ? `Action Required: Level ${currentPendingLevel} Re-Review (Returned)` : `Action Required: Level ${currentPendingLevel} Internal Approval`}
                       {isReturned && (
                         <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 font-medium">
                           Returned by {returnedBy}
@@ -832,7 +887,7 @@ export default function RFQDetailModal({
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {isReturned
                         ? `This RFQ was returned by ${returnedBy} for re-evaluation. Please review and approve or return to originator.`
-                        : `This RFQ is pending Level ${pendingApproval.levelNumber || 1} approval.`}
+                        : `This RFQ is pending Level ${currentPendingLevel} approval.`}
                     </p>
                     {isReturned && returnComment && (
                       <div className="mt-2 text-xs font-medium text-foreground/90 bg-background/80 dark:bg-card border border-amber-500/20 rounded-md p-2 italic">
@@ -1253,32 +1308,126 @@ export default function RFQDetailModal({
                 </div>
 
                 {approvalChainLoading ? (
-                  <div className="text-xs text-muted-foreground py-6 text-center">Loading approval chain...</div>
-                ) : (
-                  <div className="flex flex-col gap-3">
-                    {((approvalChain?.history?.length ?? 0) > 0 ? approvalChain?.history : approvalChain?.levels || []).map((item: any, idx: number) => (
-                      <div key={item.id || idx} className="p-3.5 rounded-xl border border-border/70 bg-card flex flex-col gap-1.5 text-xs">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Badge tone={item.status === 'APPROVED' ? 'success' : item.status === 'REJECTED' ? 'danger' : 'warning'}>
-                              Level {item.levelNumber} — {item.status}
-                            </Badge>
-                            <span className="font-semibold text-foreground">{item.requiredRole}</span>
+                  <div className="text-xs text-muted-foreground py-6 text-center">Loading approval history...</div>
+                ) : (() => {
+                  let rawList = [...((approvalChain?.history && approvalChain.history.length > 0) ? approvalChain.history : (approvalChain?.levels || []))];
+                  const hasOriginator = rawList.some((h: any) => h.levelNumber === 0 || h.status === 'SUBMITTED' || h.status === 'CREATED');
+                  if (!hasOriginator && rfq) {
+                    rawList.unshift({
+                      id: `originator-init-${rfq.id}`,
+                      levelNumber: 0,
+                      requiredRole: 'Originator / Creator',
+                      status: 'SUBMITTED',
+                      approverName: rfq.creator || 'RFQ Originator',
+                      comments: 'RFQ Created & Submitted for Approval Workflow',
+                      actionAt: rfq.createdAt || new Date(),
+                      createdAt: rfq.createdAt || new Date(),
+                    });
+                  }
+
+                  // Synthesize any missing Originator RESUBMITTED step after RETURNED
+                  const displayList: any[] = [];
+                  for (let i = 0; i < rawList.length; i++) {
+                    const item = rawList[i];
+                    const prev = i > 0 ? rawList[i - 1] : null;
+                    if (prev && prev.status === 'RETURNED' && item.status !== 'RESUBMITTED') {
+                      displayList.push({
+                        id: `originator-resubmit-${item.id || i}`,
+                        levelNumber: 0,
+                        requiredRole: 'Originator / Creator',
+                        status: 'RESUBMITTED',
+                        approverName: rfq?.creator || 'RFQ Originator',
+                        comments: 'RFQ revised and resubmitted for Level 1 approval',
+                        actionAt: item.createdAt || item.actionAt || new Date(),
+                        createdAt: item.createdAt || item.actionAt || new Date(),
+                      });
+                    }
+                    displayList.push(item);
+                  }
+
+                  return displayList.length > 0 ? (
+                    <div className="flex flex-col gap-3">
+                      {displayList.map((item: any, idx: number) => {
+                        const isResubmitted = item.status === 'RESUBMITTED';
+                        const isOriginator = item.levelNumber === 0 || item.status === 'SUBMITTED' || item.status === 'CREATED' || isResubmitted;
+                        const isApproved = item.status === 'APPROVED' || item.status === 'AUTO_FORWARDED';
+                        const isRejected = item.status === 'REJECTED';
+                        const isReturned = item.status === 'RETURNED';
+                        const isPending  = item.status === 'PENDING';
+
+                        const statusTone = isResubmitted
+                          ? 'info'
+                          : isOriginator
+                          ? 'primary'
+                          : isApproved
+                          ? 'success'
+                          : isRejected
+                          ? 'danger'
+                          : isReturned
+                          ? 'warning'
+                          : 'warning';
+
+                        const badgeLabel = isResubmitted
+                          ? 'Originator — RESUBMITTED'
+                          : isOriginator
+                          ? 'Originator — SUBMITTED'
+                          : isReturned
+                          ? `Level ${item.levelNumber} — RETURNED`
+                          : isApproved
+                          ? `Level ${item.levelNumber} — APPROVED`
+                          : isRejected
+                          ? `Level ${item.levelNumber} — REJECTED`
+                          : (rfq?.status === 'RETURNED' || rfq?.status === 'RE_REVIEW' || (item as any).isReturned)
+                          ? `Level ${item.levelNumber} — PENDING (Re-Review)`
+                          : `Level ${item.levelNumber} — PENDING`;
+
+                        const actionByText = isResubmitted || isOriginator
+                          ? `${item.approverName || rfq?.creator || 'Creator'} (RFQ Originator)`
+                          : item.approverName
+                          ? `${item.approverName} (Level ${item.levelNumber} Approver)`
+                          : isApproved
+                          ? (rfq?.creator || 'System Approver')
+                          : isPending
+                          ? `Awaiting Level ${item.levelNumber} Action`
+                          : 'Pending Action';
+
+                        const timeText = item.actionAt
+                          ? formatDateTime(item.actionAt)
+                          : item.createdAt
+                          ? formatDateTime(item.createdAt)
+                          : '—';
+
+                        return (
+                          <div key={item.id || idx} className="p-3.5 rounded-xl border border-border/70 bg-card flex flex-col gap-1.5 text-xs shadow-xs">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Badge tone={statusTone} className="font-bold tracking-wide">
+                                  {badgeLabel}
+                                </Badge>
+                                <span className="font-semibold text-foreground">{item.requiredRole}</span>
+                              </div>
+                              <span className="text-muted-foreground flex items-center gap-1 font-mono text-[11px]">
+                                <Clock size={12} className="opacity-70" />
+                                {timeText}
+                              </span>
+                            </div>
+                            <div className="text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                              <Users size={13} className="text-primary/70 shrink-0" />
+                              <span>Action By: <strong className="text-foreground">{actionByText}</strong></span>
+                            </div>
+                            {item.comments && (
+                              <div className="mt-1 p-2.5 rounded-lg bg-muted/60 border border-border/50 text-foreground italic">
+                                "{item.comments}"
+                              </div>
+                            )}
                           </div>
-                          <span className="text-muted-foreground">{item.actionAt ? formatDate(item.actionAt) : '—'}</span>
-                        </div>
-                        <div className="text-muted-foreground">
-                          Action By: <strong className="text-foreground">{item.approverName || 'Pending'}</strong>
-                        </div>
-                        {item.comments && (
-                          <div className="mt-1 p-2 rounded bg-secondary/50 italic text-foreground">
-                            "{item.comments}"
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-muted-foreground py-6 text-center">No approval history available.</div>
+                  );
+                })()}
               </div>
             )}
           </div>
@@ -1837,25 +1986,84 @@ export default function RFQDetailModal({
                   {approvalChainLoading ? (
                     <div style={{ fontSize: 14, color: 'var(--text-secondary)', padding: '24px 0', textAlign: 'center' }}>Loading approval history...</div>
                   ) : (() => {
-                    const displayList = (approvalChain?.history && approvalChain.history.length > 0)
-                      ? approvalChain.history
-                      : (approvalChain?.levels || []);
+                    let rawList = [...((approvalChain?.history && approvalChain.history.length > 0) ? approvalChain.history : (approvalChain?.levels || []))];
+                    const hasOriginator = rawList.some((h: any) => h.levelNumber === 0 || h.status === 'SUBMITTED' || h.status === 'CREATED');
+                    if (!hasOriginator && rfq) {
+                      rawList.unshift({
+                        id: `originator-init-${rfq.id}`,
+                        levelNumber: 0,
+                        requiredRole: 'Originator / Creator',
+                        status: 'SUBMITTED',
+                        approverName: rfq.creator || 'RFQ Originator',
+                        comments: 'RFQ Created & Submitted for Approval Workflow',
+                        actionAt: rfq.createdAt || new Date(),
+                        createdAt: rfq.createdAt || new Date(),
+                      });
+                    }
+
+                    // Synthesize any missing Originator RESUBMITTED step after RETURNED
+                    const displayList: any[] = [];
+                    for (let i = 0; i < rawList.length; i++) {
+                      const item = rawList[i];
+                      const prev = i > 0 ? rawList[i - 1] : null;
+                      if (prev && prev.status === 'RETURNED' && item.status !== 'RESUBMITTED') {
+                        displayList.push({
+                          id: `originator-resubmit-${item.id || i}`,
+                          levelNumber: 0,
+                          requiredRole: 'Originator / Creator',
+                          status: 'RESUBMITTED',
+                          approverName: rfq?.creator || 'RFQ Originator',
+                          comments: 'RFQ revised and resubmitted for Level 1 approval',
+                          actionAt: item.createdAt || item.actionAt || new Date(),
+                          createdAt: item.createdAt || item.actionAt || new Date(),
+                        });
+                      }
+                      displayList.push(item);
+                    }
+
                     return displayList.length > 0 ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                         {displayList.map((item: any, idx: number) => {
-                          const isApproved = item.status === 'APPROVED';
+                          const isResubmitted = item.status === 'RESUBMITTED';
+                          const isOriginator = item.levelNumber === 0 || item.status === 'SUBMITTED' || item.status === 'CREATED' || isResubmitted;
+                          const isApproved = item.status === 'APPROVED' || item.status === 'AUTO_FORWARDED';
                           const isRejected = item.status === 'REJECTED';
                           const isReturned = item.status === 'RETURNED';
                           const isPending  = item.status === 'PENDING';
 
-                          const statusColor = isApproved ? '#16a34a' : isRejected ? '#dc2626' : isReturned ? '#d97706' : isPending ? '#eab308' : '#9ca3af';
-                          const statusBg    = isApproved ? 'rgba(22, 163, 74, 0.08)' : isRejected ? 'rgba(220, 38, 38, 0.08)' : isReturned ? 'rgba(217, 119, 6, 0.08)' : isPending ? 'rgba(234, 179, 8, 0.08)' : 'rgba(156, 163, 175, 0.08)';
-                          const statusBorder = isApproved ? 'rgba(22, 163, 74, 0.2)' : isRejected ? 'rgba(220, 38, 38, 0.2)' : isReturned ? 'rgba(217, 119, 6, 0.2)' : isPending ? 'rgba(234, 179, 8, 0.2)' : 'rgba(156, 163, 175, 0.2)';
+                          const statusColor = isResubmitted ? '#0ea5e9' : isOriginator ? '#3b82f6' : isApproved ? '#16a34a' : isRejected ? '#dc2626' : isReturned ? '#d97706' : isPending ? '#eab308' : '#9ca3af';
+                          const statusBg    = isResubmitted ? 'rgba(14, 165, 233, 0.1)' : isOriginator ? 'rgba(59, 130, 246, 0.08)' : isApproved ? 'rgba(22, 163, 74, 0.08)' : isRejected ? 'rgba(220, 38, 38, 0.08)' : isReturned ? 'rgba(217, 119, 6, 0.08)' : isPending ? 'rgba(234, 179, 8, 0.08)' : 'rgba(156, 163, 175, 0.08)';
+                          const statusBorder = isResubmitted ? 'rgba(14, 165, 233, 0.3)' : isOriginator ? 'rgba(59, 130, 246, 0.25)' : isApproved ? 'rgba(22, 163, 74, 0.2)' : isRejected ? 'rgba(220, 38, 38, 0.2)' : isReturned ? 'rgba(217, 119, 6, 0.2)' : isPending ? 'rgba(234, 179, 8, 0.2)' : 'rgba(156, 163, 175, 0.2)';
 
-                          const statusLabel = item.status === 'NOT_STARTED'
-                            ? (item.levelNumber === 1 ? 'Pending Approval' : `Awaiting Level ${item.levelNumber - 1}`)
-                            : item.status;
-                          const actionByText = item.approverName || (isApproved ? (rfq.creator || 'System') : isPending ? 'Awaiting Approval' : item.levelNumber === 1 ? 'Pending Approval' : `Pending Level ${item.levelNumber - 1}`);
+                          const badgeLabel = isResubmitted
+                            ? 'Originator — RESUBMITTED'
+                            : isOriginator
+                            ? 'Originator — SUBMITTED'
+                            : isReturned
+                            ? `Level ${item.levelNumber} — RETURNED`
+                            : isApproved
+                            ? `Level ${item.levelNumber} — APPROVED`
+                            : isRejected
+                            ? `Level ${item.levelNumber} — REJECTED`
+                            : (rfq?.status === 'RETURNED' || rfq?.status === 'RE_REVIEW' || (item as any).isReturned)
+                            ? `Level ${item.levelNumber} — PENDING (Re-Review)`
+                            : `Level ${item.levelNumber} — PENDING`;
+
+                          const actionByText = isResubmitted || isOriginator
+                            ? `${item.approverName || rfq?.creator || 'Creator'} (RFQ Originator)`
+                            : item.approverName
+                            ? `${item.approverName} (Level ${item.levelNumber} Approver)`
+                            : isApproved
+                            ? (rfq?.creator || 'System Approver')
+                            : isPending
+                            ? `Awaiting Level ${item.levelNumber} Action`
+                            : 'Pending Action';
+
+                          const timeText = item.actionAt
+                            ? formatDateTime(item.actionAt)
+                            : item.createdAt
+                            ? formatDateTime(item.createdAt)
+                            : '—';
 
                           return (
                             <div
@@ -1876,14 +2084,15 @@ export default function RFQDetailModal({
                                     fontSize: 12, fontWeight: 700, padding: '3px 9px', borderRadius: 4,
                                     background: statusBg, color: statusColor, textTransform: 'uppercase', letterSpacing: '0.3px',
                                   }}>
-                                    Level {item.levelNumber} — {statusLabel}
+                                    {badgeLabel}
                                   </span>
                                   <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
                                     {item.requiredRole}
                                   </span>
                                 </div>
-                                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                                  {item.actionAt ? formatDate(item.actionAt) : item.createdAt ? formatDate(item.createdAt) : '—'}
+                                <span style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'monospace' }}>
+                                  <Clock size={12} style={{ opacity: 0.7 }} />
+                                  {timeText}
                                 </span>
                               </div>
 
@@ -1896,6 +2105,7 @@ export default function RFQDetailModal({
                                 <div style={{
                                   fontSize: 13, color: 'var(--text-primary)', background: 'var(--surface-hover)',
                                   padding: '8px 12px', borderRadius: 4, marginTop: 2, fontStyle: 'italic',
+                                  border: '1px solid var(--border)',
                                 }}>
                                   "{item.comments}"
                                 </div>
@@ -1953,6 +2163,16 @@ export default function RFQDetailModal({
           <ViewPaymentPlanModal
             plan={viewPlanQuotation}
             onClose={() => setViewPlanQuotation(null)}
+          />
+        )}
+
+        {/* ── Action Sending Multi-Step Animated Overlay ── */}
+        {actionSendingState && (
+          <ActionSendingOverlay
+            isOpen={actionSendingState.isOpen}
+            docType="rfq"
+            docNumber={actionSendingState.docNumber}
+            mode={actionSendingState.mode}
           />
         )}
     </>

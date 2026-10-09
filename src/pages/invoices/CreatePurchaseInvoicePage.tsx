@@ -8,6 +8,7 @@ import { vendorService } from '../../services/vendorService';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
 import { grnService, type GoodsReceivedNote } from '../../services/grnService';
 import { invoiceService, type APInvoice } from '../../services/invoiceService';
+import { sequencePreview } from '../../components/admin/company-settings/serializationModel';
 import { companySettingsService } from '../../services/companySettingsService';
 import { apiRequest } from '../../api/client';
 import {
@@ -182,15 +183,35 @@ export default function CreatePurchaseInvoicePage() {
   const [invoiceNumber, setInvoiceNumber] = useState<string>('');
 
   useEffect(() => {
-    if (isCreating && !invoiceNumber) {
+    if (!isReadOnly && (!invoiceNumber || invoiceNumber.startsWith('INV-2026-') || invoiceNumber.startsWith('INV 2026'))) {
       companySettingsService
-        .generateNextSequence('INVOICE')
-        .then((res) => {
-          if (res?.formattedCode) setInvoiceNumber(res.formattedCode);
+        .listSequenceSettings()
+        .then((settings) => {
+          const invSetting = settings.find((s) => s.entityType === 'INVOICE');
+          if (invSetting) {
+            const preview = sequencePreview(invSetting);
+            if (preview && !preview.includes('Enter a valid')) {
+              setInvoiceNumber(preview);
+              return;
+            }
+          }
+          companySettingsService
+            .generateNextSequence('INVOICE')
+            .then((res) => {
+              if (res?.formattedCode) setInvoiceNumber(res.formattedCode);
+            })
+            .catch(() => {});
         })
-        .catch(() => {});
+        .catch(() => {
+          companySettingsService
+            .generateNextSequence('INVOICE')
+            .then((res) => {
+              if (res?.formattedCode) setInvoiceNumber(res.formattedCode);
+            })
+            .catch(() => {});
+        });
     }
-  }, [isCreating, invoiceNumber]);
+  }, [isReadOnly, invoiceNumber]);
 
   const [vendorName, setVendorName] = useState<string>('');
   const [invoiceDate, setInvoiceDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
@@ -353,6 +374,22 @@ export default function CreatePurchaseInvoicePage() {
       (po) => String(po.id) === String(selectedPoId) || String(po.poNumber) === String(selectedPoId)
     );
   }, [poList, selectedPoId]);
+
+  useEffect(() => {
+    if (selectedPO && creationMode !== 'manual') {
+      const terms =
+        selectedPO.rfq?.selectedQuotation?.paymentTerms ||
+        (selectedPO as any).paymentTerms ||
+        (selectedPO as any).payment_terms ||
+        selectedPO.rfq?.paymentTerms ||
+        (selectedPO.rfq?.selectedQuotation?.paymentPlanSnapshot && (selectedPO.rfq.selectedQuotation.paymentPlanSnapshot as any[]).length > 0
+          ? (selectedPO.rfq.selectedQuotation.paymentPlanSnapshot as any[]).map((m: any) => `${m.title} (${m.percentage}%)`).join(', ')
+          : null);
+      if (terms) {
+        setPaymentTerms(terms);
+      }
+    }
+  }, [selectedPO, creationMode]);
 
   const finalLogoUrl = logoUrl || selectedPO?.companyLogoUrl || '/Procnex-logo.jpeg' || procnexLogo || defaultHeliflowLogo;
 
@@ -589,6 +626,18 @@ export default function CreatePurchaseInvoicePage() {
       if (foundPO.vendorId) setSelectedVendorId(String(foundPO.vendorId));
       if (foundPO.vendor?.name) setVendorName(foundPO.vendor.name);
 
+      const poPaymentTerms =
+        foundPO.rfq?.selectedQuotation?.paymentTerms ||
+        (foundPO as any).paymentTerms ||
+        (foundPO as any).payment_terms ||
+        foundPO.rfq?.paymentTerms ||
+        (foundPO.rfq?.selectedQuotation?.paymentPlanSnapshot && (foundPO.rfq.selectedQuotation.paymentPlanSnapshot as any[]).length > 0
+          ? (foundPO.rfq.selectedQuotation.paymentPlanSnapshot as any[]).map((m: any) => `${m.title} (${m.percentage}%)`).join(', ')
+          : null);
+      if (poPaymentTerms) {
+        setPaymentTerms(poPaymentTerms);
+      }
+
       if (!selectedGrnId && foundPO.items && foundPO.items.length > 0) {
         const totalVal = Number(foundPO.totalAmount || 0);
         setLineItems(
@@ -817,7 +866,16 @@ export default function CreatePurchaseInvoicePage() {
         (i) => String(i.id) === String(invId) || String(i.invoiceNumber) === String(invId) || String(i.invoiceNumber) === String(selectedGrnId)
       );
       if (foundInv) {
-        if (foundInv.invoiceNumber) setInvoiceNumber(foundInv.invoiceNumber);
+        if (isReadOnly && foundInv.invoiceNumber) {
+          setInvoiceNumber(foundInv.invoiceNumber);
+        } else if (!isReadOnly && !invoiceNumber) {
+          companySettingsService
+            .generateNextSequence('INVOICE')
+            .then((res) => {
+              if (res?.formattedCode) setInvoiceNumber(res.formattedCode);
+            })
+            .catch(() => {});
+        }
         if (foundInv.submittedAt || foundInv.invoiceDate) {
           const dateVal = foundInv.submittedAt || foundInv.invoiceDate;
           setInvoiceDate(typeof dateVal === 'string' ? dateVal.slice(0, 10) : new Date(dateVal).toISOString().slice(0, 10));
@@ -826,7 +884,12 @@ export default function CreatePurchaseInvoicePage() {
           const dueVal = foundInv.dueDate;
           setDueDate(typeof dueVal === 'string' ? dueVal.slice(0, 10) : new Date(dueVal).toISOString().slice(0, 10));
         }
-        if (foundInv.paymentTerms) setPaymentTerms(foundInv.paymentTerms);
+        const invPaymentTerms =
+          foundInv.paymentTerms ||
+          foundPO?.rfq?.selectedQuotation?.paymentTerms ||
+          (foundPO as any)?.paymentTerms ||
+          (foundPO as any)?.payment_terms;
+        if (invPaymentTerms) setPaymentTerms(invPaymentTerms);
         if (foundInv.department) setDepartment(foundInv.department);
         if ((foundInv as any).currency) setCurrency((foundInv as any).currency);
         if (foundInv.comments) setNotes(foundInv.comments);
@@ -1026,10 +1089,14 @@ export default function CreatePurchaseInvoicePage() {
         localStorage.setItem(`invoice_attachments_${invoiceNumber}`, JSON.stringify(attachments));
       } catch (e) {}
 
+      const cleanVendorInv = displayGrnNumber && displayGrnNumber !== '—' && !displayGrnNumber.startsWith('GRN-') && !displayGrnNumber.toLowerCase().includes('select') ? displayGrnNumber : undefined;
+
       await apiRequest('/invoices/manual', {
         method: 'POST',
         body: JSON.stringify({
           invoiceNumber,
+          vendorInvoiceNumber: cleanVendorInv,
+          erpInvoiceRef: cleanVendorInv,
           vendorId: selectedVendorId || selectedPOObj?.vendorId,
           poId: selectedPoId || null,
           grnId: selectedGrnId || null,
@@ -1894,11 +1961,12 @@ export default function CreatePurchaseInvoicePage() {
               <input
                 type="text"
                 value={invoiceNumber}
-                disabled={isReadOnly}
-                onChange={(e) => setInvoiceNumber(e.target.value)}
+                disabled={true}
+                readOnly
                 placeholder="e.g. INV-2026-0042"
+                style={{ cursor: 'not-allowed', opacity: 0.88, backgroundColor: 'rgba(255, 255, 255, 0.05)' }}
               />
-              <span className="cpi-field__sub">Vendor invoice reference</span>
+              <span className="cpi-field__sub">Document serialization sequence</span>
             </div>
 
             <div className="cpi-field">
@@ -1917,13 +1985,15 @@ export default function CreatePurchaseInvoicePage() {
 
             <div className="cpi-field">
               <label>PAYMENT TERMS</label>
-              <select value={paymentTerms} disabled={isReadOnly} onChange={(e) => setPaymentTerms(e.target.value)}>
-                <option value="Immediate">Immediate</option>
-                <option value="Net 15">Net 15</option>
-                <option value="Net 30">Net 30</option>
-                <option value="Net 45">Net 45</option>
-                <option value="Net 60">Net 60</option>
-              </select>
+              <input
+                type="text"
+                value={paymentTerms || 'Net 30'}
+                disabled={true}
+                readOnly
+                placeholder="e.g. Net 30"
+                style={{ cursor: 'not-allowed', opacity: 0.88, backgroundColor: 'rgba(255, 255, 255, 0.05)' }}
+              />
+              <span className="cpi-field__sub">Agreed vendor quotation payment terms</span>
             </div>
           </div>
         </div>

@@ -39,6 +39,7 @@ import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TableSkeleton } from '../../components/shared/Skeleton';
 import { TablePagination } from '../../components/shared/TablePagination';
 import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
+import ActionSendingOverlay from '../../components/shared/ActionSendingOverlay';
 import InvoiceDocumentViewerModal from '../../components/invoices/InvoiceDocumentViewerModal';
 import { apiRequest } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
@@ -359,6 +360,12 @@ export default function ApprovalsPage() {
   const [detailRequest, setDetailRequest] = useState<ApprovalRequest | null>(null);
   const [viewerInvoice, setViewerInvoice] = useState<any | null>(null);
   const [chainModal, setChainModal] = useState<{ module: string; referenceId: string } | null>(null);
+  const [actionSendingState, setActionSendingState] = useState<{
+    isOpen: boolean;
+    docType: 'po' | 'invoice' | 'payment_voucher' | 'rfq' | 'grn';
+    docNumber: string;
+    mode: 'approve' | 'reject' | 'return';
+  } | null>(null);
   useBodyScrollLock(!!(actionModal || detailRequest || actionSuccessData || chainModal || viewerInvoice));
   const perPage = 8;
 
@@ -474,6 +481,24 @@ export default function ApprovalsPage() {
       ? `${moduleName}${refText} rejected successfully.`
       : `${moduleName}${refText} returned for revision successfully.`;
 
+    const targetDocType =
+      req.module === 'RFQ'
+        ? 'rfq'
+        : req.module === 'Purchase Order'
+        ? 'po'
+        : (req.module === 'Purchase Invoice' || req.module === 'Accounts Payable')
+        ? 'invoice'
+        : (req.module === 'Payment Voucher' || req.module === 'Payments')
+        ? 'payment_voucher'
+        : 'rfq';
+
+    setActionSendingState({
+      isOpen: true,
+      docType: targetDocType as any,
+      docNumber: req.referenceNumber || String(req.id),
+      mode: actionType,
+    });
+
     setActionSuccessData({
       actionType,
       module: moduleName,
@@ -497,12 +522,16 @@ export default function ApprovalsPage() {
         res = await approvalService.return(id, comment, actionReturnTarget as any);
       }
 
+      await new Promise((resolve) => setTimeout(resolve, 1800));
+      setActionSendingState(null);
+
       if (res?.message) {
         setActionSuccessData((prev) => (prev ? { ...prev, message: res.message } : null));
       }
       window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
       await forceRefresh();
     } catch (err) {
+      setActionSendingState(null);
       setOptimisticMap((prev) => {
         const next = { ...prev };
         delete next[id];
@@ -1220,6 +1249,16 @@ export default function ApprovalsPage() {
           onClose={() => setChainModal(null)}
         />
       )}
+
+      {/* Action Sending Multi-Step Animated Overlay */}
+      {actionSendingState && (
+        <ActionSendingOverlay
+          isOpen={actionSendingState.isOpen}
+          docType={actionSendingState.docType}
+          docNumber={actionSendingState.docNumber}
+          mode={actionSendingState.mode}
+        />
+      )}
     </PageFrame>
   );
 }
@@ -1249,11 +1288,30 @@ function ApprovalChainView({ module, referenceId, onClose }: { module: string; r
     };
   }, [module, referenceId]);
 
-  const itemsToDisplay = chainData?.history && chainData.history.length > 0
+  const rawList = chainData?.history && chainData.history.length > 0
     ? chainData.history
     : chainData?.timeline && chainData.timeline.length > 0
     ? chainData.timeline
     : chainData?.levels || [];
+
+  const itemsToDisplay: any[] = [];
+  for (let i = 0; i < rawList.length; i++) {
+    const item = rawList[i];
+    const prev = i > 0 ? rawList[i - 1] : null;
+    if (prev && prev.status === 'RETURNED' && item.status !== 'RESUBMITTED') {
+      itemsToDisplay.push({
+        id: `originator-resubmit-${item.id || i}`,
+        levelNumber: 0,
+        requiredRole: 'Originator',
+        status: 'RESUBMITTED',
+        approverName: rawList[0]?.approverName || 'Originator',
+        comments: 'Revised and resubmitted for approval',
+        actionAt: item.createdAt || item.actionAt || new Date(),
+        createdAt: item.createdAt || item.actionAt || new Date(),
+      });
+    }
+    itemsToDisplay.push(item);
+  }
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -1264,32 +1322,83 @@ function ApprovalChainView({ module, referenceId, onClose }: { module: string; r
         </DialogHeader>
 
         {loading ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">Loading approval chain…</div>
+          <div className="py-8 text-center text-sm text-muted-foreground">Loading approval history…</div>
         ) : error ? (
           <div className="py-8 text-center text-sm text-destructive">{error}</div>
         ) : itemsToDisplay.length === 0 ? (
           <div className="py-8 text-center text-sm text-muted-foreground">No approval history available.</div>
         ) : (
-          <div className="space-y-4 py-2">
-            {itemsToDisplay.map((item: any, idx: number) => (
-              <div key={idx} className="flex gap-3 rounded-xl border border-border/70 bg-secondary/40 p-3.5 text-sm">
-                <div className="grid size-7 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                  {item.levelNumber || idx + 1}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold">
-                      {item.requiredRole ? item.requiredRole.replace(/_/g, ' ') : `Level ${idx + 1}`}
-                    </span>
-                    <Badge tone={item.status === 'APPROVED' ? 'success' : item.status === 'REJECTED' ? 'danger' : 'warning'}>
-                      {item.status}
-                    </Badge>
+          <div className="space-y-3 py-2 max-h-[60vh] overflow-y-auto pr-1">
+            {itemsToDisplay.map((item: any, idx: number) => {
+              const isQuotation = /quotation/i.test(module || '');
+              const isResubmitted = item.status === 'RESUBMITTED';
+              const isOriginator = item.levelNumber === 0 || item.status === 'SUBMITTED' || item.status === 'CREATED' || isResubmitted;
+              const isApproved = item.status === 'APPROVED' || item.status === 'AUTO_FORWARDED';
+              const isRejected = item.status === 'REJECTED';
+              const isReturned = item.status === 'RETURNED';
+
+              const statusTone = isResubmitted
+                ? 'info'
+                : isOriginator
+                ? 'primary'
+                : isApproved
+                ? 'success'
+                : isRejected
+                ? 'danger'
+                : isReturned
+                ? 'warning'
+                : 'warning';
+
+              const badgeText = isResubmitted
+                ? (isQuotation ? 'Vendor — RESUBMITTED' : 'Originator — RESUBMITTED')
+                : isOriginator
+                ? (isQuotation ? 'Vendor — SUBMITTED' : 'Originator — SUBMITTED')
+                : isReturned
+                ? `Level ${item.levelNumber} — RETURNED`
+                : isApproved
+                ? `Level ${item.levelNumber} — APPROVED`
+                : isRejected
+                ? `Level ${item.levelNumber} — REJECTED`
+                : `Level ${item.levelNumber} — ${item.status}`;
+
+              const timeStr = item.actionAt || item.createdAt;
+              const formattedTime = timeStr
+                ? `${new Date(timeStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}, ${new Date(timeStr).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}`
+                : '—';
+
+              return (
+                <div key={idx} className="flex gap-3 rounded-xl border border-border/70 bg-card p-3.5 text-xs shadow-2xs">
+                  <div className="grid size-7 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                    {isOriginator ? '0' : (item.levelNumber || idx + 1)}
                   </div>
-                  {item.approverName && <p className="mt-1 text-xs text-muted-foreground">By: {item.approverName}</p>}
-                  {item.comments && <p className="mt-1 rounded-lg bg-background p-2 text-xs italic">{item.comments}</p>}
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="font-bold text-foreground">
+                        {item.requiredRole
+                          ? item.requiredRole.replace(/_/g, ' ')
+                          : isOriginator
+                          ? (isQuotation ? (isResubmitted ? 'Vendor Resubmission' : 'Vendor Submission') : 'Originator')
+                          : `Level ${idx + 1}`}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <Badge tone={statusTone} className="font-semibold">
+                          {badgeText}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between text-muted-foreground gap-2 flex-wrap">
+                      <span>{isQuotation && isOriginator ? 'Vendor' : 'Action By'}: <strong className="text-foreground">{item.approverName || (isOriginator ? (isQuotation ? 'Vendor' : 'Originator') : 'Pending')}</strong></span>
+                      <span className="font-mono text-[11px]">{formattedTime}</span>
+                    </div>
+                    {item.comments && (
+                      <p className="mt-1 rounded-lg bg-muted/60 border border-border/50 p-2 text-xs italic text-foreground">
+                        "{item.comments}"
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

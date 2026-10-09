@@ -1,5 +1,6 @@
 import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
 import React, { useCallback, useMemo, useState, useEffect, useRef, type KeyboardEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Ban,
   Banknote,
@@ -131,7 +132,6 @@ const isRoleMatching = (requiredRole?: string, userRoles?: string[]): boolean =>
 
   return userRoles.some((r) => {
     const usrClean = stripPrefix(r);
-    if (ADMIN_ROLES.includes(usrClean) || usrClean.includes('admin')) return true;
     if (reqClean === usrClean) return true;
     if (L1_ROLES.includes(reqClean) && L1_ROLES.includes(usrClean)) return true;
     if (L2_ROLES.includes(reqClean) && L2_ROLES.includes(usrClean)) return true;
@@ -427,7 +427,7 @@ export default function PaymentsPage() {
           };
         }
 
-        const canAct = base.status === 'PENDING' && (isAdmin || isL1User);
+        const canAct = base.status === 'PENDING' && isL1User;
 
         return {
           ...base,
@@ -439,7 +439,15 @@ export default function PaymentsPage() {
         };
       });
 
-      setPaymentsList(mapped);
+      const seenP = new Set<string>();
+      const dedupedMapped = mapped.filter((p) => {
+        const k = String(p.paymentNumber || p.id || '').trim().toLowerCase();
+        if (!k || seenP.has(k)) return false;
+        seenP.add(k);
+        return true;
+      });
+
+      setPaymentsList(dedupedMapped);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load payments');
     } finally {
@@ -455,8 +463,17 @@ export default function PaymentsPage() {
     };
   }, [fetchPaymentsData]);
 
+  const [searchParams] = useSearchParams();
+  const [search, setSearch] = useState<string>(() => searchParams.get('search') || searchParams.get('q') || '');
+
+  useEffect(() => {
+    const q = searchParams.get('search') || searchParams.get('q');
+    if (q !== null && q !== undefined) {
+      setSearch(q);
+    }
+  }, [searchParams]);
+
   const [pendingActions, setPendingActions] = useState<Record<number, Payment>>({});
-  const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<PaymentStatus | 'ALL'>('ALL');
   const [actionModal, setActionModal] = useState<{ payment: Payment; action: ActionType } | null>(null);
   const [actionComment, setActionComment] = useState('');

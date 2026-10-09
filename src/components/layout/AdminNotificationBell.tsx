@@ -20,36 +20,43 @@ export default function AdminNotificationBell() {
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (silent = false) => {
     if (USE_MOCK) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const [list, count] = await Promise.all([
         notificationService.list() as Promise<NotificationRow[]>,
         notificationService.unreadCount() as Promise<number>,
       ]);
-      setNotifications(list);
+      const seen = new Set<string>();
+      const deduplicated = (list || []).filter((n) => {
+        const key = n.id ? String(n.id) : `${n.title}_${n.message}_${n.createdAt || ''}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      setNotifications(deduplicated);
       setUnreadCount(count);
     } catch {
-      setNotifications([]);
+      if (!silent) setNotifications([]);
       setUnreadCount(0);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     // Initial load
-    void load();
+    void load(false);
 
-    // Responsive 4-second polling to guarantee real-time updates across multiple tabs
-    const interval = setInterval(() => void load(), 4000);
+    // Responsive 4-second polling to guarantee real-time updates across multiple tabs (silent)
+    const interval = setInterval(() => void load(true), 4000);
 
     const triggerRefresh = () => {
       setBouncing(true);
       clearTimeout(bounceTimer.current);
       bounceTimer.current = setTimeout(() => setBouncing(false), 600);
-      void load();
+      void load(true);
     };
 
     // SSE real-time listeners for instant notification delivery
@@ -94,7 +101,7 @@ export default function AdminNotificationBell() {
       return;
     }
     setOpen(true);
-    void load();
+    void load(true);
   };
 
   const openNotification = (n: NotificationRow) => {
@@ -169,25 +176,24 @@ export default function AdminNotificationBell() {
           )}
         </div>
         <div className="vnotif__list">
-          {loading && <p className="vnotif__empty">Loading…</p>}
+          {loading && notifications.length === 0 && <p className="vnotif__empty">Loading…</p>}
           {!loading && notifications.length === 0 && (
             <p className="vnotif__empty">No notifications yet.</p>
           )}
-          {!loading &&
-            notifications.slice(0, 20).map((n) => (
-              <button
-                key={n.id}
-                type="button"
-                className={`vnotif__item ${n.isRead ? '' : 'vnotif__item--unread'}`}
-                onClick={() => openNotification(n)}
-              >
-                <span className="vnotif__item-icon">{iconFor(n)}</span>
-                <span className="vnotif__item-body">
-                  <span className="vnotif__item-title">{n.title}</span>
-                  {n.message && <span className="vnotif__item-msg">{n.message}</span>}
-                </span>
-              </button>
-            ))}
+          {notifications.slice(0, 20).map((n) => (
+            <button
+              key={n.id}
+              type="button"
+              className={`vnotif__item ${n.isRead ? '' : 'vnotif__item--unread'}`}
+              onClick={() => openNotification(n)}
+            >
+              <span className="vnotif__item-icon">{iconFor(n)}</span>
+              <span className="vnotif__item-body">
+                <span className="vnotif__item-title">{n.title}</span>
+                {n.message && <span className="vnotif__item-msg">{n.message}</span>}
+              </span>
+            </button>
+          ))}
         </div>
         <button
           type="button"

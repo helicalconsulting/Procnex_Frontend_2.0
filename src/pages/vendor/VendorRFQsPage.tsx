@@ -17,6 +17,8 @@ import {
   Trash2, Pencil, Shield, Upload, Sliders, ClipboardList,
 } from 'lucide-react';
 import { CurrencySelector, CurrencyAmountInput, useCurrency } from '../../components/shared/CurrencyMaster';
+import ActionSendingOverlay from '../../components/shared/ActionSendingOverlay';
+import { useSuccessModal } from '../../context/SuccessModalContext';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { TablePagination } from '../../components/shared/TablePagination';
 import { Badge } from '../../components/ui/badge';
@@ -242,6 +244,7 @@ export default function VendorRFQsPage() {
   }, [searchParams, rfqs]);
 
   const { formatAmount, companyDefaultCurrency, convert } = useCurrency();
+  const { showSuccess } = useSuccessModal();
 
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('newest');
@@ -251,6 +254,14 @@ export default function VendorRFQsPage() {
   const [quoteLoadError, setQuoteLoadError] = useState<string | null>(null);
   const quoteRequest = useRef(0);
   const quotePanelRef = useRef<HTMLDivElement>(null);
+  const [actionSendingState, setActionSendingState] = useState<{
+    isOpen: boolean;
+    docNumber?: string;
+    amount?: number;
+    currency?: string;
+    title?: string;
+    subtitle?: string;
+  } | null>(null);
   const [kpiFilter, setKpiFilter] = useState<RFQStatus | 'DEADLINE_SOON' | null>(null);
   const [expandedRFQ, setExpandedRFQ] = useState<string | null>(null);
   const [returnToast, setReturnToast] = useState<string | null>(null);
@@ -785,6 +796,21 @@ export default function VendorRFQsPage() {
         ...(bidBondPayload || {}),
       };
       const rfqId = quotModal.id; // Store before modal is cleared
+      const rfqNum = quotModal.rfqNumber;
+      const rfqTitle = quotModal.title;
+      const isResubmit = Boolean(quotModal.needsResubmit);
+      const quoteRefNo = vendorQuotationNumber.trim() || `QUOT-${rfqNum}`;
+
+      setActionSendingState({
+        isOpen: true,
+        docNumber: quoteRefNo,
+        amount: quotTotal,
+        currency,
+        title: isResubmit ? `Resubmitting Quotation #${quoteRefNo}...` : `Submitting Quotation #${quoteRefNo}...`,
+        subtitle: isResubmit
+          ? `Submitting revised quotation for RFQ #${rfqNum} to Buyer Procurement team.`
+          : `Encrypting rates and dispatching quotation for RFQ #${rfqNum} to Buyer Procurement team.`,
+      });
 
       let quotationId: string | undefined;
       // Determine which bid document file (if any) to attach — hoisted to this scope
@@ -827,9 +853,29 @@ export default function VendorRFQsPage() {
         }
       }
 
+      // Allow multi-step packaging animation to complete smoothly
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      setActionSendingState(null);
       setQuotModal(null);
       reload();
+
+      showSuccess({
+        title: isResubmit ? 'Quotation Resubmitted Successfully!' : 'Quotation Submitted Successfully!',
+        badge: isResubmit ? 'RESUBMITTED' : 'SUBMITTED',
+        message: `Your quotation (${quoteRefNo}) for RFQ #${rfqNum} has been securely delivered to the buyer.`,
+        referenceNumber: quoteRefNo,
+        details: [
+          { label: 'RFQ Number', value: rfqNum },
+          { label: 'RFQ Title', value: rfqTitle },
+          { label: 'Total Quotation Value', value: `${currency} ${quotTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+          { label: 'Delivery Lead Time', value: `${leadDays} Days` },
+          { label: 'Payment Terms', value: quotPayTerms || 'Standard' },
+        ],
+        primaryBtnText: 'View My RFQs',
+      });
     } catch (err) {
+      setActionSendingState(null);
       setSubmitError(err instanceof Error ? err.message : 'Failed to submit quotation');
     } finally {
       setSubmitting(false);
@@ -945,6 +991,7 @@ export default function VendorRFQsPage() {
             {!isVquotMinimized && (
               <div
                 className={`vquot-modal-backdrop ${isVquotExpanded ? 'vquot-modal-backdrop--expanded' : ''}`}
+                style={actionSendingState?.isOpen ? { display: 'none' } : undefined}
                 onClick={closeQuote}
               />
             )}
@@ -956,6 +1003,7 @@ export default function VendorRFQsPage() {
                 isVquotExpanded ? 'vquot-modal--expanded' : '',
                 isVquotMinimized ? 'vquot-modal--minimized' : '',
               ].filter(Boolean).join(' ')}
+              style={actionSendingState?.isOpen ? { display: 'none' } : undefined}
               ref={quotePanelRef} role="dialog" aria-modal={!isVquotMinimized || undefined} aria-labelledby="quotation-window-title" tabIndex={-1}
               onClick={e => e.stopPropagation()}
             >
@@ -1722,6 +1770,17 @@ export default function VendorRFQsPage() {
             </div>
           </>, document.body
         )}
+
+      <ActionSendingOverlay
+        isOpen={Boolean(actionSendingState?.isOpen)}
+        docType="quotation"
+        docNumber={actionSendingState?.docNumber}
+        title={actionSendingState?.title}
+        subtitle={actionSendingState?.subtitle}
+        amount={actionSendingState?.amount}
+        currency={actionSendingState?.currency}
+        mode={actionSendingState?.title?.includes('Resubmitting') ? 'return' : 'send'}
+      />
     </PageFrame>
   );
 }

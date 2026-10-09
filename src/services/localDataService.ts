@@ -307,9 +307,8 @@ export const localDataService = {
         const seen = new Set<string>();
         const uniquePayments: Payment[] = [];
         for (const item of mappedList) {
-          const cleanRef = (item.invoiceRef || '').replace(/^(Invoice:\s*|PO:\s*)/gi, '').trim().toLowerCase();
-          const key = cleanRef ? `${item.vendor.toLowerCase()}_${item.amount}_${cleanRef}` : String(item.paymentId);
-          if (!seen.has(key)) {
+          const key = String(item.paymentId || item.id || '').trim().toLowerCase();
+          if (key && !seen.has(key)) {
             seen.add(key);
             uniquePayments.push(item);
           }

@@ -98,7 +98,7 @@ export default function PurchaseRequisitionPage() {
   const branding = useBranding();
 
   const [pr, setPr] = useState<PurchaseRequisition | null>(null);
-  const isPrEditable = !pr || !['APPROVED', 'COMPLETED', 'SENT_TO_VENDOR', 'PO_CREATED', 'REJECTED', 'CANCELLED'].includes(pr.status);
+  const isPrEditable = !pr || ['DRAFT', 'RETURNED', 'RE_REVIEW', 'RETURN_FOR_RE_REVIEW', 'REVISION_REQUESTED'].includes(String(pr.status || '').toUpperCase());
   const isReadOnly = searchParams.get('mode') === 'view' || searchParams.get('readOnly') === 'true' || Boolean((location.state as any)?.readOnly) || !isPrEditable;
   const isFormDisabled = isReadOnly || !canCreatePO;
   const [loading, setLoading] = useState(true);
@@ -111,6 +111,8 @@ export default function PurchaseRequisitionPage() {
 
   // Print / PDF state
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
   const printAreaRef = useRef<HTMLDivElement>(null);
 
   // Send to Vendor modal
@@ -120,6 +122,8 @@ export default function PurchaseRequisitionPage() {
   const [sendSubject, setSendSubject] = useState('');
   const [sendMessage, setSendMessage] = useState('');
   const [sending, setSending] = useState(false);
+
+  useBodyScrollLock(showSendModal || showPreviewModal);
 
   // Validation
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
@@ -836,9 +840,137 @@ export default function PurchaseRequisitionPage() {
     }
   };
 
-  // Print — uses the professional PO document
-  const handlePrint = () => {
-    window.print();
+  // Generate high-resolution PDF document instance
+  const generatePdfDoc = async (): Promise<{ pdf: jsPDF; fileName: string } | null> => {
+    if (!pr) return null;
+    const element = printAreaRef.current;
+    if (!element) throw new Error('Print area not available');
+
+    // Temporarily bring element to (0, 0) behind viewport for high-quality DOM capture
+    const prevPosition = element.style.position;
+    const prevLeft = element.style.left;
+    const prevTop = element.style.top;
+    const prevZIndex = element.style.zIndex;
+    const prevOpacity = element.style.opacity;
+    const prevVisibility = element.style.visibility;
+    const prevPointerEvents = element.style.pointerEvents;
+
+    element.style.position = 'fixed';
+    element.style.left = '0px';
+    element.style.top = '0px';
+    element.style.zIndex = '-9999';
+    element.style.opacity = '1';
+    element.style.visibility = 'visible';
+    element.style.pointerEvents = 'none';
+
+    await document.fonts?.ready;
+    await new Promise(r => setTimeout(r, 120));
+
+    let imgData = '';
+    try {
+      imgData = await toPng(element, {
+        quality: 1,
+        pixelRatio: 2,
+        cacheBust: true,
+        backgroundColor: '#ffffff',
+      });
+    } finally {
+      // Guarantee original off-screen coordinates are restored
+      element.style.position = prevPosition;
+      element.style.left = prevLeft;
+      element.style.top = prevTop;
+      element.style.zIndex = prevZIndex;
+      element.style.opacity = prevOpacity;
+      element.style.visibility = prevVisibility;
+      element.style.pointerEvents = prevPointerEvents;
+    }
+
+    const img = new Image();
+    img.src = imgData;
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+    });
+
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const margin = 10; // mm
+    const pageWidth = 210; // A4 width mm
+    const pageHeight = 297; // A4 height mm
+    const contentWidth = pageWidth - margin * 2; // 190 mm
+
+    const imgWidth = contentWidth;
+    let calculatedImgHeight = (img.naturalHeight * imgWidth) / img.naturalWidth;
+    const usablePageHeight = pageHeight - margin * 2; // 277 mm
+
+    // If document height fits within single page (or is within 25% of single page), scale it to fit perfectly on 1 page
+    if (calculatedImgHeight <= usablePageHeight * 1.25) {
+      pdf.addImage(imgData, 'PNG', margin, margin, imgWidth, Math.min(calculatedImgHeight, usablePageHeight), undefined, 'FAST');
+    } else {
+      let remainingHeight = calculatedImgHeight;
+      let pageNum = 0;
+
+      // 12mm threshold prevents accidental blank trailing page caused by margin/padding overflow
+      while (remainingHeight > 12) {
+        if (pageNum > 0) pdf.addPage();
+        const yOffset = margin - pageNum * usablePageHeight;
+        pdf.addImage(imgData, 'PNG', margin, yOffset, imgWidth, calculatedImgHeight, undefined, 'FAST');
+        remainingHeight -= usablePageHeight;
+        pageNum++;
+      }
+    }
+
+    const fileName = pr.poNumber || `PO-${Date.now()}`;
+    return { pdf, fileName };
+  };
+
+  // Print — uses the exact same high-resolution PDF document generated for Download PDF
+  const handlePrint = async () => {
+    if (!pr) return;
+    if (!validate()) {
+      setToast({ message: 'Please fix the validation errors before printing.', type: 'error' });
+      return;
+    }
+    setPrinting(true);
+    try {
+      const result = await generatePdfDoc();
+      if (!result) throw new Error('Could not generate document for printing');
+      const blob = result.pdf.output('blob');
+      const blobUrl = URL.createObjectURL(blob);
+
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      iframe.src = blobUrl;
+      document.body.appendChild(iframe);
+
+      iframe.onload = () => {
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        } catch (e) {
+          const printWin = window.open(blobUrl, '_blank');
+          if (printWin) {
+            printWin.onload = () => printWin.print();
+          }
+        } finally {
+          setTimeout(() => {
+            if (document.body.contains(iframe)) {
+              document.body.removeChild(iframe);
+            }
+            URL.revokeObjectURL(blobUrl);
+          }, 60000);
+        }
+      };
+    } catch (err: any) {
+      console.error('PDF print failed, falling back to standard print:', err);
+      window.print();
+    } finally {
+      setPrinting(false);
+    }
   };
 
   // Download PDF — capture the React-rendered PO document as a PDF without flashing on screen
@@ -850,85 +982,10 @@ export default function PurchaseRequisitionPage() {
     }
     setDownloadingPdf(true);
     try {
-      const element = printAreaRef.current;
-      if (!element) throw new Error('Print area not available');
-
-      // Temporarily bring element to (0, 0) behind viewport for high-quality DOM capture
-      const prevPosition = element.style.position;
-      const prevLeft = element.style.left;
-      const prevTop = element.style.top;
-      const prevZIndex = element.style.zIndex;
-      const prevOpacity = element.style.opacity;
-      const prevVisibility = element.style.visibility;
-      const prevPointerEvents = element.style.pointerEvents;
-
-      element.style.position = 'fixed';
-      element.style.left = '0px';
-      element.style.top = '0px';
-      element.style.zIndex = '-9999';
-      element.style.opacity = '1';
-      element.style.visibility = 'visible';
-      element.style.pointerEvents = 'none';
-
-      await document.fonts?.ready;
-      await new Promise(r => setTimeout(r, 120));
-
-      let imgData = '';
-      try {
-        imgData = await toPng(element, {
-          quality: 1,
-          pixelRatio: 2,
-          cacheBust: true,
-          backgroundColor: '#ffffff',
-        });
-      } finally {
-        // Guarantee original off-screen coordinates are restored
-        element.style.position = prevPosition;
-        element.style.left = prevLeft;
-        element.style.top = prevTop;
-        element.style.zIndex = prevZIndex;
-        element.style.opacity = prevOpacity;
-        element.style.visibility = prevVisibility;
-        element.style.pointerEvents = prevPointerEvents;
-      }
-
-      const img = new Image();
-      img.src = imgData;
-      await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = reject;
-      });
-
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const margin = 10; // mm
-      const pageWidth = 210; // A4 width mm
-      const pageHeight = 297; // A4 height mm
-      const contentWidth = pageWidth - margin * 2; // 190 mm
-
-      const imgWidth = contentWidth;
-      let calculatedImgHeight = (img.naturalHeight * imgWidth) / img.naturalWidth;
-      const usablePageHeight = pageHeight - margin * 2; // 277 mm
-
-      // If document height fits within single page (or is within 25% of single page), scale it to fit perfectly on 1 page
-      if (calculatedImgHeight <= usablePageHeight * 1.25) {
-        pdf.addImage(imgData, 'PNG', margin, margin, imgWidth, Math.min(calculatedImgHeight, usablePageHeight), undefined, 'FAST');
-      } else {
-        let remainingHeight = calculatedImgHeight;
-        let pageNum = 0;
-
-        // 12mm threshold prevents accidental blank trailing page caused by margin/padding overflow
-        while (remainingHeight > 12) {
-          if (pageNum > 0) pdf.addPage();
-          const yOffset = margin - pageNum * usablePageHeight;
-          pdf.addImage(imgData, 'PNG', margin, yOffset, imgWidth, calculatedImgHeight, undefined, 'FAST');
-          remainingHeight -= usablePageHeight;
-          pageNum++;
-        }
-      }
-
-      const fileName = pr.poNumber || `PO-${Date.now()}`;
-      pdf.save(`${fileName}.pdf`);
-      setToast({ message: `PDF downloaded: ${fileName}.pdf`, type: 'success' });
+      const result = await generatePdfDoc();
+      if (!result) throw new Error('Could not generate document for download');
+      result.pdf.save(`${result.fileName}.pdf`);
+      setToast({ message: `PDF downloaded: ${result.fileName}.pdf`, type: 'success' });
     } catch (err: any) {
       setToast({ message: err?.message || 'Failed to download PDF', type: 'error' });
     } finally {
@@ -1221,8 +1278,8 @@ export default function PurchaseRequisitionPage() {
               {contractBalance && pr.grandTotal > contractBalance.remainingValue ? 'Amount Exceeds Limit' : <><Save size={16} /> {saving ? 'Saving…' : 'Save Draft'}</>}
             </button>
           )}
-          <button className="pr-btn pr-btn--outline" onClick={handlePrint}>
-            <Printer size={16} /> Print
+          <button className="pr-btn pr-btn--outline" onClick={() => setShowPreviewModal(true)}>
+            <Eye size={16} /> Preview
           </button>
           <button className="pr-btn pr-btn--outline" onClick={handleDownloadPdf} disabled={downloadingPdf}>
             <Download size={16} /> {downloadingPdf ? 'Downloading…' : 'Download PDF'}
@@ -2006,6 +2063,63 @@ export default function PurchaseRequisitionPage() {
               <button className="pr-btn pr-btn--primary" onClick={handleSend} disabled={sending || !sendTo.trim()}>
                 {sending ? 'Sending…' : 'Send'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Purchase Order Preview Modal ── */}
+      {showPreviewModal && pr && (
+        <div className="pr-modal-backdrop" onClick={() => setShowPreviewModal(false)}>
+          <div
+            className="pr-preview-modal"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="pr-preview-modal__header">
+              <div className="pr-preview-modal__title-wrap">
+                <div className="pr-preview-modal__icon">
+                  <Eye size={18} />
+                </div>
+                <div>
+                  <div className="pr-preview-modal__title">Purchase Order Preview</div>
+                  <div className="pr-preview-modal__subtitle">
+                    Official Document Format {pr.poNumber ? `(#${pr.poNumber})` : ''}
+                  </div>
+                </div>
+              </div>
+              <div className="pr-preview-modal__actions">
+                <button
+                  className="pr-btn pr-btn--outline"
+                  onClick={handlePrint}
+                  disabled={printing || downloadingPdf}
+                  title="Print this Purchase Order"
+                >
+                  <Printer size={15} /> {printing ? 'Preparing…' : 'Print'}
+                </button>
+                <button
+                  className="pr-btn pr-btn--primary"
+                  onClick={handleDownloadPdf}
+                  disabled={downloadingPdf || printing}
+                  title="Download Official PDF"
+                >
+                  <Download size={15} /> {downloadingPdf ? 'Downloading…' : 'Download PDF'}
+                </button>
+                <button
+                  className="pr-preview-modal__close-btn"
+                  onClick={() => setShowPreviewModal(false)}
+                  aria-label="Close Preview"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="pr-preview-modal__body">
+              <div className="pr-preview-modal__sheet">
+                <PurchaseOrderDocument pr={pr} />
+              </div>
             </div>
           </div>
         </div>

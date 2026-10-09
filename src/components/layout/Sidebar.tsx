@@ -76,6 +76,7 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   'Audit Trail': <History size={19} />,
   Reports: <BarChart3 size={19} />,
   'New Onboarding': <Building size={19} />,
+  'Vendor Onboarding': <Building size={19} />,
   'Onboarding Queue': <UsersRound size={19} />,
   Signature: <PenLine size={19} />,
   Administration: <Shield size={19} />,
@@ -267,14 +268,14 @@ export default function Sidebar({
       title: 'Governance',
       items: [
         ...menuItems
-          .filter((item) => item.id === 'vendors')
-          .map((item) => ({ label: item.label, icon: ICON_MAP[item.label] || <Users size={19} />, path: item.path })),
-        ...menuItems
           .filter((item) => item.id === 'new-onboarding')
           .map((item) => ({ label: item.label, icon: ICON_MAP[item.label] || <Building size={19} />, path: item.path })),
         ...menuItems
           .filter((item) => item.id === 'onboarding-queue')
           .map((item) => ({ label: item.label, icon: ICON_MAP[item.label] || <UsersRound size={19} />, path: item.path })),
+        ...menuItems
+          .filter((item) => item.id === 'vendors')
+          .map((item) => ({ label: item.label, icon: ICON_MAP[item.label] || <Users size={19} />, path: item.path })),
         ...menuItems
           .filter((item) => item.id === 'reports')
           .map((item) => ({ label: item.label, icon: ICON_MAP[item.label] || <BarChart3 size={19} />, path: item.path })),

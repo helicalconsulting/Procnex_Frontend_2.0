@@ -237,11 +237,26 @@ export default function CreatePaymentVoucherPage() {
         };
       });
 
-      setVouchersList(mapped);
+      const seenVouchers = new Set<string>();
+      const deduplicatedMapped = mapped.filter((p) => {
+        const idKey = String(p.paymentId || (p as any).paymentNumber || p.id || '').trim().toLowerCase();
+        if (!idKey || seenVouchers.has(idKey)) return false;
+        seenVouchers.add(idKey);
+        return true;
+      });
+
+      setVouchersList(deduplicatedMapped);
     } catch {
       try {
         const fallback = await localDataService.getPayments();
-        setVouchersList(fallback);
+        const seenFallback = new Set<string>();
+        const dedupedFallback = fallback.filter((p) => {
+          const idKey = String(p.paymentId || (p as any).paymentNumber || p.id || '').trim().toLowerCase();
+          if (!idKey || seenFallback.has(idKey)) return false;
+          seenFallback.add(idKey);
+          return true;
+        });
+        setVouchersList(dedupedFallback);
       } catch {}
     } finally {
       setVouchersLoading(false);
@@ -315,17 +330,25 @@ export default function CreatePaymentVoucherPage() {
   // Load vendors list directly from Database Master
   const { data: vendorsList } = useServiceData(
     () =>
-      vendorService.listTyped().then((vendors) =>
-        vendors.map((v) => ({
-          id: v.id,
-          name: v.name,
-          email: v.email,
-          category: v.category || '',
-          bankName: v.bankName || undefined,
-          bankAccountNumber: v.bankAccountNumber || undefined,
-          bankIfscCode: v.bankIfscCode || undefined,
-        }))
-      ),
+      vendorService.listTyped().then((vendors) => {
+        const seenV = new Set<string>();
+        return vendors
+          .map((v) => ({
+            id: v.id,
+            name: v.name,
+            email: v.email,
+            category: v.category || '',
+            bankName: v.bankName || undefined,
+            bankAccountNumber: v.bankAccountNumber || undefined,
+            bankIfscCode: v.bankIfscCode || undefined,
+          }))
+          .filter((v) => {
+            const k = (v.name || '').trim().toLowerCase();
+            if (!k || seenV.has(k)) return false;
+            seenV.add(k);
+            return true;
+          });
+      }),
     [] as VendorOption[],
     []
   );
@@ -515,7 +538,14 @@ export default function CreatePaymentVoucherPage() {
               })
             : unvoucheredInvoices;
 
-          const baseInvoices = filteredInvs.length > 0 ? filteredInvs : unvoucheredInvoices;
+          const rawBaseInvoices = filteredInvs.length > 0 ? filteredInvs : unvoucheredInvoices;
+          const seenInvKeys = new Set<string>();
+          const baseInvoices = rawBaseInvoices.filter((inv) => {
+            const k = String(inv.invoiceNumber || inv.id || '').trim().toLowerCase();
+            if (!k || seenInvKeys.has(k)) return false;
+            seenInvKeys.add(k);
+            return true;
+          });
 
           mappedInvoices = baseInvoices.map((inv, idx) => {
             const rawPoNum = (typeof inv.poNumber === 'string' && inv.poNumber)
@@ -1493,6 +1523,27 @@ export default function CreatePaymentVoucherPage() {
     const vSubtotal = (voucher as any).subtotal || (voucher.grossAmount ? voucher.grossAmount : voucher.amount);
     const vTaxAmount = (voucher as any).taxAmount || 0;
     const vTaxPercent = (voucher as any).taxPercent !== undefined ? (voucher as any).taxPercent : 18;
+
+    let voucherItems = voucher.items;
+    if (!voucherItems || voucherItems.length === 0) {
+      const cleanRef = (voucher.invoiceRef || '').replace(/\|.*/, '').trim();
+      if (cleanRef) {
+        try {
+          const cached =
+            localStorage.getItem(`invoice_items_${cleanRef}`) ||
+            localStorage.getItem(`items_INV_${cleanRef}`) ||
+            localStorage.getItem(`payment_items_${voucher.paymentId}`) ||
+            localStorage.getItem(`voucher_items_${voucher.paymentId}`);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              voucherItems = parsed;
+            }
+          }
+        } catch {}
+      }
+    }
+
     setSelectedVoucherForModal({
       voucherNumber: voucher.paymentId,
       voucherDate: voucher.paidAt || new Date().toISOString().slice(0, 10),
@@ -1512,7 +1563,7 @@ export default function CreatePaymentVoucherPage() {
       currency: companyDefaultCurrency,
       matchStatus: voucher.remarks?.toLowerCase().includes('discrepancy') ? 'DISCREPANCY' : 'MATCHED',
       discrepancyReason: voucher.remarks,
-      items: voucher.items || undefined,
+      items: voucherItems || undefined,
       invoices: voucher.invoices || undefined,
       invoiceIds: voucher.invoiceIds || undefined,
       poNumbers: (voucher as any).poNumbers || undefined,

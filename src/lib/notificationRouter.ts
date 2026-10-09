@@ -14,6 +14,7 @@ export function getNotificationTargetUrl(
   const prMatch = combined.match(/\bpr[q]?-[a-z0-9_-]+\b/i);
   const rfqMatch = combined.match(/\brfq-[a-z0-9_-]+\b/i);
   const piMatch = combined.match(/\bpi-[a-z0-9_-]+\b/i);
+  const invMatch = combined.match(/\binv-[a-z0-9_-]+\b/i);
   const payMatch = combined.match(/\b(?:pay|pv)-[a-z0-9_-]+\b/i) || combined.match(/\b(?:pay|pv)[0-9_-]+\b/i);
   const contractMatch = combined.match(/\b(?:cnt|ctr|cont)-[a-z0-9_-]+\b/i);
   const qtnMatch = combined.match(/\bqtn-[a-z0-9_-]+\b/i);
@@ -52,17 +53,58 @@ export function getNotificationTargetUrl(
     lower.includes('payment') ||
     payMatch
   ) {
-    if (
-      lower.includes('approval') ||
+    // A. Explicit Approval review / level notifications -> ALWAYS route to Payment Voucher Approval (/payments)
+    const isApprovalRequest =
+      lower.includes('payment voucher approval') ||
+      title.toLowerCase().includes('payment voucher approval') ||
+      lower.includes('approval required') ||
+      lower.includes('requires approval') ||
+      lower.includes('requires level') ||
+      lower.includes('passed level') ||
+      lower.includes('requires your level') ||
+      lower.includes('pending review') ||
+      lower.includes('pending approval') ||
+      lower.includes('approval chain') ||
       lower.includes('approver') ||
-      lower.includes('level') ||
-      lower.includes('pending review')
-    ) {
+      lower.includes('level 1') ||
+      lower.includes('level 2') ||
+      lower.includes('level 3') ||
+      lower.includes('level 4') ||
+      lower.includes('level 5') ||
+      lower.includes('approval (level') ||
+      (lower.includes('level') && lower.includes('approval'));
+
+    if (isApprovalRequest) {
       if (payMatch) return `/payments?search=${encodeURIComponent(payMatch[0])}`;
       return '/payments';
     }
+
+    // B. Explicit Creation / Draft notifications -> go to Create Payment Voucher page
+    const isCreationOrDraft =
+      lower.includes('payment voucher created') ||
+      lower.includes('draft payment voucher') ||
+      lower.includes('automatically created') ||
+      lower.includes('voucher created') ||
+      lower.includes('created for approved') ||
+      title.toLowerCase().includes('payment voucher created') ||
+      title.toLowerCase().includes('draft payment voucher');
+
+    if (isCreationOrDraft) {
+      if (payMatch) return `/procurement/create-payment-voucher?search=${encodeURIComponent(payMatch[0])}`;
+      if (piMatch) return `/procurement/create-payment-voucher?search=${encodeURIComponent(piMatch[0])}`;
+      if (invMatch) return `/procurement/create-payment-voucher?search=${encodeURIComponent(invMatch[0])}`;
+      return '/procurement/create-payment-voucher';
+    }
+
+    // Default approval / fallback
+    if (lower.includes('approval') || lower.includes('approved')) {
+      if (payMatch) return `/payments?search=${encodeURIComponent(payMatch[0])}`;
+      return '/payments';
+    }
+
     if (payMatch) return `/procurement/create-payment-voucher?search=${encodeURIComponent(payMatch[0])}`;
     if (piMatch) return `/procurement/create-payment-voucher?search=${encodeURIComponent(piMatch[0])}`;
+    if (invMatch) return `/procurement/create-payment-voucher?search=${encodeURIComponent(invMatch[0])}`;
     return '/procurement/create-payment-voucher';
   }
 
@@ -85,7 +127,21 @@ export function getNotificationTargetUrl(
     return '/rfq';
   }
 
-  // 4. Accounts Payable / Purchase Invoices & PI Approvals (Must be after Payment Vouchers and before POs)
+  // 4. Vendor Invoices / Dispatch Notes Received from Vendor (Redirects to Create Purchase Invoice Page)
+  if (
+    lower.includes('vendor invoice') ||
+    lower.includes('dispatch note') ||
+    lower.includes('tax invoice') ||
+    lower.includes('generate grn & purchase invoice') ||
+    lower.includes('new vendor invoice') ||
+    (lower.includes('invoice') && (lower.includes('received') || lower.includes('submitted tax invoice') || lower.includes('dispatch')))
+  ) {
+    if (poMatch) return `/procurement/create-purchase-invoice?poId=${encodeURIComponent(poMatch[0])}`;
+    if (invMatch) return `/procurement/create-purchase-invoice?invoiceNumber=${encodeURIComponent(invMatch[0])}`;
+    return '/procurement/create-purchase-invoice';
+  }
+
+  // 5. Accounts Payable / Purchase Invoices & PI Approvals (Must be after Payment Vouchers and before POs)
   if (
     lower.includes('purchase invoice') ||
     lower.includes('invoice') ||

@@ -26,6 +26,7 @@ import {
   Building2,
 } from 'lucide-react';
 import { MessageStrip } from '../../components/shared/MessageStrip';
+import ActionSendingOverlay from '../../components/shared/ActionSendingOverlay';
 import { useAuth } from '../../context/AuthContext';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
 import { useSuccessModal } from '../../context/SuccessModalContext';
@@ -691,6 +692,9 @@ export default function CreateGRNPage() {
       await queryClient.invalidateQueries({ queryKey: ['svc'] });
       queryClient.refetchQueries({ queryKey: ['svc'] });
 
+      // Allow multi-step packaging animation to complete smoothly
+      await new Promise((resolve) => setTimeout(resolve, 1800));
+
       showSuccess({
         title: 'Goods Receipt Note Created!',
         badge: 'GRN POSTED',
@@ -1279,6 +1283,18 @@ export default function CreateGRNPage() {
           </Card>
         </div>
       </div>
+
+      <ActionSendingOverlay
+        isOpen={submitting}
+        docType="grn"
+        docNumber={grnNumber}
+        title="Verifying & Posting Goods Receipt Note (GRN)..."
+        subtitle={`Verifying received items against PO #${selectedPO?.poNumber || selectedPoId || 'PO'}, updating warehouse stock, and syncing 3-way match records.`}
+        vendorName={selectedPO?.vendor?.name || selectedInvoice?.vendorName || 'Supplier'}
+        amount={calculations.totalAcceptedValue}
+        currency={companyDefaultCurrency}
+        mode="approval"
+      />
     </PageFrame>
   );
 }

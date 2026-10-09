@@ -29,9 +29,16 @@ function normalizePO(po: any): any {
     };
   });
 
+  const paymentTerms =
+    po.paymentTerms ||
+    po.rfq?.selectedQuotation?.paymentTerms ||
+    (po as any).payment_terms ||
+    (po.rfq?.selectedQuotation?.paymentPlanSnapshot ? (typeof po.rfq.selectedQuotation.paymentPlanSnapshot === 'string' ? po.rfq.selectedQuotation.paymentPlanSnapshot : JSON.stringify(po.rfq.selectedQuotation.paymentPlanSnapshot)) : undefined);
+
   return {
     ...po,
     totalAmount,
+    paymentTerms: paymentTerms || po.paymentTerms || 'Net 30',
     items: items.length > 0 ? items : po.items || [],
   };
 }

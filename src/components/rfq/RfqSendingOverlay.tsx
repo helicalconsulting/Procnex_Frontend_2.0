@@ -9,7 +9,6 @@ import {
   Users,
   ShieldCheck,
   Mail,
-  Sparkles,
   Lock,
 } from 'lucide-react';
 import './RfqSendingOverlay.css';
@@ -169,7 +168,6 @@ export const RfqSendingOverlay: React.FC<RfqSendingOverlayProps> = ({
             {/* Top RFQ badge if present */}
             {rfqNumber && (
               <div className="rfq-sending-card__rfq-pill">
-                <Sparkles size={13} className="text-amber-400" />
                 <span>RFQ #{rfqNumber}</span>
               </div>
             )}

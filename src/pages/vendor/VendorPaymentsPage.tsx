@@ -144,9 +144,84 @@ export default function VendorPaymentsPage() {
     };
   }, []);
 
+  // Normalize and deduplicate invoices so Vendor Portal displays ONLY vendor invoice numbers and no duplicate entries
+  const normalizedInvoices = useMemo(() => {
+    const rawList = invoices || [];
+    const isInternalPattern = (num: string) =>
+      /^[A-Za-z0-9]+-INV-\d+/i.test(num) || /^COMP-INV/i.test(num) || /^[A-Za-z]{2,5}-INV-/i.test(num);
+
+    const poGroups = new Map<string, any[]>();
+    const nonPoInvoices: any[] = [];
+
+    rawList.forEach((inv) => {
+      const poKey = (inv.poNumber && inv.poNumber !== '—') ? inv.poNumber : (inv.poId && String(inv.poId) !== '—' ? String(inv.poId) : null);
+      if (poKey) {
+        if (!poGroups.has(poKey)) poGroups.set(poKey, []);
+        poGroups.get(poKey)!.push(inv);
+      } else {
+        nonPoInvoices.push(inv);
+      }
+    });
+
+    const result: any[] = [];
+
+    for (const [poKey, group] of poGroups.entries()) {
+      let bestVendorInvoiceNumber = '';
+      const withErpRef = group.find((i) => i.erpInvoiceRef && !isInternalPattern(i.erpInvoiceRef));
+      if (withErpRef) bestVendorInvoiceNumber = withErpRef.erpInvoiceRef;
+
+      if (!bestVendorInvoiceNumber) {
+        const vendorInv = group.find((i) => i.invoiceNumber && !isInternalPattern(i.invoiceNumber));
+        if (vendorInv) bestVendorInvoiceNumber = vendorInv.invoiceNumber;
+      }
+
+      if (!bestVendorInvoiceNumber) {
+        const anyRef = group.find((i) => i.erpInvoiceRef);
+        if (anyRef) bestVendorInvoiceNumber = anyRef.erpInvoiceRef;
+      }
+
+      if (!bestVendorInvoiceNumber) {
+        bestVendorInvoiceNumber = group[0].invoiceNumber;
+      }
+
+      const hasPaid = group.some((i) => ['PAID', 'COMPLETED', 'CONFIRMED', 'SETTLED'].includes(String(i.status || '').toUpperCase()));
+      const hasApproved = group.some((i) => ['APPROVED', 'POSTED', 'REGISTERED'].includes(String(i.status || '').toUpperCase()));
+      const hasRejected = group.some((i) => ['REJECTED', 'CANCELLED'].includes(String(i.status || '').toUpperCase()));
+
+      let resolvedStatus = 'PENDING';
+      if (hasPaid) resolvedStatus = 'PAID';
+      else if (hasApproved) resolvedStatus = 'APPROVED';
+      else if (hasRejected) resolvedStatus = 'REJECTED';
+      else if (group.some((i) => i.status)) resolvedStatus = group.find((i) => i.status)?.status || 'PENDING';
+
+      const primary =
+        group.find((i) => ['PAID', 'COMPLETED', 'CONFIRMED'].includes(String(i.status || '').toUpperCase())) ||
+        group.find((i) => ['APPROVED', 'POSTED'].includes(String(i.status || '').toUpperCase())) ||
+        group[0];
+
+      result.push({
+        ...primary,
+        invoiceNumber: bestVendorInvoiceNumber,
+        status: resolvedStatus,
+      });
+    }
+
+    nonPoInvoices.forEach((inv) => {
+      const invNum = inv.erpInvoiceRef && !isInternalPattern(inv.erpInvoiceRef)
+        ? inv.erpInvoiceRef
+        : inv.invoiceNumber;
+      result.push({
+        ...inv,
+        invoiceNumber: invNum,
+      });
+    });
+
+    return result;
+  }, [invoices]);
+
   // Summary Metrics calculations
   const summary = useMemo(() => {
-    const invList = invoices || [];
+    const invList = normalizedInvoices;
     const payList = payments || [];
 
     const totalInvoiced = invList.reduce((acc, inv) => acc + convert(inv.totalAmount || inv.amount || 0, (inv as any).currency || companyDefaultCurrency, displayCurrency), 0);
@@ -162,13 +237,13 @@ export default function VendorPaymentsPage() {
       fullyPaidInvoices,
       totalInvoices: invList.length,
     };
-  }, [invoices, payments, displayCurrency, companyDefaultCurrency, convert]);
+  }, [normalizedInvoices, payments, displayCurrency, companyDefaultCurrency, convert]);
 
   // Invoice balance lookup map
   const invoiceStatsMap = useMemo(() => {
     const map = new Map<string, { totalAmount: number; paidAmount: number; balance: number; poNumber: string }>();
     
-    (invoices || []).forEach((inv) => {
+    normalizedInvoices.forEach((inv) => {
       const invTotal = inv.totalAmount || inv.amount || 0;
       map.set(inv.invoiceNumber, {
         totalAmount: invTotal,
@@ -196,7 +271,7 @@ export default function VendorPaymentsPage() {
     });
 
     return map;
-  }, [invoices, payments]);
+  }, [normalizedInvoices, payments]);
 
   // Filtered Payments
   const filteredPayments = useMemo(() => {
@@ -224,7 +299,7 @@ export default function VendorPaymentsPage() {
   // Filtered Invoices for Invoices tab
   const filteredInvoices = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return (invoices || []).filter((inv) => {
+    return normalizedInvoices.filter((inv) => {
       return (
         !q ||
         [inv.invoiceNumber, inv.poNumber, inv.description, inv.status].some((f) =>
@@ -232,7 +307,7 @@ export default function VendorPaymentsPage() {
         )
       );
     });
-  }, [invoices, search]);
+  }, [normalizedInvoices, search]);
 
   const [ledgerPage, setLedgerPage] = useState(1);
   const [invoicesPage, setInvoicesPage] = useState(1);

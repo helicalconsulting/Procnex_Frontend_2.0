@@ -224,14 +224,8 @@ export const NAVIGATION_MENU: MenuItem[] = [
     roles: [RoleName.SUPER_ADMIN, RoleName.FINANCE_MANAGER, RoleName.FINANCE_APPROVER],
   },
   {
-    id: 'vendors',
-    label: 'Vendors',
-    path: '/vendors',
-    roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER],
-  },
-  {
     id: 'new-onboarding',
-    label: 'New Onboarding',
+    label: 'Vendor Onboarding',
     path: '/onboarding/new',
     roles: [...ADMIN_ACCESS_ROLES],
   },
@@ -240,6 +234,12 @@ export const NAVIGATION_MENU: MenuItem[] = [
     label: 'Onboarding Queue',
     path: '/onboarding/queue',
     roles: [...ADMIN_ACCESS_ROLES],
+  },
+  {
+    id: 'vendors',
+    label: 'Vendors',
+    path: '/vendors',
+    roles: [RoleName.SUPER_ADMIN, RoleName.PROCUREMENT_MANAGER],
   },
   {
     id: 'signature',
