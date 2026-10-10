@@ -185,7 +185,7 @@ export function InvoiceDocumentViewerModal({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-xs transition-all ${
+      className={`fixed inset-0 z-[99999] flex items-center justify-center bg-black/85 backdrop-blur-xs transition-all ${
         isFullscreen ? 'p-0 w-screen h-screen overflow-hidden' : 'p-3 sm:p-5'
       }`}
       onClick={(e) => {

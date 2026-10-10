@@ -414,16 +414,8 @@ export default function ContractsPage() {
   }, [selectedContractIds, reload]);
 
   const handleNavigateToPO = useCallback((contractId: string) => {
-    const contract = contracts.find(c => c.id === contractId);
-    if (contract?.sourceRfq) {
-      const fullContract = rawResult.rawContracts.find(c => c.id === contractId);
-      if (fullContract?.rfqId) {
-        navigate(`/procurement/purchase-requisition/${fullContract.rfqId}?contractId=${contractId}`);
-        return;
-      }
-    }
-    navigate(`/contracts/${contractId}`);
-  }, [navigate, contracts, rawResult.rawContracts]);
+    navigate(`/contracts/${contractId}?tab=purchase-orders`, { state: { tab: 'purchase-orders' } });
+  }, [navigate]);
 
   const dismissSignedBanner = useCallback((contractId: string) => {
     setRecentlySigned(prev => prev.filter(s => s.contractId !== contractId));
@@ -442,8 +434,8 @@ export default function ContractsPage() {
   }, [navigate]);
 
   const handleCreatePO = useCallback((id: string) => {
-    handleNavigateToPO(id);
-  }, [handleNavigateToPO]);
+    navigate(`/contracts/${id}?tab=purchase-orders`, { state: { tab: 'purchase-orders' } });
+  }, [navigate]);
 
   const handleDownload = useCallback(async (r: ContractRow) => {
     try {
@@ -756,6 +748,15 @@ export default function ContractsPage() {
                           <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="View" onClick={() => handleView(r.id)}>
                             <Eye className="size-4" />
                           </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-primary hover:text-primary hover:bg-primary/10"
+                            title="Create Purchase Order"
+                            onClick={() => handleCreatePO(r.id)}
+                          >
+                            <Plus className="size-4" />
+                          </Button>
                           {r.status === 'DRAFT' && (
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Edit" onClick={() => handleEdit(r.id)}>
                               <Edit3 className="size-4" />
@@ -792,9 +793,20 @@ export default function ContractsPage() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-mono text-xs text-muted-foreground">{r.contractNumber}</span>
-                  <Badge variant="outline" className={cn(STATUS_TONES[r.status])}>
-                    {STATUS_LABELS[r.status]}
-                  </Badge>
+                  <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+                    <Badge variant="outline" className={cn(STATUS_TONES[r.status])}>
+                      {STATUS_LABELS[r.status]}
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 text-primary hover:text-primary hover:bg-primary/10"
+                      title="Create Purchase Order"
+                      onClick={() => handleCreatePO(r.id)}
+                    >
+                      <Plus className="size-3.5" />
+                    </Button>
+                  </div>
                 </div>
                 <div className="mt-3 text-base font-bold text-foreground group-hover:text-primary truncate">{r.vendorName}</div>
                 <h3 className="mt-1 text-xs text-muted-foreground truncate">{r.title}</h3>

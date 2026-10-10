@@ -124,21 +124,23 @@ export default function NotificationsPage() {
   const totalPages = Math.ceil(filtered.length / perPage);
   const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
 
-  const markRead = useCallback((id: number) => {
-    setLocalNotis(prev => prev.filter(n => n.id !== id));
-    void notificationService.deleteNotification(id).catch(() => notificationService.markRead(id));
+  const markRead = useCallback((id: string | number) => {
+    setLocalNotis(prev => prev.map(n => String(n.id) === String(id) ? { ...n, isRead: true } : n));
+    void notificationService.markRead(id).catch(() => {});
     window.dispatchEvent(new CustomEvent('heliflow:notification-updated'));
   }, []);
 
   const markAllRead = useCallback(() => {
     setLocalNotis([]);
-    void notificationService.deleteAll().catch(() => notificationService.markAllRead());
+    void notificationService.deleteAll().catch(() => {
+      void notificationService.markAllRead().catch(() => {});
+    });
     window.dispatchEvent(new CustomEvent('heliflow:notification-updated'));
   }, []);
 
-  const deleteNoti = useCallback((id: number) => {
-    setLocalNotis(prev => prev.filter(n => n.id !== id));
-    void notificationService.deleteNotification(id);
+  const deleteNoti = useCallback((id: string | number) => {
+    setLocalNotis(prev => prev.filter(n => String(n.id) !== String(id)));
+    void notificationService.deleteNotification(id).catch(() => {});
     window.dispatchEvent(new CustomEvent('heliflow:notification-updated'));
   }, []);
 

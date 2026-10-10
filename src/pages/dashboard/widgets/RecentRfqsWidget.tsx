@@ -1,4 +1,5 @@
 import LandingTable, { type LandingColumn } from '../../../components/shared/LandingTable';
+import { Link } from 'react-router-dom';
 import { FileText } from 'lucide-react';
 import { useServiceData } from '../../../hooks/useServiceData';
 import { dashboardService } from '../../../services/dashboardService';
@@ -57,8 +58,22 @@ export default function RecentRfqsWidget() {
               <tbody className="divide-y divide-border/60">
                 {recentRfqs.map((rfq) => (
                   <tr key={rfq.id} className="transition-colors hover:bg-muted/40">
-                    <td className="px-4 py-3 font-semibold text-primary">{rfq.rfqNumber}</td>
-                    <td className="max-w-[200px] truncate px-4 py-3 font-medium text-foreground">{rfq.title}</td>
+                    <td className="px-4 py-3 font-semibold">
+                      <Link
+                        to={`/rfq/${rfq.id}`}
+                        className="text-primary transition-colors hover:text-primary/75 hover:underline cursor-pointer"
+                      >
+                        {rfq.rfqNumber}
+                      </Link>
+                    </td>
+                    <td className="max-w-[200px] truncate px-4 py-3 font-medium text-foreground">
+                      <Link
+                        to={`/rfq/${rfq.id}`}
+                        className="transition-colors hover:text-primary hover:underline cursor-pointer"
+                      >
+                        {rfq.title}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3">
                       <Badge tone={STATUS_TONE[rfq.status] || 'neutral'}>
                         {STATUS_LABELS[rfq.status] || rfq.status}

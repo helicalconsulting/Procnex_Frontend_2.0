@@ -370,6 +370,7 @@ async function markAllRead(): Promise<void> {
   try {
     await apiRequest('/notifications', { method: 'DELETE', cacheTtlMs: 0 });
   } catch {
+    // fallback if delete endpoint fails
     await apiRequest('/notifications/read-all', { method: 'PUT', cacheTtlMs: 0 }).catch(() => {});
   }
 }

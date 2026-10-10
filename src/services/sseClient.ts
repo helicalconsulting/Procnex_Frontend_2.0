@@ -34,6 +34,18 @@ class SSEClient {
   private maxReconnectDelay = 30000;
   private connected = false;
 
+  private attachedEvents = new Set<string>();
+
+  constructor() {
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && (!this.connected || !this.eventSource)) {
+          this.connect();
+        }
+      });
+    }
+  }
+
   /**
    * All named SSE event types the backend may send via `event: <name>`.
    * EventSource.onmessage only fires for unnamed events (no `event:` field).
@@ -44,13 +56,17 @@ class SSEClient {
     'rfq_status_changed',
     'quotation_received',
     'po_created',
+    'po_updated',
+    'po_deleted',
     'vendor_approved',
     'approval_required',
     'erp_sync_complete',
+    'approval_initiated',
     'approval_level_complete',
     'approval_chain_complete',
     'approval_auto_forwarded',
     'approval_deadline_warning',
+    'approval_updated',
     'quotation_status_changed',
     'vendor_notification',
     // Vendor onboarding events
@@ -58,6 +74,9 @@ class SSEClient {
     'vendor_onboarding_documents_submitted',
     'evaluation_scores_updated',
     'contract_signed',
+    'contract_created',
+    'contract_updated',
+    'contract_deleted',
     'po_status_changed',
   ];
 
@@ -105,10 +124,14 @@ class SSEClient {
       // Without this, events like `event: notification\ndata: {...}` are
       // silently ignored by EventSource because onmessage only fires for
       // unnamed events.
-      for (const eventName of SSEClient.SSE_EVENT_NAMES) {
+      this.attachedEvents.clear();
+      const eventsToAttach = new Set([...SSEClient.SSE_EVENT_NAMES, ...this.listeners.keys()]);
+      for (const eventName of eventsToAttach) {
+        if (eventName === 'any') continue;
         this.eventSource.addEventListener(eventName, ((event: MessageEvent) => {
           this.handleSSEMessage(event);
         }) as EventListener);
+        this.attachedEvents.add(eventName);
       }
 
       this.eventSource.onerror = () => {
@@ -178,6 +201,19 @@ class SSEClient {
     }
     this.listeners.get(event)!.add(handler);
 
+    // Auto-attach to active EventSource if not already registered
+    if (this.eventSource && event !== 'any' && !this.attachedEvents.has(event)) {
+      this.eventSource.addEventListener(event, ((e: MessageEvent) => {
+        this.handleSSEMessage(e);
+      }) as EventListener);
+      this.attachedEvents.add(event);
+    }
+
+    // Auto-connect if needed
+    if (!this.connected && !this.eventSource) {
+      this.connect();
+    }
+
     return () => {
       const handlers = this.listeners.get(event);
       if (handlers) {
@@ -220,6 +256,7 @@ class SSEClient {
       this.eventSource.close();
       this.eventSource = null;
     }
+    this.attachedEvents.clear();
     this.connected = false;
   }
 

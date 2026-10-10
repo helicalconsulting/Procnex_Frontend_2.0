@@ -18,8 +18,8 @@ function hasRoleRouteAccess(pathname: string, roles: string[]): boolean {
     return true;
   }
 
-  // Normalize purchase-requisition route path matching
-  const normalizedPath = pathname.startsWith('/procurement/purchase-requisition') 
+  // Normalize purchase-requisition / purchase-orders route path matching
+  const normalizedPath = (pathname.startsWith('/procurement/purchase-requisition') || pathname.startsWith('/procurement/purchase-order'))
     ? '/procurement/purchase-requisitions' 
     : pathname;
 

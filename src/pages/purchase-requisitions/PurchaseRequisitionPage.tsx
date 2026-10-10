@@ -75,13 +75,18 @@ function formatCurrency(amount: number, currency: string = 'INR'): string {
 }
 
 function getStatusLabel(status: string): string {
+  const s = String(status || '').toUpperCase();
   const labels: Record<string, string> = {
     DRAFT: 'Draft',
     PENDING_APPROVAL: 'Pending Approval',
     APPROVED: 'Completed',
     SENT_TO_VENDOR: 'Sent to Vendor',
+    RETURNED: 'Returned for Re-Review',
+    RE_REVIEW: 'Returned for Re-Review',
+    RETURN_FOR_RE_REVIEW: 'Returned for Re-Review',
+    REVISION_REQUESTED: 'Returned for Re-Review',
   };
-  return labels[status] || status.replace(/_/g, ' ');
+  return labels[s] || status.replace(/_/g, ' ');
 }
 
 // ─── Component ──────────────────────────────────────────────
@@ -94,7 +99,7 @@ export default function PurchaseRequisitionPage() {
   const contractId = searchParams.get('contractId');
   const { roles, hasPermission } = useAuth();
   const canCreatePO = hasPermission('PO Creation', 'canCreate') || hasPermission('Goods Received Note', 'canCreate') || hasPermission('GRN', 'canCreate');
-  const { formatAmount, companyDefaultCurrency } = useCurrency();
+  const { formatAmount, companyDefaultCurrency, convert } = useCurrency();
   const branding = useBranding();
 
   const [pr, setPr] = useState<PurchaseRequisition | null>(null);
@@ -533,16 +538,43 @@ export default function PurchaseRequisitionPage() {
     return { ...draft, items, subtotal, taxTotal, discountTotal, grandTotal, shippingCharges: 0, otherCharges: 0 };
   }, []);
 
+  // Handle currency change with live/fallback exchange rate conversion
+  const handleCurrencyChange = useCallback((newCurrency: string) => {
+    if (!pr || isReadOnly || !newCurrency) return;
+    const prevCurrency = pr.currency || companyDefaultCurrency || 'KES';
+    if (newCurrency === prevCurrency) return;
+
+    const convertedItems = (pr.items || []).map((item) => {
+      const origPrice = Number(item.unitPrice) || 0;
+      const convertedPrice = origPrice > 0
+        ? Math.round(convert(origPrice, prevCurrency, newCurrency) * 100) / 100
+        : origPrice;
+      const updatedItem = { ...item, unitPrice: convertedPrice };
+      return { ...updatedItem, total: calcItemTotal(updatedItem) };
+    });
+
+    const draft: PurchaseRequisition = {
+      ...pr,
+      currency: newCurrency,
+      items: convertedItems,
+    };
+    setPr(recalc(draft));
+  }, [pr, isReadOnly, companyDefaultCurrency, convert, recalc]);
+
   // Update a field
   const updateField = useCallback(<K extends keyof PurchaseRequisition>(key: K, value: PurchaseRequisition[K]) => {
     if (!pr || isReadOnly) return;
+    if (key === 'currency') {
+      handleCurrencyChange(String(value));
+      return;
+    }
     const draft = { ...pr, [key]: value };
     if (key === 'shippingCharges' || key === 'otherCharges') {
       setPr(recalc(draft));
     } else {
       setPr(draft);
     }
-  }, [pr, recalc, isReadOnly]);
+  }, [pr, recalc, isReadOnly, handleCurrencyChange]);
 
   // Handle Warehouse selection from Company Settings Master
   const handleWarehouseChange = useCallback((whId: string) => {
@@ -1294,7 +1326,7 @@ export default function PurchaseRequisitionPage() {
             >
               {contractBalance && pr.grandTotal > contractBalance.remainingValue
                 ? 'PO Exceeds Contract Limit'
-                : <><Send size={16} /> {saving ? 'Submitting…' : 'Send for Approval'}</>}
+                : <><Send size={16} /> {saving ? 'Submitting…' : ['RETURNED', 'RE_REVIEW', 'RETURN_FOR_RE_REVIEW', 'REVISION_REQUESTED'].includes(String(pr?.status || '').toUpperCase()) ? 'Resubmit for Re-Review' : 'Send for Approval'}</>}
             </button>
           )}
           {poCreated && !isReadOnly && (
@@ -1574,7 +1606,7 @@ export default function PurchaseRequisitionPage() {
               <CurrencySelector
                 value={pr.currency}
                 disabled={isReadOnly}
-                onChange={(code) => updateField('currency', code)}
+                onChange={handleCurrencyChange}
               />
             </div>
             <div className="pr-field"><label>Requisitioner</label><input value={pr.requisitioner} disabled={isReadOnly} onChange={e => updateField('requisitioner', e.target.value)} /></div>
@@ -1940,7 +1972,7 @@ export default function PurchaseRequisitionPage() {
                       </select>
                     </td>
                     <td className={`pr-td--num ${itemValidationErrors[idx]?.unitPrice ? 'pr-item__cell--error' : ''}`}>
-                      <input type="number" min="0" step="1" placeholder="0" value={item.unitPrice === 0 ? '' : item.unitPrice} disabled={isFormDisabled}
+                      <input type="number" min="0" step="any" placeholder="0" value={item.unitPrice === 0 ? '' : item.unitPrice} disabled={isFormDisabled}
                         onWheel={e => e.currentTarget.blur()}
                         onChange={e => { updateItem(idx, 'unitPrice', e.target.value === '' ? 0 : Math.max(0, Number(e.target.value))); clearItemError(idx, 'unitPrice'); }}
                       />

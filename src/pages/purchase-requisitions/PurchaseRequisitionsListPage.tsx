@@ -1,6 +1,6 @@
 import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -15,6 +15,7 @@ import {
   X,
   CheckSquare,
   SlidersHorizontal,
+  Filter,
 } from 'lucide-react';
 import { purchaseRequisitionService, type PurchaseRequisition } from '../../services/purchaseRequisitionService';
 import { sseClient } from '../../services/sseClient';
@@ -41,11 +42,12 @@ import { cn } from '../../lib/utils';
 import '../../components/shared/ColumnCustomizer.css';
 
 type ListPurchaseRequisition = PurchaseRequisition & { isStandalone?: boolean };
-type StatusFilter = 'DRAFT_PENDING' | 'APPROVED' | 'REJECTED' | null;
+type StatusFilter = string | null;
 
 const releasedStatuses = ['APPROVED', 'COMPLETED', 'SENT_TO_VENDOR', 'PO_CREATED'];
 
 function getStatusLabel(status: string): string {
+  const s = String(status || '').toUpperCase();
   const labels: Record<string, string> = {
     DRAFT: 'Draft',
     PENDING_APPROVAL: 'Pending Approval',
@@ -53,18 +55,23 @@ function getStatusLabel(status: string): string {
     COMPLETED: 'Approved & Released',
     REJECTED: 'Rejected',
     CANCELLED: 'Rejected',
-    RETURNED: 'Returned for Revision',
+    RETURNED: 'Returned for Re-Review',
+    RE_REVIEW: 'Returned for Re-Review',
+    RETURN_FOR_RE_REVIEW: 'Returned for Re-Review',
+    REVISION_REQUESTED: 'Returned for Re-Review',
     SENT_TO_VENDOR: 'Sent to Vendor',
     PO_CREATED: 'PO Created',
   };
-  return labels[status] || status.replace(/_/g, ' ');
+  return labels[s] || status.replace(/_/g, ' ');
 }
 
 function getStatusTone(status: string): 'neutral' | 'warning' | 'success' | 'danger' | 'info' {
-  if (status === 'DRAFT') return 'neutral';
-  if (status === 'PENDING_APPROVAL') return 'warning';
-  if (['REJECTED', 'CANCELLED'].includes(status)) return 'danger';
-  if (status === 'SENT_TO_VENDOR') return 'info';
+  const s = String(status || '').toUpperCase();
+  if (s === 'DRAFT') return 'neutral';
+  if (s === 'PENDING_APPROVAL') return 'warning';
+  if (['RETURNED', 'RE_REVIEW', 'RETURN_FOR_RE_REVIEW', 'REVISION_REQUESTED'].includes(s)) return 'warning';
+  if (['REJECTED', 'CANCELLED'].includes(s)) return 'danger';
+  if (s === 'SENT_TO_VENDOR') return 'info';
   return 'success';
 }
 
@@ -103,8 +110,19 @@ const ALL_COLUMNS: ColumnDef[] = [
 
 export default function PurchaseRequisitionsListPage() {
   const navigate = useNavigate();
-  const { hasPermission } = useAuth();
-  const canCreatePO = hasPermission('PO Creation', 'canCreate');
+  const { hasPermission, roles: authRoles } = useAuth();
+  const isAdmin = useMemo(() => {
+    if (!authRoles || authRoles.length === 0) return false;
+    return authRoles.some((r) => r === 'Super Admin' || r === 'Administrator' || r.toLowerCase().includes('admin'));
+  }, [authRoles]);
+
+  const canCreatePO =
+    isAdmin ||
+    hasPermission('PO Creation', 'canCreate') ||
+    hasPermission('PO Creation', 'canEdit') ||
+    hasPermission('Purchase Orders', 'canCreate') ||
+    hasPermission('Purchase Orders', 'canEdit') ||
+    hasPermission('PO', 'canCreate');
   const { formatAmount, companyDefaultCurrency } = useCurrency();
 
   const [requisitions, setRequisitions] = useState<ListPurchaseRequisition[]>([]);
@@ -117,9 +135,27 @@ export default function PurchaseRequisitionsListPage() {
   const [batchDeleting, setBatchDeleting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  // Search & Filter State
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>(null);
+  const [searchParams] = useSearchParams();
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get('search') || searchParams.get('q') || '');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => {
+    const s = searchParams.get('status')?.toUpperCase();
+    if (s === 'DRAFT' || s === 'PENDING' || s === 'DRAFT_PENDING') return 'DRAFT_PENDING';
+    if (s === 'APPROVED' || s === 'RELEASED') return 'APPROVED';
+    if (s === 'REJECTED' || s === 'CANCELLED') return 'REJECTED';
+    return null;
+  });
+
+  useEffect(() => {
+    const q = searchParams.get('search') || searchParams.get('q');
+    if (q !== null && q !== undefined) {
+      setSearchTerm(q);
+    }
+    const s = searchParams.get('status')?.toUpperCase();
+    if (s === 'DRAFT' || s === 'PENDING' || s === 'DRAFT_PENDING') setStatusFilter('DRAFT_PENDING');
+    else if (s === 'APPROVED' || s === 'RELEASED') setStatusFilter('APPROVED');
+    else if (s === 'REJECTED' || s === 'CANCELLED') setStatusFilter('REJECTED');
+    else if (s === 'ALL') setStatusFilter(null);
+  }, [searchParams]);
 
   // Column Customizer State
   const defaultOrder = useMemo(() => ALL_COLUMNS.map((c) => c.key), []);
@@ -129,8 +165,8 @@ export default function PurchaseRequisitionsListPage() {
   const [showColPanel, setShowColPanel] = useState(false);
   const colBtnRef = useRef<HTMLButtonElement>(null);
 
-  const fetchRequisitions = async () => {
-    setLoading(true);
+  const fetchRequisitions = async (showSpinner = false) => {
+    if (showSpinner) setLoading(true);
     setError(null);
     try {
       const list = await purchaseRequisitionService.list();
@@ -143,18 +179,41 @@ export default function PurchaseRequisitionsListPage() {
   };
 
   useEffect(() => {
-    fetchRequisitions();
+    fetchRequisitions(true);
 
-    const unsubStatus = sseClient.on('po_status_changed', () => {
-      fetchRequisitions();
-    });
-    const unsubCreated = sseClient.on('po_created', () => {
-      fetchRequisitions();
-    });
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const handleRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        fetchRequisitions(false);
+      }, 300);
+    };
+
+    const unsubStatus = sseClient.on('po_status_changed', handleRefresh);
+    const unsubCreated = sseClient.on('po_created', handleRefresh);
+    const unsubUpdated = sseClient.on('po_updated', handleRefresh);
+    const unsubApprovalUpdated = sseClient.on('approval_updated', handleRefresh);
+    const unsubApprovalChain = sseClient.on('approval_chain_complete', handleRefresh);
+
+    window.addEventListener('heliflow:approval-updated', handleRefresh);
+    window.addEventListener('heliflow:po-updated', handleRefresh);
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('heliflow_sync');
+      bc.onmessage = () => { handleRefresh(); };
+    } catch {}
 
     return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
       unsubStatus();
       unsubCreated();
+      unsubUpdated();
+      unsubApprovalUpdated();
+      unsubApprovalChain();
+      window.removeEventListener('heliflow:approval-updated', handleRefresh);
+      window.removeEventListener('heliflow:po-updated', handleRefresh);
+      if (bc) bc.close();
     };
   }, []);
 
@@ -181,12 +240,23 @@ export default function PurchaseRequisitionsListPage() {
 
   const filteredRequisitions = useMemo(() => {
     return requisitions.filter((r) => {
-      if (statusFilter === 'DRAFT_PENDING') {
-        if (r.status !== 'DRAFT' && r.status !== 'PENDING_APPROVAL') return false;
-      } else if (statusFilter === 'APPROVED') {
-        if (!releasedStatuses.includes(r.status)) return false;
-      } else if (statusFilter === 'REJECTED') {
-        if (!['REJECTED', 'CANCELLED'].includes(r.status)) return false;
+      if (statusFilter && statusFilter !== 'ALL') {
+        const s = String(r.status || '').toUpperCase();
+        if (statusFilter === 'DRAFT_PENDING') {
+          if (!['DRAFT', 'PENDING_APPROVAL', 'RETURNED', 'RE_REVIEW', 'RETURN_FOR_RE_REVIEW', 'REVISION_REQUESTED'].includes(s)) return false;
+        } else if (statusFilter === 'APPROVED') {
+          if (!releasedStatuses.includes(r.status) && !['APPROVED', 'RELEASED', 'SENT_TO_VENDOR'].includes(s)) return false;
+        } else if (statusFilter === 'RETURNED') {
+          if (!['RETURNED', 'RE_REVIEW', 'RETURN_FOR_RE_REVIEW', 'REVISION_REQUESTED'].includes(s)) return false;
+        } else if (statusFilter === 'PENDING_APPROVAL') {
+          if (!['PENDING_APPROVAL', 'PENDING'].includes(s)) return false;
+        } else if (statusFilter === 'DRAFT') {
+          if (s !== 'DRAFT') return false;
+        } else if (statusFilter === 'REJECTED') {
+          if (!['REJECTED', 'CANCELLED'].includes(s)) return false;
+        } else {
+          if (s !== statusFilter) return false;
+        }
       }
 
       if (!searchTerm.trim()) return true;
@@ -253,7 +323,12 @@ export default function PurchaseRequisitionsListPage() {
 
   // Metrics
   const draftAndPendingCount = useMemo(
-    () => requisitions.filter((r) => r.status === 'DRAFT' || r.status === 'PENDING_APPROVAL').length,
+    () =>
+      requisitions.filter((r) =>
+        ['DRAFT', 'PENDING_APPROVAL', 'RETURNED', 'RE_REVIEW', 'RETURN_FOR_RE_REVIEW', 'REVISION_REQUESTED'].includes(
+          String(r.status || '').toUpperCase()
+        )
+      ).length,
     [requisitions]
   );
   const activeCount = useMemo(
@@ -275,11 +350,11 @@ export default function PurchaseRequisitionsListPage() {
     const effectiveMode = isEditable ? mode : 'view';
 
     if (isStandaloneDocument(requisition)) {
-      const documentId = requisition.id || requisition.rfqId;
+      const documentId = requisition.id || requisition.rfqId || requisition.poNumber;
       navigate(`/procurement/create-purchase-order?id=${encodeURIComponent(documentId)}${effectiveMode === 'view' ? '&mode=view' : ''}`);
       return;
     }
-    navigate(`/procurement/purchase-requisition/${encodeURIComponent(requisition.rfqId)}?mode=${effectiveMode}`, {
+    navigate(`/procurement/purchase-requisition/${encodeURIComponent(requisition.rfqId || requisition.id || requisition.poNumber)}?mode=${effectiveMode}`, {
       state: { readOnly: effectiveMode === 'view' },
     });
   };
@@ -360,7 +435,7 @@ export default function PurchaseRequisitionsListPage() {
             icon={Clock3}
             label="Needs attention"
             value={draftAndPendingCount}
-            detail="Draft and pending approval"
+            detail="Draft, pending, & returned"
             tone="warning"
           />
           <MetricCard
@@ -432,6 +507,46 @@ export default function PurchaseRequisitionsListPage() {
               >
                 <X size={15} />
               </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5 justify-end shrink-0 sm:ml-auto">
+            {/* Status Filter Dropdown matching RFQ Page */}
+            <div className="relative min-w-[190px]">
+              <Filter size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <select
+                className="h-11 w-full appearance-none rounded-xl border border-input bg-card pl-10 pr-9 text-sm font-medium text-foreground shadow-xs transition-colors hover:bg-accent/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+                value={statusFilter || 'ALL'}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setStatusFilter(val === 'ALL' ? null : (val as StatusFilter));
+                  setCurrentPage(1);
+                }}
+                aria-label="Filter by status"
+              >
+                <option value="ALL">All Statuses</option>
+                <option value="DRAFT">Draft</option>
+                <option value="PENDING_APPROVAL">Pending Approval</option>
+                <option value="APPROVED">Approved & Released</option>
+                <option value="RETURNED">Returned for Re-Review</option>
+                <option value="REJECTED">Rejected</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+            </div>
+
+            {(statusFilter || searchTerm) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setStatusFilter(null);
+                  setSearchTerm('');
+                  setCurrentPage(1);
+                }}
+                className="h-11 rounded-xl px-3.5"
+              >
+                Reset filters
+              </Button>
             )}
           </div>
         </div>
@@ -596,7 +711,13 @@ export default function PurchaseRequisitionsListPage() {
                                   size="icon-sm"
                                   disabled={!canCreatePO}
                                   onClick={() => canCreatePO && openDocument(requisition, 'edit')}
-                                  title={canCreatePO ? 'Edit purchase order' : 'Permission denied'}
+                                  title={
+                                    canCreatePO
+                                      ? ['RETURNED', 'RE_REVIEW', 'RETURN_FOR_RE_REVIEW', 'REVISION_REQUESTED'].includes(String(requisition.status).toUpperCase())
+                                        ? 'Edit & resubmit for re-review'
+                                        : 'Edit purchase order'
+                                      : 'Permission denied'
+                                  }
                                 >
                                   <Pencil className="size-4" />
                                 </Button>

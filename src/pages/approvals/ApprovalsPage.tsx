@@ -32,6 +32,8 @@ import {
   Wallet,
   User,
   Layers,
+  Pencil,
+  Filter,
 } from 'lucide-react';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
 import '../../components/shared/ColumnCustomizer.css';
@@ -57,12 +59,12 @@ import {
   DialogTitle,
 } from '../../components/ui/dialog';
 import { cn } from '../../lib/utils';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 
 // ─── Types ──────────────────────────────────────────────────
 
 type ApprovalStatusType = 'PENDING' | 'APPROVED' | 'REJECTED' | 'RETURNED';
-type ModuleType = 'RFQ' | 'Purchase Order' | 'Purchase Invoice' | 'Quotation' | 'Contract';
+type ModuleType = 'RFQ' | 'Purchase Order' | 'Purchase Invoice' | 'Quotation' | 'Contract' | 'Payment Voucher' | 'Payment';
 type PriorityType = 'HIGH' | 'MEDIUM' | 'LOW';
 
 type ApprovalRequest = ApprovalTableRow;
@@ -89,12 +91,14 @@ const STATUS_TONES: Record<string, string> = {
   AUTO_FORWARDED: 'bg-violet-500/10 text-violet-600 border-violet-500/20 dark:text-violet-300',
 };
 
-const MODULE_ICONS: Record<ModuleType, React.ReactNode> = {
+const MODULE_ICONS: Record<string, React.ReactNode> = {
   RFQ: <FileText size={15} />,
   'Purchase Order': <ShoppingCart size={15} />,
   'Purchase Invoice': <Wallet size={15} />,
   Quotation: <ClipboardList size={15} />,
   Contract: <FileSignature size={15} />,
+  'Payment Voucher': <Wallet size={15} />,
+  Payment: <Wallet size={15} />,
 };
 
 interface ApprovalColumnDef {
@@ -207,6 +211,8 @@ const CANONICAL_MODULE: Record<string, string> = {
   'Quotation': 'Quotations',
   'Contract': 'Contracts',
   'RFQ': 'RFQ',
+  'Payment Voucher': 'Payments',
+  'Payment': 'Payments',
 };
 
 function getInvoiceAttachments(req: any): any[] {
@@ -244,6 +250,7 @@ function getInvoiceAttachments(req: any): any[] {
 }
 
 export default function ApprovalsPage() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const initialModule = searchParams.get('module');
   const initialStatus = searchParams.get('status');
@@ -252,6 +259,7 @@ export default function ApprovalsPage() {
     if (!initialModule) return 'Purchase Order';
     const m = initialModule.toLowerCase();
     if (m.includes('invoice') || m.includes('ap') || m.includes('accounts')) return 'Purchase Invoice';
+    if (m.includes('voucher') || m.includes('payment')) return 'Payment Voucher';
     if (m.includes('po') || m.includes('purchase')) return 'Purchase Order';
     if (m.includes('quotation')) return 'Quotation';
     if (m.includes('rfq')) return 'RFQ';
@@ -268,11 +276,18 @@ export default function ApprovalsPage() {
       module: (moduleFilter !== 'ALL' && moduleFilter !== 'All') ? (CANONICAL_MODULE[moduleFilter] || moduleFilter) : undefined,
     }),
     [] as ApprovalTableRow[],
-    [moduleFilter]
+    [moduleFilter],
+    { cacheKey: `approvals:list:${moduleFilter}`, cacheTtlMs: 30000 }
   );
 
   useEffect(() => {
-    const refreshAll = () => forceRefresh();
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const refreshAll = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        reload();
+      }, 300);
+    };
 
     const unsubLevel = sseClient.on('approval_level_complete', refreshAll);
     const unsubChain = sseClient.on('approval_chain_complete', refreshAll);
@@ -281,6 +296,8 @@ export default function ApprovalsPage() {
     const unsubReq = sseClient.on('approval_required', refreshAll);
     const unsubNotif = sseClient.on('notification', refreshAll);
     const unsubApprovalInit = sseClient.on('approval_initiated', refreshAll);
+    const unsubApprovalUpdated = sseClient.on('approval_updated', refreshAll);
+    const unsubPoUpdated = sseClient.on('po_updated', refreshAll);
     const unsubPoCreated = sseClient.on('po_created', (data: any) => {
       if (data?.action === 'deleted' && (data?.poId || data?.poNumber)) {
         setDeletedIds((prev) => {
@@ -310,7 +327,6 @@ export default function ApprovalsPage() {
     window.addEventListener('heliflow:po-created', refreshAll);
     window.addEventListener('heliflow:approval-updated', refreshAll);
     window.addEventListener('heliflow:po-updated', refreshAll);
-    window.addEventListener('focus', refreshAll);
 
     let bc: BroadcastChannel | null = null;
     try {
@@ -318,19 +334,16 @@ export default function ApprovalsPage() {
       bc.onmessage = () => { refreshAll(); };
     } catch {}
 
-    const pollInterval = setInterval(() => { refreshAll(); }, 5000);
-
     return () => {
-      unsubLevel(); unsubChain(); unsubForwarded(); unsubPoStatus(); unsubReq(); unsubNotif(); unsubPoCreated(); unsubApprovalInit();
+      if (refreshTimer) clearTimeout(refreshTimer);
+      unsubLevel(); unsubChain(); unsubForwarded(); unsubPoStatus(); unsubReq(); unsubNotif(); unsubPoCreated(); unsubApprovalInit(); unsubApprovalUpdated(); unsubPoUpdated();
       window.removeEventListener('heliflow:po-deleted', handlePoDeleted);
       window.removeEventListener('heliflow:po-created', refreshAll);
       window.removeEventListener('heliflow:approval-updated', refreshAll);
       window.removeEventListener('heliflow:po-updated', refreshAll);
-      window.removeEventListener('focus', refreshAll);
       if (bc) bc.close();
-      clearInterval(pollInterval);
     };
-  }, [forceRefresh]);
+  }, [reload]);
 
   const [search, setSearch] = useState(() => searchParams.get('search') || '');
 
@@ -344,11 +357,19 @@ export default function ApprovalsPage() {
     if (mod) {
       const m = mod.toLowerCase();
       if (m.includes('invoice') || m.includes('ap') || m.includes('accounts')) setModuleFilter('Purchase Invoice');
+      else if (m.includes('voucher') || m.includes('payment')) setModuleFilter('Payment Voucher');
       else if (m.includes('rfq')) setModuleFilter('RFQ');
       else if (m.includes('quotation')) setModuleFilter('Quotation');
       else if (m.includes('contract')) setModuleFilter('Contract');
       else if (m.includes('po') || m.includes('purchase')) setModuleFilter('Purchase Order');
       else if (m.includes('all')) setModuleFilter('All');
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    const st = searchParams.get('status');
+    if (st) {
+      setStatusFilter(st.toUpperCase());
     }
   }, [searchParams]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -430,11 +451,18 @@ export default function ApprovalsPage() {
     if (a.status === 'APPROVED' || (a.status as string) === 'APPROVED_L1') return 'APPROVED';
     if (a.status === 'REJECTED') return 'REJECTED';
     if (a.status === 'RETURNED' || (a as any).isReturned) return 'RETURNED';
+    if (a.canAct) return 'PENDING';
     return 'PENDING';
   }, []);
 
   const filtered = useMemo(() => {
     if (statusFilter === 'ALL' || statusFilter === 'All') return moduleFiltered;
+    if (statusFilter === 'RETURNED') {
+      return moduleFiltered.filter((a) => getEffectiveStatus(a) === 'RETURNED');
+    }
+    if (statusFilter === 'REJECTED') {
+      return moduleFiltered.filter((a) => getEffectiveStatus(a) === 'REJECTED');
+    }
     return moduleFiltered.filter((a) => getEffectiveStatus(a) === statusFilter);
   }, [moduleFiltered, statusFilter, getEffectiveStatus]);
 
@@ -529,6 +557,11 @@ export default function ApprovalsPage() {
         setActionSuccessData((prev) => (prev ? { ...prev, message: res.message } : null));
       }
       window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
+      try {
+        const bc = new BroadcastChannel('heliflow_sync');
+        bc.postMessage({ type: 'approval_updated', id, actionType });
+        bc.close();
+      } catch {}
       await forceRefresh();
     } catch (err) {
       setActionSendingState(null);
@@ -565,10 +598,14 @@ export default function ApprovalsPage() {
     ? 'RFQ Approval'
     : moduleFilter === 'Contract'
     ? 'Contract Approval'
+    : moduleFilter === 'Payment Voucher' || moduleFilter === 'Payment'
+    ? 'Payment Voucher Approval'
     : 'All Approval Requests';
 
   const pageSubtitle = moduleFilter === 'Purchase Order'
     ? 'Review, approve, or reject pending purchase order requests'
+    : moduleFilter === 'Payment Voucher' || moduleFilter === 'Payment'
+    ? 'Review, approve, or release pending bank payment vouchers'
     : 'Review, approve, or reject pending requests across modules';
 
   return (
@@ -592,7 +629,7 @@ export default function ApprovalsPage() {
           { icon: CheckSquare, tone: 'primary' as const, label: 'Total Requests', value: summary.total, detail: 'All requests', filter: 'ALL' },
           { icon: Clock, tone: 'warning' as const, label: 'Pending', value: summary.pending, detail: 'Requires action', filter: 'PENDING' },
           { icon: CheckCircle2, tone: 'success' as const, label: 'Approved', value: summary.approved, detail: 'Approved requests', filter: 'APPROVED' },
-          { icon: XCircle, tone: 'danger' as const, label: 'Rejected', value: summary.rejected, detail: 'Rejected or returned', filter: 'REJECTED' },
+          { icon: XCircle, tone: 'danger' as const, label: 'Rejected', value: summary.rejected, detail: 'Rejected requests', filter: 'REJECTED' },
         ].map((c) => {
           const isActive = statusFilter === c.filter;
           return (
@@ -624,14 +661,12 @@ export default function ApprovalsPage() {
         })}
       </div>
 
-
-
-      {/* Toolbar: Search */}
+      {/* Toolbar: Search & Status Filter */}
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative w-full max-w-xl">
+        <div className="relative w-full max-w-md">
           <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
-            className="h-11 rounded-xl pl-10"
+            className="h-11 rounded-xl pl-10 pr-9"
             type="text"
             placeholder="Search approval requests..."
             aria-label="Search approval requests"
@@ -641,12 +676,62 @@ export default function ApprovalsPage() {
               setCurrentPage(1);
             }}
           />
+          {search && (
+            <button
+              type="button"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                setSearch('');
+                setCurrentPage(1);
+              }}
+              aria-label="Clear search"
+            >
+              <X size={15} />
+            </button>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5 justify-end shrink-0 sm:ml-auto">
+          {/* Status Filter Dropdown */}
+          <div className="relative min-w-[190px]">
+            <Filter size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <select
+              className="h-11 w-full appearance-none rounded-xl border border-input bg-card pl-10 pr-9 text-sm font-medium text-foreground shadow-xs transition-colors hover:bg-accent/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              aria-label="Filter by status"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="PENDING">Pending Approval</option>
+              <option value="APPROVED">Approved</option>
+              <option value="RETURNED">Returned for Revision</option>
+              <option value="REJECTED">Rejected</option>
+            </select>
+          </div>
+
+          {(statusFilter !== 'ALL' || search) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setStatusFilter('ALL');
+                setSearch('');
+                setCurrentPage(1);
+              }}
+              className="h-11 rounded-xl px-3.5"
+            >
+              Reset filters
+            </Button>
+          )}
         </div>
       </div>
 
       {/* Content Table */}
       <Card className="overflow-hidden">
-        {loading ? (
+        {loading && approvals.length === 0 ? (
           <TableSkeleton rows={5} columnWidths={['220px', '140px', '110px', '95px', '110px', '130px', '120px', '90px']} />
         ) : paginated.length > 0 ? (
           <div className="overflow-x-auto">
@@ -719,7 +804,7 @@ export default function ApprovalsPage() {
                         {req.canAct && (
                           <>
                             <Button variant="outline" size="sm" className="h-8 text-xs gap-1 text-emerald-600 hover:text-emerald-700" onClick={() => openAction(req, 'approve')}>
-                              <ThumbsUp className="size-3.5" /> Approve
+                              <ThumbsUp className="size-3.5" /> {(req.status === 'RETURNED' || (req as any).isReturned) ? 'Resubmit' : 'Approve'}
                             </Button>
                             <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 text-amber-600 hover:text-amber-700" onClick={() => openAction(req, 'return')}>
                               <RotateCcw className="size-3.5" /> Return
@@ -740,7 +825,11 @@ export default function ApprovalsPage() {
           <EmptyState
             icon={CheckSquare}
             title="No approval requests"
-            description={search ? 'Try adjusting your search criteria.' : 'You have no pending approval requests at this time.'}
+            description={
+              search || statusFilter !== 'ALL'
+                ? 'Try adjusting your search criteria or status filter.'
+                : 'You have no approval requests at this time.'
+            }
           />
         )}
 
@@ -756,7 +845,7 @@ export default function ApprovalsPage() {
       {/* Action Dialog */}
       <Dialog open={!!actionModal} onOpenChange={() => setActionModal(null)}>
         {actionModal && (
-          <DialogContent className="sm:max-w-[540px] p-6 sm:p-7 gap-5 overflow-hidden">
+          <DialogContent className="sm:max-w-[540px] p-6 sm:p-7 gap-5 max-h-[min(90vh,760px)] overflow-y-auto">
             {/* Header with Visual Status Badge */}
             <div className="flex items-start gap-4 pr-6">
               <div
@@ -878,7 +967,7 @@ export default function ApprovalsPage() {
             </div>
 
             {/* Action Buttons Footer */}
-            <DialogFooter className="gap-2 sm:gap-0 pt-1">
+            <DialogFooter className="flex flex-row justify-end items-center gap-3 pt-3 mt-1 pb-1 shrink-0">
               <Button
                 variant="outline"
                 className="rounded-xl h-10 px-5 text-xs font-semibold"
@@ -1137,24 +1226,9 @@ export default function ApprovalsPage() {
                         ))}
                       </div>
                     ) : (
-                      <div className="flex items-center justify-between rounded-lg border border-dashed border-border/70 p-3 text-xs text-muted-foreground bg-muted/10">
-                        <div className="flex items-center gap-2">
-                          <FileText className="size-4 text-muted-foreground/60" />
-                          <span>Digital record (No physical PDF file attached by submitter)</span>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs gap-1.5"
-                          onClick={() => setViewerInvoice({
-                            invoiceNumber: detailRequest.referenceNumber,
-                            poNumber: detailRequest.referenceId,
-                            vendorName: detailRequest.requestedBy,
-                            comments: detailRequest.comments,
-                          })}
-                        >
-                          <Eye className="size-3.5" /> View Digital Copy
-                        </Button>
+                      <div className="flex items-center gap-2 rounded-lg border border-dashed border-border/70 p-3 text-xs text-muted-foreground bg-muted/10">
+                        <FileText className="size-4 text-muted-foreground/60" />
+                        <span>No documents attached by submitter</span>
                       </div>
                     )}
                   </div>
@@ -1212,7 +1286,7 @@ export default function ApprovalsPage() {
                         openAction(req, 'approve');
                       }}
                     >
-                      <ThumbsUp className="size-3.5 mr-1" /> Approve
+                      <ThumbsUp className="size-3.5 mr-1" /> {(detailRequest.status === 'RETURNED' || (detailRequest as any).isReturned) ? 'Resubmit' : 'Approve'}
                     </Button>
                   </>
                 ) : (
@@ -1288,29 +1362,43 @@ function ApprovalChainView({ module, referenceId, onClose }: { module: string; r
     };
   }, [module, referenceId]);
 
-  const rawList = chainData?.history && chainData.history.length > 0
+  const hasAuthoritativeHistory = Boolean(chainData?.history && chainData.history.length > 0);
+  const rawList = hasAuthoritativeHistory
     ? chainData.history
     : chainData?.timeline && chainData.timeline.length > 0
     ? chainData.timeline
     : chainData?.levels || [];
 
   const itemsToDisplay: any[] = [];
-  for (let i = 0; i < rawList.length; i++) {
-    const item = rawList[i];
-    const prev = i > 0 ? rawList[i - 1] : null;
-    if (prev && prev.status === 'RETURNED' && item.status !== 'RESUBMITTED') {
-      itemsToDisplay.push({
-        id: `originator-resubmit-${item.id || i}`,
-        levelNumber: 0,
-        requiredRole: 'Originator',
-        status: 'RESUBMITTED',
-        approverName: rawList[0]?.approverName || 'Originator',
-        comments: 'Revised and resubmitted for approval',
-        actionAt: item.createdAt || item.actionAt || new Date(),
-        createdAt: item.createdAt || item.actionAt || new Date(),
-      });
+  if (hasAuthoritativeHistory) {
+    itemsToDisplay.push(...rawList);
+  } else {
+    for (let i = 0; i < rawList.length; i++) {
+      const item = rawList[i];
+      const prev = i > 0 ? rawList[i - 1] : null;
+      const isExplicitReturnToOriginator = Boolean(prev?.comments && /return\s+to\s+(originator|vendor)/i.test(prev.comments));
+      const isInternalReReview = !isExplicitReturnToOriginator && Boolean(
+        prev && prev.status === 'RETURNED' && (
+          ((prev.levelNumber || 0) > 1 && (item.levelNumber || 1) < (prev.levelNumber || 0)) ||
+          (prev.comments && /level\s*1|internal/i.test(prev.comments)) ||
+          (item.comments && /return.*(re-review|revision)/i.test(item.comments))
+        )
+      );
+
+      if (prev && prev.status === 'RETURNED' && item.status !== 'RESUBMITTED' && !isInternalReReview) {
+        itemsToDisplay.push({
+          id: `originator-resubmit-${item.id || i}`,
+          levelNumber: 0,
+          requiredRole: 'Originator',
+          status: 'RESUBMITTED',
+          approverName: rawList[0]?.approverName || 'Originator',
+          comments: 'Revised and resubmitted for approval',
+          actionAt: item.createdAt || item.actionAt || new Date(),
+          createdAt: item.createdAt || item.actionAt || new Date(),
+        });
+      }
+      itemsToDisplay.push(item);
     }
-    itemsToDisplay.push(item);
   }
 
   return (

@@ -88,7 +88,7 @@ export default function CreatePurchaseInvoicePage() {
     hasPermission('Purchase Invoice', 'canCreate') ||
     hasPermission('Invoices', 'canCreate') ||
     hasPermission('Accounts Payable', 'canCreate');
-  const { companyDefaultCurrency, formatAmount } = useCurrency();
+  const { companyDefaultCurrency, formatAmount, convert } = useCurrency();
   const { companyName, companyPhone, companyEmail, logoUrl, profile } = useBranding();
 
   // Vendor Role Redirect to Vendor Create Invoice Page
@@ -967,6 +967,26 @@ export default function CreatePurchaseInvoicePage() {
   const handleUpdateLineItem = useCallback((id: number | string, field: keyof LineItem, value: any) => {
     setLineItems((prev) => prev.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
   }, []);
+
+  // Handle Currency Change with conversion
+  const handleCurrencyChange = useCallback((newCurrency: string) => {
+    if (!newCurrency || newCurrency === currency) return;
+    const prevCurrency = currency || companyDefaultCurrency || 'KES';
+    setCurrency(newCurrency);
+
+    setLineItems((prev) =>
+      prev.map((item) => {
+        const origPrice = Number(item.unitPrice) || 0;
+        const convertedPrice = origPrice > 0
+          ? Math.round(convert(origPrice, prevCurrency, newCurrency) * 100) / 100
+          : origPrice;
+        return {
+          ...item,
+          unitPrice: origPrice > 0 ? convertedPrice : item.unitPrice,
+        };
+      })
+    );
+  }, [currency, companyDefaultCurrency, convert]);
 
   // Calculations
   const calculations = useMemo(() => {
@@ -2403,7 +2423,7 @@ export default function CreatePurchaseInvoicePage() {
 
             <div className="cpi-field">
               <label>CURRENCY</label>
-              <CurrencySelector value={currency} onChange={setCurrency} disabled={isReadOnly} />
+              <CurrencySelector value={currency} onChange={handleCurrencyChange} disabled={isReadOnly} />
             </div>
 
             <div className="cpi-totals-row">

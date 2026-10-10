@@ -105,13 +105,14 @@ export default function VendorNotificationBell() {
   };
 
   const markAllRead = async () => {
+    setNotifications([]);
+    setUnreadCount(0);
     try {
       await vendorPortalService.deleteAllNotifications();
     } catch {
       await vendorPortalService.markAllNotificationsRead().catch(() => {});
     }
-    setNotifications([]);
-    setUnreadCount(0);
+    window.dispatchEvent(new CustomEvent('heliflow:notification-updated'));
   };
 
   return (

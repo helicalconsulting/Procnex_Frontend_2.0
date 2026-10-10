@@ -17,6 +17,7 @@ import {
   ThumbsUp,
   X,
   XCircle,
+  Filter,
 } from 'lucide-react';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
 import { MessageStrip } from '../../components/shared/MessageStrip';
@@ -474,7 +475,22 @@ export default function PaymentsPage() {
   }, [searchParams]);
 
   const [pendingActions, setPendingActions] = useState<Record<number, Payment>>({});
-  const [statusFilter, setStatusFilter] = useState<PaymentStatus | 'ALL'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<PaymentStatus | 'ALL'>(() => {
+    const s = searchParams.get('status')?.toUpperCase();
+    if (s && ['DRAFT', 'COMPLETED', 'PENDING', 'PROCESSING', 'FAILED', 'CONFIRMED', 'CANCELLED', 'RETRIED', 'RETURNED', 'RE_REVIEW'].includes(s)) {
+      return s as PaymentStatus;
+    }
+    return 'ALL';
+  });
+
+  useEffect(() => {
+    const s = searchParams.get('status')?.toUpperCase();
+    if (s && ['DRAFT', 'COMPLETED', 'PENDING', 'PROCESSING', 'FAILED', 'CONFIRMED', 'CANCELLED', 'RETRIED', 'RETURNED', 'RE_REVIEW'].includes(s)) {
+      setStatusFilter(s as PaymentStatus);
+    } else if (s === 'ALL') {
+      setStatusFilter('ALL');
+    }
+  }, [searchParams]);
   const [actionModal, setActionModal] = useState<{ payment: Payment; action: ActionType } | null>(null);
   const [actionComment, setActionComment] = useState('');
   const [detailPayment, setDetailPayment] = useState<Payment | null>(null);
@@ -1115,8 +1131,44 @@ export default function PaymentsPage() {
             </button>
           )}
         </div>
+        <div className="flex flex-wrap items-center gap-2.5 justify-end shrink-0 sm:ml-auto">
+          {/* Status Filter Dropdown */}
+          <div className="relative min-w-[190px]">
+            <Filter size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <select
+              className="h-11 w-full appearance-none rounded-xl border border-input bg-card pl-10 pr-9 text-sm font-medium text-foreground shadow-xs transition-colors hover:bg-accent/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value as any);
+                setCurrentPage(1);
+              }}
+              aria-label="Filter by status"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="DRAFT">Draft</option>
+              <option value="PENDING">Pending Approval</option>
+              <option value="PROCESSING">Processing</option>
+              <option value="COMPLETED">Approved / Completed</option>
+              <option value="RETURNED">Returned for Re-Review</option>
+              <option value="FAILED">Failed / Cancelled</option>
+            </select>
+          </div>
 
-
+          {(statusFilter !== 'ALL' || search) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setStatusFilter('ALL');
+                setSearch('');
+                setCurrentPage(1);
+              }}
+              className="h-11 rounded-xl px-3.5"
+            >
+              Reset filters
+            </Button>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -1693,27 +1745,9 @@ export default function PaymentsPage() {
                         ))}
                       </div>
                     ) : (
-                      <div className="flex items-center justify-between text-xs text-muted-foreground py-1">
-                        <span>No physical files attached directly. Linked to {detailPayment.invoiceRef || 'Vendor Invoice'}.</span>
-                        {detailPayment.invoiceRef && detailPayment.invoiceRef !== '—' && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs px-2 gap-1 text-primary"
-                            onClick={() => {
-                              setViewerAttachments([]);
-                              setViewerDocContext({
-                                paymentNumber: detailPayment.paymentNumber,
-                                vendorName: detailPayment.vendorName,
-                                amount: detailPayment.amount,
-                                invoiceNumber: detailPayment.invoiceRef,
-                              });
-                              setViewerOpen(true);
-                            }}
-                          >
-                            <Eye className="size-3" /> View Linked Invoice
-                          </Button>
-                        )}
+                      <div className="flex items-center gap-2 rounded-lg border border-dashed border-border/70 p-3 text-xs text-muted-foreground bg-background/50">
+                        <FileText className="size-4 text-muted-foreground/60" />
+                        <span>No physical or digital documents attached</span>
                       </div>
                     )}
                   </div>

@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { TrendingUp } from 'lucide-react';
 import { useServiceData } from '../../../hooks/useServiceData';
 import { dashboardService } from '../../../services/dashboardService';
@@ -15,10 +16,25 @@ export default function SpendOverviewWidget() {
   );
 
   const maxValue = Math.max(1, ...data.monthlyTrend.map((m) => m.value));
+  const totalSpend = useMemo(() => {
+    return (
+      data.categories.reduce((sum, c) => sum + (c.amount || 0), 0) ||
+      data.monthlyTrend.reduce((sum, m) => sum + (m.value || 0), 0)
+    );
+  }, [data]);
 
   return (
     <>
-      <WidgetHeader icon={<TrendingUp size={16} />} title="Spend Overview" subtitle="Monthly Trend & Breakdown" />
+      <WidgetHeader
+        icon={<TrendingUp size={16} />}
+        title="Spend Overview"
+        subtitle={
+          totalSpend > 0
+            ? `Total: ${formatAmount(totalSpend, companyDefaultCurrency)} · Monthly trend & breakdown`
+            : 'Monthly Trend & Breakdown'
+        }
+        href="/procurement/purchase-orders"
+      />
       <WidgetBody className="grid gap-6">
         {loading ? (
           <WidgetLoading>
@@ -93,9 +109,14 @@ export default function SpendOverviewWidget() {
                         <span className={`size-2 rounded-full ${colorClass}`} />
                         <span>{cat.label}</span>
                       </div>
-                      <span className="font-semibold tabular-nums text-foreground">
-                        {formatAmount(cat.amount, companyDefaultCurrency)}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold tabular-nums text-foreground">
+                          {formatAmount(cat.amount, companyDefaultCurrency)}
+                        </span>
+                        <span className="text-[11px] font-medium text-muted-foreground tabular-nums">
+                          ({cat.percent}%)
+                        </span>
+                      </div>
                     </div>
                     <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                       <div

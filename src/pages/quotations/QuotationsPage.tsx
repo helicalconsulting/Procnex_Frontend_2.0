@@ -18,7 +18,7 @@ import {
   Crown, GitCompareArrows, ArrowDownNarrowWide, X, RotateCcw,
   MessageSquare, AlertTriangle, ArrowRightLeft, Shield, Check, X as XIcon,
   Maximize2, Minimize2, Minus, ChevronUp, BarChart3, Loader2, LayoutGrid, LayoutList,
-  Download, FileCheck, ShoppingCart, GitBranch, Building2, Paperclip, History, Save, Send,
+  Download, FileCheck, ShoppingCart, GitBranch, Building2, Paperclip, History, Save, Send, Filter,
 } from 'lucide-react';
 import { downloadDocument } from '../../utils/download';
 import ColumnCustomizer from '../../components/shared/ColumnCustomizer';
@@ -4641,27 +4641,67 @@ export default function QuotationsPage() {
               onChange={(e) => { setSearch(e.target.value); setListingPage(1); }}
             />
           </div>
-          {rfqGroups.length > 0 && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-11 rounded-xl gap-2 font-medium"
-              onClick={toggleExpandAll}
-            >
-              {expandedRfqNumbers.size === rfqGroups.length ? (
-                <>
-                  <ChevronUp size={16} />
-                  <span>Collapse All</span>
-                </>
-              ) : (
-                <>
-                  <ChevronDown size={16} />
-                  <span>Expand All ({rfqGroups.length})</span>
-                </>
-              )}
-            </Button>
-          )}
+          <div className="flex flex-wrap items-center gap-2.5 justify-end shrink-0 sm:ml-auto">
+            {/* Status Filter Dropdown matching RFQ Page */}
+            <div className="relative min-w-[190px]">
+              <Filter size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <select
+                className="h-11 w-full appearance-none rounded-xl border border-input bg-card pl-10 pr-9 text-sm font-medium text-foreground shadow-xs transition-colors hover:bg-accent/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+                value={statusFilter || 'ALL'}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setStatusFilter(val === 'ALL' ? null : val);
+                  setListingPage(1);
+                }}
+                aria-label="Filter by status"
+              >
+                <option value="ALL">All Statuses</option>
+                <option value="SUBMITTED">Submitted</option>
+                <option value="UNDER_REVIEW">Under Evaluation</option>
+                <option value="SHORTLISTED">Shortlisted</option>
+                <option value="ACCEPTED">Accepted / Awarded</option>
+                <option value="RETURNED">Returned</option>
+                <option value="REJECTED">Rejected</option>
+              </select>
+            </div>
+
+            {(statusFilter || search) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setStatusFilter(null);
+                  setSearch('');
+                  setListingPage(1);
+                }}
+                className="h-11 rounded-xl px-3.5"
+              >
+                Reset filters
+              </Button>
+            )}
+
+            {rfqGroups.length > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-11 rounded-xl gap-2 font-medium"
+                onClick={toggleExpandAll}
+              >
+                {expandedRfqNumbers.size === rfqGroups.length ? (
+                  <>
+                    <ChevronUp size={16} />
+                    <span>Collapse All</span>
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown size={16} />
+                    <span>Expand All ({rfqGroups.length})</span>
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Grouped RFQs Accordion List */}

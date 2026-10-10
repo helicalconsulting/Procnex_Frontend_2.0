@@ -118,13 +118,13 @@ export default function AdminNotificationBell() {
   };
 
   const markAllRead = async () => {
+    setNotifications([]);
+    setUnreadCount(0);
     try {
       await notificationService.deleteAll();
     } catch {
       await notificationService.markAllRead().catch(() => {});
     }
-    setNotifications([]);
-    setUnreadCount(0);
     window.dispatchEvent(new CustomEvent('heliflow:notification-updated'));
   };
 

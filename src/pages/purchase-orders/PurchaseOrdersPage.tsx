@@ -1,6 +1,6 @@
 import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
 import { useState, useMemo, useRef, useEffect, useCallback, type KeyboardEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
   Calendar,
@@ -27,6 +27,8 @@ import {
   RotateCcw,
   ThumbsUp,
   ThumbsDown,
+  Pencil,
+  Filter,
 } from 'lucide-react';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
 import { approvalService } from '../../services/approvalService';
@@ -88,8 +90,8 @@ const STATUS_CONFIG: Record<POStatus, { label: string; tone: Tone; icon: typeof 
   DISPATCHED: { label: 'Dispatched', tone: 'info', icon: Truck },
   DELIVERED: { label: 'Delivered', tone: 'success', icon: Package },
   CANCELLED: { label: 'Cancelled', tone: 'danger', icon: XCircle },
-  RETURNED: { label: 'Returned', tone: 'warning', icon: RotateCcw as any },
-  RE_REVIEW: { label: 'Returned (Re-Review)', tone: 'warning', icon: RotateCcw as any },
+  RETURNED: { label: 'Returned for Re-Review', tone: 'warning', icon: RotateCcw as any },
+  RE_REVIEW: { label: 'Returned for Re-Review', tone: 'warning', icon: RotateCcw as any },
 };
 
 const PROGRESS_STEPS: POStatus[] = ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'DISPATCHED', 'DELIVERED'];
@@ -159,35 +161,62 @@ export default function PurchaseOrdersPage() {
     hasPermission('Purchase Orders', 'canApprove') ||
     hasPermission('PO', 'canApprove');
 
-  const { data: poResult, loading, error, forceRefresh } = useServiceData(
+  const { data: poResult, loading, error, reload, forceRefresh } = useServiceData(
     () => purchaseOrderService.list().then((r) => r.orders.map(mapPO)),
     [] as MockPO[],
     [],
-    { cacheKey: 'po:list' }
+    { cacheKey: 'po:list', cacheTtlMs: 30000 }
   );
 
   useEffect(() => {
-    const handleRefresh = () => {
-      forceRefresh();
-      fetchPendingApprovals();
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const debouncedRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        reload();
+        fetchPendingApprovals();
+      }, 300);
     };
-    window.addEventListener('heliflow:approval-updated', handleRefresh);
-    window.addEventListener('heliflow:po-updated', handleRefresh);
-    window.addEventListener('heliflow:po-created', handleRefresh);
 
-    const unsub1 = sseClient.on('approval_level_complete', handleRefresh);
-    const unsub2 = sseClient.on('approval_chain_complete', handleRefresh);
-    const unsub3 = sseClient.on('po_status_changed', handleRefresh);
+    window.addEventListener('heliflow:approval-updated', debouncedRefresh);
+    window.addEventListener('heliflow:po-updated', debouncedRefresh);
+    window.addEventListener('heliflow:po-created', debouncedRefresh);
+
+    const unsub1 = sseClient.on('approval_level_complete', debouncedRefresh);
+    const unsub2 = sseClient.on('approval_chain_complete', debouncedRefresh);
+    const unsub3 = sseClient.on('po_status_changed', debouncedRefresh);
+    const unsub4 = sseClient.on('approval_updated', debouncedRefresh);
+    const unsub5 = sseClient.on('approval_required', debouncedRefresh);
+    const unsub6 = sseClient.on('approval_initiated', debouncedRefresh);
+    const unsub7 = sseClient.on('po_created', debouncedRefresh);
+    const unsub8 = sseClient.on('po_updated', debouncedRefresh);
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('heliflow_sync');
+      bc.onmessage = (event) => {
+        if (!event.data || ['po', 'approval'].some((prefix) => String(event.data).toLowerCase().includes(prefix))) {
+          debouncedRefresh();
+        }
+      };
+    } catch {}
 
     return () => {
-      window.removeEventListener('heliflow:approval-updated', handleRefresh);
-      window.removeEventListener('heliflow:po-updated', handleRefresh);
-      window.removeEventListener('heliflow:po-created', handleRefresh);
+      if (refreshTimer) clearTimeout(refreshTimer);
+      window.removeEventListener('heliflow:approval-updated', debouncedRefresh);
+      window.removeEventListener('heliflow:po-updated', debouncedRefresh);
+      window.removeEventListener('heliflow:po-created', debouncedRefresh);
       unsub1();
       unsub2();
       unsub3();
+      unsub4();
+      unsub5();
+      unsub6();
+      unsub7();
+      unsub8();
+      if (bc) bc.close();
     };
-  }, [forceRefresh]);
+  }, [reload, fetchPendingApprovals]);
 
   const [optimisticOverrides, setOptimisticOverrides] = useState<Record<string | number, POStatus>>({});
   const [pendingApprovalsMap, setPendingApprovalsMap] = useState<Map<string, any>>(new Map());
@@ -224,7 +253,15 @@ export default function PurchaseOrdersPage() {
   }, [poResult, optimisticOverrides]);
 
   const { formatAmount, companyDefaultCurrency } = useCurrency();
-  const [search, setSearch] = useState('');
+  const [searchParams] = useSearchParams();
+  const [search, setSearch] = useState(() => searchParams.get('search') || searchParams.get('q') || '');
+
+  useEffect(() => {
+    const q = searchParams.get('search') || searchParams.get('q');
+    if (q !== null && q !== undefined) {
+      setSearch(q);
+    }
+  }, [searchParams]);
   const [view, setView] = useState<'table' | 'card'>('table');
   const [statusFilter, setStatusFilter] = useState<POStatus | 'ALL'>('ALL');
   const [currentPage, setCurrentPage] = useState(1);
@@ -340,7 +377,13 @@ export default function PurchaseOrdersPage() {
 
         window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
         window.dispatchEvent(new CustomEvent('heliflow:po-updated'));
+        try {
+          const bc = new BroadcastChannel('heliflow_sync');
+          bc.postMessage({ type: 'po-approval-updated' });
+          bc.close();
+        } catch {}
         forceRefresh().catch(() => {});
+        fetchPendingApprovals().catch(() => {});
       } catch (err) {
         console.error('PO action failed in background:', err);
         setOptimisticOverrides((prev) => {
@@ -445,7 +488,13 @@ export default function PurchaseOrdersPage() {
 
           window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
           window.dispatchEvent(new CustomEvent('heliflow:po-updated'));
+          try {
+            const bc = new BroadcastChannel('heliflow_sync');
+            bc.postMessage({ type: 'po-approval-updated' });
+            bc.close();
+          } catch {}
           forceRefresh().catch(() => {});
+          fetchPendingApprovals().catch(() => {});
         } catch (err) {
           console.error('Background PO approval sync error:', err);
           setOptimisticOverrides((prev) => {
@@ -491,9 +540,15 @@ export default function PurchaseOrdersPage() {
     const query = search.trim().toLowerCase();
     return effectivePOResult.filter((p) => {
       if (statusFilter !== 'ALL') {
-        if (statusFilter === 'PENDING_APPROVAL' && !['PENDING_APPROVAL', 'DRAFT', 'RETURNED', 'RE_REVIEW'].includes(p.status)) return false;
-        if (statusFilter === 'APPROVED' && !['APPROVED', 'DISPATCHED'].includes(p.status)) return false;
-        if (statusFilter !== 'PENDING_APPROVAL' && statusFilter !== 'APPROVED' && p.status !== statusFilter) return false;
+        if (statusFilter === 'PENDING_APPROVAL') {
+          if (!['PENDING_APPROVAL', 'PENDING'].includes(p.status)) return false;
+        } else if (statusFilter === 'APPROVED') {
+          if (!['APPROVED', 'DISPATCHED', 'RELEASED'].includes(p.status)) return false;
+        } else if (statusFilter === 'RETURNED') {
+          if (!['RETURNED', 'RE_REVIEW'].includes(p.status)) return false;
+        } else if (p.status !== statusFilter) {
+          return false;
+        }
       }
       if (!query) return true;
       return [p.poNumber, p.vendorName, p.rfqNumber, p.createdBy, p.department].some((field) =>
@@ -669,7 +724,45 @@ export default function PurchaseOrdersPage() {
           )}
         </div>
 
-        <div className="flex items-center gap-2.5 justify-end shrink-0 sm:ml-auto">
+        <div className="flex flex-wrap items-center gap-2.5 justify-end shrink-0 sm:ml-auto">
+          {/* Status Filter Dropdown */}
+          <div className="relative min-w-[190px]">
+            <Filter size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <select
+              className="h-11 w-full appearance-none rounded-xl border border-input bg-card pl-10 pr-9 text-sm font-medium text-foreground shadow-xs transition-colors hover:bg-accent/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value as any);
+                setCurrentPage(1);
+              }}
+              aria-label="Filter by status"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="DRAFT">Draft</option>
+              <option value="PENDING_APPROVAL">Pending Approval</option>
+              <option value="APPROVED">Approved & Released</option>
+              <option value="RETURNED">Returned for Re-Review</option>
+              <option value="DISPATCHED">Dispatched</option>
+              <option value="DELIVERED">Delivered</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
+          </div>
+
+          {(statusFilter !== 'ALL' || search) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setStatusFilter('ALL');
+                setSearch('');
+                setCurrentPage(1);
+              }}
+              className="h-11 rounded-xl px-3.5"
+            >
+              Reset filters
+            </Button>
+          )}
+
           <div className="flex items-center gap-1 rounded-xl border border-input bg-card p-1 h-11">
             <Button
               variant={view === 'table' ? 'secondary' : 'ghost'}
@@ -693,7 +786,7 @@ export default function PurchaseOrdersPage() {
         </div>
       </div>
 
-      {loading ? (
+      {loading && poResult.length === 0 ? (
         <Card className="flex min-h-[360px] items-center justify-center p-8">
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
             <div className="size-5 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
@@ -867,9 +960,20 @@ export default function PurchaseOrdersPage() {
                             >
                               <Eye className="size-4" />
                             </Button>
+                            {['DRAFT', 'RETURNED', 'RE_REVIEW'].includes(order.status) && (
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                disabled={!canCreatePO}
+                                onClick={() => canCreatePO && navigate(`/procurement/create-purchase-order?id=${encodeURIComponent(order.id || order.poNumber)}`)}
+                                title={canCreatePO ? (['RETURNED', 'RE_REVIEW'].includes(order.status) ? `Edit & resubmit ${order.poNumber}` : `Edit ${order.poNumber}`) : 'Permission denied'}
+                              >
+                                <Pencil className="size-4" />
+                              </Button>
+                            )}
                             {(() => {
                               const pendingApp = getPendingApprovalForPO(order);
-                              const canActOnThisPO = Boolean(pendingApp && pendingApp.canAct && ['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW'].includes(order.status));
+                              const canActOnThisPO = Boolean((pendingApp?.canAct || ((canApprovePO || isAdmin) && pendingApp)) && ['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW'].includes(order.status));
                               return canActOnThisPO ? (
                               <>
                                 <Button
@@ -976,7 +1080,7 @@ export default function PurchaseOrdersPage() {
                   </div>
                   {(() => {
                     const pendingApp = getPendingApprovalForPO(order);
-                    const canActOnThisPO = Boolean(pendingApp && pendingApp.canAct && ['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW'].includes(order.status));
+                    const canActOnThisPO = Boolean((pendingApp?.canAct || ((canApprovePO || isAdmin) && pendingApp)) && ['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW'].includes(order.status));
                     return canActOnThisPO ? (
                     <div className="flex gap-1">
                       <Button size="sm" onClick={() => openAction(order, 'approve')}>
@@ -1171,7 +1275,7 @@ export default function PurchaseOrdersPage() {
               <div className="flex flex-wrap items-center gap-2">
                 {(() => {
                   const pendingApp = getPendingApprovalForPO(detailPO);
-                  const canActOnThisPO = Boolean(pendingApp && pendingApp.canAct && ['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW'].includes(detailPO.status));
+                  const canActOnThisPO = Boolean((pendingApp?.canAct || ((canApprovePO || isAdmin) && pendingApp)) && ['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW'].includes(detailPO.status));
                   return canActOnThisPO ? (
                   <>
                     <Button

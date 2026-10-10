@@ -53,7 +53,7 @@ export default function VendorCreateInvoicePage() {
   const grnIdParam = searchParams.get('grnId');
 
   const { user } = useAuth();
-  const { companyDefaultCurrency, formatAmount } = useCurrency();
+  const { companyDefaultCurrency, formatAmount, convert } = useCurrency();
   const { companyName, companyPhone, companyEmail, logoUrl } = useBranding();
 
   // Load Vendor's assigned Purchase Orders
@@ -309,12 +309,64 @@ export default function VendorCreateInvoicePage() {
     }
   }, [selectedPO, selectedPoId, companyName]);
 
+  // Populate Payment Terms & Currency from selected PO / quotation (read-only from quotation)
+  useEffect(() => {
+    if (selectedPO) {
+      const explicitTerms =
+        selectedPO.paymentTerms ||
+        (selectedPO as any).payment_terms ||
+        (selectedPO as any).rfq?.selectedQuotation?.paymentTerms ||
+        (selectedPO as any).quotation?.paymentTerms ||
+        (selectedPO as any).rfq?.paymentTerms ||
+        (selectedPO as any).paymentPlan?.name;
+
+      if (explicitTerms && String(explicitTerms).trim()) {
+        setPaymentTerms(String(explicitTerms).trim());
+      }
+      if (selectedPO.currency) {
+        setCurrency(selectedPO.currency);
+      }
+    }
+  }, [selectedPO]);
+
+  // Auto-calculate Due Date based on Invoice Date and Payment Terms
+  useEffect(() => {
+    if (!invoiceDate) return;
+    const match = String(paymentTerms || '').match(/(\d+)\s*(?:day|days)?/i);
+    const days = match ? parseInt(match[1], 10) : (paymentTerms?.toLowerCase().includes('immediate') ? 0 : 30);
+    const invD = new Date(invoiceDate);
+    if (!isNaN(invD.getTime())) {
+      invD.setDate(invD.getDate() + days);
+      setDueDate(localDateValue(invD));
+    }
+  }, [invoiceDate, paymentTerms]);
+
   // Update Line Item Values
   const handleUpdateLineItem = useCallback((id: number | string, field: keyof LineItem, value: any) => {
     setLineItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
     );
   }, []);
+
+  // Handle Currency Change with conversion of line item unit prices
+  const handleCurrencyChange = useCallback((newCurrency: string) => {
+    if (!newCurrency || newCurrency === currency) return;
+    const prevCurrency = currency || companyDefaultCurrency || 'KES';
+    setCurrency(newCurrency);
+
+    setLineItems((prev) =>
+      prev.map((item) => {
+        const origPrice = Number(item.unitPrice) || 0;
+        const convertedPrice = origPrice > 0
+          ? Math.round(convert(origPrice, prevCurrency, newCurrency) * 100) / 100
+          : origPrice;
+        return {
+          ...item,
+          unitPrice: origPrice > 0 ? convertedPrice : item.unitPrice,
+        };
+      })
+    );
+  }, [currency, companyDefaultCurrency, convert]);
 
   const handleAddLineItem = useCallback(() => {
     const itemId = crypto.randomUUID();
@@ -645,17 +697,19 @@ export default function VendorCreateInvoicePage() {
             </div>
 
             <div className="form-field">
-              <label htmlFor="invoice-payment-terms" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">PAYMENT TERMS</label>
-              <Select id="invoice-payment-terms"
-                className="h-10 font-medium"
-                value={paymentTerms}
-                onChange={(e) => setPaymentTerms(e.target.value)}
-              >
-                <option value="Net 15">Net 15</option>
-                <option value="Net 30">Net 30</option>
-                <option value="Net 45">Net 45</option>
-                <option value="Net 60">Net 60</option>
-              </Select>
+              <label htmlFor="invoice-payment-terms" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                <span>PAYMENT TERMS</span>
+                <span className="text-[11px] text-muted-foreground font-normal lowercase tracking-normal">(from quotation)</span>
+              </label>
+              <Input
+                id="invoice-payment-terms"
+                className="h-10 rounded-xl text-sm font-medium bg-muted/40 cursor-not-allowed text-foreground border-border/80"
+                type="text"
+                value={paymentTerms || 'Net 30'}
+                readOnly
+                disabled
+                title="Agreed payment terms from quotation (locked)"
+              />
             </div>
           </div>
         </Card>
@@ -813,7 +867,7 @@ export default function VendorCreateInvoicePage() {
               <div className="space-y-3 text-sm">
                 <div className="form-field">
                   <label htmlFor="invoice-currency" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">CURRENCY</label>
-                  <CurrencySelector id="invoice-currency" className="invoice-currency" value={currency} onChange={setCurrency} size="sm" />
+                  <CurrencySelector id="invoice-currency" className="invoice-currency" value={currency} onChange={handleCurrencyChange} size="sm" />
                 </div>
 
                 <div className="flex items-center justify-between text-muted-foreground pt-2">

@@ -64,19 +64,27 @@ async function apiList(params?: { page?: number; limit?: number }): Promise<List
     try {
       const { vendorPortalService } = await import('./vendorPortalService');
       const vOrders = await vendorPortalService.listOrders();
-      const orders: any[] = vOrders.map((vo) => ({
+      const orders: any[] = vOrders.map((vo, idx) => ({
+        ...vo,
         id: vo.id,
         poNumber: vo.poNumber,
-        totalAmount: Number(vo.totalAmount || vo.grandTotal || 0),
+        totalAmount: Number(vo.totalAmount || (vo as any).grandTotal || 0),
         status: vo.status || 'CONFIRMED',
         createdAt: vo.orderDate || new Date().toISOString(),
+        paymentTerms: vo.paymentTerms || (vo as any).payment_terms || 'Net 30',
+        currency: vo.currency || (vo as any).currency || 'KES',
+        buyerCompany: vo.buyerCompany || (vo as any).companyName || 'Procnex',
+        buyerName: vo.buyerName || (vo as any).requisitioner || 'Buyer',
         vendor: {
           id: 'vendor_me',
-          name: vo.vendorName || user?.fullName || 'Vendor',
-          email: vo.vendorEmail || user?.email || '',
+          name: (vo as any).vendorName || user?.fullName || 'Vendor',
+          email: (vo as any).vendorEmail || user?.email || '',
         },
-        items: (vo.items || []).map((it: any) => ({
+        items: (vo.items || []).map((it: any, itemIdx: number) => ({
+          id: it.id || `po_item_${idx}_${itemIdx}`,
+          itemCode: it.itemCode || `ITM-${String(itemIdx + 1).padStart(3, '0')}`,
           itemName: it.name || it.itemName || 'Line Item',
+          description: it.description || '',
           quantity: Number(it.quantity || 1),
           unit: it.unit || 'Pcs',
           unitPrice: Number(it.unitPrice || 0),

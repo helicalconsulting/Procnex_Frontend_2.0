@@ -139,30 +139,32 @@ export default function CompanyGRNListPage() {
 
   // Real-time synchronization across tabs & components
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
     const handleRefresh = () => {
-      forceRefreshGrns();
-      forceRefreshPOs();
-      forceRefreshReqs();
-      queryClient.invalidateQueries({ queryKey: ['svc'] });
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        forceRefreshGrns();
+        forceRefreshPOs();
+        forceRefreshReqs();
+      }, 300);
     };
 
     const unsubGrn = sseClient.on('grn_created', handleRefresh);
     const unsubPo = sseClient.on('po_status_changed', handleRefresh);
-    const unsubAny = typeof sseClient.onAny === 'function' ? sseClient.onAny(handleRefresh) : undefined;
 
     window.addEventListener('heliflow:grn-updated', handleRefresh);
     window.addEventListener('heliflow:po-updated', handleRefresh);
     window.addEventListener('storage', handleRefresh);
 
     return () => {
+      if (timer) clearTimeout(timer);
       unsubGrn();
       unsubPo();
-      if (typeof unsubAny === 'function') unsubAny();
       window.removeEventListener('heliflow:grn-updated', handleRefresh);
       window.removeEventListener('heliflow:po-updated', handleRefresh);
       window.removeEventListener('storage', handleRefresh);
     };
-  }, [forceRefreshGrns, forceRefreshPOs, forceRefreshReqs, queryClient]);
+  }, [forceRefreshGrns, forceRefreshPOs, forceRefreshReqs]);
 
   const poLoading = poLoading1 || poLoading2;
 

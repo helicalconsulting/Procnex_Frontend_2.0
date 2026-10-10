@@ -1,5 +1,6 @@
 import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
 import React, { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useServiceData } from '../../hooks/useServiceData';
 import { vendorService } from '../../services/vendorService';
@@ -265,11 +266,31 @@ export default function VendorsPage() {
     { cacheTtlMs: 30000 }
   );
 
-  const [search, setSearch] = useState('');
-  const [filterMode, setFilterMode] = useState<'all' | 'active' | 'inactive' | 'top-rated'>('all');
+  const [searchParams] = useSearchParams();
+  const urlSearch = searchParams.get('search') || searchParams.get('q') || '';
+  const urlStatus = searchParams.get('status')?.toLowerCase() || 'all';
+
+  const [search, setSearch] = useState(() => urlSearch);
+  const [filterMode, setFilterMode] = useState<'all' | 'active' | 'inactive' | 'top-rated'>(() => {
+    if (urlStatus === 'active') return 'active';
+    if (urlStatus === 'inactive' || urlStatus === 'pending') return 'inactive';
+    if (urlStatus === 'top-rated' || urlStatus === 'top') return 'top-rated';
+    return 'all';
+  });
   const [categoryFilter, setCategoryFilter] = useState('');
   const [view, setView] = useState<'table' | 'card'>('table');
   const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    const q = searchParams.get('search') || searchParams.get('q');
+    if (q !== null && q !== undefined) {
+      setSearch(q);
+    }
+    const s = searchParams.get('status')?.toLowerCase();
+    if (s === 'active' || s === 'inactive' || s === 'pending' || s === 'top-rated' || s === 'all') {
+      setFilterMode(s === 'pending' ? 'inactive' : (s as any));
+    }
+  }, [searchParams]);
   const { data: categories } = useServiceData(
     () => companySettingsService.listCategories(),
     [] as Category[],

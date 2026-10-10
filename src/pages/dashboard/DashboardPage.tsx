@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
 import { useDashboardWidgets } from '../../hooks/useDashboardWidgets';
@@ -18,6 +18,8 @@ import {
   Zap,
   Check,
   ChevronDown,
+  Maximize2,
+  Minimize2,
   X,
 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
@@ -86,6 +88,26 @@ export default function DashboardPage() {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [dragState, setDragState] = useState<WidgetDragState | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [widgetWidths, setWidgetWidths] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem('dashboard_widget_widths');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const toggleWidgetWidth = useCallback((widgetId: string) => {
+    setWidgetWidths((prev) => {
+      const currentFull = prev[widgetId] ?? (WIDGET_REGISTRY.find((w) => w.id === widgetId)?.fullWidth ?? false);
+      const next = { ...prev, [widgetId]: !currentFull };
+      try {
+        localStorage.setItem('dashboard_widget_widths', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
+
   const dragListenersRef = useRef<{
     move: (e: PointerEvent) => void;
     up: (e: PointerEvent) => void;
@@ -208,6 +230,117 @@ export default function DashboardPage() {
     reorderWidgets(reorderWidgetIds(activeWidgets, widgetId, activeWidgets[targetIndex]));
   }, [activeWidgets, reorderWidgets]);
 
+  const layoutChunks = useMemo(() => {
+    type Chunk =
+      | { type: 'full'; widget: WidgetDefinition }
+      | { type: 'columns'; id: string; left: WidgetDefinition[]; right: WidgetDefinition[] };
+
+    const chunks: Chunk[] = [];
+    let currentLeft: WidgetDefinition[] = [];
+    let currentRight: WidgetDefinition[] = [];
+
+    const flushColumns = () => {
+      if (currentLeft.length > 0 || currentRight.length > 0) {
+        chunks.push({
+          type: 'columns',
+          id: `cols-${[...currentLeft, ...currentRight].map((w) => w.id).join('-')}`,
+          left: [...currentLeft],
+          right: [...currentRight],
+        });
+        currentLeft = [];
+        currentRight = [];
+      }
+    };
+
+    activeWidgetDefs.forEach((widget) => {
+      const isFull = widgetWidths[widget.id] ?? widget.fullWidth;
+      if (isFull) {
+        flushColumns();
+        chunks.push({ type: 'full', widget });
+      } else {
+        if (currentLeft.length <= currentRight.length) {
+          currentLeft.push(widget);
+        } else {
+          currentRight.push(widget);
+        }
+      }
+    });
+
+    flushColumns();
+    return chunks;
+  }, [activeWidgetDefs, widgetWidths]);
+
+  const renderWidgetCard = (widget: WidgetDefinition, isFullWidth: boolean) => {
+    const WidgetComponent = widget.component;
+    const isDragging = draggedId === widget.id;
+    const isDropTarget = dropTargetId === widget.id;
+
+    return (
+      <motion.div
+        key={widget.id}
+        data-widget-id={widget.id}
+        className="group/widget relative min-w-0 w-full"
+        layout="position"
+        initial={{ opacity: 0, scale: 0.98, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.97, y: -6 }}
+        transition={motionTransition.softSpring}
+      >
+        <Card
+          className={cn(
+            'min-w-0 overflow-hidden transition-[opacity,border-color,box-shadow] duration-200',
+            isDragging && 'opacity-45',
+            isDropTarget && 'border-primary/60 ring-4 ring-primary/10',
+          )}
+        >
+          <div className="flex h-10 items-center justify-between border-b border-border/70 bg-muted/30 px-3 py-1.5">
+            <button
+              type="button"
+              className="inline-flex size-8 cursor-grab touch-none items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
+              onPointerDown={(event) => startWidgetDrag(event, widget.id, widget.name)}
+              title={`Reorder ${widget.name}`}
+              aria-label={`Reorder ${widget.name}. Use arrow keys to move.`}
+              onKeyDown={(event) => {
+                if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+                  event.preventDefault();
+                  moveWidgetWithKeyboard(widget.id, -1);
+                }
+                if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+                  event.preventDefault();
+                  moveWidgetWithKeyboard(widget.id, 1);
+                }
+                if (event.key === 'Escape') cancelWidgetDrag();
+              }}
+            >
+              <GripVertical size={16} />
+            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
+                onClick={() => toggleWidgetWidth(widget.id)}
+                title={isFullWidth ? 'Collapse to 1 column' : 'Expand to full width'}
+                aria-label={isFullWidth ? `Collapse ${widget.name} to 1 column` : `Expand ${widget.name} to full width`}
+              >
+                {isFullWidth ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+              </button>
+              <button
+                type="button"
+                className="inline-flex size-7 shrink-0 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-destructive/15 hover:text-destructive focus-visible:ring-2 focus-visible:ring-destructive cursor-pointer"
+                onClick={() => removeWidget(widget.id)}
+                title={`Remove ${widget.name}`}
+                aria-label={`Remove ${widget.name}`}
+              >
+                <X size={16} strokeWidth={2.2} />
+              </button>
+            </div>
+          </div>
+          <div className={cn('min-w-0', widget.id === 'kpi-stats' && 'p-3 sm:p-4')}><WidgetComponent /></div>
+        </Card>
+      </motion.div>
+    );
+  };
+
   return (
     <div className="w-full">
       <header className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
@@ -249,64 +382,28 @@ export default function DashboardPage() {
       )}
 
       {hasWidgets && (
-        <div className="mt-5 grid gap-5 lg:grid-cols-2">
+        <div className="mt-5 flex flex-col gap-5">
           <AnimatePresence initial={false} mode="popLayout">
-          {activeWidgetDefs.map((widget) => {
-            const WidgetComponent = widget.component;
-            const isDragging = draggedId === widget.id;
-            const isDropTarget = dropTargetId === widget.id;
+            {layoutChunks.map((chunk) => {
+              if (chunk.type === 'full') {
+                return (
+                  <div key={chunk.widget.id} className="w-full">
+                    {renderWidgetCard(chunk.widget, true)}
+                  </div>
+                );
+              }
 
-            return (
-              <motion.div
-                key={widget.id}
-                data-widget-id={widget.id}
-                className={cn(
-                  'group/widget relative min-w-0',
-                  widget.fullWidth && 'lg:col-span-2',
-                )}
-                layout="position"
-                initial={{ opacity: 0, scale: 0.98, y: 8 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.97, y: -6 }}
-                transition={motionTransition.softSpring}
-              >
-              <Card
-                className={cn(
-                  'h-full min-w-0 overflow-hidden transition-[opacity,border-color,box-shadow] duration-200',
-                  isDragging && 'opacity-45',
-                  isDropTarget && 'border-primary/60 ring-4 ring-primary/10',
-                )}
-              >
-                <div className="flex h-10 items-center justify-between border-b border-border/70 bg-muted/30 px-3 py-1.5">
-                  <button
-                    type="button"
-                    className="inline-flex size-8 cursor-grab touch-none items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
-                    onPointerDown={(event) => startWidgetDrag(event, widget.id, widget.name)}
-                    title={`Reorder ${widget.name}`}
-                    aria-label={`Reorder ${widget.name}. Use arrow keys to move.`}
-                    onKeyDown={(event) => {
-                      if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') { event.preventDefault(); moveWidgetWithKeyboard(widget.id, -1); }
-                      if (event.key === 'ArrowRight' || event.key === 'ArrowDown') { event.preventDefault(); moveWidgetWithKeyboard(widget.id, 1); }
-                      if (event.key === 'Escape') cancelWidgetDrag();
-                    }}
-                  >
-                    <GripVertical size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    className="inline-flex size-7 shrink-0 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-destructive/15 hover:text-destructive focus-visible:ring-2 focus-visible:ring-destructive"
-                    onClick={() => removeWidget(widget.id)}
-                    title={`Remove ${widget.name}`}
-                    aria-label={`Remove ${widget.name}`}
-                  >
-                    <X size={16} strokeWidth={2.2} />
-                  </button>
+              return (
+                <div key={chunk.id} className="flex flex-col lg:flex-row gap-5 items-start w-full">
+                  <div className="flex-1 flex flex-col gap-5 w-full min-w-0">
+                    {chunk.left.map((widget) => renderWidgetCard(widget, false))}
+                  </div>
+                  <div className="flex-1 flex flex-col gap-5 w-full min-w-0">
+                    {chunk.right.map((widget) => renderWidgetCard(widget, false))}
+                  </div>
                 </div>
-                <div className={cn('min-w-0', widget.id === 'kpi-stats' && 'p-3 sm:p-4')}><WidgetComponent /></div>
-              </Card>
-              </motion.div>
-            );
-          })}
+              );
+            })}
           </AnimatePresence>
         </div>
       )}

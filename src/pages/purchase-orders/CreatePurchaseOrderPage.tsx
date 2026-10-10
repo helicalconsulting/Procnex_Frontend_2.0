@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ShoppingCart, ArrowLeft, Plus, Trash2, Download, Save, Send,
   Building2, FileText, Calendar, IndianRupee, Tag, UserCheck, ShieldCheck,
-  CheckCircle2, AlertCircle, Clock, Search, X, Pencil, Eye
+  CheckCircle2, AlertCircle, Clock, Search, X, Pencil, Eye, RotateCcw
 } from 'lucide-react';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
 import { purchaseRequisitionService } from '../../services/purchaseRequisitionService';
@@ -12,7 +12,7 @@ import CustomPaymentPlanModal from '../../components/vendor/CustomPaymentPlanMod
 import '../../components/vendor/vendor-rfq-workspace.css';
 import { apiRequest } from '../../api/client';
 import { downloadPurchaseOrderAsPdf } from '../../utils/pdfDownload';
-import { useCurrency } from '../../components/shared/CurrencyMaster';
+import { useCurrency, CurrencySelector } from '../../components/shared/CurrencyMaster';
 import { useBranding } from '../../context/BrandingContext';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { useAuth } from '../../context/AuthContext';
@@ -72,7 +72,7 @@ export default function CreatePurchaseOrderPage() {
   const canCreatePO = hasPermission('PO Creation', 'canCreate') || hasPermission('Purchase Orders', 'canCreate') || hasPermission('PO', 'canCreate');
   const [searchParams] = useSearchParams();
   const editId = searchParams.get('id');
-  const { formatAmount, companyDefaultCurrency } = useCurrency();
+  const { formatAmount, companyDefaultCurrency, convert } = useCurrency();
   const { companyName: brandingCompanyName, companyPhone: brandingPhone, companyEmail: brandingEmail, profile } = useBranding();
 
   // ── Ship-To & Warehouse Master State ──
@@ -536,6 +536,25 @@ export default function CreatePurchaseOrderPage() {
     );
   };
 
+  const handleCurrencyChange = (newCurrency: string) => {
+    if (!newCurrency || newCurrency === currency) return;
+    const prevCurrency = currency || companyDefaultCurrency || 'KES';
+    setCurrency(newCurrency);
+
+    setItems((prevItems) =>
+      prevItems.map((item) => {
+        const origPrice = Number(item.unitPrice) || 0;
+        const convertedPrice = origPrice > 0
+          ? Math.round(convert(origPrice, prevCurrency, newCurrency) * 100) / 100
+          : origPrice;
+        return {
+          ...item,
+          unitPrice: convertedPrice,
+        };
+      })
+    );
+  };
+
   // ── Financial Calculations ──
   const subtotal = useMemo(
     () => items.reduce((acc, i) => acc + (Number(i.quantity) || 0) * (Number(i.unitPrice) || 0), 0),
@@ -830,6 +849,11 @@ export default function CreatePurchaseOrderPage() {
                   Pending Approval
                 </span>
               )}
+              {(status === 'Returned' || status === 'RE_REVIEW') && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', background: 'rgba(217, 119, 6, 0.15)', color: '#d97706', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 16, fontSize: 13, fontWeight: 700, marginLeft: 10 }}>
+                  <RotateCcw size={13} /> Returned for Re-Review
+                </span>
+              )}
             </div>
             <p>Generate individual PO, link vendor master, and submit for approval</p>
           </div>
@@ -854,7 +878,7 @@ export default function CreatePurchaseOrderPage() {
             style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
             title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to submit POs." : undefined}
           >
-            <Send size={15} /> {submittingAction === 'submit' ? 'Submitting…' : 'Submit for Approval'}
+            <Send size={15} /> {submittingAction === 'submit' ? 'Submitting…' : (status === 'Returned' || status === 'RE_REVIEW') ? 'Resubmit for Re-Review' : 'Submit for Approval'}
           </button>
         </div>
       </div>
@@ -1413,7 +1437,7 @@ export default function CreatePurchaseOrderPage() {
                         <input
                           type="number"
                           min="0"
-                          step="1"
+                          step="any"
                           placeholder="0"
                           className="cpo-table__input"
                           value={item.unitPrice === 0 ? '' : item.unitPrice}
@@ -1454,13 +1478,7 @@ export default function CreatePurchaseOrderPage() {
             <div className="cpo-grid cpo-grid--2">
               <div className="cpo-field">
                 <label>CURRENCY</label>
-                <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
-                  <option value="KES">KES — Kenyan Shilling</option>
-                  <option value="USD">USD — US Dollar</option>
-                  <option value="INR">INR — Indian Rupee</option>
-                  <option value="EUR">EUR — Euro</option>
-                  <option value="GBP">GBP — British Pound</option>
-                </select>
+                <CurrencySelector value={currency} onChange={handleCurrencyChange} />
               </div>
               <div className="cpo-field rfq-payment-field" style={{ gridColumn: 'span 2' }}>
                 <label>PAYMENT TERMS & SCHEDULE</label>
@@ -1763,7 +1781,7 @@ export default function CreatePurchaseOrderPage() {
                 style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                 title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to submit POs." : undefined}
               >
-                <Send size={16} /> {submittingAction === 'submit' ? 'Submitting PO for Approval…' : 'Submit PO for Approval'}
+                <Send size={16} /> {submittingAction === 'submit' ? 'Submitting PO for Approval…' : (status === 'Returned' || status === 'RE_REVIEW') ? 'Resubmit for Re-Review' : 'Submit PO for Approval'}
               </button>
               <button
                 className="cpo-btn cpo-btn--outline cpo-btn--full"

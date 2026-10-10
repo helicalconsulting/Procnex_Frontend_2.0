@@ -310,6 +310,7 @@ export default function App() {
                           <Route path="/purchase-orders" element={page(PurchaseOrdersPage)} />
                           <Route path="/purchase-orders/new" element={page(CreatePurchaseOrderPage)} />
                           <Route path="/procurement/create-purchase-order" element={page(CreatePurchaseOrderPage)} />
+                          <Route path="/procurement/purchase-orders" element={page(PurchaseRequisitionsListPage)} />
                           <Route path="/procurement/purchase-requisitions" element={page(PurchaseRequisitionsListPage)} />
                           <Route path="/procurement/purchase-requisition/:rfqId" element={page(PurchaseRequisitionPage)} />
                           <Route path="/audit" element={page(AuditTrailPage)} />

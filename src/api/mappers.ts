@@ -20,8 +20,8 @@ const BACKEND_TO_UI_RFQ_STATUS: Record<string, RFQStatus> = {
   SENT: 'ACCEPTED',
   QUOTATIONS_RECEIVED: 'ACCEPTED',
   UNDER_EVALUATION: 'ACCEPTED',
-  PO_CREATED: 'CLOSED',
-  CLOSED: 'CLOSED',
+  PO_CREATED: 'APPROVED',
+  CLOSED: 'APPROVED',
   CANCELLED: 'CANCELLED',
   IN_PROGRESS: 'ACCEPTED',
   ACCEPTED: 'ACCEPTED',
@@ -77,7 +77,7 @@ export function mapApiRfqToTableRow(rfq: Record<string, unknown>): RFQTableRow {
   const rawStatus = String(rfq.status || '');
   const isDocReturned = rawStatus === 'RETURNED' || rawStatus === 'RE_REVIEW' || rawStatus === 'RETURN_FOR_RE_REVIEW' || rawStatus === 'RETURNED_TO_ORIGINATOR';
   const isDocRejected = rawStatus === 'REJECTED';
-  const isDocApproved = rawStatus === 'APPROVED' || rawStatus === 'SENT' || rawStatus === 'ACCEPTED';
+  const isDocApproved = rawStatus === 'APPROVED' || rawStatus === 'SENT' || rawStatus === 'ACCEPTED' || rawStatus === 'CLOSED' || rawStatus === 'PO_CREATED';
 
   const finalStatus: RFQStatus = isDocReturned
     ? 'RETURNED'

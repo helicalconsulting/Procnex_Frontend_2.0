@@ -275,9 +275,9 @@ export default function RFQDetailModal({
     fetchApprovalChain();
   }, [rfq?.id, fetchApprovalChain]);
 
-  // Fetch pending approval for this RFQ when status is PENDING_APPROVAL or RE_REVIEW
+  // Fetch pending approval for this RFQ when user has not yet acted in session
   useEffect(() => {
-    if (!rfq || (rfq.status !== 'PENDING_APPROVAL' && rfq.status !== 'RE_REVIEW' && rfq.status !== 'RETURN_FOR_RE_REVIEW')) {
+    if (!rfq || (rfq as any)._isReturnedByMe || (rfq as any)._isApprovedByMe || (rfq as any)._isRejectedByMe) {
       setPendingApproval(null);
       return;
     }
@@ -802,7 +802,7 @@ export default function RFQDetailModal({
         )}
 
         {/* ── RETURNED FOR REVISION INTERACTIVE NOTICE CARD ── */}
-        {(rfq.status === 'RETURNED' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW' || (rfq as any)._isReturnedByMe) && (() => {
+        {!pendingApproval?.canAct && (rfq.status === 'RETURNED' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW' || (rfq as any)._isReturnedByMe || (rfq as any)._isReturnedForReReview) && (() => {
           const latestReturnEntry = approvalChain?.history?.slice().reverse().find((h: any) => h.status === 'RETURNED');
           const returnComment = (rfq as any).returnComments || (rfq as any).returnReason || latestReturnEntry?.comments;
           const returnedBy = latestReturnEntry?.approverName || (latestReturnEntry?.levelNumber ? `Level ${latestReturnEntry.levelNumber} Approver` : 'Approver');
@@ -848,8 +848,8 @@ export default function RFQDetailModal({
           );
         })()}
 
-        {/* ── 3. PENDING APPROVAL INTERACTIVE CARD (If PENDING_APPROVAL or RE_REVIEW) ── */}
-        {(rfq.status === 'PENDING_APPROVAL' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW') && pendingApproval && pendingApproval.canAct && (() => {
+        {/* ── 3. PENDING APPROVAL INTERACTIVE CARD (If user can act on pending level / re-review) ── */}
+        {Boolean(pendingApproval && pendingApproval.canAct && !(rfq as any)._isReturnedByMe) && (() => {
           const currentPendingLevel = pendingApproval.currentLevel || pendingApproval.levelNumber || approvalChain?.currentLevel || 1;
           const historyItems = approvalChain?.history || [];
           const lastReturnIdx = historyItems.map((h: any) => h.status).lastIndexOf('RETURNED');
@@ -1325,24 +1325,36 @@ export default function RFQDetailModal({
                     });
                   }
 
-                  // Synthesize any missing Originator RESUBMITTED step after RETURNED
+                  const hasAuthoritativeHistory = Boolean(approvalChain?.history && approvalChain.history.length > 0);
                   const displayList: any[] = [];
-                  for (let i = 0; i < rawList.length; i++) {
-                    const item = rawList[i];
-                    const prev = i > 0 ? rawList[i - 1] : null;
-                    if (prev && prev.status === 'RETURNED' && item.status !== 'RESUBMITTED') {
-                      displayList.push({
-                        id: `originator-resubmit-${item.id || i}`,
-                        levelNumber: 0,
-                        requiredRole: 'Originator / Creator',
-                        status: 'RESUBMITTED',
-                        approverName: rfq?.creator || 'RFQ Originator',
-                        comments: 'RFQ revised and resubmitted for Level 1 approval',
-                        actionAt: item.createdAt || item.actionAt || new Date(),
-                        createdAt: item.createdAt || item.actionAt || new Date(),
-                      });
+                  if (hasAuthoritativeHistory) {
+                    displayList.push(...rawList);
+                  } else {
+                    for (let i = 0; i < rawList.length; i++) {
+                      const item = rawList[i];
+                      const prev = i > 0 ? rawList[i - 1] : null;
+                      const isExplicitReturnToOriginator = Boolean(prev?.comments && /return\s+to\s+(originator|vendor)/i.test(prev.comments));
+                      const isInternalReReview = !isExplicitReturnToOriginator && Boolean(
+                        prev && prev.status === 'RETURNED' && (
+                          ((prev.levelNumber || 0) > 1 && (item.levelNumber || 1) < (prev.levelNumber || 0)) ||
+                          (prev.comments && /level\s*1|internal/i.test(prev.comments)) ||
+                          (item.comments && /return.*(re-review|revision)/i.test(item.comments))
+                        )
+                      );
+                      if (prev && prev.status === 'RETURNED' && item.status !== 'RESUBMITTED' && !isInternalReReview) {
+                        displayList.push({
+                          id: `originator-resubmit-${item.id || i}`,
+                          levelNumber: 0,
+                          requiredRole: 'Originator / Creator',
+                          status: 'RESUBMITTED',
+                          approverName: rfq?.creator || 'RFQ Originator',
+                          comments: 'RFQ revised and resubmitted for Level 1 approval',
+                          actionAt: item.createdAt || item.actionAt || new Date(),
+                          createdAt: item.createdAt || item.actionAt || new Date(),
+                        });
+                      }
+                      displayList.push(item);
                     }
-                    displayList.push(item);
                   }
 
                   return displayList.length > 0 ? (
@@ -2001,24 +2013,36 @@ export default function RFQDetailModal({
                       });
                     }
 
-                    // Synthesize any missing Originator RESUBMITTED step after RETURNED
+                    const hasAuthoritativeHistory = Boolean(approvalChain?.history && approvalChain.history.length > 0);
                     const displayList: any[] = [];
-                    for (let i = 0; i < rawList.length; i++) {
-                      const item = rawList[i];
-                      const prev = i > 0 ? rawList[i - 1] : null;
-                      if (prev && prev.status === 'RETURNED' && item.status !== 'RESUBMITTED') {
-                        displayList.push({
-                          id: `originator-resubmit-${item.id || i}`,
-                          levelNumber: 0,
-                          requiredRole: 'Originator / Creator',
-                          status: 'RESUBMITTED',
-                          approverName: rfq?.creator || 'RFQ Originator',
-                          comments: 'RFQ revised and resubmitted for Level 1 approval',
-                          actionAt: item.createdAt || item.actionAt || new Date(),
-                          createdAt: item.createdAt || item.actionAt || new Date(),
-                        });
+                    if (hasAuthoritativeHistory) {
+                      displayList.push(...rawList);
+                    } else {
+                      for (let i = 0; i < rawList.length; i++) {
+                        const item = rawList[i];
+                        const prev = i > 0 ? rawList[i - 1] : null;
+                        const isExplicitReturnToOriginator = Boolean(prev?.comments && /return\s+to\s+(originator|vendor)/i.test(prev.comments));
+                        const isInternalReReview = !isExplicitReturnToOriginator && Boolean(
+                          prev && prev.status === 'RETURNED' && (
+                            ((prev.levelNumber || 0) > 1 && (item.levelNumber || 1) < (prev.levelNumber || 0)) ||
+                            (prev.comments && /level\s*1|internal/i.test(prev.comments)) ||
+                            (item.comments && /return.*(re-review|revision)/i.test(item.comments))
+                          )
+                        );
+                        if (prev && prev.status === 'RETURNED' && item.status !== 'RESUBMITTED' && !isInternalReReview) {
+                          displayList.push({
+                            id: `originator-resubmit-${item.id || i}`,
+                            levelNumber: 0,
+                            requiredRole: 'Originator / Creator',
+                            status: 'RESUBMITTED',
+                            approverName: rfq?.creator || 'RFQ Originator',
+                            comments: 'RFQ revised and resubmitted for Level 1 approval',
+                            actionAt: item.createdAt || item.actionAt || new Date(),
+                            createdAt: item.createdAt || item.actionAt || new Date(),
+                          });
+                        }
+                        displayList.push(item);
                       }
-                      displayList.push(item);
                     }
 
                     return displayList.length > 0 ? (

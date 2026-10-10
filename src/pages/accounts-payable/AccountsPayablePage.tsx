@@ -54,6 +54,7 @@ import {
   ThumbsUp,
   Wallet,
   X,
+  Filter,
 } from 'lucide-react';
 import '../../components/shared/ColumnCustomizer.css';
 
@@ -529,8 +530,16 @@ export default function AccountsPayablePage() {
     const list = invoicesList;
     const query = search.trim().toLowerCase();
     return list.filter((invoice) => {
+      const matchStatus = statusFilter === 'ALL'
+        ? true
+        : statusFilter === 'RETURNED'
+        ? (invoice.status === 'RETURNED' || invoice.status === 'RE_REVIEW')
+        : statusFilter === 'PENDING'
+        ? (invoice.status === 'PENDING' || invoice.status === 'PENDING_APPROVAL')
+        : invoice.status === statusFilter;
+
       return (
-        (statusFilter === 'ALL' || invoice.status === statusFilter) &&
+        matchStatus &&
         (!query ||
           [invoice.invoiceNumber, invoice.vendorName, invoice.poNumber].some((field) =>
             (field || '').toLowerCase().includes(query)
@@ -867,8 +876,45 @@ export default function AccountsPayablePage() {
           )}
         </div>
 
-        <div className="flex items-center gap-2.5 justify-end shrink-0 sm:ml-auto">
+        <div className="flex flex-wrap items-center gap-2.5 justify-end shrink-0 sm:ml-auto">
+          {/* Status Filter Dropdown */}
+          <div className="relative min-w-[190px]">
+            <Filter size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <select
+              className="h-11 w-full appearance-none rounded-xl border border-input bg-card pl-10 pr-9 text-sm font-medium text-foreground shadow-xs transition-colors hover:bg-accent/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value as any);
+                setCurrentPage(1);
+              }}
+              aria-label="Filter by status"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="DRAFT">Draft</option>
+              <option value="PENDING">Pending Approval</option>
+              <option value="APPROVED">Approved</option>
+              <option value="PAID">Paid</option>
+              <option value="PARTIAL">Partially Paid</option>
+              <option value="OVERDUE">Overdue</option>
+              <option value="RETURNED">Returned for Re-Review</option>
+              <option value="REJECTED">Rejected</option>
+            </select>
+          </div>
 
+          {(statusFilter !== 'ALL' || search) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setStatusFilter('ALL');
+                setSearch('');
+                setCurrentPage(1);
+              }}
+              className="h-11 rounded-xl px-3.5"
+            >
+              Reset filters
+            </Button>
+          )}
         </div>
       </div>
 
@@ -1431,19 +1477,9 @@ export default function AccountsPayablePage() {
                         ))}
                       </div>
                     ) : (
-                      <div className="flex items-center justify-between rounded-lg border border-dashed border-border/70 p-3 text-xs text-muted-foreground bg-muted/10">
-                        <div className="flex items-center gap-2">
-                          <FileText className="size-4 text-muted-foreground/60" />
-                          <span>Digital invoice record (No physical PDF file attached by vendor)</span>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs gap-1.5"
-                          onClick={() => setViewerInvoice(detailInvoice)}
-                        >
-                          <Eye className="size-3.5" /> View Digital Bill
-                        </Button>
+                      <div className="flex items-center gap-2 rounded-lg border border-dashed border-border/70 p-3 text-xs text-muted-foreground bg-muted/10">
+                        <FileText className="size-4 text-muted-foreground/60" />
+                        <span>No physical or digital documents attached by vendor</span>
                       </div>
                     )}
                   </div>

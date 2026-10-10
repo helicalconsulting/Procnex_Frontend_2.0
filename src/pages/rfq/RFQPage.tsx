@@ -5,7 +5,7 @@ import { approvalService } from '../../services/approvalService';
 import { sseClient } from '../../services/sseClient';
 import { useServiceData } from '../../hooks/useServiceData';
 import type { RFQTableRow } from '../../types/viewModels';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
   Plus, Search, FileText, Eye, Trash2, Users, Building2,
@@ -102,12 +102,15 @@ const ALL_COLUMNS: ColumnDef[] = [
     label: 'Status',
     defaultVisible: true,
     render: (rfq) => {
+      const isDocApproved = (rfq.status === 'SENT' || rfq.status === 'IN_PROGRESS' || rfq.status === 'ACCEPTED' || rfq.status === 'APPROVED' || rfq.status === 'CLOSED' || rfq.status === 'PO_CREATED');
       const isApprovedByMe = (rfq as any)._isApprovedByMe;
-      const isReturnedByMe = (rfq as any)._isReturnedByMe;
-      const isRejectedByMe = (rfq as any)._isRejectedByMe;
-      const isReturnedForReReview = (rfq as any)._isReturnedForReReview || rfq.status === 'RE_REVIEW';
+      const isReturnedByMe = !isDocApproved && Boolean((rfq as any)._isReturnedByMe);
+      const isRejectedByMe = !isDocApproved && Boolean((rfq as any)._isRejectedByMe);
+      const isReturnedForReReview = !isDocApproved && Boolean((rfq as any)._isReturnedForReReview || rfq.status === 'RE_REVIEW');
 
-      let displayStatus: string = isApprovedByMe
+      let displayStatus: string = isDocApproved
+        ? 'APPROVED'
+        : isApprovedByMe
         ? 'APPROVED'
         : isReturnedByMe
         ? 'RETURNED'
@@ -115,8 +118,6 @@ const ALL_COLUMNS: ColumnDef[] = [
         ? 'RE_REVIEW'
         : (isRejectedByMe || rfq.status === 'REJECTED')
         ? 'REJECTED'
-        : (rfq.status === 'SENT' || rfq.status === 'IN_PROGRESS' || rfq.status === 'ACCEPTED' || rfq.status === 'APPROVED')
-        ? 'APPROVED'
         : rfq.status;
 
       const label = displayStatus === 'RETURNED'
@@ -271,10 +272,32 @@ export default function RFQPage() {
   const canCreateRFQ = isUserAdmin || hasPermission('RFQ Management', 'canCreate') || hasPermission('RFQ', 'canCreate');
   const canApproveRFQ = hasPermission('RFQ Management', 'canApprove') || hasPermission('RFQ', 'canApprove') || canCreateRFQ;
 
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+  const [searchParams] = useSearchParams();
+  const urlStatus = searchParams.get('status');
+  const urlSearch = searchParams.get('search') || searchParams.get('q');
+  const [search, setSearch] = useState(() => urlSearch || '');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => {
+    if (!urlStatus) return 'ALL';
+    const upper = urlStatus.toUpperCase();
+    if (upper === 'ALL' || upper === 'DRAFT' || upper === 'PENDING_APPROVAL' || upper === 'APPROVED' || upper === 'SENT' || upper === 'RETURNED' || upper === 'REJECTED' || upper === 'CLOSED' || upper === 'CANCELLED' || upper === 'DRAFT_OR_PENDING') {
+      return upper as StatusFilter;
+    }
+    return 'ALL';
+  });
   const [departmentFilter, setDepartmentFilter] = useState<string>('ALL');
   const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    const s = searchParams.get('search') || searchParams.get('q');
+    if (s !== null) {
+      setSearch(s);
+    }
+    const st = searchParams.get('status');
+    if (st) {
+      const upper = st.toUpperCase();
+      setStatusFilter(upper as StatusFilter);
+    }
+  }, [searchParams]);
 
   const { data: rfqList, loading, error, reload, forceRefresh } = useServiceData(
     () => rfqService.list({ limit: 100 }),
@@ -477,18 +500,21 @@ export default function RFQPage() {
   const enrichedRfqList = useMemo(() => {
     return rfqList.map((rfq) => {
       const idStr = String(rfq.id);
+      const isDocApproved = (rfq.status === 'SENT' || rfq.status === 'IN_PROGRESS' || rfq.status === 'ACCEPTED' || rfq.status === 'APPROVED' || rfq.status === 'CLOSED' || rfq.status === 'PO_CREATED');
       const overrideStatus = localStatusMap.get(idStr) || (rfq.rfqNumber && localStatusMap.get(rfq.rfqNumber));
-      const pendingApp = pendingApprovalsMap.get(idStr) || (rfq.rfqNumber && pendingApprovalsMap.get(rfq.rfqNumber));
-      const isApprovedByMe = Boolean((rfq as any)._isApprovedByMe || (overrideStatus === 'APPROVED' && !pendingApp));
-      const isReturnedByMe = Boolean((rfq as any)._isReturnedByMe || (overrideStatus === 'RETURNED' && !pendingApp));
-      const isRejectedByMe = Boolean((rfq as any)._isRejectedByMe || (overrideStatus === 'REJECTED' && !pendingApp));
-      const isReturnedForReReview = !isApprovedByMe && Boolean(
+      const pendingApp = !isDocApproved ? (pendingApprovalsMap.get(idStr) || (rfq.rfqNumber && pendingApprovalsMap.get(rfq.rfqNumber))) : null;
+      const isApprovedByMe = Boolean((rfq as any)._isApprovedByMe || (overrideStatus === 'APPROVED' && !pendingApp) || isDocApproved);
+      const isReturnedByMe = Boolean(!isDocApproved && ((rfq as any)._isReturnedByMe || (overrideStatus === 'RETURNED' && !pendingApp)));
+      const isRejectedByMe = Boolean(!isDocApproved && ((rfq as any)._isRejectedByMe || (overrideStatus === 'REJECTED' && !pendingApp)));
+      const isReturnedForReReview = !isApprovedByMe && !isDocApproved && Boolean(
         pendingApp?.isReturned ||
         (pendingApp?.comments && /return/i.test(pendingApp.comments)) ||
         rfq.status === 'RE_REVIEW' ||
         (rfq as any)._isReturnedForReReview
       );
-      const effectiveStatus = isApprovedByMe
+      const effectiveStatus = isDocApproved
+        ? 'APPROVED'
+        : isApprovedByMe
         ? 'APPROVED'
         : isReturnedByMe
         ? 'RETURNED'
@@ -513,8 +539,8 @@ export default function RFQPage() {
       total: cleanList.length,
       draft: cleanList.filter((r) => r.status === 'DRAFT').length,
       pendingApproval: cleanList.filter((r) => r.status === 'PENDING_APPROVAL').length,
-      draftOrPending: cleanList.filter((r) => r.status === 'DRAFT' || r.status === 'PENDING_APPROVAL' || r.status === 'RETURNED').length,
-      approved: cleanList.filter((r) => r.status === 'APPROVED' || r.status === 'SENT' || r.status === 'IN_PROGRESS' || r.status === 'ACCEPTED').length,
+      draftOrPending: cleanList.filter((r) => r.status === 'DRAFT' || r.status === 'PENDING_APPROVAL' || r.status === 'RETURNED' || r.status === 'RE_REVIEW' || (r as any)._isReturnedForReReview).length,
+      approved: cleanList.filter((r) => r.status === 'APPROVED' || r.status === 'SENT' || r.status === 'IN_PROGRESS' || r.status === 'ACCEPTED' || r.status === 'CLOSED' || r.status === 'PO_CREATED').length,
       rejected: cleanList.filter((r) => r.status === 'REJECTED').length,
     };
   }, [enrichedRfqList]);
@@ -607,7 +633,7 @@ export default function RFQPage() {
     let list = enrichedRfqList.filter((r) => r.title !== 'Direct PO Master' && !r.rfqNumber?.startsWith('RFQ-DIRECT'));
     if (statusFilter !== 'ALL') {
       if (statusFilter === 'APPROVED') {
-        list = list.filter((r) => (r.status === 'APPROVED' || r.status === 'SENT' || r.status === 'IN_PROGRESS' || r.status === 'ACCEPTED' || r._isApprovedByMe) && !r._isReturnedByMe && !r._isRejectedByMe && r.status !== 'RETURNED' && r.status !== 'REJECTED');
+        list = list.filter((r) => (r.status === 'APPROVED' || r.status === 'SENT' || r.status === 'IN_PROGRESS' || r.status === 'ACCEPTED' || r.status === 'CLOSED' || r.status === 'PO_CREATED' || r._isApprovedByMe) && !r._isReturnedByMe && !r._isRejectedByMe && r.status !== 'RETURNED' && r.status !== 'REJECTED');
       } else if (statusFilter === 'DRAFT_OR_PENDING') {
         list = list.filter((r) => (r.status === 'DRAFT' || r.status === 'PENDING_APPROVAL' || r.status === 'RETURNED' || r.status === 'RE_REVIEW') && !r._isApprovedByMe);
       } else if (statusFilter === 'RETURNED') {
@@ -616,6 +642,8 @@ export default function RFQPage() {
         list = list.filter((r) => (r.status === 'PENDING_APPROVAL' || r.status === 'RE_REVIEW' || r._isReturnedForReReview) && !r._isReturnedByMe && !r._isApprovedByMe && !r._isRejectedByMe);
       } else if (statusFilter === 'REJECTED') {
         list = list.filter((r) => r.status === 'REJECTED' || r._isRejectedByMe);
+      } else if (statusFilter === 'SENT') {
+        list = list.filter((r) => r.status === 'SENT' || r.status === 'ACCEPTED' || r.status === 'IN_PROGRESS');
       } else {
         list = list.filter((r) => {
           const effective = r._isReturnedByMe ? 'RETURNED' : r._isRejectedByMe ? 'REJECTED' : r._isApprovedByMe ? 'APPROVED' : r.status;
@@ -814,6 +842,7 @@ export default function RFQPage() {
               <option value="DRAFT">Draft</option>
               <option value="PENDING_APPROVAL">Pending Approval</option>
               <option value="APPROVED">Approved</option>
+              <option value="SENT">Sent</option>
               <option value="RETURNED">Returned for Revision</option>
               <option value="REJECTED">Rejected</option>
               <option value="CLOSED">Closed</option>
@@ -960,9 +989,19 @@ export default function RFQPage() {
                       (rfqCreatorName && userFullName && rfqCreatorName === userFullName)
                     );
 
-                    const pendingApproval = pendingApprovalsMap.get(String(rfq.id)) || pendingApprovalsMap.get(rfq.rfqNumber);
-                    const isPending = (rfq.status === 'PENDING_APPROVAL' || rfq.status === 'RE_REVIEW' || Boolean((rfq as any)._isReturnedForReReview)) && !rfq._isReturnedByMe && !rfq._isRejectedByMe;
-                    const canUserActOnRFQ = isPending && (Boolean(pendingApproval?.canAct) || Boolean(rfq.canUserAct));
+                    const isApprovedDoc = (rfq.status === 'SENT' || rfq.status === 'IN_PROGRESS' || rfq.status === 'ACCEPTED' || rfq.status === 'APPROVED' || rfq.status === 'CLOSED' || rfq.status === 'PO_CREATED');
+                    const pendingApproval = !isApprovedDoc ? (pendingApprovalsMap.get(String(rfq.id)) || pendingApprovalsMap.get(rfq.rfqNumber)) : null;
+
+                    const isReturnedDoc = !isApprovedDoc && Boolean(
+                      rfq.status === 'RETURNED' ||
+                      rfq.status === 'RE_REVIEW' ||
+                      rfq.status === 'RETURN_FOR_RE_REVIEW' ||
+                      (rfq as any)._isReturnedForReReview ||
+                      (rfq as any)._isReturnedByMe
+                    );
+
+                    // User can act on the RFQ if there is an active pending approval for which user is an authorized approver, and has not yet acted in this session
+                    const canUserActOnRFQ = !isApprovedDoc && Boolean(pendingApproval?.canAct) && !rfq._isApprovedByMe && !rfq._isReturnedByMe && !rfq._isRejectedByMe;
                     const canEditThisRFQ = isCreator || isUserAdmin;
 
                     return (
@@ -1008,7 +1047,7 @@ export default function RFQPage() {
                                   size="icon-sm"
                                   className="text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-700"
                                   onClick={() => openApprovalAction(rfq, 'approve')}
-                                  title="Approve RFQ Level"
+                                  title={pendingApproval?.isReturned ? 'Approve RFQ Re-Review' : 'Approve RFQ Level'}
                                 >
                                   <ThumbsUp className="size-4" />
                                 </Button>
@@ -1033,7 +1072,7 @@ export default function RFQPage() {
                               </>
                             )}
 
-                            {canEditThisRFQ && (rfq.status === 'DRAFT' || rfq.status === 'RETURNED' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW') && (
+                            {canEditThisRFQ && !canUserActOnRFQ && (rfq.status === 'DRAFT' || isReturnedDoc) && (
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
@@ -1085,6 +1124,9 @@ export default function RFQPage() {
                   (creatorId && currentUserId && creatorId === currentUserId) ||
                   (rfqCreatorName && userFullName && (rfqCreatorName === userFullName || userFullName.includes(rfqCreatorName) || rfqCreatorName.includes(userFullName)))
                 );
+                const isApprovedDoc = (rfq.status === 'SENT' || rfq.status === 'IN_PROGRESS' || rfq.status === 'ACCEPTED' || rfq.status === 'APPROVED' || rfq.status === 'CLOSED' || rfq.status === 'PO_CREATED');
+                const pendingApproval = !isApprovedDoc ? (pendingApprovalsMap.get(String(rfq.id)) || pendingApprovalsMap.get(rfq.rfqNumber)) : null;
+                const canUserActOnRFQ = !isApprovedDoc && Boolean(pendingApproval?.canAct) && !rfq._isApprovedByMe && !rfq._isReturnedByMe && !rfq._isRejectedByMe;
                 const canEditThisRFQ = isCreator || isUserAdmin;
 
                 return (
@@ -1096,10 +1138,32 @@ export default function RFQPage() {
                           <p className="mt-1 truncate text-sm font-medium">{rfq.title}</p>
                         </div>
                         {(() => {
-                          const isReturnedByMe = (rfq as any)._isReturnedByMe || rfq.status === 'RETURNED' || rfq.status === 'RETURN_FOR_RE_REVIEW';
-                          const isReturnedForReReview = (rfq as any)._isReturnedForReReview || rfq.status === 'RE_REVIEW';
-                          const displayStatus = isReturnedByMe ? 'RETURNED' : isReturnedForReReview ? 'RE_REVIEW' : rfq.status;
-                          const label = displayStatus === 'RETURNED' ? 'Returned for Revision' : displayStatus === 'RE_REVIEW' ? 'Returned (Re-Review)' : (STATUS_LABELS[displayStatus] || displayStatus);
+                          const isApprovedByMe = (rfq as any)._isApprovedByMe;
+                          const isRejectedByMe = !isApprovedDoc && Boolean((rfq as any)._isRejectedByMe);
+                          const isReturnedByMe = !isApprovedDoc && Boolean((rfq as any)._isReturnedByMe || rfq.status === 'RETURNED' || rfq.status === 'RETURN_FOR_RE_REVIEW');
+                          const isReturnedForReReview = !isApprovedDoc && Boolean((rfq as any)._isReturnedForReReview || rfq.status === 'RE_REVIEW');
+                          const displayStatus = isApprovedDoc
+                            ? 'APPROVED'
+                            : isApprovedByMe
+                            ? 'APPROVED'
+                            : isReturnedByMe
+                            ? 'RETURNED'
+                            : isReturnedForReReview
+                            ? 'RE_REVIEW'
+                            : (isRejectedByMe || rfq.status === 'REJECTED')
+                            ? 'REJECTED'
+                            : rfq.status;
+                          const label = displayStatus === 'RETURNED'
+                            ? 'Returned for Revision'
+                            : displayStatus === 'RE_REVIEW'
+                            ? 'Returned (Re-Review)'
+                            : (displayStatus === 'APPROVED' || displayStatus === 'SENT')
+                            ? 'Approved'
+                            : displayStatus === 'ACCEPTED'
+                            ? 'Accepted'
+                            : displayStatus === 'REJECTED'
+                            ? 'Rejected'
+                            : (STATUS_LABELS[displayStatus] || displayStatus);
                           return (
                             <Badge tone={statusTone(displayStatus)} className="shrink-0">
                               {label}
@@ -1112,8 +1176,36 @@ export default function RFQPage() {
                         <div><dt className="text-muted-foreground">Estimate</dt><dd className="mt-1 font-semibold tabular-nums">{rfq.totalEstimate}</dd></div>
                       </dl>
                     </button>
-                    <div className="mt-4 flex gap-2 border-t border-border/60 pt-3">
-                      {canEditThisRFQ && (rfq.status === 'DRAFT' || rfq.status === 'RETURNED' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW') && (
+                    <div className="mt-4 flex flex-wrap gap-2 border-t border-border/60 pt-3">
+                      {canUserActOnRFQ && (
+                        <div className="flex w-full gap-2">
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                            onClick={() => openApprovalAction(rfq, 'approve')}
+                          >
+                            <ThumbsUp className="size-3.5 mr-1" /> Approve
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1 text-amber-600 border-amber-500/30 hover:bg-amber-500/10"
+                            onClick={() => openApprovalAction(rfq, 'return')}
+                          >
+                            <RotateCcw className="size-3.5 mr-1" /> Return
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            className="flex-1"
+                            onClick={() => openApprovalAction(rfq, 'reject')}
+                          >
+                            <ThumbsDown className="size-3.5 mr-1" /> Reject
+                          </Button>
+                        </div>
+                      )}
+                      {canEditThisRFQ && !canUserActOnRFQ && (rfq.status === 'DRAFT' || rfq.status === 'RETURNED' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW' || (rfq as any)._isReturnedForReReview || (rfq as any)._isReturnedByMe) && (
                         <Button variant="default" size="sm" className="flex-1" onClick={() => navigate(`/rfq/edit/${rfq.id}`)}>
                           <PenLine className="size-3.5 mr-1" /> {rfq.status === 'DRAFT' ? 'Edit Draft' : 'Edit & Resubmit'}
                         </Button>

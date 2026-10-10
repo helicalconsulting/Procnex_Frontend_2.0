@@ -24,13 +24,18 @@ async function mockKpis(): Promise<KpiItem[]> {
 }
 
 async function apiKpis(): Promise<KpiItem[]> {
-  const [o, tasksRes] = await Promise.all([
+  const [o, tasksRes, approvalsRes] = await Promise.all([
     apiRequest<DashboardOverview>('/dashboard/overview'),
     apiRequest<{ tasks: Array<{ type: string; count: number; label: string; link: string }>; taskCount: number }>('/dashboard/my-tasks'),
+    apiRequest<{ approvals?: Array<{ status: string }> }>('/approvals').catch(() => ({ approvals: [] })),
   ]);
+  const pendingApprovalsCount = Array.isArray(approvalsRes?.approvals)
+    ? approvalsRes.approvals.filter((a) => ['PENDING', 'RETURNED'].includes(String(a.status || ''))).length
+    : (o.rfqs?.pendingApproval || 0);
+
   return [
     { id: 'rfq', label: 'Open RFQs', value: String(o.rfqs.total), trend: '', direction: 'neutral', modifier: 'rfq' },
-    { id: 'approvals', label: 'Pending Eval', value: String(o.rfqs.pendingApproval), trend: '', direction: 'neutral', modifier: 'approvals' },
+    { id: 'approvals', label: 'Pending Eval', value: String(Math.max(pendingApprovalsCount, o.rfqs?.pendingApproval || 0)), trend: '', direction: 'neutral', modifier: 'approvals' },
     { id: 'pos', label: 'Purchase Orders', value: String(o.purchaseOrders.total), trend: '', direction: 'neutral', modifier: 'pos' },
     { id: 'vendors', label: 'Active Vendors', value: String(o.vendors.total), trend: '', direction: 'neutral', modifier: 'vendors' },
     { id: 'quotes', label: 'Active Quotations', value: String(o.quotations.active), trend: '', direction: 'neutral', modifier: 'spend' },

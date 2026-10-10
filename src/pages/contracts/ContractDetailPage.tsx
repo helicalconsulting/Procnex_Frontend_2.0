@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { contractService, type Contract, type ContractItem, type ContractClause, type ContractSLAEntry, type ContractMilestone, type ContractBalance } from '../../services/contractService';
@@ -353,7 +353,19 @@ export default function ContractDetailPage() {
   const [searchParams] = useSearchParams();
   const { formatAmount, companyDefaultCurrency } = useCurrency();
 
-  const [activeTab, setActiveTab] = useState<string>('overview');
+  const location = useLocation();
+  const resolveInitialTab = useCallback((tab: string | null | undefined): string => {
+    if (!tab) return 'overview';
+    if (tab === 'orders' || tab === 'purchase-orders' || tab === 'po') return 'purchase-orders';
+    if (['overview', 'terms', 'signatures', 'documents', 'activity'].includes(tab)) return tab;
+    return 'overview';
+  }, []);
+
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    const fromQuery = searchParams.get('tab');
+    const fromState = (location.state as any)?.tab;
+    return resolveInitialTab(fromQuery || fromState);
+  });
   const [showSignModal, setShowSignModal] = useState(false);
   const [signing, setSigning] = useState(false);
   const [pageMsg, setPageMsg] = useState<string | null>(null);
@@ -437,11 +449,11 @@ export default function ContractDetailPage() {
     if (searchParams.get('action') === 'sign' && data && !showSignModal) {
       setShowSignModal(true);
     }
-    const tabParam = searchParams.get('tab');
-    if (tabParam === 'orders') {
-      setActiveTab('purchase-orders');
+    const tabParam = searchParams.get('tab') || (location.state as any)?.tab;
+    if (tabParam) {
+      setActiveTab(resolveInitialTab(tabParam));
     }
-  }, [searchParams, data]);
+  }, [searchParams, location.state, data, showSignModal, resolveInitialTab]);
 
   // ─── Handlers (moved BEFORE early returns to obey Rules of Hooks) ─
   const handleSign = useCallback(async (signerName: string, signerTitle: string, signatureDataUrl: string) => {
@@ -1168,8 +1180,8 @@ export default function ContractDetailPage() {
                 </div>
               </>
             ) : (
-              <div className="ctr-detail__po-empty">
-                <div className="ctr-detail__po-empty-icon"><Package size={36} /></div>
+              <div className="ctr-detail__po-empty flex flex-col items-center justify-center text-center">
+                <div className="ctr-detail__po-empty-icon flex items-center justify-center mx-auto mb-3.5"><Package size={36} /></div>
                 <p style={{ fontWeight: 600 }}>No Purchase Orders Yet</p>
                 <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 20 }}>
                   {isAccepted 
@@ -1205,8 +1217,8 @@ export default function ContractDetailPage() {
                 </div>
               ))
             ) : (
-              <div className="ctr-detail__po-empty">
-                <div className="ctr-detail__po-empty-icon"><Activity size={36} /></div>
+              <div className="ctr-detail__po-empty flex flex-col items-center justify-center text-center">
+                <div className="ctr-detail__po-empty-icon flex items-center justify-center mx-auto mb-3.5"><Activity size={36} /></div>
                 <p style={{ fontWeight: 600 }}>No activity recorded</p>
                 <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Activities and changes to this contract will be logged here.</p>
               </div>
