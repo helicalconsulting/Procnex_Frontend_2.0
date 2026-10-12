@@ -2109,9 +2109,29 @@ function QuotationAcceptedModalInner({
   const { formatAmount } = useCurrency();
   const canShowOptions = !isNextLevel && canPerformPostAward(q, user, roles);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' || e.key === 'Enter') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
     <div className="qam-accepted-backdrop" onClick={onClose}>
       <div className="qam-accepted-modal" onClick={(e) => e.stopPropagation()}>
+        {/* Top Right Close Cross Button */}
+        <button
+          type="button"
+          className="qam-accepted__close-btn"
+          onClick={onClose}
+          aria-label="Close modal"
+        >
+          <X size={18} />
+        </button>
+
         {/* Glowing Success Icon */}
         <div className="qam-accepted__icon-wrap">
           <div className="qam-accepted__icon-ring" />
@@ -2197,11 +2217,12 @@ function QuotationAcceptedModalInner({
         <div className="qam-accepted__actions">
           <button
             type="button"
-            className="qam-accepted__btn qam-accepted__btn--secondary"
+            className="qam-accepted__btn qam-accepted__btn--ok"
             onClick={onClose}
             style={{ width: '100%', justifyContent: 'center' }}
+            autoFocus
           >
-            <X size={15} /> Cancel / Continue Comparison
+            OK
           </button>
         </div>
       </div>

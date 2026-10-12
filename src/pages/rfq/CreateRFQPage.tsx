@@ -386,6 +386,7 @@ export default function CreateRFQPage() {
     label: string;
     fieldType: string;
     value: string;
+    options?: string[];
   }
   const [infoExtraFields, setInfoExtraFields] = useState<InfoExtraField[]>([]);
   const [showInfoFieldMenu, setShowInfoFieldMenu] = useState(false);
@@ -393,7 +394,7 @@ export default function CreateRFQPage() {
   const addInfoExtraField = useCallback((field: FormFieldConfig) => {
     setInfoExtraFields((prev) => [
       ...prev,
-      { id: `ief_${Date.now()}`, fieldKey: field.fieldKey, label: field.label, fieldType: field.fieldType, value: '' },
+      { id: `ief_${Date.now()}`, fieldKey: field.fieldKey, label: field.label, fieldType: field.fieldType, value: '', options: field.options },
     ]);
     setShowInfoFieldMenu(false);
   }, []);
@@ -1143,12 +1144,53 @@ export default function CreateRFQPage() {
                     type="file"
                     onChange={(e) => updateInfoExtraFieldValue(ef.id, e.target.files?.[0]?.name || '')}
                   />
-                ) : ef.fieldType === 'number' ? (
+                ) : ef.fieldType === 'number' || ef.fieldType === 'numerical' ? (
                   <input
                     className="create-rfq__input"
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     value={ef.value}
-                    placeholder={`Enter ${ef.label.toLowerCase() || 'value'}`}
+                    placeholder={`Enter ${ef.label.toLowerCase() || 'numbers only'}`}
+                    onChange={(e) => updateInfoExtraFieldValue(ef.id, e.target.value.replace(/[^0-9]/g, ''))}
+                  />
+                ) : ef.fieldType === 'alphabetical' || ef.fieldType === 'alphabetic' ? (
+                  <input
+                    className="create-rfq__input"
+                    type="text"
+                    value={ef.value}
+                    placeholder={`Enter ${ef.label.toLowerCase() || 'letters only'}`}
+                    onChange={(e) => updateInfoExtraFieldValue(ef.id, e.target.value.replace(/[^a-zA-Z\s]/g, ''))}
+                  />
+                ) : ef.fieldType === 'dropdown' ? (
+                  <select
+                    className="create-rfq__input"
+                    value={ef.value}
+                    onChange={(e) => updateInfoExtraFieldValue(ef.id, e.target.value)}
+                  >
+                    <option value="">-- Select {ef.label || 'Option'} --</option>
+                    {(ef.options || []).map((opt, optIdx) => (
+                      <option key={optIdx} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                ) : ef.fieldType === 'checkbox' ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38 }}>
+                    <input
+                      type="checkbox"
+                      id={`ief_chk_${ef.id}`}
+                      checked={ef.value === 'Yes'}
+                      onChange={(e) => updateInfoExtraFieldValue(ef.id, e.target.checked ? 'Yes' : 'No')}
+                      style={{ width: 18, height: 18, cursor: 'pointer' }}
+                    />
+                    <label htmlFor={`ief_chk_${ef.id}`} style={{ cursor: 'pointer', fontSize: 14, color: 'var(--text-primary)' }}>
+                      {ef.label || 'Checked'}
+                    </label>
+                  </div>
+                ) : ef.fieldType === 'date' ? (
+                  <input
+                    className="create-rfq__input"
+                    type="date"
+                    value={ef.value}
                     onChange={(e) => updateInfoExtraFieldValue(ef.id, e.target.value)}
                   />
                 ) : (

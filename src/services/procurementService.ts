@@ -85,7 +85,7 @@ export interface VendorInvitationRow {
   items?: Array<{ itemCode: string; itemName: string }> | null;
   selectedDocuments?: Array<{ name: string; isRequired: boolean }> | null;
   documentIds?: string[];
-  flexiFields?: Array<{ fieldKey?: string; label: string; fieldType: string }> | null;
+  flexiFields?: Array<{ fieldKey?: string; label: string; fieldType: string; options?: string[] }> | null;
   flexiFieldValues?: Record<string, string> | null;
 }
 
@@ -99,7 +99,7 @@ export interface SendInvitationPayload {
   notes?: string;
   items?: Array<{ itemCode: string; itemName: string }>;
   documentIds?: string[];
-  flexiFields?: Array<{ fieldKey: string; label: string; fieldType: string }>;
+  flexiFields?: Array<{ fieldKey: string; label: string; fieldType: string; options?: string[] }>;
   ndaMndaRequired?: boolean;
   ndaRequired?: boolean;
   mndaRequired?: boolean;

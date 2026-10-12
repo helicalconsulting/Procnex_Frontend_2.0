@@ -630,7 +630,8 @@
 
   .po-doc__party-box,
   .po-doc__info-grid,
-  .po-doc__notes-col {
+  .po-doc__notes-col,
+  .po-doc__stamp-card {
     break-inside: avoid;
     background: #f8fafc !important;
     border: 1px solid #cbd5e1 !important;
@@ -652,6 +653,155 @@
   .po-doc__footer {
     position: running(footer);
   }
+}
+
+/* ── Approvals & Authorization Stamps (Document Bottom) ── */
+.po-doc__approvals-section {
+  margin-top: 14px;
+  break-inside: avoid;
+}
+
+.po-doc__approvals-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: #059669;
+  margin: 0 0 12px 0;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.po-doc__approvals-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.po-doc__stamp-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  break-inside: avoid;
+}
+
+.po-doc__stamp-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.po-doc__stamp-level-pill {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #0f172a;
+  background: #e2e8f0;
+  padding: 2px 7px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.po-doc__stamp-status-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3.5px;
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.po-doc__stamp-status-tag--approved {
+  color: #059669;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+}
+
+.po-doc__stamp-status-tag--pending {
+  color: #d97706;
+  background: #fffbe3;
+  border: 1px solid #fde68a;
+}
+
+.po-doc__stamp-card-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.po-doc__stamp-role {
+  font-size: 11px;
+  font-weight: 700;
+  color: #0a2342;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.po-doc__stamp-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.po-doc__stamp-date {
+  font-size: 10.5px;
+  color: #64748b;
+  margin-top: 1px;
+}
+
+.po-doc__stamp-signature {
+  background: #ffffff;
+  border: 1px dashed #cbd5e1;
+  border-radius: 6px;
+  padding: 8px;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  margin-top: auto;
+}
+
+.po-doc__stamp-sig-pending {
+  font-size: 11px;
+  font-style: italic;
+  color: #94a3b8;
+}
+
+.po-doc__stamp-sig-active {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.po-doc__stamp-sig-img {
+  max-height: 48px;
+  max-width: 180px;
+  object-fit: contain;
+}
+
+.po-doc__stamp-sig-seal {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #0284c7;
+}
+
+.po-doc__stamp-sig-fallback {
+  font-family: 'Caveat', 'Dancing Script', 'Brush Script MT', cursive;
+  font-size: 24px;
+  font-style: italic;
+  color: #0f172a;
 }
 
 @page {

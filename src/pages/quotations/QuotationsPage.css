@@ -4348,6 +4348,31 @@
   border-color: rgba(255, 255, 255, 0.2);
 }
 
+.qam-accepted__close-btn {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-elevated, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  color: var(--text-secondary, #9ca3af);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.qam-accepted__close-btn:hover {
+  background: var(--surface-hover, rgba(255, 255, 255, 0.14));
+  color: var(--text-primary, #ffffff);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: scale(1.05);
+}
+
 .qam-accepted__btn--primary {
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   color: #ffffff;
@@ -4358,6 +4383,23 @@
   background: linear-gradient(135deg, #059669 0%, #047857 100%);
   transform: translateY(-1px);
   box-shadow: 0 6px 18px rgba(16, 185, 129, 0.4);
+}
+
+.qam-accepted__btn--ok {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 700;
+  height: 44px;
+  border-radius: 12px;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+  letter-spacing: 0.02em;
+}
+
+.qam-accepted__btn--ok:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.45);
 }
 
 /* ─── SAP Fiori Styled Action Buttons (Create PO / Create Contract) ─── */

@@ -35,6 +35,7 @@ import { approvalService } from '../../services/approvalService';
 import { signatureService } from '../../services/signatureService';
 import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
 import { DigitalSignatureApprovalModal } from '../../components/shared/DigitalSignatureApprovalModal';
+import PrintPurchaseOrderModal from '../../components/purchase-orders/PrintPurchaseOrderModal';
 import { sseClient } from '../../services/sseClient';
 import { downloadPurchaseOrderAsPdf } from '../../utils/pdfDownload';
 import { toNumber } from '../../api/normalize';
@@ -272,6 +273,7 @@ export default function PurchaseOrdersPage() {
   const [showBatchDeleteModal, setShowBatchDeleteModal] = useState(false);
   const [batchDeleting, setBatchDeleting] = useState(false);
   const [pageMsg, setPageMsg] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [printPO, setPrintPO] = useState<MockPO | null>(null);
 
   const [actionModal, setActionModal] = useState<{ order: MockPO; action: 'approve' | 'reject' | 'return' } | null>(null);
   const [actionComment, setActionComment] = useState('');
@@ -1015,6 +1017,14 @@ export default function PurchaseOrdersPage() {
                             <Button
                               variant="ghost"
                               size="icon-sm"
+                              onClick={() => setPrintPO(order)}
+                              title={`View / Print ${order.poNumber}`}
+                            >
+                              <Printer className="size-4 text-primary" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
                               onClick={() => downloadPurchaseOrderAsPdf(order, formatAmount, companyDefaultCurrency)}
                               title={`Download ${order.poNumber}`}
                             >
@@ -1073,6 +1083,9 @@ export default function PurchaseOrdersPage() {
                   <div className="flex gap-1.5">
                     <Button variant="ghost" size="sm" onClick={() => setDetailPO(order)}>
                       <Eye /> Details
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setPrintPO(order)}>
+                      <Printer /> View
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => downloadPurchaseOrderAsPdf(order, formatAmount, companyDefaultCurrency)}>
                       <Download /> PDF
@@ -1315,8 +1328,14 @@ export default function PurchaseOrdersPage() {
                     </Button>
                   </>
                 ) : null; })()}
+                <Button
+                  variant="outline"
+                  onClick={() => setPrintPO(detailPO)}
+                >
+                  <Printer className="size-4 mr-1.5" /> View / Print Official PO
+                </Button>
                 <Button onClick={() => downloadPurchaseOrderAsPdf(detailPO, formatAmount, companyDefaultCurrency)}>
-                  <Download className="size-4" /> Download PDF Document
+                  <Download className="size-4 mr-1.5" /> Download PDF Document
                 </Button>
                 <Button variant="outline" onClick={() => setDetailPO(null)}>
                   Close
@@ -1328,117 +1347,132 @@ export default function PurchaseOrdersPage() {
       </Dialog>
 
       {/* Action Dialog */}
-      <Dialog open={!!actionModal} onOpenChange={(open) => { if (!open && !actionSaving) setActionModal(null); }}>
-        {actionModal && (
-          <DialogContent>
-            <DialogHeader>
-              <div
-                className={cn(
-                  'mb-2 grid size-11 place-items-center rounded-xl',
-                  actionModal.action === 'approve'
-                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                    : actionModal.action === 'reject'
-                    ? 'bg-destructive/10 text-destructive'
-                    : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                )}
-              >
-                {actionModal.action === 'approve' ? (
-                  <ThumbsUp className="size-5" />
-                ) : actionModal.action === 'reject' ? (
-                  <ThumbsDown className="size-5" />
-                ) : (
-                  <RotateCcw className="size-5" />
-                )}
-              </div>
-              <DialogTitle>
-                {actionModal.action === 'approve'
-                  ? `Approve Purchase Order ${actionModal.order.poNumber}?`
-                  : actionModal.action === 'reject'
-                  ? `Reject PO ${actionModal.order.poNumber}?`
-                  : `Return PO ${actionModal.order.poNumber}?`}
-              </DialogTitle>
-              <DialogDescription>
-                {actionModal.action === 'approve'
-                  ? 'Approving this purchase order will advance it through the approval workflow.'
-                  : actionModal.action === 'reject'
-                  ? 'Rejecting this purchase order will decline the request.'
-                  : 'Returning this purchase order will send it back for revision.'}
-              </DialogDescription>
-            </DialogHeader>
+      {actionModal && actionModal.action === 'approve' ? (
+        <DigitalSignatureApprovalModal
+          open={!!actionModal}
+          onClose={() => setActionModal(null)}
+          onConfirm={handleSignatureConfirm}
+          docTitle={`Purchase Order ${actionModal.order.poNumber}`}
+          docDetails={[
+            { label: 'PO Number', value: actionModal.order.poNumber },
+            { label: 'Vendor Name', value: actionModal.order.vendorName },
+            { label: 'Total Amount', value: formatAmount(actionModal.order.totalAmountNum, companyDefaultCurrency) },
+            { label: 'Expected Delivery', value: formatDate(actionModal.order.expectedDelivery) },
+          ]}
+        />
+      ) : (
+        <Dialog open={!!actionModal} onOpenChange={(open) => { if (!open && !actionSaving) setActionModal(null); }}>
+          {actionModal && (
+            <DialogContent>
+              <DialogHeader>
+                <div
+                  className={cn(
+                    'mb-2 grid size-11 place-items-center rounded-xl',
+                    actionModal.action === 'reject'
+                      ? 'bg-destructive/10 text-destructive'
+                      : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                  )}
+                >
+                  {actionModal.action === 'reject' ? (
+                    <ThumbsDown className="size-5" />
+                  ) : (
+                    <RotateCcw className="size-5" />
+                  )}
+                </div>
+                <DialogTitle>
+                  {actionModal.action === 'reject'
+                    ? `Reject PO ${actionModal.order.poNumber}?`
+                    : `Return PO ${actionModal.order.poNumber}?`}
+                </DialogTitle>
+                <DialogDescription>
+                  {actionModal.action === 'reject'
+                    ? 'Rejecting this purchase order will decline the request.'
+                    : 'Returning this purchase order will send it back for revision.'}
+                </DialogDescription>
+              </DialogHeader>
 
-            <div className="rounded-xl border border-border/70 bg-muted/30 p-3 space-y-1.5 text-xs">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Vendor:</span>
-                <span className="font-semibold text-foreground">{actionModal.order.vendorName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Total Amount:</span>
-                <span className="font-semibold text-foreground">{formatAmount(actionModal.order.totalAmountNum, companyDefaultCurrency)}</span>
-              </div>
-              {actionModal.order.expectedDelivery && (
+              <div className="rounded-xl border border-border/70 bg-muted/30 p-3 space-y-1.5 text-xs">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Expected Delivery:</span>
-                  <span className="font-semibold text-foreground">{formatDate(actionModal.order.expectedDelivery)}</span>
+                  <span className="text-muted-foreground">Vendor:</span>
+                  <span className="font-semibold text-foreground">{actionModal.order.vendorName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Total Amount:</span>
+                  <span className="font-semibold text-foreground">{formatAmount(actionModal.order.totalAmountNum, companyDefaultCurrency)}</span>
+                </div>
+                {actionModal.order.expectedDelivery && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Expected Delivery:</span>
+                    <span className="font-semibold text-foreground">{formatDate(actionModal.order.expectedDelivery)}</span>
+                  </div>
+                )}
+              </div>
+
+              {actionModal.action === 'return' && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-foreground">Return to</label>
+                  <select
+                    className="h-10 rounded-xl border border-input bg-background px-3 text-sm font-medium focus:ring-2 focus:ring-primary/20"
+                    value={actionReturnTarget}
+                    onChange={(e) => setActionReturnTarget(e.target.value as any)}
+                  >
+                    <option value="ORIGINATOR">Originator / Creator for Resubmission</option>
+                    <option value="LEVEL_1">Level 1 Approver</option>
+                  </select>
                 </div>
               )}
-            </div>
 
-            {actionModal.action === 'return' && (
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-foreground">Return to</label>
-                <select
-                  className="h-10 rounded-xl border border-input bg-background px-3 text-sm font-medium focus:ring-2 focus:ring-primary/20"
-                  value={actionReturnTarget}
-                  onChange={(e) => setActionReturnTarget(e.target.value as any)}
-                >
-                  <option value="ORIGINATOR">Originator / Creator for Resubmission</option>
-                  <option value="LEVEL_1">Level 1 Approver</option>
-                </select>
+              <div className="space-y-2 py-1">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Comments / Reason <span className="text-destructive">*</span>
+                </label>
+                <Input
+                  placeholder="Required comment explaining the decision..."
+                  value={actionComment}
+                  onChange={(e) => setActionComment(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleAction(); }}
+                />
               </div>
-            )}
 
-            <div className="space-y-2 py-1">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Comments / Reason {actionModal.action !== 'approve' && <span className="text-destructive">*</span>}
-              </label>
-              <Input
-                placeholder={
-                  actionModal.action === 'approve'
-                    ? 'Optional approval comments...'
-                    : 'Required comment explaining the decision...'
-                }
-                value={actionComment}
-                onChange={(e) => setActionComment(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleAction(); }}
-              />
-            </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setActionModal(null)} disabled={actionSaving}>
+                  Cancel
+                </Button>
+                <Button
+                  variant={actionModal.action === 'reject' ? 'destructive' : 'default'}
+                  loading={actionSaving}
+                  onClick={handleAction}
+                >
+                  {actionModal.action === 'reject'
+                    ? 'Confirm Rejection'
+                    : 'Confirm Return'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          )}
+        </Dialog>
+      )}
 
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setActionModal(null)} disabled={actionSaving}>
-                Cancel
-              </Button>
-              <Button
-                variant={
-                  actionModal.action === 'approve'
-                    ? 'default'
-                    : actionModal.action === 'reject'
-                    ? 'destructive'
-                    : 'default'
-                }
-                className={actionModal.action === 'approve' ? 'bg-emerald-600 hover:bg-emerald-700 text-white font-medium' : undefined}
-                loading={actionSaving}
-                onClick={handleAction}
-              >
-                {actionModal.action === 'approve'
-                  ? 'Confirm Approval'
-                  : actionModal.action === 'reject'
-                  ? 'Confirm Rejection'
-                  : 'Confirm Return'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        )}
-      </Dialog>
+      {/* Official Printable PO Modal */}
+      {printPO && (
+        <PrintPurchaseOrderModal
+          data={{
+            id: printPO.id,
+            referenceNumber: printPO.poNumber,
+            title: `Purchase Order for ${printPO.vendorName}`,
+            amount: printPO.totalAmountNum || printPO.totalAmount || 0,
+            requestedBy: printPO.requisitioner || 'Procurement',
+            department: printPO.department || 'Procurement',
+            priority: printPO.priority || 'MEDIUM',
+            status: printPO.status || 'PENDING',
+            submittedAt: printPO.poDate || printPO.createdAt || new Date().toISOString(),
+            vendorName: printPO.vendorName,
+            comments: printPO.notes || printPO.comments,
+            items: printPO.items,
+          }}
+          onClose={() => setPrintPO(null)}
+        />
+      )}
 
       {/* Delete Single Modal */}
       <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open && !deleting) setDeleteTarget(null); }}>

@@ -22,10 +22,11 @@
 .rfq-toolbar__search { position: relative; flex: 1 1 300px; max-width: 560px; }
 .rfq-toolbar__actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .rfq-toolbar select { min-height: 40px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-card); color: var(--text-primary); padding: 8px 30px 8px 10px; }
-.rfq-register { border: 1px solid var(--border); border-radius: 14px; background: var(--surface-card); overflow: hidden; }
+.rfq-register { border: 1px solid var(--border); border-radius: 14px; background: var(--surface-card); overflow: hidden; contain: layout style; }
 .rfq-register__head, .rfq-register__row { display: grid; grid-template-columns: minmax(180px, 1.35fr) minmax(140px, 1fr) minmax(135px, .85fr) minmax(140px, .95fr) minmax(145px, .85fr); gap: 20px; align-items: center; padding: 18px 20px; }
 .rfq-register__head { background: var(--surface-elevated); color: var(--text-secondary); padding-block: 12px; font-weight: 600; }
 .rfq-register__entry + .rfq-register__entry { border-top: 1px solid var(--border); }
+.rfq-register__entry { contain: layout style; }
 .rfq-register__entry[data-expanded="true"] { background: color-mix(in srgb, var(--accent) 30%, var(--surface-card)); }
 .rfq-register__row > * { min-width: 0; }
 .rfq-register__identity { display: flex; flex-direction: column; gap: 5px; overflow-wrap: anywhere; }
@@ -64,7 +65,17 @@
 .rfq-facts dt { margin-bottom: 7px; }
 .rfq-facts dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .rfq-section-heading .vrfq-card__items-title { margin: 0; }
-.rfq-table-scroll { overflow: auto; max-height: 360px; border: 1px solid var(--border); border-radius: 10px; margin-top: 12px; overscroll-behavior: contain; }
+.rfq-table-scroll {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 480px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-top: 12px;
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
 .rfq-pricing-table { width: 100%; border-collapse: collapse; min-width: 540px; }
 .rfq-pricing-table th { position: sticky; top: 0; background: var(--surface-elevated); color: var(--text-secondary); z-index: 1; }
 .rfq-pricing-table :is(th, td) { padding: 13px 16px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }

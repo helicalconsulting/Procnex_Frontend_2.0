@@ -184,6 +184,26 @@ export default function PurchaseRequisitionPage() {
       .then((res) => {
         const list = res.vendors || res.data || [];
         setVendorsList(list);
+        setPr((prev) => {
+          if (!prev) return prev;
+          if (!prev.vendorAddress && prev.vendorName) {
+            const v = list.find((item: any) =>
+              (item.name && item.name.toLowerCase().trim() === prev.vendorName.toLowerCase().trim()) ||
+              item.id === (prev as any).vendorId ||
+              item.id === (prev as any).selectedVendorId
+            );
+            if (v && (v.address || v.location)) {
+              return {
+                ...prev,
+                vendorAddress: v.address || v.location || prev.vendorAddress,
+                vendorPhone: prev.vendorPhone || v.phone,
+                vendorEmail: prev.vendorEmail || v.email,
+                vendorGstVat: prev.vendorGstVat || v.gstNumber || v.panNumber,
+              };
+            }
+          }
+          return prev;
+        });
       })
       .catch(() => {});
 
@@ -352,9 +372,14 @@ export default function PurchaseRequisitionPage() {
         // Fetch company profile
         let profile: Record<string, any> = {};
         try {
-          profile = await companySettingsService.getProfile();
+          profile = await companySettingsService.getCompanyProfile();
           setCompanyProfile(profile);
-        } catch {}
+        } catch {
+          if ((branding as any)?.profile) {
+            profile = (branding as any).profile;
+            setCompanyProfile(profile);
+          }
+        }
 
         // Build items from RFQ items + quotation items
         // Fetch the full quotation separately — RFQQuotationSummary doesn't include line items
@@ -427,7 +452,15 @@ export default function PurchaseRequisitionPage() {
         // Recalc totals
         items.forEach(i => { i.total = calcItemTotal(i); });
 
-        const vendor = quotation?.vendor || rfqData.vendors?.[0] || contract?.vendor || {};
+        const rawVendor = quotation?.vendor || rfqData.vendors?.[0] || contract?.vendor || {};
+        const matchedVendorFromMaster = vendorsList.find((vl: any) =>
+          vl.id === rawVendor.id ||
+          vl.id === contract?.vendorId ||
+          (rawVendor.name && vl.name?.toLowerCase().trim() === rawVendor.name?.toLowerCase().trim())
+        );
+        const vendor = matchedVendorFromMaster ? { ...matchedVendorFromMaster, ...rawVendor } : rawVendor;
+        const resolvedVendorAddress = vendor?.address || (vendor as any)?.location || vendor?.registeredAddress || matchedVendorFromMaster?.address || matchedVendorFromMaster?.location || '';
+
         const subtotal = items.reduce((s, i) => s + (i.quantity * i.unitPrice), 0);
         const taxTotal = 0;
         const discountTotal = 0;
@@ -437,24 +470,33 @@ export default function PurchaseRequisitionPage() {
           ? `Purchase Order from Contract: ${contract.contractNumber}\nContract Value: ${contract.contractValue} ${contract.currency || ''}`
           : '';
 
+        const compAddress = [
+          profile?.companyAddress || (branding as any).companyAddress,
+          profile?.companyCity || (branding as any).companyCity,
+          profile?.companyState || (branding as any).companyState,
+          profile?.companyCountry || (branding as any).companyCountry,
+        ].filter(Boolean).join(', ') || profile?.companyAddress || (branding as any).companyAddress || '';
+
+        const compWebsite = (branding as any).companyWebsite || profile?.companyWebsite || profile?.website || '';
+
         setPr({
           rfqId,
           poNumber: generatePONumber(),
           status: 'DRAFT',
           companyName: branding.companyName,
-          companyAddress: profile?.address || '',
+          companyAddress: compAddress,
           companyPhone: branding.companyPhone || profile?.phone || '',
           companyEmail: branding.companyEmail || profile?.email || '',
-          companyWebsite: profile?.website || '',
+          companyWebsite: compWebsite,
           vendorName: vendor?.name || vendor?.companyName || contract?.vendor?.name || '',
-          vendorAddress: vendor?.address || vendor?.registeredAddress || contract?.vendor?.address || '',
+          vendorAddress: resolvedVendorAddress,
           vendorContactPerson: vendor?.contactPerson || vendor?.name || contract?.vendor?.contactPerson || '',
           vendorPhone: vendor?.phone || vendor?.contactPhone || contract?.vendor?.phone || '',
           vendorEmail: vendor?.email || contract?.vendor?.email || '',
           vendorGstVat: vendor?.gstVat || vendor?.gstNumber || '',
           shipToCompany: branding.companyName,
           shipToWarehouse: '',
-          shipToAddress: profile?.address || '',
+          shipToAddress: compAddress,
           shipToContact: '',
           shipToPhone: '',
           poDate: new Date().toISOString().slice(0, 10),

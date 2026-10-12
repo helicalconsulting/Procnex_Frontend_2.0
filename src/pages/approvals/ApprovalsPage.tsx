@@ -43,6 +43,9 @@ import { TablePagination } from '../../components/shared/TablePagination';
 import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
 import ActionSendingOverlay from '../../components/shared/ActionSendingOverlay';
 import InvoiceDocumentViewerModal from '../../components/invoices/InvoiceDocumentViewerModal';
+import { DigitalSignatureApprovalModal } from '../../components/shared/DigitalSignatureApprovalModal';
+import PrintPurchaseOrderModal from '../../components/purchase-orders/PrintPurchaseOrderModal';
+import { signatureService } from '../../services/signatureService';
 import { apiRequest } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { PageFrame, PageLead, MetricCard, EmptyState } from '../../components/ui/product';
@@ -381,13 +384,14 @@ export default function ApprovalsPage() {
   const [detailRequest, setDetailRequest] = useState<ApprovalRequest | null>(null);
   const [viewerInvoice, setViewerInvoice] = useState<any | null>(null);
   const [chainModal, setChainModal] = useState<{ module: string; referenceId: string } | null>(null);
+  const [printPO, setPrintPO] = useState<any | null>(null);
   const [actionSendingState, setActionSendingState] = useState<{
     isOpen: boolean;
     docType: 'po' | 'invoice' | 'payment_voucher' | 'rfq' | 'grn';
     docNumber: string;
     mode: 'approve' | 'reject' | 'return';
   } | null>(null);
-  useBodyScrollLock(!!(actionModal || detailRequest || actionSuccessData || chainModal || viewerInvoice));
+  useBodyScrollLock(!!(actionModal || detailRequest || actionSuccessData || chainModal || viewerInvoice || printPO));
   const perPage = 8;
 
   const defaultOrder = ALL_COLUMNS.map((c) => c.key);
@@ -796,10 +800,31 @@ export default function ApprovalsPage() {
                         {col.render(req, formatDateTime)}
                       </td>
                     ))}
-                    <td className="w-28 px-4 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
+                    <td className="w-36 px-3 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-center gap-1">
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="View Details" onClick={() => setDetailRequest(req)}>
                           <Eye className="size-4 text-muted-foreground hover:text-foreground" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-primary hover:text-primary hover:bg-primary/10"
+                          title={`View / Print Document (${req.referenceNumber})`}
+                          onClick={() => {
+                            if (/order|po/i.test(req.module)) {
+                              setPrintPO(req);
+                            } else {
+                              const attList = getInvoiceAttachments(req);
+                              setViewerInvoice({
+                                invoiceNumber: req.referenceNumber,
+                                poNumber: req.referenceId,
+                                vendorName: req.requestedBy,
+                                attachments: attList,
+                              });
+                            }
+                          }}
+                        >
+                          <Printer className="size-4" />
                         </Button>
                         {req.canAct && (
                           <>
@@ -843,27 +868,51 @@ export default function ApprovalsPage() {
       </Card>
 
       {/* Action Dialog */}
-      <Dialog open={!!actionModal} onOpenChange={() => setActionModal(null)}>
-        {actionModal && (
-          <DialogContent className="sm:max-w-[540px] p-6 sm:p-7 gap-5 max-h-[min(90vh,760px)] overflow-y-auto">
-            {/* Header with Visual Status Badge */}
-            <div className="flex items-start gap-4 pr-6">
-              <div
-                className={cn(
-                  "size-12 rounded-2xl flex items-center justify-center shrink-0 shadow-xs",
-                  actionModal.action === 'approve' && "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 dark:bg-emerald-500/15 dark:text-emerald-400",
-                  actionModal.action === 'return' && "bg-amber-500/10 text-amber-600 border border-amber-500/20 dark:bg-amber-500/15 dark:text-amber-400",
-                  actionModal.action === 'reject' && "bg-rose-500/10 text-rose-600 border border-rose-500/20 dark:bg-rose-500/15 dark:text-rose-400"
-                )}
-              >
-                {actionModal.action === 'approve' ? (
-                  <ThumbsUp className="size-6" />
-                ) : actionModal.action === 'return' ? (
-                  <RotateCcw className="size-6" />
-                ) : (
-                  <ThumbsDown className="size-6" />
-                )}
-              </div>
+      {actionModal && actionModal.action === 'approve' ? (
+        <DigitalSignatureApprovalModal
+          open={!!actionModal}
+          onClose={() => setActionModal(null)}
+          onConfirm={async (signatureDataUrl: string, comment?: string) => {
+            const req = actionModal.request;
+            const targetModule = req.module === 'Purchase Order' ? 'PurchaseOrders' : (req.module === 'Purchase Invoice' ? 'AccountsPayable' : req.module);
+            await signatureService.signDocument({
+              module: targetModule,
+              referenceId: req.referenceNumber || String(req.id),
+              signatureId: 'digital_signature',
+              dataUrl: signatureDataUrl,
+              levelNumber: req.currentLevel || 1,
+              comments: comment,
+            }).catch((err) => console.warn('Signature record warning:', err));
+            handleAction('approve', comment);
+          }}
+          docTitle={`${actionModal.request.module} ${actionModal.request.referenceNumber}`}
+          docDetails={[
+            { label: 'Reference Number', value: actionModal.request.referenceNumber },
+            { label: 'Module', value: actionModal.request.module },
+            { label: 'Subject / Title', value: actionModal.request.title },
+            { label: 'Amount', value: actionModal.request.amount },
+            { label: 'Requested By', value: actionModal.request.requestedBy },
+          ]}
+        />
+      ) : (
+        <Dialog open={!!actionModal} onOpenChange={() => setActionModal(null)}>
+          {actionModal && (
+            <DialogContent className="sm:max-w-[540px] p-6 sm:p-7 gap-5 max-h-[min(90vh,760px)] overflow-y-auto">
+              {/* Header with Visual Status Badge */}
+              <div className="flex items-start gap-4 pr-6">
+                <div
+                  className={cn(
+                    "size-12 rounded-2xl flex items-center justify-center shrink-0 shadow-xs",
+                    actionModal.action === 'return' && "bg-amber-500/10 text-amber-600 border border-amber-500/20 dark:bg-amber-500/15 dark:text-amber-400",
+                    actionModal.action === 'reject' && "bg-rose-500/10 text-rose-600 border border-rose-500/20 dark:bg-rose-500/15 dark:text-rose-400"
+                  )}
+                >
+                  {actionModal.action === 'return' ? (
+                    <RotateCcw className="size-6" />
+                  ) : (
+                    <ThumbsDown className="size-6" />
+                  )}
+                </div>
               <div className="space-y-1 min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <DialogTitle className="text-lg font-bold text-foreground tracking-tight">
@@ -1002,6 +1051,7 @@ export default function ApprovalsPage() {
           </DialogContent>
         )}
       </Dialog>
+    )}
 
       {/* Detail View Dialog (Payment Voucher Eye View Style) */}
       <Dialog open={!!detailRequest} onOpenChange={() => setDetailRequest(null)}>
@@ -1237,17 +1287,28 @@ export default function ApprovalsPage() {
             </div>
 
             <DialogFooter className="mt-6 flex flex-col gap-2 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
-              <Button
-                variant="outline"
-                className="gap-2 rounded-full px-4"
-                onClick={() => {
-                  const req = detailRequest;
-                  const refId = req.referenceId || req.referenceNumber;
-                  setChainModal({ module: req.module, referenceId: refId });
-                }}
-              >
-                <Clock className="size-4" /> View Approval Chain
-              </Button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  variant="outline"
+                  className="gap-2 rounded-full px-4"
+                  onClick={() => {
+                    const req = detailRequest;
+                    const refId = req.referenceId || req.referenceNumber;
+                    setChainModal({ module: req.module, referenceId: refId });
+                  }}
+                >
+                  <Clock className="size-4" /> View Approval Chain
+                </Button>
+                {/order|po/i.test(detailRequest.module) && (
+                  <Button
+                    variant="outline"
+                    className="gap-2 rounded-full px-4"
+                    onClick={() => setPrintPO(detailRequest)}
+                  >
+                    <Printer className="size-4 text-primary" /> View PO Document
+                  </Button>
+                )}
+              </div>
 
               <div className="flex items-center gap-2">
                 {detailRequest.canAct ? (
@@ -1306,6 +1367,27 @@ export default function ApprovalsPage() {
         invoice={viewerInvoice}
         onClose={() => setViewerInvoice(null)}
       />
+
+      {/* Official Printable PO Modal */}
+      {printPO && (
+        <PrintPurchaseOrderModal
+          data={{
+            id: printPO.id,
+            referenceNumber: printPO.referenceNumber,
+            title: printPO.title,
+            amount: printPO.amount,
+            requestedBy: printPO.requestedBy,
+            department: printPO.department || 'Procurement',
+            priority: printPO.priority || 'MEDIUM',
+            status: printPO.status || 'PENDING',
+            submittedAt: printPO.submittedAt || new Date().toISOString(),
+            vendorName: printPO.vendorName || (printPO as any).vendor?.name || (printPO as any).supplierName,
+            comments: printPO.comments,
+            items: printPO.items || (printPO as any).lineItems,
+          }}
+          onClose={() => setPrintPO(null)}
+        />
+      )}
 
       {/* Success Modal */}
       {actionSuccessData && (

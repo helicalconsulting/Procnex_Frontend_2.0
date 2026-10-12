@@ -18,8 +18,12 @@
   user-select: none;
 }
 
-[data-theme="light"] .action-sending-overlay {
-  background: rgba(15, 23, 42, 0.74);
+:root:not([data-theme="dark"]) .action-sending-overlay,
+[data-theme="light"] .action-sending-overlay,
+.light .action-sending-overlay {
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 /* Ambient glow blobs */
@@ -30,6 +34,12 @@
   pointer-events: none;
   opacity: 0.45;
   animation: action-glow-pulse 6s ease-in-out infinite alternate;
+}
+
+:root:not([data-theme="dark"]) .action-sending-overlay__glow,
+[data-theme="light"] .action-sending-overlay__glow,
+.light .action-sending-overlay__glow {
+  display: none !important;
 }
 
 .action-sending-overlay__glow--1 {
@@ -92,12 +102,13 @@
   z-index: 2;
 }
 
-[data-theme="light"] .action-sending-card {
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(10, 110, 209, 0.18);
-  box-shadow: 0 28px 65px -15px rgba(15, 23, 42, 0.35),
-              0 0 0 1px rgba(10, 110, 209, 0.08),
-              inset 0 1px 1px rgba(255, 255, 255, 0.85);
+:root:not([data-theme="dark"]) .action-sending-card,
+[data-theme="light"] .action-sending-card,
+.light .action-sending-card {
+  background: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow: 0 24px 48px -12px rgba(15, 23, 42, 0.16),
+              0 0 0 1px rgba(15, 23, 42, 0.05);
   color: #0f172a;
 }
 

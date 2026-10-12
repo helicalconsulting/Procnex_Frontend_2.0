@@ -1,11 +1,11 @@
 import { useId, useState } from 'react';
-import { CalendarDays, ChevronDown, FileText, Hash, Paperclip, RefreshCw, Search, Type } from 'lucide-react';
+import { CalendarDays, CheckSquare, ChevronDown, FileText, Hash, Paperclip, RefreshCw, Search, Type } from 'lucide-react';
 import type { FormFieldConfig } from '../../services/companySettingsService';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 
-export type OnboardingField = Pick<FormFieldConfig, 'fieldKey' | 'label' | 'fieldType'>;
+export type OnboardingField = Pick<FormFieldConfig, 'fieldKey' | 'label' | 'fieldType' | 'options'>;
 
 const fieldTypes = {
   alphabetical: { label: 'Alphabetic', icon: Type },
@@ -13,6 +13,7 @@ const fieldTypes = {
   number: { label: 'Number', icon: Hash },
   date: { label: 'Date', icon: CalendarDays },
   dropdown: { label: 'Dropdown', icon: ChevronDown },
+  checkbox: { label: 'Checkbox', icon: CheckSquare },
   attachment: { label: 'Attachment', icon: Paperclip },
 };
 
@@ -74,7 +75,7 @@ export default function OnboardingFieldSelector({ fields, selected, onChange, lo
                     disabled={disabled}
                     aria-label={field.label}
                     onChange={event => onChange(event.target.checked
-                      ? [...selected.filter(option => option.fieldKey !== field.fieldKey), { fieldKey: field.fieldKey, label: field.label, fieldType: field.fieldType }]
+                      ? [...selected.filter(option => option.fieldKey !== field.fieldKey), { fieldKey: field.fieldKey, label: field.label, fieldType: field.fieldType, options: field.options }]
                       : selected.filter(option => option.fieldKey !== field.fieldKey))}
                   />
                   <span className="onb-fields__name">{field.label}</span>

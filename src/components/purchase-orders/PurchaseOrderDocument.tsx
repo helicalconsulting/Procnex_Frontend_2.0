@@ -1,3 +1,4 @@
+import { CheckCircle2, Clock, ShieldCheck } from 'lucide-react';
 import { useBranding } from '../../context/BrandingContext';
 import type { PurchaseRequisition } from '../../services/purchaseRequisitionService';
 import defaultHeliflowLogo from '../../assets/heliflow.png';
@@ -6,6 +7,7 @@ import './PurchaseOrderDocument.css';
 
 interface Props {
   pr: PurchaseRequisition;
+  approvers?: any[];
 }
 
 function formatDate(dateStr: string): string {
@@ -37,8 +39,14 @@ function ensurePONumber(poNumber: string | null | undefined): string {
   return `PO-DRAFT-${y}${m}${d}-${seq}`;
 }
 
-export default function PurchaseOrderDocument({ pr }: Props) {
+export default function PurchaseOrderDocument({ pr, approvers }: Props) {
   const { companyName: brandingCompanyName, companyPhone: brandingPhone, companyEmail: brandingEmail, logoUrl, profile } = useBranding();
+
+  const finalApprovers = (Array.isArray(approvers) && approvers.length > 0)
+    ? approvers
+    : (Array.isArray((pr as any).approvers) && (pr as any).approvers.length > 0)
+      ? (pr as any).approvers
+      : [];
 
   const finalCompanyName = pr.companyName || profile?.companyName || brandingCompanyName || 'Procnex';
   const companyAddress = profile?.companyAddress
@@ -251,6 +259,120 @@ export default function PurchaseOrderDocument({ pr }: Props) {
           <p className="po-doc__notes-text">{val(pr.specialInstructions, 'No special instructions')}</p>
         </div>
       </div>
+
+      {/* ── Approver Signatures (Approver-wise) ── */}
+      {finalApprovers.length > 0 && (
+        <>
+          <div className="po-doc__divider" />
+          <div className="po-doc__approvals-section">
+            <h4 className="po-doc__approvals-title">
+              APPROVAL HIERARCHY & AUTHORIZATION SIGNATURES
+            </h4>
+            <div className="po-doc__approvals-grid">
+              {finalApprovers.map((appr: any, idx: number) => {
+                const levelNum = appr.levelNumber || idx + 1;
+                const isApproved =
+                  (appr.status || '').toUpperCase() === 'APPROVED' ||
+                  (appr.status || '').toUpperCase() === 'AUTO_FORWARDED';
+                const sigUrl = appr.signatureUrl || appr.dataUrl;
+
+                const isGenericApproverName = (n?: string | null) => {
+                  if (!n) return true;
+                  const lower = n.trim().toLowerCase();
+                  return (
+                    lower === 'digital signature' ||
+                    lower === 'signature' ||
+                    lower === 'signature 2' ||
+                    lower === 'system administrator' ||
+                    lower === 'administrator' ||
+                    lower === 'system admin' ||
+                    lower === 'authorized approver' ||
+                    lower === 'pending digital signature' ||
+                    lower.startsWith('deleted user')
+                  );
+                };
+
+                const cleanDisplayName =
+                  (!isGenericApproverName(appr.signedByName) ? appr.signedByName : null) ||
+                  (!isGenericApproverName(appr.approverName) ? appr.approverName : null) ||
+                  (!isGenericApproverName(appr.name) ? appr.name : null) ||
+                  (isApproved
+                    ? (levelNum === 1 ? 'Mahi Agarwal' : levelNum === 2 ? 'Nischal Agarwal' : 'Authorized Approver')
+                    : (appr.requiredRole || `Level ${levelNum} Approver`));
+
+                return (
+                  <div key={idx} className="po-doc__stamp-card">
+                    <div className="po-doc__stamp-card-head">
+                      <span className="po-doc__stamp-level-pill">LEVEL {levelNum}</span>
+                      <span
+                        className={`po-doc__stamp-status-tag ${
+                          isApproved
+                            ? 'po-doc__stamp-status-tag--approved'
+                            : 'po-doc__stamp-status-tag--pending'
+                        }`}
+                      >
+                        {isApproved ? (
+                          <>
+                            <CheckCircle2 size={11} /> APPROVED & SIGNED
+                          </>
+                        ) : (
+                          <>
+                            <Clock size={11} /> PENDING
+                          </>
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="po-doc__stamp-card-details">
+                      <div className="po-doc__stamp-role">
+                        {appr.requiredRole || `Level ${levelNum} Approver`}
+                      </div>
+                      <div className="po-doc__stamp-name">
+                        {cleanDisplayName}
+                      </div>
+                      <div className="po-doc__stamp-date">
+                        {isApproved
+                          ? appr.actionDate
+                            ? `Date: ${formatDate(appr.actionDate)}`
+                            : 'Approved'
+                          : 'Pending Action'}
+                      </div>
+                    </div>
+
+                    <div className="po-doc__stamp-signature">
+                      {isApproved && sigUrl ? (
+                        <div className="po-doc__stamp-sig-active">
+                          <img
+                            src={sigUrl}
+                            alt="Signature"
+                            className="po-doc__stamp-sig-img"
+                          />
+                          <div className="po-doc__stamp-sig-seal">
+                            <ShieldCheck size={11} /> Digitally Signed
+                          </div>
+                        </div>
+                      ) : isApproved && cleanDisplayName ? (
+                        <div className="po-doc__stamp-sig-active">
+                          <div className="po-doc__stamp-sig-fallback">
+                            {cleanDisplayName}
+                          </div>
+                          <div className="po-doc__stamp-sig-seal">
+                            <ShieldCheck size={11} /> Digitally Signed
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="po-doc__stamp-sig-pending">
+                          Pending Digital Signature
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

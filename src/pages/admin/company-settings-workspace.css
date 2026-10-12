@@ -38,8 +38,8 @@
 .settings-workspace .settings-icon--danger { color: var(--settings-danger); }
 .settings-workspace .settings-icon--danger:hover { background: color-mix(in srgb,var(--settings-danger) 10%,transparent); }
 .settings-workspace .settings-search-clear { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); }
-.settings-workspace :is(.cs-field-hint,.settings-hint,.settings-muted,.cs-item__desc,.cs-time-limit-desc) { font-size: 12px; line-height: 1.6; color: var(--settings-muted); }
 .settings-workspace .cs-branding-form { max-width: none; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 24px; }
+.settings-workspace .cs-branding-field--full { grid-column: 1 / -1; }
 .settings-workspace .cs-branding-actions { grid-column: 1 / -1; display: flex; gap: 10px; border-top: 1px solid var(--border); padding-top: 18px; margin: 0; }
 .settings-workspace .cs-upload-row { flex-wrap: wrap; gap: 14px; }
 .settings-workspace .cs-upload-btn { background: transparent; border-radius: 12px; color: var(--foreground); padding: 11px 16px; font-size: 13px; font-weight: 600; }

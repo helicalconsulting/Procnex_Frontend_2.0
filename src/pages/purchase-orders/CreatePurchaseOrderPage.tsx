@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
 import { purchaseRequisitionService } from '../../services/purchaseRequisitionService';
+import { contractService } from '../../services/contractService';
 import { companySettingsService, type Warehouse, type PaymentTerm, type PaymentPlan } from '../../services/companySettingsService';
 import CustomPaymentPlanModal from '../../components/vendor/CustomPaymentPlanModal';
 import '../../components/vendor/vendor-rfq-workspace.css';
@@ -72,8 +73,43 @@ export default function CreatePurchaseOrderPage() {
   const canCreatePO = hasPermission('PO Creation', 'canCreate') || hasPermission('Purchase Orders', 'canCreate') || hasPermission('PO', 'canCreate');
   const [searchParams] = useSearchParams();
   const editId = searchParams.get('id');
+  const queryContractId = searchParams.get('contractId') || searchParams.get('contractNo');
+  const queryRfqId = searchParams.get('rfqId') || searchParams.get('rfqNo');
+  const queryVendorId = searchParams.get('vendorId');
   const { formatAmount, companyDefaultCurrency, convert } = useCurrency();
   const { companyName: brandingCompanyName, companyPhone: brandingPhone, companyEmail: brandingEmail, profile } = useBranding();
+
+  // ── Company / Buyer Details State ──
+  const [companyName, setCompanyName] = useState(brandingCompanyName || 'Organization');
+  const [companyAddress, setCompanyAddress] = useState('');
+  const [companyWebsite, setCompanyWebsite] = useState('');
+  const [companyPhone, setCompanyPhone] = useState(brandingPhone || '');
+  const [companyEmail, setCompanyEmail] = useState(brandingEmail || '');
+
+  // Auto-populate company address and website from Branding / Settings
+  useEffect(() => {
+    if (brandingCompanyName && (!companyName || companyName === 'Organization')) {
+      setCompanyName(brandingCompanyName);
+    }
+    if (brandingPhone && !companyPhone) setCompanyPhone(brandingPhone);
+    if (brandingEmail && !companyEmail) setCompanyEmail(brandingEmail);
+
+    const compAddress = [
+      profile?.companyAddress || (profile as any)?.address,
+      profile?.companyCity,
+      profile?.companyState,
+      profile?.companyCountry,
+    ].filter(Boolean).join(', ') || profile?.companyAddress || '';
+
+    if (compAddress && !companyAddress) {
+      setCompanyAddress(compAddress);
+    }
+
+    const compWeb = (profile as any)?.companyWebsite || (profile as any)?.website || '';
+    if (compWeb && !companyWebsite) {
+      setCompanyWebsite(compWeb);
+    }
+  }, [profile, brandingCompanyName, brandingPhone, brandingEmail]);
 
   // ── Ship-To & Warehouse Master State ──
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
@@ -352,10 +388,11 @@ export default function CreatePurchaseOrderPage() {
 
   const handleSelectVendorOption = (v: VendorOption) => {
     const code = (v as any).supplierCode || (v as any).code || `SUP-${v.id.slice(-5).toUpperCase()}`;
+    const resolvedAddress = v.address || (v as any).location || (v as any).registeredAddress || '';
     setSelectedVendorId(v.id);
     setSupplierCode(code);
     setSupplierName(v.name);
-    setSupplierAddress(v.address || '');
+    setSupplierAddress(resolvedAddress);
     setSupplierTaxId(v.gstNumber || v.panNumber || '');
     setContactPerson(v.contactPerson || '');
     setContactEmail(v.email || '');
@@ -381,6 +418,99 @@ export default function CreatePurchaseOrderPage() {
     }
   }, [selectedVendorId, vendors]);
 
+  // ── Load Contract, RFQ, or Vendor if passed in URL query params ──
+  useEffect(() => {
+    if (editId) return;
+
+    if (queryVendorId && vendors.length > 0 && !selectedVendorId) {
+      const v = vendors.find((item) => item.id === queryVendorId);
+      if (v) {
+        handleSelectVendorOption(v);
+      }
+    }
+
+    if (queryContractId) {
+      setContractNo(queryContractId);
+      contractService.getContract(queryContractId)
+        .then((resp) => {
+          const ctr = resp?.contract;
+          if (ctr) {
+            if (ctr.contractNumber) setContractNo(ctr.contractNumber);
+            if (ctr.rfqId) setRfqNo(ctr.rfqId);
+            if (ctr.currency) setCurrency(ctr.currency);
+            if (ctr.paymentTerms) setPaymentTerms(ctr.paymentTerms);
+            if (ctr.vendor) {
+              const v = ctr.vendor;
+              setSelectedVendorId(v.id || ctr.vendorId || '');
+              setSupplierName(v.name || '');
+              const addr = v.address || v.location || v.registeredAddress || '';
+              if (addr) setSupplierAddress(addr);
+              if (v.email) setContactEmail(v.email);
+              if (v.phone) {
+                setContactPhone(v.phone);
+                setContactCountryCode(detectCountryCode(v.phone, '+91'));
+              }
+              if (v.contactPerson) setContactPerson(v.contactPerson);
+              if (v.gstNumber || v.panNumber) setSupplierTaxId(v.gstNumber || v.panNumber);
+            }
+            if (ctr.items && Array.isArray(ctr.items) && ctr.items.length > 0) {
+              setItems(ctr.items.map((ci: any, idx: number) => ({
+                id: String(idx + 1),
+                itemCode: `ITEM-00${idx + 1}`,
+                itemName: ci.itemName || `Item ${idx + 1}`,
+                description: ci.description || '',
+                quantity: Number(ci.quantity) || 1,
+                unit: ci.unit || 'pcs',
+                unitPrice: Number(ci.unitPrice) || 0,
+                taxPercent: Number(ci.tax) || ctr.taxPercentage || 0,
+              })));
+            }
+          }
+        })
+        .catch(() => {});
+    }
+
+    if (queryRfqId) {
+      setRfqNo(queryRfqId);
+      apiRequest<any>(`/rfqs/${queryRfqId}`)
+        .then((rfqResp) => {
+          const rfq = rfqResp?.rfq || rfqResp;
+          if (rfq) {
+            if (rfq.currency) setCurrency(rfq.currency);
+            if (rfq.paymentTerms) setPaymentTerms(rfq.paymentTerms);
+            const awardedQuotation = rfq.quotations?.find((q: any) => q.status === 'ACCEPTED' || q.status === 'SHORTLISTED') || rfq.quotations?.[0];
+            const awardedVendor = awardedQuotation?.vendor || rfq.vendors?.[0];
+            if (awardedVendor) {
+              setSelectedVendorId(awardedVendor.id || '');
+              setSupplierName(awardedVendor.name || '');
+              const addr = awardedVendor.address || awardedVendor.location || awardedVendor.registeredAddress || '';
+              if (addr) setSupplierAddress(addr);
+              if (awardedVendor.email) setContactEmail(awardedVendor.email);
+              if (awardedVendor.phone) {
+                setContactPhone(awardedVendor.phone);
+                setContactCountryCode(detectCountryCode(awardedVendor.phone, '+91'));
+              }
+              if (awardedVendor.contactPerson) setContactPerson(awardedVendor.contactPerson);
+              if (awardedVendor.gstNumber || awardedVendor.panNumber) setSupplierTaxId(awardedVendor.gstNumber || awardedVendor.panNumber);
+            }
+            if (rfq.lineItems && Array.isArray(rfq.lineItems) && rfq.lineItems.length > 0) {
+              setItems(rfq.lineItems.map((ri: any, idx: number) => ({
+                id: String(idx + 1),
+                itemCode: `ITEM-00${idx + 1}`,
+                itemName: ri.itemName || ri.description || `Item ${idx + 1}`,
+                description: ri.description || '',
+                quantity: Number(ri.quantity) || 1,
+                unit: ri.unit || 'pcs',
+                unitPrice: Number(ri.targetPrice) || 0,
+                taxPercent: 0,
+              })));
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [editId, queryContractId, queryRfqId, queryVendorId, vendors]);
+
   // ── Load Existing PO Data if editId is provided in URL ──
   useEffect(() => {
     if (!editId) return;
@@ -391,6 +521,11 @@ export default function CreatePurchaseOrderPage() {
           existing = await purchaseRequisitionService.getByRfqId(editId);
         }
         if (existing) {
+          if (existing.companyName) setCompanyName(existing.companyName);
+          if (existing.companyAddress) setCompanyAddress(existing.companyAddress);
+          if (existing.companyWebsite) setCompanyWebsite(existing.companyWebsite);
+          if (existing.companyPhone) setCompanyPhone(existing.companyPhone);
+          if (existing.companyEmail) setCompanyEmail(existing.companyEmail);
           if (existing.status) {
             const rawStatus = String(existing.status).toUpperCase();
             if (rawStatus === 'APPROVED' || rawStatus === 'PO_ISSUED' || rawStatus === 'COMPLETED' || rawStatus === 'SENT_TO_VENDOR') {
@@ -477,6 +612,10 @@ export default function CreatePurchaseOrderPage() {
         if (!supplierType && cat) setSupplierType(cat);
         const code = matchedVendor.supplierCode || (matchedVendor as any).code || `SUP-${matchedVendor.id.slice(-5).toUpperCase()}`;
         if (!supplierCode) setSupplierCode(code);
+        if (!supplierAddress) {
+          const addr = matchedVendor.address || (matchedVendor as any).location || (matchedVendor as any).registeredAddress || '';
+          if (addr) setSupplierAddress(addr);
+        }
       }
     } else if (supplierName) {
       const matchedVendor = vendors.find(
@@ -488,9 +627,13 @@ export default function CreatePurchaseOrderPage() {
         if (!supplierType && cat) setSupplierType(cat);
         const code = matchedVendor.supplierCode || (matchedVendor as any).code || `SUP-${matchedVendor.id.slice(-5).toUpperCase()}`;
         if (!supplierCode) setSupplierCode(code);
+        if (!supplierAddress) {
+          const addr = matchedVendor.address || (matchedVendor as any).location || (matchedVendor as any).registeredAddress || '';
+          if (addr) setSupplierAddress(addr);
+        }
       }
     }
-  }, [vendors, selectedVendorId, supplierName, contactEmail, supplierType, supplierCode]);
+  }, [vendors, selectedVendorId, supplierName, contactEmail, supplierType, supplierCode, supplierAddress]);
 
   // ── Vendor Select Handler ──
   const handleVendorSelect = (id: string) => {
@@ -500,11 +643,11 @@ export default function CreatePurchaseOrderPage() {
       const code = v.supplierCode || (v as any).code || `SUP-${v.id.slice(-5).toUpperCase()}`;
       setSupplierCode(code);
       setSupplierName(v.name);
-      setSupplierAddress(v.address || 'Standard Registered Address');
-      setSupplierTaxId(v.gstNumber || v.panNumber || 'GB123456789');
-      setContactPerson(v.contactPerson || 'Account Manager');
+      setSupplierAddress(v.address || (v as any).location || (v as any).registeredAddress || '');
+      setSupplierTaxId(v.gstNumber || v.panNumber || '');
+      setContactPerson(v.contactPerson || '');
       setContactEmail(v.email);
-      setContactPhone(v.phone || '+1 000 000 0000');
+      setContactPhone(v.phone || '');
     }
   };
 
@@ -659,6 +802,11 @@ export default function CreatePurchaseOrderPage() {
           taxPercent: i.taxPercent,
           totalPrice: i.quantity * i.unitPrice * (1 + i.taxPercent / 100),
         })),
+        companyName: companyName || brandingCompanyName || 'Organization',
+        companyAddress: companyAddress || ([profile?.companyAddress, profile?.companyCity, profile?.companyState, profile?.companyCountry].filter(Boolean).join(', ')) || '',
+        companyWebsite: companyWebsite || '',
+        companyPhone: companyPhone || brandingPhone || '',
+        companyEmail: companyEmail || brandingEmail || '',
         sourceReferences: {
           prNo,
           contractNo,
@@ -677,17 +825,18 @@ export default function CreatePurchaseOrderPage() {
 
       // Also save to PR table so it appears in the PO Creation & Orders list page
       // (PurchaseRequisitionsListPage reads from purchaseRequisitionService)
+      const compAddressFinal = companyAddress || ([profile?.companyAddress, profile?.companyCity, profile?.companyState, profile?.companyCountry].filter(Boolean).join(', ')) || '';
       const prPayload: any = {
         ...(editId ? { id: editId } : {}),
         rfqId: rfqNo || editId || `rfq-direct-${Date.now()}`,
         poNumber: finalPoNumber,
         status: statusPayload,
         isStandalone: true,
-        companyName: brandingCompanyName || 'Procnex Consulting',
-        companyAddress: supplierAddress || '',
-        companyPhone: brandingPhone || '',
-        companyEmail: brandingEmail || '',
-        companyWebsite: '',
+        companyName: companyName || brandingCompanyName || 'Organization',
+        companyAddress: compAddressFinal,
+        companyPhone: companyPhone || brandingPhone || '',
+        companyEmail: companyEmail || brandingEmail || '',
+        companyWebsite: companyWebsite || '',
         supplierType: supplierType,
         supplierCode: supplierCode,
         selectedVendorId: selectedVendorId,
@@ -768,19 +917,19 @@ export default function CreatePurchaseOrderPage() {
 
   // ── Download PDF Handler ──
   const handleDownloadPdf = () => {
-    const compAddress = profile?.companyAddress
+    const compAddress = companyAddress || (profile?.companyAddress
       ? [profile.companyAddress, profile.companyCity, profile.companyState, profile.companyCountry].filter(Boolean).join(', ')
-      : '';
+      : '');
 
     const poData = {
       poNumber,
       revisionNo,
       orderDate: poDate,
-      companyName: brandingCompanyName || 'Company',
+      companyName: companyName || brandingCompanyName || 'Company',
       companyAddress: compAddress,
-      companyPhone: brandingPhone || '',
-      companyEmail: brandingEmail || '',
-      companyWebsite: '',
+      companyPhone: companyPhone || brandingPhone || '',
+      companyEmail: companyEmail || brandingEmail || '',
+      companyWebsite: companyWebsite || '',
       vendorName: supplierName || 'Supplier',
       supplierCode: supplierCode || undefined,
       supplierType: supplierType || undefined,
@@ -976,6 +1125,74 @@ export default function CreatePurchaseOrderPage() {
               <label>FRAMEWORK AGREEMENT</label>
               <span className="cpo-field__sub">Agreement reference</span>
               <input type="text" value={frameworkAgreement} onChange={(e) => setFrameworkAgreement(e.target.value)} placeholder="FA-00000" />
+            </div>
+          </div>
+        </div>
+
+        {/* ── Section 02B: Company Information (Buyer Organization) ── */}
+        <div className="cpo-section">
+          <div className="cpo-section__header">
+            <span className="cpo-section__num">02B</span>
+            <span className="cpo-section__title">Company Information (Buyer Organization)</span>
+            <span className="cpo-section__hint">Auto-populated from Company Settings & Branding</span>
+          </div>
+
+          <div className="cpo-grid cpo-grid--4">
+            <div className="cpo-field cpo-field--span-2">
+              <label>COMPANY NAME</label>
+              <input
+                type="text"
+                value={companyName}
+                disabled={isReadOnly}
+                onChange={(e) => setCompanyName(e.target.value)}
+                placeholder="e.g. Acme Corp"
+              />
+            </div>
+            <div className="cpo-field cpo-field--span-2">
+              <label>COMPANY WEBSITE</label>
+              <input
+                type="url"
+                value={companyWebsite}
+                disabled={isReadOnly}
+                onChange={(e) => setCompanyWebsite(e.target.value)}
+                placeholder="https://www.example.com"
+              />
+            </div>
+          </div>
+
+          <div className="cpo-grid cpo-grid--1" style={{ marginTop: 12 }}>
+            <div className="cpo-field">
+              <label>REGISTERED COMPANY ADDRESS</label>
+              <input
+                type="text"
+                value={companyAddress}
+                disabled={isReadOnly}
+                onChange={(e) => setCompanyAddress(e.target.value)}
+                placeholder="Registered Street Address, City, State, Country"
+              />
+            </div>
+          </div>
+
+          <div className="cpo-grid cpo-grid--2" style={{ marginTop: 12 }}>
+            <div className="cpo-field">
+              <label>COMPANY PHONE</label>
+              <input
+                type="tel"
+                value={companyPhone}
+                disabled={isReadOnly}
+                onChange={(e) => setCompanyPhone(e.target.value)}
+                placeholder="+91 1234567890"
+              />
+            </div>
+            <div className="cpo-field">
+              <label>COMPANY EMAIL</label>
+              <input
+                type="email"
+                value={companyEmail}
+                disabled={isReadOnly}
+                onChange={(e) => setCompanyEmail(e.target.value)}
+                placeholder="info@company.com"
+              />
             </div>
           </div>
         </div>

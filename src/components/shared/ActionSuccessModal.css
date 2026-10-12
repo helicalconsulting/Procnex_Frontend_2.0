@@ -15,6 +15,14 @@
   animation: fadeInBackdrop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+:root:not([data-theme="dark"]) .action-success-backdrop,
+[data-theme="light"] .action-success-backdrop,
+.light .action-success-backdrop {
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
 @keyframes fadeInBackdrop {
   from { opacity: 0; }
   to { opacity: 1; }

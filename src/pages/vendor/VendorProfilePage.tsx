@@ -366,16 +366,16 @@ export default function VendorProfilePage() {
                       : '—'}
                   </dd>
                 </div>
+                <div className="sm:col-span-2">
+                  <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Address</dt>
+                  <dd className="font-semibold text-foreground mt-0.5 whitespace-pre-wrap break-words leading-relaxed">
+                    {company.address || company.location || '—'}
+                  </dd>
+                </div>
               </dl>
             </div>
 
             <div className="profile-contact pt-4 mt-4 border-t border-border/60 text-xs text-muted-foreground">
-              {company.address && (
-                <div className="flex items-center gap-2 sm:col-span-2">
-                  <MapPin className="size-3.5 text-primary shrink-0" />
-                  <span className="break-words min-w-0">{company.address}</span>
-                </div>
-              )}
               {company.phone && (
                 <div className="flex items-center gap-2">
                   <Phone className="size-3.5 text-primary shrink-0" />
@@ -855,16 +855,16 @@ export default function VendorProfilePage() {
                           : '—'}
                       </dd>
                     </div>
+                    <div className="sm:col-span-2">
+                      <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Address</dt>
+                      <dd className="font-semibold text-foreground mt-0.5 whitespace-pre-wrap break-words leading-relaxed">
+                        {company.address || company.location || '—'}
+                      </dd>
+                    </div>
                   </dl>
                 </div>
 
                 <div className="profile-contact pt-4 mt-4 border-t border-border/60 text-xs text-muted-foreground">
-                  {company.address && (
-                    <div className="flex items-center gap-2 sm:col-span-2">
-                      <MapPin className="size-3.5 text-primary shrink-0" />
-                      <span className="break-words min-w-0">{company.address}</span>
-                    </div>
-                  )}
                   {company.phone && (
                     <div className="flex items-center gap-2">
                       <Phone className="size-3.5 text-primary shrink-0" />

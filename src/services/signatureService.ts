@@ -178,15 +178,27 @@ async function apiSetDefault(id: string | number): Promise<void> {
 
 const MODULE_MAP: Record<string, string> = {
   Payments: 'INVOICE',
+  PAYMENTS: 'INVOICE',
   AccountsPayable: 'INVOICE',
+  'Accounts Payable': 'INVOICE',
   PurchaseInvoice: 'INVOICE',
+  'Purchase Invoice': 'INVOICE',
   PurchaseOrder: 'PURCHASE_ORDER',
+  PurchaseOrders: 'PURCHASE_ORDER',
+  'Purchase Order': 'PURCHASE_ORDER',
+  'Purchase Orders': 'PURCHASE_ORDER',
+  PURCHASEORDER: 'PURCHASE_ORDER',
+  PURCHASEORDERS: 'PURCHASE_ORDER',
+  PURCHASE_ORDER: 'PURCHASE_ORDER',
   RFQ: 'RFQ',
+  RFQs: 'RFQ',
   Quotation: 'QUOTATION',
+  Quotations: 'QUOTATION',
 };
 
 async function apiSignDocument(payload: SignDocumentPayload): Promise<DocumentSignatureRecord> {
-  const mappedModule = MODULE_MAP[payload.module] || payload.module.toUpperCase();
+  const norm = (payload.module || '').trim();
+  const mappedModule = MODULE_MAP[norm] || MODULE_MAP[norm.toUpperCase()] || (norm.toUpperCase().includes('PURCHASE') ? 'PURCHASE_ORDER' : norm.toUpperCase());
   return apiRequest<DocumentSignatureRecord>('/signatures/sign', {
     method: 'POST',
     body: JSON.stringify({
@@ -197,7 +209,8 @@ async function apiSignDocument(payload: SignDocumentPayload): Promise<DocumentSi
 }
 
 async function apiGetDocumentSignatures(module: string, referenceId: string): Promise<DocumentSignatureRecord[]> {
-  const mappedModule = MODULE_MAP[module] || module.toUpperCase();
+  const norm = (module || '').trim();
+  const mappedModule = MODULE_MAP[norm] || MODULE_MAP[norm.toUpperCase()] || (norm.toUpperCase().includes('PURCHASE') ? 'PURCHASE_ORDER' : norm.toUpperCase());
   return apiRequest<DocumentSignatureRecord[]>(`/signatures/document/${mappedModule}/${referenceId}`);
 }
 

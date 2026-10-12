@@ -219,6 +219,30 @@ const STATUS_MAP: Record<RFQStatus, { label: string; tone: 'neutral' | 'primary'
 const deadlineTime = (date: string) => new Date(`${date}T23:59:59`).getTime();
 const dueSoon = (rfq: VendorRFQ) => ['OPEN', 'RETURNED'].includes(rfq.status) && deadlineTime(rfq.deadline) >= Date.now() && deadlineTime(rfq.deadline) <= Date.now() + 3 * 86400000;
 
+function addDaysToDateString(dateStr: string, days: number): string {
+  if (!dateStr || isNaN(days) || days <= 0) return '';
+  const clean = dateStr.slice(0, 10);
+  const parts = clean.split('-').map(Number);
+  if (parts.length !== 3 || parts.some(isNaN)) return '';
+  const [y, m, d] = parts;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  const year = dt.getUTCFullYear();
+  const month = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(dt.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getDaysBetweenDateStrings(startDateStr: string, endDateStr: string): number | null {
+  if (!startDateStr || !endDateStr) return null;
+  const p1 = startDateStr.slice(0, 10).split('-').map(Number);
+  const p2 = endDateStr.slice(0, 10).split('-').map(Number);
+  if (p1.length !== 3 || p2.length !== 3 || p1.some(isNaN) || p2.some(isNaN)) return null;
+  const t1 = Date.UTC(p1[0], p1[1] - 1, p1[2]);
+  const t2 = Date.UTC(p2[0], p2[1] - 1, p2[2]);
+  return Math.round((t2 - t1) / 86400000);
+}
+
 // ─── Component ──────────────────────────────────────────────
 
 export default function VendorRFQsPage() {
@@ -228,27 +252,32 @@ export default function VendorRFQsPage() {
     [] as VendorRFQ[]
   );
 
-  useEffect(() => {
-    const rfqParam = searchParams.get('rfq');
-    const searchParam = searchParams.get('search');
-    if (searchParam) {
-      setSearch(searchParam);
-    }
-    if (!rfqParam || rfqs.length === 0) return;
-    const match = rfqs.find(rfq => String(rfq.id) === rfqParam || rfq.rfqNumber === rfqParam);
-    if (!match) return;
-    setExpandedRFQ(match.id);
-    setPage(Math.floor(rfqs.indexOf(match) / 10) + 1);
-    const el = document.getElementById(`vrfq-card-${match.id}`);
-    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, [searchParams, rfqs]);
-
   const { formatAmount, companyDefaultCurrency, convert } = useCurrency();
   const { showSuccess } = useSuccessModal();
 
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => searchParams.get('search') || '');
   const [sortBy, setSortBy] = useState('newest');
   const [page, setPage] = useState(1);
+  const lastScrolledRfqRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const rfqParam = searchParams.get('rfq');
+    const searchParam = searchParams.get('search');
+    if (searchParam && searchParam !== search) {
+      setSearch(searchParam);
+    }
+    if (!rfqParam || rfqs.length === 0) return;
+    if (lastScrolledRfqRef.current === rfqParam) return;
+    const match = rfqs.find(rfq => String(rfq.id) === rfqParam || rfq.rfqNumber === rfqParam);
+    if (!match) return;
+    lastScrolledRfqRef.current = rfqParam;
+    setExpandedRFQ(match.id);
+    setPage(Math.floor(rfqs.indexOf(match) / 10) + 1);
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`vrfq-card-${match.id}`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }, [searchParams, rfqs, search]);
   const PAGE_SIZE = 10;
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteLoadError, setQuoteLoadError] = useState<string | null>(null);
@@ -362,6 +391,8 @@ export default function VendorRFQsPage() {
   const [bidSecValueType, setBidSecValueType] = useState<'FIXED_AMOUNT' | 'PERCENTAGE'>('FIXED_AMOUNT');
   const [bidSecValue, setBidSecValue] = useState('');
   const [bidSecCurrency, setBidSecCurrency] = useState(companyDefaultCurrency || 'KES');
+  const [bidSecIssueDate, setBidSecIssueDate] = useState('');
+  const [bidSecExpiryDate, setBidSecExpiryDate] = useState('');
   const [bidSecValidityValue, setBidSecValidityValue] = useState('');
   const [bidSecValidityUnit, setBidSecValidityUnit] = useState<'DAYS' | ''>('DAYS');
   const [bidSecFile, setBidSecFile] = useState<File | null>(null);
@@ -518,6 +549,7 @@ export default function VendorRFQsPage() {
         bidSecurityCurrency: security.bidSecurityCurrency, bidSecurityValidityValue: security.bidSecurityValidityValue,
         bidSecurityValidityUnit: security.bidSecurityValidityUnit, bidSecurityBondNumber: security.bondNumber,
         bidSecurityIssuer: security.issuer, bidSecurityDocumentUrl: security.publicUrl,
+        bidSecurityIssueDate: security.issueDate, bidSecurityExpiryDate: security.expiryDate,
         bidBondNumber: security.bondNumber, bidBondIssuer: security.issuer, bidBondAmount: security.bondAmount,
         bidBondCurrency: security.bondCurrency, bidBondIssueDate: security.issueDate, bidBondExpiryDate: security.expiryDate,
         bidBondValidityValue: security.bidBondValidityValue, bidBondValidityUnit: security.bidBondValidityUnit,
@@ -623,7 +655,21 @@ export default function VendorRFQsPage() {
     );
     setBidSecValue(prevVal ? String(prevVal) : '');
     setBidSecCurrency(myQuot?.bidSecurityCurrency || currentRfq.bidSecurityCurrency || companyDefaultCurrency || 'KES');
-    setBidSecValidityValue(prevValDays ? String(prevValDays) : '');
+    const initSecIssueDate = myQuot?.bidSecurityIssueDate || myQuot?.issueDate ? String(myQuot.bidSecurityIssueDate || myQuot.issueDate).slice(0, 10) : '';
+    let initSecExpiryDate = myQuot?.bidSecurityExpiryDate || myQuot?.expiryDate ? String(myQuot.bidSecurityExpiryDate || myQuot.expiryDate).slice(0, 10) : '';
+    let initSecValDays = prevValDays ? String(prevValDays) : '';
+    const secValDaysNum = parseInt(initSecValDays) || currentRfq.bidSecurityMinValidity || 0;
+    if (initSecIssueDate && !initSecExpiryDate && secValDaysNum > 0) {
+      initSecExpiryDate = addDaysToDateString(initSecIssueDate, secValDaysNum);
+    } else if (initSecIssueDate && initSecExpiryDate && !initSecValDays) {
+      const diff = getDaysBetweenDateStrings(initSecIssueDate, initSecExpiryDate);
+      if (diff !== null && diff > 0) {
+        initSecValDays = String(diff);
+      }
+    }
+    setBidSecIssueDate(initSecIssueDate);
+    setBidSecExpiryDate(initSecExpiryDate);
+    setBidSecValidityValue(initSecValDays);
     setBidSecValidityUnit((myQuot?.bidSecurityValidityUnit || currentRfq.bidSecurityValidityUnit as 'DAYS' | '') || 'DAYS');
     setBidSecFile(null);
     setBidSecBondNumber(prevBNo);
@@ -633,10 +679,21 @@ export default function VendorRFQsPage() {
     setBidBondNumber(prevBNo);
     setBidBondIssuer(prevIssuer);
     setBidBondAmount(prevVal ? String(prevVal) : '');
-    setBidBondCurrency(myQuot?.bidBondCurrency || currentRfq.bidSecurityCurrency || companyDefaultCurrency || 'KES');
-    setBidBondIssueDate(myQuot?.bidBondIssueDate || '');
-    setBidBondExpiryDate(myQuot?.bidBondExpiryDate || '');
-    setBidBondValidityValue(prevValDays ? String(prevValDays) : '');
+    const initIssueDate = myQuot?.bidBondIssueDate ? String(myQuot.bidBondIssueDate).slice(0, 10) : '';
+    let initExpiryDate = myQuot?.bidBondExpiryDate ? String(myQuot.bidBondExpiryDate).slice(0, 10) : '';
+    let initValDays = prevValDays ? String(prevValDays) : '';
+    const valDaysNum = parseInt(initValDays) || currentRfq.bidBondMinValidity || 0;
+    if (initIssueDate && !initExpiryDate && valDaysNum > 0) {
+      initExpiryDate = addDaysToDateString(initIssueDate, valDaysNum);
+    } else if (initIssueDate && initExpiryDate && !initValDays) {
+      const diff = getDaysBetweenDateStrings(initIssueDate, initExpiryDate);
+      if (diff !== null && diff > 0) {
+        initValDays = String(diff);
+      }
+    }
+    setBidBondIssueDate(initIssueDate);
+    setBidBondExpiryDate(initExpiryDate);
+    setBidBondValidityValue(initValDays);
     setBidBondValidityUnit((myQuot?.bidBondValidityUnit as 'DAYS' | '') || 'DAYS');
     // Also reset card-body bid security upload state to prevent stale loading indicator
     setBidSecurityUploadingRfqId(prev => prev === currentRfq.id ? null : prev);
@@ -767,9 +824,13 @@ export default function VendorRFQsPage() {
         bidSecurityCurrency: bidSecValueType === 'FIXED_AMOUNT' ? bidSecCurrency : undefined,
         bidSecurityValidityValue: bidSecValidityValue ? parseInt(bidSecValidityValue, 10) : undefined,
         bidSecurityValidityUnit: bidSecValidityValue ? 'DAYS' : undefined,
-        // Additional bid security fields: bond number, issuer
+        // Additional bid security fields: bond number, issuer, dates
         bidBondNumber: bidSecBondNumber || undefined,
         bidBondIssuer: bidSecIssuer || undefined,
+        bidSecurityIssueDate: bidSecIssueDate || undefined,
+        bidSecurityExpiryDate: bidSecExpiryDate || undefined,
+        bidBondIssueDate: bidSecIssueDate || undefined,
+        bidBondExpiryDate: bidSecExpiryDate || undefined,
       } : undefined;
 
       const bidBondPayload = quotModal.bidBondRequired ? {
@@ -967,7 +1028,7 @@ export default function VendorRFQsPage() {
               {expanded && <div className="rfq-register__details text-sm" id={`rfq-details-${rfq.id}`}>
                 <div className="rfq-section-heading"><strong>Requirements · {rfq.title}</strong><span className="text-xs rfq-muted">Created {quoteDate(rfq.createdAt)}</span></div>
                 {rfq.description && <p className="rfq-muted">{rfq.description}</p>}
-                <div className="rfq-table-scroll" tabIndex={0} role="region" aria-label={`Required items for ${rfq.rfqNumber}`}><table className="rfq-pricing-table"><thead><tr><th scope="col">Item / Description</th><th scope="col">Quantity</th><th scope="col">Expected delivery</th></tr></thead><tbody>{rfq.items.map(item => <tr key={item.id}><td><strong>{item.name}</strong>{item.description && <p className="text-xs rfq-muted">{item.description}</p>}</td><td>{item.quantity} {item.unit}</td><td>{quoteDate(item.expectedDate)}</td></tr>)}</tbody></table></div>
+                <div className="rfq-table-scroll" role="region" aria-label={`Required items for ${rfq.rfqNumber}`}><table className="rfq-pricing-table"><thead><tr><th scope="col">Item / Description</th><th scope="col">Quantity</th><th scope="col">Expected delivery</th></tr></thead><tbody>{rfq.items.map(item => <tr key={item.id}><td><strong>{item.name}</strong>{item.description && <p className="text-xs rfq-muted">{item.description}</p>}</td><td>{item.quantity} {item.unit}</td><td>{quoteDate(item.expectedDate)}</td></tr>)}</tbody></table></div>
                 {(rfq.bidSecurityRequired || rfq.bidBondRequired) && <div className="flex items-center gap-2 rfq-muted"><Shield size={16} />{[rfq.bidSecurityRequired && 'Bid security required', rfq.bidBondRequired && 'Bid bond required'].filter(Boolean).join(' · ')}</div>}
               </div>}
             </article>;
@@ -1377,6 +1438,48 @@ export default function VendorRFQsPage() {
                           )}
                         </div>
 
+                        <div className="vquot-bond-sub__grid" style={{ marginBottom: 12 }}>
+                          <div className="vquot-modal__field">
+                            <label className="vquot-modal__label">Issue *</label>
+                            <input
+                              className="vquot-modal__input"
+                              type="date"
+                              value={bidSecIssueDate ? String(bidSecIssueDate).slice(0, 10) : ''}
+                              onChange={(e) => {
+                                const newIssue = e.target.value;
+                                setBidSecIssueDate(newIssue);
+                                const validityDays = parseInt(bidSecValidityValue) || quotModal?.bidSecurityMinValidity || 0;
+                                if (newIssue && validityDays > 0) {
+                                  setBidSecExpiryDate(addDaysToDateString(newIssue, validityDays));
+                                  if (!bidSecValidityValue) {
+                                    setBidSecValidityValue(String(validityDays));
+                                  }
+                                }
+                              }}
+                              disabled={isQuotReadOnly}
+                            />
+                          </div>
+                          <div className="vquot-modal__field">
+                            <label className="vquot-modal__label">Expiry *</label>
+                            <input
+                              className="vquot-modal__input"
+                              type="date"
+                              value={bidSecExpiryDate ? String(bidSecExpiryDate).slice(0, 10) : ''}
+                              onChange={(e) => {
+                                const newExpiry = e.target.value;
+                                setBidSecExpiryDate(newExpiry);
+                                if (bidSecIssueDate && newExpiry) {
+                                  const diffDays = getDaysBetweenDateStrings(bidSecIssueDate, newExpiry);
+                                  if (diffDays !== null && diffDays > 0) {
+                                    setBidSecValidityValue(String(diffDays));
+                                  }
+                                }
+                              }}
+                              disabled={isQuotReadOnly}
+                            />
+                          </div>
+                        </div>
+
                         <div className="vquot-modal__field">
                           <label className="vquot-modal__label">Validity *</label>
                           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -1386,7 +1489,14 @@ export default function VendorRFQsPage() {
                               min="1"
                               placeholder="e.g. 90"
                               value={bidSecValidityValue}
-                              onChange={(e) => setBidSecValidityValue(e.target.value)}
+                              onChange={(e) => {
+                                const newVal = e.target.value;
+                                setBidSecValidityValue(newVal);
+                                const days = parseInt(newVal);
+                                if (bidSecIssueDate && days > 0) {
+                                  setBidSecExpiryDate(addDaysToDateString(bidSecIssueDate, days));
+                                }
+                              }}
                               disabled={isQuotReadOnly}
                               style={{ flex: 1 }}
                             />
@@ -1400,8 +1510,20 @@ export default function VendorRFQsPage() {
                               <option value="DAYS">Days</option>
                             </select>
                           </div>
-                          {/* ⚠ Warning: Bid Security validity below minimum */}
-                          {quotModal?.bidSecurityMinValidity != null && bidSecValidityValue && parseInt(bidSecValidityValue) < quotModal.bidSecurityMinValidity && (
+                          {/* ⚠ Warning: Check validity based on issue/expiry dates */}
+                          {quotModal?.bidSecurityMinValidity != null && bidSecIssueDate && bidSecExpiryDate && (() => {
+                            const diffDays = getDaysBetweenDateStrings(bidSecIssueDate, bidSecExpiryDate);
+                            if (diffDays !== null && diffDays < quotModal.bidSecurityMinValidity!) {
+                              return (
+                                <div className="vquot-warning">
+                                  ⚠ Warning: Minimum bid security validity required is {quotModal.bidSecurityMinValidity} days. Current validity ({diffDays} days) is below the minimum.
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
+                          {/* Fallback warning if issue/expiry not both set */}
+                          {quotModal?.bidSecurityMinValidity != null && (!bidSecIssueDate || !bidSecExpiryDate) && bidSecValidityValue && parseInt(bidSecValidityValue) < quotModal.bidSecurityMinValidity && (
                             <div className="vquot-warning">
                               ⚠ Warning: Minimum bid security validity required is {quotModal.bidSecurityMinValidity} days. Your entered value ({parseInt(bidSecValidityValue)}) is below the minimum.
                             </div>
@@ -1580,7 +1702,17 @@ export default function VendorRFQsPage() {
                               className="vquot-modal__input"
                               type="date"
                               value={bidBondIssueDate ? String(bidBondIssueDate).slice(0, 10) : ''}
-                              onChange={(e) => setBidBondIssueDate(e.target.value)}
+                              onChange={(e) => {
+                                const newIssue = e.target.value;
+                                setBidBondIssueDate(newIssue);
+                                const validityDays = parseInt(bidBondValidityValue) || quotModal?.bidBondMinValidity || 0;
+                                if (newIssue && validityDays > 0) {
+                                  setBidBondExpiryDate(addDaysToDateString(newIssue, validityDays));
+                                  if (!bidBondValidityValue) {
+                                    setBidBondValidityValue(String(validityDays));
+                                  }
+                                }
+                              }}
                               disabled={isQuotReadOnly}
                             />
                           </div>
@@ -1590,7 +1722,16 @@ export default function VendorRFQsPage() {
                               className="vquot-modal__input"
                               type="date"
                               value={bidBondExpiryDate ? String(bidBondExpiryDate).slice(0, 10) : ''}
-                              onChange={(e) => setBidBondExpiryDate(e.target.value)}
+                              onChange={(e) => {
+                                const newExpiry = e.target.value;
+                                setBidBondExpiryDate(newExpiry);
+                                if (bidBondIssueDate && newExpiry) {
+                                  const diffDays = getDaysBetweenDateStrings(bidBondIssueDate, newExpiry);
+                                  if (diffDays !== null && diffDays > 0) {
+                                    setBidBondValidityValue(String(diffDays));
+                                  }
+                                }
+                              }}
                               disabled={isQuotReadOnly}
                             />
                           </div>
@@ -1603,7 +1744,14 @@ export default function VendorRFQsPage() {
                                 min="1"
                                 placeholder="90"
                                 value={bidBondValidityValue}
-                                onChange={(e) => setBidBondValidityValue(e.target.value)}
+                                onChange={(e) => {
+                                  const newVal = e.target.value;
+                                  setBidBondValidityValue(newVal);
+                                  const days = parseInt(newVal);
+                                  if (bidBondIssueDate && days > 0) {
+                                    setBidBondExpiryDate(addDaysToDateString(bidBondIssueDate, days));
+                                  }
+                                }}
                                 disabled={isQuotReadOnly}
                               />
                               <select
@@ -1620,17 +1768,13 @@ export default function VendorRFQsPage() {
 
                         {/* ⚠ Warning: Check validity based on issue/expiry dates */}
                         {quotModal?.bidBondMinValidity != null && bidBondIssueDate && bidBondExpiryDate && (() => {
-                          const issue = new Date(bidBondIssueDate);
-                          const expiry = new Date(bidBondExpiryDate);
-                          if (issue && expiry && expiry > issue) {
-                            const diffDays = Math.round((expiry.getTime() - issue.getTime()) / 86400000);
-                            if (diffDays < quotModal.bidBondMinValidity!) {
-                              return (
-                                <div className="vquot-warning">
-                                  ⚠ Warning: Minimum bid bond validity required is {quotModal.bidBondMinValidity} days. Current validity ({diffDays} days) is below the minimum.
-                                </div>
-                              );
-                            }
+                          const diffDays = getDaysBetweenDateStrings(bidBondIssueDate, bidBondExpiryDate);
+                          if (diffDays !== null && diffDays < quotModal.bidBondMinValidity!) {
+                            return (
+                              <div className="vquot-warning">
+                                ⚠ Warning: Minimum bid bond validity required is {quotModal.bidBondMinValidity} days. Current validity ({diffDays} days) is below the minimum.
+                              </div>
+                            );
                           }
                           return null;
                         })()}

@@ -93,6 +93,16 @@ interface BrandingContextType {
   companyPhone: string | null;
   /** Company email from branding settings */
   companyEmail: string | null;
+  /** Company website from branding settings */
+  companyWebsite: string | null;
+  /** Company address from branding settings */
+  companyAddress: string | null;
+  /** Company city from branding settings */
+  companyCity: string | null;
+  /** Company state / province from branding settings */
+  companyState: string | null;
+  /** Company country from branding settings */
+  companyCountry: string | null;
   /** Logo URL */
   logoUrl: string | null;
   /** Favicon URL */
@@ -223,6 +233,11 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
         if (p.logoUrl === undefined && existing.logoUrl) p = { ...p, logoUrl: existing.logoUrl };
         if (p.faviconUrl === undefined && existing.faviconUrl) p = { ...p, faviconUrl: existing.faviconUrl };
         if (p.companyName === undefined && existing.companyName) p = { ...p, companyName: existing.companyName };
+        if (p.companyWebsite === undefined && existing.companyWebsite) p = { ...p, companyWebsite: existing.companyWebsite };
+        if (p.companyAddress === undefined && existing.companyAddress) p = { ...p, companyAddress: existing.companyAddress };
+        if (p.companyCity === undefined && existing.companyCity) p = { ...p, companyCity: existing.companyCity };
+        if (p.companyState === undefined && existing.companyState) p = { ...p, companyState: existing.companyState };
+        if (p.companyCountry === undefined && existing.companyCountry) p = { ...p, companyCountry: existing.companyCountry };
         if (p.primaryColor === undefined && existing.primaryColor) p = { ...p, primaryColor: existing.primaryColor };
         if (p.primaryPortalName === undefined && existing.primaryPortalName) p = { ...p, primaryPortalName: existing.primaryPortalName };
         if (p.loginText === undefined && existing.loginText) p = { ...p, loginText: existing.loginText };
@@ -277,6 +292,11 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
     companyName: dynamicName,
     companyPhone: profile?.companyPhone || null,
     companyEmail: profile?.companyEmail || null,
+    companyWebsite: profile?.companyWebsite || null,
+    companyAddress: profile?.companyAddress || null,
+    companyCity: profile?.companyCity || null,
+    companyState: profile?.companyState || null,
+    companyCountry: profile?.companyCountry || null,
     logoUrl: profile?.logoUrl || '/Procnex-logo.jpeg' || procnexLogo || heliflowLogo,
     faviconUrl: profile?.faviconUrl || profile?.logoUrl || '/Procnex-logo.jpeg' || null,
     primaryColor: profile?.primaryColor || DEFAULT_PRIMARY,

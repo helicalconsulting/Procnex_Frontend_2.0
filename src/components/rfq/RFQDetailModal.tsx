@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useCurrency, CurrencySelector, CurrencyBadge, DEFAULT_CURRENCY } from '../../components/shared/CurrencyMaster';
 import ActionSendingOverlay from '../shared/ActionSendingOverlay';
+import ActionSuccessModal, { type ActionSuccessModalData } from '../shared/ActionSuccessModal';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import ViewPaymentPlanModal from '../vendor/ViewPaymentPlanModal';
 import { Badge } from '../../components/ui/badge';
@@ -259,6 +260,7 @@ export default function RFQDetailModal({
     docNumber: string;
     mode: 'approve' | 'reject' | 'return';
   } | null>(null);
+  const [actionSuccessData, setActionSuccessData] = useState<ActionSuccessModalData | null>(null);
 
   const fetchApprovalChain = useCallback(() => {
     if (!rfq?.id) return;
@@ -287,12 +289,33 @@ export default function RFQDetailModal({
         const pendingFound = pendingRows.find(
           (r) => (String(r.referenceId) === String(rfq.id) || r.referenceNumber === rfq.rfqNumber) && Boolean(r.canAct)
         );
-        setPendingApproval(pendingFound || null);
+
+        // Check if current user already acted/approved in the active cycle of this RFQ
+        const historyItems = approvalChain?.history || [];
+        const currentUserId = String(user?.id || (user as any)?._id || '');
+        const currentUserName = (user?.fullName || (user as any)?.name || (user as any)?.username || '').trim().toLowerCase();
+
+        const lastReturnIdx = historyItems.map((h: any) => h.status).lastIndexOf('RETURNED');
+        const activeCycleHistory = lastReturnIdx !== -1 ? historyItems.slice(lastReturnIdx + 1) : historyItems;
+
+        const alreadyApprovedInCurrentCycle = activeCycleHistory.some((h: any) =>
+          h.status === 'APPROVED' && (
+            (h.approverId && String(h.approverId) === currentUserId) ||
+            (h.approverName && currentUserName && h.approverName.trim().toLowerCase() === currentUserName)
+          )
+        );
+
+        if (alreadyApprovedInCurrentCycle) {
+          (rfq as any)._isApprovedByMe = true;
+          setPendingApproval(null);
+        } else {
+          setPendingApproval(pendingFound || null);
+        }
       })
       .catch(() => {
         setPendingApproval(null);
       });
-  }, [rfq?.id, rfq?.status, user]);
+  }, [rfq?.id, rfq?.status, user, approvalChain?.history]);
 
   const handleApproveRFQ = async () => {
     if (!pendingApproval || !rfq) return;
@@ -316,19 +339,34 @@ export default function RFQDetailModal({
       setActionSendingState(null);
 
       const hasNextLevel = Boolean(res?.nextLevel);
+      const defaultMsg = hasNextLevel
+        ? (res?.message || 'RFQ Level approved successfully! Forwarded to next level.')
+        : (res?.message || 'RFQ fully approved & dispatched!');
+
+      (rfq as any)._isApprovedByMe = true;
+      (rfq as any).canUserAct = false;
+      setPendingApproval(null);
+      setApprovalActionSuccess(defaultMsg);
+
       if (hasNextLevel) {
         rfq.status = 'PENDING_APPROVAL';
-        setApprovalActionSuccess(res?.message || 'RFQ Level approved successfully! Forwarded to next level.');
-        const rows = await approvalService.listTable({ module: 'RFQ', status: 'PENDING' });
-        const found = rows.find((r) => (String(r.referenceId) === String(rfq.id) || r.referenceNumber === rfq.rfqNumber) && r.canAct);
-        setPendingApproval(found || null);
       } else {
         rfq.status = 'APPROVED';
-        (rfq as any)._isApprovedByMe = true;
-        (rfq as any).canUserAct = false;
-        setPendingApproval(null);
-        setApprovalActionSuccess(res?.message || 'RFQ fully approved & dispatched!');
       }
+
+      setActionSuccessData({
+        actionType: 'approve',
+        module: 'RFQ',
+        referenceNumber: rfq.rfqNumber || String(rfq.id),
+        title: rfq.title,
+        message: defaultMsg,
+        comment: comment || undefined,
+        details: [
+          { label: 'Created By', value: String(rfq.creator || 'Procurement Team') },
+          { label: 'Department', value: String((rfq as any).department || 'Procurement') },
+        ],
+      });
+
       fetchApprovalChain();
       window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
       window.dispatchEvent(new CustomEvent('heliflow:rfq-updated'));
@@ -370,7 +408,20 @@ export default function RFQDetailModal({
       const res = await approvalService.reject(approvalId, comment);
       await new Promise((resolve) => setTimeout(resolve, 1800));
       setActionSendingState(null);
-      if (res?.message) setApprovalActionSuccess(res.message);
+      const msg = res?.message || 'RFQ Rejected.';
+      setApprovalActionSuccess(msg);
+      setActionSuccessData({
+        actionType: 'reject',
+        module: 'RFQ',
+        referenceNumber: rfq.rfqNumber || String(rfq.id),
+        title: rfq.title,
+        message: msg,
+        comment: comment || undefined,
+        details: [
+          { label: 'Created By', value: String(rfq.creator || 'Procurement Team') },
+          { label: 'Department', value: String((rfq as any).department || 'Procurement') },
+        ],
+      });
       fetchApprovalChain();
       window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
     } catch (err) {
@@ -411,7 +462,20 @@ export default function RFQDetailModal({
       const res = await approvalService.return(approvalId, comment, actionReturnTarget);
       await new Promise((resolve) => setTimeout(resolve, 1800));
       setActionSendingState(null);
-      if (res?.message) setApprovalActionSuccess(res.message);
+      const msg = res?.message || 'RFQ Returned for revision.';
+      setApprovalActionSuccess(msg);
+      setActionSuccessData({
+        actionType: 'return',
+        module: 'RFQ',
+        referenceNumber: rfq.rfqNumber || String(rfq.id),
+        title: rfq.title,
+        message: msg,
+        comment: comment || undefined,
+        details: [
+          { label: 'Created By', value: String(rfq.creator || 'Procurement Team') },
+          { label: 'Department', value: String((rfq as any).department || 'Procurement') },
+        ],
+      });
       fetchApprovalChain();
       window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
     } catch (err) {
@@ -710,7 +774,7 @@ export default function RFQDetailModal({
                   const isApprovedByMe = (rfq as any)._isApprovedByMe;
                   const isReturnedByMe = (rfq as any)._isReturnedByMe || (rfq.status === 'RETURNED' && !isApprovedByMe);
                   const displayStatus = isApprovedByMe
-                    ? 'APPROVED'
+                    ? (rfq.status === 'PENDING_APPROVAL' ? 'PENDING_APPROVAL' : 'APPROVED')
                     : isReturnedByMe
                     ? 'RETURNED'
                     : isCurrentStepReReview
@@ -849,7 +913,7 @@ export default function RFQDetailModal({
         })()}
 
         {/* ── 3. PENDING APPROVAL INTERACTIVE CARD (If user can act on pending level / re-review) ── */}
-        {Boolean(pendingApproval && pendingApproval.canAct && !(rfq as any)._isReturnedByMe) && (() => {
+        {Boolean(pendingApproval && pendingApproval.canAct && !(rfq as any)._isReturnedByMe && !(rfq as any)._isApprovedByMe && !(rfq as any)._isRejectedByMe) && (() => {
           const currentPendingLevel = pendingApproval.currentLevel || pendingApproval.levelNumber || approvalChain?.currentLevel || 1;
           const historyItems = approvalChain?.history || [];
           const lastReturnIdx = historyItems.map((h: any) => h.status).lastIndexOf('RETURNED');
@@ -1418,8 +1482,8 @@ export default function RFQDetailModal({
                                 </Badge>
                                 <span className="font-semibold text-foreground">{item.requiredRole}</span>
                               </div>
-                              <span className="text-muted-foreground flex items-center gap-1 font-mono text-[11px]">
-                                <Clock size={12} className="opacity-70" />
+                              <span className="text-foreground/90 flex items-center gap-1.5 font-medium text-sm">
+                                <Clock size={15} className="text-muted-foreground/80 shrink-0" />
                                 {timeText}
                               </span>
                             </div>
@@ -1450,6 +1514,24 @@ export default function RFQDetailModal({
           <ViewPaymentPlanModal
             plan={viewPlanQuotation}
             onClose={() => setViewPlanQuotation(null)}
+          />
+        )}
+
+        {/* ── Action Success Modal ── */}
+        {actionSuccessData && (
+          <ActionSuccessModal
+            data={actionSuccessData}
+            onClose={() => setActionSuccessData(null)}
+          />
+        )}
+
+        {/* ── Action Sending Multi-Step Animated Overlay ── */}
+        {actionSendingState && (
+          <ActionSendingOverlay
+            isOpen={actionSendingState.isOpen}
+            docType="rfq"
+            docNumber={actionSendingState.docNumber}
+            mode={actionSendingState.mode}
           />
         )}
       </div>
@@ -2114,8 +2196,8 @@ export default function RFQDetailModal({
                                     {item.requiredRole}
                                   </span>
                                 </div>
-                                <span style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'monospace' }}>
-                                  <Clock size={12} style={{ opacity: 0.7 }} />
+                                <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <Clock size={15} style={{ opacity: 0.8, color: 'var(--text-secondary)' }} />
                                   {timeText}
                                 </span>
                               </div>
@@ -2187,6 +2269,14 @@ export default function RFQDetailModal({
           <ViewPaymentPlanModal
             plan={viewPlanQuotation}
             onClose={() => setViewPlanQuotation(null)}
+          />
+        )}
+
+        {/* ── Action Success Modal ── */}
+        {actionSuccessData && (
+          <ActionSuccessModal
+            data={actionSuccessData}
+            onClose={() => setActionSuccessData(null)}
           />
         )}
 

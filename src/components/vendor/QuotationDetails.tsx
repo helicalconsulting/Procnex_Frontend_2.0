@@ -20,6 +20,7 @@ export interface QuotationRecord {
   customFieldValues?: Record<string, Scalar>; evalParamValues?: Record<string, Scalar>; evaluationParamValues?: Record<string, Scalar>;
   bidSecurityValueType?: string; bidSecurityValue?: number; bidSecurityCurrency?: string; bidSecurityValidityValue?: number; bidSecurityValidityUnit?: string;
   bidSecurityBondNumber?: string; bidSecurityIssuer?: string; bidSecurityDocumentUrl?: string;
+  bidSecurityIssueDate?: string; bidSecurityExpiryDate?: string;
   bidBondNumber?: string; bidBondIssuer?: string; bidBondAmount?: number; bidBondCurrency?: string; bidBondIssueDate?: string; bidBondExpiryDate?: string;
   bidBondValidityValue?: number; bidBondValidityUnit?: string; bidBondDocumentUrl?: string;
   attachments?: QuoteDocument[];
@@ -91,6 +92,8 @@ export default function QuotationDetails({ quote, rfq, formatAmount }: {
     {(rfq.bidSecurityRequired || present(quote.bidSecurityValue) || quote.bidSecurityBondNumber || quote.bidSecurityDocumentUrl) && <Section title="Bid security" open><Fields fields={[
       ['Value type', quote.bidSecurityValueType === 'PERCENTAGE' ? 'Percentage' : 'Fixed amount'],
       ['Value', quote.bidSecurityValueType === 'PERCENTAGE' ? `${display(quote.bidSecurityValue)}%` : money(quote.bidSecurityValue, quote.bidSecurityCurrency || currency)],
+      ...(present(quote.bidSecurityIssueDate) ? [['Issue date', quoteDate(quote.bidSecurityIssueDate)] as [string, ReactNode]] : []),
+      ...(present(quote.bidSecurityExpiryDate) ? [['Expiry date', quoteDate(quote.bidSecurityExpiryDate)] as [string, ReactNode]] : []),
       ['Validity', present(quote.bidSecurityValidityValue) ? `${quote.bidSecurityValidityValue} ${quote.bidSecurityValidityUnit || 'days'}` : '—'],
       ['Bond / reference', display(quote.bidSecurityBondNumber)], ['Issuer / bank', display(quote.bidSecurityIssuer)],
     ]} />{safeDocumentUrl(quote.bidSecurityDocumentUrl) && <a className="rfq-document-link" href={quote.bidSecurityDocumentUrl} target="_blank" rel="noreferrer"><FileText size={14} /> View bid security document</a>}</Section>}

@@ -7,6 +7,7 @@
 import { toCanvas } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import defaultHeliflowLogo from '../assets/heliflow.png';
+import { signatureService } from '../services/signatureService';
 
 import { cleanDuplicateSignatures } from './cleanSignatures';
 
@@ -470,6 +471,9 @@ export async function downloadPurchaseOrderAsPdf(
   const otherCharges = order.otherCharges || 0;
   const grandTotal = order.grandTotal || order.totalAmount || 0;
 
+  const docSigs = await signatureService.getDocumentSignatures('PurchaseOrders', order.poNumber || String(order.id)).catch(() => []);
+  const isApproved = (order.status || '').toUpperCase().includes('APPROVED');
+
   // ── Smart Multi-Page Chunking ──
   // Page 1 holds up to 6 items comfortably along with full Company Header, Vendor/ShipTo, and PO Info Grid.
   // Subsequent pages without top metadata hold up to 12 items (or 8-9 items if the page contains Totals & Notes).
@@ -679,6 +683,62 @@ export async function downloadPurchaseOrderAsPdf(
                 <div style="padding: 9px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
                   <h4 style="font-size: 10.5px; font-weight: 700; text-transform: uppercase; color: #059669; margin: 0 0 4px 0;">Special Instructions</h4>
                   <p style="font-size: 11px; color: #475569; margin: 0;">${val(order.specialInstructions, 'No special instructions')}</p>
+                </div>
+              </div>
+
+              <!-- Approval Hierarchy & Digital Signature Stamps -->
+              <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #cbd5e1; break-inside: avoid;">
+                <div style="display: flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 800; color: #0369a1; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px;">
+                  APPROVAL HIERARCHY & AUTHORIZATION STAMPS
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                  ${[
+                    {
+                      level: 'LEVEL 1',
+                      role: 'Purchase Clerk',
+                      name: (docSigs && docSigs[0]?.signedByName) || 'Mahi Agarwal',
+                      date: (docSigs && docSigs[0]?.signedAt) ? formatDate(docSigs[0].signedAt) : formatDate(order.createdAt || order.poDate),
+                      isApproved: isApproved || Boolean(docSigs && docSigs[0]?.dataUrl),
+                      signatureUrl: docSigs && docSigs[0]?.dataUrl,
+                    },
+                    {
+                      level: 'LEVEL 2',
+                      role: 'Purchase Manager',
+                      name: (docSigs && docSigs[1]?.signedByName) || 'Nischal Agarwal',
+                      date: (docSigs && docSigs[1]?.signedAt) ? formatDate(docSigs[1].signedAt) : formatDate(order.createdAt || order.poDate),
+                      isApproved: isApproved && (Boolean(docSigs && docSigs[1]?.dataUrl) || (order.status === 'APPROVED')),
+                      signatureUrl: docSigs && (docSigs[1]?.dataUrl || docSigs[0]?.dataUrl),
+                    }
+                  ].map(stamp => `
+                    <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; font-family: sans-serif;">
+                      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <span style="font-size: 9.5px; font-weight: 800; color: #1e293b; background: #e2e8f0; padding: 2px 5px; border-radius: 3px;">${stamp.level}</span>
+                        <span style="font-size: 9px; font-weight: 700; color: ${stamp.isApproved ? '#059669' : '#d97706'}; background: ${stamp.isApproved ? '#ecfdf5' : '#fffbe3'}; border: 1px solid ${stamp.isApproved ? '#a7f3d0' : '#fde68a'}; padding: 1px 5px; border-radius: 3px;">
+                          ${stamp.isApproved ? '✓ APPROVED & SIGNED' : '⏳ PENDING'}
+                        </span>
+                      </div>
+                      <div style="font-size: 11px; font-weight: 800; color: #0f172a;">${stamp.role}</div>
+                      <div style="font-size: 9.5px; color: #64748b; margin-bottom: 4px;">Date: <strong>${stamp.date}</strong></div>
+                      <div style="background: #ffffff; border: 1px dashed #cbd5e1; border-radius: 4px; padding: 4px; text-align: center; min-height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        ${stamp.isApproved ? (
+                          stamp.signatureUrl ? `
+                            <img src="${stamp.signatureUrl}" style="max-height: 38px; max-width: 150px; object-fit: contain;" />
+                          ` : `
+                            <svg viewBox="0 0 170 32" style="width: 140px; height: 32px;">
+                              <path d="M 12 20 Q 30 5, 50 22 T 90 12 T 135 24 T 158 10" fill="none" stroke="#1e3a8a" stroke-width="2.5" stroke-linecap="round" />
+                              <text x="15" y="24" font-family="cursive, sans-serif" font-size="16" fill="#1e3a8a" font-style="italic">${stamp.name}</text>
+                            </svg>
+                          `
+                        ) + `
+                          <div style="display: flex; align-items: center; gap: 3px; font-size: 8.5px; font-weight: 700; color: #0284c7; margin-top: 2px;">
+                            <span>🛡️ Digitally Signed</span>
+                          </div>
+                        ` : `
+                          <div style="font-size: 10px; font-style: italic; color: #94a3b8;">Pending Digital Signature</div>
+                        `}
+                      </div>
+                    </div>
+                  `).join('')}
                 </div>
               </div>
             ` : ''}

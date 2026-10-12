@@ -308,6 +308,19 @@ export function mapApprovalToTableRow(a: Record<string, unknown>): ApprovalTable
     approverId: a.approverId ? String(a.approverId) : (a.approver as any)?.id ? String((a.approver as any).id) : undefined,
     approverName: a.approverName ? String(a.approverName) : (a.approver as any)?.fullName ? String((a.approver as any).fullName) : undefined,
     approverEmail: a.approverEmail ? String(a.approverEmail) : (a.approver as any)?.email ? String((a.approver as any).email) : undefined,
+    vendorName: (a.vendorName as string) || (a.vendor as any)?.name || (a.supplierName as string) || (() => {
+      const rawT = String(a.title || '');
+      if (rawT.includes('for ')) {
+        const after = rawT.split('for ')[1];
+        if (after) {
+          const extracted = after.split(' — ')[0].split(' - ')[0].trim();
+          if (extracted && extracted.toLowerCase() !== 'system administrator') {
+            return extracted;
+          }
+        }
+      }
+      return undefined;
+    })(),
   };
 }
 

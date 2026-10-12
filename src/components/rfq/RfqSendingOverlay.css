@@ -17,8 +17,12 @@
   user-select: none;
 }
 
-[data-theme="light"] .rfq-sending-overlay {
-  background: rgba(15, 23, 42, 0.72);
+:root:not([data-theme="dark"]) .rfq-sending-overlay,
+[data-theme="light"] .rfq-sending-overlay,
+.light .rfq-sending-overlay {
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 /* Ambient glow blobs */
@@ -29,6 +33,12 @@
   pointer-events: none;
   opacity: 0.45;
   animation: rfq-glow-pulse 6s ease-in-out infinite alternate;
+}
+
+:root:not([data-theme="dark"]) .rfq-sending-overlay__glow,
+[data-theme="light"] .rfq-sending-overlay__glow,
+.light .rfq-sending-overlay__glow {
+  display: none !important;
 }
 
 .rfq-sending-overlay__glow--1 {
@@ -73,12 +83,13 @@
   z-index: 2;
 }
 
-[data-theme="light"] .rfq-sending-card {
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid rgba(10, 110, 209, 0.18);
-  box-shadow: 0 25px 60px -15px rgba(15, 23, 42, 0.35),
-              0 0 0 1px rgba(10, 110, 209, 0.08),
-              inset 0 1px 1px rgba(255, 255, 255, 0.8);
+:root:not([data-theme="dark"]) .rfq-sending-card,
+[data-theme="light"] .rfq-sending-card,
+.light .rfq-sending-card {
+  background: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow: 0 24px 48px -12px rgba(15, 23, 42, 0.16),
+              0 0 0 1px rgba(15, 23, 42, 0.05);
   color: #0f172a;
 }
 

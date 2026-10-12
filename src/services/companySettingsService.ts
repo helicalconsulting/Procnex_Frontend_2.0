@@ -262,6 +262,7 @@ export interface CompanyProfile {
   companyName?: string | null;
   companyPhone?: string | null;
   companyEmail?: string | null;
+  companyWebsite?: string | null;
   companyAddress?: string | null;
   companyCity?: string | null;
   companyState?: string | null;
@@ -285,6 +286,7 @@ export interface UpdateBrandingPayload {
   companyName?: string;
   companyPhone?: string;
   companyEmail?: string;
+  companyWebsite?: string;
   companyAddress?: string;
   companyCity?: string;
   companyState?: string;
@@ -388,6 +390,17 @@ async function mockUpdateCompanyProfile(payload: UpdateCompanyProfilePayload): P
     createdAt: '',
     updatedAt: '',
     companyName: payload.companyName || null,
+    companyPhone: payload.companyPhone || null,
+    companyEmail: payload.companyEmail || null,
+    companyWebsite: payload.companyWebsite || null,
+    companyAddress: payload.companyAddress || null,
+    companyCity: payload.companyCity || null,
+    companyState: payload.companyState || null,
+    companyCountry: payload.companyCountry || null,
+    taxRegistrationNumber: payload.taxRegistrationNumber || null,
+    bankName: payload.bankName || null,
+    bankAccountNumber: payload.bankAccountNumber || null,
+    bankIfscCode: payload.bankIfscCode || null,
     logoUrl: payload.logoUrl || null,
     faviconUrl: payload.faviconUrl || null,
     primaryColor: payload.primaryColor || '#0a6ed1',
@@ -865,6 +878,7 @@ export interface FormFieldConfig {
   fieldType: string;
   isVisible: boolean;
   sortOrder: number;
+  options?: string[];
 }
 
 const MOCK_FORM_FIELDS: Record<string, FormFieldConfig[]> = {};
@@ -1526,7 +1540,7 @@ export const companySettingsService = {
     const configs = data.configs || [];
     return configs.filter((f) => f.sectionKey === 'custom_fields' || f.fieldKey.startsWith('cf_'));
   },
-  createFormFieldConfig: async (payload: { formKey: string; fieldKey: string; label: string; fieldType: string; sectionKey?: string; sectionLabel?: string; sortOrder?: number; isVisible?: boolean }) => {
+  createFormFieldConfig: async (payload: { formKey: string; fieldKey: string; label: string; fieldType: string; sectionKey?: string; sectionLabel?: string; sortOrder?: number; isVisible?: boolean; options?: string[] }) => {
     const data = await apiRequest<FormFieldConfig>('/form-config/form-fields', {
       method: 'POST',
       body: JSON.stringify({

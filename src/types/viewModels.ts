@@ -148,6 +148,7 @@ export interface ApprovalTableRow {
   approverId?: string;
   approverName?: string;
   approverEmail?: string;
+  vendorName?: string;
 }
 
 export interface NotificationRow {

@@ -982,10 +982,25 @@ export default function OnboardingQueuePage() {
                             const key = f.fieldKey || f.label;
                             const flexiVals = (snapshotData.flexiFieldValues as Record<string, string>) || {};
                             const val = flexiVals[key] ?? flexiVals[f.label] ?? flexiVals[f.fieldKey || ''];
+                            const isAttachment = (f.fieldType === 'attachment' || f.fieldType === 'file') || (typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://') || val.startsWith('/api/')));
+                            const isCheckbox = f.fieldType === 'checkbox';
+                            const isDate = f.fieldType === 'date';
                             return (
                               <div key={idx}>
                                 <div className="text-muted-foreground font-medium">{f.label}</div>
-                                <div className="font-semibold text-foreground mt-0.5">{val || <span className="text-muted-foreground italic">Not filled</span>}</div>
+                                <div className="font-semibold text-foreground mt-0.5">
+                                  {isAttachment && val ? (
+                                    <a href={val} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
+                                      View Attachment
+                                    </a>
+                                  ) : isCheckbox && val ? (
+                                    val === 'Yes' || val === 'true' ? '✓ Yes' : '✗ No'
+                                  ) : isDate && val && !isNaN(new Date(val).getTime()) ? (
+                                    new Date(val).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                                  ) : (
+                                    val || <span className="text-muted-foreground italic">Not filled</span>
+                                  )}
+                                </div>
                               </div>
                             );
                           })

@@ -1100,7 +1100,11 @@ export default function CompanySettingsPage() {
   const [brandingSupportEmail, setBrandingSupportEmail] = useState('');
   const [brandingCompanyPhone, setBrandingCompanyPhone] = useState('');
   const [brandingCompanyEmail, setBrandingCompanyEmail] = useState('');
+  const [brandingCompanyWebsite, setBrandingCompanyWebsite] = useState('');
   const [brandingCompanyAddress, setBrandingCompanyAddress] = useState('');
+  const [brandingCompanyCity, setBrandingCompanyCity] = useState('');
+  const [brandingCompanyState, setBrandingCompanyState] = useState('');
+  const [brandingCompanyCountry, setBrandingCompanyCountry] = useState('');
   const [brandingTaxRegistrationNumber, setBrandingTaxRegistrationNumber] = useState('');
   const [brandingBankName, setBrandingBankName] = useState('');
   const [brandingBankAccountNumber, setBrandingBankAccountNumber] = useState('');
@@ -1123,7 +1127,11 @@ export default function CompanySettingsPage() {
       setBrandingSupportEmail(profile.supportEmail || '');
       setBrandingCompanyPhone(profile.companyPhone || '');
       setBrandingCompanyEmail(profile.companyEmail || '');
+      setBrandingCompanyWebsite(profile.companyWebsite || '');
       setBrandingCompanyAddress(profile.companyAddress || '');
+      setBrandingCompanyCity(profile.companyCity || '');
+      setBrandingCompanyState(profile.companyState || '');
+      setBrandingCompanyCountry(profile.companyCountry || '');
       setBrandingTaxRegistrationNumber(profile.taxRegistrationNumber || '');
       setBrandingBankName(profile.bankName || '');
       setBrandingBankAccountNumber(profile.bankAccountNumber || '');
@@ -1148,7 +1156,11 @@ export default function CompanySettingsPage() {
       if (brandingSupportEmail !== (profile?.supportEmail || '')) payload.supportEmail = brandingSupportEmail;
       if (brandingCompanyPhone !== (profile?.companyPhone || '')) payload.companyPhone = brandingCompanyPhone;
       if (brandingCompanyEmail !== (profile?.companyEmail || '')) payload.companyEmail = brandingCompanyEmail;
+      if (brandingCompanyWebsite !== (profile?.companyWebsite || '')) payload.companyWebsite = brandingCompanyWebsite;
       if (brandingCompanyAddress !== (profile?.companyAddress || '')) payload.companyAddress = brandingCompanyAddress;
+      if (brandingCompanyCity !== (profile?.companyCity || '')) payload.companyCity = brandingCompanyCity;
+      if (brandingCompanyState !== (profile?.companyState || '')) payload.companyState = brandingCompanyState;
+      if (brandingCompanyCountry !== (profile?.companyCountry || '')) payload.companyCountry = brandingCompanyCountry;
       if (brandingTaxRegistrationNumber !== (profile?.taxRegistrationNumber || '')) payload.taxRegistrationNumber = brandingTaxRegistrationNumber;
       if (brandingBankName !== (profile?.bankName || '')) payload.bankName = brandingBankName;
       if (brandingBankAccountNumber !== (profile?.bankAccountNumber || '')) payload.bankAccountNumber = brandingBankAccountNumber;
@@ -1171,8 +1183,9 @@ export default function CompanySettingsPage() {
     }
   }, [
     brandingDirty, brandingName, brandingLogoUrl, brandingColor, brandingLoginText,
-    brandingSupportEmail, brandingCompanyPhone, brandingCompanyEmail,
-    brandingCompanyAddress, brandingTaxRegistrationNumber, brandingBankName,
+    brandingSupportEmail, brandingCompanyPhone, brandingCompanyEmail, brandingCompanyWebsite,
+    brandingCompanyAddress, brandingCompanyCity, brandingCompanyState, brandingCompanyCountry,
+    brandingTaxRegistrationNumber, brandingBankName,
     brandingBankAccountNumber, brandingBankIfscCode, profile, refreshBranding, canCreateSettings
   ]);
 
@@ -2225,7 +2238,24 @@ export default function CompanySettingsPage() {
   const [formFieldsLoading, setFormFieldsLoading] = useState(false);
   const [newFieldName, setNewFieldName] = useState('');
   const [newFieldType, setNewFieldType] = useState('alphabetical');
+  const [dropdownOptions, setDropdownOptions] = useState<string[]>([]);
+  const [newOptionInput, setNewOptionInput] = useState('');
   const [addingFormField, setAddingFormField] = useState(false);
+
+  const handleAddDropdownOption = () => {
+    const trimmed = newOptionInput.trim();
+    if (!trimmed) return;
+    if (dropdownOptions.includes(trimmed)) {
+      setPageMsg('This option already exists.');
+      return;
+    }
+    setDropdownOptions((prev) => [...prev, trimmed]);
+    setNewOptionInput('');
+  };
+
+  const handleRemoveDropdownOption = (indexToRemove: number) => {
+    setDropdownOptions((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+  };
 
   const AVAILABLE_FORMS = [
     { key: 'vendor_onboarding', label: 'Vendor Onboarding Form' },
@@ -2252,6 +2282,10 @@ export default function CompanySettingsPage() {
 
   const handleAddCustomField = useCallback(async () => {
     if (!selectedFormKey || !newFieldName.trim()) return;
+    if (newFieldType === 'dropdown' && dropdownOptions.length === 0) {
+      setPageMsg('Please add at least one option for the dropdown field.');
+      return;
+    }
     setAddingFormField(true);
     try {
       const fieldKey = `cf_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
@@ -2264,9 +2298,12 @@ export default function CompanySettingsPage() {
         sectionLabel: 'Custom Fields',
         sortOrder: formCustomFields.length,
         isVisible: true,
+        options: newFieldType === 'dropdown' ? dropdownOptions : [],
       });
       setNewFieldName('');
       setNewFieldType('alphabetical');
+      setDropdownOptions([]);
+      setNewOptionInput('');
       await fetchFormFields(selectedFormKey);
       setPageMsg('Flexi field created successfully!');
     } catch (err) {
@@ -2274,7 +2311,7 @@ export default function CompanySettingsPage() {
     } finally {
       setAddingFormField(false);
     }
-  }, [selectedFormKey, newFieldName, newFieldType, formCustomFields.length, fetchFormFields]);
+  }, [selectedFormKey, newFieldName, newFieldType, dropdownOptions, formCustomFields.length, fetchFormFields]);
 
   const handleDeleteFormField = useCallback(async (id: string) => {
     if (!selectedFormKey) return;
@@ -3509,15 +3546,60 @@ export default function CompanySettingsPage() {
                   <span className="cs-field-hint">Shown on Purchase Order documents and contract templates</span>
                 </SettingsField>
 
-                {/* Company Address */}
+                {/* Company Website */}
                 <SettingsField className="company-settings__field">
-                  <label>Company Address / Headquarters</label>
+                  <label>Company Website</label>
+                  <Input
+                    type="url"
+                    value={brandingCompanyWebsite}
+                    onChange={(e) => { setBrandingCompanyWebsite(e.target.value); markBrandingDirty(); }}
+                    placeholder="https://www.example.com"
+                  />
+                  <span className="cs-field-hint">Official organization website printed on PO headers and invoices</span>
+                </SettingsField>
+
+                {/* Company Address */}
+                <SettingsField className="company-settings__field cs-branding-field--full" style={{ gridColumn: '1 / -1' }}>
+                  <label>Company Address / Headquarters (Employee Side)</label>
                   <Input
                     value={brandingCompanyAddress}
                     onChange={(e) => { setBrandingCompanyAddress(e.target.value); markBrandingDirty(); }}
-                    placeholder="123 Business Avenue, Suite 500, City, Country"
+                    placeholder="e.g. Building 4, Enterprise Business Park, Sector 62"
                   />
-                  <span className="cs-field-hint">Rendered on Tax Invoices, Purchase Orders, and Payment Vouchers</span>
+                  <span className="cs-field-hint">Primary registered office street address for the employee company / organization (rendered on POs, RFQs, Invoices & Agreements)</span>
+                </SettingsField>
+
+                {/* City */}
+                <SettingsField className="company-settings__field">
+                  <label>Company City</label>
+                  <Input
+                    value={brandingCompanyCity}
+                    onChange={(e) => { setBrandingCompanyCity(e.target.value); markBrandingDirty(); }}
+                    placeholder="e.g. Nairobi / Mumbai"
+                  />
+                  <span className="cs-field-hint">City of the registered company office</span>
+                </SettingsField>
+
+                {/* State / Province */}
+                <SettingsField className="company-settings__field">
+                  <label>Company State / Province</label>
+                  <Input
+                    value={brandingCompanyState}
+                    onChange={(e) => { setBrandingCompanyState(e.target.value); markBrandingDirty(); }}
+                    placeholder="e.g. Nairobi County / Maharashtra"
+                  />
+                  <span className="cs-field-hint">State or province of the registered company office</span>
+                </SettingsField>
+
+                {/* Country */}
+                <SettingsField className="company-settings__field">
+                  <label>Company Country</label>
+                  <Input
+                    value={brandingCompanyCountry}
+                    onChange={(e) => { setBrandingCompanyCountry(e.target.value); markBrandingDirty(); }}
+                    placeholder="e.g. Kenya / India"
+                  />
+                  <span className="cs-field-hint">Country for legal and billing jurisdiction</span>
                 </SettingsField>
 
                 {/* Tax / GSTIN Registration */}
@@ -3588,7 +3670,11 @@ export default function CompanySettingsPage() {
                           setBrandingSupportEmail(profile.supportEmail || '');
                           setBrandingCompanyPhone(profile.companyPhone || '');
                           setBrandingCompanyEmail(profile.companyEmail || '');
+                          setBrandingCompanyWebsite(profile.companyWebsite || '');
                           setBrandingCompanyAddress(profile.companyAddress || '');
+                          setBrandingCompanyCity(profile.companyCity || '');
+                          setBrandingCompanyState(profile.companyState || '');
+                          setBrandingCompanyCountry(profile.companyCountry || '');
                           setBrandingTaxRegistrationNumber(profile.taxRegistrationNumber || '');
                           setBrandingBankName(profile.bankName || '');
                           setBrandingBankAccountNumber(profile.bankAccountNumber || '');
@@ -3963,6 +4049,7 @@ export default function CompanySettingsPage() {
                           <option value="number">Number</option>
                           <option value="date">Date</option>
                           <option value="dropdown">Dropdown</option>
+                          <option value="checkbox">Checkbox</option>
                           <option value="attachment">Attachment</option>
                         </Select>
                       </SettingsField>
@@ -3971,12 +4058,99 @@ export default function CompanySettingsPage() {
                           type="button"
                           className="settings-action"
                           onClick={handleAddCustomField}
-                          disabled={addingFormField || !newFieldName.trim()}
+                          disabled={addingFormField || !newFieldName.trim() || (newFieldType === 'dropdown' && dropdownOptions.length === 0)}
                         >
                           <Plus size={14} /> {addingFormField ? 'Adding...' : 'Add Field'}
                         </Button>
                       </div>
                     </div>
+
+                    {newFieldType === 'dropdown' && (
+                      <div style={{
+                        marginTop: 14,
+                        padding: '14px 16px',
+                        background: 'var(--surface-elevated, #f8fafc)',
+                        borderRadius: 8,
+                        border: '1px solid var(--border, #e2e8f0)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 10,
+                      }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary, #1e293b)' }}>
+                          Dropdown Options <span style={{ color: '#dc2626' }}>*</span>
+                          <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-secondary, #64748b)', marginLeft: 8 }}>
+                            Add the selectable options for this dropdown
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <Input
+                            type="text"
+                            placeholder="Type an option and press Add (e.g. Regular, Express)"
+                            value={newOptionInput}
+                            onChange={(e) => setNewOptionInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleAddDropdownOption();
+                              }
+                            }}
+                            style={{ flex: 1 }}
+                          />
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={handleAddDropdownOption}
+                            disabled={!newOptionInput.trim()}
+                          >
+                            <Plus size={13} /> Add Option
+                          </Button>
+                        </div>
+                        {dropdownOptions.length > 0 ? (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                            {dropdownOptions.map((opt, idx) => (
+                              <span
+                                key={idx}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  background: 'rgba(10, 110, 209, 0.1)',
+                                  color: 'var(--primary-500, #0a6ed1)',
+                                  border: '1px solid rgba(10, 110, 209, 0.25)',
+                                  padding: '4px 10px',
+                                  borderRadius: 16,
+                                  fontSize: 13,
+                                  fontWeight: 500,
+                                }}
+                              >
+                                {opt}
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveDropdownOption(idx)}
+                                  style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: 'inherit',
+                                    cursor: 'pointer',
+                                    padding: 0,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                  }}
+                                  title="Remove option"
+                                >
+                                  <X size={12} />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 12, color: '#dc2626' }}>
+                            At least one option is required to create a dropdown field.
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* ── Flexi Fields List ── */}
@@ -4014,6 +4188,27 @@ export default function CompanySettingsPage() {
                             <div style={{ fontWeight: 500, color: 'var(--text-primary, #1e293b)' }}>
                               {field.label}
                               <span style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary, #64748b)' }}>Key: {field.fieldKey}</span>
+                              {field.fieldType === 'dropdown' && field.options && field.options.length > 0 && (
+                                <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+                                  <span style={{ fontSize: 11, color: 'var(--text-secondary, #64748b)', fontWeight: 600 }}>Options:</span>
+                                  {field.options.map((opt, optIdx) => (
+                                    <span
+                                      key={optIdx}
+                                      style={{
+                                        fontSize: 11,
+                                        background: 'rgba(10, 110, 209, 0.08)',
+                                        border: '1px solid rgba(10, 110, 209, 0.2)',
+                                        color: 'var(--primary-500, #0a6ed1)',
+                                        padding: '1px 6px',
+                                        borderRadius: 8,
+                                        fontWeight: 500,
+                                      }}
+                                    >
+                                      {opt}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                             <div>
                               <span className="settings-field-type" style={{

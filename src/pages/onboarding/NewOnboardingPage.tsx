@@ -767,7 +767,7 @@ export default function NewOnboardingPage() {
         notes: notes.trim() || undefined,
         documentIds: selectedDocIds.length > 0 ? selectedDocIds : undefined,
         flexiFields: onboardingFlexiFields.length > 0
-          ? onboardingFlexiFields.map((f) => ({ fieldKey: f.fieldKey || '', label: f.label, fieldType: f.fieldType }))
+          ? onboardingFlexiFields.map((f) => ({ fieldKey: f.fieldKey || '', label: f.label, fieldType: f.fieldType, options: f.options }))
           : undefined,
         ndaMndaRequired: (ndaRequired && mndaRequired) || undefined,
         ndaRequired: ndaRequired || undefined,
@@ -2942,7 +2942,27 @@ export default function NewOnboardingPage() {
                         </div>
                         {value !== undefined && (
                           <div style={{ fontSize: 13, color: 'var(--text-secondary)', paddingTop: 6, marginTop: 2, borderTop: '1px dashed var(--border)' }}>
-                            <strong>Filled Value:</strong> <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{value || 'Not filled'}</span>
+                            <strong>Filled Value:</strong>{' '}
+                            {(f.fieldType === 'attachment' || f.fieldType === 'file') && typeof value === 'string' && (value.startsWith('http') || value.startsWith('/')) ? (
+                              <a
+                                href={value}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ color: 'var(--primary-500)', fontWeight: 600, textDecoration: 'underline' }}
+                              >
+                                View Attachment
+                              </a>
+                            ) : f.fieldType === 'checkbox' ? (
+                              <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                                {value === 'Yes' || value === 'true' || value === true ? '✓ Yes' : '✗ No'}
+                              </span>
+                            ) : f.fieldType === 'date' && typeof value === 'string' && value && !isNaN(new Date(value).getTime()) ? (
+                              <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                                {new Date(value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                              </span>
+                            ) : (
+                              <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{String(value) || 'Not filled'}</span>
+                            )}
                           </div>
                         )}
                       </div>
