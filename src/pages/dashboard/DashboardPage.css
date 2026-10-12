@@ -1758,9 +1758,16 @@ body.dash-is-dragging .dash-drag-ghost * {
 
 /* ─── Responsive ─────────────────────────────────────────── */
 
-@media (min-width: 900px) {
+@media (min-width: 1281px) {
   .dash-kpis {
     grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 12px;
+  }
+}
+
+@media (max-width: 1280px) and (min-width: 900px) {
+  .dash-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 12px;
   }
 }

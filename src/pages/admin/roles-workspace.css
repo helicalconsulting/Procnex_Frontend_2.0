@@ -4,7 +4,10 @@
 .roles-metrics [role="button"] { cursor: pointer; }
 .roles-workspace :is(button, [tabindex="0"]):focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .roles-workspace button:disabled { cursor: not-allowed; }
-.roles-split { display: grid; grid-template-columns: 276px minmax(0, 1fr); height: max(500px, calc(100vh - 330px)); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; background: var(--card); }
+.roles-split { display: grid; grid-template-columns: minmax(220px, 276px) minmax(0, 1fr); min-height: 480px; height: max(480px, calc(100vh - 300px)); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; background: var(--card); }
+@media (max-width: 1024px) {
+  .roles-split { grid-template-columns: minmax(200px, 240px) minmax(0, 1fr); }
+}
 .roles-picker { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--border); }
 .roles-picker__header { padding: 18px 16px 14px; border-bottom: 1px solid var(--border); }
 .roles-picker__header > div:first-child { display: flex; justify-content: space-between; margin-bottom: 12px; }

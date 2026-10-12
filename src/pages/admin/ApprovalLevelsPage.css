@@ -21,7 +21,7 @@
 .alvl-page__add-btn:active { transform: translateY(0); }
 
 /* Summary */
-.alvl-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.alvl-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
 
 .alvl-summary-card {
   padding: 20px; border-radius: var(--radius-lg); background: var(--surface-card);
@@ -696,7 +696,8 @@
    Responsive
    ═══════════════════════════════════════════════════════════ */
 
-@media (max-width: 1023px) { .alvl-summary { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 1200px) { .alvl-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 1023px) { .alvl-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 @media (max-width: 768px) {
   .alvl-page__header { flex-direction: column; align-items: flex-start; }

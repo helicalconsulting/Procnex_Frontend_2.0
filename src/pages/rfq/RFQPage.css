@@ -58,9 +58,10 @@
 .rfq-toolbar__search input:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(10,110,209,0.1); }
 
 /* ─── KPI Summary Cards (Glassmorphism) ──────────────────── */
-.rfq-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; width: 100%; padding: 4px; margin: -4px; overflow: visible; }
-@media (max-width: 1024px) { .rfq-summary { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 640px) { .rfq-summary { grid-template-columns: repeat(2, 1fr); } }
+.rfq-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; width: 100%; padding: 4px; margin: -4px; overflow: visible; }
+@media (max-width: 1200px) { .rfq-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 1024px) { .rfq-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .rfq-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 .rfq-summary-card {
   position: relative;

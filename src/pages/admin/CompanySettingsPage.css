@@ -1747,6 +1747,12 @@
   box-shadow: 0 0 0 2px rgba(77, 177, 255, 0.15);
 }
 
+.cs-mandatory-custom-container {
+  overflow-x: auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
 /* ── Required Documents Table Header & Item Rows (Light & Dark Mode) ── */
 .cs-doc-grid-header {
   display: grid;

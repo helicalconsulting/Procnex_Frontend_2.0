@@ -94,12 +94,14 @@ export default function DesktopWindow({
     if (!open) return;
     const cx = window.innerWidth / 2;
     const cy = window.innerHeight / 2;
+    const targetW = Math.min(defaultWidth, Math.max(minWidth, window.innerWidth - 32));
+    const targetH = Math.min(defaultHeight, Math.max(minHeight, window.innerHeight - 32));
     setPos({
-      x: Math.max(16, cx - defaultWidth / 2),
-      y: Math.max(16, cy - defaultHeight / 2),
+      x: Math.max(16, cx - targetW / 2),
+      y: Math.max(16, cy - targetH / 2),
     });
-    setSize({ w: defaultWidth, h: defaultHeight });
-  }, [open, defaultWidth, defaultHeight]);
+    setSize({ w: targetW, h: targetH });
+  }, [open, defaultWidth, defaultHeight, minWidth, minHeight]);
 
   // ── Focus element inside body on open (preventing focus on top bar header buttons) ──
   useEffect(() => {

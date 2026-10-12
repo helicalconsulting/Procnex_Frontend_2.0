@@ -159,7 +159,7 @@
 
 /* ── Summary ─────────────────────────────────────────────── */
 
-.quot-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; padding: 4px; margin: -4px; }
+.quot-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; padding: 4px; margin: -4px; }
 .quot-summary-card {
   padding: 20px;
   border-radius: 14px !important;
@@ -3172,7 +3172,8 @@
   box-shadow: 0 2px 8px rgba(139,92,246,0.2) !important;
 }
 
-@media (max-width: 1023px) { .quot-summary { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 1200px) { .quot-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 1023px) { .quot-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 @media (max-width: 768px) {
   .quot-page__header { flex-direction: column; align-items: flex-start; }

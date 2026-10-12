@@ -210,7 +210,7 @@
 /* ── Metric Cards Grid ─────────────────────────────────── */
 .ctr-detail__balance-cards {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   margin-top: 4px;
 }
@@ -344,7 +344,7 @@
 /* ── Summary Metadata Row ───────────────────────────────── */
 .ctr-detail__summary-meta {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 16px;
   padding-top: 18px;
   border-top: 1px solid var(--border);
@@ -1131,9 +1131,13 @@
 }
 
 /* ── Responsive adjustments ─────────────────────────────── */
+@media (max-width: 1280px) {
+  .ctr-detail__summary-meta { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
 @media (max-width: 1024px) {
-  .ctr-detail__balance-cards { grid-template-columns: repeat(2, 1fr); }
-  .ctr-detail__summary-meta { grid-template-columns: repeat(3, 1fr); }
+  .ctr-detail__balance-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ctr-detail__summary-meta { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (max-width: 768px) {
