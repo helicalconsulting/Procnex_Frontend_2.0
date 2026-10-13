@@ -1011,24 +1011,6 @@ export default function CreatePurchaseOrderPage() {
           <button className="cpo-btn cpo-btn--secondary" onClick={handleDownloadPdf}>
             <Download size={15} /> Download PDF
           </button>
-          <button
-            className="cpo-btn cpo-btn--outline"
-            onClick={() => handleSubmit('Draft')}
-            disabled={submittingAction !== null || !canCreatePO}
-            style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-            title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to save draft POs." : undefined}
-          >
-            <Save size={15} /> {submittingAction === 'draft' ? 'Saving Draft…' : 'Save Draft'}
-          </button>
-          <button
-            className="cpo-btn cpo-btn--primary"
-            onClick={() => handleSubmit('Pending Approval')}
-            disabled={submittingAction !== null || !canCreatePO}
-            style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
-            title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to submit POs." : undefined}
-          >
-            <Send size={15} /> {submittingAction === 'submit' ? 'Submitting…' : (status === 'Returned' || status === 'RE_REVIEW') ? 'Resubmit for Re-Review' : 'Submit for Approval'}
-          </button>
         </div>
       </div>
 

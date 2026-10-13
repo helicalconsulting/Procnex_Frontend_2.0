@@ -3,9 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
 import { useDashboardWidgets } from '../../hooks/useDashboardWidgets';
 import { WIDGET_REGISTRY, type WidgetDefinition } from './widgets';
-import HeaderCalendarPopover from '../../components/layout/HeaderCalendarPopover';
 import {
-  CalendarDays,
   Sparkles,
   GripVertical,
   LayoutGrid,
@@ -17,7 +15,6 @@ import {
   IndianRupee,
   Zap,
   Check,
-  ChevronDown,
   Maximize2,
   Minimize2,
   X,
@@ -85,7 +82,6 @@ export default function DashboardPage() {
     closeGallery,
   } = useDashboardWidgets();
 
-  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [dragState, setDragState] = useState<WidgetDragState | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [widgetWidths, setWidgetWidths] = useState<Record<string, boolean>>(() => {
@@ -112,13 +108,6 @@ export default function DashboardPage() {
     move: (e: PointerEvent) => void;
     up: (e: PointerEvent) => void;
   } | null>(null);
-
-  const today = new Date().toLocaleDateString('en-IN', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
 
   // Group available widgets by category
   const groupedWidgets = CATEGORY_ORDER.map((cat) => ({
@@ -343,23 +332,14 @@ export default function DashboardPage() {
 
   return (
     <div className="w-full">
-      <header className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-primary">Command center</span>
-          <h1 className="mt-2 text-2xl font-semibold leading-[1.15] tracking-[-0.035em] text-foreground">Procurement overview</h1>
+      <header className="flex flex-col gap-5 px-1 sm:px-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 pl-1 sm:pl-1.5">
+          <h1 className="text-2xl font-semibold leading-[1.15] tracking-[-0.035em] text-foreground">Procurement overview</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
             {user?.fullName ? `${user.fullName} · ` : ''}Purchasing metrics, requisition progress, and priority workflows in one view.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
-            <Button variant="outline" className={cn('max-w-full', isCalendarOpen && 'border-primary/40 bg-primary/5')} onClick={() => setIsCalendarOpen(!isCalendarOpen)} aria-expanded={isCalendarOpen}>
-              <CalendarDays size={16} />
-              <span className="hidden max-w-52 truncate sm:inline">{today}</span>
-              <ChevronDown size={14} className={cn('transition-transform', isCalendarOpen && 'rotate-180')} />
-            </Button>
-            {isCalendarOpen && <HeaderCalendarPopover onClose={() => setIsCalendarOpen(false)} />}
-          </div>
+        <div className="flex shrink-0 items-center gap-2">
           <Button onClick={openGallery} id="customize-dashboard-btn">
             <Sparkles size={16} /> Customize
             {hasWidgets && <Badge className="min-h-5 border-white/20 bg-white/15 px-1.5 text-primary-foreground" tone="primary">{activeWidgets.length}</Badge>}

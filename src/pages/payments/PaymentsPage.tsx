@@ -1755,66 +1755,68 @@ export default function PaymentsPage() {
               })()}
             </div>
 
-            <DialogFooter className="mt-6 flex flex-col gap-2 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
-              <Button
-                variant="outline"
-                onClick={() => setChainModal({ module: 'Payments', referenceId: detailPayment.paymentNumber || detailPayment.invoiceRef })}
-              >
-                <Clock className="size-4" /> View Approval Chain
-              </Button>
-              <div className="flex flex-wrap items-center gap-2">
-                {ACTIONABLE.includes(detailPayment.status) && detailPayment.canAct && (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-amber-600 hover:text-amber-700 border-amber-500/30 hover:bg-amber-500/10 rounded-full px-3.5"
-                      onClick={() => {
-                        const target = detailPayment;
-                        setDetailPayment(null);
-                        openAction(target, 'return');
-                      }}
-                    >
-                      <RotateCcw className="size-3.5 mr-1" /> Return
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      className="rounded-full px-3.5"
-                      onClick={() => {
-                        const target = detailPayment;
-                        setDetailPayment(null);
-                        openAction(target, 'cancel');
-                      }}
-                    >
-                      <Ban className="size-3.5 mr-1" /> Reject
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-full px-3.5"
-                      onClick={() => {
-                        const target = detailPayment;
-                        setDetailPayment(null);
-                        openAction(target, 'confirm');
-                      }}
-                    >
-                      <ThumbsUp className="size-3.5 mr-1" /> Confirm
-                    </Button>
-                  </>
-                )}
+            <DialogFooter className="mt-6 flex flex-col gap-3 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2 flex-wrap">
                 <Button
+                  variant="outline"
+                  className="gap-2 rounded-full px-4"
+                  onClick={() => setChainModal({ module: 'Payments', referenceId: detailPayment.paymentNumber || detailPayment.invoiceRef })}
+                >
+                  <Clock className="size-4" /> View Approval Chain
+                </Button>
+                <Button
+                  variant="outline"
+                  className="gap-2 rounded-full px-4"
                   onClick={() => {
                     const target = detailPayment;
                     setDetailPayment(null);
                     setSelectedPrintVoucher(target);
                   }}
                 >
-                  <Printer className="size-4" /> Print Voucher
-                </Button>
-                <Button variant="secondary" onClick={() => setDetailPayment(null)}>
-                  Close
+                  <Printer className="size-4 text-primary" /> Print Voucher
                 </Button>
               </div>
+
+              {ACTIONABLE.includes(detailPayment.status) && detailPayment.canAct && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-amber-600 hover:text-amber-700 border-amber-500/30 hover:bg-amber-500/10 rounded-full px-3.5"
+                    onClick={() => {
+                      const target = detailPayment;
+                      setDetailPayment(null);
+                      openAction(target, 'return');
+                    }}
+                  >
+                    <RotateCcw className="size-3.5 mr-1" /> Return
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="rounded-full px-3.5"
+                    onClick={() => {
+                      const target = detailPayment;
+                      setDetailPayment(null);
+                      openAction(target, 'cancel');
+                    }}
+                  >
+                    <Ban className="size-3.5 mr-1" /> Reject
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-full px-4"
+                    onClick={() => {
+                      const target = detailPayment;
+                      setDetailPayment(null);
+                      openAction(target, 'confirm');
+                    }}
+                  >
+                    <ThumbsUp className="size-3.5 mr-1" /> Confirm
+                  </Button>
+                </div>
+              )}
             </DialogFooter>
           </DialogContent>
         )}
@@ -1953,9 +1955,6 @@ function ApprovalChainView({ module, referenceId, onClose }: { module: string; r
           </div>
         )}
 
-        <DialogFooter>
-          <Button variant="secondary" onClick={onClose}>Close</Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

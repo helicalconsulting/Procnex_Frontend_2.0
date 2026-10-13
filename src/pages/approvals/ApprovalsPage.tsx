@@ -1303,7 +1303,11 @@ export default function ApprovalsPage() {
                   <Button
                     variant="outline"
                     className="gap-2 rounded-full px-4"
-                    onClick={() => setPrintPO(detailRequest)}
+                    onClick={() => {
+                      const req = detailRequest;
+                      setDetailRequest(null);
+                      setPrintPO(req);
+                    }}
                   >
                     <Printer className="size-4 text-primary" /> View PO Document
                   </Button>
@@ -1311,7 +1315,7 @@ export default function ApprovalsPage() {
               </div>
 
               <div className="flex items-center gap-2">
-                {detailRequest.canAct ? (
+                {detailRequest.canAct && (
                   <>
                     <Button
                       variant="outline"
@@ -1350,10 +1354,6 @@ export default function ApprovalsPage() {
                       <ThumbsUp className="size-3.5 mr-1" /> {(detailRequest.status === 'RETURNED' || (detailRequest as any).isReturned) ? 'Resubmit' : 'Approve'}
                     </Button>
                   </>
-                ) : (
-                  <Button variant="secondary" className="rounded-full px-5" onClick={() => setDetailRequest(null)}>
-                    Close
-                  </Button>
                 )}
               </div>
             </DialogFooter>
@@ -1572,9 +1572,6 @@ function ApprovalChainView({ module, referenceId, onClose }: { module: string; r
           </div>
         )}
 
-        <DialogFooter>
-          <Button variant="secondary" onClick={onClose}>Close</Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

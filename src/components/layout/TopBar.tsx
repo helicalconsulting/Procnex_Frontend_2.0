@@ -156,18 +156,6 @@ export default function TopBar({ mobileOpen, onMenuClick, isSidebarExpanded }: T
     navigate(isVendor(roles) ? '/vendor/profile' : '/profile');
   };
 
-  // Close calendar on click outside
-  useEffect(() => {
-    if (!isCalendarOpen) return;
-    const handleClick = (e: MouseEvent) => {
-      if (calendarRef.current && !calendarRef.current.contains(e.target as Node)) {
-        setIsCalendarOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [isCalendarOpen]);
-
   // Close dropdown on click outside
   useEffect(() => {
     if (!dropdownOpen) return;
@@ -279,6 +267,7 @@ export default function TopBar({ mobileOpen, onMenuClick, isSidebarExpanded }: T
         <div className="relative" ref={calendarRef}>
           <button
             type="button"
+            data-calendar-trigger="true"
             className={iconButtonClass}
             onClick={() => setIsCalendarOpen(!isCalendarOpen)}
             title="Open calendar"
@@ -288,7 +277,7 @@ export default function TopBar({ mobileOpen, onMenuClick, isSidebarExpanded }: T
             <CalendarDays size={18} />
           </button>
           {isCalendarOpen && (
-            <HeaderCalendarPopover onClose={() => setIsCalendarOpen(false)} />
+            <HeaderCalendarPopover onClose={() => setIsCalendarOpen(false)} triggerRef={calendarRef} />
           )}
         </div>
 

@@ -1324,8 +1324,8 @@ export default function PurchaseRequisitionPage() {
 
       {/* ── Top Toolbar ── */}
       <div className="pr-toolbar">
-        <button className="pr-toolbar__back" onClick={() => navigate(-1)} title="Go Back">
-          <ArrowLeft size={16} /> Back
+        <button className="pr-toolbar__back" onClick={() => navigate(-1)} title="Go Back" aria-label="Go Back">
+          <ArrowLeft size={18} />
         </button>
         <div className="pr-toolbar__title">
           <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">

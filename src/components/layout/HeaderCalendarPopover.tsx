@@ -13,6 +13,7 @@ interface AgendaItem {
 
 interface HeaderCalendarPopoverProps {
   onClose: () => void;
+  triggerRef?: React.RefObject<HTMLElement | null>;
 }
 
 const MONTH_NAMES = [
@@ -22,7 +23,7 @@ const MONTH_NAMES = [
 
 const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
-export default function HeaderCalendarPopover({ onClose }: HeaderCalendarPopoverProps) {
+export default function HeaderCalendarPopover({ onClose, triggerRef }: HeaderCalendarPopoverProps) {
   const { user } = useAuth();
   const userId = user?.id || user?.email || 'guest';
 
@@ -61,7 +62,14 @@ export default function HeaderCalendarPopover({ onClose }: HeaderCalendarPopover
   // Click outside to close
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+      const target = e.target as HTMLElement | null;
+      if (popoverRef.current && !popoverRef.current.contains(target)) {
+        if (triggerRef?.current && triggerRef.current.contains(target)) {
+          return;
+        }
+        if (target && target.closest('[data-calendar-trigger="true"]')) {
+          return;
+        }
         onClose();
       }
     };
@@ -76,7 +84,7 @@ export default function HeaderCalendarPopover({ onClose }: HeaderCalendarPopover
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [onClose]);
+  }, [onClose, triggerRef]);
 
   // Save custom events to localStorage
   const saveCustomEvents = (updated: Record<string, AgendaItem[]>) => {

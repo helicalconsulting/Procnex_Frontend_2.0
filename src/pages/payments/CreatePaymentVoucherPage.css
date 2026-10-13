@@ -1250,11 +1250,30 @@
   background: color-mix(in srgb, var(--primary-500, #0a6ed1) 5%, transparent);
 }
 
-.cpv-dropzone-icon {
-  color: var(--primary-500, #0a6ed1);
+.cpv-dropzone-icon-wrap {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: color-mix(in srgb, var(--primary-500, #0a6ed1) 12%, transparent);
-  padding: 10px;
-  border-radius: 12px;
+  color: var(--primary-500, #0a6ed1);
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.cpv-dropzone:hover .cpv-dropzone-icon-wrap {
+  background: color-mix(in srgb, var(--primary-500, #0a6ed1) 20%, transparent);
+  transform: translateY(-2px);
+}
+
+.cpv-dropzone-icon {
+  width: 20px;
+  height: 20px;
+  color: currentColor;
+  flex-shrink: 0;
 }
 
 .cpv-attachments-list {

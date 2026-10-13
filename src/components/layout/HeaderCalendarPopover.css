@@ -40,7 +40,7 @@
 
 .calendar-clock-bar {
   padding: 16px 20px;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(139, 92, 246, 0.08));
+  background: linear-gradient(135deg, rgba(10, 110, 209, 0.08), rgba(59, 130, 246, 0.06));
   border-bottom: 1px solid var(--border, #e2e8f0);
   display: flex;
   align-items: center;
@@ -48,7 +48,7 @@
 }
 
 [data-theme="dark"] .calendar-clock-bar {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.15));
+  background: linear-gradient(135deg, rgba(10, 110, 209, 0.16), rgba(59, 130, 246, 0.12));
   border-bottom-color: rgba(255, 255, 255, 0.08);
 }
 
@@ -70,8 +70,8 @@
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
-  color: var(--primary-500, #6366f1);
-  background: rgba(99, 102, 241, 0.1);
+  color: var(--primary-500, #0a6ed1);
+  background: rgba(10, 110, 209, 0.1);
   padding: 2px 6px;
   border-radius: 4px;
 }
@@ -138,15 +138,15 @@
   border-radius: 6px;
   border: 1px solid var(--border, #cbd5e1);
   background: var(--surface-card, #ffffff);
-  color: var(--primary-500, #6366f1);
+  color: var(--primary-500, #0a6ed1);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .calendar-btn-today:hover {
-  background: var(--primary-500, #6366f1);
+  background: var(--primary-500, #0a6ed1);
   color: #ffffff;
-  border-color: var(--primary-500, #6366f1);
+  border-color: var(--primary-500, #0a6ed1);
 }
 
 /* ─── Calendar Grid ────────────────────────────────────────── */
@@ -201,26 +201,26 @@
 
 .calendar-day-cell:hover:not(.calendar-day-cell--disabled) {
   background: var(--surface-elevated, #f1f5f9);
-  color: var(--primary-500, #6366f1);
+  color: var(--primary-500, #0a6ed1);
 }
 
 [data-theme="dark"] .calendar-day-cell:hover:not(.calendar-day-cell--disabled) {
   background: rgba(255, 255, 255, 0.1);
-  color: #818cf8;
+  color: #60a5fa;
 }
 
 .calendar-day-cell--today {
   font-weight: 800;
-  color: var(--primary-500, #6366f1);
-  background: rgba(99, 102, 241, 0.1);
-  box-shadow: inset 0 0 0 1.5px var(--primary-500, #6366f1);
+  color: var(--primary-500, #0a6ed1);
+  background: rgba(10, 110, 209, 0.1);
+  box-shadow: inset 0 0 0 1.5px var(--primary-500, #0a6ed1);
 }
 
 .calendar-day-cell--selected {
-  background: linear-gradient(135deg, #8b5cf6, #6366f1) !important;
+  background: linear-gradient(135deg, #0a6ed1, #2563eb) !important;
   color: #ffffff !important;
   font-weight: 800;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+  box-shadow: 0 4px 12px rgba(10, 110, 209, 0.35);
 }
 
 .calendar-day-cell--has-event::after {
@@ -270,9 +270,9 @@
 .calendar-agenda__add-btn {
   font-size: 12px;
   font-weight: 700;
-  color: var(--primary-500, #6366f1);
-  background: rgba(99, 102, 241, 0.1);
-  border: 1px solid rgba(99, 102, 241, 0.2);
+  color: var(--primary-500, #0a6ed1);
+  background: rgba(10, 110, 209, 0.1);
+  border: 1px solid rgba(10, 110, 209, 0.2);
   border-radius: 20px;
   padding: 3px 10px;
   cursor: pointer;
@@ -283,10 +283,10 @@
 }
 
 .calendar-agenda__add-btn:hover {
-  background: var(--primary-500, #6366f1);
+  background: var(--primary-500, #0a6ed1);
   color: #ffffff;
-  border-color: var(--primary-500, #6366f1);
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+  border-color: var(--primary-500, #0a6ed1);
+  box-shadow: 0 2px 8px rgba(10, 110, 209, 0.3);
 }
 
 .calendar-add-input {
@@ -319,8 +319,8 @@
 }
 
 .calendar-add-input:focus-within {
-  border-color: var(--primary-500, #6366f1) !important;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25) !important;
+  border-color: var(--primary-500, #0a6ed1) !important;
+  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.2) !important;
 }
 
 .calendar-add-input input {
@@ -346,17 +346,17 @@
   padding: 6px 14px;
   border-radius: 7px;
   border: none;
-  background: linear-gradient(135deg, #8b5cf6, #6366f1);
+  background: linear-gradient(135deg, #0a6ed1, #2563eb);
   color: #ffffff;
   cursor: pointer;
   transition: all 0.15s ease;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+  box-shadow: 0 2px 8px rgba(10, 110, 209, 0.3);
   white-space: nowrap;
 }
 
 .calendar-add-input button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.5);
+  box-shadow: 0 4px 12px rgba(10, 110, 209, 0.45);
 }
 
 .calendar-agenda__list {
@@ -373,7 +373,7 @@
   border-radius: 8px;
   background: var(--surface-card, #ffffff);
   border: 1px solid var(--border, #e2e8f0);
-  border-left: 3px solid #8b5cf6;
+  border-left: 3px solid #0a6ed1;
   font-size: 13px;
   transition: all 0.2s ease;
 }
@@ -381,12 +381,12 @@
 [data-theme="dark"] .calendar-agenda__item {
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 255, 255, 0.08);
-  border-left-color: #818cf8;
+  border-left-color: #60a5fa;
 }
 
 .calendar-agenda__item:hover {
   transform: translateX(2px);
-  border-color: var(--primary-500, #6366f1);
+  border-color: var(--primary-500, #0a6ed1);
 }
 
 .calendar-agenda__dot {
@@ -394,7 +394,7 @@
   height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: #8b5cf6;
+  background: #0a6ed1;
 }
 
 .calendar-agenda__content {
@@ -457,5 +457,5 @@
 
 .calendar-agenda__empty-icon {
   opacity: 0.4;
-  color: var(--primary-500, #6366f1);
+  color: var(--primary-500, #0a6ed1);
 }

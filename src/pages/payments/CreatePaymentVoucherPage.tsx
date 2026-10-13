@@ -2070,18 +2070,6 @@ export default function CreatePaymentVoucherPage() {
             </p>
           </div>
         </div>
-        <div className="cpv-header__actions">
-          <button
-            type="button"
-            className="cpv-btn cpv-btn--primary"
-            onClick={submitVoucher}
-            onMouseDown={(e) => e.stopPropagation()}
-            disabled={savingDraft || submitting || !canCreateVoucher}
-            title={!canCreateVoucher ? "You do not have permission to submit payment vouchers." : undefined}
-          >
-            <Send size={15} /> {submitting ? 'Submitting…' : 'Submit Voucher for Approval'}
-          </button>
-        </div>
       </div>
 
       {/* Form Body */}
@@ -2157,7 +2145,7 @@ export default function CreatePaymentVoucherPage() {
                     textDecoration: 'underline',
                   }}
                 >
-                  {isManualSupplier ? '📁 Choose from Database Master' : '✏️ Enter Supplier Manually'}
+                  {isManualSupplier ? 'Choose from Database Master' : 'Enter Supplier Manually'}
                 </button>
               </div>
               {isManualSupplier ? (
@@ -3332,7 +3320,9 @@ export default function CreatePaymentVoucherPage() {
               <div className="cpv-field" style={{ marginTop: 8 }}>
                 <label>Attachments & Bank Advice Documents</label>
                 <label className="cpv-dropzone">
-                  <Upload size={22} className="cpv-dropzone-icon" />
+                  <div className="cpv-dropzone-icon-wrap">
+                    <Upload size={20} className="cpv-dropzone-icon" />
+                  </div>
                   <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
                     Click to upload or drag & drop files
                   </span>

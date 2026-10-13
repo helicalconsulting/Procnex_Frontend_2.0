@@ -743,24 +743,28 @@ export default function CreateGRNPage() {
         </div>
       )}
 
-      {/* Page Header */}
-      <PageLead
-        title={
-          <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => navigate(-1)}
-              className="size-9 rounded-md shrink-0"
-              title="Back"
-            >
-              <ArrowLeft className="size-4" />
-            </Button>
-            <span>Create Goods Receipt Note (GRN)</span>
+      {/* Top Header */}
+      <div className="flex items-center justify-between gap-3.5 flex-wrap mb-6">
+        <div className="flex items-center gap-3.5 min-w-0">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => navigate(-1)}
+            className="size-10 min-w-10 rounded-lg shrink-0 border-border bg-card hover:bg-accent text-muted-foreground hover:text-foreground"
+            title="Back"
+            aria-label="Back"
+          >
+            <ArrowLeft className="size-[18px]" />
+          </Button>
+          <div className="min-w-0">
+            <h1 className="text-[27px] font-bold text-foreground leading-tight tracking-normal m-0 mb-1">
+              Create Goods Receipt Note (GRN)
+            </h1>
+            <p className="text-[16px] text-muted-foreground m-0">
+              Record physical material receipt and verify against Purchase Order and Vendor Invoice for 3-way matching.
+            </p>
           </div>
-        }
-        description="Record physical material receipt and verify against Purchase Order and Vendor Invoice for 3-way matching."
-      >
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
@@ -770,17 +774,8 @@ export default function CreateGRNPage() {
           >
             <Printer className="size-4" /> Print
           </Button>
-          <Button
-            variant="default"
-            size="sm"
-            onClick={handleSubmit}
-            disabled={submitting || isSelectedPoAlreadyReceived}
-            className="gap-2 shadow-sm font-semibold"
-          >
-            <Send className="size-4" /> {submitting ? 'Posting GRN…' : isSelectedPoAlreadyReceived ? 'GRN Already Recorded' : 'Save & Post GRN'}
-          </Button>
         </div>
-      </PageLead>
+      </div>
 
       <div className="space-y-6">
         {/* GRN Creation Mode Card */}

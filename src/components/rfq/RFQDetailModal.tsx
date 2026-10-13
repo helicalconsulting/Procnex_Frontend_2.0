@@ -1103,48 +1103,55 @@ export default function RFQDetailModal({
         </Card>
 
         {/* ── 4. INTEGRATED TABS BAR & CONTENT ── */}
-        <div className="rounded-xl border border-border/70 bg-card overflow-hidden">
-          <div className="flex items-center gap-1 border-b border-border/70 bg-secondary/30 px-3 pt-2 overflow-x-auto scrollbar-none">
-            {[
-              { key: 'info', label: 'Details', icon: FileText, count: null },
-              { key: 'items', label: 'Items', icon: ClipboardList, count: rfq.lineItems.length },
-              { key: 'vendors', label: 'Vendors', icon: Users, count: rfq.vendors.length },
-              { key: 'quotations', label: 'Quotations', icon: FileText, count: rfq.quotationCount, highlight: rfq.quotationCount > 0 },
-              { key: 'approvals', label: 'Approvals', icon: ShieldCheck, count: approvalChain?.totalLevels ?? null },
-            ].map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.key;
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => setActiveTab(tab.key as any)}
-                  className={cn(
-                    'flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider transition-colors relative whitespace-nowrap',
-                    isActive
-                      ? 'border-primary text-primary bg-card rounded-t-lg'
-                      : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/40 rounded-t-lg'
-                  )}
-                >
-                  <Icon className="size-3.5" />
-                  <span>{tab.label}</span>
-                  {tab.count !== null && (
-                    <span
+        <div className="rounded-xl border border-border/70 bg-card shadow-xs overflow-hidden">
+          <div className="border-b border-border/60 bg-muted/20 px-3 py-2 sm:px-4">
+            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
+              {[
+                { key: 'info', label: 'Details', icon: FileText, count: null },
+                { key: 'items', label: 'Items', icon: ClipboardList, count: rfq.lineItems.length },
+                { key: 'vendors', label: 'Vendors', icon: Users, count: rfq.vendors.length },
+                { key: 'quotations', label: 'Quotations', icon: FileText, count: rfq.quotationCount, highlight: rfq.quotationCount > 0 },
+                { key: 'approvals', label: 'Approvals', icon: ShieldCheck, count: approvalChain?.totalLevels ?? null },
+              ].map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setActiveTab(tab.key as any)}
+                    className={cn(
+                      'group flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-all duration-150 whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      isActive
+                        ? 'bg-card text-foreground shadow-xs ring-1 ring-border/80 font-bold'
+                        : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                    )}
+                  >
+                    <Icon
                       className={cn(
-                        'ml-1 rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums',
-                        isActive
-                          ? 'bg-primary/10 text-primary'
-                          : tab.highlight
-                          ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400'
-                          : 'bg-muted text-muted-foreground'
+                        'size-3.5 shrink-0 transition-colors',
+                        isActive ? 'text-primary' : 'text-muted-foreground/70 group-hover:text-foreground'
                       )}
-                    >
-                      {tab.count}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+                    />
+                    <span>{tab.label}</span>
+                    {tab.count !== null && (
+                      <span
+                        className={cn(
+                          'inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold tabular-nums transition-colors',
+                          isActive
+                            ? 'bg-primary/10 text-primary'
+                            : tab.highlight
+                            ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400 font-bold'
+                            : 'bg-muted/70 text-muted-foreground group-hover:bg-muted group-hover:text-foreground'
+                        )}
+                      >
+                        {tab.count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* ── 5. ACTIVE TAB CONTENT SECTION ── */}

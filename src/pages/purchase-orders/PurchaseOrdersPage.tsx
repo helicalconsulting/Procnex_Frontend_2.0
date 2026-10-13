@@ -1330,7 +1330,11 @@ export default function PurchaseOrdersPage() {
                 ) : null; })()}
                 <Button
                   variant="outline"
-                  onClick={() => setPrintPO(detailPO)}
+                  onClick={() => {
+                    const order = detailPO;
+                    setDetailPO(null);
+                    setPrintPO(order);
+                  }}
                 >
                   <Printer className="size-4 mr-1.5" /> View / Print Official PO
                 </Button>
@@ -1601,9 +1605,6 @@ function ApprovalChainView({ module, referenceId, onClose }: { module: string; r
           </div>
         )}
 
-        <DialogFooter>
-          <Button variant="secondary" onClick={onClose}>Close</Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

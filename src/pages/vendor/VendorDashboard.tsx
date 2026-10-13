@@ -566,9 +566,10 @@ export default function VendorDashboard() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
+          <div className="relative z-50">
             <Button
               variant="outline"
+              data-calendar-trigger="true"
               className={cn('max-w-full', isCalendarOpen && 'border-primary/40 bg-primary/5')}
               onClick={() => setIsCalendarOpen(!isCalendarOpen)}
               aria-expanded={isCalendarOpen}

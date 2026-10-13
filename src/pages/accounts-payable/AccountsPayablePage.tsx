@@ -1656,9 +1656,6 @@ function ApprovalChainView({ module, referenceId, onClose }: { module: string; r
           </div>
         )}
 
-        <DialogFooter>
-          <Button variant="secondary" onClick={onClose}>Close</Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

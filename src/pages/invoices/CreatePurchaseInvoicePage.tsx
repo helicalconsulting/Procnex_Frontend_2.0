@@ -1715,7 +1715,7 @@ export default function CreatePurchaseInvoicePage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14, margin: '8px 0' }}>
                 {/* Option 1: Link with Vendor Dispatch Note / Invoice */}
                 <div
-                  className="cpi-mode-option cpi-mode-option--selected"
+                  className="cpi-mode-option"
                   onClick={() => {
                     if (!poIdParam && !grnIdParam) {
                       setSelectedVendorId('');
@@ -1761,18 +1761,12 @@ export default function CreatePurchaseInvoicePage() {
                     <Receipt size={26} />
                   </div>
                   <div>
-                    <div className="cpi-mode-title">✏️ Create Custom / Direct Manual Invoice</div>
+                    <div className="cpi-mode-title">Create Custom / Direct Manual Invoice</div>
                     <div className="cpi-mode-desc">
                       Create a custom purchase invoice directly without requiring a vendor dispatch note cascade reference.
                     </div>
                   </div>
                 </div>
-              </div>
-
-              <div className="cpi-modal-actions">
-                <button className="cpi-btn cpi-btn--outline" onClick={() => setShowModeModal(false)}>
-                  Cancel
-                </button>
               </div>
             </div>
           </div>
@@ -1837,16 +1831,6 @@ export default function CreatePurchaseInvoicePage() {
                   >
                     <Save size={15} /> {savingDraft ? 'Saving…' : 'Save Draft'}
                   </button>
-                  <button
-                    type="button"
-                    className="cpi-btn cpi-btn--primary"
-                    onClick={() => submitInvoiceToAPI(false)}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    disabled={savingDraft || submitting || !canCreateInvoice}
-                    title={!canCreateInvoice ? 'Admin permission required to submit purchase invoices.' : undefined}
-                  >
-                    <Send size={15} /> {submitting ? 'Submitting…' : 'Submit Invoice for Approval'}
-                  </button>
                 </div>
               )}
             </div>
@@ -1890,7 +1874,6 @@ export default function CreatePurchaseInvoicePage() {
                     </option>
                   ))}
                 </select>
-                <span className="cpi-field__sub">Filters available Purchase Orders</span>
               </div>
 
               {/* 2. PO Selection */}
@@ -1922,7 +1905,6 @@ export default function CreatePurchaseInvoicePage() {
                     <option value={selectedPoId}>{displayPoNumber}</option>
                   )}
                 </select>
-                <span className="cpi-field__sub">Auto-loads PO items & linked Dispatch Notes</span>
               </div>
 
               {/* 3. Auto-Linked Dispatch Note / Vendor Invoice */}
@@ -1939,7 +1921,6 @@ export default function CreatePurchaseInvoicePage() {
                     </span>
                   )}
                 </div>
-                <span className="cpi-field__sub">Automatically mapped from selected Purchase Order</span>
               </div>
             </div>
           </div>
@@ -1970,7 +1951,6 @@ export default function CreatePurchaseInvoicePage() {
                     </option>
                   ))}
                 </select>
-                <span className="cpi-field__sub">Select supplier for manual entry</span>
               </div>
             )}
 
@@ -1986,7 +1966,6 @@ export default function CreatePurchaseInvoicePage() {
                 placeholder="e.g. INV-2026-0042"
                 style={{ cursor: 'not-allowed', opacity: 0.88, backgroundColor: 'rgba(255, 255, 255, 0.05)' }}
               />
-              <span className="cpi-field__sub">Document serialization sequence</span>
             </div>
 
             <div className="cpi-field">
@@ -2013,7 +1992,6 @@ export default function CreatePurchaseInvoicePage() {
                 placeholder="e.g. Net 30"
                 style={{ cursor: 'not-allowed', opacity: 0.88, backgroundColor: 'rgba(255, 255, 255, 0.05)' }}
               />
-              <span className="cpi-field__sub">Agreed vendor quotation payment terms</span>
             </div>
           </div>
         </div>
@@ -2442,11 +2420,6 @@ export default function CreatePurchaseInvoicePage() {
               <span className="cpi-totals-grand-val">{formatAmount(calculations.grandTotal, currency)}</span>
             </div>
 
-            <div className="cpi-workflow-notice">
-              <PackageCheck size={18} />
-              <span>Triggers AccountsPayable Approval Workflow</span>
-            </div>
-
             {!isReadOnly && (
               <div style={{ marginTop: 8 }}>
                 <button
@@ -2692,7 +2665,7 @@ export default function CreatePurchaseInvoicePage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14, margin: '8px 0' }}>
               {/* Option 1: Link with Vendor Dispatch Note / Invoice */}
               <div
-                className={`cpi-mode-option ${creationMode === 'linked' ? 'cpi-mode-option--selected' : ''}`}
+                className="cpi-mode-option"
                 onClick={() => {
                   setIsReadOnly(false);
                   if (!poIdParam && !grnIdParam) {
@@ -2719,7 +2692,7 @@ export default function CreatePurchaseInvoicePage() {
 
               {/* Option 2: Direct Manual Invoice */}
               <div
-                className={`cpi-mode-option ${creationMode === 'manual' ? 'cpi-mode-option--selected' : ''}`}
+                className="cpi-mode-option"
                 onClick={() => {
                   setIsReadOnly(false);
                   setSelectedVendorId('');
@@ -2740,18 +2713,12 @@ export default function CreatePurchaseInvoicePage() {
                   <Receipt size={26} />
                 </div>
                 <div>
-                  <div className="cpi-mode-title">✏️ Create Custom / Direct Manual Invoice</div>
+                  <div className="cpi-mode-title">Create Custom / Direct Manual Invoice</div>
                   <div className="cpi-mode-desc">
                     Create a custom purchase invoice directly without requiring a vendor dispatch note cascade reference.
                   </div>
                 </div>
               </div>
-            </div>
-
-            <div className="cpi-modal-actions">
-              <button className="cpi-btn cpi-btn--outline" onClick={() => setShowModeModal(false)}>
-                Cancel
-              </button>
             </div>
           </div>
         </div>

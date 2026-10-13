@@ -671,72 +671,81 @@ export default function ContractDetailPage() {
         </MessageStrip>
       )}
 
-      {/* Back button */}
-      <button className="ctr-detail__back" onClick={() => navigate('/contracts')}>
-        <ChevronLeft size={16} /> Back to Contracts
-      </button>
-
-      {/* Summary Bar */}
-      <div className="ctr-detail__summary">
-        <div className="ctr-detail__summary-top">
-          <div className="ctr-detail__summary-left">
+      {/* Top Header & Navigation */}
+      <div className="ctr-detail__page-header">
+        <div className="ctr-detail__header-left">
+          <button
+            className="ctr-detail__back-btn"
+            onClick={() => navigate('/contracts')}
+            title="Back to Contracts"
+            aria-label="Back to Contracts"
+          >
+            <ArrowLeft size={18} />
+          </button>
+          <div className="ctr-detail__title-wrap">
             <div className="ctr-detail__title-row">
-              <h1 className="ctr-detail__summary-title">{contract.title}</h1>
-              <span className="ctr-detail__summary-number">{contract.contractNumber}</span>
+              <h1 className="ctr-detail__title">{contract.title}</h1>
+              <span className="ctr-detail__contract-tag">{contract.contractNumber}</span>
+              <span className={`ctr-badge ${STATUS_CLASSES[contract.status] || 'ctr-badge--DRAFT'}`}>
+                {STATUS_ICONS[contract.status]} {STATUS_LABELS[contract.status] || contract.status}
+              </span>
             </div>
-          </div>
-          <div className="ctr-detail__summary-right">
-            <span className={`ctr-badge ${STATUS_CLASSES[contract.status] || 'ctr-badge--DRAFT'}`}>
-              {STATUS_ICONS[contract.status]} {STATUS_LABELS[contract.status] || contract.status}
-            </span>
-            {canSendToVendor && (
-              <button className="ctr-detail__action-btn ctr-detail__action-btn--primary" onClick={handleSendToVendor} disabled={sendingToVendor}>
-                <FileSignature size={14} /> {sendingToVendor ? 'Sending…' : 'Send to Vendor'}
-              </button>
-            )}
-            {canComplete && (
-              <button className="ctr-detail__action-btn ctr-detail__action-btn--success" onClick={handleCompleteContract} disabled={completing}>
-                <CheckCircle2 size={14} /> {completing ? 'Completing…' : 'Mark Completed'}
-              </button>
-            )}
-            {canSign && (
-              <button className="ctr-detail__action-btn ctr-detail__action-btn--success" onClick={() => setShowSignModal(true)}>
-                <FileSignature size={14} /> Sign Now
-              </button>
-            )}
-            <button className="ctr-detail__action-btn" onClick={handleDownload}>
-              <Download size={14} /> {contract.signedByVendorAt ? 'Download Signed Copy' : 'Download'}
-            </button>
-            <button className="ctr-detail__action-btn" onClick={handlePrint}>
-              <Printer size={14} /> Print
-            </button>
-            {canEdit && (
-              <button className="ctr-detail__action-btn" onClick={() => navigate(`/contracts/${id}/edit`)}>
-                <PenLine size={14} /> Edit
-              </button>
-            )}
-            {/* Create PO — show button */}
-            {canCreatePO && (
-              <button
-                className="ctr-detail__action-btn ctr-detail__action-btn--primary"
-                onClick={handleCreatePO}
-                disabled={creatingPO || isLimitReached}
-                title={isLimitReached ? "Limit Reached — 100% Contract Value Consumed" : "Create Purchase Order"}
-              >
-                <Plus size={14} /> {isLimitReached ? 'Limit Reached' : creatingPO ? 'Creating PO…' : 'Create Purchase Order'}
-              </button>
-            )}
-            <button
-              className="ctr-detail__action-btn ctr-detail__action-btn--danger"
-              onClick={() => setShowDeleteConfirm(true)}
-              title="Delete Contract"
-            >
-              <Trash2 size={14} /> Delete
-            </button>
+            <p className="ctr-detail__subtitle">
+              Contract agreements, commercial terms, signed documents & procurement order tracking
+            </p>
           </div>
         </div>
 
-        {/* Contract Balance & Stat Cards — Always displayed for rich consistent summary */}
+        <div className="ctr-detail__header-actions">
+          {canSendToVendor && (
+            <button className="ctr-detail__action-btn ctr-detail__action-btn--primary" onClick={handleSendToVendor} disabled={sendingToVendor}>
+              <FileSignature size={14} /> {sendingToVendor ? 'Sending…' : 'Send to Vendor'}
+            </button>
+          )}
+          {canComplete && (
+            <button className="ctr-detail__action-btn ctr-detail__action-btn--success" onClick={handleCompleteContract} disabled={completing}>
+              <CheckCircle2 size={14} /> {completing ? 'Completing…' : 'Mark Completed'}
+            </button>
+          )}
+          {canSign && (
+            <button className="ctr-detail__action-btn ctr-detail__action-btn--success" onClick={() => setShowSignModal(true)}>
+              <FileSignature size={14} /> Sign Now
+            </button>
+          )}
+          <button className="ctr-detail__action-btn" onClick={handleDownload}>
+            <Download size={14} /> {contract.signedByVendorAt ? 'Download Signed Copy' : 'Download'}
+          </button>
+          <button className="ctr-detail__action-btn" onClick={handlePrint}>
+            <Printer size={14} /> Print
+          </button>
+          {canEdit && (
+            <button className="ctr-detail__action-btn" onClick={() => navigate(`/contracts/${id}/edit`)}>
+              <PenLine size={14} /> Edit
+            </button>
+          )}
+          {canCreatePO && (
+            <button
+              className="ctr-detail__action-btn ctr-detail__action-btn--primary"
+              onClick={handleCreatePO}
+              disabled={creatingPO || isLimitReached}
+              title={isLimitReached ? "Limit Reached — 100% Contract Value Consumed" : "Create Purchase Order"}
+            >
+              <Plus size={14} /> {isLimitReached ? 'Limit Reached' : creatingPO ? 'Creating PO…' : 'Create Purchase Order'}
+            </button>
+          )}
+          <button
+            className="ctr-detail__action-btn ctr-detail__action-btn--danger"
+            onClick={() => setShowDeleteConfirm(true)}
+            title="Delete Contract"
+          >
+            <Trash2 size={14} /> Delete
+          </button>
+        </div>
+      </div>
+
+      {/* Summary Card with Metrics & Metadata */}
+      <div className="ctr-detail__summary">
+        {/* Contract Balance & Stat Cards */}
         <div className="ctr-detail__balance-cards">
           <div className="ctr-detail__balance-card">
             <div className="ctr-detail__balance-card-icon ctr-detail__balance-card-icon--total">
