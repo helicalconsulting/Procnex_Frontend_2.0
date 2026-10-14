@@ -140,7 +140,14 @@ export default function PhoneInput({
 
   const handlePhoneChange = (e: ChangeEvent<HTMLInputElement>) => {
     // Only allow digits, spaces, hyphens, and parentheses
-    const sanitized = e.target.value.replace(/[^\d\s\-\+\(\)]/g, '');
+    let sanitized = e.target.value.replace(/[^\d\s\-\+\(\)]/g, '');
+    if (sanitized.startsWith('+')) {
+      const matched = [...COUNTRY_CODES].sort((a, b) => b.dial.length - a.dial.length).find((cc) => sanitized.startsWith(cc.dial));
+      if (matched) {
+        onCountryCodeChange(matched.dial);
+        sanitized = sanitized.slice(matched.dial.length).trim();
+      }
+    }
     onChange(sanitized);
   };
 

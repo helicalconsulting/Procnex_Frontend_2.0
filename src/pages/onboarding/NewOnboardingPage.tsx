@@ -99,34 +99,50 @@ function levenshteinDistance(a: string, b: string): number {
 }
 
 function calculateFuzzyNameMatchScore(s1: string, s2: string): number {
-  const norm = (str?: string) => (str || '').toLowerCase().trim().replace(/\s+/g, ' ').replace(/\b(pvt|private|ltd|limited|llc|inc|co)\b\.?/gi, '').trim();
+  const norm = (str?: string) =>
+    (str || '')
+      .toLowerCase()
+      .trim()
+      .replace(/[,\-_&/\\()]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .replace(/\b(pvt|private|ltd|limited|llc|inc|corporation|co)\b\.?/gi, '')
+      .trim();
   const n1 = norm(s1);
   const n2 = norm(s2);
 
   if (!n1 || !n2) return 0;
   if (n1 === n2) return 100;
-  if (n1.includes(n2) || n2.includes(n1)) return 85;
-
-  const maxLen = Math.max(n1.length, n2.length);
-  const dist = levenshteinDistance(n1, n2);
-  const charSim = Math.max(0, Math.round(((maxLen - dist) / maxLen) * 100));
 
   const words1 = n1.split(' ').filter(Boolean);
   const words2 = n2.split(' ').filter(Boolean);
-  let wordSimSum = 0;
-  words1.forEach((w1) => {
-    let maxW = 0;
-    words2.forEach((w2) => {
-      const wMax = Math.max(w1.length, w2.length);
-      const wDist = levenshteinDistance(w1, w2);
-      const wSim = Math.max(0, ((wMax - wDist) / wMax) * 100);
-      if (wSim > maxW) maxW = wSim;
-    });
-    wordSimSum += maxW;
-  });
-  const wordSim = Math.round(wordSimSum / Math.max(words1.length, words2.length));
+  if (words1.length === 0 || words2.length === 0) return 0;
 
-  return Math.max(charSim, wordSim);
+  const wordSim = (w1: string, w2: string) => {
+    if (w1 === w2) return 100;
+    if (w2.startsWith(w1)) return Math.round(80 + (w1.length / w2.length) * 20);
+    if (w1.startsWith(w2)) return Math.round(80 + (w2.length / w1.length) * 20);
+    const maxL = Math.max(w1.length, w2.length);
+    const d = levenshteinDistance(w1, w2);
+    if (d === 1 && maxL >= 4) return Math.max(75, Math.round(((maxL - d) / maxL) * 100));
+    if (d <= 2 && maxL >= 7) return Math.max(70, Math.round(((maxL - d) / maxL) * 100));
+    return 0;
+  };
+
+  // Rule 1: First word must match first word
+  const w1Score = wordSim(words1[0], words2[0]);
+  if (w1Score === 0) return 0;
+
+  // Single word query
+  if (words1.length === 1) {
+    if (words2.length === 1) return w1Score;
+    const penalty = Math.min(15, (words2.length - 1) * 3);
+    return Math.max(40, w1Score - penalty);
+  }
+
+  // Rule 2: Multi-word query (evaluates Word 1 then Word 2)
+  const w2Score = words2.length > 1 ? wordSim(words1[1], words2[1]) : 0;
+  const combined = Math.round(w1Score * 0.6 + w2Score * 0.4);
+  return combined >= 40 ? combined : 0;
 }
 
 export default function NewOnboardingPage() {
@@ -321,6 +337,7 @@ export default function NewOnboardingPage() {
     score: number;
     duplicationRisk: 'LOW' | 'MEDIUM' | 'HIGH';
     matchedVendor: { name: string; email: string; score: number } | null;
+    separateNameMatch?: { name: string; email: string; score: number } | null;
     breakdown?: {
       nameScore: number;
       emailScore: number;
@@ -629,14 +646,15 @@ export default function NewOnboardingPage() {
     setAuditLoading(true);
 
     try {
-      // Search DB by company name, email, and phone
-      const [byName, byEmail, byPhone] = await Promise.all([
+      // Search DB by company name, email, phone, and contact person
+      const [byName, byEmail, byPhone, byPerson] = await Promise.all([
         procurementService.searchVendors(companyName.trim()).catch(() => []),
         contactEmail.trim() ? procurementService.searchVendors(contactEmail.trim()).catch(() => []) : Promise.resolve([]),
         contactPhone.trim() ? procurementService.searchVendors(contactPhone.trim()).catch(() => []) : Promise.resolve([]),
+        contactPerson.trim() ? procurementService.searchVendors(contactPerson.trim()).catch(() => []) : Promise.resolve([]),
       ]);
 
-      const dbResults = [...byName, ...byEmail, ...byPhone];
+      const dbResults = [...byName, ...byEmail, ...byPhone, ...byPerson];
 
       // Combine DB results with local invitations to find candidate matches
       const candidates: Array<{ companyName: string; contactEmail: string; contactPerson?: string; contactPhone?: string }> = [
@@ -644,81 +662,120 @@ export default function NewOnboardingPage() {
         ...dbResults.map(v => ({ companyName: v.name, contactEmail: v.email, contactPerson: v.contactPerson || undefined, contactPhone: v.phone || v.contactPhone || undefined })),
       ];
 
+      const formatPhoneWithCountryCode = (code: string, phone: string) => {
+        const p = phone.trim();
+        if (!p) return '';
+        if (p.startsWith('+')) return p;
+        const c = code.startsWith('+') ? code : `+${code}`;
+        return `${c}${p.replace(/^0+/, '')}`;
+      };
+
       const currentInput = {
         companyName: companyName.trim(),
         contactEmail: contactEmail.trim(),
         contactPerson: contactPerson.trim(),
-        contactPhone: contactPhone.trim() ? `${contactCountryCode}${contactPhone.trim()}` : '',
+        contactPhone: formatPhoneWithCountryCode(contactCountryCode, contactPhone),
       };
 
       const norm = (str?: string) => (str || '').trim().toLowerCase();
-      
-      const cleanPhoneDigits = (raw?: string) => {
-        if (!raw) return '';
-        const digits = raw.replace(/\D/g, '');
-        return digits.length >= 7 ? digits.slice(-10) : digits;
+
+      // Priority Weights:
+      // High Priority (Main): Company Name (40%), Vendor Email (40%)
+      // Lower Priority: Contact Person (10%), Phone Number (10%)
+      const WEIGHTS = {
+        name: 0.40,
+        email: 0.40,
+        person: 0.10,
+        phone: 0.10,
       };
 
       let bestScore = 0;
       let bestMatchedVendor: { name: string; email: string; score: number } | null = null;
       let bestBreakdown = { nameScore: 0, emailScore: 0, personScore: 0, phoneScore: 0 };
+      let bestNameVendor: { name: string; email: string; score: number } | null = null;
 
       candidates.forEach((cand) => {
-        let totalWeights = 0;
-        let weightedScoreSum = 0;
-
-        // 1. Company Name Match
+        // 1. Company Name Match (Main Priority · 40% - Rule 1 & 2: Positional Word 1 then Word 2)
         const nameScore = calculateFuzzyNameMatchScore(currentInput.companyName, cand.companyName);
-        if (currentInput.companyName) {
-          totalWeights += 1;
-          weightedScoreSum += nameScore;
+        if (nameScore > (bestNameVendor?.score || 0)) {
+          bestNameVendor = { name: cand.companyName, email: cand.contactEmail, score: nameScore };
         }
 
-        // 2. Email Match
+        // 2. Email Match (Main Priority · 40% - Rule 3: Validate @ se pehle and @ k baad me e.g. jai@helical.com vs jai@syspro.com)
         const inEmail = norm(currentInput.contactEmail);
         const exEmail = norm(cand.contactEmail);
         let emailScore = 0;
         if (inEmail && exEmail) {
-          if (inEmail === exEmail) emailScore = 100;
-          else if (inEmail.split('@')[1] && inEmail.split('@')[1] === exEmail.split('@')[1] && !['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com'].includes(inEmail.split('@')[1])) {
-            emailScore = 60;
+          if (inEmail === exEmail) {
+            emailScore = 100;
+          } else {
+            const [inUser, inDomain] = inEmail.split('@');
+            const [exUser, exDomain] = exEmail.split('@');
+            const genericDomains = ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com', 'live.com', 'rediffmail.com'];
+            const isUserMatch = Boolean(inUser && exUser && inUser === exUser);
+            const isDomainMatch = Boolean(inDomain && exDomain && inDomain === exDomain && !genericDomains.includes(inDomain));
+
+            if (isUserMatch && isDomainMatch) {
+              emailScore = 100;
+            } else if (isUserMatch) {
+              // @ se pehle matches! (e.g. jai@helical.com vs jai@syspro.com)
+              emailScore = 75;
+            } else if (isDomainMatch) {
+              // @ k baad me matches (corporate domain)
+              emailScore = 60;
+            }
           }
-          totalWeights += 1;
-          weightedScoreSum += emailScore;
         }
 
-        // 3. Contact Person Match
+        // 3. Contact Person Match (Lower Priority · 10%)
         const inPerson = norm(currentInput.contactPerson);
         const exPerson = norm(cand.contactPerson);
         let personScore = 0;
         if (inPerson && exPerson) {
-          if (inPerson === exPerson) personScore = 100;
-          else if (inPerson.includes(exPerson) || exPerson.includes(inPerson)) personScore = 75;
-          else {
-            const inWords = inPerson.split(/\s+/);
-            const exWords = exPerson.split(/\s+/);
-            if (inWords.some(w => exWords.includes(w) && w.length >= 3)) personScore = 50;
+          if (inPerson === exPerson) {
+            personScore = 100;
+          } else if (inPerson.includes(exPerson) || exPerson.includes(inPerson)) {
+            personScore = 75;
+          } else {
+            const inWords = inPerson.split(/\s+/).filter(Boolean);
+            const exWords = exPerson.split(/\s+/).filter(Boolean);
+            if (inWords.some(w => exWords.includes(w) && w.length >= 3)) {
+              personScore = 50;
+            } else {
+              const pDist = levenshteinDistance(inPerson, exPerson);
+              const maxPL = Math.max(inPerson.length, exPerson.length);
+              if (pDist <= 2 && maxPL >= 5) {
+                personScore = Math.max(60, Math.round(((maxPL - pDist) / maxPL) * 100));
+              }
+            }
           }
-          totalWeights += 1;
-          weightedScoreSum += personScore;
         }
 
-        // 4. Phone Match - Normalized Digit Comparison (Last 10 Digits & Country Code Handling)
-        const inPhoneDigits = cleanPhoneDigits(currentInput.contactPhone);
-        const exPhoneDigits = cleanPhoneDigits(cand.contactPhone);
+        // 4. Phone Match (Lower Priority · 10% - Rule 4: Match phone numbers with country code e.g. +254755809333 vs +91755809333)
+        const inPhoneDigits = (currentInput.contactPhone || '').replace(/\D/g, '');
+        const exPhoneDigits = (cand.contactPhone || '').replace(/\D/g, '');
         let phoneScore = 0;
         if (inPhoneDigits && exPhoneDigits) {
-          if (inPhoneDigits === exPhoneDigits || inPhoneDigits.endsWith(exPhoneDigits) || exPhoneDigits.endsWith(inPhoneDigits)) {
+          if (inPhoneDigits === exPhoneDigits) {
             phoneScore = 100;
-          } else {
-            phoneScore = 0;
+          } else if (inPhoneDigits.endsWith(exPhoneDigits) || exPhoneDigits.endsWith(inPhoneDigits)) {
+            phoneScore = 100;
+          } else if (inPhoneDigits.length >= 7 && exPhoneDigits.length >= 7) {
+            const minLen = Math.min(9, inPhoneDigits.length, exPhoneDigits.length);
+            if (inPhoneDigits.slice(-minLen) === exPhoneDigits.slice(-minLen)) {
+              // Same subscriber digits across country codes (e.g. +254755809333 vs +91755809333)
+              phoneScore = 85;
+            }
           }
-          totalWeights += 1;
-          weightedScoreSum += phoneScore;
         }
 
-        // Dynamically weighted score based on active provided field pairs
-        const total = totalWeights > 0 ? Math.round(weightedScoreSum / totalWeights) : 0;
+        // Priority-weighted duplication total
+        const total = Math.round(
+          nameScore * WEIGHTS.name +
+          emailScore * WEIGHTS.email +
+          personScore * WEIGHTS.person +
+          phoneScore * WEIGHTS.phone
+        );
 
         if (total > bestScore) {
           bestScore = total;
@@ -735,6 +792,7 @@ export default function NewOnboardingPage() {
         score: bestScore,
         duplicationRisk: risk,
         matchedVendor: bestMatchedVendor,
+        separateNameMatch: bestNameVendor && (bestNameVendor as any).score >= 40 ? bestNameVendor : null,
         breakdown: bestBreakdown,
       });
     } catch {
@@ -761,7 +819,11 @@ export default function NewOnboardingPage() {
         companyName: companyName.trim(),
         contactEmail: contactEmail.trim(),
         contactPerson: contactPerson.trim() || undefined,
-        contactPhone: contactPhone.trim() ? `${contactCountryCode}${contactPhone.trim()}` : undefined,
+        contactPhone: contactPhone.trim()
+          ? (contactPhone.trim().startsWith('+')
+              ? contactPhone.trim()
+              : `${contactCountryCode.startsWith('+') ? contactCountryCode : `+${contactCountryCode}`}${contactPhone.trim().replace(/^0+/, '')}`)
+          : undefined,
         category: selectedCategory.trim() || undefined,
         categoryId: selectedCategoryId || undefined,
         notes: notes.trim() || undefined,
@@ -3074,24 +3136,28 @@ export default function NewOnboardingPage() {
                     </div>
                   </div>
 
-                  {/* Matched DB Vendor Warning (if any) */}
-                  {auditResult?.matchedVendor && (
+
+                  {/* Separate Name Match Alert (if another vendor matched company name) */}
+                  {auditResult?.separateNameMatch && auditResult.separateNameMatch.name.toLowerCase() !== auditResult.matchedVendor?.name.toLowerCase() && (
                     <div style={{
                       display: 'flex',
-                      gap: 12,
-                      padding: '12px 16px',
+                      gap: 10,
+                      alignItems: 'center',
+                      padding: '10px 14px',
                       borderRadius: 'var(--radius-md)',
-                      background: 'rgba(239, 68, 68, 0.08)',
-                      border: '1px solid rgba(239, 68, 68, 0.2)',
+                      background: 'rgba(245, 158, 11, 0.08)',
+                      border: '1px solid rgba(245, 158, 11, 0.25)',
+                      fontSize: 12.5,
+                      color: 'var(--text-primary)',
                     }}>
-                      <AlertTriangle size={18} style={{ color: '#ef4444', flexShrink: 0, marginTop: 1 }} />
-                      <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>
-                        <strong>Database Duplication Warning:</strong> Vendor <strong>{auditResult.matchedVendor.name}</strong> ({auditResult.matchedVendor.email}) matches your input with a <strong>{auditResult.matchedVendor.score}% similarity score</strong>.
+                      <AlertTriangle size={16} style={{ color: '#f59e0b', flexShrink: 0 }} />
+                      <div>
+                        <strong>Separate Company Name Match:</strong> Another vendor <strong>"{auditResult.separateNameMatch.name}"</strong> exists in database with <strong>{auditResult.separateNameMatch.score}% name similarity</strong>.
                       </div>
                     </div>
                   )}
 
-                  {/* Audit Summary Details & Equal 25% Weightage Breakdown */}
+                  {/* Audit Summary Details & Priority-Weighted Breakdown */}
                   <div className="onb-modal__summary">
                     <div className="onb-modal__summary-row" style={{ borderBottom: '1px solid var(--border)', paddingBottom: 8, marginBottom: 4 }}>
                       <span className="onb-modal__summary-label" style={{ fontWeight: 700 }}>Weighted Duplication Risk:</span>
@@ -3100,38 +3166,67 @@ export default function NewOnboardingPage() {
                         color: auditResult?.duplicationRisk === 'HIGH' ? '#ef4444' : auditResult?.duplicationRisk === 'MEDIUM' ? '#f59e0b' : '#10b981'
                       }}>
                         {auditResult?.matchedVendor
-                          ? `${auditResult.duplicationRisk} RISK (${auditResult.matchedVendor.score}% match in DB)`
+                          ? `${auditResult.duplicationRisk} RISK (${auditResult.score}% match in DB)`
                           : 'LOW RISK (0 Matches in Database)'}
                       </span>
                     </div>
 
-                    {/* Equal Weightage 25% Breakdown Grid */}
+                    {/* Priority-Weighted Breakdown Grid */}
                     {auditResult?.breakdown && (
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 14px', padding: '4px 0 8px', borderBottom: '1px dashed var(--border)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-                          <span style={{ color: 'var(--text-secondary)' }}>Company Name (25%):</span>
-                          <span style={{ fontWeight: 700, color: auditResult.breakdown.nameScore > 0 ? '#f59e0b' : '#10b981' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 14px', padding: '6px 0 10px', borderBottom: '1px dashed var(--border)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
+                          <div>
+                            <span style={{ color: 'var(--text-secondary)' }}>Company Name</span>
+                            {auditResult.matchedVendor && (
+                              <span style={{ fontSize: 10.5, color: 'var(--text-placeholder)', marginLeft: 4 }}>
+                                (vs {auditResult.matchedVendor.name})
+                              </span>
+                            )}
+                            <span style={{ fontSize: 10, marginLeft: 6, padding: '1px 5px', borderRadius: 4, background: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa', fontWeight: 600 }}>Main · 40%</span>
+                          </div>
+                          <span style={{ fontWeight: 700, color: auditResult.breakdown.nameScore > 0 ? (auditResult.breakdown.nameScore >= 70 ? '#ef4444' : '#f59e0b') : '#10b981' }}>
                             {auditResult.breakdown.nameScore}%
                           </span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-                          <span style={{ color: 'var(--text-secondary)' }}>Vendor Email (25%):</span>
-                          <span style={{ fontWeight: 700, color: auditResult.breakdown.emailScore > 0 ? '#f59e0b' : '#10b981' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
+                          <div>
+                            <span style={{ color: 'var(--text-secondary)' }}>Vendor Email</span>
+                            <span style={{ fontSize: 10, marginLeft: 6, padding: '1px 5px', borderRadius: 4, background: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa', fontWeight: 600 }}>Main · 40%</span>
+                          </div>
+                          <span style={{ fontWeight: 700, color: auditResult.breakdown.emailScore > 0 ? (auditResult.breakdown.emailScore >= 70 ? '#ef4444' : '#f59e0b') : '#10b981' }}>
                             {auditResult.breakdown.emailScore}%
                           </span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-                          <span style={{ color: 'var(--text-secondary)' }}>Contact Person (25%):</span>
-                          <span style={{ fontWeight: 700, color: auditResult.breakdown.personScore > 0 ? '#f59e0b' : '#10b981' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
+                          <div>
+                            <span style={{ color: 'var(--text-secondary)' }}>Contact Person</span>
+                            <span style={{ fontSize: 10, marginLeft: 6, padding: '1px 5px', borderRadius: 4, background: 'rgba(107, 114, 128, 0.18)', color: 'var(--text-secondary)', fontWeight: 600 }}>Low · 10%</span>
+                          </div>
+                          <span style={{ fontWeight: 700, color: auditResult.breakdown.personScore > 0 ? (auditResult.breakdown.personScore >= 70 ? '#ef4444' : '#f59e0b') : '#10b981' }}>
                             {auditResult.breakdown.personScore}%
                           </span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-                          <span style={{ color: 'var(--text-secondary)' }}>Phone Number (25%):</span>
-                          <span style={{ fontWeight: 700, color: auditResult.breakdown.phoneScore > 0 ? '#f59e0b' : '#10b981' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
+                          <div>
+                            <span style={{ color: 'var(--text-secondary)' }}>Phone Number</span>
+                            <span style={{ fontSize: 10, marginLeft: 6, padding: '1px 5px', borderRadius: 4, background: 'rgba(107, 114, 128, 0.18)', color: 'var(--text-secondary)', fontWeight: 600 }}>Low · 10%</span>
+                          </div>
+                          <span style={{ fontWeight: 700, color: auditResult.breakdown.phoneScore > 0 ? (auditResult.breakdown.phoneScore >= 70 ? '#ef4444' : '#f59e0b') : '#10b981' }}>
                             {auditResult.breakdown.phoneScore}%
                           </span>
                         </div>
+
+                        {/* Optional row showing separate company name match if different vendor */}
+                        {auditResult?.separateNameMatch && auditResult.separateNameMatch.name.toLowerCase() !== auditResult.matchedVendor?.name.toLowerCase() && (
+                          <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11.5, background: 'rgba(245, 158, 11, 0.08)', padding: '5px 10px', borderRadius: 4, border: '1px dashed rgba(245, 158, 11, 0.3)' }}>
+                            <span style={{ color: 'var(--text-secondary)' }}>
+                              Separate Name Match (vs <strong>{auditResult.separateNameMatch.name}</strong>)
+                            </span>
+                            <span style={{ fontWeight: 700, color: '#f59e0b' }}>
+                              {auditResult.separateNameMatch.score}%
+                            </span>
+                          </div>
+                        )}
                       </div>
                     )}
 

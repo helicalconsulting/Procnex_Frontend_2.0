@@ -14,8 +14,8 @@ const BACKEND_TO_UI_RFQ_STATUS: Record<string, RFQStatus> = {
   APPROVED: 'APPROVED',
   REJECTED: 'REJECTED',
   RETURNED: 'RETURNED',
-  RE_REVIEW: 'RETURNED',
-  RETURN_FOR_RE_REVIEW: 'RETURNED',
+  RE_REVIEW: 'RE_REVIEW',
+  RETURN_FOR_RE_REVIEW: 'RE_REVIEW',
   RETURNED_TO_ORIGINATOR: 'RETURNED',
   SENT: 'ACCEPTED',
   QUOTATIONS_RECEIVED: 'ACCEPTED',
@@ -75,11 +75,14 @@ export function mapApiRfqToTableRow(rfq: Record<string, unknown>): RFQTableRow {
   });
 
   const rawStatus = String(rfq.status || '');
-  const isDocReturned = rawStatus === 'RETURNED' || rawStatus === 'RE_REVIEW' || rawStatus === 'RETURN_FOR_RE_REVIEW' || rawStatus === 'RETURNED_TO_ORIGINATOR';
+  const isDocReReview = rawStatus === 'RE_REVIEW' || rawStatus === 'RETURN_FOR_RE_REVIEW';
+  const isDocReturned = rawStatus === 'RETURNED' || rawStatus === 'RETURNED_TO_ORIGINATOR';
   const isDocRejected = rawStatus === 'REJECTED';
   const isDocApproved = rawStatus === 'APPROVED' || rawStatus === 'SENT' || rawStatus === 'ACCEPTED' || rawStatus === 'CLOSED' || rawStatus === 'PO_CREATED';
 
-  const finalStatus: RFQStatus = isDocReturned
+  const finalStatus: RFQStatus = isDocReReview
+    ? 'RE_REVIEW'
+    : isDocReturned
     ? 'RETURNED'
     : isDocRejected
     ? 'REJECTED'
@@ -88,6 +91,7 @@ export function mapApiRfqToTableRow(rfq: Record<string, unknown>): RFQTableRow {
     : mapBackendRfqStatus(rawStatus);
 
   return {
+    ...(rfq as any),
     id: String(rfq.id),
     rfqNumber: String(rfq.rfqNumber),
     title: String(rfq.title),
@@ -96,10 +100,11 @@ export function mapApiRfqToTableRow(rfq: Record<string, unknown>): RFQTableRow {
     _isApprovedByMe: Boolean(rfq.isApprovedByMe || rfq.userAction === 'APPROVED'),
     _isReturnedByMe: Boolean(rfq.isReturnedByMe || rfq.userAction === 'RETURNED'),
     _isRejectedByMe: Boolean(rfq.isRejectedByMe || rfq.userAction === 'REJECTED'),
+    _isReturnedForReReview: Boolean(isDocReReview || (rfq as any)._isReturnedForReReview),
     canUserAct: Boolean(rfq.canUserAct),
     createdAt: String(rfq.createdAt).slice(0, 10),
-    creator: creator?.fullName || 'Unknown',
-    creatorInitials: initials(creator?.fullName),
+    creator: creator?.fullName || (typeof rfq.creator === 'string' ? rfq.creator : '') || 'Unknown',
+    creatorInitials: initials(creator?.fullName || (typeof rfq.creator === 'string' ? rfq.creator : '') || 'Unknown'),
     createdBy: String(rfq.createdBy || creator?.id || ''),
     creatorId: String(rfq.createdBy || creator?.id || ''),
     vendorCount: counts?.vendors ?? vendors.length,
@@ -111,6 +116,7 @@ export function mapApiRfqToTableRow(rfq: Record<string, unknown>): RFQTableRow {
     currency: String(rfq.currency || 'KES'),
     lineItems: items.map((item) => ({
       id: String(item.id),
+      itemCode: String(item.itemCode || (item as any).item_code || ''),
       itemName: String(item.itemName),
       description: String(item.description || ''),
       quantity: String(item.quantity),
@@ -147,17 +153,31 @@ export function mapApiRfqToTableRow(rfq: Record<string, unknown>): RFQTableRow {
           };
         })
       : undefined,
-    evaluationParameters: rfq.evaluationParameters as Array<Record<string, unknown>> | undefined,
+    evaluationParameters: Array.isArray(rfq.evaluationParameters)
+      ? (rfq.evaluationParameters as Array<Record<string, unknown>>)
+      : undefined,
+    evaluationCategories: Array.isArray(rfq.evaluationCategories)
+      ? (rfq.evaluationCategories as Array<Record<string, unknown>>)
+      : undefined,
     // Bid Security
-    bidSecurityRequired: rfq.bidSecurityRequired as boolean | undefined,
-    bidBondRequired: rfq.bidBondRequired as boolean | undefined,
+    bidSecurityRequired: Boolean(rfq.bidSecurityRequired),
+    bidBondRequired: Boolean(rfq.bidBondRequired),
     bidSecurityType: rfq.bidSecurityType as string | undefined,
     bidSecurityValueType: rfq.bidSecurityValueType as string | undefined,
-    bidSecurityValue: rfq.bidSecurityValue as number | undefined,
-    bidSecurityCurrency: rfq.bidSecurityCurrency as string | undefined,
-    bidSecurityValidityValue: rfq.bidSecurityValidityValue as number | undefined,
+    bidSecurityValue: rfq.bidSecurityValue != null ? Number(rfq.bidSecurityValue) : (rfq.bidSecurityMinValue != null ? Number(rfq.bidSecurityMinValue) : undefined),
+    bidSecurityCurrency: (rfq.bidSecurityCurrency as string) || (rfq.bidSecurityMinCurrency as string) || undefined,
+    bidSecurityValidityValue: rfq.bidSecurityValidityValue != null ? Number(rfq.bidSecurityValidityValue) : (rfq.bidSecurityMinValidity != null ? Number(rfq.bidSecurityMinValidity) : undefined),
     bidSecurityValidityUnit: rfq.bidSecurityValidityUnit as string | undefined,
-    // Raw backend fields needed by the edit page (CreateRFQPage)
+    // Buyer-set minimum requirements
+    bidSecurityMinValue: rfq.bidSecurityMinValue != null ? Number(rfq.bidSecurityMinValue) : (rfq.bidSecurityValue != null ? Number(rfq.bidSecurityValue) : undefined),
+    bidSecurityMinCurrency: (rfq.bidSecurityMinCurrency as string) || (rfq.bidSecurityCurrency as string) || undefined,
+    bidSecurityMinValidity: rfq.bidSecurityMinValidity != null ? Number(rfq.bidSecurityMinValidity) : (rfq.bidSecurityValidityValue != null ? Number(rfq.bidSecurityValidityValue) : undefined),
+    bidBondMinValue: rfq.bidBondMinValue != null ? Number(rfq.bidBondMinValue) : undefined,
+    bidBondMinCurrency: (rfq.bidBondMinCurrency as string) || undefined,
+    bidBondMinValidity: rfq.bidBondMinValidity != null ? Number(rfq.bidBondMinValidity) : undefined,
+    rfqApprovalStartPoint: (rfq.rfqApprovalStartPoint as string) || undefined,
+    quotationApprovalMode: (rfq.quotationApprovalMode as string) || undefined,
+    quotationXUserRole: (rfq.quotationXUserRole as string) || undefined,
   };
 }
 

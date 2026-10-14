@@ -21,6 +21,7 @@ export interface CreateRfqPayload {
   closingDate?: string;
   currency?: string;
   items: Array<{
+    itemCode?: string;
     itemName: string;
     description?: string;
     quantity: number;
@@ -158,7 +159,10 @@ async function apiGetById(id: string): Promise<RFQTableRow | null> {
     const rfq = await apiRequest<Record<string, unknown>>(`/rfqs/${id}`);
     const mapped = mapApiRfqToTableRow(rfq);
     if (!mapped || isRfqDeleted(mapped.id, mapped.rfqNumber)) return null;
-    return mapped;
+    return {
+      ...(rfq as any),
+      ...mapped,
+    };
   } catch (err: any) {
     if (err?.status === 404 || err?.code === 'NOT_FOUND' || err?.message?.includes('404') || err?.message?.includes('not found')) {
       return null;

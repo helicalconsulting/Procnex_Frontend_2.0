@@ -40,6 +40,7 @@ export default function ApprovalLevelsPage() {
   const busy = saving || Boolean(pendingId);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<ApprovalLevelData | null>(null);
+  const [isModuleLocked, setIsModuleLocked] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ApprovalLevelData | null>(null);
   const [formError, setFormError] = useState('');
   const [deleteError, setDeleteError] = useState('');
@@ -67,15 +68,18 @@ export default function ApprovalLevelsPage() {
     if (returnFocus.current?.isConnected) returnFocus.current.focus();
     else addTrigger.current?.focus();
   }
-  function openAdd(module = moduleFilter === 'ALL' ? '' : moduleFilter) {
+  function openAdd(presetModule?: string) {
     if (!canManage || requestPending.current) return;
     rememberFocus(); setEditing(null); setFormError('');
-    setForm({ module, role: '', hours: '24', min: '', max: '', currency: companyDefaultCurrency });
+    const targetModule = presetModule || (moduleFilter === 'ALL' ? '' : moduleFilter);
+    setIsModuleLocked(Boolean(presetModule || (moduleFilter !== 'ALL' && moduleFilter)));
+    setForm({ module: targetModule, role: '', hours: '24', min: '', max: '', currency: companyDefaultCurrency });
     setShowForm(true);
   }
   function openEdit(level: ApprovalLevelData) {
     if (!canManage || requestPending.current) return;
     rememberFocus(); setEditing(level); setFormError('');
+    setIsModuleLocked(true);
     setForm({ module: level.module, role: level.requiredRole, hours: String(level.timeLimitHours), min: level.minValue === null ? '' : String(level.minValue), max: level.maxValue === null ? '' : String(level.maxValue), currency: level.currency || companyDefaultCurrency });
     setShowForm(true);
   }
@@ -171,13 +175,21 @@ export default function ApprovalLevelsPage() {
     </DetailTabPanel>
 
     <Dialog open={showForm} onOpenChange={open => { if (!saving) setShowForm(open); }}>
-      <DialogContent className="approval-workspace approval-level-dialog" hideClose onInteractOutside={event => event.preventDefault()} onOpenAutoFocus={event => { event.preventDefault(); (editing ? roleInput : moduleInput).current?.focus(); }} onCloseAutoFocus={restoreFocus}>
+      <DialogContent className="approval-workspace approval-level-dialog" hideClose onInteractOutside={event => event.preventDefault()} onOpenAutoFocus={event => { event.preventDefault(); (editing || isModuleLocked ? roleInput : moduleInput).current?.focus(); }} onCloseAutoFocus={restoreFocus}>
         <header className="approval-level-dialog__header"><div><DialogTitle>{editing ? 'Edit Approval Level' : 'Add Approval Level'}</DialogTitle><DialogDescription className="text-xs">{APPROVAL_SYSTEM_LABELS[system]} · {form.module ? `Level ${nextLevel} · ${moduleLabel(form.module)}` : 'Choose a module and required approver.'}</DialogDescription></div><Button variant="ghost" size="icon-sm" aria-label="Close approval level form" disabled={saving} onClick={() => setShowForm(false)}><X size={18} /></Button></header>
         <form onSubmit={event => event.preventDefault()}>
           <div className="approval-level-dialog__body">
             {formError && <MessageStrip type="error">{formError}</MessageStrip>}
-            {editing ? <dl className="approval-form-module text-xs"><div><dt className="text-muted-foreground">Module</dt><dd className="font-semibold">{moduleLabel(form.module)}</dd></div><div><dt className="text-muted-foreground">Sequence</dt><dd className="font-semibold">Level {nextLevel}</dd></div></dl>
-              : <div className="form-field"><label htmlFor="approval-module" className="text-xs font-semibold">Module <span aria-hidden="true">*</span></label><Select id="approval-module" ref={moduleInput} required value={form.module} disabled={saving} onChange={event => setForm({ ...form, module: event.target.value })}><option value="">Select module</option>{modules.map(module => <option key={module.key} value={module.key}>{module.label}</option>)}</Select>{form.module && <p className="text-xs text-muted-foreground">Added after the existing approvals as level {nextLevel}.</p>}</div>}
+            {!editing && !isModuleLocked && (
+              <div className="form-field">
+                <label htmlFor="approval-module" className="text-xs font-semibold">Module <span aria-hidden="true">*</span></label>
+                <Select id="approval-module" ref={moduleInput} required value={form.module} disabled={saving} onChange={event => setForm({ ...form, module: event.target.value })}>
+                  <option value="">Select module</option>
+                  {modules.map(module => <option key={module.key} value={module.key}>{module.label}</option>)}
+                </Select>
+                {form.module && <p className="text-xs text-muted-foreground">Added after the existing approvals as level {nextLevel}.</p>}
+              </div>
+            )}
             <div className="form-field"><label htmlFor="approval-role" className="text-xs font-semibold">Required Role <span aria-hidden="true">*</span></label><Select id="approval-role" ref={roleInput} required value={form.role} disabled={saving} onChange={event => setForm({ ...form, role: event.target.value })}><option value="">Select role</option>{editing && !roleOptions.includes(editing.requiredRole) && <option value={editing.requiredRole}>{editing.requiredRole} (current role)</option>}{roleOptions.map(role => <option key={role} value={role}>{role}</option>)}</Select></div>
             <div className="form-field"><label htmlFor="approval-hours" className="text-xs font-semibold">Time Limit (Hours) <span aria-hidden="true">*</span></label><Input id="approval-hours" type="number" required min={1} max={168} step={1} value={form.hours} disabled={saving} aria-invalid={Boolean(errors.hours)} aria-describedby={errors.hours ? 'approval-hours-error' : undefined} onChange={event => setForm({ ...form, hours: event.target.value })} />
               <div className="approval-time-presets" aria-label="Time limit presets">{TIME_PRESETS.map(hours => <button type="button" key={hours} aria-pressed={Number(form.hours) === hours} disabled={saving} onClick={() => setForm({ ...form, hours: String(hours) })} className="text-xs">{hours}h</button>)}</div>

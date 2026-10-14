@@ -36,7 +36,7 @@ import './CreateRFQPage.css';
 // ─── Types ──────────────────────────────────────────────────
 
 interface LineItem {
-  id: number;
+  id: string | number;
   itemCode?: string;
   itemName: string;
   description: string;
@@ -193,7 +193,8 @@ export default function CreateRFQPage() {
       const currentUserId = String(user?.id || (user as any)?._id || '');
       const creatorId = String((rfq as any).createdBy || (rfq as any).creatorId || (rfq as any).creator?.id || '');
       const userFullName = (user?.fullName || (user as any)?.name || (user as any)?.username || '').trim().toLowerCase();
-      const rfqCreatorName = (rfq.creator || '').trim().toLowerCase();
+      const rawCreator = typeof rfq.creator === 'string' ? rfq.creator : (rfq.creator as any)?.fullName || '';
+      const rfqCreatorName = rawCreator.trim().toLowerCase();
       const isOriginator = Boolean(
         (creatorId && currentUserId && creatorId === currentUserId) ||
         (rfqCreatorName && userFullName && (rfqCreatorName === userFullName || userFullName.includes(rfqCreatorName) || rfqCreatorName.includes(userFullName)))
@@ -201,7 +202,7 @@ export default function CreateRFQPage() {
 
       if ((rfq.status === 'PENDING_APPROVAL' || rfq.status === 'RETURNED' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW') && !isOriginator && !isUserAdmin) {
         setIsEditLocked(true);
-        setSubmitError(`RFQ #${rfq.rfqNumber} was created by ${rfq.creator || 'the originator'}. Only the creator or administrator can edit and resubmit it.`);
+        setSubmitError(`RFQ #${rfq.rfqNumber} was created by ${rawCreator || 'the originator'}. Only the creator or administrator can edit and resubmit it.`);
       }
 
       if (rfq.status === 'RETURNED' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW') {
@@ -224,20 +225,31 @@ export default function CreateRFQPage() {
       setDepartment(rfq.department || '');
       setClosingDate(rfq.closingDate || '');
       // Load Bid Security data
-      if ((rfq as any).bidSecurityRequired) {
-        setBidSecurityEnabled(true);
+      const hasBidSec = Boolean((rfq as any).bidSecurityRequired);
+      const secVal = (rfq as any).bidSecurityMinValue ?? (rfq as any).bidSecurityValue;
+      if (hasBidSec || secVal != null) {
+        if (hasBidSec) setBidSecurityEnabled(true);
         setBidSecurityExpanded(true);
-        if ((rfq as any).bidSecurityMinValue != null) setBidSecurityMinValue(String((rfq as any).bidSecurityMinValue));
-        if ((rfq as any).bidSecurityMinCurrency != null) setBidSecurityMinCurrency((rfq as any).bidSecurityMinCurrency);
-        if ((rfq as any).bidSecurityMinValidity != null) setBidSecurityMinValidity(String((rfq as any).bidSecurityMinValidity));
+        if (secVal != null && secVal !== '') setBidSecurityMinValue(String(secVal));
+        const secCurr = (rfq as any).bidSecurityMinCurrency ?? (rfq as any).bidSecurityCurrency;
+        if (secCurr) setBidSecurityMinCurrency(secCurr);
+        const secVald = (rfq as any).bidSecurityMinValidity ?? (rfq as any).bidSecurityValidityValue;
+        if (secVald != null && secVald !== '') setBidSecurityMinValidity(String(secVald));
       }
-      if ((rfq as any).bidBondRequired) {
-        setBidBondEnabled(true);
+
+      // Load Bid Bond data
+      const hasBidBond = Boolean((rfq as any).bidBondRequired);
+      const bondVal = (rfq as any).bidBondMinValue ?? (rfq as any).bidBondValue;
+      if (hasBidBond || bondVal != null) {
+        if (hasBidBond) setBidBondEnabled(true);
         setBidSecurityExpanded(true);
-        if ((rfq as any).bidBondMinValue != null) setBidBondMinValue(String((rfq as any).bidBondMinValue));
-        if ((rfq as any).bidBondMinCurrency != null) setBidBondMinCurrency((rfq as any).bidBondMinCurrency);
-        if ((rfq as any).bidBondMinValidity != null) setBidBondMinValidity(String((rfq as any).bidBondMinValidity));
+        if (bondVal != null && bondVal !== '') setBidBondMinValue(String(bondVal));
+        const bondCurr = (rfq as any).bidBondMinCurrency ?? (rfq as any).bidBondCurrency;
+        if (bondCurr) setBidBondMinCurrency(bondCurr);
+        const bondVald = (rfq as any).bidBondMinValidity ?? (rfq as any).bidBondValidityValue;
+        if (bondVald != null && bondVald !== '') setBidBondMinValidity(String(bondVald));
       }
+
       if ((rfq as any).rfqApprovalStartPoint) setRfqApprovalStartPoint((rfq as any).rfqApprovalStartPoint);
       if ((rfq as any).quotationApprovalMode) setQuotationApprovalMode((rfq as any).quotationApprovalMode);
       if ((rfq as any).quotationXUserRole) setQuotationXUserRole((rfq as any).quotationXUserRole);
@@ -254,15 +266,24 @@ export default function CreateRFQPage() {
 
       // Load Simple RFQ weightages from evaluationParameters so edits persist on refresh
       if (rfq.rfqType !== 'TENDER' && rfq.rfqType !== 'CUSTOM') {
-        const evalParams = (rfq as any).evaluationParameters as
-          | Array<{ parameterName: string; parameterType: string; weightage: number; active: boolean; sortOrder: number }>
-          | undefined;
-        if (evalParams && evalParams.length > 0) {
+        const evalParams = ((rfq as any).evaluationParameters || []) as
+          | Array<{ parameterName: string; parameterType: string; weightage: number; active: boolean; sortOrder: number }>;
+        if (evalParams.length > 0) {
           const weightages: Record<string, { label: string; weightage: number }> = {};
           const sysKeys = ['price', 'vendorRating', 'delivery', 'compliance'];
           for (const ep of evalParams) {
+            let matchedKey: string | null = null;
             if (ep.sortOrder >= 0 && ep.sortOrder < sysKeys.length) {
-              weightages[sysKeys[ep.sortOrder]] = { label: ep.parameterName, weightage: ep.weightage };
+              matchedKey = sysKeys[ep.sortOrder];
+            } else {
+              const name = (ep.parameterName || '').toLowerCase();
+              if (name.includes('price') || name.includes('commercial')) matchedKey = 'price';
+              else if (name.includes('rating') || name.includes('vendor')) matchedKey = 'vendorRating';
+              else if (name.includes('delivery') || name.includes('lead') || name.includes('time')) matchedKey = 'delivery';
+              else if (name.includes('compliance') || name.includes('document')) matchedKey = 'compliance';
+            }
+            if (matchedKey) {
+              weightages[matchedKey] = { label: ep.parameterName, weightage: Number(ep.weightage) || 0 };
             }
           }
           if (Object.keys(weightages).length > 0) {
@@ -271,8 +292,13 @@ export default function CreateRFQPage() {
         }
       }
 
-      if ((rfq.rfqType === 'TENDER' || rfq.rfqType === 'CUSTOM') && evalCats && evalCats.length > 0) {
-        setEvalCategories(evalCats.map((cat: import('../../services/rfqService').EvalCategoryDTO) => ({
+      // Load Tender / Custom categories
+      const existingCats = (evalCats && evalCats.length > 0) ? evalCats : ((rfq as any).evaluationCategories || []);
+      if (existingCats.length > 0) {
+        if (rfq.rfqType === 'TENDER' || rfq.rfqType === 'CUSTOM') {
+          setRfqMode('TENDER');
+        }
+        setEvalCategories(existingCats.map((cat: import('../../services/rfqService').EvalCategoryDTO) => ({
           id: `cat-${Date.now()}-${Math.random().toString(36).slice(2, 6)}-${cat.name}`,
           name: cat.name,
           weightage: cat.weightage,
@@ -290,16 +316,21 @@ export default function CreateRFQPage() {
           })),
         })));
       }
-      if (rfq.lineItems.length > 0) {
-        setItems(rfq.lineItems.map((item) => ({
-          id: Number(item.id) || Date.now(),
-          itemCode: (item as any).itemCode || '',
-          itemName: item.itemName,
-          description: item.description,
-          quantity: item.quantity,
-          unit: item.unit,
-          expectedDate: item.expectedDate || '',
-        })));
+      if (rfq.lineItems && rfq.lineItems.length > 0) {
+        const rawBackendItems = Array.isArray((rfq as any).items) ? (rfq as any).items : [];
+        setItems(rfq.lineItems.map((item, idx) => {
+          const rawItem = rawBackendItems[idx] || rawBackendItems.find((ri: any) => String(ri.id) === String(item.id)) || {};
+          const resolvedItemCode = (item as any).itemCode || (item as any).item_code || rawItem.itemCode || rawItem.item_code || '';
+          return {
+            id: item.id ? `${String(item.id)}_${idx}` : `item-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+            itemCode: resolvedItemCode,
+            itemName: item.itemName,
+            description: item.description,
+            quantity: item.quantity,
+            unit: item.unit,
+            expectedDate: item.expectedDate || '',
+          };
+        }));
       }
       if (rfq.vendors.length > 0) {
         setSelectedVendors(rfq.vendors.map((v) => v.id));
@@ -574,15 +605,15 @@ export default function CreateRFQPage() {
   const addItem = useCallback(() => {
     setItems((prev) => [
       ...prev,
-      { id: Date.now(), itemCode: '', itemName: '', description: '', quantity: '', unit: '', expectedDate: '' },
+      { id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, itemCode: '', itemName: '', description: '', quantity: '', unit: '', expectedDate: '' },
     ]);
   }, []);
 
-  const removeItem = useCallback((id: number) => {
+  const removeItem = useCallback((id: number | string) => {
     setItems((prev) => (prev.length > 1 ? prev.filter((i) => i.id !== id) : prev));
   }, []);
 
-  const updateItem = useCallback((id: number, field: keyof LineItem, value: string) => {
+  const updateItem = useCallback((id: number | string, field: keyof LineItem, value: string) => {
     setItems((prev) =>
       prev.map((i) => {
         if (i.id !== id) return i;
@@ -755,14 +786,14 @@ export default function CreateRFQPage() {
         ? toEvalCategoryDTO(enabledCats)
         : undefined,
       // Bid Security — customer just says what's required, vendor fills details
-      bidSecurityRequired: bidSecurityEnabled || undefined,
-      bidBondRequired: bidBondEnabled || undefined,
-      bidSecurityMinValue: bidSecurityMinValue ? parseFloat(bidSecurityMinValue) : undefined,
-      bidSecurityMinCurrency: bidSecurityMinCurrency || undefined,
-      bidSecurityMinValidity: bidSecurityMinValidity ? parseInt(bidSecurityMinValidity, 10) : undefined,
-      bidBondMinValue: bidBondMinValue ? parseFloat(bidBondMinValue) : undefined,
-      bidBondMinCurrency: bidBondMinCurrency || undefined,
-      bidBondMinValidity: bidBondMinValidity ? parseInt(bidBondMinValidity, 10) : undefined,
+      bidSecurityRequired: Boolean(bidSecurityEnabled),
+      bidBondRequired: Boolean(bidBondEnabled),
+      bidSecurityMinValue: bidSecurityEnabled && bidSecurityMinValue ? parseFloat(bidSecurityMinValue) : null,
+      bidSecurityMinCurrency: bidSecurityEnabled && bidSecurityMinCurrency ? bidSecurityMinCurrency : null,
+      bidSecurityMinValidity: bidSecurityEnabled && bidSecurityMinValidity ? parseInt(bidSecurityMinValidity, 10) : null,
+      bidBondMinValue: bidBondEnabled && bidBondMinValue ? parseFloat(bidBondMinValue) : null,
+      bidBondMinCurrency: bidBondEnabled && bidBondMinCurrency ? bidBondMinCurrency : null,
+      bidBondMinValidity: bidBondEnabled && bidBondMinValidity ? parseInt(bidBondMinValidity, 10) : null,
     };
   }, [title, description, priority, department, selectedDepartment, closingDate, companyDefaultCurrency, items, selectedVendors, evalCategories, rfqMode, customFields, infoExtraFields, simpleWeightages, bidSecurityMinValue, bidSecurityMinCurrency, bidSecurityMinValidity, bidBondMinValue, bidBondMinCurrency, bidBondMinValidity, rfqApprovalStartPoint, quotationApprovalMode, quotationXUserRole]);
 

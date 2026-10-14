@@ -46,7 +46,8 @@ function getStatusTone(status: string): 'neutral' | 'primary' | 'success' | 'war
 type ModalState = 'open' | 'expanded' | 'minimized';
 
 interface LineItem {
-  id: number;
+  id: number | string;
+  itemCode?: string;
   itemName: string;
   description: string;
   quantity: string;
@@ -131,6 +132,11 @@ const ALL_ITEM_COLUMNS: ItemColumnDef[] = [
     renderCell: (_item, idx) => <span className="rfq-modal__row-num">{idx + 1}</span>,
   },
   {
+    key: 'itemCode', label: 'Item Code', defaultVisible: true,
+    width: '120px',
+    renderCell: (item) => <span className="rfq-modal__item-code font-mono text-xs text-muted-foreground">{item.itemCode || '—'}</span>,
+  },
+  {
     key: 'itemName', label: 'Item Name', defaultVisible: true, required: true,
     width: '180px',
     renderCell: (item) => <span className="rfq-modal__item-name">{item.itemName || '—'}</span>,
@@ -159,7 +165,7 @@ const ALL_ITEM_COLUMNS: ItemColumnDef[] = [
 ];
 
 const ITEM_COL_WIDTHS: Record<string, string> = {
-  index: '48px', itemName: '180px', description: 'auto',
+  index: '48px', itemCode: '120px', itemName: '180px', description: 'auto',
   quantity: '70px', unit: '72px', expectedDate: '120px',
 };
 
@@ -226,7 +232,8 @@ export default function RFQDetailModal({
   const currentUserId = String(user?.id || (user as any)?._id || '');
   const creatorId = String((rfq as any)?.createdBy || (rfq as any)?.creatorId || (rfq as any)?.creator?.id || '');
   const userFullName = (user?.fullName || (user as any)?.name || (user as any)?.username || '').trim().toLowerCase();
-  const rfqCreatorName = (rfq?.creator || '').trim().toLowerCase();
+  const rawCreator = typeof rfq?.creator === 'string' ? rfq.creator : (rfq?.creator as any)?.fullName || '';
+  const rfqCreatorName = rawCreator.trim().toLowerCase();
   const isCreator = Boolean(
     (creatorId && currentUserId && creatorId === currentUserId) ||
     (rfqCreatorName && userFullName && (rfqCreatorName === userFullName || userFullName.includes(rfqCreatorName) || rfqCreatorName.includes(userFullName)))
@@ -279,7 +286,8 @@ export default function RFQDetailModal({
 
   // Fetch pending approval for this RFQ when user has not yet acted in session
   useEffect(() => {
-    if (!rfq || (rfq as any)._isReturnedByMe || (rfq as any)._isApprovedByMe || (rfq as any)._isRejectedByMe) {
+    const isDocReReview = rfq?.status === 'RE_REVIEW' || rfq?.status === 'RETURN_FOR_RE_REVIEW' || Boolean((rfq as any)?._isReturnedForReReview);
+    if (!rfq || (!isDocReReview && (rfq as any)._isReturnedByMe) || (!isDocReReview && (rfq as any)._isApprovedByMe) || (rfq as any)._isRejectedByMe) {
       setPendingApproval(null);
       return;
     }
@@ -771,10 +779,28 @@ export default function RFQDetailModal({
                   const hasApprovalAfterReturn = lastReturnIdx !== -1 && historyItems.slice(lastReturnIdx + 1).some((h: any) => h.status === 'APPROVED');
                   const isCurrentStepReReview = (rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW' || (lastReturnIdx !== -1 && !hasApprovalAfterReturn)) && currentPendingLevel === 1;
 
-                  const isApprovedByMe = (rfq as any)._isApprovedByMe;
+                  const returnHappenedAfterMyApproval = lastReturnIdx !== -1 && !historyItems.slice(lastReturnIdx + 1).some((h: any) =>
+                    h.status === 'APPROVED' && (
+                      (h.approverId && String(h.approverId) === currentUserId) ||
+                      (h.approverName && userFullName && (h.approverName.toLowerCase().includes(userFullName) || userFullName.includes(h.approverName.toLowerCase())))
+                    )
+                  );
+
+                  const isApprovedByMe = Boolean(
+                    !returnHappenedAfterMyApproval && (
+                      (rfq as any)._isApprovedByMe || (
+                        !isCreator && approvalChain?.history?.some((h: any) =>
+                          h.status === 'APPROVED' && (
+                            (h.approverId && String(h.approverId) === currentUserId) ||
+                            (h.approverName && userFullName && (h.approverName.toLowerCase().includes(userFullName) || userFullName.includes(h.approverName.toLowerCase())))
+                          )
+                        )
+                      )
+                    )
+                  );
                   const isReturnedByMe = (rfq as any)._isReturnedByMe || (rfq.status === 'RETURNED' && !isApprovedByMe);
                   const displayStatus = isApprovedByMe
-                    ? (rfq.status === 'PENDING_APPROVAL' ? 'PENDING_APPROVAL' : 'APPROVED')
+                    ? 'APPROVED'
                     : isReturnedByMe
                     ? 'RETURNED'
                     : isCurrentStepReReview
@@ -913,7 +939,7 @@ export default function RFQDetailModal({
         })()}
 
         {/* ── 3. PENDING APPROVAL INTERACTIVE CARD (If user can act on pending level / re-review) ── */}
-        {Boolean(pendingApproval && pendingApproval.canAct && !(rfq as any)._isReturnedByMe && !(rfq as any)._isApprovedByMe && !(rfq as any)._isRejectedByMe) && (() => {
+        {Boolean((rfq.status === 'PENDING_APPROVAL' || rfq.status === 'RE_REVIEW' || rfq.status === 'RETURN_FOR_RE_REVIEW') && pendingApproval && pendingApproval.canAct && !(rfq as any)._isReturnedByMe && !(rfq as any)._isApprovedByMe && !(rfq as any)._isRejectedByMe) && (() => {
           const currentPendingLevel = pendingApproval.currentLevel || pendingApproval.levelNumber || approvalChain?.currentLevel || 1;
           const historyItems = approvalChain?.history || [];
           const lastReturnIdx = historyItems.map((h: any) => h.status).lastIndexOf('RETURNED');
@@ -1177,42 +1203,61 @@ export default function RFQDetailModal({
                 )}
 
                 {/* Bid Security Section */}
-                {rfq.bidSecurityRequired && (
+                {/* Bid Security & Bid Bond Section */}
+                {(rfq.bidSecurityRequired || rfq.bidBondRequired) && (
                   <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-secondary/10 p-4">
                     <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                       <Shield className="size-4 text-primary" />
-                      Bid Security Requirements
+                      Security & Guarantee Requirements
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-                      <div>
-                        <span className="text-muted-foreground block">Type</span>
-                        <strong className="text-sm font-medium text-foreground">Bid Bond</strong>
+                    {rfq.bidSecurityRequired && (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs pb-2 border-b border-border/50">
+                        <div>
+                          <span className="text-muted-foreground block">Requirement</span>
+                          <strong className="text-sm font-medium text-foreground">Bid Security</strong>
+                        </div>
+                        {(rfq.bidSecurityMinValue != null || rfq.bidSecurityValue != null) && (
+                          <div>
+                            <span className="text-muted-foreground block">Min Required Value</span>
+                            <strong className="text-sm font-medium text-foreground">
+                              {rfq.bidSecurityMinCurrency || rfq.bidSecurityCurrency || 'KES'} {Number(rfq.bidSecurityMinValue ?? rfq.bidSecurityValue).toLocaleString('en-IN')}
+                            </strong>
+                          </div>
+                        )}
+                        {(rfq.bidSecurityMinValidity != null || rfq.bidSecurityValidityValue != null) && (
+                          <div>
+                            <span className="text-muted-foreground block">Min Required Validity</span>
+                            <strong className="text-sm font-medium text-foreground">
+                              {rfq.bidSecurityMinValidity ?? rfq.bidSecurityValidityValue} Days
+                            </strong>
+                          </div>
+                        )}
                       </div>
-                      {rfq.bidSecurityValueType === 'FIXED_AMOUNT' && rfq.bidSecurityValue != null && (
+                    )}
+                    {rfq.bidBondRequired && (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs pt-1">
                         <div>
-                          <span className="text-muted-foreground block">Required Value</span>
-                          <strong className="text-sm font-medium text-foreground">
-                            {rfq.bidSecurityCurrency || 'KES'} {Number(rfq.bidSecurityValue).toLocaleString('en-IN')}
-                          </strong>
+                          <span className="text-muted-foreground block">Requirement</span>
+                          <strong className="text-sm font-medium text-foreground">Bid Bond</strong>
                         </div>
-                      )}
-                      {rfq.bidSecurityValueType === 'PERCENTAGE' && rfq.bidSecurityValue != null && (
-                        <div>
-                          <span className="text-muted-foreground block">Required Value</span>
-                          <strong className="text-sm font-medium text-foreground">
-                            {Number(rfq.bidSecurityValue)}% of Bid Value
-                          </strong>
-                        </div>
-                      )}
-                      {rfq.bidSecurityValidityValue != null && (
-                        <div>
-                          <span className="text-muted-foreground block">Required Validity</span>
-                          <strong className="text-sm font-medium text-foreground">
-                            {rfq.bidSecurityValidityValue} {rfq.bidSecurityValidityUnit === 'DAYS' ? 'Days' : ''}
-                          </strong>
-                        </div>
-                      )}
-                    </div>
+                        {rfq.bidBondMinValue != null && (
+                          <div>
+                            <span className="text-muted-foreground block">Min Bond Value</span>
+                            <strong className="text-sm font-medium text-foreground">
+                              {rfq.bidBondMinCurrency || 'KES'} {Number(rfq.bidBondMinValue).toLocaleString('en-IN')}
+                            </strong>
+                          </div>
+                        )}
+                        {rfq.bidBondMinValidity != null && (
+                          <div>
+                            <span className="text-muted-foreground block">Min Bond Validity</span>
+                            <strong className="text-sm font-medium text-foreground">
+                              {rfq.bidBondMinValidity} Days
+                            </strong>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1762,43 +1807,61 @@ export default function RFQDetailModal({
                     ))}
                   </div>
 
-                  {/* ── Bid Security Section ── */}
-                  {rfq.bidSecurityRequired && (
+                  {/* ── Bid Security & Bid Bond Section ── */}
+                  {(rfq.bidSecurityRequired || rfq.bidBondRequired) && (
                     <div className="rfq-modal__info-panel" style={{ marginTop: 12, border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 16 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                         <Shield size={16} style={{ color: 'var(--primary-500)' }} />
-                        <strong style={{ fontSize: 15, color: 'var(--text-primary)' }}>Bid Security Required</strong>
+                        <strong style={{ fontSize: 15, color: 'var(--text-primary)' }}>Security & Guarantee Requirements</strong>
                       </div>
-                      <div className="rfq-modal__info-grid" style={{ gap: 8 }}>
-                        {rfq.bidSecurityType && (
+                      {rfq.bidSecurityRequired && (
+                        <div className="rfq-modal__info-grid" style={{ gap: 8, marginBottom: rfq.bidBondRequired ? 12 : 0, paddingBottom: rfq.bidBondRequired ? 8 : 0, borderBottom: rfq.bidBondRequired ? '1px dashed var(--border)' : 'none' }}>
                           <div className="rfq-modal__info-item">
-                            <span className="rfq-modal__info-label">Type</span>
+                            <span className="rfq-modal__info-label">Requirement</span>
+                            <span className="rfq-modal__info-value">Bid Security</span>
+                          </div>
+                          {(rfq.bidSecurityMinValue != null || rfq.bidSecurityValue != null) && (
+                            <div className="rfq-modal__info-item">
+                              <span className="rfq-modal__info-label">Min Required Value</span>
+                              <span className="rfq-modal__info-value">
+                                {rfq.bidSecurityMinCurrency || rfq.bidSecurityCurrency || 'KES'} {Number(rfq.bidSecurityMinValue ?? rfq.bidSecurityValue).toLocaleString('en-IN')}
+                              </span>
+                            </div>
+                          )}
+                          {(rfq.bidSecurityMinValidity != null || rfq.bidSecurityValidityValue != null) && (
+                            <div className="rfq-modal__info-item">
+                              <span className="rfq-modal__info-label">Min Required Validity</span>
+                              <span className="rfq-modal__info-value">
+                                {rfq.bidSecurityMinValidity ?? rfq.bidSecurityValidityValue} Days
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {rfq.bidBondRequired && (
+                        <div className="rfq-modal__info-grid" style={{ gap: 8 }}>
+                          <div className="rfq-modal__info-item">
+                            <span className="rfq-modal__info-label">Requirement</span>
                             <span className="rfq-modal__info-value">Bid Bond</span>
                           </div>
-                        )}
-                        {rfq.bidSecurityValueType === 'FIXED_AMOUNT' && rfq.bidSecurityValue != null && (
-                          <div className="rfq-modal__info-item">
-                            <span className="rfq-modal__info-label">Required Value</span>
-                            <span className="rfq-modal__info-value">
-                              {rfq.bidSecurityCurrency || 'KES'} {Number(rfq.bidSecurityValue).toLocaleString('en-IN')}
-                            </span>
-                          </div>
-                        )}
-                        {rfq.bidSecurityValueType === 'PERCENTAGE' && rfq.bidSecurityValue != null && (
-                          <div className="rfq-modal__info-item">
-                            <span className="rfq-modal__info-label">Required Value</span>
-                            <span className="rfq-modal__info-value">{Number(rfq.bidSecurityValue)}% of Bid Value</span>
-                          </div>
-                        )}
-                        {rfq.bidSecurityValidityValue != null && (
-                          <div className="rfq-modal__info-item">
-                            <span className="rfq-modal__info-label">Required Validity</span>
-                            <span className="rfq-modal__info-value">
-                              {rfq.bidSecurityValidityValue} {rfq.bidSecurityValidityUnit === 'DAYS' ? 'Days' : ''}
-                            </span>
-                          </div>
-                        )}
-                      </div>
+                          {rfq.bidBondMinValue != null && (
+                            <div className="rfq-modal__info-item">
+                              <span className="rfq-modal__info-label">Min Bond Value</span>
+                              <span className="rfq-modal__info-value">
+                                {rfq.bidBondMinCurrency || 'KES'} {Number(rfq.bidBondMinValue).toLocaleString('en-IN')}
+                              </span>
+                            </div>
+                          )}
+                          {rfq.bidBondMinValidity != null && (
+                            <div className="rfq-modal__info-item">
+                              <span className="rfq-modal__info-label">Min Bond Validity</span>
+                              <span className="rfq-modal__info-value">
+                                {rfq.bidBondMinValidity} Days
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1881,7 +1944,10 @@ export default function RFQDetailModal({
                       <div key={item.id} className="rfq-modal__item-card">
                         <span className="rfq-modal__row-num">{idx + 1}</span>
                         <div className="rfq-modal__item-card-body">
-                          <div className="rfq-modal__item-card-name">{item.itemName || '—'}</div>
+                          <div className="rfq-modal__item-card-name">
+                            {item.itemName || '—'}
+                            {item.itemCode && <span className="ml-2 font-mono text-xs text-muted-foreground">({item.itemCode})</span>}
+                          </div>
                           <div className="rfq-modal__item-card-desc">{item.description || '—'}</div>
                           <div className="rfq-modal__item-card-meta">
                             <span className="rfq-modal__unit-badge">{item.unit}</span>

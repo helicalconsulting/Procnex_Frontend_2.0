@@ -21,6 +21,7 @@ export interface RFQTableRow {
   currency: string;
   lineItems: {
     id: string;
+    itemCode?: string;
     itemName: string;
     description: string;
     quantity: string;
@@ -49,12 +50,18 @@ export interface RFQTableRow {
   bidSecurityValidityUnit?: string;
   // Buyer-set minimum requirements
   bidSecurityMinValue?: number;
+  bidSecurityMinCurrency?: string;
   bidSecurityMinValidity?: number;
   bidBondMinValue?: number;
+  bidBondMinCurrency?: string;
   bidBondMinValidity?: number;
+  rfqApprovalStartPoint?: string;
+  quotationApprovalMode?: string;
+  quotationXUserRole?: string;
   // Raw backend fields passed through for edit page
   customFields?: Array<Record<string, unknown>>;
   evaluationParameters?: Array<Record<string, unknown>>;
+  evaluationCategories?: Array<Record<string, unknown>>;
   _isApprovedByMe?: boolean;
   _isReturnedByMe?: boolean;
   _isRejectedByMe?: boolean;
