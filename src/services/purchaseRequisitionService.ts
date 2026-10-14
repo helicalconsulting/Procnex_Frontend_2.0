@@ -6,7 +6,10 @@ import { apiRequest } from '../api/client';
 export interface PurchaseRequisitionItem {
   id?: string;
   itemNo: number;
+  itemCode?: string;
+  itemName?: string;
   description: string;
+  showDescription?: boolean;
   quantity: number;
   unit: string;
   unitPrice: number;

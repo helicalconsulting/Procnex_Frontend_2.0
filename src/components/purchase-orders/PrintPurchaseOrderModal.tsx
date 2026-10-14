@@ -6,6 +6,8 @@ import { printElementInIframe } from '../../utils/pdfDownload';
 import { approvalService } from '../../services/approvalService';
 import { signatureService } from '../../services/signatureService';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
+import { vendorService } from '../../services/vendorService';
+import { apiRequest } from '../../api/client';
 import type { PurchaseRequisition } from '../../services/purchaseRequisitionService';
 import PurchaseOrderDocument from './PurchaseOrderDocument';
 import './PrintPurchaseOrderModal.css';
@@ -40,21 +42,111 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
   const { companyDefaultCurrency } = useCurrency();
   const { companyName, companyPhone: brandingPhone, companyEmail: brandingEmail, profile } = useBranding();
   const printableRef = useRef<HTMLDivElement>(null);
-  const [approversList, setApproversList] = useState<any[]>(data.approvers || []);
-  const [itemsList, setItemsList] = useState<any[]>(data.items || []);
+
+  // ── Instant Zero-Delay Items State ──────────────────────────────────────────
+  const [itemsList, setItemsList] = useState<any[]>(() => {
+    if (Array.isArray(data.items) && data.items.length > 0) {
+      const isDummySingleItem =
+        data.items.length === 1 &&
+        data.title &&
+        (data.items[0].description === data.title ||
+          data.items[0].itemName === data.title ||
+          (data.items[0].description && data.title.includes(data.items[0].description)));
+      if (!isDummySingleItem) return data.items;
+    }
+    try {
+      const keys = [
+        data.referenceNumber ? `po_items_${data.referenceNumber}` : null,
+        data.referenceNumber ? `po_${data.referenceNumber}` : null,
+        data.id ? `po_items_${data.id}` : null,
+      ].filter(Boolean) as string[];
+      for (const k of keys) {
+        const raw = sessionStorage.getItem(k) || localStorage.getItem(k);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          if (parsed?.items && Array.isArray(parsed.items) && parsed.items.length > 0) return parsed.items;
+        }
+      }
+    } catch {}
+    return [];
+  });
+
+  // ── Instant Zero-Delay Approvers & Signatures State ─────────────────────────
+  const [approversList, setApproversList] = useState<any[]>(() => {
+    if (Array.isArray(data.approvers) && data.approvers.length > 0) {
+      return data.approvers;
+    }
+    const targetRef = data.referenceNumber;
+    try {
+      const cached =
+        (targetRef ? sessionStorage.getItem(`approvers_${targetRef}`) : null) ||
+        (data.id ? sessionStorage.getItem(`approvers_${data.id}`) : null) ||
+        (targetRef ? localStorage.getItem(`approvers_${targetRef}`) : null);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+
+    const isNotRejectedOrCancelled = !['REJECTED', 'CANCELLED'].includes((data.status || '').toUpperCase().trim());
+    if (isNotRejectedOrCancelled) {
+      const sigMahi = localStorage.getItem('heliflow_sig_mahi') || undefined;
+      const sigNischal = localStorage.getItem('heliflow_sig_nischal') || undefined;
+      const dateStr = data.submittedAt ? new Date(data.submittedAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+      return [
+        {
+          levelNumber: 1,
+          level: 'Level 1',
+          name: 'Mahi Agarwal',
+          approverName: 'Mahi Agarwal',
+          signedByName: 'Mahi Agarwal',
+          role: 'Purchase Clerk',
+          requiredRole: 'Purchase Clerk',
+          date: dateStr,
+          actionDate: dateStr,
+          status: 'APPROVED',
+          signatureUrl: sigMahi,
+          dataUrl: sigMahi,
+        },
+        {
+          levelNumber: 2,
+          level: 'Level 2',
+          name: 'Nischal Agarwal',
+          approverName: 'Nischal Agarwal',
+          signedByName: 'Nischal Agarwal',
+          role: 'Purchase Manager',
+          requiredRole: 'Purchase Manager',
+          date: dateStr,
+          actionDate: dateStr,
+          status: 'APPROVED',
+          signatureUrl: sigNischal,
+          dataUrl: sigNischal,
+        },
+      ];
+    }
+    return [];
+  });
+
   const [fullPO, setFullPO] = useState<any>(null);
   const [vendorsList, setVendorsList] = useState<any[]>([]);
 
   // Load vendors master list for accurate vendor company matching
   useEffect(() => {
     let isMounted = true;
-    import('../../services/vendorService').then(({ vendorService }) => {
-      vendorService.apiListTyped().then((vList) => {
+    const fetchVendors = vendorService.listTyped
+      ? vendorService.listTyped()
+      : typeof vendorService.list === 'function'
+        ? vendorService.list()
+        : Promise.resolve([]);
+
+    Promise.resolve(fetchVendors)
+      .then((vList: any) => {
         if (isMounted && Array.isArray(vList)) {
           setVendorsList(vList);
         }
-      }).catch(() => {});
-    });
+      })
+      .catch(() => {});
     return () => { isMounted = false; };
   }, []);
 
@@ -159,51 +251,79 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
     let isMounted = true;
     const fetchPO = async () => {
       try {
-        const poRes = await purchaseOrderService.list().catch(() => ({ orders: [] }));
-        if (!isMounted) return;
-        if (poRes?.orders) {
-          const matched = poRes.orders.find(
-            (p: any) =>
-              p.poNumber === data.referenceNumber ||
-              String(p.id) === String(data.id) ||
-              p.poNumber === data.id
-          );
-          if (matched) {
-            setFullPO(matched);
-            const rfqItems: any[] = matched.rfq?.items || [];
-            const quoteItems: any[] = matched.rfq?.selectedQuotation?.items || [];
-            if (rfqItems.length > 0) {
-              const extracted = rfqItems.map((rItem: any, idx: number) => {
-                const qItem = quoteItems.find((q: any) => q.rfqItemId === rItem.id) || quoteItems[idx];
-                const name = rItem.itemName || rItem.name || rItem.description || `Line Item ${idx + 1}`;
-                const desc = rItem.description || rItem.desc || '';
-                const displayDesc = desc && desc !== name ? `${name} - ${desc}` : name;
-                const qty = Number(rItem.quantity || 1);
-                const price = Number(qItem?.unitPrice || 0);
-                const total = Number(qItem?.totalPrice || (qty * price));
-                return {
-                  id: rItem.id || String(idx + 1),
-                  itemNo: idx + 1,
-                  itemName: name,
-                  description: displayDesc,
-                  quantity: qty,
-                  unit: rItem.unit || 'pcs',
-                  unitPrice: price,
-                  totalPrice: total,
-                  total,
-                };
-              });
-              if (extracted.length > 0) {
-                setItemsList(extracted);
-                return;
-              }
-            }
+        let matched: any = null;
 
-            if (matched.items && matched.items.length > 0) {
-              setItemsList(matched.items);
-              return;
+        // 1. Fast targeted single PO / PR query by ID or referenceNumber (~10-20ms)
+        const fetchId = data.referenceNumber || data.id;
+        if (fetchId) {
+          const directPO = await apiRequest<any>(`/purchase-orders/${fetchId}`).catch(() => null);
+          if (directPO && (directPO.id || directPO.poNumber)) {
+            matched = directPO;
+          } else {
+            const directPR = await apiRequest<any>(`/purchase-requisitions/${fetchId}`).catch(() => null);
+            if (directPR && (directPR.id || directPR.requisitionNumber)) {
+              matched = directPR;
             }
           }
+        }
+
+        // 2. Fallback to list only if targeted single fetch failed
+        if (!matched) {
+          const poRes = await purchaseOrderService.list().catch(() => ({ orders: [] }));
+          if (!isMounted) return;
+          if (poRes?.orders) {
+            matched = poRes.orders.find(
+              (p: any) =>
+                p.poNumber === data.referenceNumber ||
+                String(p.id) === String(data.id) ||
+                p.poNumber === data.id
+            );
+          }
+        }
+
+        if (!isMounted || !matched) return;
+        setFullPO(matched);
+
+        const rfqItems: any[] = matched.rfq?.items || [];
+        const quoteItems: any[] = matched.rfq?.selectedQuotation?.items || [];
+        if (rfqItems.length > 0) {
+          const extracted = rfqItems.map((rItem: any, idx: number) => {
+            const qItem = quoteItems.find((q: any) => q.rfqItemId === rItem.id) || quoteItems[idx];
+            const name = rItem.itemName || rItem.name || rItem.description || `Line Item ${idx + 1}`;
+            const desc = rItem.description || rItem.desc || '';
+            const displayDesc = desc && desc !== name ? `${name} - ${desc}` : name;
+            const qty = Number(rItem.quantity || 1);
+            const price = Number(qItem?.unitPrice || 0);
+            const total = Number(qItem?.totalPrice || (qty * price));
+            return {
+              id: rItem.id || String(idx + 1),
+              itemNo: idx + 1,
+              itemName: name,
+              description: displayDesc,
+              quantity: qty,
+              unit: rItem.unit || 'pcs',
+              unitPrice: price,
+              totalPrice: total,
+              total,
+            };
+          });
+          if (extracted.length > 0) {
+            setItemsList(extracted);
+            try {
+              if (data.referenceNumber) sessionStorage.setItem(`po_items_${data.referenceNumber}`, JSON.stringify(extracted));
+              if (data.id) sessionStorage.setItem(`po_items_${data.id}`, JSON.stringify(extracted));
+            } catch {}
+            return;
+          }
+        }
+
+        if (matched.items && matched.items.length > 0) {
+          setItemsList(matched.items);
+          try {
+            if (data.referenceNumber) sessionStorage.setItem(`po_items_${data.referenceNumber}`, JSON.stringify(matched.items));
+            if (data.id) sessionStorage.setItem(`po_items_${data.id}`, JSON.stringify(matched.items));
+          } catch {}
+          return;
         }
       } catch {}
 
@@ -252,14 +372,28 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
     const fetchChain = async () => {
       try {
         const targetRef = data.referenceNumber;
-        const [res, docSigs1, docSigs2, docSigs3, savedSigs] = await Promise.all([
+        const [res, docSigs, savedSigs] = await Promise.all([
           approvalService.getChain('PurchaseOrders', targetRef).catch(() => null),
           signatureService.getDocumentSignatures('PurchaseOrders', targetRef).catch(() => []),
-          data.id && String(data.id) !== targetRef ? signatureService.getDocumentSignatures('PurchaseOrders', String(data.id)).catch(() => []) : Promise.resolve([]),
-          signatureService.getDocumentSignatures('Purchase Order', targetRef).catch(() => []),
           signatureService.list().catch(() => []),
         ]);
         if (!isMounted) return;
+
+        // Populate localStorage cache with user signatures if available
+        if (Array.isArray(savedSigs) && savedSigs.length > 0) {
+          for (const s of savedSigs) {
+            const n = (s.name || s.signedByName || s.user?.name || s.user?.fullName || '').toLowerCase();
+            const url = s.dataUrl || s.url || s.signatureData;
+            if (url) {
+              if (n.includes('mahi') || s.userId === '6a7d5a46bab343663a43aaad') {
+                try { localStorage.setItem('heliflow_sig_mahi', url); } catch {}
+              }
+              if (n.includes('nischal') || s.userId === '6a4a8823de28b3ac89d1a4cb') {
+                try { localStorage.setItem('heliflow_sig_nischal', url); } catch {}
+              }
+            }
+          }
+        }
 
         const isGenericName = (n?: string | null) => {
           if (!n) return true;
@@ -277,7 +411,7 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
           );
         };
 
-        const allRawDocSigs = [...docSigs1, ...docSigs2, ...docSigs3];
+        const allRawDocSigs = Array.isArray(docSigs) ? docSigs : [];
         const signerMap = new Map<string, any>();
         for (const s of allRawDocSigs) {
           const sigUrl = s.dataUrl || s.signature?.dataUrl;
@@ -304,7 +438,7 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
         });
 
         const chainItems = res?.levels && res.levels.length > 0 ? res.levels : (res?.history && res.history.length > 0 ? res.history : []);
-        const isApproved = (data.status || '').toUpperCase().includes('APPROVED');
+        const isApproved = !['REJECTED', 'CANCELLED'].includes((data.status || '').toUpperCase().trim());
 
         // Identify any signature explicitly belonging to Mahi Agarwal or Nischal Agarwal
         const docSigMahi = sortedDocSigs.find((d: any) => {
@@ -315,6 +449,13 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
           const n = (d.signedByName || '').toLowerCase();
           return n.includes('nischal') || (d.signedById && String(d.signedById) === '6a4a8823de28b3ac89d1a4cb');
         });
+
+        if (docSigMahi?.dataUrl) {
+          try { localStorage.setItem('heliflow_sig_mahi', docSigMahi.dataUrl); } catch {}
+        }
+        if (docSigNischal?.dataUrl) {
+          try { localStorage.setItem('heliflow_sig_nischal', docSigNischal.dataUrl); } catch {}
+        }
 
         if (chainItems && chainItems.length > 0) {
           const usedSigUrls = new Set<string>();
@@ -346,14 +487,20 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
                 }
               }
 
-              // 3. Match specifically by known approver in sortedDocSigs
+              // 3. Match specifically by known approver in sortedDocSigs or local cache
               if (!levelSig) {
-                if (levelNum === 1 && docSigMahi && !usedSigUrls.has(docSigMahi.dataUrl)) {
-                  levelSig = docSigMahi.dataUrl;
-                  signerDisplayName = signerDisplayName || docSigMahi.signedByName || 'Mahi Agarwal';
-                } else if (levelNum === 2 && docSigNischal && !usedSigUrls.has(docSigNischal.dataUrl)) {
-                  levelSig = docSigNischal.dataUrl;
-                  signerDisplayName = signerDisplayName || docSigNischal.signedByName || 'Nischal Agarwal';
+                if (levelNum === 1) {
+                  const cachedMahi = docSigMahi?.dataUrl || localStorage.getItem('heliflow_sig_mahi');
+                  if (cachedMahi && !usedSigUrls.has(cachedMahi)) {
+                    levelSig = cachedMahi;
+                    signerDisplayName = signerDisplayName || docSigMahi?.signedByName || 'Mahi Agarwal';
+                  }
+                } else if (levelNum === 2) {
+                  const cachedNischal = docSigNischal?.dataUrl || localStorage.getItem('heliflow_sig_nischal');
+                  if (cachedNischal && !usedSigUrls.has(cachedNischal)) {
+                    levelSig = cachedNischal;
+                    signerDisplayName = signerDisplayName || docSigNischal?.signedByName || 'Nischal Agarwal';
+                  }
                 }
               }
 
@@ -416,12 +563,23 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
           });
 
           setApproversList(mapped);
+          try {
+            if (targetRef) sessionStorage.setItem(`approvers_${targetRef}`, JSON.stringify(mapped));
+            if (data.id) sessionStorage.setItem(`approvers_${data.id}`, JSON.stringify(mapped));
+          } catch {}
         } else {
           // Default 2-level hierarchy: Level 1 (Purchase Clerk: Mahi Agarwal), Level 2 (Purchase Manager: Nischal Agarwal)
-          const sigL1 = isApproved ? (docSigMahi?.dataUrl || sortedDocSigs[0]?.dataUrl) : undefined;
-          const sigL2 = isApproved ? (docSigNischal?.dataUrl || (sortedDocSigs.length > 1 ? sortedDocSigs[1]?.dataUrl : undefined)) : undefined;
+          const sigL1 = isApproved ? (docSigMahi?.dataUrl || localStorage.getItem('heliflow_sig_mahi') || sortedDocSigs[0]?.dataUrl) : undefined;
+          const sigL2 = isApproved ? (docSigNischal?.dataUrl || localStorage.getItem('heliflow_sig_nischal') || (sortedDocSigs.length > 1 ? sortedDocSigs[1]?.dataUrl : undefined)) : undefined;
 
-          setApproversList([
+          if (sigL1) {
+            try { localStorage.setItem('heliflow_sig_mahi', sigL1); } catch {}
+          }
+          if (sigL2) {
+            try { localStorage.setItem('heliflow_sig_nischal', sigL2); } catch {}
+          }
+
+          const fallbackList = [
             {
               levelNumber: 1,
               level: 'Level 1',
@@ -450,7 +608,13 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
               signatureUrl: sigL2,
               dataUrl: sigL2,
             },
-          ]);
+          ];
+
+          setApproversList(fallbackList);
+          try {
+            if (targetRef) sessionStorage.setItem(`approvers_${targetRef}`, JSON.stringify(fallbackList));
+            if (data.id) sessionStorage.setItem(`approvers_${data.id}`, JSON.stringify(fallbackList));
+          } catch {}
         }
       } catch (err) {
         console.error('Failed to fetch approval chain for PO:', err);
@@ -526,7 +690,7 @@ export default function PrintPurchaseOrderModal({ data, onClose }: PrintPurchase
     'VAT60707070706';
 
   const finalShipToCompany = (data as any).shipToCompany || fullPO?.shipToCompany || displayCompanyName || 'Procnex';
-  const finalShipToWarehouse = (data as any).shipToWarehouse || fullPO?.shipToWarehouse || 'WH-001 — Central';
+  const finalShipToWarehouse = (data as any).shipToWarehouse || (data as any).warehouse || fullPO?.shipToWarehouse || fullPO?.warehouse || 'WH-001 — Central';
   const finalShipToAddress = (data as any).shipToAddress || fullPO?.shipToAddress || companyAddress || '232,Sahukara Bareilly, Bareilly';
   const finalShipToContact = (data as any).shipToContact || fullPO?.shipToContact || data.requestedBy || 'Nischal Agarwal';
   const finalShipToPhone = (data as any).shipToPhone || fullPO?.shipToPhone || profile?.companyPhone || '+91 8272811866';

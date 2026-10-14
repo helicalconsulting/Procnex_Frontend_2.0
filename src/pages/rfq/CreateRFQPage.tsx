@@ -853,25 +853,28 @@ export default function CreateRFQPage() {
     try {
       if (isEditing && editId) {
         await rfqService.update(editId, { ...payload, isDraft: true });
-        await saveEvalCategories(editId);
-        if (payload.vendorIds) {
-          await syncVendors(editId, payload.vendorIds);
-        }
+        await Promise.all([
+          saveEvalCategories(editId),
+          payload.vendorIds ? syncVendors(editId, payload.vendorIds) : Promise.resolve(),
+          rfqService.saveWeightagePreferences(simpleWeightages).catch(() => {})
+        ]);
         setSuccessMsg('RFQ draft updated successfully!');
       } else {
         const created = await rfqService.create({ ...payload, isDraft: true });
         const createdId = (created as { id?: string })?.id;
         if (createdId) {
-          await saveEvalCategories(createdId);
+          await Promise.all([
+            saveEvalCategories(createdId),
+            rfqService.saveWeightagePreferences(simpleWeightages).catch(() => {})
+          ]);
         }
         setSuccessMsg('RFQ saved as draft successfully!');
       }
-      await rfqService.saveWeightagePreferences(simpleWeightages).catch(() => {});
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('heliflow:rfq-updated'));
         window.dispatchEvent(new CustomEvent('heliflow:approval-updated'));
       }
-      setTimeout(() => navigate('/rfq'), 1200);
+      setTimeout(() => navigate('/rfq'), 800);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Failed to save RFQ');
     } finally {
@@ -906,15 +909,20 @@ export default function CreateRFQPage() {
       let rfqResult: any;
       if (isEditing && editId) {
         rfqResult = await rfqService.update(editId, { ...payload, vendorIds: selectedVendors, isDraft: false });
-        await saveEvalCategories(editId);
-        await syncVendors(editId, selectedVendors);
+        await Promise.all([
+          saveEvalCategories(editId),
+          syncVendors(editId, selectedVendors),
+          rfqService.saveWeightagePreferences(simpleWeightages).catch(() => {})
+        ]);
       } else {
         rfqResult = await rfqService.create({ ...payload, vendorIds: selectedVendors, isDraft: false });
         const createdId = (rfqResult as { id?: string })?.id;
         if (!createdId) throw new Error('RFQ created but no id returned');
-        await saveEvalCategories(createdId);
+        await Promise.all([
+          saveEvalCategories(createdId),
+          rfqService.saveWeightagePreferences(simpleWeightages).catch(() => {})
+        ]);
       }
-      await rfqService.saveWeightagePreferences(simpleWeightages).catch(() => {});
 
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('heliflow:rfq-updated'));

@@ -652,21 +652,23 @@ export const ActionSendingOverlay: React.FC<ActionSendingOverlayProps> = ({
       return;
     }
 
-    // Progress bar animation timer
+    // Fast & smooth progress bar animation timer (100ms instead of 450ms)
     const progressInterval = setInterval(() => {
       setProgress((prev) => {
-        if (prev >= 94) return prev;
-        const jump = Math.floor(Math.random() * 8) + 3;
-        return Math.min(prev + jump, 94);
+        if (prev >= 96) return prev;
+        const jump = Math.floor(Math.random() * 12) + 6;
+        return Math.min(prev + jump, 96);
       });
-    }, 450);
+    }, 90);
 
-    // Timers for step transitions
-    const stepTimers = steps.map((step, idx) => {
+    // Dynamic scaled-down timers for snappy step transitions (max ~350ms total span)
+    const stepTimers = steps.map((_, idx) => {
       if (idx === 0) return null;
+      // Scale delay so steps transition briskly: 100ms, 200ms, 300ms...
+      const scaledDelay = Math.min(idx * 120, 400);
       return setTimeout(() => {
         setActiveStepIndex(idx);
-      }, step.delay);
+      }, scaledDelay);
     });
 
     // Lock body scroll while overlay is mounted

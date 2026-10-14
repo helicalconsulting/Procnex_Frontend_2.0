@@ -343,7 +343,6 @@ export default function RFQDetailModal({
 
     try {
       const res = await approvalService.approve(approvalId, comment);
-      await new Promise((resolve) => setTimeout(resolve, 1800));
       setActionSendingState(null);
 
       const hasNextLevel = Boolean(res?.nextLevel);
@@ -414,7 +413,6 @@ export default function RFQDetailModal({
 
     try {
       const res = await approvalService.reject(approvalId, comment);
-      await new Promise((resolve) => setTimeout(resolve, 1800));
       setActionSendingState(null);
       const msg = res?.message || 'RFQ Rejected.';
       setApprovalActionSuccess(msg);
@@ -468,7 +466,6 @@ export default function RFQDetailModal({
 
     try {
       const res = await approvalService.return(approvalId, comment, actionReturnTarget);
-      await new Promise((resolve) => setTimeout(resolve, 1800));
       setActionSendingState(null);
       const msg = res?.message || 'RFQ Returned for revision.';
       setApprovalActionSuccess(msg);

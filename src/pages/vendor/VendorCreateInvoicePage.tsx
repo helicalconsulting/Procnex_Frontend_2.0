@@ -504,8 +504,7 @@ export default function VendorCreateInvoicePage() {
         bc.close();
       } catch {}
 
-      // Allow multi-step packaging animation to complete smoothly
-      await new Promise((resolve) => setTimeout(resolve, 1800));
+
 
       if (isDraft) {
         setActionSuccessModalData({

@@ -1966,3 +1966,39 @@
     display: table-header-group;
   }
 }
+
+/* ── Item Name & Description Styling (Matches Direct PO) ── */
+.cpo-table__item-name-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.cpo-table__add-desc-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--primary-500, #0a6ed1);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.cpo-table__add-desc-btn:hover {
+  background: color-mix(in srgb, var(--primary-500, #0a6ed1) 12%, transparent);
+  color: var(--primary-600, #0284c7);
+}
+
+.cpo-table__input--sub {
+  font-size: 13px !important;
+  color: var(--text-secondary) !important;
+}

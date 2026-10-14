@@ -76,6 +76,7 @@ interface MockQuotation {
   attachments?: QuotationAttachment[];
   returnReason?: string | null;
   currentLevelRole?: string | null;
+  currentLevelNumber?: number | null;
   finalLevelRole?: string | null;
   isChainComplete?: boolean;
   rfqApprovalStartPoint?: string;
@@ -298,6 +299,11 @@ function mapQuotationToRow(q: Quotation): MockQuotation {
     quotationApprovalMode: (rfqObj as any)?.quotationApprovalMode || (q as any).quotationApprovalMode || null,
     quotationXUserRole: (rfqObj as any)?.quotationXUserRole || (q as any).quotationXUserRole || null,
     currentLevelRole: (q as any).currentLevelRole || null,
+    currentLevelNumber: (q as any).currentLevelNumber !== undefined && (q as any).currentLevelNumber !== null
+      ? Number((q as any).currentLevelNumber)
+      : (q as any).currentLevel !== undefined && (q as any).currentLevel !== null
+      ? Number((q as any).currentLevel)
+      : null,
     finalLevelRole: (q as any).finalLevelRole || null,
     rfqCreatedBy: (rfqObj as any)?.createdBy || (q as any).rfqCreatedBy || (q as any).createdBy || null,
     vendorId: q.vendorId || vendor?.id || (q as any).vendor_id,
@@ -2271,17 +2277,16 @@ function ActionModalInner({
       : []
   );
 
-  // Quotation is at Level 2+ review (already approved by Level 1 / Approver 1, currently Under Review)
-  const isLevel2PlusReview =
-    q.status === 'UNDER_REVIEW' ||
-    Number((q as any).currentLevelNumber || (q as any).currentLevel || 0) > 1 ||
-    Boolean((q as any).userAction === 'APPROVED_L1');
+  // Determine the effective level of the quotation
+  const activeLevelNum = Number(q.currentLevelNumber || (q as any).currentLevel || 0);
 
-  // Approver 1 / Single-level Review (SUBMITTED): Hide Level 1 return option; default and sole destination is Return to Vendor.
-  // Approver 2 (Level 2+ / UNDER_REVIEW): Show BOTH options:
-  // 1) Return to Vendor for Resubmission (selected by default)
+  // Approver 1 / Single-level Review (Level 1 / Approver 1):
+  // Direct return to vendor only — do NOT show Return Destination radio options.
+  // Approver 2 or above (Level >= 2):
+  // Show BOTH options:
+  // 1) Return to Vendor for Resubmission
   // 2) Return to Level 1 Approver
-  const canReturnToLevel1 = Boolean(isLevel2PlusReview);
+  const canReturnToLevel1 = activeLevelNum >= 2 || Boolean((q as any).userAction === 'APPROVED_L1');
 
   const [returnTarget, setReturnTarget] = useState<'LEVEL_1' | 'VENDOR'>('VENDOR');
 

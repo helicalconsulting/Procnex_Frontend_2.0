@@ -459,6 +459,7 @@ export default function CreatePurchaseOrderPage() {
                 itemCode: `ITEM-00${idx + 1}`,
                 itemName: ci.itemName || `Item ${idx + 1}`,
                 description: ci.description || '',
+                showDescription: !!(ci.description || '').trim(),
                 quantity: Number(ci.quantity) || 1,
                 unit: ci.unit || 'pcs',
                 unitPrice: Number(ci.unitPrice) || 0,
@@ -497,8 +498,9 @@ export default function CreatePurchaseOrderPage() {
               setItems(rfq.lineItems.map((ri: any, idx: number) => ({
                 id: String(idx + 1),
                 itemCode: `ITEM-00${idx + 1}`,
-                itemName: ri.itemName || ri.description || `Item ${idx + 1}`,
+                itemName: ri.itemName || `Item ${idx + 1}`,
                 description: ri.description || '',
+                showDescription: !!(ri.description || '').trim(),
                 quantity: Number(ri.quantity) || 1,
                 unit: ri.unit || 'pcs',
                 unitPrice: Number(ri.targetPrice) || 0,
@@ -579,14 +581,14 @@ export default function CreatePurchaseOrderPage() {
           if (existing.rfqId) setRfqNo(existing.rfqId);
           if (existing.items && existing.items.length > 0) {
             setItems(existing.items.map((item: any, idx: number) => {
-              const parts = (item.description || '').split(' - ');
-              const desc = parts.length > 1 ? parts.slice(1).join(' - ') : '';
+              const itemName = item.itemName || item.name || '';
+              const description = item.description || '';
               return {
                 id: String(idx + 1),
-                itemCode: `ITEM-00${idx + 1}`,
-                itemName: parts[0] || item.description || '',
-                description: desc,
-                showDescription: !!desc,
+                itemCode: item.itemCode || `ITEM-00${idx + 1}`,
+                itemName,
+                description,
+                showDescription: !!description.trim(),
                 quantity: item.quantity || 1,
                 unit: item.unit || 'pcs',
                 unitPrice: item.unitPrice || 0,
@@ -864,7 +866,9 @@ export default function CreatePurchaseOrderPage() {
         shippingTerms: shippingTerms,
         items: items.map((i, idx) => ({
           itemNo: idx + 1,
-          description: `${i.itemName}${i.description ? ` - ${i.description}` : ''}`,
+          itemCode: i.itemCode,
+          itemName: i.itemName,
+          description: i.description || '',
           quantity: Number(i.quantity) || 1,
           unit: i.unit || 'pcs',
           unitPrice: Number(i.unitPrice) || 0,
@@ -902,7 +906,7 @@ export default function CreatePurchaseOrderPage() {
         setShowSendingOverlay(false);
         // Redirect to PO Creation & Orders list page
         navigate('/procurement/purchase-requisitions');
-      }, 2200);
+      }, 350);
     } catch (err) {
       setShowSendingOverlay(false);
       setMsg({
@@ -1584,36 +1588,23 @@ export default function CreatePurchaseOrderPage() {
                         />
                       </td>
                       <td>
-                        <div className="cpo-table__item-name-wrap">
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                           <input
                             type="text"
                             className="cpo-table__input"
                             placeholder="Item Name *"
                             value={item.itemName}
                             onChange={(e) => handleItemChange(item.id, 'itemName', e.target.value)}
-                            style={{ fontWeight: 600, paddingRight: !item.showDescription ? '120px' : '12px' }}
+                            style={{ fontWeight: 600 }}
                           />
-                          {!item.showDescription && (
-                            <button
-                              type="button"
-                              className="cpo-table__add-desc-btn"
-                              onClick={() => handleItemChange(item.id, 'showDescription', true)}
-                            >
-                              + Add Description
-                            </button>
-                          )}
-                        </div>
-                        {item.showDescription && (
                           <input
                             type="text"
                             className="cpo-table__input cpo-table__input--sub"
                             placeholder="Description / Specs"
                             value={item.description}
                             onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
-                            style={{ marginTop: 4 }}
-                            autoFocus
                           />
-                        )}
+                        </div>
                       </td>
                       <td>
                         <input

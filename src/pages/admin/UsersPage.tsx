@@ -467,13 +467,17 @@ export default function UsersPage() {
   const handleCreateUser = useCallback(async () => {
     const roleName = selectedUserType === 'rfq' ? newPosition : newRole;
 
-    if (actionLoading || !hasPermission('User Management', 'canCreate') || !selectedUserType || !newFullName.trim() || !newUsername.trim() || newPassword.length < 8 || !newEmail.trim()) return;
+    if (actionLoading || !hasPermission('User Management', 'canCreate') || !selectedUserType || !newFullName.trim() || !newUsername.trim() || newPassword.length < 8 || !newEmail.trim() || !newDepartment.trim()) return;
     if (isNewEmailInvalid) {
       setCreateModalError('Please enter a complete valid email address (e.g. user@domain.com)');
       return;
     }
     if (selectedUserType === 'heliflow' && !newRole) return;
     if (selectedUserType === 'rfq' && !newPosition) return;
+    if (!newDepartment.trim()) {
+      setCreateModalError('Please select a department');
+      return;
+    }
 
     setActionLoading(true);
     setPageMsg(null);
@@ -485,7 +489,7 @@ export default function UsersPage() {
         email: newEmail.trim(),
         password: newPassword,
         phone: newPhone.trim() ? `${newCountryCode}${newPhone.trim()}` : undefined,
-        department: newDepartment || (selectedUserType === 'rfq' ? 'Procurement' : 'General'),
+        department: newDepartment.trim(),
         position: selectedUserType === 'rfq' ? newPosition : undefined,
         companyCode: userCompanyCode || undefined,
         roleName,
@@ -549,7 +553,10 @@ export default function UsersPage() {
 
   const handleSaveEdit = useCallback(async () => {
     if (!editingUser || actionLoading || !hasPermission('User Management', 'canCreate')) return;
-    if (!editFullName.trim() || !editEmail.trim()) return;
+    if (!editFullName.trim() || !editEmail.trim() || !editDepartment.trim() || !editRoleName) {
+      setPageMsg('Please fill in all mandatory fields: Full Name, Email, Department, and Role.');
+      return;
+    }
     if (isEditEmailInvalid) {
       setPageMsg('Please enter a complete valid email address (e.g. user@domain.com)');
       return;
@@ -561,8 +568,8 @@ export default function UsersPage() {
         fullName: editFullName.trim(),
         email: editEmail.trim(),
         phone: editPhone.trim() ? `${editCountryCode}${editPhone.trim()}` : undefined,
-        department: editDepartment.trim() || undefined,
-        roleName: editRoleName || undefined,
+        department: editDepartment.trim(),
+        roleName: editRoleName.trim(),
         isMobileAccessEnabled: editMobileAccess,
       });
       setPageMsg(`User "${updated.fullName}" updated successfully.`);
@@ -655,6 +662,7 @@ export default function UsersPage() {
     !isNewEmailInvalid &&
     selectedUserType !== null &&
     newEmail.trim() &&
+    newDepartment.trim() &&
     (selectedUserType === 'rfq' ? !!newPosition : !!newRole);
 
   const createUserMissingFields = useMemo(() => {
@@ -669,8 +677,9 @@ export default function UsersPage() {
     }
     if (selectedUserType === 'rfq' && !newPosition) missing.push('Position');
     if (selectedUserType === 'heliflow' && !newRole) missing.push('Role');
+    if (!newDepartment.trim()) missing.push('Department');
     return missing;
-  }, [newFullName, newUsername, newPassword, newEmail, isNewEmailInvalid, newPosition, newRole, selectedUserType]);
+  }, [newFullName, newUsername, newPassword, newEmail, isNewEmailInvalid, newPosition, newRole, newDepartment, selectedUserType]);
 
   const canProceedStep1 = selectedUserType !== null;
 
@@ -1257,8 +1266,8 @@ export default function UsersPage() {
                         </Select>
                       </div>
                       <div className="users-modal__field">
-                        <label htmlFor="users-newDepartment" className="users-modal__label"><Building2 size={13} style={{ marginRight: 4 }} />Department</label>
-                        <Select id="users-newDepartment" disabled={actionLoading} className="users-modal__select" value={newDepartment} onChange={(e) => setNewDepartment(e.target.value)}>
+                        <label htmlFor="users-newDepartment" className="users-modal__label"><Building2 size={13} style={{ marginRight: 4 }} />Department <span className="users-required" aria-hidden="true">*</span></label>
+                        <Select id="users-newDepartment" disabled={actionLoading} className="users-modal__select" required value={newDepartment} onChange={(e) => setNewDepartment(e.target.value)}>
                           <option value="">Select department</option>
                           {departments.filter((d) => d.isActive).map((d) => (<option key={d.id} value={d.name}>{d.name}</option>))}
                         </Select>
@@ -1275,8 +1284,8 @@ export default function UsersPage() {
                         </Select>
                       </div>
                       <div className="users-modal__field">
-                        <label htmlFor="users-newDepartment" className="users-modal__label"><Building2 size={13} style={{ marginRight: 4 }} />Department</label>
-                        <Select id="users-newDepartment" disabled={actionLoading} className="users-modal__select" value={newDepartment} onChange={(e) => setNewDepartment(e.target.value)}>
+                        <label htmlFor="users-newDepartment" className="users-modal__label"><Building2 size={13} style={{ marginRight: 4 }} />Department <span className="users-required" aria-hidden="true">*</span></label>
+                        <Select id="users-newDepartment" disabled={actionLoading} className="users-modal__select" required value={newDepartment} onChange={(e) => setNewDepartment(e.target.value)}>
                           <option value="">Select department</option>
                           {departments.filter((d) => d.isActive).map((d) => (<option key={d.id} value={d.name}>{d.name}</option>))}
                         </Select>
@@ -1414,16 +1423,16 @@ export default function UsersPage() {
               </div>
               <div className="users-modal__row">
                 <div className="users-modal__field">
-                  <label htmlFor="users-editDepartment" className="users-modal__label">Department</label>
-                  <Select id="users-editDepartment" disabled={actionLoading} className="users-modal__select" value={editDepartment} onChange={(e) => setEditDepartment(e.target.value)}>
+                  <label htmlFor="users-editDepartment" className="users-modal__label">Department <span className="users-required" aria-hidden="true">*</span></label>
+                  <Select id="users-editDepartment" disabled={actionLoading} className="users-modal__select" required value={editDepartment} onChange={(e) => setEditDepartment(e.target.value)}>
                     <option value="">Select department</option>
                     {editDepartment && !departments.some(d => d.isActive && d.name === editDepartment) && <option value={editDepartment}>{editDepartment}</option>}
                     {departments.filter((d) => d.isActive).map((d) => (<option key={d.id} value={d.name}>{d.name}</option>))}
                   </Select>
                 </div>
                 <div className="users-modal__field">
-                  <label htmlFor="users-editRoleName" className="users-modal__label">Role</label>
-                  <Select id="users-editRoleName" disabled={actionLoading} className="users-modal__select" value={editRoleName} onChange={(e) => setEditRoleName(e.target.value)}>
+                  <label htmlFor="users-editRoleName" className="users-modal__label">Role <span className="users-required" aria-hidden="true">*</span></label>
+                  <Select id="users-editRoleName" disabled={actionLoading} className="users-modal__select" required value={editRoleName} onChange={(e) => setEditRoleName(e.target.value)}>
                     <option value="">Select role / position</option>
                     {positionRoleOptions.map((r) => (<option key={r} value={r}>{r}</option>))}
                   </Select>
@@ -1442,7 +1451,7 @@ export default function UsersPage() {
             </div>
             <div className="users-modal__footer">
               <button type="button" className="users-modal__btn users-modal__btn--secondary" disabled={actionLoading} onClick={() => { if (!actionLoading) setEditingUser(null); }}>Cancel</button>
-              <button type="button" className="users-modal__btn users-modal__btn--primary" disabled={actionLoading || !editFullName.trim() || !editEmail.trim() || isEditEmailInvalid} onClick={handleSaveEdit}>
+              <button type="button" className="users-modal__btn users-modal__btn--primary" disabled={actionLoading || !editFullName.trim() || !editEmail.trim() || isEditEmailInvalid || !editDepartment.trim() || !editRoleName} onClick={handleSaveEdit}>
                 {actionLoading ? 'Saving…' : 'Save Changes'}
               </button>
             </div>

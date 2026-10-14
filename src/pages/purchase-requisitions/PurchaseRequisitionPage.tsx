@@ -66,6 +66,40 @@ function calcItemTotal(item: Partial<PurchaseRequisitionItem>): number {
   return price * qty;
 }
 
+function sanitizePrItems(rawItems: any[]): PurchaseRequisitionItem[] {
+  return (rawItems || []).map((i: any, idx: number) => {
+    let itemName = (i.itemName || i.name || '').trim();
+    let description = (i.description || '').trim();
+    if (!itemName) {
+      if (description.includes(' - ')) {
+        const parts = description.split(' - ');
+        itemName = parts[0].trim();
+        description = parts.slice(1).join(' - ').trim();
+      } else {
+        itemName = description || `Item ${idx + 1}`;
+        description = '';
+      }
+    } else if (description.toLowerCase() === itemName.toLowerCase()) {
+      description = '';
+    }
+    const hasDesc = Boolean(i.showDescription ?? (description && description.length > 0));
+    return {
+      ...i,
+      itemNo: i.itemNo || idx + 1,
+      itemCode: i.itemCode || `ITEM-00${idx + 1}`,
+      itemName,
+      description,
+      showDescription: hasDesc,
+      quantity: Number(i.quantity) || 0,
+      unit: i.unit || 'Pcs',
+      unitPrice: Number(i.unitPrice) || 0,
+      taxPercent: Number(i.taxPercent) || 0,
+      discount: Number(i.discount) || 0,
+      total: calcItemTotal({ quantity: Number(i.quantity) || 0, unitPrice: Number(i.unitPrice) || 0 }),
+    };
+  });
+}
+
 function formatCurrency(amount: number, currency: string = 'INR'): string {
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
@@ -212,27 +246,28 @@ export default function PurchaseRequisitionPage() {
         const list = whs || [];
         setWarehouses(list);
         if (list.length > 0) {
-          setPr(prev => {
-            if (!prev) return prev;
-            if (!prev.shipToWarehouse || prev.shipToWarehouse === '') {
-              const defWh = list.find(w => w.isDefault && w.isActive) || list.find(w => w.isActive) || list[0];
-              if (defWh) {
-                setSelectedWarehouseId(defWh.id);
-                const fullAddress = [defWh.address, defWh.city, defWh.country].filter(Boolean).join(', ');
-                if (defWh.phone) {
-                  setShipToCountryCode(detectCountryCode(defWh.phone, '+91'));
-                }
+          const defWh = list.find(w => w.isDefault && w.isActive) || list.find(w => w.isActive) || list[0];
+          if (defWh) {
+            setSelectedWarehouseId(defWh.id);
+            const whLabel = defWh.code ? `${defWh.code} — ${defWh.name}` : defWh.name;
+            const fullAddress = [defWh.address, defWh.city, defWh.country].filter(Boolean).join(', ');
+            if (defWh.phone) {
+              setShipToCountryCode(detectCountryCode(defWh.phone, '+91'));
+            }
+            setPr(prev => {
+              if (!prev) return prev;
+              if (!prev.shipToWarehouse || prev.shipToWarehouse.trim() === '') {
                 return {
                   ...prev,
-                  shipToWarehouse: `${defWh.code} — ${defWh.name}`,
+                  shipToWarehouse: whLabel,
                   shipToAddress: fullAddress || prev.shipToAddress,
                   shipToContact: defWh.contactPerson || prev.shipToContact,
                   shipToPhone: defWh.phone || prev.shipToPhone,
                 };
               }
-            }
-            return prev;
-          });
+              return prev;
+            });
+          }
         }
       })
       .catch(() => {});
@@ -272,6 +307,32 @@ export default function PurchaseRequisitionPage() {
       .catch(() => {});
   }, []);
 
+  // Auto-sync warehouse to pr if warehouse is selected or default exists but pr.shipToWarehouse is empty
+  useEffect(() => {
+    if (!pr || isReadOnly) return;
+    if (warehouses.length > 0 && (!pr.shipToWarehouse || !pr.shipToWarehouse.trim())) {
+      const defWh = warehouses.find(w => w.id === selectedWarehouseId) 
+        || warehouses.find(w => w.isDefault && w.isActive) 
+        || warehouses.find(w => w.isActive) 
+        || warehouses[0];
+      if (defWh) {
+        setSelectedWarehouseId(defWh.id);
+        const whLabel = defWh.code ? `${defWh.code} — ${defWh.name}` : defWh.name;
+        const fullAddress = [defWh.address, defWh.city, defWh.country].filter(Boolean).join(', ');
+        if (defWh.phone) {
+          setShipToCountryCode(detectCountryCode(defWh.phone, '+91'));
+        }
+        setPr(prev => prev ? {
+          ...prev,
+          shipToWarehouse: whLabel,
+          shipToAddress: fullAddress || prev.shipToAddress,
+          shipToContact: defWh.contactPerson || prev.shipToContact,
+          shipToPhone: defWh.phone || prev.shipToPhone,
+        } : null);
+      }
+    }
+  }, [warehouses, pr?.shipToWarehouse, selectedWarehouseId, isReadOnly]);
+
   const selectedCustomPlan = useMemo(() => {
     if (selectedPaymentPlanId) {
       return customPlans.find((p) => p.id === selectedPaymentPlanId) || null;
@@ -298,7 +359,7 @@ export default function PurchaseRequisitionPage() {
         if (!contractId) {
           const existing = await purchaseRequisitionService.getByRfqId(rfqId);
           if (existing) {
-            const items = (existing.items || []).map(i => ({ ...i, total: calcItemTotal(i) }));
+            const items = sanitizePrItems(existing.items);
             const subtotal = items.reduce((s, i) => s + (i.quantity * i.unitPrice), 0);
             if ((existing as any).paymentPlanId) setSelectedPaymentPlanId((existing as any).paymentPlanId);
             if ((existing as any).paymentPlanSnapshot) {
@@ -408,21 +469,33 @@ export default function PurchaseRequisitionPage() {
         // Prefer contract items if available
         const useContractItems = contract?.items && contract.items.length > 0;
         let items: PurchaseRequisitionItem[] = useContractItems 
-          ? contract.items.map((ci: any, idx: number) => ({
-              itemNo: idx + 1,
-              description: ci.itemName || `Item ${idx + 1}`,
-              quantity: ci.quantity || 1,
-              unit: ci.unit || 'Pcs',
-              unitPrice: Number(ci.unitPrice) || 0,
-              taxPercent: Number(ci.tax) > 0 ? Math.round((Number(ci.tax) / (Number(ci.unitPrice) * Number(ci.quantity))) * 100) : (contract?.taxPercentage || 0),
-              discount: 0,
-              total: 0,
-            }))
-          : rfqItems.map((ri: any, idx: number) => {
-              const qi = quotItems.find((i: any) => i.rfqItemId === ri.id);
+          ? contract.items.map((ci: any, idx: number) => {
+              const name = ci.itemName || ci.name || `Item ${idx + 1}`;
+              const desc = ci.description || '';
               return {
                 itemNo: idx + 1,
-                description: ri.itemName || ri.description || `Item ${idx + 1}`,
+                itemCode: ci.itemCode || `ITEM-00${idx + 1}`,
+                itemName: name,
+                description: desc,
+                showDescription: Boolean(desc && desc.trim().length > 0),
+                quantity: ci.quantity || 1,
+                unit: ci.unit || 'Pcs',
+                unitPrice: Number(ci.unitPrice) || 0,
+                taxPercent: Number(ci.tax) > 0 ? Math.round((Number(ci.tax) / (Number(ci.unitPrice) * Number(ci.quantity))) * 100) : (contract?.taxPercentage || 0),
+                discount: 0,
+                total: 0,
+              };
+            })
+          : rfqItems.map((ri: any, idx: number) => {
+              const qi = quotItems.find((i: any) => i.rfqItemId === ri.id);
+              const name = ri.itemName || ri.name || `Item ${idx + 1}`;
+              const desc = ri.description || '';
+              return {
+                itemNo: idx + 1,
+                itemCode: ri.itemCode || `ITEM-00${idx + 1}`,
+                itemName: name,
+                description: desc,
+                showDescription: Boolean(desc && desc.trim().length > 0),
                 quantity: ri.quantity || 0,
                 unit: ri.unit || 'Pcs',
                 unitPrice: qi ? Number(qi.unitPrice) : 0,
@@ -438,7 +511,10 @@ export default function PurchaseRequisitionPage() {
           items = [
             {
               itemNo: 1,
-              description: contract.title || `Contract Items (${contract.contractNumber})`,
+              itemCode: 'ITEM-001',
+              itemName: contract.title || `Contract Items (${contract.contractNumber})`,
+              description: '',
+              showDescription: false,
               quantity: 1,
               unit: 'Lot',
               unitPrice: availValue,
@@ -495,10 +571,22 @@ export default function PurchaseRequisitionPage() {
           vendorEmail: vendor?.email || contract?.vendor?.email || '',
           vendorGstVat: vendor?.gstVat || vendor?.gstNumber || '',
           shipToCompany: branding.companyName,
-          shipToWarehouse: '',
-          shipToAddress: compAddress,
-          shipToContact: '',
-          shipToPhone: '',
+          shipToWarehouse: (() => {
+            const defWh = warehouses.find(w => w.id === selectedWarehouseId) || warehouses.find(w => w.isDefault && w.isActive) || warehouses.find(w => w.isActive) || warehouses[0];
+            return defWh ? (defWh.code ? `${defWh.code} — ${defWh.name}` : defWh.name) : '';
+          })(),
+          shipToAddress: (() => {
+            const defWh = warehouses.find(w => w.id === selectedWarehouseId) || warehouses.find(w => w.isDefault && w.isActive) || warehouses.find(w => w.isActive) || warehouses[0];
+            return defWh ? ([defWh.address, defWh.city, defWh.country].filter(Boolean).join(', ') || compAddress) : compAddress;
+          })(),
+          shipToContact: (() => {
+            const defWh = warehouses.find(w => w.id === selectedWarehouseId) || warehouses.find(w => w.isDefault && w.isActive) || warehouses.find(w => w.isActive) || warehouses[0];
+            return defWh?.contactPerson || '';
+          })(),
+          shipToPhone: (() => {
+            const defWh = warehouses.find(w => w.id === selectedWarehouseId) || warehouses.find(w => w.isDefault && w.isActive) || warehouses.find(w => w.isActive) || warehouses[0];
+            return defWh?.phone || '';
+          })(),
           poDate: new Date().toISOString().slice(0, 10),
           currency: contract?.currency || rfqData.currency || 'INR',
           requisitioner: '',
@@ -551,7 +639,7 @@ export default function PurchaseRequisitionPage() {
     const unsubStatus = sseClient.on('po_status_changed', () => {
       // Re-fetch the PR to get latest status from backend
       purchaseRequisitionService.getByRfqId(rfqId).then(existing => {
-        if (existing) setPr(existing);
+        if (existing) setPr({ ...existing, items: sanitizePrItems(existing.items) });
       }).catch(() => {});
     });
 
@@ -560,7 +648,7 @@ export default function PurchaseRequisitionPage() {
       // Only refresh if the PO's rfqId matches our PR's rfqId
       if (event?.rfqId && event.rfqId !== rfqId) return;
       purchaseRequisitionService.getByRfqId(rfqId).then(existing => {
-        if (existing) setPr(existing);
+        if (existing) setPr({ ...existing, items: sanitizePrItems(existing.items) });
       }).catch(() => {});
     });
 
@@ -663,7 +751,7 @@ export default function PurchaseRequisitionPage() {
     const currentItem = { ...items[index], [key]: value };
     items[index] = currentItem;
 
-    if (key === 'description' && typeof value === 'string' && value.trim()) {
+    if ((key === 'itemName' || key === 'description') && typeof value === 'string' && value.trim()) {
       const trimmed = value.trim();
       const matched = erpStockItems.find(
         (s) => s.stockCode.toLowerCase() === trimmed.toLowerCase() || s.description.toLowerCase() === trimmed.toLowerCase()
@@ -671,6 +759,10 @@ export default function PurchaseRequisitionPage() {
       const stockCodeToLookup = matched ? matched.stockCode : trimmed;
 
       if (matched) {
+        if (matched.description && !currentItem.description) {
+          currentItem.description = matched.description;
+          currentItem.showDescription = true;
+        }
         if (matched.price && (!currentItem.unitPrice || currentItem.unitPrice === 0)) {
           currentItem.unitPrice = matched.price;
         }
@@ -722,9 +814,12 @@ export default function PurchaseRequisitionPage() {
   // Add item
   const addItem = useCallback(() => {
     if (!pr || isReadOnly) return;
-    const items = [...pr.items, {
+    const items: PurchaseRequisitionItem[] = [...pr.items, {
       itemNo: pr.items.length + 1,
+      itemCode: `ITEM-00${pr.items.length + 1}`,
+      itemName: '',
       description: '',
+      showDescription: false,
       quantity: 1,
       unit: 'Pcs',
       unitPrice: 0,
@@ -849,6 +944,7 @@ export default function PurchaseRequisitionPage() {
     } else {
       pr.items.forEach((item, idx) => {
         const iErr: Record<string, string> = {};
+        if (!item.itemName?.trim() && !item.description?.trim()) iErr.itemName = 'Item name is required';
         if (item.quantity <= 0) iErr.quantity = 'Must be > 0';
         if (item.unitPrice <= 0) iErr.unitPrice = 'Must be > 0';
         if (Object.keys(iErr).length > 0) itemErrors[idx] = iErr;
@@ -892,7 +988,7 @@ export default function PurchaseRequisitionPage() {
       
       // Update PR state with returned data (includes the new id)
       if (result) {
-        setPr(result);
+        setPr({ ...result, items: sanitizePrItems(result.items) });
       }
 
       // Check if a PO was auto-created (backend returns createdPO)
@@ -1980,7 +2076,7 @@ export default function PurchaseRequisitionPage() {
               <thead>
                 <tr>
                   <th className="pr-th--no">#</th>
-                  <th className="pr-th--desc">Description</th>
+                  <th className="pr-th--desc">Item Name / Description {!isReadOnly && <span className="pr-required">*</span>}</th>
                   <th className="pr-th--num">Qty {!isReadOnly && <span className="pr-required">*</span>}</th>
                   <th className="pr-th--unit">Unit</th>
                   <th className="pr-th--price">Unit Price {!isReadOnly && <span className="pr-required">*</span>}</th>
@@ -1992,14 +2088,34 @@ export default function PurchaseRequisitionPage() {
                 {pr.items.map((item, idx) => (
                   <tr key={idx} className={itemValidationErrors[idx] ? 'pr-item--error-row' : ''}>
                     <td className="pr-td--no">{item.itemNo}</td>
-                    <td className="pr-td--desc">
-                      <input
-                        value={item.description}
-                        disabled={isFormDisabled}
-                        list="po-erp-stock-codes"
-                        onChange={e => updateItem(idx, 'description', e.target.value)}
-                        placeholder="Item description / stock code"
-                      />
+                    <td className={`pr-td--desc ${itemValidationErrors[idx]?.itemName ? 'pr-item__cell--error' : ''}`}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <input
+                          type="text"
+                          value={item.itemName ?? ''}
+                          disabled={isFormDisabled}
+                          list="po-erp-stock-codes"
+                          onChange={e => {
+                            updateItem(idx, 'itemName', e.target.value);
+                            clearItemError(idx, 'itemName');
+                          }}
+                          placeholder="Item Name *"
+                          style={{
+                            fontWeight: 600,
+                          }}
+                        />
+                        <input
+                          type="text"
+                          value={item.description || ''}
+                          disabled={isFormDisabled}
+                          onChange={e => updateItem(idx, 'description', e.target.value)}
+                          placeholder="Description / Specs"
+                          className="cpo-table__input--sub"
+                        />
+                      </div>
+                      {itemValidationErrors[idx]?.itemName && (
+                        <span className="pr-field__error-msg">{itemValidationErrors[idx].itemName}</span>
+                      )}
                     </td>
                     <td className={`pr-td--num ${itemValidationErrors[idx]?.quantity ? 'pr-item__cell--error' : ''}`}>
                       <input type="number" min="1" value={item.quantity === 0 ? '' : item.quantity} disabled={isFormDisabled}

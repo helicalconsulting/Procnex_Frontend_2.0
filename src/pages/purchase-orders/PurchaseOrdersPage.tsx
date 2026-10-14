@@ -82,6 +82,9 @@ interface MockPO {
   expectedDelivery: string;
   department: string;
   createdBy: string;
+  items?: any[];
+  rawPO?: any;
+  [key: string]: any;
 }
 
 const STATUS_CONFIG: Record<POStatus, { label: string; tone: Tone; icon: typeof FileText }> = {
@@ -103,6 +106,74 @@ function mapPO(po: PurchaseOrder): MockPO {
   const initials = name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
   const amount = toNumber(po.totalAmount);
   const created = String(po.createdAt).slice(0, 10);
+
+  // Extract items immediately for zero-delay rendering in the print modal
+  const quotationItems: any[] = (po as any).rfq?.selectedQuotation?.items || [];
+  const rfqItems: any[] = (po as any).rfq?.items || [];
+  let formattedItems: any[] = [];
+  if (rfqItems.length > 0) {
+    formattedItems = rfqItems.map((rItem: any, idx: number) => {
+      const qItem = quotationItems.find((q: any) => q.rfqItemId === rItem.id || q.id === rItem.id) || quotationItems[idx];
+      const n = rItem.itemName || rItem.name || `Line Item ${idx + 1}`;
+      const desc = rItem.description || rItem.desc || '';
+      const qty = Number(rItem.quantity || rItem.orderedQty || 1);
+      const unit = rItem.unit || 'pcs';
+      const price = Number(qItem?.unitPrice || rItem.unitPrice || 0);
+      const total = Number(qItem?.totalPrice || (qty * price));
+      return {
+        id: rItem.id || String(idx + 1),
+        itemNo: idx + 1,
+        itemName: n,
+        description: desc && desc !== n ? `${n} - ${desc}` : (desc || n),
+        quantity: qty,
+        unit,
+        unitPrice: price,
+        totalPrice: total,
+        total,
+      };
+    });
+  } else if (quotationItems.length > 0) {
+    formattedItems = quotationItems.map((qItem: any, idx: number) => {
+      const n = qItem.itemName || qItem.name || `Line Item ${idx + 1}`;
+      const desc = qItem.description || '';
+      const qty = Number(qItem.quantity || 1);
+      const unit = qItem.unit || 'pcs';
+      const price = Number(qItem.unitPrice || 0);
+      const total = Number(qItem.totalPrice || (qty * price));
+      return {
+        id: qItem.id || String(idx + 1),
+        itemNo: idx + 1,
+        itemName: n,
+        description: desc && desc !== n ? `${n} - ${desc}` : (desc || n),
+        quantity: qty,
+        unit,
+        unitPrice: price,
+        totalPrice: total,
+        total,
+      };
+    });
+  } else if (Array.isArray(po.items) && po.items.length > 0) {
+    formattedItems = (po.items as any[]).map((it: any, idx: number) => ({
+      id: it.id || String(idx + 1),
+      itemNo: it.itemNo || idx + 1,
+      itemName: it.itemName || it.name || `Line Item ${idx + 1}`,
+      description: it.description || it.itemName || it.name || '',
+      quantity: Number(it.quantity || 1),
+      unit: it.unit || 'pcs',
+      unitPrice: Number(it.unitPrice || 0),
+      totalPrice: Number(it.totalPrice || it.total || 0),
+      total: Number(it.totalPrice || it.total || 0),
+    }));
+  }
+
+  // Pre-cache items in sessionStorage for instant retrieval
+  if (formattedItems.length > 0) {
+    try {
+      if (po.poNumber) sessionStorage.setItem(`po_items_${po.poNumber}`, JSON.stringify(formattedItems));
+      if (po.id) sessionStorage.setItem(`po_items_${po.id}`, JSON.stringify(formattedItems));
+    } catch {}
+  }
+
   return {
     id: po.id,
     poNumber: po.poNumber,
@@ -112,13 +183,15 @@ function mapPO(po: PurchaseOrder): MockPO {
     avatarMod: String((po.vendorId % 6) + 1),
     totalAmount: amount.toLocaleString('en-IN'),
     totalAmountNum: amount,
-    itemCount: po.items?.length ?? 0,
+    itemCount: formattedItems.length || po.items?.length || 0,
     status: (po.status as POStatus) || 'DRAFT',
     priority: 'MEDIUM',
     createdAt: created,
     expectedDelivery: created,
     department: '—',
     createdBy: '—',
+    items: formattedItems.length > 0 ? formattedItems : (po.items as any[]),
+    rawPO: po,
   };
 }
 
@@ -1471,8 +1544,13 @@ export default function PurchaseOrdersPage() {
             status: printPO.status || 'PENDING',
             submittedAt: printPO.poDate || printPO.createdAt || new Date().toISOString(),
             vendorName: printPO.vendorName,
-            comments: printPO.notes || printPO.comments,
+            comments: (printPO.rawPO as any)?.notes || printPO.notes || printPO.comments,
             items: printPO.items,
+            vendorId: (printPO.rawPO as any)?.vendorId || (printPO as any).vendorId,
+            warehouse: (printPO.rawPO as any)?.warehouse || (printPO.rawPO as any)?.warehouseName || (printPO as any).warehouse,
+            vendorAddress: (printPO.rawPO as any)?.vendor?.address || (printPO as any).vendorAddress,
+            vendorEmail: (printPO.rawPO as any)?.vendor?.email || (printPO as any).vendorEmail,
+            vendorPhone: (printPO.rawPO as any)?.vendor?.phone || (printPO as any).vendorPhone,
           }}
           onClose={() => setPrintPO(null)}
         />

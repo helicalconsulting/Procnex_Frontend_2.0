@@ -554,7 +554,6 @@ export default function ApprovalsPage() {
         res = await approvalService.return(id, comment, actionReturnTarget as any);
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1800));
       setActionSendingState(null);
 
       if (res?.message) {
@@ -959,8 +958,8 @@ export default function ApprovalsPage() {
               </div>
             </div>
 
-            {/* Return Destination (if return mode) */}
-            {actionModal.action === 'return' && (
+            {/* Return Destination (only show options for Approver 2+; for Approver 1 it returns directly to Vendor/Originator) */}
+            {actionModal.action === 'return' && (actionModal.request.currentLevel || 1) > 1 && (
               <div className="space-y-2">
                 <label className="text-xs font-bold text-foreground flex items-center justify-between">
                   <span>Return Destination</span>
@@ -977,24 +976,22 @@ export default function ApprovalsPage() {
                     )}
                     onClick={() => setActionReturnTarget((actionModal.request.module === 'Quotation' || actionModal.request.module === 'Quotations') ? 'VENDOR' : 'ORIGINATOR')}
                   >
-                    <div className="text-xs font-bold">{(actionModal.request.module === 'Quotation' || actionModal.request.module === 'Quotations') ? 'Vendor' : 'Originator'}</div>
+                    <div className="text-xs font-bold">{(actionModal.request.module === 'Quotation' || actionModal.request.module === 'Quotations') ? 'Return to Vendor for Resubmission' : 'Return to Originator for Modification'}</div>
                     <div className="text-[11px] text-muted-foreground mt-0.5 leading-tight">Send back for revision</div>
                   </button>
-                  {(actionModal.request.currentLevel || 1) > 1 && (
-                    <button
-                      type="button"
-                      className={cn(
-                        "rounded-xl border p-3 text-left transition-all relative",
-                        actionReturnTarget === 'LEVEL_1'
-                          ? "border-amber-500 bg-amber-500/10 text-amber-900 dark:text-amber-200 ring-2 ring-amber-500/20 font-semibold"
-                          : "border-border/80 bg-card hover:bg-muted/40 text-foreground"
-                      )}
-                      onClick={() => setActionReturnTarget('LEVEL_1')}
-                    >
-                      <div className="text-xs font-bold">Level 1 Approver</div>
-                      <div className="text-[11px] text-muted-foreground mt-0.5 leading-tight">Restart chain at L1</div>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className={cn(
+                      "rounded-xl border p-3 text-left transition-all relative",
+                      actionReturnTarget === 'LEVEL_1'
+                        ? "border-amber-500 bg-amber-500/10 text-amber-900 dark:text-amber-200 ring-2 ring-amber-500/20 font-semibold"
+                        : "border-border/80 bg-card hover:bg-muted/40 text-foreground"
+                    )}
+                    onClick={() => setActionReturnTarget('LEVEL_1')}
+                  >
+                    <div className="text-xs font-bold">Return to Level 1 Approver</div>
+                    <div className="text-[11px] text-muted-foreground mt-0.5 leading-tight">Restart chain at L1</div>
+                  </button>
                 </div>
               </div>
             )}
@@ -1384,6 +1381,8 @@ export default function ApprovalsPage() {
             vendorName: printPO.vendorName || (printPO as any).vendor?.name || (printPO as any).supplierName,
             comments: printPO.comments,
             items: printPO.items || (printPO as any).lineItems,
+            approvers: (printPO as any).approvers || (printPO as any).approvalChain || (printPO as any).levels,
+            warehouse: (printPO as any).warehouse || (printPO as any).warehouseName,
           }}
           onClose={() => setPrintPO(null)}
         />

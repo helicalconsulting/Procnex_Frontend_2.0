@@ -34,7 +34,7 @@ import '../../components/vendor/vendor-rfq-workspace.css';
 
 // ─── Types ──────────────────────────────────────────────────
 
-type RFQStatus = 'OPEN' | 'SUBMITTED' | 'CLOSED' | 'CANCELLED' | 'RETURNED' | 'ACCEPTED' | 'REJECTED';
+type RFQStatus = 'OPEN' | 'SUBMITTED' | 'CLOSED' | 'CANCELLED' | 'RETURNED' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED';
 type VquotModalState = 'open' | 'expanded' | 'minimized';
 
 interface EvalCategoryInfo {
@@ -114,8 +114,11 @@ function mapVendorRfq(r: RFQ & {
   bidSecurityMinValidity?: number;
   bidBondMinValue?: number;
   bidBondMinValidity?: number;
+  selectedQuotationId?: string | null;
+  isRfqAwarded?: boolean;
+  isWinningVendor?: boolean;
 }): VendorRFQ {
-  const ext = r as RFQ & { closingDate?: string; department?: string };
+  const ext = r as RFQ & { closingDate?: string; department?: string; selectedQuotationId?: string | null };
   const statusMap: Record<string, RFQStatus> = {
     SENT: 'OPEN',
     IN_PROGRESS: 'OPEN',
@@ -130,10 +133,27 @@ function mapVendorRfq(r: RFQ & {
     REJECTED: 'REJECTED',
   };
   let status: RFQStatus = statusMap[r.status] || 'OPEN';
+
+  const hasWinner =
+    r.status === 'PO_CREATED' ||
+    r.status === 'AWARDED' ||
+    r.status === 'ACCEPTED' ||
+    Boolean(ext.selectedQuotationId) ||
+    Boolean((r as any).isRfqAwarded);
+
+  const isMyQuoteWon =
+    r.latestQuotationStatus === 'ACCEPTED' ||
+    r.latestQuotationStatus === 'APPROVED' ||
+    Boolean((r as any).isWinningVendor);
+
   if (r.latestQuotationStatus === 'REJECTED' || r.status === 'REJECTED') {
     status = 'REJECTED';
-  } else if (r.latestQuotationStatus === 'ACCEPTED' || r.latestQuotationStatus === 'APPROVED' || r.status === 'PO_CREATED' || r.status === 'AWARDED') {
+  } else if (isMyQuoteWon) {
+    // This vendor's OWN quotation was accepted
     status = 'ACCEPTED';
+  } else if (hasWinner) {
+    // RFQ was awarded to another vendor — this vendor never submitted or was not selected
+    status = r.hasSubmittedQuotation ? 'REJECTED' : 'EXPIRED';
   } else if (r.hasSubmittedQuotation && !r.needsResubmit) {
     status = 'SUBMITTED';
   }
@@ -214,6 +234,7 @@ const STATUS_MAP: Record<RFQStatus, { label: string; tone: 'neutral' | 'primary'
   CLOSED: { label: 'Closed', tone: 'neutral' },
   CANCELLED: { label: 'Cancelled', tone: 'danger' },
   RETURNED: { label: 'Returned', tone: 'danger' },
+  EXPIRED: { label: 'Expired', tone: 'neutral' },
 };
 
 const deadlineTime = (date: string) => new Date(`${date}T23:59:59`).getTime();
@@ -914,9 +935,6 @@ export default function VendorRFQsPage() {
         }
       }
 
-      // Allow multi-step packaging animation to complete smoothly
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
       setActionSendingState(null);
       setQuotModal(null);
       reload();
@@ -1015,7 +1033,7 @@ export default function VendorRFQsPage() {
                 <div className="rfq-register__identity"><span className="text-base font-bold">{rfq.rfqNumber}</span><span className="text-sm font-medium">{rfq.title}</span><span className="text-xs rfq-muted">{rfq.buyerCompany}{rfq.rfqType === 'TENDER' ? ' · Tender' : ''}</span></div>
                 <div><Badge className="rfq-status-badge" data-rfq-status={rfq.status} tone={status.tone}><span className="size-1.5 rounded-full bg-current" />{status.label}</Badge></div>
                 <div className="rfq-register__items"><strong className="text-sm">{rfq.items.length} {rfq.items.length === 1 ? 'item' : 'items'}</strong><span className="text-xs rfq-muted" title={rfq.items.map(item => item.name).join(', ')}>{rfq.items.slice(0, 2).map(item => item.name).join(', ')}{rfq.items.length > 2 ? ` +${rfq.items.length - 2} more` : ''}</span></div>
-                <div className="rfq-register__dates"><span className="text-sm font-semibold">{quoteDate(rfq.deadline)}</span><span className={cn('text-xs', ['OPEN', 'RETURNED'].includes(rfq.status) ? `rfq-deadline--${deadline.cls}` : 'rfq-muted')}>{['OPEN', 'RETURNED'].includes(rfq.status) ? deadline.text : `Created ${quoteDate(rfq.createdAt)}`}</span></div>
+                <div className="rfq-register__dates"><span className="text-sm font-semibold">{quoteDate(rfq.deadline)}</span><span className={cn('text-xs', ['OPEN', 'RETURNED'].includes(rfq.status) ? `rfq-deadline--${deadline.cls}` : 'rfq-muted')}>{['OPEN', 'RETURNED'].includes(rfq.status) ? deadline.text : (rfq.status === 'EXPIRED' ? 'Bidding closed' : `Created ${quoteDate(rfq.createdAt)}`)}</span></div>
                 <div className="rfq-register__actions">
                   {rfq.status === 'OPEN' && <Button size="sm" onClick={() => openQuotModal(rfq)}><Send size={14} /> Submit Quote</Button>}
                   {['SUBMITTED', 'ACCEPTED', 'REJECTED', 'CLOSED', 'CANCELLED'].includes(rfq.status) && (

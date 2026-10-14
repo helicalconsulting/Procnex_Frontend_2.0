@@ -442,8 +442,6 @@ export default function RFQPage() {
         ? await approvalService.reject(targetApprovalId, targetComment)
         : await approvalService.return(targetApprovalId, targetComment, targetReturn);
 
-      // Allow animated progress and steps to complete cleanly
-      await new Promise((resolve) => setTimeout(resolve, 1800));
       setActionSendingState(null);
 
       // ⚡ INSTANT Optimistic State Updates in local maps

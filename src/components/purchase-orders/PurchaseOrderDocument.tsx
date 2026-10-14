@@ -136,7 +136,9 @@ export default function PurchaseOrderDocument({ pr, approvers }: Props) {
         <div className="po-doc__party-box">
           <h3 className="po-doc__party-heading">SHIP TO</h3>
           <p className="po-doc__party-name">{val(pr.shipToCompany)}</p>
-          <p className="po-doc__party-detail">Warehouse: {val(pr.shipToWarehouse)}</p>
+          <p className="po-doc__party-detail">
+            Warehouse: {val(pr.shipToWarehouse, pr.shipToAddress ? 'WH-001 — Central' : '—')}
+          </p>
           <p className="po-doc__party-detail">Address: {val(pr.shipToAddress)}</p>
           <p className="po-doc__party-detail">Contact Person: {val(pr.shipToContact)}</p>
           <p className="po-doc__party-detail">Phone: {val(pr.shipToPhone)}</p>
@@ -196,7 +198,12 @@ export default function PurchaseOrderDocument({ pr, approvers }: Props) {
             {pr.items.map((item) => (
               <tr key={item.itemNo}>
                 <td className="po-doc__td--no">{item.itemNo}</td>
-                <td className="po-doc__td--desc">{val(item.description)}</td>
+                <td className="po-doc__td--desc">
+                  <div style={{ fontWeight: 600 }}>{val(item.itemName || item.description)}</div>
+                  {item.description && item.itemName && item.description !== item.itemName && (
+                    <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>{item.description}</div>
+                  )}
+                </td>
                 <td className="po-doc__td--qty">{item.quantity}</td>
                 <td className="po-doc__td--unit">{val(item.unit)}</td>
                 <td className="po-doc__td--price">{formatCurrency(item.unitPrice, pr.currency)}</td>

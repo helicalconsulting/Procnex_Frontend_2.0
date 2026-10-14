@@ -40,19 +40,19 @@ const DEFAULT_SEND_STEPS: StepItem[] = [
     id: 2,
     label: 'Configuring evaluation matrix & terms',
     icon: <ShieldCheck size={16} />,
-    delay: 600,
+    delay: 90,
   },
   {
     id: 3,
     label: 'Generating secure vendor access portals',
     icon: <Users size={16} />,
-    delay: 1300,
+    delay: 180,
   },
   {
     id: 4,
     label: 'Dispatching real-time email invitations',
     icon: <Mail size={16} />,
-    delay: 2100,
+    delay: 270,
   },
 ];
 
@@ -67,13 +67,13 @@ const DRAFT_STEPS: StepItem[] = [
     id: 2,
     label: 'Saving line items & custom fields',
     icon: <ShieldCheck size={16} />,
-    delay: 500,
+    delay: 90,
   },
   {
     id: 3,
     label: 'Syncing draft state to server',
     icon: <CheckCircle2 size={16} />,
-    delay: 1100,
+    delay: 180,
   },
 ];
 
@@ -97,14 +97,14 @@ export const RfqSendingOverlay: React.FC<RfqSendingOverlayProps> = ({
       return;
     }
 
-    // Progress bar animation timer
+    // Progress bar animation timer (fast responsive ticks)
     const progressInterval = setInterval(() => {
       setProgress((prev) => {
         if (prev >= 92) return prev;
-        const jump = Math.floor(Math.random() * 8) + 3;
+        const jump = Math.floor(Math.random() * 10) + 6;
         return Math.min(prev + jump, 92);
       });
-    }, 450);
+    }, 70);
 
     // Timers for step transitions
     const stepTimers = steps.map((step, idx) => {

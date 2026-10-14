@@ -692,8 +692,7 @@ export default function CreateGRNPage() {
       await queryClient.invalidateQueries({ queryKey: ['svc'] });
       queryClient.refetchQueries({ queryKey: ['svc'] });
 
-      // Allow multi-step packaging animation to complete smoothly
-      await new Promise((resolve) => setTimeout(resolve, 1800));
+
 
       showSuccess({
         title: 'Goods Receipt Note Created!',
