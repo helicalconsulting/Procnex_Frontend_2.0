@@ -495,8 +495,12 @@ export default function ApprovalsPage() {
     const isFinalLevel = (req.currentLevel || 1) >= (req.totalLevels || 1);
     const newStatus: ApprovalStatusType = actionType === 'approve'
       ? (isFinalLevel ? 'APPROVED' : 'APPROVED')
-      : actionType === 'reject' ? 'REJECTED' : 'RETURNED';
-    const targetLevel = actionType === 'approve' ? ((req.currentLevel || 1) + 1) : req.currentLevel;
+      : actionType === 'reject'
+      ? 'REJECTED'
+      : (actionReturnTarget === 'LEVEL_1' ? 'PENDING' : 'RETURNED');
+    const targetLevel = actionType === 'approve'
+      ? ((req.currentLevel || 1) + 1)
+      : (actionReturnTarget === 'LEVEL_1' ? 1 : req.currentLevel);
 
     setOptimisticMap((prev) => ({
       ...prev,
@@ -584,7 +588,11 @@ export default function ApprovalsPage() {
   const openAction = useCallback((request: ApprovalRequest, action: 'approve' | 'reject' | 'return') => {
     setActionModal({ request, action });
     setActionComment('');
-    const defaultTarget = (request.module === 'Quotation' || request.module === 'Quotations') ? 'VENDOR' : 'ORIGINATOR';
+    const defaultTarget = (request.module === 'Quotation' || request.module === 'Quotations')
+      ? 'VENDOR'
+      : (request.currentLevel && request.currentLevel > 1)
+      ? 'LEVEL_1'
+      : 'ORIGINATOR';
     setActionReturnTarget(defaultTarget);
   }, []);
 

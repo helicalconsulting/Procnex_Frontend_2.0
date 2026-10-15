@@ -299,10 +299,20 @@ export default function PurchaseOrdersPage() {
     try {
       const pendingRows = await approvalService.listTable({ module: 'PurchaseOrders', status: 'PENDING' });
       const map = new Map<string, any>();
+      const setInMap = (key: string, row: any) => {
+        const existing = map.get(key);
+        if (!existing) {
+          map.set(key, row);
+        } else if (existing.status !== 'PENDING' && row.status === 'PENDING') {
+          map.set(key, row);
+        } else if (!existing.canAct && row.canAct) {
+          map.set(key, row);
+        }
+      };
       pendingRows.forEach((r) => {
-        if (r.referenceId) map.set(String(r.referenceId), r);
-        if (r.referenceNumber) map.set(String(r.referenceNumber), r);
-        if (r.id) map.set(String(r.id), r);
+        if (r.referenceId) setInMap(String(r.referenceId), r);
+        if (r.referenceNumber) setInMap(String(r.referenceNumber), r);
+        if (r.id) setInMap(String(r.id), r);
       });
       setPendingApprovalsMap(map);
     } catch {
@@ -359,8 +369,10 @@ export default function PurchaseOrdersPage() {
   const openAction = useCallback((order: MockPO, action: 'approve' | 'reject' | 'return') => {
     setActionModal({ order, action });
     setActionComment('');
-    setActionReturnTarget('ORIGINATOR');
-  }, []);
+    const pendingApp = getPendingApprovalForPO(order);
+    const currentLvl = pendingApp?.currentLevel || pendingApp?.level?.levelNumber || 1;
+    setActionReturnTarget(currentLvl > 1 ? 'LEVEL_1' : 'ORIGINATOR');
+  }, [getPendingApprovalForPO]);
 
   const handleAction = useCallback(async () => {
     if (!actionModal) return;
@@ -369,7 +381,11 @@ export default function PurchaseOrdersPage() {
     const comment = actionComment.trim() || undefined;
 
     // ⚡ INSTANT 0ms Optimistic Status Update & Success Modal Trigger
-    const statusToSet: POStatus = act === 'approve' ? 'APPROVED' : act === 'reject' ? 'CANCELLED' : 'RETURNED';
+    const statusToSet: POStatus = act === 'approve'
+      ? 'APPROVED'
+      : act === 'reject'
+      ? 'CANCELLED'
+      : (actionReturnTarget === 'LEVEL_1' ? 'PENDING_APPROVAL' : 'RETURNED');
     setOptimisticOverrides((prev) => ({
       ...prev,
       [targetOrder.id]: statusToSet,
@@ -436,7 +452,7 @@ export default function PurchaseOrdersPage() {
             res = await approvalService.return(approvalId, comment, actionReturnTarget);
           }
         } else {
-          res = await purchaseOrderService.updateStatus(targetOrder.id, statusToSet, comment);
+          res = await purchaseOrderService.updateStatus(targetOrder.id, statusToSet, comment, actionReturnTarget);
         }
 
         // Keep optimistic APPROVED status visible for the approver on their UI

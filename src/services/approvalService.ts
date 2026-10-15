@@ -72,7 +72,7 @@ async function reject(id: string, comment?: string): Promise<ApprovalActionResul
   });
 }
 
-async function returnRequest(id: string, comment?: string, returnTarget?: 'LEVEL_1' | 'VENDOR'): Promise<ApprovalActionResult> {
+async function returnRequest(id: string, comment?: string, returnTarget?: 'LEVEL_1' | 'VENDOR' | 'ORIGINATOR' | string): Promise<ApprovalActionResult> {
   if (USE_MOCK) {
     console.log(`Returned ${id}`, comment, returnTarget);
     return {};
