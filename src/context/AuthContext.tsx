@@ -52,7 +52,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     permissions?: { module: string; canView: boolean; canCreate: boolean; canApprove: boolean }[];
   }) => {
     setUser(session.user);
-    setRoles(session.roles);
+    setRoles((prev) => {
+      if ((!session.roles || session.roles.length === 0) && prev && prev.length > 0) {
+        return prev;
+      }
+      return session.roles || [];
+    });
     setPermissions(
       session.permissions?.length ? permissionsListToMap(session.permissions) : {}
     );
@@ -191,14 +196,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const hasRole = useCallback(
-    (role: string) => roles.includes(role),
+    (role: string) => {
+      if (!role) return false;
+      const target = role.toLowerCase().trim();
+      const targetClean = target.replace(/[\s_-]+/g, '');
+      const isAdmin = roles.some((r) => {
+        if (!r || typeof r !== 'string') return false;
+        const cl = r.toLowerCase().replace(/[\s_-]+/g, '');
+        return ['admin', 'superadmin', 'administrator', 'systemadministrator'].includes(cl);
+      });
+      if (isAdmin) return true;
+      return roles.some((r) => {
+        if (!r || typeof r !== 'string') return false;
+        const rClean = r.toLowerCase().replace(/[\s_-]+/g, '');
+        return r.toLowerCase().trim() === target || rClean === targetClean;
+      });
+    },
     [roles]
   );
 
   const hasAnyRole = useCallback(
-    (requiredRoles: string[]) =>
-      requiredRoles.some((role) => roles.includes(role)),
-    [roles]
+    (requiredRoles: string[]) => {
+      if (!requiredRoles || requiredRoles.length === 0) return false;
+      const isAdmin = roles.some((r) => {
+        if (!r || typeof r !== 'string') return false;
+        const cl = r.toLowerCase().replace(/[\s_-]+/g, '');
+        return ['admin', 'superadmin', 'administrator', 'systemadministrator'].includes(cl);
+      });
+      if (isAdmin) return true;
+      return requiredRoles.some((role) => hasRole(role));
+    },
+    [roles, hasRole]
   );
 
   return (

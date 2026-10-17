@@ -14,6 +14,7 @@ import {
   ShoppingCart, Building2, Truck, ClipboardList, Hash, DollarSign,
   Percent, Calculator, X, Loader2, AlertTriangle, Settings,
   AlertCircle, Download, FileCheck, ShieldAlert, CheckCircle2, PieChart, IndianRupee, Pencil,
+  ArrowLeftRight, Globe,
 } from 'lucide-react';
 import { companySettingsService, type Warehouse, type PaymentTerm, type PaymentPlan } from '../../services/companySettingsService';
 import CustomPaymentPlanModal from '../../components/vendor/CustomPaymentPlanModal';
@@ -142,6 +143,7 @@ export default function PurchaseRequisitionPage() {
   const isFormDisabled = isReadOnly || !canCreatePO;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [submittingAction, setSubmittingAction] = useState<'draft' | 'approval' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [contractData, setContractData] = useState<any>(null);
@@ -167,6 +169,7 @@ export default function PurchaseRequisitionPage() {
   // Validation
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [itemValidationErrors, setItemValidationErrors] = useState<Record<number, Record<string, string>>>({});
+
 
   // Clear errors when user edits fields
   const clearFieldError = useCallback((field: string) => {
@@ -980,6 +983,7 @@ export default function PurchaseRequisitionPage() {
       return;
     }
     setSaving(true);
+    setSubmittingAction('draft');
     setError(null);
     try {
       // Include contractId in save payload so backend auto-creates a PurchaseOrder
@@ -992,14 +996,14 @@ export default function PurchaseRequisitionPage() {
       }
 
       // Check if a PO was auto-created (backend returns createdPO)
+      setPoCreated(false);
       if (result?.createdPO?.poNumber) {
-        setPoCreated(true);
         setToast({ 
-          message: `✅ Purchase Order ${result.createdPO.poNumber} created from contract. You can create another PO or send this one to the vendor.`,
+          message: `Purchase Order ${result.createdPO.poNumber} saved as draft.`,
           type: 'success' 
         });
       } else {
-        setToast({ message: 'Purchase Requisition saved as draft.', type: 'success' });
+        setToast({ message: 'Purchase Order saved as draft.', type: 'success' });
       }
       setValidationErrors({});
       setItemValidationErrors({});
@@ -1007,6 +1011,7 @@ export default function PurchaseRequisitionPage() {
       setToast({ message: err?.message || 'Failed to save', type: 'error' });
     } finally {
       setSaving(false);
+      setSubmittingAction(null);
     }
   };
 
@@ -1178,6 +1183,7 @@ export default function PurchaseRequisitionPage() {
   const executeSubmitForApproval = async (startLevelNumber?: number) => {
     if (!pr) return;
     setSaving(true);
+    setSubmittingAction('approval');
     setShowSendingOverlay(true);
     setError(null);
     try {
@@ -1205,7 +1211,6 @@ export default function PurchaseRequisitionPage() {
       } catch {}
 
       if (result?.createdPO?.poNumber) {
-        setPoCreated(true);
         setToast({
           message: `✅ Purchase Order ${result.createdPO.poNumber} submitted for approval. Redirecting to PO Creation page…`,
           type: 'success'
@@ -1223,6 +1228,7 @@ export default function PurchaseRequisitionPage() {
       setToast({ message: err?.message || 'Failed to submit for approval', type: 'error' });
     } finally {
       setSaving(false);
+      setSubmittingAction(null);
     }
   };
 
@@ -1445,7 +1451,7 @@ export default function PurchaseRequisitionPage() {
               style={!canCreatePO ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
               title={!canCreatePO ? "Admin has not allowed this action. You do not have permission to save draft POs." : undefined}
             >
-              {contractBalance && pr.grandTotal > contractBalance.remainingValue ? 'Amount Exceeds Limit' : <><Save size={16} /> {saving ? 'Saving…' : 'Save Draft'}</>}
+              {contractBalance && pr.grandTotal > contractBalance.remainingValue ? 'Amount Exceeds Limit' : <><Save size={16} /> {submittingAction === 'draft' ? 'Saving…' : 'Save Draft'}</>}
             </button>
           )}
           <button className="pr-btn pr-btn--outline" onClick={() => setShowPreviewModal(true)}>
@@ -1464,7 +1470,7 @@ export default function PurchaseRequisitionPage() {
             >
               {contractBalance && pr.grandTotal > contractBalance.remainingValue
                 ? 'PO Exceeds Contract Limit'
-                : <><Send size={16} /> {saving ? 'Submitting…' : ['RETURNED', 'RE_REVIEW', 'RETURN_FOR_RE_REVIEW', 'REVISION_REQUESTED'].includes(String(pr?.status || '').toUpperCase()) ? 'Resubmit for Re-Review' : 'Send for Approval'}</>}
+                : <><Send size={16} /> {submittingAction === 'approval' ? 'Submitting…' : ['RETURNED', 'RE_REVIEW', 'RETURN_FOR_RE_REVIEW', 'REVISION_REQUESTED'].includes(String(pr?.status || '').toUpperCase()) ? 'Resubmit for Re-Review' : 'Send for Approval'}</>}
             </button>
           )}
           {poCreated && !isReadOnly && (
@@ -2185,6 +2191,20 @@ export default function PurchaseRequisitionPage() {
           <section className="pr-section pr-section--totals">
             <div className="pr-section__header"><Calculator size={16} /> Totals</div>
             <div className="pr-totals">
+              {/* Document Currency Selector in Totals */}
+              <div className="pr-totals__currency-bar">
+                <span className="pr-totals__currency-label">
+                  <Globe size={13} /> PO Currency
+                </span>
+                <CurrencySelector
+                  value={pr.currency}
+                  disabled={isReadOnly}
+                  onChange={handleCurrencyChange}
+                  size="sm"
+                  className="pr-totals__currency-selector"
+                />
+              </div>
+
               <div className="pr-totals__grid">
                 <div className="pr-total-row"><span>Subtotal</span><span>{formatCurrency(pr.subtotal, pr.currency)}</span></div>
                 <div className={`pr-total-row pr-total-row--grand ${contractBalance && pr.grandTotal > contractBalance.remainingValue ? 'pr-total-row--exceeded' : ''}`}>

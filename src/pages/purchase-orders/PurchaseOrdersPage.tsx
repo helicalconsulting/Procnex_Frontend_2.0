@@ -1064,7 +1064,10 @@ export default function PurchaseOrdersPage() {
                             )}
                             {(() => {
                               const pendingApp = getPendingApprovalForPO(order);
-                              const canActOnThisPO = Boolean((pendingApp?.canAct || ((canApprovePO || isAdmin) && pendingApp)) && ['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW'].includes(order.status));
+                              const canActOnThisPO = Boolean(
+                                pendingApp?.canAct &&
+                                ['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW', 'RETURN_FOR_RE_REVIEW', 'REVISION_REQUESTED'].includes(order.status)
+                              );
                               return canActOnThisPO ? (
                               <>
                                 <Button
@@ -1182,7 +1185,10 @@ export default function PurchaseOrdersPage() {
                   </div>
                   {(() => {
                     const pendingApp = getPendingApprovalForPO(order);
-                    const canActOnThisPO = Boolean((pendingApp?.canAct || ((canApprovePO || isAdmin) && pendingApp)) && ['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW'].includes(order.status));
+                    const canActOnThisPO = Boolean(
+                      pendingApp?.canAct &&
+                      ['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW', 'RETURN_FOR_RE_REVIEW', 'REVISION_REQUESTED'].includes(order.status)
+                    );
                     return canActOnThisPO ? (
                     <div className="flex gap-1">
                       <Button size="sm" onClick={() => openAction(order, 'approve')}>
@@ -1377,7 +1383,10 @@ export default function PurchaseOrdersPage() {
               <div className="flex flex-wrap items-center gap-2">
                 {(() => {
                   const pendingApp = getPendingApprovalForPO(detailPO);
-                  const canActOnThisPO = Boolean((pendingApp?.canAct || ((canApprovePO || isAdmin) && pendingApp)) && ['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW'].includes(detailPO.status));
+                  const canActOnThisPO = Boolean(
+                    pendingApp?.canAct &&
+                    ['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW', 'RETURN_FOR_RE_REVIEW', 'REVISION_REQUESTED'].includes(detailPO.status)
+                  );
                   return canActOnThisPO ? (
                   <>
                     <Button

@@ -3997,17 +3997,7 @@ export default function QuotationsPage() {
       case 'totalPrice':   return <div className="quot-compare__col-inner quot-compare__col-inner--right">TOTAL PRICE</div>;
       case 'leadTime':     return <div className="quot-compare__col-inner quot-compare__col-inner--center">LEAD TIME</div>;
       case 'paymentTerms': return <div className="quot-compare__col-inner">PAYMENT TERMS</div>;
-      case 'score':
-        return (
-          <div className="quot-compare__col-inner quot-compare__col-inner--center">
-            RECOMMENDATION
-            {evalSource === 'formula' && (
-              <span className="quot-compare__eval-sublabel" title="Score calculated from price, lead time, and vendor rating formula">
-                FORMULA
-              </span>
-            )}
-          </div>
-        );
+      case 'score':        return <div className="quot-compare__col-inner quot-compare__col-inner--center">RECOMMENDATION</div>;
       case 'itemCount':    return <div className="quot-compare__col-inner quot-compare__col-inner--center">ITEMS</div>;
       case 'status':       return <div className="quot-compare__col-inner quot-compare__col-inner--center">STATUS</div>;
       case 'submittedAt':  return <div className="quot-compare__col-inner quot-compare__col-inner--center">SUBMITTED</div>;

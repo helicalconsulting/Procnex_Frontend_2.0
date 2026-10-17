@@ -1405,6 +1405,18 @@
   line-height: 1.4;
 }
 
+.cs-branding-form input::placeholder {
+  opacity: 0.55;
+  color: var(--text-placeholder, #94a3b8);
+  font-style: italic;
+}
+
+[data-theme="dark"] .cs-branding-form input::placeholder {
+  opacity: 0.45;
+  color: #94a3b8;
+  font-style: italic;
+}
+
 .cs-color-row {
   display: flex;
   align-items: center;
@@ -6142,6 +6154,331 @@
   color: #38bdf8;
   background: rgba(56, 189, 248, 0.12);
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Multi-Tenant Email & Domain Branding (Light & Dark Theme)
+   ═══════════════════════════════════════════════════════════ */
+
+.cs-email-step-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary, #0f172a);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-theme="dark"] .cs-email-step-title {
+  color: #f1f5f9;
+}
+
+.cs-email-step-desc {
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 16px;
+}
+
+[data-theme="dark"] .cs-email-step-desc {
+  color: #94a3b8;
+}
+
+.cs-email-section-divider {
+  border: none;
+  border-top: 1px solid var(--border-color, #e2e8f0);
+  margin: 24px 0;
+}
+
+[data-theme="dark"] .cs-email-section-divider {
+  border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Status banner */
+.cs-email-status-banner {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+[data-theme="dark"] .cs-email-status-banner {
+  background: rgba(15, 23, 42, 0.6);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.cs-email-status-banner--platform {
+  background: #f0f9ff;
+  border-color: #bae6fd;
+}
+
+[data-theme="dark"] .cs-email-status-banner--platform {
+  background: rgba(14, 165, 233, 0.1);
+  border-color: rgba(14, 165, 233, 0.25);
+}
+
+.cs-email-status-banner--verified {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+[data-theme="dark"] .cs-email-status-banner--verified {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.25);
+}
+
+.cs-email-status-title {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0369a1;
+}
+
+[data-theme="dark"] .cs-email-status-title {
+  color: #38bdf8;
+}
+
+.cs-email-status-title--verified {
+  color: #15803d;
+}
+
+[data-theme="dark"] .cs-email-status-title--verified {
+  color: #4ade80;
+}
+
+.cs-email-status-subtitle {
+  font-size: 12px;
+  color: #475569;
+  line-height: 1.4;
+}
+
+[data-theme="dark"] .cs-email-status-subtitle {
+  color: #94a3b8;
+}
+
+/* Domain Card */
+.cs-domain-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+[data-theme="dark"] .cs-domain-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.cs-domain-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+[data-theme="dark"] .cs-domain-name {
+  color: #f8fafc;
+}
+
+.cs-domain-badge {
+  margin-left: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+.cs-domain-badge--verified {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+[data-theme="dark"] .cs-domain-badge--verified {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.3);
+}
+
+.cs-domain-badge--pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+[data-theme="dark"] .cs-domain-badge--pending {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+/* DNS Records Table */
+.cs-dns-table-container {
+  overflow-x: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+[data-theme="dark"] .cs-dns-table-container {
+  background: rgba(0, 0, 0, 0.2);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.cs-dns-table {
+  width: 100%;
+  font-size: 12px;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.cs-dns-table th {
+  padding: 8px 12px;
+  background: #f1f5f9;
+  color: #475569;
+  border-bottom: 1px solid #e2e8f0;
+  font-weight: 600;
+}
+
+[data-theme="dark"] .cs-dns-table th {
+  background: rgba(255, 255, 255, 0.05);
+  color: #cbd5e1;
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+.cs-dns-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  color: #1e293b;
+}
+
+[data-theme="dark"] .cs-dns-table td {
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+  color: #e2e8f0;
+}
+
+.cs-dns-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* Test Email Feedback */
+.cs-test-email-feedback {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cs-test-email-feedback--success {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+[data-theme="dark"] .cs-test-email-feedback--success {
+  background: rgba(16, 185, 129, 0.15);
+  color: #6ee7b7;
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.cs-test-email-feedback--error {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+[data-theme="dark"] .cs-test-email-feedback--error {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+/* Email Settings Save Action Bar */
+.cs-email-save-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+
+[data-theme="dark"] .cs-email-save-bar {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.cs-email-save-bar__left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 220px;
+}
+
+.cs-email-save-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cs-email-save-feedback {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.cs-email-save-feedback--pending {
+  color: #d97706;
+}
+
+[data-theme="dark"] .cs-email-save-feedback--pending {
+  color: #fbbf24;
+}
+
+.cs-email-save-feedback--saved {
+  color: #64748b;
+}
+
+[data-theme="dark"] .cs-email-save-feedback--saved {
+  color: #94a3b8;
+}
+
+.cs-email-save-feedback--success {
+  color: #059669;
+  font-weight: 600;
+}
+
+[data-theme="dark"] .cs-email-save-feedback--success {
+  color: #34d399;
+}
+
+.cs-email-save-feedback--error {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+[data-theme="dark"] .cs-email-save-feedback--error {
+  color: #f87171;
+}
+
 
 
 

@@ -129,7 +129,7 @@ const PO_RETURN_STEPS: StepItem[] = [
   },
   {
     id: 2,
-    label: 'Routing Purchase Order back to originator for modifications',
+    label: 'Routing Purchase Order back to originator/admin for modifications',
     icon: <Users size={16} />,
     delay: 600,
   },
@@ -417,7 +417,7 @@ const RFQ_RETURN_STEPS: StepItem[] = [
   },
   {
     id: 2,
-    label: 'Routing RFQ back to originator for modifications',
+    label: 'Routing RFQ back to originator/admin for modifications',
     icon: <Users size={16} />,
     delay: 600,
   },
@@ -561,7 +561,7 @@ const GENERIC_RETURN_STEPS: StepItem[] = [
   },
   {
     id: 2,
-    label: 'Routing document back to originator for modifications',
+    label: 'Routing document back to originator/admin for modifications',
     icon: <Users size={16} />,
     delay: 600,
   },
@@ -783,7 +783,7 @@ export const ActionSendingOverlay: React.FC<ActionSendingOverlayProps> = ({
         case 'po':
           return 'Recording return comments and routing the purchase order back for corrections.';
         case 'rfq':
-          return 'Recording revision notes and returning RFQ to originator for necessary modifications.';
+          return 'Recording revision notes and returning RFQ to originator/admin for necessary modifications.';
         case 'invoice':
           return 'Recording return comments and routing invoice back for discrepancy resolution.';
         case 'payment_voucher':
@@ -791,7 +791,7 @@ export const ActionSendingOverlay: React.FC<ActionSendingOverlayProps> = ({
         case 'quotation':
           return 'Updating quotation proposal terms and resubmitting to buyer procurement matrix.';
         default:
-          return 'Recording revision notes and returning document back to originator for modifications.';
+          return 'Recording revision notes and returning document back to originator/admin for modifications.';
       }
     }
 

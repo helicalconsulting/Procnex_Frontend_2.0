@@ -3,12 +3,14 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ShoppingCart, ArrowLeft, Plus, Trash2, Download, Save, Send,
   Building2, FileText, Calendar, IndianRupee, Tag, UserCheck, ShieldCheck,
-  CheckCircle2, AlertCircle, Clock, Search, X, Pencil, Eye, RotateCcw
+  CheckCircle2, AlertCircle, Clock, Search, X, Pencil, Eye, RotateCcw,
+  ArrowLeftRight, Globe
 } from 'lucide-react';
 import { purchaseOrderService } from '../../services/purchaseOrderService';
 import { purchaseRequisitionService } from '../../services/purchaseRequisitionService';
 import { contractService } from '../../services/contractService';
 import { companySettingsService, type Warehouse, type PaymentTerm, type PaymentPlan } from '../../services/companySettingsService';
+import { approvalService } from '../../services/approvalService';
 import CustomPaymentPlanModal from '../../components/vendor/CustomPaymentPlanModal';
 import '../../components/vendor/vendor-rfq-workspace.css';
 import { apiRequest } from '../../api/client';
@@ -719,6 +721,7 @@ export default function CreatePurchaseOrderPage() {
     [subtotal]
   );
 
+
   // ── Submit / Save Draft Handler ──
   const handleSubmit = async (targetStatus: 'Draft' | 'Pending Approval') => {
     // Hard guard: prevent duplicate submissions from double-click or fast re-renders
@@ -883,9 +886,14 @@ export default function CreatePurchaseOrderPage() {
         subtotal: subtotal,
         taxTotal: taxTotal,
         discountTotal: 0,
-        grandTotal: grandTotal,
-      };
       await purchaseRequisitionService.save(prPayload).catch(() => {});
+
+      if (targetStatus === 'Pending Approval') {
+        const poRef = finalPoNumber || poNumber || editId;
+        if (poRef) {
+          await approvalService.resubmit('PurchaseOrders', poRef, 1).catch(() => null);
+        }
+      }
 
       // 🔔 Instant sync notification across open tabs and windows
       window.dispatchEvent(new CustomEvent('heliflow:po-created', { detail: { poNumber, status: statusPayload } }));
@@ -1949,6 +1957,19 @@ export default function CreatePurchaseOrderPage() {
           <div className="cpo-section cpo-totals-card">
             <div className="cpo-section__header">
               <span className="cpo-section__title">Financial Summary</span>
+            </div>
+
+            {/* Document Currency Selector in Totals */}
+            <div className="pr-totals__currency-bar">
+              <span className="pr-totals__currency-label">
+                <Globe size={13} /> PO Currency
+              </span>
+              <CurrencySelector
+                value={currency}
+                onChange={handleCurrencyChange}
+                size="sm"
+                className="pr-totals__currency-selector"
+              />
             </div>
 
             <div className="cpo-totals">

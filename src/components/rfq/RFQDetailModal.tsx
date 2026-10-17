@@ -287,7 +287,7 @@ export default function RFQDetailModal({
   // Fetch pending approval for this RFQ when user has not yet acted in session
   useEffect(() => {
     const isDocReReview = rfq?.status === 'RE_REVIEW' || rfq?.status === 'RETURN_FOR_RE_REVIEW' || Boolean((rfq as any)?._isReturnedForReReview);
-    if (!rfq || (!isDocReReview && (rfq as any)._isReturnedByMe) || (!isDocReReview && (rfq as any)._isApprovedByMe) || (rfq as any)._isRejectedByMe) {
+    if (!rfq || (rfq as any)._isReturnedByMe || (!isDocReReview && (rfq as any)._isApprovedByMe) || (rfq as any)._isRejectedByMe || rfq.status === 'RETURNED') {
       setPendingApproval(null);
       return;
     }
@@ -298,18 +298,31 @@ export default function RFQDetailModal({
           (r) => (String(r.referenceId) === String(rfq.id) || r.referenceNumber === rfq.rfqNumber) && Boolean(r.canAct)
         );
 
-        // Check if current user already acted/approved in the active cycle of this RFQ
+        // Check if current user already acted/approved/returned in the active cycle of this RFQ
         const historyItems = approvalChain?.history || [];
         const currentUserId = String(user?.id || (user as any)?._id || '');
         const currentUserName = (user?.fullName || (user as any)?.name || (user as any)?.username || '').trim().toLowerCase();
 
         const lastReturnIdx = historyItems.map((h: any) => h.status).lastIndexOf('RETURNED');
         const activeCycleHistory = lastReturnIdx !== -1 ? historyItems.slice(lastReturnIdx + 1) : historyItems;
+        const lastReturn = lastReturnIdx !== -1 ? historyItems[lastReturnIdx] : null;
+        const hasApprovalAfterReturn = lastReturnIdx !== -1 && historyItems.slice(lastReturnIdx + 1).some((h: any) => h.status === 'APPROVED');
+
+        const returnedByMeInHistory = !hasApprovalAfterReturn && !pendingFound && Boolean(lastReturn && (
+          (lastReturn.approverId && String(lastReturn.approverId) === currentUserId) ||
+          (lastReturn.approverName && currentUserName && (lastReturn.approverName.trim().toLowerCase() === currentUserName || currentUserName.includes(lastReturn.approverName.trim().toLowerCase()) || lastReturn.approverName.trim().toLowerCase().includes(currentUserName)))
+        ));
+
+        if (returnedByMeInHistory) {
+          (rfq as any)._isReturnedByMe = true;
+          setPendingApproval(null);
+          return;
+        }
 
         const alreadyApprovedInCurrentCycle = activeCycleHistory.some((h: any) =>
           h.status === 'APPROVED' && (
             (h.approverId && String(h.approverId) === currentUserId) ||
-            (h.approverName && currentUserName && h.approverName.trim().toLowerCase() === currentUserName)
+            (h.approverName && currentUserName && (h.approverName.trim().toLowerCase() === currentUserName || currentUserName.includes(h.approverName.trim().toLowerCase()) || h.approverName.trim().toLowerCase().includes(currentUserName)))
           )
         );
 
@@ -387,12 +400,8 @@ export default function RFQDetailModal({
 
   const handleRejectRFQ = async () => {
     if (!pendingApproval || !rfq) return;
-    if (!approvalComment.trim()) {
-      setApprovalActionError('Please enter a comment explaining the reason for rejection.');
-      return;
-    }
     const approvalId = pendingApproval.id;
-    const comment = approvalComment;
+    const comment = approvalComment.trim() || 'Rejected';
 
     // Instant optimistic update
     setPendingApproval(null);
@@ -440,12 +449,8 @@ export default function RFQDetailModal({
 
   const handleReturnRFQ = async () => {
     if (!pendingApproval || !rfq) return;
-    if (!approvalComment.trim()) {
-      setApprovalActionError('Please enter a comment explaining the reason for return.');
-      return;
-    }
     const approvalId = pendingApproval.id;
-    const comment = approvalComment;
+    const comment = approvalComment.trim() || 'Returned for revision';
 
     // Instant optimistic update
     setPendingApproval(null);
@@ -1006,12 +1011,12 @@ export default function RFQDetailModal({
                         value={actionReturnTarget}
                         onChange={(e) => setActionReturnTarget(e.target.value as any)}
                       >
-                        <option value="ORIGINATOR">Originator (Creator)</option>
+                        <option value="ORIGINATOR">Originator / Creator / Admin</option>
                         <option value="LEVEL_1">Level 1 Approver</option>
                       </select>
                     ) : (
                       <div className="flex h-8 items-center rounded-md border border-border/70 bg-muted/40 px-2 text-xs font-medium text-foreground">
-                        Originator (Creator)
+                        Originator / Creator / Admin
                       </div>
                     )}
                   </div>

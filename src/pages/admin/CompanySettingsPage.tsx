@@ -8,7 +8,7 @@ import {
   Plus, X, Edit3, Building2, Tag, ChevronDown, ChevronRight, Search,
   Save, Settings, Trash2, Ruler, Users, CreditCard, Mail, Phone, FileText, RotateCcw, Clock,
   Palette, Image, FileSignature, Eye, Upload, Loader2, ArrowRight, Sparkles, AlertTriangle, CheckCircle2, Info, FileCheck, Globe, Hash,
-  Lock, Unlock, ShieldCheck, Key, EyeOff, Check,
+  Lock, Unlock, ShieldCheck, Key, EyeOff, Check, Copy, Send, RefreshCw,
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import ImageCropperModal from '../../components/shared/ImageCropperModal';
@@ -525,7 +525,7 @@ const EMBEDDED_STANDARD_UNITS: EmbeddedUnit[] = [
 // ─── Component ──────────────────────────────────────────────
 
 export default function CompanySettingsPage() {
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
   const canCreateSettings = hasPermission('Company Settings', 'canCreate') || hasPermission('Settings', 'canCreate');
   const noPermissionTitle = "Admin has not allowed this action. You do not have permission to modify company settings.";
   const disabledActionStyle = !canCreateSettings ? { opacity: 0.6, cursor: 'not-allowed', pointerEvents: 'auto' as const } : undefined;
@@ -1106,10 +1106,24 @@ export default function CompanySettingsPage() {
   const [brandingCompanyState, setBrandingCompanyState] = useState('');
   const [brandingCompanyCountry, setBrandingCompanyCountry] = useState('');
   const [brandingBankName, setBrandingBankName] = useState('');
+  const [brandingSenderDisplayName, setBrandingSenderDisplayName] = useState('');
+  const [brandingSenderEmail, setBrandingSenderEmail] = useState('');
+  const [brandingReplyToEmail, setBrandingReplyToEmail] = useState('');
+  const [customDomainInput, setCustomDomainInput] = useState('');
+  const [registeringDomain, setRegisteringDomain] = useState(false);
+  const [verifyingDomain, setVerifyingDomain] = useState(false);
+  const [removingDomain, setRemovingDomain] = useState(false);
+  const [copiedRecordKey, setCopiedRecordKey] = useState<string | null>(null);
+  const [testEmailRecipient, setTestEmailRecipient] = useState('');
+  const [sendingTestEmail, setSendingTestEmail] = useState(false);
+  const [testEmailFeedback, setTestEmailFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
   const [brandingDirty, setBrandingDirty] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [removingLogo, setRemovingLogo] = useState(false);
   const [savingBranding, setSavingBranding] = useState(false);
+  const [emailSettingsDirty, setEmailSettingsDirty] = useState(false);
+  const [savingEmailSettings, setSavingEmailSettings] = useState(false);
+  const [emailSaveFeedback, setEmailSaveFeedback] = useState<string | null>(null);
   const brandingInitialized = useRef(false);
 
   // Load branding from profile once
@@ -1130,12 +1144,15 @@ export default function CompanySettingsPage() {
       setBrandingCompanyState(profile.companyState || '');
       setBrandingCompanyCountry(profile.companyCountry || '');
       setBrandingBankName(profile.bankName || '');
+      setBrandingSenderDisplayName(profile.senderDisplayName || '');
+      setBrandingSenderEmail(profile.senderEmail || '');
+      setBrandingReplyToEmail(profile.replyToEmail || '');
+      setCustomDomainInput(profile.customDomain || '');
     }
   }, [profile]);
 
   const handleSaveBranding = useCallback(async () => {
     if (!canCreateSettings) return;
-    if (!brandingDirty) return;
     setSavingBranding(true);
     setPageMsg(null);
     try {
@@ -1159,6 +1176,7 @@ export default function CompanySettingsPage() {
 
       if (Object.keys(payload).length === 0) {
         setPageMsg('No changes to save.');
+        setBrandingDirty(false);
         return;
       }
 
@@ -1173,16 +1191,150 @@ export default function CompanySettingsPage() {
       setSavingBranding(false);
     }
   }, [
-    brandingDirty, brandingName, brandingLogoUrl, brandingColor, brandingLoginText,
+    canCreateSettings, brandingName, brandingLogoUrl, brandingColor, brandingLoginText,
     brandingSupportEmail, brandingCompanyPhone, brandingCompanyEmail, brandingCompanyWebsite,
     brandingCompanyAddress, brandingCompanyCity, brandingCompanyState, brandingCompanyCountry,
-    brandingBankName, profile, refreshBranding, canCreateSettings
+    brandingBankName, profile, refreshBranding
   ]);
 
   const markBrandingDirty = useCallback(() => {
     if (!canCreateSettings) return;
     if (!brandingDirty) setBrandingDirty(true);
   }, [brandingDirty, canCreateSettings]);
+
+  const markEmailSettingsDirty = useCallback(() => {
+    if (!canCreateSettings) return;
+    if (!emailSettingsDirty) setEmailSettingsDirty(true);
+  }, [emailSettingsDirty, canCreateSettings]);
+
+  const handleSaveEmailSettings = useCallback(async () => {
+    if (!canCreateSettings) return;
+    setSavingEmailSettings(true);
+    setEmailSaveFeedback(null);
+    try {
+      const payload: Record<string, unknown> = {};
+      if (brandingSenderDisplayName !== (profile?.senderDisplayName || '')) {
+        payload.senderDisplayName = brandingSenderDisplayName;
+      }
+      if (brandingSenderEmail !== (profile?.senderEmail || '')) {
+        payload.senderEmail = brandingSenderEmail;
+      }
+      if (brandingReplyToEmail !== (profile?.replyToEmail || '')) {
+        payload.replyToEmail = brandingReplyToEmail;
+      }
+
+      if (Object.keys(payload).length === 0) {
+        setEmailSaveFeedback('Settings are already up to date.');
+        setEmailSettingsDirty(false);
+        setTimeout(() => setEmailSaveFeedback(null), 3000);
+        return;
+      }
+
+      const updated = await companySettingsService.updateCompanyProfile(payload);
+      setProfile(updated);
+      setEmailSettingsDirty(false);
+      setEmailSaveFeedback('Email settings saved successfully!');
+      setTimeout(() => setEmailSaveFeedback(null), 4500);
+      refreshBranding();
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to save email settings';
+      setEmailSaveFeedback(`Error: ${errorMsg}`);
+    } finally {
+      setSavingEmailSettings(false);
+    }
+  }, [
+    canCreateSettings, brandingSenderDisplayName, brandingSenderEmail, brandingReplyToEmail,
+    profile, refreshBranding
+  ]);
+
+  // ── Custom Domain & Test Email Handlers ───────────────────────
+  const handleRegisterDomain = async () => {
+    if (!customDomainInput.trim()) return;
+    setRegisteringDomain(true);
+    setPageMsg(null);
+    try {
+      const res = await companySettingsService.registerCustomDomain(customDomainInput.trim());
+      if (res.success) {
+        setPageMsg('Domain registered successfully! Please add the DNS records below to your DNS provider.');
+        const refreshed = await companySettingsService.getCompanyProfile();
+        setProfile(refreshed);
+      } else {
+        setPageMsg(res.error || 'Failed to register domain');
+      }
+    } catch (err: any) {
+      setPageMsg(err?.message || 'Failed to register domain');
+    } finally {
+      setRegisteringDomain(false);
+    }
+  };
+
+  const handleVerifyDomain = async () => {
+    setVerifyingDomain(true);
+    setPageMsg(null);
+    try {
+      const res = await companySettingsService.verifyCustomDomain();
+      if (res.success) {
+        const refreshed = await companySettingsService.getCompanyProfile();
+        setProfile(refreshed);
+        if (res.status === 'VERIFIED') {
+          setPageMsg('✅ Domain DNS verified! Outgoing emails will now be sent directly from your custom domain.');
+        } else {
+          setPageMsg('DNS check completed. DNS records are still propagating. Please allow a few minutes and try again.');
+        }
+      } else {
+        setPageMsg(res.error || 'Failed to verify domain');
+      }
+    } catch (err: any) {
+      setPageMsg(err?.message || 'Verification failed');
+    } finally {
+      setVerifyingDomain(false);
+    }
+  };
+
+  const handleRemoveDomain = async () => {
+    if (!window.confirm('Are you sure you want to disconnect this custom domain? Emails will revert to Procnex platform delivery.')) return;
+    setRemovingDomain(true);
+    setPageMsg(null);
+    try {
+      await companySettingsService.removeCustomDomain();
+      const refreshed = await companySettingsService.getCompanyProfile();
+      setProfile(refreshed);
+      setCustomDomainInput('');
+      setPageMsg('Custom domain removed. Default platform delivery restored.');
+    } catch (err: any) {
+      setPageMsg(err?.message || 'Failed to remove domain');
+    } finally {
+      setRemovingDomain(false);
+    }
+  };
+
+  const handleSendTestEmail = async () => {
+    const target = testEmailRecipient.trim() || user?.email || '';
+    if (!target) {
+      setTestEmailFeedback({ ok: false, msg: 'Please enter a recipient email address.' });
+      return;
+    }
+    setSendingTestEmail(true);
+    setTestEmailFeedback(null);
+    try {
+      const res = await companySettingsService.sendTestEmail(target);
+      if (res.success) {
+        setTestEmailFeedback({ ok: true, msg: `Test email sent to ${target}! Check your inbox and try replying.` });
+      } else {
+        setTestEmailFeedback({ ok: false, msg: res.message || 'Failed to send test email' });
+      }
+    } catch (err: any) {
+      setTestEmailFeedback({ ok: false, msg: err?.message || 'Failed to send test email' });
+    } finally {
+      setSendingTestEmail(false);
+    }
+  };
+
+  const copyToClipboard = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedRecordKey(key);
+    setTimeout(() => setCopiedRecordKey(null), 2000);
+  };
 
   // ── Image Cropper (after branding so all variables are declared) ──
   const [cropFile, setCropFile] = useState<File | null>(null);
@@ -3638,6 +3790,285 @@ export default function CompanySettingsPage() {
                     >
                       <X size={16} /> Discard
                     </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Multi-Tenant Email & Domain Branding Setup Card ──────── */}
+          <div className="cs-section-card" style={{ marginTop: '24px' }}>
+            <div className="cs-section-header">
+              <div className="cs-section-header__left">
+                <h2><Mail size={17} /> Email Sender & Domain Branding</h2>
+                <p>Configure how RFQs, Purchase Orders, and vendor invitations appear in your suppliers' inboxes and where vendor replies are routed.</p>
+              </div>
+            </div>
+            <div className="cs-section-body">
+              {/* Step 1: Identity & Reply-To */}
+              <div style={{ marginBottom: '24px' }}>
+                <h3 className="cs-email-step-title">
+                  <Sparkles size={16} className="text-primary" /> Step 1: Outgoing Email Identity & Vendor Reply Routing
+                </h3>
+                <div className="cs-branding-form">
+                  <SettingsField className="company-settings__field">
+                    <label>Sender Display Name</label>
+                    <Input
+                      value={brandingSenderDisplayName}
+                      onChange={(e) => { setBrandingSenderDisplayName(e.target.value); markEmailSettingsDirty(); }}
+                      placeholder={brandingName ? `e.g. ${brandingName}` : "e.g. Acme Procurement"}
+                    />
+                    <span className="cs-field-hint">Name shown in supplier's inbox (e.g. "Acme Corp" or "Procurement Dept")</span>
+                  </SettingsField>
+
+                  <SettingsField className="company-settings__field">
+                    <label>Official Sender Email Address</label>
+                    <Input
+                      type="email"
+                      value={brandingSenderEmail}
+                      onChange={(e) => { setBrandingSenderEmail(e.target.value); markEmailSettingsDirty(); }}
+                      placeholder={profile?.customDomain ? `e.g. orders@${profile.customDomain}` : "e.g. orders@yourcompany.com"}
+                    />
+                    <span className="cs-field-hint">
+                      {profile?.customDomain
+                        ? `Address used as sender (e.g. orders@${profile.customDomain}) once verified`
+                        : "Email address used as sender identity"}
+                    </span>
+                  </SettingsField>
+
+                  <SettingsField className="company-settings__field">
+                    <label>Vendor Reply-To Email</label>
+                    <Input
+                      type="email"
+                      value={brandingReplyToEmail}
+                      onChange={(e) => { setBrandingReplyToEmail(e.target.value); markEmailSettingsDirty(); }}
+                      placeholder={brandingCompanyEmail ? `e.g. ${brandingCompanyEmail}` : "e.g. procurement@yourcompany.com"}
+                    />
+                    <span className="cs-field-hint">When a vendor clicks "Reply" in Outlook or Gmail, their response goes directly to this email</span>
+                  </SettingsField>
+                </div>
+
+                {/* Save Email Settings Action Bar */}
+                <div className="cs-email-save-bar">
+                  <div className="cs-email-save-bar__left">
+                    {emailSaveFeedback ? (
+                      <span className={`cs-email-save-feedback ${emailSaveFeedback.startsWith('Error') ? 'cs-email-save-feedback--error' : 'cs-email-save-feedback--success'}`}>
+                        {emailSaveFeedback.startsWith('Error') ? <AlertTriangle size={15} /> : <CheckCircle2 size={15} />}
+                        {emailSaveFeedback}
+                      </span>
+                    ) : emailSettingsDirty ? (
+                      <span className="cs-email-save-feedback cs-email-save-feedback--pending">
+                        <AlertTriangle size={15} /> You have unsaved changes in email sender details
+                      </span>
+                    ) : (
+                      <span className="cs-email-save-feedback cs-email-save-feedback--saved">
+                        <Check size={14} /> Email sender identity details are up to date
+                      </span>
+                    )}
+                  </div>
+                  <div className="cs-email-save-bar__actions">
+                    {emailSettingsDirty && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={savingEmailSettings}
+                        onClick={() => {
+                          if (profile) {
+                            setBrandingSenderDisplayName(profile.senderDisplayName || '');
+                            setBrandingSenderEmail(profile.senderEmail || '');
+                            setBrandingReplyToEmail(profile.replyToEmail || '');
+                            setEmailSettingsDirty(false);
+                            setEmailSaveFeedback(null);
+                          }
+                        }}
+                      >
+                        <X size={14} /> Discard
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="default"
+                      size="default"
+                      disabled={savingEmailSettings || !canCreateSettings}
+                      title={!canCreateSettings ? noPermissionTitle : undefined}
+                      style={!canCreateSettings ? disabledActionStyle : undefined}
+                      onClick={handleSaveEmailSettings}
+                    >
+                      {savingEmailSettings ? (
+                        <>
+                          <Loader2 size={15} className="animate-spin" /> Saving Settings…
+                        </>
+                      ) : (
+                        <>
+                          <Save size={15} /> Save Email Settings
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Delivery Mode Status Badge */}
+                <div className={`cs-email-status-banner ${profile?.domainStatus === 'VERIFIED' ? 'cs-email-status-banner--verified' : 'cs-email-status-banner--platform'}`}>
+                  {profile?.domainStatus === 'VERIFIED' ? (
+                    <>
+                      <CheckCircle2 size={20} style={{ color: '#10b981', flexShrink: 0 }} />
+                      <div>
+                        <strong className="cs-email-status-title cs-email-status-title--verified">Verified Enterprise Domain Active ({profile.customDomain})</strong>
+                        <span className="cs-email-status-subtitle">Emails are sent natively from your corporate domain with full DKIM authentication.</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <Info size={20} style={{ color: '#0a6ed1', flexShrink: 0 }} />
+                      <div>
+                        <strong className="cs-email-status-title">Zero-Setup Platform Delivery Active</strong>
+                        <span className="cs-email-status-subtitle">
+                          Emails are delivered securely via Procnex servers with your custom sender name <strong>({brandingSenderDisplayName || brandingName || 'Your Company'})</strong> and all vendor replies route to <strong>({brandingReplyToEmail || brandingCompanyEmail || 'your email'})</strong>.
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <hr className="cs-email-section-divider" />
+
+              {/* Step 2: Custom Domain Verification */}
+              <div style={{ marginBottom: '24px' }}>
+                <h3 className="cs-email-step-title">
+                  <Globe size={16} className="text-primary" /> Step 2: Connect Custom Corporate Domain (Optional - For Enterprises)
+                </h3>
+                <p className="cs-email-step-desc">
+                  Want emails to come 100% from your domain (e.g. <code>orders@{customDomainInput || 'company.com'}</code>)? Register your domain and add the DKIM/SPF DNS records.
+                </p>
+
+                {!profile?.customDomain ? (
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', maxWidth: '600px' }}>
+                    <Input
+                      value={customDomainInput}
+                      onChange={(e) => setCustomDomainInput(e.target.value)}
+                      placeholder="e.g. yourcompany.com or procurement.yourcompany.com"
+                      disabled={registeringDomain}
+                    />
+                    <Button
+                      type="button"
+                      variant="default"
+                      onClick={handleRegisterDomain}
+                      disabled={registeringDomain || !customDomainInput.trim()}
+                    >
+                      {registeringDomain ? <><Loader2 size={14} className="animate-spin" /> Registering…</> : <><Globe size={14} /> Connect Domain</>}
+                    </Button>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="cs-domain-card">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <Globe size={18} style={{ color: '#0a6ed1' }} />
+                        <div>
+                          <strong className="cs-domain-name">{profile.customDomain}</strong>
+                          <span className={`cs-domain-badge ${profile.domainStatus === 'VERIFIED' ? 'cs-domain-badge--verified' : 'cs-domain-badge--pending'}`}>
+                            {profile.domainStatus === 'VERIFIED' ? <><CheckCircle2 size={12} /> Verified</> : <><Clock size={12} /> Pending DNS Verification</>}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleVerifyDomain}
+                          disabled={verifyingDomain}
+                        >
+                          {verifyingDomain ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} Check DNS Status
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleRemoveDomain}
+                          disabled={removingDomain}
+                          style={{ color: '#ef4444' }}
+                        >
+                          <Trash2 size={13} /> Disconnect
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* DNS Records Table */}
+                    {profile.domainDnsRecords && profile.domainDnsRecords.length > 0 && (
+                      <div className="cs-dns-table-container">
+                        <table className="cs-dns-table">
+                          <thead>
+                            <tr>
+                              <th>Type</th>
+                              <th>Host / Name</th>
+                              <th>Value</th>
+                              <th style={{ textAlign: 'center' }}>Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {profile.domainDnsRecords.map((rec, idx) => (
+                              <tr key={idx}>
+                                <td style={{ fontWeight: 600 }}>{rec.type}</td>
+                                <td style={{ fontFamily: 'monospace' }}>{rec.name}</td>
+                                <td style={{ fontFamily: 'monospace', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={rec.value}>
+                                  {rec.value}
+                                </td>
+                                <td style={{ textAlign: 'center' }}>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => copyToClipboard(rec.value, `dns-${idx}`)}
+                                  >
+                                    {copiedRecordKey === `dns-${idx}` ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy</>}
+                                  </Button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <hr className="cs-email-section-divider" />
+
+              {/* Step 3: Send Test Email */}
+              <div>
+                <h3 className="cs-email-step-title">
+                  <Send size={16} className="text-primary" /> Test Your Email Delivery
+                </h3>
+                <p className="cs-email-step-desc">
+                  Send a verification test email to any inbox to confirm the sender display name and verify the Reply-To header.
+                </p>
+
+                <div style={{ display: 'flex', gap: '12px', maxWidth: '600px', alignItems: 'flex-start' }}>
+                  <Input
+                    type="email"
+                    value={testEmailRecipient}
+                    onChange={(e) => setTestEmailRecipient(e.target.value)}
+                    placeholder={user?.email ? `e.g. ${user.email}` : "e.g. test@yourcompany.com"}
+                    disabled={sendingTestEmail}
+                  />
+                  <Button
+                    type="button"
+                    variant="default"
+                    onClick={handleSendTestEmail}
+                    disabled={sendingTestEmail}
+                  >
+                    {sendingTestEmail ? <><Loader2 size={14} className="animate-spin" /> Sending…</> : <><Send size={14} /> Send Test</>}
+                  </Button>
+                </div>
+
+                {testEmailFeedback && (
+                  <div className={`cs-test-email-feedback ${testEmailFeedback.ok ? 'cs-test-email-feedback--success' : 'cs-test-email-feedback--error'}`}>
+                    {testEmailFeedback.ok ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+                    {testEmailFeedback.msg}
                   </div>
                 )}
               </div>

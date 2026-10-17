@@ -984,7 +984,7 @@ export default function ApprovalsPage() {
                     )}
                     onClick={() => setActionReturnTarget((actionModal.request.module === 'Quotation' || actionModal.request.module === 'Quotations') ? 'VENDOR' : 'ORIGINATOR')}
                   >
-                    <div className="text-xs font-bold">{(actionModal.request.module === 'Quotation' || actionModal.request.module === 'Quotations') ? 'Return to Vendor for Resubmission' : 'Return to Originator for Modification'}</div>
+                    <div className="text-xs font-bold">{(actionModal.request.module === 'Quotation' || actionModal.request.module === 'Quotations') ? 'Return to Vendor for Resubmission' : 'Return to Originator/Admin for Modification'}</div>
                     <div className="text-[11px] text-muted-foreground mt-0.5 leading-tight">Send back for revision</div>
                   </button>
                   <button

@@ -88,6 +88,7 @@ export interface RFQ {
   bidSecurityMinValue?: number;
   bidSecurityMinValidity?: number;
   bidBondMinValue?: number;
+  bidBondMinCurrency?: string;
   bidBondMinValidity?: number;
   // Approval Settings
   rfqApprovalStartPoint?: 'ORIGINATOR' | 'L1_USER';

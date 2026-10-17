@@ -885,6 +885,219 @@
   font-weight: 800;
 }
 
+/* ── Totals Currency Bar & Currency Converter ─────────────────── */
+
+.pr-totals__currency-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  background: var(--surface-elevated, #f8fafc);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+[data-theme="dark"] .pr-totals__currency-bar {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+.pr-totals__currency-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary, #64748b);
+  white-space: nowrap;
+}
+
+.pr-totals__currency-selector {
+  flex: 1;
+  max-width: 200px;
+}
+
+/* Currency Converter Card */
+.pr-currency-converter {
+  margin-top: 14px;
+  padding: 14px;
+  background: var(--surface-card, #ffffff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+[data-theme="dark"] .pr-currency-converter {
+  background: #0f172a;
+  border-color: #1e293b;
+}
+
+.pr-currency-converter__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border, #e2e8f0);
+}
+
+[data-theme="dark"] .pr-currency-converter__header {
+  border-bottom-color: #1e293b;
+}
+
+.pr-currency-converter__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-primary, #0f172a);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.pr-currency-converter__rate {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #0284c7;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-family: var(--font-mono, monospace);
+  white-space: nowrap;
+}
+
+[data-theme="dark"] .pr-currency-converter__rate {
+  background: #082f49;
+  border-color: #0369a1;
+  color: #38bdf8;
+}
+
+.pr-currency-converter__controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.pr-currency-converter__field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pr-currency-converter__field label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary, #64748b);
+  text-transform: uppercase;
+}
+
+.pr-currency-converter__swap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #cbd5e1);
+  background: var(--surface-card, #ffffff);
+  color: var(--text-secondary, #64748b);
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 2px;
+  flex-shrink: 0;
+}
+
+[data-theme="dark"] .pr-currency-converter__swap {
+  background: #1e293b;
+  border-color: #334155;
+  color: #94a3b8;
+}
+
+.pr-currency-converter__swap:hover {
+  background: var(--surface-elevated, #f1f5f9);
+  color: var(--primary-500, #0a6ed1);
+  border-color: var(--primary-500, #0a6ed1);
+  transform: rotate(180deg);
+}
+
+.pr-currency-converter__results {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, rgba(10, 110, 209, 0.05) 0%, rgba(10, 110, 209, 0.01) 100%);
+  border: 1px dashed rgba(10, 110, 209, 0.35);
+  border-radius: 8px;
+}
+
+[data-theme="dark"] .pr-currency-converter__results {
+  background: rgba(10, 110, 209, 0.08);
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
+.pr-currency-converter__result-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12.5px;
+  color: var(--text-secondary, #64748b);
+}
+
+.pr-currency-converter__result-row span:last-child {
+  font-family: var(--font-mono, monospace);
+  font-weight: 600;
+  color: var(--text-primary, #0f172a);
+}
+
+.pr-currency-converter__result-row--grand {
+  font-size: 13.5px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(10, 110, 209, 0.15);
+}
+
+.pr-currency-converter__result-row--grand span:first-child {
+  font-weight: 700;
+  color: var(--text-primary, #0f172a);
+}
+
+.pr-currency-converter__val {
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  color: var(--primary-600, #0284c7) !important;
+  font-family: var(--font-mono, monospace);
+}
+
+.pr-currency-converter__apply-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0a6ed1;
+  background: rgba(10, 110, 209, 0.08);
+  border: 1px solid rgba(10, 110, 209, 0.25);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.pr-currency-converter__apply-btn:hover {
+  background: #0a6ed1;
+  color: #ffffff;
+  border-color: #0a6ed1;
+}
+
 /* ── SAP Fiori Contract Balance Gauge / Banner (Enterprise Edition) ───────── */
 
 .pr-contract-balance {

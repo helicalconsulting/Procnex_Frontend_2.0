@@ -218,7 +218,15 @@ async function apiGetCurrentUser(): Promise<AuthResponse | null> {
 
     // Admin session: call /auth/me
     const data = await apiRequest<AuthResponse>('/auth/me');
-    if (data) saveSession(data);
+    if (data) {
+      if (!data.roles || data.roles.length === 0) {
+        const cached = getCachedSession();
+        if (cached?.roles && cached.roles.length > 0) {
+          data.roles = cached.roles;
+        }
+      }
+      saveSession(data);
+    }
     return data;
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
@@ -249,10 +257,24 @@ async function apiGetCurrentUser(): Promise<AuthResponse | null> {
 function saveSession(data: AuthResponse, options?: { vendorPortal?: boolean }): void {
   localStorage.setItem(TOKEN_KEY, data.token);
   localStorage.setItem(USER_KEY, JSON.stringify(data.user));
-  localStorage.setItem(ROLES_KEY, JSON.stringify(data.roles));
+
+  let rolesToSave = data.roles || [];
+  if (rolesToSave.length === 0) {
+    try {
+      const existing = localStorage.getItem(ROLES_KEY);
+      if (existing) {
+        const parsed = JSON.parse(existing);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          rolesToSave = parsed;
+        }
+      }
+    } catch {}
+  }
+  localStorage.setItem(ROLES_KEY, JSON.stringify(rolesToSave));
+
   if (data.permissions?.length) {
     localStorage.setItem(PERMISSIONS_KEY, JSON.stringify(data.permissions));
-  } else {
+  } else if (!localStorage.getItem(PERMISSIONS_KEY)) {
     localStorage.removeItem(PERMISSIONS_KEY);
   }
   if (options?.vendorPortal) {

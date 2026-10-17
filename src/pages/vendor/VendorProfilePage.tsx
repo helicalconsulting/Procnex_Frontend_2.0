@@ -15,7 +15,7 @@ import {
 import { Badge } from '../../components/ui/badge';
 import { Button, buttonVariants } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
-import { Input, Select } from '../../components/ui/input';
+import { Input, Textarea, Select } from '../../components/ui/input';
 import { EmptyState, MetricCard, PageFrame, PageLead } from '../../components/ui/product';
 import { MessageStrip } from '../../components/shared/MessageStrip';
 import { cn } from '../../lib/utils';
@@ -88,6 +88,21 @@ export default function VendorProfilePage() {
   const [showPw, setShowPw] = useState(false);
   const [pwMsg, setPwMsg] = useState('');
   const [pwLoading, setPwLoading] = useState(false);
+
+  // Company edit
+  const [editCompany, setEditCompany] = useState(false);
+  const [companyForm, setCompanyForm] = useState({
+    name: '',
+    contactPerson: '',
+    phone: '',
+    website: '',
+    category: '',
+    address: '',
+    gstNumber: '',
+    panNumber: '',
+  });
+  const [companySaving, setCompanySaving] = useState(false);
+  const [companyMsg, setCompanyMsg] = useState('');
 
   // Banking edit
   const [editBank, setEditBank] = useState(false);
@@ -202,6 +217,314 @@ export default function VendorProfilePage() {
     );
   }
 
+  const startEditCompany = () => {
+    setCompanyForm({
+      name: company.name || '',
+      contactPerson: company.contactPerson || '',
+      phone: company.phone || '',
+      website: company.website || '',
+      category: company.category || '',
+      address: company.address || company.location || '',
+      gstNumber: company.gstNumber || '',
+      panNumber: company.panNumber || '',
+    });
+    setCompanyMsg('');
+    setEditCompany(true);
+  };
+
+  const companyChanged =
+    companyForm.name !== (company.name || '') ||
+    companyForm.contactPerson !== (company.contactPerson || '') ||
+    companyForm.phone !== (company.phone || '') ||
+    companyForm.website !== (company.website || '') ||
+    companyForm.category !== (company.category || '') ||
+    companyForm.address !== (company.address || company.location || '') ||
+    companyForm.gstNumber !== (company.gstNumber || '') ||
+    companyForm.panNumber !== (company.panNumber || '');
+
+  const handleSaveCompany = async () => {
+    if (companySaving || !companyChanged) return;
+    if (!companyForm.name.trim()) {
+      setCompanyMsg('Company name is required');
+      return;
+    }
+    setCompanySaving(true);
+    setCompanyMsg('');
+    try {
+      await vendorPortalService.updateCompany({
+        name: companyForm.name.trim(),
+        contactPerson: companyForm.contactPerson.trim(),
+        phone: companyForm.phone.trim(),
+        website: companyForm.website.trim(),
+        category: companyForm.category.trim(),
+        address: companyForm.address.trim(),
+        gstNumber: companyForm.gstNumber.trim(),
+        panNumber: companyForm.panNumber.trim(),
+      });
+      setCompanyMsg('Company information updated successfully!');
+      setEditCompany(false);
+      reload();
+      setTimeout(() => setCompanyMsg(''), 4000);
+    } catch (err) {
+      setCompanyMsg(err instanceof Error ? err.message : 'Failed to update company information');
+    } finally {
+      setCompanySaving(false);
+    }
+  };
+
+  const renderCompanyCard = () => (
+    <Card className="overflow-hidden border-border/80 bg-card p-6 shadow-xs profile-section">
+      <div>
+        <div className="flex items-center justify-between pb-4 border-b border-border/60 mb-5">
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Building className="size-5" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-foreground text-base">Company Information</h3>
+              <p className="text-xs text-muted-foreground">Official business details on record</p>
+            </div>
+          </div>
+          {!editCompany && (
+            <Button size="sm" variant="outline" onClick={startEditCompany} aria-label="Edit company information" className="h-8 gap-1.5 text-xs">
+              <Edit3 className="size-3.5" /> Edit
+            </Button>
+          )}
+        </div>
+
+        {companyMsg && (
+          <div className="mb-4">
+            <MessageStrip type={companyMsg.toLowerCase().includes('success') ? 'success' : 'error'}>
+              {companyMsg}
+            </MessageStrip>
+          </div>
+        )}
+
+        {!editCompany ? (
+          <>
+            <dl className="profile-facts grid grid-cols-1 sm:grid-cols-3 gap-y-4 gap-x-6 text-sm">
+              <div>
+                <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Company Name</dt>
+                <dd className="font-semibold text-foreground mt-0.5">{company.name || '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{profile.gstNumberLabel || 'GSTIN'}</dt>
+                <dd className="font-semibold text-foreground mt-0.5">{company.gstNumber || '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{profile.panNumberLabel || 'PAN'}</dt>
+                <dd className="font-semibold text-foreground mt-0.5">{company.panNumber || '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Category</dt>
+                <dd className="font-semibold text-foreground mt-0.5">{company.category || '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Contact Person</dt>
+                <dd className="font-semibold text-foreground mt-0.5">{company.contactPerson || '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Status</dt>
+                <dd className="mt-0.5">
+                  <Badge tone={company.isActive ? 'success' : 'warning'} className={company.isActive ? "text-emerald-700 dark:text-emerald-300" : undefined}>
+                    {company.isActive && <CheckCircle2 className="size-3.5" />}
+                    {company.isActive ? 'Active' : company.status || 'Pending'}
+                  </Badge>
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Member Since</dt>
+                <dd className="font-semibold text-foreground mt-0.5">
+                  {company.createdAt
+                    ? new Date(company.createdAt).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' })
+                    : '—'}
+                </dd>
+              </div>
+              <div className="sm:col-span-2">
+                <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Address</dt>
+                <dd className="font-semibold text-foreground mt-0.5 whitespace-pre-wrap break-words leading-relaxed">
+                  {company.address || company.location || '—'}
+                </dd>
+              </div>
+            </dl>
+
+            <div className="profile-contact pt-4 mt-4 border-t border-border/60 text-xs text-muted-foreground">
+              {company.phone && (
+                <div className="flex items-center gap-2">
+                  <Phone className="size-3.5 text-primary shrink-0" />
+                  <span>{company.phone}</span>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <Mail className="size-3.5 text-primary shrink-0" />
+                <span className="break-words min-w-0">{company.email}</span>
+              </div>
+              {company.website && (
+                <div className="flex items-center gap-2">
+                  <Globe className="size-3.5 text-primary shrink-0" />
+                  <a
+                    href={company.website.startsWith('http') ? company.website : `https://${company.website}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="break-words min-w-0 hover:underline text-primary font-medium"
+                  >
+                    {company.website}
+                  </a>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="form-field sm:col-span-2">
+              <label htmlFor="profile-company-name" className="text-xs font-semibold text-foreground">
+                Company Name <span className="text-destructive">*</span>
+              </label>
+              <Input
+                id="profile-company-name"
+                disabled={companySaving}
+                type="text"
+                className="h-9 rounded-lg"
+                value={companyForm.name}
+                onChange={(e) => setCompanyForm((prev) => ({ ...prev, name: e.target.value }))}
+                placeholder="e.g. Acme Corporation"
+              />
+            </div>
+
+            <div className="form-field">
+              <label htmlFor="profile-company-contact" className="text-xs font-semibold text-foreground">
+                Contact Person
+              </label>
+              <Input
+                id="profile-company-contact"
+                disabled={companySaving}
+                type="text"
+                className="h-9 rounded-lg"
+                value={companyForm.contactPerson}
+                onChange={(e) => setCompanyForm((prev) => ({ ...prev, contactPerson: e.target.value }))}
+                placeholder="e.g. Rahul Sharma"
+              />
+            </div>
+
+            <div className="form-field">
+              <label htmlFor="profile-company-phone" className="text-xs font-semibold text-foreground">
+                Phone Number
+              </label>
+              <Input
+                id="profile-company-phone"
+                disabled={companySaving}
+                type="tel"
+                className="h-9 rounded-lg"
+                value={companyForm.phone}
+                onChange={(e) => setCompanyForm((prev) => ({ ...prev, phone: e.target.value }))}
+                placeholder="e.g. +91 9876543210"
+              />
+            </div>
+
+            <div className="form-field">
+              <label htmlFor="profile-company-category" className="text-xs font-semibold text-foreground">
+                Category / Industry
+              </label>
+              <Input
+                id="profile-company-category"
+                disabled={companySaving}
+                type="text"
+                className="h-9 rounded-lg"
+                value={companyForm.category}
+                onChange={(e) => setCompanyForm((prev) => ({ ...prev, category: e.target.value }))}
+                placeholder="e.g. Electrical, Manufacturing"
+              />
+            </div>
+
+            <div className="form-field">
+              <label htmlFor="profile-company-website" className="text-xs font-semibold text-foreground">
+                Website
+              </label>
+              <Input
+                id="profile-company-website"
+                disabled={companySaving}
+                type="text"
+                className="h-9 rounded-lg"
+                value={companyForm.website}
+                onChange={(e) => setCompanyForm((prev) => ({ ...prev, website: e.target.value }))}
+                placeholder="e.g. https://www.acme.com"
+              />
+            </div>
+
+            <div className="form-field">
+              <label htmlFor="profile-company-gst" className="text-xs font-semibold text-foreground">
+                {profile.gstNumberLabel || 'GSTIN'}
+              </label>
+              <Input
+                id="profile-company-gst"
+                disabled={companySaving}
+                type="text"
+                className="h-9 rounded-lg"
+                value={companyForm.gstNumber}
+                onChange={(e) => setCompanyForm((prev) => ({ ...prev, gstNumber: e.target.value.toUpperCase() }))}
+                placeholder="e.g. 27AAAAA0000A1Z5"
+              />
+            </div>
+
+            <div className="form-field">
+              <label htmlFor="profile-company-pan" className="text-xs font-semibold text-foreground">
+                {profile.panNumberLabel || 'PAN'}
+              </label>
+              <Input
+                id="profile-company-pan"
+                disabled={companySaving}
+                type="text"
+                className="h-9 rounded-lg"
+                value={companyForm.panNumber}
+                onChange={(e) => setCompanyForm((prev) => ({ ...prev, panNumber: e.target.value.toUpperCase() }))}
+                placeholder="e.g. ABCDE1234F"
+              />
+            </div>
+
+            <div className="form-field sm:col-span-2">
+              <label htmlFor="profile-company-address" className="text-xs font-semibold text-foreground">
+                Registered Address / Location
+              </label>
+              <Textarea
+                id="profile-company-address"
+                disabled={companySaving}
+                rows={3}
+                className="min-h-20 rounded-lg text-sm"
+                value={companyForm.address}
+                onChange={(e) => setCompanyForm((prev) => ({ ...prev, address: e.target.value }))}
+                placeholder="Street address, city, state, postal code"
+              />
+            </div>
+
+            <div className="form-field sm:col-span-2">
+              <label htmlFor="profile-company-email" className="text-xs font-semibold text-foreground flex items-center justify-between">
+                <span>Account Email</span>
+                <span className="text-[11px] text-muted-foreground font-normal">(Registered login ID — cannot be changed here)</span>
+              </label>
+              <Input
+                id="profile-company-email"
+                disabled
+                type="email"
+                className="h-9 rounded-lg opacity-60 bg-muted/40 cursor-not-allowed"
+                value={company.email || ''}
+              />
+            </div>
+
+            <div className="sm:col-span-2 flex items-center justify-end gap-2 pt-2">
+              <Button onClick={handleSaveCompany} disabled={companySaving || !companyChanged} size="sm" className="h-9 gap-1.5">
+                {companySaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                {companySaving ? 'Saving…' : 'Save Changes'}
+              </Button>
+              <Button variant="outline" onClick={() => setEditCompany(false)} disabled={companySaving} size="sm" className="h-9 gap-1.5">
+                <X className="size-4" /> Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+
   return (
     <PageFrame className="profile-workspace">
       <PageLead
@@ -315,92 +638,7 @@ export default function VendorProfilePage() {
       {/* ── Company Dedicated Tab ── */}
       {activeTab === 'company' && (
         <div className="max-w-4xl">
-          {/* Company Information */}
-          <Card className="overflow-hidden border-border/80 bg-card p-6 shadow-xs profile-section">
-            <div>
-              <div className="flex items-center gap-3 pb-4 border-b border-border/60 mb-5">
-                <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <Building className="size-5" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-foreground text-base">Company Information</h3>
-                  <p className="text-xs text-muted-foreground">Official business details on record</p>
-                </div>
-              </div>
-
-              <dl className="profile-facts grid grid-cols-1 sm:grid-cols-3 gap-y-4 gap-x-6 text-sm">
-                <div>
-                  <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Company Name</dt>
-                  <dd className="font-semibold text-foreground mt-0.5">{company.name || '—'}</dd>
-                </div>
-                <div>
-                  <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{profile.gstNumberLabel || 'GSTIN'}</dt>
-                  <dd className="font-semibold text-foreground mt-0.5">{company.gstNumber || '—'}</dd>
-                </div>
-                <div>
-                  <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{profile.panNumberLabel || 'PAN'}</dt>
-                  <dd className="font-semibold text-foreground mt-0.5">{company.panNumber || '—'}</dd>
-                </div>
-                <div>
-                  <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Category</dt>
-                  <dd className="font-semibold text-foreground mt-0.5">{company.category || '—'}</dd>
-                </div>
-                <div>
-                  <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Contact Person</dt>
-                  <dd className="font-semibold text-foreground mt-0.5">{company.contactPerson || '—'}</dd>
-                </div>
-                <div>
-                  <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Status</dt>
-                  <dd className="mt-0.5">
-                    <Badge tone={company.isActive ? 'success' : 'warning'} className={company.isActive ? "text-emerald-700 dark:text-emerald-300" : undefined}>
-                      {company.isActive && <CheckCircle2 className="size-3.5" />}
-                      {company.isActive ? 'Active' : company.status || 'Pending'}
-                    </Badge>
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Member Since</dt>
-                  <dd className="font-semibold text-foreground mt-0.5">
-                    {company.createdAt
-                      ? new Date(company.createdAt).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' })
-                      : '—'}
-                  </dd>
-                </div>
-                <div className="sm:col-span-2">
-                  <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Address</dt>
-                  <dd className="font-semibold text-foreground mt-0.5 whitespace-pre-wrap break-words leading-relaxed">
-                    {company.address || company.location || '—'}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-
-            <div className="profile-contact pt-4 mt-4 border-t border-border/60 text-xs text-muted-foreground">
-              {company.phone && (
-                <div className="flex items-center gap-2">
-                  <Phone className="size-3.5 text-primary shrink-0" />
-                  <span>{company.phone}</span>
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <Mail className="size-3.5 text-primary shrink-0" />
-                <span className="break-words min-w-0">{company.email}</span>
-              </div>
-              {company.website && (
-                <div className="flex items-center gap-2">
-                  <Globe className="size-3.5 text-primary shrink-0" />
-                  <a
-                    href={company.website.startsWith('http') ? company.website : `https://${company.website}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="break-words min-w-0 hover:underline text-primary font-medium"
-                  >
-                    {company.website}
-                  </a>
-                </div>
-              )}
-            </div>
-          </Card>
+          {renderCompanyCard()}
         </div>
       )}
 
@@ -804,92 +1042,7 @@ export default function VendorProfilePage() {
         <div className="space-y-6">
           <div className="profile-columns">
             <div className="profile-column">
-              {/* Company Information */}
-              <Card className="overflow-hidden border-border/80 bg-card p-6 shadow-xs profile-section">
-                <div>
-                  <div className="flex items-center gap-3 pb-4 border-b border-border/60 mb-5">
-                    <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      <Building className="size-5" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-foreground text-base">Company Information</h3>
-                      <p className="text-xs text-muted-foreground">Official business details on record</p>
-                    </div>
-                  </div>
-
-                  <dl className="profile-facts grid grid-cols-1 sm:grid-cols-3 gap-y-4 gap-x-6 text-sm">
-                    <div>
-                      <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Company Name</dt>
-                      <dd className="font-semibold text-foreground mt-0.5">{company.name || '—'}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{profile.gstNumberLabel || 'GSTIN'}</dt>
-                      <dd className="font-semibold text-foreground mt-0.5">{company.gstNumber || '—'}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{profile.panNumberLabel || 'PAN'}</dt>
-                      <dd className="font-semibold text-foreground mt-0.5">{company.panNumber || '—'}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Category</dt>
-                      <dd className="font-semibold text-foreground mt-0.5">{company.category || '—'}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Contact Person</dt>
-                      <dd className="font-semibold text-foreground mt-0.5">{company.contactPerson || '—'}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Status</dt>
-                      <dd className="mt-0.5">
-                        <Badge tone={company.isActive ? 'success' : 'warning'} className={company.isActive ? "text-emerald-700 dark:text-emerald-300" : undefined}>
-                          {company.isActive && <CheckCircle2 className="size-3.5" />}
-                          {company.isActive ? 'Active' : company.status || 'Pending'}
-                        </Badge>
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Member Since</dt>
-                      <dd className="font-semibold text-foreground mt-0.5">
-                        {company.createdAt
-                          ? new Date(company.createdAt).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' })
-                          : '—'}
-                      </dd>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <dt className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Address</dt>
-                      <dd className="font-semibold text-foreground mt-0.5 whitespace-pre-wrap break-words leading-relaxed">
-                        {company.address || company.location || '—'}
-                      </dd>
-                    </div>
-                  </dl>
-                </div>
-
-                <div className="profile-contact pt-4 mt-4 border-t border-border/60 text-xs text-muted-foreground">
-                  {company.phone && (
-                    <div className="flex items-center gap-2">
-                      <Phone className="size-3.5 text-primary shrink-0" />
-                      <span>{company.phone}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2">
-                    <Mail className="size-3.5 text-primary shrink-0" />
-                    <span className="break-words min-w-0">{company.email}</span>
-                  </div>
-                  {company.website && (
-                    <div className="flex items-center gap-2">
-                      <Globe className="size-3.5 text-primary shrink-0" />
-                      <a
-                        href={company.website.startsWith('http') ? company.website : `https://${company.website}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="break-words min-w-0 hover:underline text-primary font-medium"
-                      >
-                        {company.website}
-                      </a>
-                    </div>
-                  )}
-                </div>
-              </Card>
+              {renderCompanyCard()}
 
               {/* Compliance Documents */}
               <Card className="overflow-hidden border-border/80 bg-card p-6 shadow-xs profile-section">

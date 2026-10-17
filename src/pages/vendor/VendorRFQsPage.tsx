@@ -92,6 +92,8 @@ interface VendorRFQ {
   bidSecurityMinValue?: number;
   bidSecurityMinValidity?: number;
   bidBondMinValue?: number;
+  bidBondMinCurrency?: string;
+  bidBondCurrency?: string;
   bidBondMinValidity?: number;
 }
 
@@ -113,6 +115,8 @@ function mapVendorRfq(r: RFQ & {
   bidSecurityMinValue?: number;
   bidSecurityMinValidity?: number;
   bidBondMinValue?: number;
+  bidBondMinCurrency?: string;
+  bidBondCurrency?: string;
   bidBondMinValidity?: number;
   selectedQuotationId?: string | null;
   isRfqAwarded?: boolean;
@@ -222,6 +226,8 @@ function mapVendorRfq(r: RFQ & {
     bidSecurityMinValue: r.bidSecurityMinValue,
     bidSecurityMinValidity: r.bidSecurityMinValidity,
     bidBondMinValue: r.bidBondMinValue,
+    bidBondMinCurrency: (r as any).bidBondMinCurrency || (r as any).bidBondCurrency,
+    bidBondCurrency: (r as any).bidBondCurrency || (r as any).bidBondMinCurrency,
     bidBondMinValidity: r.bidBondMinValidity,
   };
 }
@@ -665,20 +671,20 @@ export default function VendorRFQsPage() {
     // All categories collapsed by default — vendor clicks to expand
     setExpandedEvalCats(new Set());
 
-    // Pre-fill bid security & bid bond format fields from previous quotation (if available) or RFQ default
-    const prevBNo = myQuot?.bidSecurityBondNumber || myQuot?.bidBondNumber || '';
-    const prevIssuer = myQuot?.bidSecurityIssuer || myQuot?.bidBondIssuer || '';
-    const prevVal = myQuot?.bidSecurityValue ?? myQuot?.bidBondAmount ?? currentRfq.bidSecurityMinValue ?? '';
-    const prevValDays = myQuot?.bidSecurityValidityValue ?? myQuot?.bidBondValidityValue ?? currentRfq.bidSecurityMinValidity ?? '';
+    // Pre-fill bid security fields from previous quotation (if available) or RFQ default
+    const prevSecBNo = myQuot?.bidSecurityBondNumber || (!currentRfq.bidBondRequired ? myQuot?.bidBondNumber : '') || '';
+    const prevSecIssuer = myQuot?.bidSecurityIssuer || (!currentRfq.bidBondRequired ? myQuot?.bidBondIssuer : '') || '';
+    const prevSecVal = myQuot?.bidSecurityValue ?? currentRfq.bidSecurityMinValue ?? '';
+    const prevSecValDays = myQuot?.bidSecurityValidityValue ?? currentRfq.bidSecurityMinValidity ?? '';
 
     setBidSecValueType(
       (myQuot?.bidSecurityValueType || currentRfq.bidSecurityValueType as 'FIXED_AMOUNT' | 'PERCENTAGE') || 'FIXED_AMOUNT'
     );
-    setBidSecValue(prevVal ? String(prevVal) : '');
+    setBidSecValue(prevSecVal ? String(prevSecVal) : '');
     setBidSecCurrency(myQuot?.bidSecurityCurrency || currentRfq.bidSecurityCurrency || companyDefaultCurrency || 'KES');
     const initSecIssueDate = myQuot?.bidSecurityIssueDate || myQuot?.issueDate ? String(myQuot.bidSecurityIssueDate || myQuot.issueDate).slice(0, 10) : '';
     let initSecExpiryDate = myQuot?.bidSecurityExpiryDate || myQuot?.expiryDate ? String(myQuot.bidSecurityExpiryDate || myQuot.expiryDate).slice(0, 10) : '';
-    let initSecValDays = prevValDays ? String(prevValDays) : '';
+    let initSecValDays = prevSecValDays ? String(prevSecValDays) : '';
     const secValDaysNum = parseInt(initSecValDays) || currentRfq.bidSecurityMinValidity || 0;
     if (initSecIssueDate && !initSecExpiryDate && secValDaysNum > 0) {
       initSecExpiryDate = addDaysToDateString(initSecIssueDate, secValDaysNum);
@@ -693,16 +699,24 @@ export default function VendorRFQsPage() {
     setBidSecValidityValue(initSecValDays);
     setBidSecValidityUnit((myQuot?.bidSecurityValidityUnit || currentRfq.bidSecurityValidityUnit as 'DAYS' | '') || 'DAYS');
     setBidSecFile(null);
-    setBidSecBondNumber(prevBNo);
-    setBidSecIssuer(prevIssuer);
+    setBidSecBondNumber(prevSecBNo);
+    setBidSecIssuer(prevSecIssuer);
+
+    // Pre-fill bid bond fields from previous quotation (if available) or RFQ default
+    const prevBondBNo = myQuot?.bidBondNumber || (!currentRfq.bidSecurityRequired ? myQuot?.bidSecurityBondNumber : '') || '';
+    const prevBondIssuer = myQuot?.bidBondIssuer || (!currentRfq.bidSecurityRequired ? myQuot?.bidSecurityIssuer : '') || '';
+    const prevBondVal = myQuot?.bidBondAmount ?? currentRfq.bidBondMinValue ?? '';
+    const prevBondValDays = myQuot?.bidBondValidityValue ?? currentRfq.bidBondMinValidity ?? '';
+
     setBidBondFile(null);
     setBidBondUploadError(null);
-    setBidBondNumber(prevBNo);
-    setBidBondIssuer(prevIssuer);
-    setBidBondAmount(prevVal ? String(prevVal) : '');
+    setBidBondNumber(prevBondBNo);
+    setBidBondIssuer(prevBondIssuer);
+    setBidBondAmount(prevBondVal ? String(prevBondVal) : '');
+    setBidBondCurrency(myQuot?.bidBondCurrency || (currentRfq as any).bidBondMinCurrency || (currentRfq as any).bidBondCurrency || companyDefaultCurrency || 'KES');
     const initIssueDate = myQuot?.bidBondIssueDate ? String(myQuot.bidBondIssueDate).slice(0, 10) : '';
     let initExpiryDate = myQuot?.bidBondExpiryDate ? String(myQuot.bidBondExpiryDate).slice(0, 10) : '';
-    let initValDays = prevValDays ? String(prevValDays) : '';
+    let initValDays = prevBondValDays ? String(prevBondValDays) : '';
     const valDaysNum = parseInt(initValDays) || currentRfq.bidBondMinValidity || 0;
     if (initIssueDate && !initExpiryDate && valDaysNum > 0) {
       initExpiryDate = addDaysToDateString(initIssueDate, valDaysNum);
@@ -846,12 +860,14 @@ export default function VendorRFQsPage() {
         bidSecurityValidityValue: bidSecValidityValue ? parseInt(bidSecValidityValue, 10) : undefined,
         bidSecurityValidityUnit: bidSecValidityValue ? 'DAYS' : undefined,
         // Additional bid security fields: bond number, issuer, dates
-        bidBondNumber: bidSecBondNumber || undefined,
-        bidBondIssuer: bidSecIssuer || undefined,
+        bidSecurityBondNumber: bidSecBondNumber || undefined,
+        bidSecurityIssuer: bidSecIssuer || undefined,
+        bidBondNumber: (!quotModal.bidBondRequired ? bidSecBondNumber : undefined) || undefined,
+        bidBondIssuer: (!quotModal.bidBondRequired ? bidSecIssuer : undefined) || undefined,
         bidSecurityIssueDate: bidSecIssueDate || undefined,
         bidSecurityExpiryDate: bidSecExpiryDate || undefined,
-        bidBondIssueDate: bidSecIssueDate || undefined,
-        bidBondExpiryDate: bidSecExpiryDate || undefined,
+        bidBondIssueDate: (!quotModal.bidBondRequired ? bidSecIssueDate : undefined) || undefined,
+        bidBondExpiryDate: (!quotModal.bidBondRequired ? bidSecExpiryDate : undefined) || undefined,
       } : undefined;
 
       const bidBondPayload = quotModal.bidBondRequired ? {
@@ -1557,7 +1573,7 @@ export default function VendorRFQsPage() {
                               <input
                                 className="vquot-modal__input"
                                 type="text"
-                                placeholder="BB-001"
+                                placeholder="e.g. BB-001"
                                 value={bidSecBondNumber}
                                 onChange={(e) => setBidSecBondNumber(e.target.value)}
                                 disabled={isQuotReadOnly}
@@ -1568,7 +1584,7 @@ export default function VendorRFQsPage() {
                               <input
                                 className="vquot-modal__input"
                                 type="text"
-                                placeholder="KCB"
+                                placeholder="e.g. KCB"
                                 value={bidSecIssuer}
                                 onChange={(e) => setBidSecIssuer(e.target.value)}
                                 disabled={isQuotReadOnly}
@@ -1654,7 +1670,7 @@ export default function VendorRFQsPage() {
                             <span style={{ fontWeight: 600, marginRight: 4 }}>ℹ Buyer Requirement:</span>
                             {quotModal.bidBondMinValue != null && (
                               <span>
-                                Min. Amount: <strong>{quotModal.bidBondMinValue} {quotModal.bidSecurityCurrency || 'KES'}</strong>
+                                Min. Amount: <strong>{quotModal.bidBondMinValue} {quotModal.bidBondMinCurrency || quotModal.bidBondCurrency || quotModal.bidSecurityCurrency || 'KES'}</strong>
                               </span>
                             )}
                             {quotModal.bidBondMinValidity != null && (
@@ -1695,7 +1711,7 @@ export default function VendorRFQsPage() {
                                 className="vquot-modal__input"
                                 type="number"
                                 min="1"
-                                placeholder="500000"
+                                placeholder={quotModal?.bidBondMinValue ? String(quotModal.bidBondMinValue) : "500000"}
                                 value={bidBondAmount}
                                 onChange={(e) => setBidBondAmount(e.target.value)}
                                 disabled={isQuotReadOnly}
@@ -1760,7 +1776,7 @@ export default function VendorRFQsPage() {
                                 className="vquot-modal__input"
                                 type="number"
                                 min="1"
-                                placeholder="90"
+                                placeholder={quotModal?.bidBondMinValidity ? String(quotModal.bidBondMinValidity) : "e.g. 90"}
                                 value={bidBondValidityValue}
                                 onChange={(e) => {
                                   const newVal = e.target.value;
@@ -1796,6 +1812,12 @@ export default function VendorRFQsPage() {
                           }
                           return null;
                         })()}
+                        {/* Fallback warning if issue/expiry not both set */}
+                        {quotModal?.bidBondMinValidity != null && (!bidBondIssueDate || !bidBondExpiryDate) && bidBondValidityValue && parseInt(bidBondValidityValue) < quotModal.bidBondMinValidity && (
+                          <div className="vquot-warning">
+                            ⚠ Warning: Minimum bid bond validity required is {quotModal.bidBondMinValidity} days. Your entered value ({parseInt(bidBondValidityValue)}) is below the minimum.
+                          </div>
+                        )}
 
                         {/* Document Upload */}
                         <div className="vquot-modal__field" style={{ marginTop: 10 }}>

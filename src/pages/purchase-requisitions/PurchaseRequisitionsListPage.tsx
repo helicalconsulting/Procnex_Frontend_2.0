@@ -1,5 +1,5 @@
 import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -16,8 +16,14 @@ import {
   CheckSquare,
   SlidersHorizontal,
   Filter,
+  ThumbsUp,
+  ThumbsDown,
+  RotateCcw,
 } from 'lucide-react';
 import { purchaseRequisitionService, type PurchaseRequisition } from '../../services/purchaseRequisitionService';
+import { approvalService } from '../../services/approvalService';
+import ActionSuccessModal, { type ActionSuccessModalData } from '../../components/shared/ActionSuccessModal';
+import { DigitalSignatureApprovalModal } from '../../components/shared/DigitalSignatureApprovalModal';
 import { sseClient } from '../../services/sseClient';
 import { useAuth } from '../../context/AuthContext';
 import { useCurrency } from '../../components/shared/CurrencyMaster';
@@ -123,6 +129,21 @@ export default function PurchaseRequisitionsListPage() {
     hasPermission('Purchase Orders', 'canCreate') ||
     hasPermission('Purchase Orders', 'canEdit') ||
     hasPermission('PO', 'canCreate');
+
+  const canApprovePO =
+    isAdmin ||
+    hasPermission('PO Approvals', 'canApprove') ||
+    hasPermission('PO Creation', 'canApprove') ||
+    hasPermission('Purchase Orders', 'canApprove') ||
+    hasPermission('PO', 'canApprove');
+
+  const [pendingApprovalsMap, setPendingApprovalsMap] = useState<Map<string, any>>(new Map());
+  const [actionModal, setActionModal] = useState<{ req: ListPurchaseRequisition; action: 'approve' | 'reject' | 'return' } | null>(null);
+  const [actionComment, setActionComment] = useState('');
+  const [actionReturnTarget, setActionReturnTarget] = useState<'ORIGINATOR' | 'LEVEL_1'>('ORIGINATOR');
+  const [actionSuccessData, setActionSuccessData] = useState<ActionSuccessModalData | null>(null);
+  const [sigModalOpen, setSigModalOpen] = useState(false);
+  const [sigTargetReq, setSigTargetReq] = useState<ListPurchaseRequisition | null>(null);
   const { formatAmount, companyDefaultCurrency } = useCurrency();
 
   const [requisitions, setRequisitions] = useState<ListPurchaseRequisition[]>([]);
@@ -165,7 +186,7 @@ export default function PurchaseRequisitionsListPage() {
   const [showColPanel, setShowColPanel] = useState(false);
   const colBtnRef = useRef<HTMLButtonElement>(null);
 
-  const fetchRequisitions = async (showSpinner = false) => {
+  const fetchRequisitions = useCallback(async (showSpinner = false) => {
     if (showSpinner) setLoading(true);
     setError(null);
     try {
@@ -176,16 +197,188 @@ export default function PurchaseRequisitionsListPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  const fetchPendingApprovals = useCallback(async () => {
+    try {
+      const pendingRows = await approvalService.listTable({ module: 'PurchaseOrders', status: 'PENDING' });
+      const map = new Map<string, any>();
+      const setInMap = (key: string, row: any) => {
+        const existing = map.get(key);
+        if (!existing) {
+          map.set(key, row);
+        } else if (existing.status !== 'PENDING' && row.status === 'PENDING') {
+          map.set(key, row);
+        } else if (!existing.canAct && row.canAct) {
+          map.set(key, row);
+        }
+      };
+      pendingRows.forEach((r) => {
+        if (r.referenceId) setInMap(String(r.referenceId), r);
+        if (r.referenceNumber) setInMap(String(r.referenceNumber), r);
+        if (r.id) setInMap(String(r.id), r);
+      });
+      setPendingApprovalsMap(map);
+    } catch {
+      setPendingApprovalsMap(new Map());
+    }
+  }, []);
+
+  const getPendingApprovalForPO = useCallback((req: ListPurchaseRequisition | null) => {
+    if (!req) return null;
+    return (
+      (req.id ? pendingApprovalsMap.get(String(req.id)) : null) ||
+      (req.poNumber ? pendingApprovalsMap.get(req.poNumber) : null) ||
+      (req.rfqId ? pendingApprovalsMap.get(req.rfqId) : null)
+    );
+  }, [pendingApprovalsMap]);
+
+  const openAction = useCallback((req: ListPurchaseRequisition, action: 'approve' | 'reject' | 'return') => {
+    const pendingApp = getPendingApprovalForPO(req);
+    const currentLvl = pendingApp?.currentLevel || pendingApp?.level?.levelNumber || 1;
+    if (action === 'approve') {
+      setSigTargetReq(req);
+      setSigModalOpen(true);
+    } else {
+      setActionModal({ req, action });
+      setActionComment('');
+      setActionReturnTarget(currentLvl > 1 ? 'LEVEL_1' : 'ORIGINATOR');
+    }
+  }, [getPendingApprovalForPO]);
+
+  const handleSignatureConfirm = useCallback(
+    async (signatureDataUrl: string, comment?: string) => {
+      if (!sigTargetReq) return;
+      const targetReq = sigTargetReq;
+      setSigModalOpen(false);
+      setSigTargetReq(null);
+
+      // Optimistic update
+      setRequisitions((prev) =>
+        prev.map((r) =>
+          (r.id === targetReq.id || (r.poNumber && r.poNumber === targetReq.poNumber))
+            ? { ...r, status: 'APPROVED' }
+            : r
+        )
+      );
+
+      setActionSuccessData({
+        actionType: 'approve',
+        module: 'Purchase Order',
+        referenceNumber: targetReq.poNumber || String(targetReq.id),
+        title: `Purchase Order ${targetReq.poNumber || ''}`,
+        message: 'Purchase Order approved successfully with digital signature.',
+        comment: comment,
+        details: [
+          { label: 'Vendor Name', value: targetReq.vendorName || '—' },
+          { label: 'Total Amount', value: formatAmount(targetReq.grandTotal || 0, targetReq.currency || companyDefaultCurrency) },
+          { label: 'Date', value: formatDate(targetReq.poDate) },
+        ],
+      });
+
+      try {
+        let approvalId = (targetReq as any).approvalId;
+        if (!approvalId) {
+          const list = await approvalService.listTable({ module: 'PurchaseOrders' }).catch(() => []);
+          const found = list.find(
+            (r: any) =>
+              r.referenceId === String(targetReq.id) ||
+              r.referenceNumber === targetReq.poNumber ||
+              r.referenceId === targetReq.poNumber ||
+              (targetReq.rfqId && r.referenceId === targetReq.rfqId)
+          );
+          if (found) approvalId = found.id;
+        }
+
+        if (approvalId) {
+          await approvalService.approve(approvalId, comment);
+        }
+        await fetchRequisitions(false);
+        await fetchPendingApprovals();
+      } catch (err: any) {
+        setToast({ message: err?.message || 'Failed to approve purchase order', type: 'error' });
+        await fetchRequisitions(false);
+      }
+    },
+    [sigTargetReq, formatAmount, companyDefaultCurrency, fetchRequisitions, fetchPendingApprovals]
+  );
+
+  const handleActionConfirm = useCallback(async () => {
+    if (!actionModal) return;
+    const targetReq = actionModal.req;
+    const act = actionModal.action;
+    const comment = actionComment.trim() || undefined;
+
+    const statusToSet = act === 'reject'
+      ? 'REJECTED'
+      : (actionReturnTarget === 'LEVEL_1' ? 'RE_REVIEW' : 'RETURNED');
+
+    setRequisitions((prev) =>
+      prev.map((r) =>
+        (r.id === targetReq.id || (r.poNumber && r.poNumber === targetReq.poNumber))
+          ? { ...r, status: statusToSet }
+          : r
+      )
+    );
+
+    setActionModal(null);
+    setActionComment('');
+
+    setActionSuccessData({
+      actionType: act === 'reject' ? 'reject' : 'return',
+      module: 'Purchase Order',
+      referenceNumber: targetReq.poNumber || String(targetReq.id),
+      title: `Purchase Order ${targetReq.poNumber || ''}`,
+      message: act === 'reject'
+        ? `Purchase Order ${targetReq.poNumber || ''} rejected.`
+        : `Purchase Order ${targetReq.poNumber || ''} returned for revision.`,
+      comment: comment,
+      details: [
+        { label: 'Vendor Name', value: targetReq.vendorName || '—' },
+        { label: 'Total Amount', value: formatAmount(targetReq.grandTotal || 0, targetReq.currency || companyDefaultCurrency) },
+        { label: 'Date', value: formatDate(targetReq.poDate) },
+      ],
+    });
+
+    try {
+      let approvalId = (targetReq as any).approvalId;
+      if (!approvalId) {
+        const list = await approvalService.listTable({ module: 'PurchaseOrders' }).catch(() => []);
+        const found = list.find(
+          (r: any) =>
+            r.referenceId === String(targetReq.id) ||
+            r.referenceNumber === targetReq.poNumber ||
+            r.referenceId === targetReq.poNumber ||
+            (targetReq.rfqId && r.referenceId === targetReq.rfqId)
+        );
+        if (found) approvalId = found.id;
+      }
+
+      if (approvalId) {
+        if (act === 'reject') {
+          await approvalService.reject(approvalId, comment);
+        } else {
+          await approvalService.return(approvalId, comment, actionReturnTarget);
+        }
+      }
+      await fetchRequisitions(false);
+      await fetchPendingApprovals();
+    } catch (err: any) {
+      setToast({ message: err?.message || 'Failed to process action', type: 'error' });
+      await fetchRequisitions(false);
+    }
+  }, [actionModal, actionComment, actionReturnTarget, formatAmount, companyDefaultCurrency, fetchRequisitions, fetchPendingApprovals]);
 
   useEffect(() => {
     fetchRequisitions(true);
+    fetchPendingApprovals();
 
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
     const handleRefresh = () => {
       if (refreshTimer) clearTimeout(refreshTimer);
       refreshTimer = setTimeout(() => {
         fetchRequisitions(false);
+        fetchPendingApprovals();
       }, 300);
     };
 
@@ -215,7 +408,7 @@ export default function PurchaseRequisitionsListPage() {
       window.removeEventListener('heliflow:po-updated', handleRefresh);
       if (bc) bc.close();
     };
-  }, []);
+  }, [fetchRequisitions, fetchPendingApprovals]);
 
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
@@ -722,6 +915,44 @@ export default function PurchaseRequisitionsListPage() {
                                   <Pencil className="size-4" />
                                 </Button>
                               )}
+                              {(() => {
+                                const pendingApp = getPendingApprovalForPO(requisition);
+                                const canActOnThisPO = Boolean(
+                                  pendingApp?.canAct &&
+                                  ['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW', 'RETURN_FOR_RE_REVIEW', 'REVISION_REQUESTED'].includes(requisition.status)
+                                );
+                                return canActOnThisPO ? (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-sm"
+                                      className="text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-700"
+                                      onClick={() => openAction(requisition, 'approve')}
+                                      title={`Approve ${requisition.poNumber || 'purchase order'}`}
+                                    >
+                                      <ThumbsUp className="size-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-sm"
+                                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                      onClick={() => openAction(requisition, 'reject')}
+                                      title={`Reject ${requisition.poNumber || 'purchase order'}`}
+                                    >
+                                      <ThumbsDown className="size-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-sm"
+                                      className="text-amber-600 hover:bg-amber-500/10 hover:text-amber-700"
+                                      onClick={() => openAction(requisition, 'return')}
+                                      title={`Return ${requisition.poNumber || 'purchase order'}`}
+                                    >
+                                      <RotateCcw className="size-4" />
+                                    </Button>
+                                  </>
+                                ) : null;
+                              })()}
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
@@ -757,11 +988,46 @@ export default function PurchaseRequisitionsListPage() {
                         <div><dt className="text-muted-foreground">Grand total</dt><dd className="mt-1 font-semibold tabular-nums">{formatAmount(requisition.grandTotal || 0, requisition.currency || companyDefaultCurrency)}</dd></div>
                       </dl>
                     </button>
-                    <div className="mt-4 flex gap-2 border-t border-border/60 pt-3">
+                    <div className="mt-4 flex flex-wrap gap-2 border-t border-border/60 pt-3">
                       <Button variant="outline" size="sm" className="flex-1" onClick={() => openDocument(requisition, 'view')}><Eye /> View</Button>
                       {isPOEditable(requisition.status) && (
                         <Button variant="outline" size="sm" className="flex-1" disabled={!canCreatePO} onClick={() => canCreatePO && openDocument(requisition, 'edit')}><Pencil /> Edit</Button>
                       )}
+                      {(() => {
+                        const pendingApp = getPendingApprovalForPO(requisition);
+                        const canActOnThisPO = Boolean(
+                          pendingApp?.canAct &&
+                          ['PENDING_APPROVAL', 'DRAFT', 'PENDING', 'RETURNED', 'RE_REVIEW', 'RETURN_FOR_RE_REVIEW', 'REVISION_REQUESTED'].includes(requisition.status)
+                        );
+                        return canActOnThisPO ? (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-700"
+                              onClick={() => openAction(requisition, 'approve')}
+                            >
+                              <ThumbsUp className="size-3.5" /> Approve
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              onClick={() => openAction(requisition, 'reject')}
+                            >
+                              <ThumbsDown className="size-3.5" /> Reject
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-amber-600 hover:bg-amber-500/10 hover:text-amber-700"
+                              onClick={() => openAction(requisition, 'return')}
+                            >
+                              <RotateCcw className="size-3.5" /> Return
+                            </Button>
+                          </>
+                        ) : null;
+                      })()}
                       <Button variant="ghost" size="icon-sm" disabled={!canCreatePO} className="text-destructive hover:bg-destructive/10" onClick={() => canCreatePO && setDeleteTarget(requisition)}><Trash2 /></Button>
                     </div>
                   </article>
@@ -823,6 +1089,129 @@ export default function PurchaseRequisitionsListPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Digital Signature Modal */}
+      {sigModalOpen && sigTargetReq && (
+        <DigitalSignatureApprovalModal
+          open={sigModalOpen}
+          onClose={() => {
+            setSigModalOpen(false);
+            setSigTargetReq(null);
+          }}
+          onConfirm={handleSignatureConfirm}
+          docTitle={`Purchase Order ${sigTargetReq.poNumber || ''}`}
+          docDetails={[
+            { label: 'PO Number', value: sigTargetReq.poNumber || '—' },
+            { label: 'Vendor Name', value: sigTargetReq.vendorName || '—' },
+            {
+              label: 'Total Amount',
+              value: formatAmount(sigTargetReq.grandTotal || 0, sigTargetReq.currency || companyDefaultCurrency),
+            },
+            { label: 'Date', value: formatDate(sigTargetReq.poDate) },
+          ]}
+        />
+      )}
+
+      {/* Action Dialog (Reject / Return) */}
+      <Dialog open={Boolean(actionModal)} onOpenChange={(open) => { if (!open) setActionModal(null); }}>
+        {actionModal && (
+          <DialogContent>
+            <DialogHeader>
+              <div
+                className={cn(
+                  'mb-2 grid size-11 place-items-center rounded-xl',
+                  actionModal.action === 'reject'
+                    ? 'bg-destructive/10 text-destructive'
+                    : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                )}
+              >
+                {actionModal.action === 'reject' ? (
+                  <ThumbsDown className="size-5" />
+                ) : (
+                  <RotateCcw className="size-5" />
+                )}
+              </div>
+              <DialogTitle>
+                {actionModal.action === 'reject'
+                  ? `Reject PO ${actionModal.req.poNumber || ''}?`
+                  : `Return PO ${actionModal.req.poNumber || ''}?`}
+              </DialogTitle>
+              <DialogDescription>
+                {actionModal.action === 'reject'
+                  ? 'Rejecting this purchase order will decline the request.'
+                  : 'Returning this purchase order will send it back for revision.'}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="rounded-xl border border-border/70 bg-muted/30 p-3 space-y-1.5 text-xs">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Vendor:</span>
+                <span className="font-semibold text-foreground">{actionModal.req.vendorName || '—'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Total Amount:</span>
+                <span className="font-semibold text-foreground">
+                  {formatAmount(actionModal.req.grandTotal || 0, actionModal.req.currency || companyDefaultCurrency)}
+                </span>
+              </div>
+              {actionModal.req.poDate && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Date:</span>
+                  <span className="font-semibold text-foreground">{formatDate(actionModal.req.poDate)}</span>
+                </div>
+              )}
+            </div>
+
+            {actionModal.action === 'return' && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-foreground">Return to</label>
+                <select
+                  className="h-10 rounded-xl border border-input bg-background px-3 text-sm font-medium focus:ring-2 focus:ring-primary/20"
+                  value={actionReturnTarget}
+                  onChange={(e) => setActionReturnTarget(e.target.value as any)}
+                >
+                  <option value="ORIGINATOR">Originator / Creator for Resubmission</option>
+                  <option value="LEVEL_1">Level 1 Approver</option>
+                </select>
+              </div>
+            )}
+
+            <div className="space-y-2 py-1">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Comments / Reason <span className="text-destructive">*</span>
+              </label>
+              <Input
+                placeholder="Required comment explaining the decision..."
+                value={actionComment}
+                onChange={(e) => setActionComment(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleActionConfirm(); }}
+              />
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setActionModal(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant={actionModal.action === 'reject' ? 'destructive' : 'default'}
+                onClick={handleActionConfirm}
+              >
+                {actionModal.action === 'reject'
+                  ? 'Confirm Rejection'
+                  : 'Confirm Return'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        )}
+      </Dialog>
+
+      {/* Action Success Modal */}
+      {actionSuccessData && (
+        <ActionSuccessModal
+          data={actionSuccessData}
+          onClose={() => setActionSuccessData(null)}
+        />
+      )}
     </PageFrame>
+
   );
 }

@@ -107,13 +107,13 @@ async function mockVendorQuotations(): Promise<VendorQuotationRow[]> {
     bidSecurityCurrency: q.bidSecurityCurrency,
     bidSecurityValidityValue: q.bidSecurityValidityValue,
     bidSecurityValidityUnit: q.bidSecurityValidityUnit,
-    bidSecurityBondNumber: q.bidSecurityBondNumber || q.bidBondNumber,
-    bidSecurityIssuer: q.bidSecurityIssuer || q.bidBondIssuer,
-    bidBondNumber: q.bidBondNumber || q.bidSecurityBondNumber,
-    bidBondIssuer: q.bidBondIssuer || q.bidSecurityIssuer,
-    bidBondAmount: q.bidBondAmount || q.bidSecurityValue,
-    bidBondValidityValue: q.bidBondValidityValue || q.bidSecurityValidityValue,
-    bidBondValidityUnit: q.bidBondValidityUnit || q.bidSecurityValidityUnit,
+    bidSecurityBondNumber: q.bidSecurityBondNumber || (!q.bidBondRequired ? q.bidBondNumber : undefined),
+    bidSecurityIssuer: q.bidSecurityIssuer || (!q.bidBondRequired ? q.bidBondIssuer : undefined),
+    bidBondNumber: q.bidBondNumber || (!q.bidSecurityRequired ? q.bidSecurityBondNumber : undefined),
+    bidBondIssuer: q.bidBondIssuer || (!q.bidSecurityRequired ? q.bidSecurityIssuer : undefined),
+    bidBondAmount: q.bidBondAmount ?? (!q.bidSecurityRequired ? q.bidSecurityValue : undefined),
+    bidBondValidityValue: q.bidBondValidityValue ?? (!q.bidSecurityRequired ? q.bidSecurityValidityValue : undefined),
+    bidBondValidityUnit: q.bidBondValidityUnit ?? (!q.bidSecurityRequired ? q.bidSecurityValidityUnit : undefined),
     customFieldValues: q.customFieldValues ?? null,
     evalParamValues: q.evalParamValues ?? null,
     rfq: {
@@ -735,6 +735,25 @@ async function apiGetProfile(): Promise<VendorProfileData> {
   return vendorFetch<VendorProfileData>('/profile', { cacheTtlMs: 0 });
 }
 
+export interface UpdateCompanyPayload {
+  name?: string;
+  phone?: string;
+  contactPerson?: string;
+  category?: string;
+  address?: string;
+  location?: string;
+  website?: string;
+  gstNumber?: string;
+  panNumber?: string;
+}
+
+async function apiUpdateCompany(payload: UpdateCompanyPayload): Promise<void> {
+  await vendorFetch('/profile/company', {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
 export interface UpdateBankingPayload {
   bankName?: string;
   bankBranch?: string;
@@ -884,6 +903,7 @@ export const vendorPortalService = {
   getBidSecurity: apiVendorGetBidSecurity,
   getQuotationEvaluation: apiGetQuotationEvaluation,
   getProfile: apiGetProfile,
+  updateCompany: apiUpdateCompany,
   updateBanking: apiUpdateBanking,
   uploadDocument: apiUploadDocument,
   getWidgetPreferences: apiGetWidgetPreferences,

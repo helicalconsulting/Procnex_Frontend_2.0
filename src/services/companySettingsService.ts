@@ -280,6 +280,33 @@ export interface CompanyProfile {
   supportEmail?: string | null;
   primaryPortalName?: string | null;
   requireNdaMnda?: boolean;
+  // Multi-Tenant Email & Domain Branding
+  senderDisplayName?: string | null;
+  senderEmail?: string | null;
+  replyToEmail?: string | null;
+  customDomain?: string | null;
+  resendDomainId?: string | null;
+  domainStatus?: string | null;
+  domainDnsRecords?: DnsRecord[] | null;
+  domainVerifiedAt?: string | null;
+}
+
+export interface DnsRecord {
+  record: string;
+  name: string;
+  type: string;
+  value: string;
+  ttl?: string;
+  status?: string;
+  priority?: number;
+}
+
+export interface DomainOperationResult {
+  success: boolean;
+  domain?: string;
+  status?: string;
+  records?: DnsRecord[];
+  error?: string;
 }
 
 export interface UpdateBrandingPayload {
@@ -305,6 +332,9 @@ export interface UpdateBrandingPayload {
   primaryPortalName?: string;
   maxUsers?: number;
   maxVendors?: number;
+  senderDisplayName?: string;
+  senderEmail?: string;
+  replyToEmail?: string;
 }
 
 async function mockGetCompanyProfile(): Promise<CompanyProfile> {
@@ -1610,7 +1640,40 @@ export const companySettingsService = {
   updateBranch: apiUpdateBranch,
   deleteBranch: apiDeleteBranch,
   setDefaultBranch: apiSetDefaultBranch,
+  // Custom Domain & Email Verification
+  registerCustomDomain: apiRegisterCustomDomain,
+  verifyCustomDomain: apiVerifyCustomDomain,
+  removeCustomDomain: apiRemoveCustomDomain,
+  sendTestEmail: apiSendTestEmail,
 };
+
+// ─── Custom Domain & Email Verification API ───────────────────
+
+async function apiRegisterCustomDomain(domain: string): Promise<DomainOperationResult> {
+  return apiRequest<DomainOperationResult>('/company-settings/domain/register', {
+    method: 'POST',
+    body: JSON.stringify({ domain }),
+  });
+}
+
+async function apiVerifyCustomDomain(): Promise<DomainOperationResult> {
+  return apiRequest<DomainOperationResult>('/company-settings/domain/verify', {
+    method: 'POST',
+  });
+}
+
+async function apiRemoveCustomDomain(): Promise<{ success: boolean }> {
+  return apiRequest<{ success: boolean }>('/company-settings/domain', {
+    method: 'DELETE',
+  });
+}
+
+async function apiSendTestEmail(recipientEmail: string): Promise<{ success: boolean; message: string }> {
+  return apiRequest<{ success: boolean; message: string }>('/company-settings/email/send-test', {
+    method: 'POST',
+    body: JSON.stringify({ recipientEmail }),
+  });
+}
 
 export interface SequenceSetting {
   id?: string;
