@@ -593,7 +593,7 @@
   .po-doc__items-table thead th {
     padding: 6px 8px;
     font-size: 9.5px;
-    background: #0a6ed1 !important;
+    background: var(--primary-500, #0a6ed1) !important;
     color: #ffffff !important;
     border: none !important;
     border-right: none !important;
@@ -617,7 +617,7 @@
   }
 
   .po-doc__total-row--grand {
-    background: #0a6ed1 !important;
+    background: var(--primary-500, #0a6ed1) !important;
     color: #ffffff !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;

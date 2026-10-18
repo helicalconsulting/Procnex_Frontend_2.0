@@ -50,8 +50,8 @@
   width: 2.5rem;
   height: 2.5rem;
   border-radius: 0.75rem;
-  background: rgba(10, 110, 209, 0.1);
-  color: #0a6ed1;
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.1);
+  color: var(--primary-500, #0a6ed1);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -147,7 +147,7 @@
 .sig-approve-tab--active {
   background: var(--background, #ffffff);
   border-color: var(--border, #cbd5e1);
-  color: #0a6ed1;
+  color: var(--primary-500, #0a6ed1);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
@@ -180,9 +180,9 @@
 }
 
 .sig-saved-card-item--selected {
-  border-color: #0a6ed1;
-  background: rgba(10, 110, 209, 0.04);
-  box-shadow: 0 0 0 1px #0a6ed1;
+  border-color: var(--primary-500, #0a6ed1);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.04);
+  box-shadow: 0 0 0 1px var(--primary-500, #0a6ed1);
 }
 
 .sig-saved-card-item img {
@@ -298,8 +298,8 @@
 }
 
 .sig-approve-upload-box:hover {
-  border-color: #0a6ed1;
-  background: rgba(10, 110, 209, 0.02);
+  border-color: var(--primary-500, #0a6ed1);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.02);
 }
 
 .sig-approve-comments-area {
@@ -357,12 +357,12 @@
 }
 
 .sig-approve-btn--primary {
-  background: #0a6ed1;
+  background: var(--primary-500, #0a6ed1);
   color: #ffffff;
 }
 
 .sig-approve-btn--primary:hover {
-  background: #085aa9;
+  background: var(--primary-600, #085aa9);
 }
 
 .sig-approve-btn--primary:disabled {

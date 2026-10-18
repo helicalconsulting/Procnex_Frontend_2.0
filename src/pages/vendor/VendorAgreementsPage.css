@@ -73,9 +73,9 @@
 }
 
 .va-badge--nda {
-  background: rgba(10, 110, 209, 0.12);
-  color: #0a6ed1;
-  border: 1px solid rgba(10, 110, 209, 0.2);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.12);
+  color: var(--primary-500, #0a6ed1);
+  border: 1px solid rgba(var(--primary-rgb, 10, 110, 209), 0.2);
 }
 
 .va-badge--mnda {

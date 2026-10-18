@@ -261,7 +261,7 @@
   background: linear-gradient(135deg, var(--primary-50), var(--primary-100));
   color: var(--primary-700);
   border-color: var(--primary-200);
-  box-shadow: 0 1px 3px rgba(10, 110, 209, 0.1);
+  box-shadow: 0 1px 3px rgba(var(--primary-rgb, 10, 110, 209), 0.1);
 }
 
 /* Dark mode */
@@ -269,7 +269,7 @@
   background: linear-gradient(135deg, var(--primary-600), var(--primary-700));
   color: #fff;
   border-color: transparent;
-  box-shadow: 0 1px 3px rgba(10, 110, 209, 0.25);
+  box-shadow: 0 1px 3px rgba(var(--primary-rgb, 10, 110, 209), 0.25);
 }
 
 .topbar__user-info {

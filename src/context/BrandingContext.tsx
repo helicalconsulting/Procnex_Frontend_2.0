@@ -109,6 +109,8 @@ interface BrandingContextType {
   faviconUrl: string | null;
   /** Primary color hex */
   primaryColor: string;
+  /** Dynamically set and preview/apply the primary branding color */
+  setPrimaryColor: (color: string) => void;
   /** Login page heading / subtitle text */
   loginText: string | null;
   /** Support email */
@@ -127,17 +129,22 @@ const BrandingContext = createContext<BrandingContextType | undefined>(undefined
 
 // ─── Defaults ───────────────────────────────────────────────
 
-const DEFAULT_PRIMARY = '#0a6ed1';
+export const DEFAULT_PRIMARY = '#0a6ed1';
 const DEFAULT_TITLE = 'Enterprise Procurement Platform';
 
 // ─── Color shade generation ─────────────────────────────────
 
-function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
-  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+export function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const clean = hex.trim().replace(/^#/, '');
+  let fullHex = clean;
+  if (clean.length === 3) {
+    fullHex = clean.split('').map((c) => c + c).join('');
+  }
+  const m = /^([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(fullHex);
   return m ? { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) } : null;
 }
 
-function shade(hex: string, mixColor: string, amount: number): string {
+export function shade(hex: string, mixColor: string, amount: number): string {
   const c = hexToRgb(hex);
   const m = hexToRgb(mixColor);
   if (!c || !m) return hex;
@@ -151,32 +158,116 @@ function shade(hex: string, mixColor: string, amount: number): string {
     .join('')}`;
 }
 
-/** Generate the full primary-50..700 palette from a base color */
-function generatePrimaryPalette(hex: string): Record<string, string> {
+/** Check contrast luminance and pick accessible text color (#ffffff or #0f172a) */
+function getContrastForeground(hex: string): string {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return '#ffffff';
+  // Standard relative luminance
+  const lum = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
+  return lum > 0.65 ? '#0f172a' : '#ffffff';
+}
+
+/** Generate the full application-wide design token palette from a base primary hex */
+export function generatePrimaryPalette(rawHex: string): Record<string, string> {
+  const hex = rawHex && /^#?[0-9a-fA-F]{3,6}$/.test(rawHex.trim())
+    ? (rawHex.trim().startsWith('#') ? rawHex.trim() : `#${rawHex.trim()}`)
+    : DEFAULT_PRIMARY;
+
+  const rgb = hexToRgb(hex) || { r: 10, g: 110, b: 209 };
+  const rgbStr = `${rgb.r}, ${rgb.g}, ${rgb.b}`;
+
+  const p50 = shade(hex, '#ffffff', 0.94);
+  const p100 = shade(hex, '#ffffff', 0.84);
+  const p200 = shade(hex, '#ffffff', 0.68);
+  const p300 = shade(hex, '#ffffff', 0.46);
+  const p400 = shade(hex, '#ffffff', 0.22);
+  const p500 = hex;
+  const p600 = shade(hex, '#000000', 0.16);
+  const p700 = shade(hex, '#000000', 0.28);
+  const p800 = shade(hex, '#000000', 0.44);
+  const p900 = shade(hex, '#000000', 0.62);
+
+  const lightRgb = hexToRgb(p300) || { r: 77, g: 177, b: 255 };
+  const lightRgbStr = `${lightRgb.r}, ${lightRgb.g}, ${lightRgb.b}`;
+
+  // Dark mode primary: tune for contrast against dark background (#0b111b)
+  const lum = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
+  const darkPrimary = lum < 0.45 ? shade(hex, '#ffffff', 0.32) : hex;
+  const darkRing = shade(hex, '#ffffff', 0.42);
+
   return {
-    '--primary-50': shade(hex, '#ffffff', 0.92),
-    '--primary-100': shade(hex, '#ffffff', 0.8),
-    '--primary-200': shade(hex, '#ffffff', 0.6),
-    '--primary-300': shade(hex, '#ffffff', 0.4),
-    '--primary-400': shade(hex, '#ffffff', 0.15),
-    '--primary-500': hex,
-    '--primary-600': shade(hex, '#000000', 0.15),
-    '--primary-700': shade(hex, '#000000', 0.25),
-    // Vendor-specific aliases so every page picks up the branding color
-    '--vendor-primary': hex,
-    '--vendor-primary-light': shade(hex, '#ffffff', 0.3),
-    '--vendor-primary-dark': shade(hex, '#000000', 0.25),
-    '--vendor-accent': shade(hex, '#ffffff', 0.15),
+    '--primary-50': p50,
+    '--primary-100': p100,
+    '--primary-200': p200,
+    '--primary-300': p300,
+    '--primary-400': p400,
+    '--primary-500': p500,
+    '--primary-600': p600,
+    '--primary-700': p700,
+    '--primary-800': p800,
+    '--primary-900': p900,
+
+    '--primary-rgb': rgbStr,
+    '--primary-light-rgb': lightRgbStr,
+
+    // Core Tailwind & shadcn tokens
+    '--primary': p500,
+    '--primary-foreground': getContrastForeground(p500),
+    '--primary-hover': p600,
+    '--primary-active': p700,
+    '--primary-focus': p400,
+    '--primary-subtle': p50,
+    '--accent': p50,
+    '--accent-foreground': p700,
+    '--ring': p400,
+    '--border-focus': p500,
+
+    // Vendor portal aliases
+    '--vendor-primary': p500,
+    '--vendor-primary-light': p300,
+    '--vendor-primary-dark': p700,
+    '--vendor-accent': p400,
+
+    // Dark mode adaptive tokens
+    '--primary-dark': darkPrimary,
+    '--primary-dark-accent': `rgba(${rgbStr}, 0.22)`,
+    '--primary-dark-ring': darkRing,
+
+    // Shell sidebar accents
+    '--shell-accent': shade(hex, '#ffffff', 0.2),
+    '--shell-bg': `linear-gradient(175deg, #1e293b 0%, #152232 45%, ${shade(hex, '#000000', 0.6)} 100%)`,
+    '--shell-bg-dark': `linear-gradient(175deg, #0d1b2a 0%, #101b27 45%, ${shade(hex, '#000000', 0.7)} 100%)`,
+
+    // Card Selection & Interactive Glow System
+    '--card-glow-border': `rgba(${rgbStr}, 0.45)`,
+    '--card-glow-shadow': `0 0 0 2px rgba(${rgbStr}, 0.12), 0 4px 20px rgba(${rgbStr}, 0.14)`,
+    '--card-glow-bg': `rgba(${rgbStr}, 0.08)`,
+    '--card-glow-border-light': `rgba(${rgbStr}, 0.45)`,
+    '--card-glow-shadow-light': `0 0 0 2px rgba(${rgbStr}, 0.12), 0 4px 20px rgba(${rgbStr}, 0.14)`,
+    '--card-glow-bg-light': `rgba(${rgbStr}, 0.08)`,
+    '--card-glow-border-dark': darkPrimary,
+    '--card-glow-shadow-dark': `0 0 0 1.5px ${darkPrimary}, 0 0 25px rgba(${rgbStr}, 0.55), 0 0 10px rgba(${rgbStr}, 0.7), inset 0 0 15px rgba(${rgbStr}, 0.2)`,
+    '--card-glow-bg-dark': `rgba(${rgbStr}, 0.18)`,
   };
 }
 
-/** Apply CSS custom properties to the document root */
-function applyPrimaryColor(hex: string) {
+/** Apply CSS custom properties to documentElement synchronously */
+export function applyPrimaryColor(hex: string) {
+  if (typeof document === 'undefined') return;
   const palette = generatePrimaryPalette(hex);
   const root = document.documentElement;
   for (const [key, val] of Object.entries(palette)) {
     root.style.setProperty(key, val);
   }
+}
+
+// ─── Immediate Synchronous Initialization ───────────────────
+// Guarantees no flash of default blue on page refresh or navigation
+try {
+  const initialCache = readCachedProfile();
+  applyPrimaryColor(initialCache?.primaryColor || DEFAULT_PRIMARY);
+} catch {
+  applyPrimaryColor(DEFAULT_PRIMARY);
 }
 
 /** Apply favicon — defaults to explicit faviconUrl -> logoUrl -> default icon */
@@ -221,8 +312,24 @@ export function applyTitle(name: string | null) {
 
 export function BrandingProvider({ children }: { children: ReactNode }) {
   // Initialize from localStorage first
-  const [profile, setProfile] = useState<CompanyProfile | null>(() => readCachedProfile());
+  const [profile, setProfile] = useState<CompanyProfile | null>(() => {
+    const cached = readCachedProfile();
+    if (cached?.primaryColor) {
+      applyPrimaryColor(cached.primaryColor);
+    }
+    return cached;
+  });
   const [loaded, setLoaded] = useState(false);
+
+  const setPrimaryColor = useCallback((color: string) => {
+    applyPrimaryColor(color);
+    setProfile((prev) => {
+      const updated = prev ? { ...prev, primaryColor: color } : ({ primaryColor: color } as CompanyProfile);
+      writeCachedProfile(updated);
+      return updated;
+    });
+    window.dispatchEvent(new CustomEvent('heliflow_primary_color_change', { detail: { color } }));
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -300,6 +407,7 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
     logoUrl: profile?.logoUrl || '/Procnex-logo.jpeg' || procnexLogo || heliflowLogo,
     faviconUrl: profile?.faviconUrl || profile?.logoUrl || '/Procnex-logo.jpeg' || null,
     primaryColor: profile?.primaryColor || DEFAULT_PRIMARY,
+    setPrimaryColor,
     loginText: profile?.loginText || null,
     supportEmail: profile?.supportEmail || null,
     primaryPortalName: profile?.primaryPortalName || 'Employee',

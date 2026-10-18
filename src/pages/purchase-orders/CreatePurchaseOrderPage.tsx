@@ -886,6 +886,7 @@ export default function CreatePurchaseOrderPage() {
         subtotal: subtotal,
         taxTotal: taxTotal,
         discountTotal: 0,
+      };
       await purchaseRequisitionService.save(prPayload).catch(() => {});
 
       if (targetStatus === 'Pending Approval') {
@@ -1200,8 +1201,8 @@ export default function CreatePurchaseOrderPage() {
           </div>
 
           <div className="cpo-vendor-picker-banner" style={{
-            background: 'linear-gradient(135deg, rgba(10, 110, 209, 0.12), rgba(16, 185, 129, 0.12))',
-            border: '1px solid rgba(10, 110, 209, 0.3)',
+            background: 'linear-gradient(135deg, rgba(var(--primary-rgb, 10, 110, 209), 0.12), rgba(16, 185, 129, 0.12))',
+            border: '1px solid rgba(var(--primary-rgb, 10, 110, 209), 0.3)',
             borderRadius: '10px',
             padding: '16px 20px',
             marginBottom: '20px',
@@ -1245,7 +1246,7 @@ export default function CreatePurchaseOrderPage() {
                     fontSize: '16px',
                     fontWeight: 600,
                     outline: 'none',
-                    boxShadow: '0 4px 12px rgba(10, 110, 209, 0.15)'
+                    boxShadow: '0 4px 12px rgba(var(--primary-rgb, 10, 110, 209), 0.15)'
                   }}
                 />
                 {vendorSearchQuery && (
@@ -1316,7 +1317,7 @@ export default function CreatePurchaseOrderPage() {
                           style={{
                             padding: '10px 16px',
                             cursor: 'pointer',
-                            background: isSelected ? 'rgba(10, 110, 209, 0.2)' : 'transparent',
+                            background: isSelected ? 'rgba(var(--primary-rgb, 10, 110, 209), 0.2)' : 'transparent',
                             borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
                             display: 'flex',
                             alignItems: 'center',
@@ -1325,7 +1326,7 @@ export default function CreatePurchaseOrderPage() {
                             transition: 'background 0.15s ease'
                           }}
                           onMouseEnter={(e) => {
-                            if (!isSelected) e.currentTarget.style.background = 'rgba(10, 110, 209, 0.1)';
+                            if (!isSelected) e.currentTarget.style.background = 'rgba(var(--primary-rgb, 10, 110, 209), 0.1)';
                           }}
                           onMouseLeave={(e) => {
                             if (!isSelected) e.currentTarget.style.background = 'transparent';
@@ -1339,7 +1340,7 @@ export default function CreatePurchaseOrderPage() {
                               <span style={{
                                 padding: '2px 7px',
                                 borderRadius: '4px',
-                                background: 'rgba(10, 110, 209, 0.18)',
+                                background: 'rgba(var(--primary-rgb, 10, 110, 209), 0.18)',
                                 color: 'var(--primary-500, #0a6ed1)',
                                 fontSize: '12.5px',
                                 fontWeight: 800,

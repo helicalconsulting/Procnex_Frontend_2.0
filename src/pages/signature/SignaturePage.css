@@ -93,9 +93,9 @@
   width: 38px;
   height: 38px;
   border-radius: 10px;
-  background: rgba(10, 110, 209, 0.12);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.12);
   color: var(--primary-500);
-  border: 1px solid rgba(10, 110, 209, 0.2);
+  border: 1px solid rgba(var(--primary-rgb, 10, 110, 209), 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -103,9 +103,9 @@
 }
 
 [data-theme="dark"] .sig-capture-card__icon {
-  background: rgba(10, 110, 209, 0.25);
-  color: #4db1ff;
-  border-color: rgba(77, 177, 255, 0.3);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.25);
+  color: var(--primary, #4db1ff);
+  border-color: rgba(var(--primary-rgb, 77, 177, 255), 0.3);
 }
 
 .sig-capture-card__header h2 {
@@ -160,13 +160,13 @@
 
 .sig-color-dot--active {
   border-color: var(--primary-500);
-  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.25);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb, 10, 110, 209), 0.25);
   transform: scale(1.15);
 }
 
 [data-theme="dark"] .sig-color-dot--active {
-  border-color: #4db1ff;
-  box-shadow: 0 0 0 3px rgba(77, 177, 255, 0.25);
+  border-color: var(--primary, #4db1ff);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb, 77, 177, 255), 0.25);
 }
 
 .sig-pen-tools__divider {
@@ -220,12 +220,12 @@
 
 .sig-size-btn--active {
   border-color: var(--primary-500);
-  background: rgba(10, 110, 209, 0.08);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.08);
 }
 
 [data-theme="dark"] .sig-size-btn--active {
-  border-color: #4db1ff;
-  background: rgba(77, 177, 255, 0.15);
+  border-color: var(--primary, #4db1ff);
+  background: rgba(var(--primary-rgb, 77, 177, 255), 0.15);
 }
 
 .sig-size-btn__dot {
@@ -280,7 +280,7 @@
   display: flex;
   position: relative;
   border-radius: 12px;
-  border: 1.5px dashed rgba(10, 110, 209, 0.28);
+  border: 1.5px dashed rgba(var(--primary-rgb, 10, 110, 209), 0.28);
   background: #ffffff;
   overflow: hidden;
   transition: border-color 0.2s, box-shadow 0.2s;
@@ -288,7 +288,7 @@
 
 .sig-canvas-wrap:hover {
   border-color: var(--primary-500);
-  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.06);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb, 10, 110, 209), 0.06);
 }
 
 .sig-canvas {
@@ -400,8 +400,8 @@
 }
 
 [data-theme="dark"] .sig-saved-card__tab--active {
-  color: #4db1ff !important;
-  border-bottom-color: #4db1ff !important;
+  color: var(--primary, #4db1ff) !important;
+  border-bottom-color: var(--primary, #4db1ff) !important;
 }
 
 .sig-saved-card__body {
@@ -451,7 +451,7 @@
 
 .sig-saved-item__preview:hover {
   border-color: var(--primary-500);
-  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.08);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb, 10, 110, 209), 0.08);
 }
 
 .sig-saved-item__preview img {
@@ -472,14 +472,14 @@
   font-size: 9.5px;
   font-weight: 800;
   color: var(--primary-500);
-  background: rgba(10, 110, 209, 0.12);
-  border: 1px solid rgba(10, 110, 209, 0.2);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.12);
+  border: 1px solid rgba(var(--primary-rgb, 10, 110, 209), 0.2);
 }
 
 [data-theme="dark"] .sig-saved-item__default-badge {
-  color: #4db1ff;
-  background: rgba(77, 177, 255, 0.2);
-  border-color: rgba(77, 177, 255, 0.3);
+  color: var(--primary, #4db1ff);
+  background: rgba(var(--primary-rgb, 77, 177, 255), 0.2);
+  border-color: rgba(var(--primary-rgb, 77, 177, 255), 0.3);
 }
 
 .sig-saved-item__info {
@@ -519,13 +519,13 @@
 }
 
 .sig-saved-item__type--drawn {
-  background: rgba(10, 110, 209, 0.1);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.1);
   color: var(--primary-500);
 }
 
 [data-theme="dark"] .sig-saved-item__type--drawn {
-  background: rgba(10, 110, 209, 0.25);
-  color: #4db1ff;
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.25);
+  color: var(--primary, #4db1ff);
 }
 
 .sig-saved-item__type--uploaded {
@@ -631,7 +631,7 @@
   width: 36px;
   height: 36px;
   border-radius: var(--radius-md);
-  background: rgba(10, 110, 209, 0.08);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.08);
   color: var(--primary-500);
   display: flex;
   align-items: center;
@@ -640,8 +640,8 @@
 }
 
 [data-theme="dark"] .sig-history-item__icon {
-  background: rgba(77, 177, 255, 0.12);
-  color: #4db1ff;
+  background: rgba(var(--primary-rgb, 77, 177, 255), 0.12);
+  color: var(--primary, #4db1ff);
 }
 
 .sig-history-item__info {
@@ -820,13 +820,13 @@
 
 .sig-dialog__sig-option:hover {
   border-color: var(--primary-500);
-  background: rgba(10, 110, 209, 0.03);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.03);
 }
 
 .sig-dialog__sig-option--active {
   border-color: var(--primary-500) !important;
-  background: rgba(10, 110, 209, 0.06) !important;
-  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.15) !important;
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.06) !important;
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb, 10, 110, 209), 0.15) !important;
 }
 
 .sig-dialog__sig-option img {
@@ -878,15 +878,15 @@
 .sig-dialog__module-btn:hover {
   border-color: var(--primary-500);
   color: var(--primary-500);
-  background: rgba(10, 110, 209, 0.04);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.04);
 }
 
 .sig-dialog__module-btn--active {
   border-color: var(--primary-500) !important;
-  background: rgba(10, 110, 209, 0.08) !important;
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.08) !important;
   color: var(--primary-500) !important;
   font-weight: 700 !important;
-  box-shadow: 0 0 0 2px rgba(10, 110, 209, 0.12);
+  box-shadow: 0 0 0 2px rgba(var(--primary-rgb, 10, 110, 209), 0.12);
 }
 
 .sig-dialog__input,
@@ -910,7 +910,7 @@
 .sig-dialog__input:focus,
 .sig-dialog__textarea:focus {
   border-color: var(--primary-500);
-  box-shadow: 0 0 0 3.5px rgba(10, 110, 209, 0.14);
+  box-shadow: 0 0 0 3.5px rgba(var(--primary-rgb, 10, 110, 209), 0.14);
 }
 
 .sig-dialog__footer {
@@ -961,16 +961,16 @@
   font-size: 11px;
   font-weight: 700;
   color: var(--primary-500);
-  background: rgba(10, 110, 209, 0.1);
-  border: 1px solid rgba(10, 110, 209, 0.2);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.1);
+  border: 1px solid rgba(var(--primary-rgb, 10, 110, 209), 0.2);
   padding: 3px 9px;
   border-radius: 6px;
 }
 
 [data-theme="dark"] .sig-dialog__default-tag {
-  color: #4db1ff;
-  background: rgba(77, 177, 255, 0.15);
-  border-color: rgba(77, 177, 255, 0.25);
+  color: var(--primary, #4db1ff);
+  background: rgba(var(--primary-rgb, 77, 177, 255), 0.15);
+  border-color: rgba(var(--primary-rgb, 77, 177, 255), 0.25);
 }
 
 /* ─── Responsive Adjustments ─────────────────────────────── */

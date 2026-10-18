@@ -28,7 +28,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     description: 'Start a new request for quotation',
     icon: FileText,
     path: '/rfq/create',
-    accent: '#0a6ed1',
+    accent: 'var(--primary-500, #0a6ed1)',
   },
   {
     id: 'view-approvals',

@@ -243,7 +243,7 @@ export async function downloadContractAsPdf(
           </style>
         </head>
         <body>
-          ${(!/<h[1-3]/i.test(contentHtml || '') && docTitle) ? `<div style="text-align:center;margin-bottom:24px;padding-bottom:12px;border-bottom:2px solid #0a6ed1;"><h1 style="margin:0;font-size:19px;border:none;">${docTitle}</h1></div>` : ''}
+          ${(!/<h[1-3]/i.test(contentHtml || '') && docTitle) ? `<div style="text-align:center;margin-bottom:24px;padding-bottom:12px;border-bottom:2px solid ${(typeof document !== 'undefined' && document.documentElement.style.getPropertyValue('--primary-500')?.trim()) || '#0a6ed1'};"><h1 style="margin:0;font-size:19px;border:none;">${docTitle}</h1></div>` : ''}
           ${contentHtml}
         </body>
       </html>

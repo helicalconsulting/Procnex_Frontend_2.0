@@ -1347,7 +1347,7 @@ function ViewQuotationModal({
                                 title="Download document"
                                 aria-label="Download document"
                                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary-500)', padding: '2px 4px', display: 'inline-flex', alignItems: 'center', borderRadius: 4, transition: 'background 0.15s' }}
-                                onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(10,110,209,0.08)'; }}
+                                onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(var(--primary-rgb, 10, 110, 209), 0.08)'; }}
                                 onMouseOut={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                               >
                                 <Download size={13} />
@@ -1404,7 +1404,7 @@ function ViewQuotationModal({
                                   title="Download document"
                                   aria-label="Download document"
                                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary-500)', padding: '2px 4px', display: 'inline-flex', alignItems: 'center', borderRadius: 4, transition: 'background 0.15s' }}
-                                  onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(10,110,209,0.08)'; }}
+                                  onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(var(--primary-rgb, 10, 110, 209), 0.08)'; }}
                                   onMouseOut={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                                 >
                                   <Download size={13} />
@@ -1577,7 +1577,7 @@ function ViewQuotationModal({
                             title="Download document"
                             aria-label="Download document"
                             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary-500)', padding: '8px', display: 'inline-flex', alignItems: 'center', borderRadius: 4, transition: 'background 0.15s', flexShrink: 0 }}
-                            onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(10,110,209,0.08)'; }}
+                            onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(var(--primary-rgb, 10, 110, 209), 0.08)'; }}
                             onMouseOut={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                           >
                             <Download size={15} />
@@ -4787,7 +4787,7 @@ export default function QuotationsPage() {
                           <Button
                             type="button"
                             size="sm"
-                            className="quot-rfq-card__compare-btn bg-[#0a6ed1] hover:bg-[#0856a4] text-white border-[#0a6ed1] shadow-sm font-semibold"
+                            className="quot-rfq-card__compare-btn bg-primary hover:bg-primary-hover text-primary-foreground border-primary shadow-sm font-semibold"
                             title="Open Side-by-Side Comparison for this RFQ"
                             onClick={() => {
                               setSelectedRFQ(group.rfqNumber);

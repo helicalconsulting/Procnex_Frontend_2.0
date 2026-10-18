@@ -451,7 +451,7 @@ export default function ContractsPage() {
       if (!contentHtml) {
         contentHtml = `
           <div style="font-family: inherit; padding: 20px;">
-            <h1 style="color: #0a6ed1; border-bottom: 2px solid #0a6ed1; padding-bottom: 8px;">${r.title || r.contractNumber}</h1>
+            <h1 style="color: var(--primary-500, #0a6ed1); border-bottom: 2px solid var(--primary-500, #0a6ed1); padding-bottom: 8px;">${r.title || r.contractNumber}</h1>
             <table style="width: 100%; border-collapse: collapse; margin-top: 16px;">
               <tr><td style="font-weight: 700; width: 180px; padding: 8px; border: 1px solid #ddd;">Contract Number</td><td style="padding: 8px; border: 1px solid #ddd;">${r.contractNumber}</td></tr>
               <tr><td style="font-weight: 700; padding: 8px; border: 1px solid #ddd;">Supplier</td><td style="padding: 8px; border: 1px solid #ddd;">${r.vendorName}</td></tr>

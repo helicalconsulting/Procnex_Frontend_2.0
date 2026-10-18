@@ -587,7 +587,7 @@ export default function FormsPage() {
                         <div
                           style={{
                             height: '100%',
-                            background: 'linear-gradient(90deg, #0a6ed1, #107e3e)',
+                            background: 'linear-gradient(90deg, var(--primary-500, #0a6ed1), #107e3e)',
                             transition: 'width 0.3s ease',
                             width: `${
                               sub.status === 'completed'

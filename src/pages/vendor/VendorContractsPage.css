@@ -6,7 +6,7 @@
 
 .vc-hero {
   position: relative;
-  background: linear-gradient(135deg, #0a6ed1 0%, #1a8af7 50%, #4db1ff 100%);
+  background: linear-gradient(135deg, var(--vendor-primary, #0a6ed1) 0%, var(--primary-400, #1a8af7) 50%, var(--primary-300, #4db1ff) 100%);
   border-radius: 4px;
   padding: 32px 36px;
   margin-bottom: 24px;
@@ -108,8 +108,8 @@
 }
 
 .vc-card--expanded {
-  border-color: #0a6ed1;
-  box-shadow: 0 0 0 1px rgba(10,110,209,0.2), 0 8px 24px rgba(10,110,209,0.08);
+  border-color: var(--vendor-primary, #0a6ed1);
+  box-shadow: 0 0 0 1px rgba(var(--primary-rgb, 10,110,209),0.2), 0 8px 24px rgba(var(--primary-rgb, 10,110,209),0.08);
 }
 
 .vc-card__header {
@@ -124,11 +124,11 @@
 }
 
 .vc-card__header:hover {
-  background: rgba(10,110,209,0.03);
+  background: rgba(var(--primary-rgb, 10,110,209),0.03);
 }
 
 .vc-card--expanded .vc-card__header {
-  background: rgba(10,110,209,0.04);
+  background: rgba(var(--primary-rgb, 10,110,209),0.04);
   border-bottom: 1px solid var(--border);
 }
 
@@ -150,7 +150,7 @@
 .vc-card__number {
   font-size: 15px;
   font-weight: 700;
-  color: #0a6ed1;
+  color: var(--vendor-primary, #0a6ed1);
   letter-spacing: -0.2px;
 }
 
@@ -200,7 +200,7 @@
 
 .vc-card__chevron--open {
   transform: rotate(180deg);
-  color: #0a6ed1;
+  color: var(--vendor-primary, #0a6ed1);
 }
 
 /* ─── Expanded Body ───────────────────────────────────────── */
@@ -293,14 +293,14 @@
 }
 
 .vc-btn--primary {
-  background: linear-gradient(135deg, #0a6ed1, #1a8af7);
+  background: linear-gradient(135deg, var(--vendor-primary, #0a6ed1), var(--primary-400, #1a8af7));
   color: #fff;
-  box-shadow: 0 3px 10px rgba(10,110,209,0.25);
+  box-shadow: 0 3px 10px rgba(var(--primary-rgb, 10,110,209),0.25);
 }
 
 .vc-btn--primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(10,110,209,0.35);
+  box-shadow: 0 6px 16px rgba(var(--primary-rgb, 10,110,209),0.35);
   filter: brightness(1.05);
 }
 
@@ -317,7 +317,7 @@
 .vc-btn--secondary:hover {
   background: var(--surface-hover);
   border-color: var(--border-strong);
-  color: #0a6ed1;
+  color: var(--vendor-primary, #0a6ed1);
 }
 
 /* ─── Status Badge ────────────────────────────────────────── */
@@ -423,24 +423,24 @@
 }
 
 [data-theme="dark"] .vc-hero {
-  background: linear-gradient(135deg, #074a8a 0%, #0a6ed1 50%, #1a8af7 100%);
+  background: linear-gradient(135deg, var(--primary-800, #074a8a) 0%, var(--vendor-primary, #0a6ed1) 50%, var(--primary-400, #1a8af7) 100%);
 }
 
 [data-theme="dark"] .vc-summary__card:hover {
-  border-color: rgba(10,110,209,0.3);
+  border-color: rgba(var(--primary-rgb, 10,110,209),0.3);
 }
 
 [data-theme="dark"] .vc-card--expanded {
-  border-color: rgba(10,110,209,0.4);
-  box-shadow: 0 0 0 1px rgba(10,110,209,0.15), 0 8px 24px rgba(0,0,0,0.2);
+  border-color: rgba(var(--primary-rgb, 10,110,209),0.4);
+  box-shadow: 0 0 0 1px rgba(var(--primary-rgb, 10,110,209),0.15), 0 8px 24px rgba(0,0,0,0.2);
 }
 
 [data-theme="dark"] .vc-card__header:hover {
-  background: rgba(10,110,209,0.06);
+  background: rgba(var(--primary-rgb, 10,110,209),0.06);
 }
 
 [data-theme="dark"] .vc-card--expanded .vc-card__header {
-  background: rgba(10,110,209,0.08);
+  background: rgba(var(--primary-rgb, 10, 110, 209),0.08);
 }
 
 /* ─── Preview Modal ──────────────────────────────────────── */
@@ -488,7 +488,7 @@
   justify-content: space-between;
   padding: 16px 20px;
   border-bottom: 1px solid var(--border);
-  background: linear-gradient(135deg, rgba(10,110,209,0.04), rgba(75,177,255,0.03));
+  background: linear-gradient(135deg, rgba(var(--primary-rgb, 10, 110, 209),0.04), rgba(75,177,255,0.03));
   flex-shrink: 0;
 }
 

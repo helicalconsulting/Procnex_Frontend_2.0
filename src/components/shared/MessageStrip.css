@@ -134,7 +134,7 @@
 }
 
 [data-theme='dark'] .sap-message-strip--information {
-  background: rgba(10, 110, 209, 0.12);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.12);
   border-color: rgba(96, 165, 250, 0.25);
   border-left-color: #60a5fa;
 }

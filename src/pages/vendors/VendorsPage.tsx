@@ -924,7 +924,7 @@ export default function VendorsPage() {
       <Card className="overflow-hidden">
         {loading ? (
           view === 'table' ? (
-            <TableSkeleton rows={perPage} columnWidths={visibleColumns.map((col) => COL_META[col.key]?.width || '120px').concat(['130px'])} />
+            <TableSkeleton rows={perPage} columnWidths={visibleColumns.map((col) => COL_META[col.key]?.width || '120px').concat(['160px'])} />
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 p-4">
               {Array.from({ length: 8 }).map((_, i) => (
@@ -936,12 +936,12 @@ export default function VendorsPage() {
           view === 'table' ? (
             <>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[900px] border-collapse text-sm">
+                <table className="w-full min-w-[1100px] border-collapse text-sm">
                   <colgroup>
                     {visibleColumns.map((col) => (
                       <col key={col.key} style={{ width: COL_META[col.key]?.width || 'auto' }} />
                     ))}
-                    <col style={{ width: '130px' }} />
+                    <col style={{ width: '160px' }} />
                   </colgroup>
                   <thead>
                     <tr className="border-b border-border/75 bg-muted/45 text-left text-[12px] font-bold uppercase tracking-wide text-muted-foreground">
@@ -957,7 +957,7 @@ export default function VendorsPage() {
                           </th>
                         );
                       })}
-                      <th className="px-4 py-3 text-right">
+                      <th className="px-4 py-3 text-right sticky right-0 z-10 bg-muted/95 backdrop-blur-sm shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.1)] dark:shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.35)] min-w-[160px] w-[160px]">
                         <div className="flex items-center justify-end gap-2">
                           <span>Actions</span>
                           <div className="relative">
@@ -996,11 +996,12 @@ export default function VendorsPage() {
                           );
                         })}
 
-                        <td className="px-4 py-3.5 align-middle text-right" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-1">
+                        <td className="px-4 py-3.5 align-middle text-right sticky right-0 z-10 bg-card group-hover:bg-accent/35 transition-colors shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.1)] dark:shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.35)] min-w-[160px] w-[160px]" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1 whitespace-nowrap">
                             <Button
                               variant="ghost"
                               size="icon-sm"
+                              className="shrink-0"
                               onClick={() => setDetailVendor(v)}
                               title="View profile"
                             >
@@ -1011,6 +1012,7 @@ export default function VendorsPage() {
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
+                                className="shrink-0"
                                 onClick={() => openCredentialsModal(v)}
                                 title="Resend password setup email"
                               >
@@ -1022,6 +1024,7 @@ export default function VendorsPage() {
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
+                                className="shrink-0"
                                 onClick={() => openEditModal(v)}
                                 title="Edit vendor"
                               >
@@ -1032,7 +1035,7 @@ export default function VendorsPage() {
                                 variant="ghost"
                                 size="icon-sm"
                                 disabled
-                                className="opacity-50"
+                                className="opacity-50 shrink-0"
                                 title="Admin has not allowed this action."
                               >
                                 <ShieldOff className="size-4" />
@@ -1043,7 +1046,7 @@ export default function VendorsPage() {
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
-                                className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive shrink-0"
                                 onClick={() => openDeleteModal(v)}
                                 title="Delete vendor"
                               >
@@ -1054,7 +1057,7 @@ export default function VendorsPage() {
                                 variant="ghost"
                                 size="icon-sm"
                                 disabled
-                                className="opacity-50"
+                                className="opacity-50 shrink-0"
                                 title="Admin has not allowed this action."
                               >
                                 <ShieldOff className="size-4" />

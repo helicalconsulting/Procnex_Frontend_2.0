@@ -13,20 +13,20 @@
   align-items: center;
   gap: 8px;
   padding: 10px 20px;
-  background: linear-gradient(135deg, #0a6ed1 0%, #0856a4 100%) !important;
+  background: linear-gradient(135deg, var(--primary-500, #0a6ed1) 0%, var(--primary-600, #0856a4) 100%) !important;
   color: #ffffff !important;
   font-size: 15px;
   font-weight: 700;
   border-radius: 8px;
-  border: 1px solid rgba(10, 110, 209, 0.4);
-  box-shadow: 0 4px 14px rgba(10, 110, 209, 0.35);
+  border: 1px solid rgba(var(--primary-rgb, 10, 110, 209), 0.4);
+  box-shadow: 0 4px 14px rgba(var(--primary-rgb, 10, 110, 209), 0.35);
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .ctr-page__add-btn:hover {
-  background: linear-gradient(135deg, #0b7bf0 0%, #0a6ed1 100%) !important;
+  background: linear-gradient(135deg, #0b7bf0 0%, var(--primary-500, #0a6ed1) 100%) !important;
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(10, 110, 209, 0.45);
+  box-shadow: 0 6px 20px rgba(var(--primary-rgb, 10, 110, 209), 0.45);
 }
 .ctr-page__add-btn:active {
   transform: translateY(0);
@@ -60,13 +60,13 @@
 .ctr-summary-card:hover {
   transform: translateY(-4px) scale(1.015);
   background: rgba(255, 255, 255, 0.88) !important;
-  border-color: rgba(10, 110, 209, 0.4) !important;
-  box-shadow: 0 16px 40px 0 rgba(10, 110, 209, 0.15), inset 0 1px 0 0 rgba(255, 255, 255, 1);
+  border-color: rgba(var(--primary-rgb, 10, 110, 209), 0.4) !important;
+  box-shadow: 0 16px 40px 0 rgba(var(--primary-rgb, 10, 110, 209), 0.15), inset 0 1px 0 0 rgba(255, 255, 255, 1);
 }
 
 [data-theme="dark"] .ctr-summary-card:hover {
   background: linear-gradient(135deg, rgba(38, 52, 75, 0.8) 0%, rgba(22, 33, 52, 0.85) 100%) !important;
-  border-color: rgba(77, 177, 255, 0.4) !important;
+  border-color: rgba(var(--primary-rgb, 77, 177, 255), 0.4) !important;
   box-shadow: 0 12px 36px 0 rgba(0, 0, 0, 0.45), inset 0 1px 0 0 rgba(255, 255, 255, 0.18);
 }
 
@@ -74,9 +74,9 @@
 [data-theme="dark"] .ctr-summary-card--active,
 .ctr-summary-card.active,
 [data-theme="dark"] .ctr-summary-card.active {
-  border: 1.5px solid #388bfd !important;
-  box-shadow: 0 0 0 1.5px #388bfd, 0 0 25px rgba(56, 139, 253, 0.75), 0 0 10px rgba(56, 139, 253, 0.9), inset 0 0 15px rgba(56, 139, 253, 0.2) !important;
-  background: rgba(56, 139, 253, 0.16) !important;
+  border: 1.5px solid var(--primary-dark, #388bfd) !important;
+  box-shadow: 0 0 0 1.5px var(--primary-dark, #388bfd), 0 0 25px rgba(var(--primary-rgb, 56, 139, 253), 0.75), 0 0 10px rgba(var(--primary-rgb, 56, 139, 253), 0.9), inset 0 0 15px rgba(var(--primary-rgb, 56, 139, 253), 0.2) !important;
+  background: rgba(var(--primary-rgb, 56, 139, 253), 0.16) !important;
   transform: translateY(-3px) scale(1.01) !important;
 }
 .ctr-summary-card::before {
@@ -111,12 +111,12 @@
   transform: scale(1.08) rotate(2deg);
 }
 
-.ctr-summary-card__icon--total   { background: rgba(10,110,209,0.12);  color: var(--primary-500); border: 1px solid rgba(10,110,209,0.2); }
+.ctr-summary-card__icon--total   { background: rgba(var(--primary-rgb, 10, 110, 209),0.12);  color: var(--primary-500); border: 1px solid rgba(var(--primary-rgb, 10, 110, 209),0.2); }
 .ctr-summary-card__icon--signed  { background: rgba(16,126,62,0.14);   color: var(--success-500); border: 1px solid rgba(16,126,62,0.25); }
 .ctr-summary-card__icon--pending { background: rgba(234,179,8,0.14);   color: #eab308; border: 1px solid rgba(234,179,8,0.25); }
 .ctr-summary-card__icon--value   { background: rgba(139,92,246,0.14);  color: #8b5cf6; border: 1px solid rgba(139,92,246,0.25); }
 
-[data-theme="dark"] .ctr-summary-card__icon--total   { background: rgba(10,110,209,0.25); color: #4db1ff; border-color: rgba(77,177,255,0.3); }
+[data-theme="dark"] .ctr-summary-card__icon--total   { background: rgba(var(--primary-rgb, 10, 110, 209),0.25); color: var(--primary, #4db1ff); border-color: rgba(var(--primary-rgb, 77, 177, 255),0.3); }
 [data-theme="dark"] .ctr-summary-card__icon--signed  { background: rgba(16,126,62,0.25);  color: #4ade80; border-color: rgba(74,222,128,0.3); }
 [data-theme="dark"] .ctr-summary-card__icon--pending { background: rgba(234,179,8,0.25);  color: #facc15; border-color: rgba(250,204,21,0.3); }
 [data-theme="dark"] .ctr-summary-card__icon--value   { background: rgba(139,92,246,0.25); color: #c084fc; border-color: rgba(192,132,252,0.3); }
@@ -134,7 +134,7 @@
   font-size: 16px; font-family: var(--font-sans) !important; transition: border-color 0.2s, box-shadow 0.2s; outline: none;
 }
 .ctr-toolbar__search input::placeholder { color: var(--text-placeholder); }
-.ctr-toolbar__search input:focus { border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(10,110,209,0.15); }
+.ctr-toolbar__search input:focus { border-color: var(--border-focus); box-shadow: 0 0 0 2px rgba(var(--primary-rgb, 10, 110, 209),0.15); }
 .ctr-toolbar__right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ctr-toolbar__filter-select {
   padding: 9px 32px 9px 14px; border: 1px solid var(--border); border-radius: 4px;
@@ -290,7 +290,7 @@
   display: inline-flex; align-items: center; justify-content: center;
   transition: all 0.2s ease;
 }
-.ctr-table__action-btn:hover { background: rgba(10, 110, 209, 0.1) !important; color: var(--primary-500) !important; border-color: rgba(10, 110, 209, 0.2); }
+.ctr-table__action-btn:hover { background: rgba(var(--primary-rgb, 10, 110, 209), 0.1) !important; color: var(--primary-500) !important; border-color: rgba(var(--primary-rgb, 10, 110, 209), 0.2); }
 .ctr-table__action-btn--danger:hover { background: rgba(220, 38, 38, 0.1) !important; color: #f87171 !important; border-color: rgba(220, 38, 38, 0.2); }
 
 [data-theme="dark"] .ctr-table__action-btn {
@@ -390,7 +390,7 @@
 }
 .col-btn span { width: 3px; height: 3px; border-radius: 50%; background: var(--text-secondary); display: block; }
 .col-btn:hover { border-color: var(--border-strong); }
-.col-btn--active { border-color: var(--primary-500); background: rgba(10,110,209,0.05); }
+.col-btn--active { border-color: var(--primary-500); background: rgba(var(--primary-rgb, 10, 110, 209),0.05); }
 
 /* ═══════════════════════════════════════════════════════════
    Recently Signed Contract Banner

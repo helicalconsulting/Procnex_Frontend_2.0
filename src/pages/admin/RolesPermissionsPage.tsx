@@ -127,71 +127,308 @@ export default function RolesPermissionsPage() {
     finally { requestPending.current = false; setBusy(false); }
   }
 
-  return <PageFrame className="roles-workspace space-y-6">
-    <PageLead title="Roles & Permissions" description="Manage roles, define access levels, and configure module permissions"
-      actions={<Button ref={createTrigger} onClick={openCreate} disabled={!canManage || busy}><Plus size={16} />Create Role</Button>} />
-    {error && <MessageStrip type="error">{error}</MessageStrip>}
-    {message && <MessageStrip type={message.type} onClose={() => setMessage(null)}>{message.text}</MessageStrip>}
-    <div className="roles-metrics grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      {([
-        { key: 'all', label: 'Total Roles', value: summary.total, icon: Shield, tone: 'primary' },
-        { key: 'modules', label: 'Modules', value: PERMISSION_MODULE_NAMES.length, icon: Lock, tone: 'warning' },
-        { key: 'system', label: 'System Roles', value: summary.system, icon: ShieldCheck, tone: 'success' },
-        { key: 'custom', label: 'Custom Roles', value: summary.custom, icon: ShieldAlert, tone: 'violet' },
-      ] as const).map(metric => <MetricCard key={metric.key} label={metric.label} value={metric.value} icon={metric.icon} tone={metric.tone}
-        role="button" tabIndex={0} aria-pressed={metric.key === 'modules' ? showModules : filter === metric.key && !showModules}
-        onClick={() => { if (metric.key === 'modules') setShowModules(v => !v); else { setFilter(metric.key); setShowModules(false); } }}
-        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.click(); } }} />)}
-    </div>
-    {showModules && <div className="roles-module-catalog text-xs"><strong>{PERMISSION_MODULE_NAMES.length} modules · {permissionSelection(buildDefaultPermissions()).total} supported permissions</strong><p>Create and Approve are offered only where the module supports them.</p><div>{MODULE_CAPABILITIES.map(module => <span key={module.module}>{module.module}</span>)}</div></div>}
-    {loading ? <CardSkeleton count={3} /> : <div className="roles-split">
-      <aside className="roles-picker" aria-label="Roles">
-        <div className="roles-picker__header"><div className="text-xs font-semibold"><span>Roles</span><span className="text-muted-foreground">{filtered.length} of {roles.length}</span></div>
-          <div className="roles-picker__search"><Search size={15} /><Input aria-label="Search roles and permissions" placeholder="Find a role..." value={search} onChange={e => setSearch(e.target.value)} /></div>
+  return (
+    <PageFrame className="roles-workspace space-y-5">
+      <PageLead
+        title="Roles & Permissions"
+        description="Manage roles, define access levels, and configure module permissions"
+        actions={
+          <Button ref={createTrigger} onClick={openCreate} disabled={!canManage || busy} className="gap-2 shadow-xs">
+            <Plus size={16} />
+            Create Role
+          </Button>
+        }
+      />
+
+      {error && <MessageStrip type="error">{error}</MessageStrip>}
+      {message && <MessageStrip type={message.type} onClose={() => setMessage(null)}>{message.text}</MessageStrip>}
+
+      {/* Overview Metric Cards */}
+      <div className="roles-metrics grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {([
+          { key: 'all', label: 'Total Roles', value: summary.total, icon: Shield, tone: 'primary' },
+          { key: 'modules', label: 'Modules', value: PERMISSION_MODULE_NAMES.length, icon: Lock, tone: 'warning' },
+          { key: 'system', label: 'System Roles', value: summary.system, icon: ShieldCheck, tone: 'success' },
+          { key: 'custom', label: 'Custom Roles', value: summary.custom, icon: ShieldAlert, tone: 'violet' },
+        ] as const).map(metric => (
+          <MetricCard
+            key={metric.key}
+            label={metric.label}
+            value={metric.value}
+            icon={metric.icon}
+            tone={metric.tone}
+            role="button"
+            tabIndex={0}
+            aria-pressed={metric.key === 'modules' ? showModules : filter === metric.key && !showModules}
+            onClick={() => {
+              if (metric.key === 'modules') setShowModules(v => !v);
+              else { setFilter(metric.key); setShowModules(false); }
+            }}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.currentTarget.click();
+              }
+            }}
+          />
+        ))}
+      </div>
+
+      {showModules && (
+        <div className="roles-module-catalog text-xs">
+          <strong>{PERMISSION_MODULE_NAMES.length} modules · {permissionSelection(buildDefaultPermissions()).total} supported permissions</strong>
+          <p>Create and Approve are offered only where the module supports them.</p>
+          <div>{MODULE_CAPABILITIES.map(module => <span key={module.module}>{module.module}</span>)}</div>
         </div>
-        <div className="roles-picker__list">
-          {filtered.map(role => {
-            const pending = drafts[role.id];
-            const dirty = pending ? permissionChanges(pending.base, pending.permissions) : 0;
-            const tally = permissionSelection(pending?.permissions ?? role.permissions);
-            return <button key={role.id} type="button" className="roles-picker__item" aria-pressed={selected?.id === role.id} disabled={busy}
-              onClick={() => { setSelectedId(role.id); setMessage(null); }}>
-              <span className="roles-picker__name text-base font-semibold">{role.displayRoleName || role.roleName}{role.protected && <Lock size={13} />}</span>
-              <span className="text-xs text-muted-foreground">{role.userCount ?? 0} user{role.userCount === 1 ? '' : 's'} · {tally.granted}/{tally.total} granted</span>
-              {dirty > 0 && <span className="roles-unsaved text-[11px]">Unsaved changes</span>}
-            </button>;
-          })}
-          {!filtered.length && <p className="roles-picker__empty text-xs text-muted-foreground">No roles match this filter.</p>}
+      )}
+
+      {loading ? (
+        <CardSkeleton count={3} />
+      ) : (
+        <div className="roles-split">
+          {/* Left Roles Sidebar */}
+          <aside className="roles-picker" aria-label="Roles">
+            <div className="roles-picker__header">
+              <div className="flex items-center justify-between text-xs font-semibold">
+                <span className="text-foreground tracking-tight">Roles</span>
+                <span className="text-muted-foreground font-normal tabular-nums">{filtered.length} of {roles.length}</span>
+              </div>
+              <div className="roles-picker__search mt-2.5">
+                <Search size={15} />
+                <Input
+                  aria-label="Search roles and permissions"
+                  placeholder="Find a role..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="h-9 text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="roles-picker__list">
+              {filtered.map(role => {
+                const pending = drafts[role.id];
+                const dirty = pending ? permissionChanges(pending.base, pending.permissions) : 0;
+                const tally = permissionSelection(pending?.permissions ?? role.permissions);
+                const isSelected = selected?.id === role.id;
+
+                return (
+                  <button
+                    key={role.id}
+                    type="button"
+                    className="roles-picker__item"
+                    aria-pressed={isSelected}
+                    disabled={busy}
+                    onClick={() => { setSelectedId(role.id); setMessage(null); }}
+                  >
+                    <div className="roles-picker__item-top">
+                      <span className="roles-picker__name">
+                        {role.displayRoleName || role.roleName}
+                      </span>
+                      {role.protected && (
+                        <span className="roles-picker__lock" title="Protected role (Super Admin)">
+                          <Lock size={12} />
+                        </span>
+                      )}
+                      {dirty > 0 && (
+                        <span className="roles-unsaved-badge" title={`${dirty} unsaved change(s)`}>
+                          Draft
+                        </span>
+                      )}
+                    </div>
+                    <div className="roles-picker__item-meta">
+                      <span>{role.userCount ?? 0} user{role.userCount === 1 ? '' : 's'}</span>
+                      <span className="roles-picker__item-dot">·</span>
+                      <span className="tabular-nums">{tally.granted}/{tally.total} granted</span>
+                    </div>
+                  </button>
+                );
+              })}
+              {!filtered.length && (
+                <p className="roles-picker__empty text-xs text-muted-foreground">No roles match this filter.</p>
+              )}
+            </div>
+
+            {dirtyRoles > 0 && (
+              <div className="roles-picker__note">
+                <Info size={13} className="shrink-0 text-primary" />
+                <span>{dirtyRoles} role{dirtyRoles === 1 ? '' : 's'} with unsaved drafts.</span>
+              </div>
+            )}
+          </aside>
+
+          {/* Right Permissions Detail Panel */}
+          {selected ? (
+            <section className={`roles-detail ${draft ? 'roles-detail--editing' : ''}`} aria-label={`Permissions for ${selected.displayRoleName || selected.roleName}`}>
+              <header className="roles-detail__header">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <h2 className="text-lg font-semibold tracking-tight text-foreground">
+                      {selected.displayRoleName || selected.roleName}
+                    </h2>
+                    {selected.protected && (
+                      <span className="roles-badge roles-badge--protected">
+                        <Lock size={12} />
+                        Protected
+                      </span>
+                    )}
+                    {selected.isSystem && !selected.protected && (
+                      <span className="roles-badge roles-badge--system">
+                        <Shield size={12} />
+                        System Role
+                      </span>
+                    )}
+                    {draft && (
+                      <span className="roles-badge roles-badge--editing">
+                        <Edit3 size={12} />
+                        Editing Mode
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="roles-detail__desc">
+                    {selected.description || 'Configure this role’s access to application modules.'}
+                  </p>
+
+                  <div className="roles-detail__meta">
+                    <span className="roles-meta-item">
+                      <Users size={13} className="text-muted-foreground" />
+                      <strong>{selected.userCount ?? 0}</strong> assigned user{selected.userCount === 1 ? '' : 's'}
+                    </span>
+                    <span className="roles-meta-divider">·</span>
+                    <span className="roles-meta-item">
+                      <ShieldCheck size={13} className="text-emerald-600 dark:text-emerald-400" />
+                      <strong>{counts.granted}</strong> of {counts.total} permissions granted
+                    </span>
+                  </div>
+                </div>
+
+                <div className="roles-detail__actions">
+                  {selected.protected ? (
+                    <span className="roles-protected-pill">
+                      <Lock size={13} /> Full access
+                    </span>
+                  ) : !draft ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={startEditing}
+                      disabled={!canManage || busy}
+                      className="gap-1.5 font-medium shadow-2xs hover:border-primary/40 hover:text-primary"
+                    >
+                      <Edit3 size={14} />
+                      Edit permissions
+                    </Button>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => discardDraft(selected.id)}
+                        disabled={busy}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={savePermissions}
+                        disabled={busy || !editable || !changed || conflict}
+                        className="gap-1.5 shadow-xs"
+                      >
+                        <Save size={14} />
+                        {busy ? 'Saving…' : 'Save changes'}
+                      </Button>
+                    </div>
+                  )}
+
+                  {canDelete && !selected.protected && !draft && (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Delete ${selected.displayRoleName || selected.roleName}`}
+                      disabled={busy}
+                      onClick={() => { setDeleteError(''); setDeleteTarget(selected); }}
+                      className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      title="Delete role"
+                    >
+                      <Trash2 size={15} />
+                    </Button>
+                  )}
+                </div>
+              </header>
+
+              {/* Permission Matrix Table */}
+              <div className="roles-detail__matrix-wrap">
+                <PermissionMatrix
+                  key={selected.id}
+                  permissions={permissions}
+                  editable={editable}
+                  busy={busy}
+                  onChange={next => setDrafts(current => ({
+                    ...current,
+                    [selected.id]: { base: current[selected.id].base, permissions: next }
+                  }))}
+                />
+              </div>
+
+              {/* Footer status / feedback */}
+              <footer className="roles-detail__footer">
+                <div className="roles-detail__footer-status" role="status">
+                  {conflict ? (
+                    <span className="roles-error font-medium">⚠️ This role changed while you were editing. Cancel to reload latest permissions.</span>
+                  ) : draft ? (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="roles-change-pill">
+                        {changed} unsaved change{changed === 1 ? '' : 's'}
+                      </span>
+                      <span>
+                        Will apply to {selected.userCount ?? 0} assigned user{selected.userCount === 1 ? '' : 's'} upon saving.
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="roles-view-mode-text">
+                      <Info size={13} className="shrink-0 text-muted-foreground" />
+                      {selected.protected
+                        ? 'Super Admin permissions are fixed to full access.'
+                        : canManage
+                        ? 'View mode. Choose “Edit permissions” to configure access.'
+                        : 'You have read-only access to role permissions.'}
+                    </span>
+                  )}
+
+                  {removesOwnManagement && (
+                    <span className="roles-error font-medium text-xs">
+                      ⚠️ Caution: Saving removes your own ability to manage permissions through this role.
+                    </span>
+                  )}
+                  {selected.extraPermissions.length > 0 && (
+                    <span className="text-[11px] text-muted-foreground">
+                      {selected.extraPermissions.length} non-standard module permission(s) remain untouched.
+                    </span>
+                  )}
+                </div>
+
+                {draft && (
+                  <div className="roles-detail__actions">
+                    <Button variant="outline" size="sm" onClick={() => discardDraft(selected.id)} disabled={busy}>
+                      Cancel
+                    </Button>
+                    <Button size="sm" onClick={savePermissions} disabled={busy || !editable || !changed || conflict} className="gap-1.5">
+                      <Save size={14} />
+                      {busy ? 'Saving…' : 'Save changes'}
+                    </Button>
+                  </div>
+                )}
+              </footer>
+            </section>
+          ) : (
+            <div className="roles-detail roles-detail--empty">
+              <EmptyState icon={Shield} title="No roles found" description="Try another search or role filter." />
+            </div>
+          )}
         </div>
-        {dirtyRoles > 0 && <p className="roles-picker__note text-[11px]">{dirtyRoles} role{dirtyRoles === 1 ? '' : 's'} with unsaved changes. Drafts stay available when switching roles.</p>}
-      </aside>
-      {selected ? <section className="roles-detail" aria-label={`Permissions for ${selected.displayRoleName || selected.roleName}`}>
-        <header className="roles-detail__header">
-          <div><h2 className="text-base font-semibold">{selected.displayRoleName || selected.roleName}</h2>
-            <p className="text-xs text-muted-foreground">{selected.description || 'Configure this role’s access to application modules.'}</p>
-            <div className="roles-detail__meta text-xs text-muted-foreground"><span><Users size={13} />{selected.userCount ?? 0} assigned user{selected.userCount === 1 ? '' : 's'}</span><span>{counts.granted} of {counts.total} permissions granted</span>{selected.isSystem && <span><Shield size={13} />System role</span>}</div>
-          </div>
-          <div className="roles-detail__actions">
-            {selected.protected ? <span className="roles-protected text-xs"><Lock size={13} />Full access · protected</span>
-              : !draft ? <Button variant="outline" size="sm" onClick={startEditing} disabled={!canManage || busy}><Edit3 size={14} />Edit permissions</Button>
-                : <span className="roles-editing text-xs"><Edit3 size={13} />Editing</span>}
-            {canDelete && !selected.protected && <Button variant="ghost" size="icon-sm" aria-label={`Delete ${selected.displayRoleName || selected.roleName}`} disabled={busy || Boolean(draft)} onClick={() => { setDeleteError(''); setDeleteTarget(selected); }}><Trash2 size={15} /></Button>}
-          </div>
-        </header>
-        <PermissionMatrix key={selected.id} permissions={permissions} editable={editable} busy={busy}
-          onChange={next => setDrafts(current => ({ ...current, [selected.id]: { base: current[selected.id].base, permissions: next } }))} />
-        <footer className="roles-detail__footer">
-          <div className="text-xs text-muted-foreground" role="status">
-            {conflict ? <span className="roles-error">This role changed while you were editing. Cancel to load its latest permissions.</span>
-              : draft ? <><strong className="roles-change-count">{changed} unsaved permission change{changed === 1 ? '' : 's'}</strong><span>Applies to {selected.userCount ?? 0} assigned user{selected.userCount === 1 ? '' : 's'} after saving.</span></>
-                : <span><Info size={13} />{selected.protected ? 'Super Admin permissions are fixed to full access.' : canManage ? 'View mode. Choose Edit permissions to make changes.' : 'You have read-only access to role permissions.'}</span>}
-            {removesOwnManagement && <span className="roles-error">Saving removes this role’s ability to manage permissions, including your own access through this role.</span>}
-            {selected.extraPermissions.length > 0 && <span>{selected.extraPermissions.length} permissions outside this module list are unchanged.</span>}
-          </div>
-          {draft && <div className="roles-detail__actions"><Button variant="outline" onClick={() => discardDraft(selected.id)} disabled={busy}>Cancel changes</Button><Button onClick={savePermissions} disabled={busy || !editable || !changed || conflict}><Save size={14} />{busy ? 'Saving…' : 'Save changes'}</Button></div>}
-        </footer>
-      </section> : <div className="roles-detail roles-detail--empty"><EmptyState icon={Shield} title="No roles found" description="Try another search or role filter." /></div>}
-    </div>}
+      )}
 
     <Dialog open={showCreate} onOpenChange={open => { if (!busy) setShowCreate(open); }}>
       <DialogContent className="roles-workspace role-create-dialog" hideClose onOpenAutoFocus={event => { event.preventDefault(); roleNameInput.current?.focus(); }} onInteractOutside={event => event.preventDefault()} onCloseAutoFocus={event => { event.preventDefault(); createTrigger.current?.focus(); }}>
@@ -209,5 +446,6 @@ export default function RolesPermissionsPage() {
     <Dialog open={Boolean(deleteTarget)} onOpenChange={open => { if (!open && !busy) setDeleteTarget(null); }}>
       <DialogContent className="roles-workspace" hideClose><DialogTitle>Delete role?</DialogTitle><DialogDescription>This removes “{deleteTarget?.displayRoleName || deleteTarget?.roleName}” and its assignments from {deleteTarget?.userCount ?? 0} users. This action cannot be undone.</DialogDescription>{deleteError && <MessageStrip type="error">{deleteError}</MessageStrip>}<div className="roles-detail__actions justify-end mt-4"><Button variant="outline" disabled={busy} onClick={() => setDeleteTarget(null)}>Cancel</Button><Button variant="destructive" disabled={busy} onClick={deleteRole}>{busy ? 'Deleting…' : 'Delete Role'}</Button></div></DialogContent>
     </Dialog>
-  </PageFrame>;
+    </PageFrame>
+  );
 }

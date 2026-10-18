@@ -134,6 +134,21 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
+  --color-primary-50: var(--primary-50);
+  --color-primary-100: var(--primary-100);
+  --color-primary-200: var(--primary-200);
+  --color-primary-300: var(--primary-300);
+  --color-primary-400: var(--primary-400);
+  --color-primary-500: var(--primary-500);
+  --color-primary-600: var(--primary-600);
+  --color-primary-700: var(--primary-700);
+  --color-primary-800: var(--primary-800);
+  --color-primary-900: var(--primary-900);
+  --color-vendor-primary: var(--vendor-primary);
+  --color-vendor-primary-light: var(--vendor-primary-light);
+  --color-vendor-primary-dark: var(--vendor-primary-dark);
+  --color-vendor-accent: var(--vendor-accent);
+
   --radius-sm: calc(var(--radius) - 6px);
   --radius-md: calc(var(--radius) - 3px);
   --radius-lg: var(--radius);
@@ -148,7 +163,7 @@
 /* ─── Static Palette (never changes) ──────────────────────── */
 
 :root {
-  /* Primary (SAP Blue) */
+  /* Primary Palette Fallbacks */
   --primary-50: #eef2ff;
   --primary-100: #e0e7ff;
   --primary-200: #c7d2fe;
@@ -157,6 +172,21 @@
   --primary-500: #0a6ed1;
   --primary-600: #0854a0;
   --primary-700: #074a8a;
+  --primary-800: #053b6f;
+  --primary-900: #042d54;
+
+  --primary-rgb: 10, 110, 209;
+  --primary-light-rgb: 77, 177, 255;
+  --primary-hover: var(--primary-600);
+  --primary-active: var(--primary-700);
+  --primary-focus: var(--primary-400);
+  --primary-subtle: var(--primary-50);
+  --primary-dark: #5ea2ff;
+
+  --vendor-primary: var(--primary-500);
+  --vendor-primary-light: var(--primary-300);
+  --vendor-primary-dark: var(--primary-700);
+  --vendor-accent: var(--primary-400);
 
   /* Success */
   --success-50: #ecfdf5;
@@ -257,18 +287,18 @@
   --card-foreground: #edf3f9;
   --popover: #151e2d;
   --popover-foreground: #edf3f9;
-  --primary: #5ea2ff;
+  --primary: var(--primary-dark, #5ea2ff);
   --primary-foreground: #07111f;
   --secondary: #1a2534;
   --secondary-foreground: #e4ebf3;
   --muted: #182331;
   --muted-foreground: #9ba9b9;
-  --accent: #1b3150;
-  --accent-foreground: #d7e8ff;
+  --accent: var(--primary-dark-accent, rgba(var(--primary-rgb, 94, 162, 255), 0.18));
+  --accent-foreground: var(--primary-100, #d7e8ff);
   --destructive: #f05252;
   --destructive-foreground: #ffffff;
   --input: #334154;
-  --ring: #6eacff;
+  --ring: var(--primary-dark-ring, #6eacff);
 
   --surface: var(--background);
   --surface-elevated: #101926;
@@ -291,11 +321,11 @@
   --overlay: rgba(0, 0, 0, 0.5);
 
   /* SAP Shell (left panel — darker variant) */
-  --shell-bg: linear-gradient(175deg, #0d1b2a 0%, #1b2838 40%, #0a3d6b 100%);
+  --shell-bg: var(--shell-bg-dark, linear-gradient(175deg, #0d1b2a 0%, #1b2838 40%, #0a3d6b 100%));
   --shell-text: #e8eaed;
   --shell-text-secondary: rgba(232, 234, 237, 0.5);
   --shell-border: rgba(255, 255, 255, 0.06);
-  --shell-accent: #4db1ff;
+  --shell-accent: var(--primary-dark, #4db1ff);
 
   /* Error styling */
   --error-bg: rgba(187, 0, 0, 0.12);
@@ -867,15 +897,15 @@ img {
   --glass-bg-light: rgba(255, 255, 255, 0.75);
   --glass-bg-hover-light: rgba(255, 255, 255, 0.88);
   --glass-border-light: rgba(255, 255, 255, 0.7);
-  --glass-border-hover-light: rgba(10, 110, 209, 0.4);
+  --glass-border-hover-light: var(--card-glow-border, rgba(var(--primary-rgb, 10, 110, 209), 0.4));
   --glass-shadow-light: 0 8px 32px 0 rgba(31, 38, 135, 0.08), inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
-  --glass-shadow-hover-light: 0 16px 40px 0 rgba(10, 110, 209, 0.15), inset 0 1px 0 0 rgba(255, 255, 255, 1);
+  --glass-shadow-hover-light: 0 16px 40px 0 var(--card-glow-bg, rgba(var(--primary-rgb, 10, 110, 209), 0.15)), inset 0 1px 0 0 rgba(255, 255, 255, 1);
 
   /* Dark Theme Glass Tokens */
   --glass-bg-dark: linear-gradient(135deg, rgba(30, 41, 59, 0.65) 0%, rgba(15, 23, 42, 0.75) 100%);
   --glass-bg-hover-dark: linear-gradient(135deg, rgba(38, 52, 75, 0.8) 0%, rgba(22, 33, 52, 0.85) 100%);
   --glass-border-dark: rgba(255, 255, 255, 0.14);
-  --glass-border-hover-dark: rgba(77, 177, 255, 0.5);
+  --glass-border-hover-dark: var(--card-glow-border, rgba(var(--primary-light-rgb, 77, 177, 255), 0.5));
   --glass-shadow-dark: 0 8px 32px 0 rgba(0, 0, 0, 0.35), inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
   --glass-shadow-hover-dark: 0 16px 44px 0 rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.18);
 }
@@ -915,16 +945,17 @@ img {
    Universal Card Selection & Glow System (App-Wide Standard)
    ═══════════════════════════════════════════════════════════ */
 
-:root {
-  --card-glow-border: rgba(10, 110, 209, 0.45);
-  --card-glow-shadow: 0 0 0 2px rgba(10, 110, 209, 0.1), 0 4px 20px rgba(10, 110, 209, 0.12);
-  --card-glow-bg: rgba(10, 110, 209, 0.08);
+:root,
+[data-theme="light"] {
+  --card-glow-border: var(--card-glow-border-light, rgba(var(--primary-rgb, 10, 110, 209), 0.45));
+  --card-glow-shadow: var(--card-glow-shadow-light, 0 0 0 2px rgba(var(--primary-rgb, 10, 110, 209), 0.1), 0 4px 20px rgba(var(--primary-rgb, 10, 110, 209), 0.12));
+  --card-glow-bg: var(--card-glow-bg-light, rgba(var(--primary-rgb, 10, 110, 209), 0.08));
 }
 
 [data-theme="dark"] {
-  --card-glow-border: #388bfd;
-  --card-glow-shadow: 0 0 0 1.5px #388bfd, 0 0 25px rgba(56, 139, 253, 0.75), 0 0 10px rgba(56, 139, 253, 0.9), inset 0 0 15px rgba(56, 139, 253, 0.2);
-  --card-glow-bg: rgba(56, 139, 253, 0.2);
+  --card-glow-border: var(--card-glow-border-dark, var(--primary-dark, #388bfd));
+  --card-glow-shadow: var(--card-glow-shadow-dark, 0 0 0 1.5px #388bfd, 0 0 25px rgba(var(--primary-rgb, 56, 139, 253), 0.75), 0 0 10px rgba(var(--primary-rgb, 56, 139, 253), 0.9), inset 0 0 15px rgba(var(--primary-rgb, 56, 139, 253), 0.2));
+  --card-glow-bg: var(--card-glow-bg-dark, rgba(var(--primary-rgb, 56, 139, 253), 0.2));
 }
 
 /* Master Active / Selected Card Glow Selector */
@@ -1091,8 +1122,8 @@ img {
 .glass-card:hover:not(.active),
 .po-card:hover:not(.active),
 .docs-card:hover:not(.active) {
-  border-color: rgba(56, 139, 253, 0.4) !important;
-  box-shadow: 0 12px 30px -24px rgba(56, 139, 253, 0.55) !important;
+  border-color: var(--card-glow-border, rgba(var(--primary-rgb, 56, 139, 253), 0.4)) !important;
+  box-shadow: 0 12px 30px -24px var(--card-glow-border, rgba(var(--primary-rgb, 56, 139, 253), 0.55)) !important;
   transform: translateY(-1px) !important;
 }
 

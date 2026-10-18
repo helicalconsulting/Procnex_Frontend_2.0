@@ -746,7 +746,7 @@ export default function ApprovalsPage() {
           <TableSkeleton rows={5} columnWidths={['220px', '140px', '110px', '95px', '110px', '130px', '120px', '90px']} />
         ) : paginated.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1000px] border-collapse text-sm">
+            <table className="w-full min-w-[1180px] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-border/75 bg-muted/45 text-left text-[12px] font-bold uppercase tracking-wide text-muted-foreground">
                   {visibleColumns.map((col) => (
@@ -760,7 +760,7 @@ export default function ApprovalsPage() {
                       {col.label}
                     </th>
                   ))}
-                  <th className="w-28 px-4 py-3 text-center">
+                  <th className="w-[340px] min-w-[340px] px-4 py-3 text-center sticky right-0 z-10 bg-muted/95 backdrop-blur-sm shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.1)] dark:shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.35)]">
                     <div className="flex items-center justify-center gap-2">
                       <span>Actions</span>
                       <div className="relative">
@@ -795,7 +795,7 @@ export default function ApprovalsPage() {
               </thead>
               <tbody className="divide-y divide-border/60">
                 {paginated.map((req) => (
-                  <tr key={req.id} className="cursor-pointer transition-colors hover:bg-accent/35" onClick={() => setDetailRequest(req)}>
+                  <tr key={req.id} className="group cursor-pointer transition-colors hover:bg-accent/35" onClick={() => setDetailRequest(req)}>
                     {visibleColumns.map((col) => (
                       <td
                         key={col.key}
@@ -807,15 +807,15 @@ export default function ApprovalsPage() {
                         {col.render(req, formatDateTime)}
                       </td>
                     ))}
-                    <td className="w-36 px-3 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-center gap-1">
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="View Details" onClick={() => setDetailRequest(req)}>
+                    <td className="w-[340px] min-w-[340px] px-3 py-3.5 text-center sticky right-0 z-10 bg-card group-hover:bg-accent/35 transition-colors shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.1)] dark:shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.35)]" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0" title="View Details" onClick={() => setDetailRequest(req)}>
                           <Eye className="size-4 text-muted-foreground hover:text-foreground" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-8 w-8 p-0 text-primary hover:text-primary hover:bg-primary/10"
+                          className="h-8 w-8 p-0 shrink-0 text-primary hover:text-primary hover:bg-primary/10"
                           title={`View / Print Document (${req.referenceNumber})`}
                           onClick={() => {
                             if (/order|po/i.test(req.module)) {
@@ -835,13 +835,13 @@ export default function ApprovalsPage() {
                         </Button>
                         {req.canAct && (
                           <>
-                            <Button variant="outline" size="sm" className="h-8 text-xs gap-1 text-emerald-600 hover:text-emerald-700" onClick={() => openAction(req, 'approve')}>
+                            <Button variant="outline" size="sm" className="h-8 text-xs gap-1 shrink-0 text-emerald-600 hover:text-emerald-700 whitespace-nowrap" onClick={() => openAction(req, 'approve')}>
                               <ThumbsUp className="size-3.5" /> {(req.status === 'RETURNED' || (req as any).isReturned) ? 'Resubmit' : 'Approve'}
                             </Button>
-                            <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 text-amber-600 hover:text-amber-700" onClick={() => openAction(req, 'return')}>
+                            <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 shrink-0 text-amber-600 hover:text-amber-700 whitespace-nowrap" onClick={() => openAction(req, 'return')}>
                               <RotateCcw className="size-3.5" /> Return
                             </Button>
-                            <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 text-destructive hover:text-destructive" onClick={() => openAction(req, 'reject')}>
+                            <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 shrink-0 text-destructive hover:text-destructive whitespace-nowrap" onClick={() => openAction(req, 'reject')}>
                               <ThumbsDown className="size-3.5" /> Reject
                             </Button>
                           </>

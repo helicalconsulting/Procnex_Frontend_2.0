@@ -60,12 +60,12 @@
   width: 42px;
   height: 42px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #0a6ed1 0%, #6366f1 100%);
+  background: linear-gradient(135deg, var(--primary-500, #0a6ed1) 0%, var(--primary-600, #6366f1) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   color: #ffffff;
-  box-shadow: 0 4px 12px rgba(10, 110, 209, 0.3);
+  box-shadow: 0 4px 12px rgba(var(--primary-rgb, 10, 110, 209), 0.3);
 }
 
 .cdbm-header__title {
@@ -107,9 +107,9 @@
 }
 
 .cdbm-tab-btn--active {
-  background: rgba(10, 110, 209, 0.1);
-  border-color: #0a6ed1;
-  color: #0a6ed1;
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.1);
+  border-color: var(--primary-500, #0a6ed1);
+  color: var(--primary-500, #0a6ed1);
 }
 
 [data-theme="dark"] .cdbm-tab-btn--active {
@@ -220,8 +220,8 @@
 .cdbm-sig-toggle {
   padding: 12px;
   border-radius: 8px;
-  background: rgba(10, 110, 209, 0.06);
-  border: 1px solid rgba(10, 110, 209, 0.18);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.06);
+  border: 1px solid rgba(var(--primary-rgb, 10, 110, 209), 0.18);
   margin-top: 6px;
 }
 
@@ -231,7 +231,7 @@
   gap: 8px;
   font-size: 13px;
   font-weight: 600;
-  color: #0a6ed1;
+  color: var(--primary-500, #0a6ed1);
   cursor: pointer;
 }
 
@@ -320,9 +320,9 @@
 }
 
 .cdbm-ph-tab--active {
-  background: rgba(10, 110, 209, 0.12);
-  border-color: #0a6ed1;
-  color: #0a6ed1;
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.12);
+  border-color: var(--primary-500, #0a6ed1);
+  color: var(--primary-500, #0a6ed1);
   font-weight: 600;
 }
 
@@ -346,15 +346,15 @@
 }
 
 .cdbm-ph-chip:hover {
-  background: rgba(10, 110, 209, 0.08);
-  border-color: #0a6ed1;
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.08);
+  border-color: var(--primary-500, #0a6ed1);
   transform: translateY(-1px);
 }
 
 .cdbm-ph-chip code {
   font-family: monospace;
   font-weight: 700;
-  color: #0a6ed1;
+  color: var(--primary-500, #0a6ed1);
 }
 
 [data-theme="dark"] .cdbm-ph-chip {
@@ -459,12 +459,12 @@
 }
 
 .cdbm-btn--primary {
-  background: linear-gradient(135deg, #0a6ed1 0%, #4f46e5 100%);
+  background: linear-gradient(135deg, var(--primary-500, #0a6ed1) 0%, var(--primary-600, #4f46e5) 100%);
   color: #ffffff;
-  box-shadow: 0 4px 12px rgba(10, 110, 209, 0.3);
+  box-shadow: 0 4px 12px rgba(var(--primary-rgb, 10, 110, 209), 0.3);
 }
 
 .cdbm-btn--primary:hover {
   opacity: 0.95;
-  box-shadow: 0 6px 16px rgba(10, 110, 209, 0.4);
+  box-shadow: 0 6px 16px rgba(var(--primary-rgb, 10, 110, 209), 0.4);
 }

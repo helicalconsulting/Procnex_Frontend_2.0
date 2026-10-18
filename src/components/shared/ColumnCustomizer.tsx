@@ -96,7 +96,7 @@ export default function ColumnCustomizer({
       background: var(--surface-card);
       border: 1.5px solid var(--primary-500);
       border-radius: 10px;
-      box-shadow: 0 12px 32px rgba(10,110,209,0.22);
+      box-shadow: 0 12px 32px rgba(var(--primary-rgb, 10, 110, 209), 0.22);
       opacity: 0.95;
       z-index: 9999;
       pointer-events: none;

@@ -130,16 +130,16 @@
 }
 
 .cpv-btn--primary {
-  background: linear-gradient(135deg, #0a6ed1, #0856a4);
+  background: linear-gradient(135deg, var(--primary-500, #0a6ed1), var(--primary-600, #0856a4));
   color: #ffffff;
   border: none;
-  box-shadow: 0 4px 14px rgba(10, 110, 209, 0.25);
+  box-shadow: 0 4px 14px rgba(var(--primary-rgb, 10, 110, 209), 0.25);
 }
 
 .cpv-btn--primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #0856a4, #064280);
+  background: linear-gradient(135deg, var(--primary-600, #0856a4), #064280);
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(10, 110, 209, 0.35);
+  box-shadow: 0 6px 20px rgba(var(--primary-rgb, 10, 110, 209), 0.35);
 }
 
 .cpv-btn--success {
@@ -940,7 +940,7 @@
   font-family: var(--font-mono, monospace);
   font-weight: 600;
   color: var(--primary-500, #0a6ed1);
-  background: rgba(10, 110, 209, 0.08);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.08);
   padding: 2px 6px;
   border-radius: 4px;
   max-width: 150px;
@@ -1536,7 +1536,7 @@
 .cpv-mode-btn--active {
   background: var(--primary-500, #0a6ed1);
   color: #ffffff;
-  box-shadow: 0 2px 8px rgba(10, 110, 209, 0.25);
+  box-shadow: 0 2px 8px rgba(var(--primary-rgb, 10, 110, 209), 0.25);
 }
 
 .cpv-inv-table-wrap {

@@ -1338,7 +1338,7 @@ export default function CreateRFQPage() {
                             >
                               <span style={{
                                 width: 26, height: 26, borderRadius: 'var(--radius-sm)',
-                                background: 'rgba(10,110,209,0.12)',
+                                background: 'rgba(var(--primary-rgb, 10, 110, 209), 0.12)',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                               }}>
                                 <Plus size={13} style={{ color: 'var(--primary-500)' }} />
@@ -1347,7 +1347,7 @@ export default function CreateRFQPage() {
                               <span style={{
                                 fontSize: 11, fontWeight: 600,
                                 color: 'var(--primary-500)',
-                                background: 'rgba(10,110,209,0.12)',
+                                background: 'rgba(var(--primary-rgb, 10, 110, 209), 0.12)',
                                 padding: '2px 7px', borderRadius: 10,
                                 textTransform: 'capitalize',
                               }}>{f.fieldType}</span>
@@ -1448,11 +1448,11 @@ export default function CreateRFQPage() {
                 {Object.entries(simpleWeightages).map(([key, param], idx) => {
                   const isEditing = editingKey === key;
                   const accentColor =
-                    key === 'price' ? '#0a6ed1' :
+                    key === 'price' ? 'var(--primary-500, #0a6ed1)' :
                     key === 'vendorRating' ? '#107e3e' :
                     key === 'delivery' ? '#e9730c' :
                     key === 'compliance' ? '#8b5cf6' :
-                    ['#0a6ed1', '#107e3e', '#e9730c', '#8b5cf6', '#0891b2', '#ec4899'][idx % 6];
+                    ['var(--primary-500, #0a6ed1)', '#107e3e', '#e9730c', '#8b5cf6', '#0891b2', '#ec4899'][idx % 6];
                   const fillPct = Math.min(100, Math.max(0, param.weightage));
                   const trackBackground = `linear-gradient(to right, ${accentColor} 0%, ${accentColor} ${fillPct}%, var(--border-strong) ${fillPct}%, var(--border-strong) 100%)`;
                   return (
@@ -1946,7 +1946,7 @@ export default function CreateRFQPage() {
                     padding: '12px 16px',
                     border: `2px solid ${bidSecurityEnabled ? 'var(--primary-500)' : 'var(--border)'}`,
                     borderRadius: 'var(--radius-md)',
-                    background: bidSecurityEnabled ? 'rgba(10,110,209,0.04)' : 'transparent',
+                    background: bidSecurityEnabled ? 'rgba(var(--primary-rgb, 10, 110, 209), 0.04)' : 'transparent',
                     cursor: 'pointer',
                     transition: 'all 0.2s',
                     userSelect: 'none',
@@ -1971,7 +1971,7 @@ export default function CreateRFQPage() {
                     padding: '12px 16px',
                     border: `2px solid ${bidBondEnabled ? 'var(--primary-500)' : 'var(--border)'}`,
                     borderRadius: 'var(--radius-md)',
-                    background: bidBondEnabled ? 'rgba(10,110,209,0.04)' : 'transparent',
+                    background: bidBondEnabled ? 'rgba(var(--primary-rgb, 10, 110, 209), 0.04)' : 'transparent',
                     cursor: 'pointer',
                     transition: 'all 0.2s',
                     userSelect: 'none',
@@ -2153,29 +2153,67 @@ export default function CreateRFQPage() {
             <div className="create-rfq__vendors-grid">
               {departmentVendors.map((v) => {
                 const selected = selectedVendors.includes(v.id);
+                const hasScore = v.overallScore != null && v.overallScore > 0;
+                const scoreValue = v.overallScore ?? 0;
+                const scoreTone = !hasScore
+                  ? 'neutral'
+                  : scoreValue >= 80
+                  ? 'success'
+                  : scoreValue >= 60
+                  ? 'warning'
+                  : 'danger';
+
                 return (
                   <div
                     key={v.id}
                     className={`create-rfq__vendor-card ${selected ? 'create-rfq__vendor-card--selected' : ''}`}
                     onClick={() => toggleVendor(v.id)}
+                    role="checkbox"
+                    aria-checked={selected}
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === ' ' || e.key === 'Enter') {
+                        e.preventDefault();
+                        toggleVendor(v.id);
+                      }
+                    }}
                   >
-                    <span className="create-rfq__vendor-check">
-                      {selected && <Check size={13} />}
-                    </span>
-                    <span className={`create-rfq__vendor-avatar create-rfq__vendor-avatar--${v.avatarMod}`}>
-                      {v.initials}
-                    </span>
-                    <div className="create-rfq__vendor-info">
-                      <div className="create-rfq__vendor-name">{v.name}</div>
-                      <div className="create-rfq__vendor-email">{v.email}</div>
-                      <div className="create-rfq__vendor-category">{v.category}</div>
+                    {/* Top Row: Checkbox + Avatar + Score Badge */}
+                    <div className="create-rfq__vendor-card-top">
+                      <div className="create-rfq__vendor-card-identity">
+                        <span className="create-rfq__vendor-check">
+                          {selected && <Check size={11} strokeWidth={3} />}
+                        </span>
+                        <span className={`create-rfq__vendor-avatar create-rfq__vendor-avatar--${v.avatarMod}`}>
+                          {v.initials}
+                        </span>
+                      </div>
+
+                      <span
+                        className={`create-rfq__vendor-score-pill create-rfq__vendor-score-pill--${scoreTone}`}
+                        title={`Performance score: ${hasScore ? `${scoreValue}%` : 'Not yet rated'}`}
+                      >
+                        <span className="create-rfq__vendor-score-dot" />
+                        {hasScore ? `${scoreValue}%` : 'New'}
+                      </span>
                     </div>
-                    <span className="create-rfq__vendor-score" style={{
-                      color: v.overallScore != null && v.overallScore >= 80 ? '#16a34a' : v.overallScore != null && v.overallScore >= 60 ? '#ca8a04' : '#dc2626',
-                      fontWeight: 700,
-                    }}>
-                      {v.overallScore != null ? `${v.overallScore}%` : '—'}
-                    </span>
+
+                    {/* Middle: Vendor Name */}
+                    <div className="create-rfq__vendor-name" title={v.name}>
+                      {v.name}
+                    </div>
+
+                    {/* Bottom Metadata: Category Badge + Email */}
+                    <div className="create-rfq__vendor-footer">
+                      {v.category && (
+                        <span className="create-rfq__vendor-category" title={v.category}>
+                          {v.category}
+                        </span>
+                      )}
+                      <span className="create-rfq__vendor-email" title={v.email}>
+                        {v.email}
+                      </span>
+                    </div>
                   </div>
                 );
               })}

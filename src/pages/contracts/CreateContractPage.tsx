@@ -79,10 +79,10 @@ export default function CreateContractPage() {
             cursor: 'pointer',
             transition: 'all 0.2s',
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#0a6ed1')}
+          onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--primary-500, #0a6ed1)')}
           onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
         >
-          <div style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(10, 110, 209, 0.12)', color: '#0a6ed1', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+          <div style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(var(--primary-rgb, 10, 110, 209), 0.12)', color: 'var(--primary-500, #0a6ed1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
             <FileText size={22} />
           </div>
           <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 6px' }}>Service Level Contract</h3>

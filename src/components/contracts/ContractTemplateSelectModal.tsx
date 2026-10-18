@@ -19,7 +19,7 @@ const CONTRACT_TYPE_LABELS: Record<string, string> = {
 };
 
 const CONTRACT_TYPE_COLORS: Record<string, { bg: string; color: string }> = {
-  PURCHASE_CONTRACT: { bg: 'rgba(10,110,209,0.12)', color: '#0a6ed1' },
+  PURCHASE_CONTRACT: { bg: 'rgba(var(--primary-rgb, 10, 110, 209), 0.12)', color: 'var(--primary-500, #0a6ed1)' },
   SERVICE_CONTRACT: { bg: 'rgba(16,126,62,0.12)', color: '#107e3e' },
   AMC:              { bg: 'rgba(139,92,246,0.12)', color: '#8b5cf6' },
   BINDING_CONTRACT: { bg: 'rgba(217,119,6,0.12)',  color: '#d97706' },

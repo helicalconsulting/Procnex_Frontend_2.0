@@ -321,7 +321,7 @@
 
 .sap-field__input:focus {
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 2px rgba(10, 110, 209, 0.16);
+  box-shadow: 0 0 0 2px rgba(var(--primary-rgb, 10, 110, 209), 0.16);
 }
 
 [data-theme="dark"] .sap-field__input:focus {
@@ -401,7 +401,7 @@
 }
 
 [data-theme="dark"] .sap-login__submit {
-  box-shadow: 0 2px 8px rgba(10, 110, 209, 0.3);
+  box-shadow: 0 2px 8px rgba(var(--primary-rgb, 10, 110, 209), 0.3);
 }
 
 /* ─── Spinner ──────────────────────────────────────────────── */

@@ -18,7 +18,7 @@
   border-radius: var(--radius-lg);
   background: linear-gradient(135deg, var(--primary-500) 0%, var(--primary-600) 55%, var(--primary-700) 100%);
   color: #fff;
-  box-shadow: 0 4px 20px rgba(10, 110, 209, 0.28);
+  box-shadow: 0 4px 20px rgba(var(--primary-rgb, 10, 110, 209), 0.28);
   position: relative;
   overflow: hidden;
 }
@@ -168,7 +168,7 @@
 }
 
 .sap-panel__action:hover {
-  background: rgba(10, 110, 209, 0.06);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.06);
   border-color: var(--primary-500);
 }
 
@@ -221,7 +221,7 @@
 
 .sap-form-row__input:focus {
   border-color: var(--primary-500);
-  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.12);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb, 10, 110, 209), 0.12);
 }
 
 /* ── Documents table ─────────────────────────────────────── */
@@ -252,7 +252,7 @@
   width: 40px;
   height: 40px;
   border-radius: var(--radius-md);
-  background: rgba(10, 110, 209, 0.08);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.08);
   color: var(--primary-500);
   display: flex;
   align-items: center;
@@ -303,7 +303,7 @@
 }
 
 .sap-doc-item__link:hover {
-  background: rgba(10, 110, 209, 0.06);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.06);
 }
 
 .sap-doc-item__actions {
@@ -353,7 +353,7 @@
 
 .sap-pw-field input:focus {
   border-color: var(--primary-500);
-  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.12);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb, 10, 110, 209), 0.12);
 }
 
 .sap-pw-actions {

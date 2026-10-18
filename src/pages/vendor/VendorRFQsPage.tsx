@@ -1303,7 +1303,7 @@ export default function VendorRFQsPage() {
                         <span style={{
                           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                           width: 22, height: 22, borderRadius: 5,
-                          background: 'rgba(10, 110, 209, 0.1)',
+                          background: 'rgba(var(--primary-rgb, 10, 110, 209), 0.1)',
                           color: 'var(--primary-600, #0a6ed1)',
                           fontSize: 13, fontWeight: 700,
                         }}>
@@ -1393,8 +1393,8 @@ export default function VendorRFQsPage() {
                         {/* ── Buyer requirement hints ── */}
                         {(quotModal.bidSecurityValue != null || quotModal.bidSecurityMinValue != null || quotModal.bidSecurityValidityValue != null || quotModal.bidSecurityMinValidity != null) && (
                           <div style={{
-                            padding: '8px 12px', background: 'rgba(10,110,209,0.06)',
-                            border: '1px solid rgba(10,110,209,0.15)', borderRadius: 'var(--radius-sm)',
+                            padding: '8px 12px', background: 'rgba(var(--primary-rgb, 10, 110, 209), 0.06)',
+                            border: '1px solid rgba(var(--primary-rgb, 10, 110, 209), 0.15)', borderRadius: 'var(--radius-sm)',
                             marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: '6px 16px',
                             fontSize: 13, color: 'var(--primary-600, #0a6ed1)',
                           }}>
@@ -1516,7 +1516,7 @@ export default function VendorRFQsPage() {
 
                         <div className="vquot-modal__field">
                           <label className="vquot-modal__label">Validity *</label>
-                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <div className="vquot-validity-row">
                             <input
                               className="vquot-modal__input"
                               type="number"
@@ -1532,14 +1532,12 @@ export default function VendorRFQsPage() {
                                 }
                               }}
                               disabled={isQuotReadOnly}
-                              style={{ flex: 1 }}
                             />
                             <select
                               className="vquot-modal__input"
                               value={bidSecValidityUnit}
                               onChange={(e) => setBidSecValidityUnit(e.target.value as 'DAYS')}
                               disabled={isQuotReadOnly}
-                              style={{ width: 100, flexShrink: 0 }}
                             >
                               <option value="DAYS">Days</option>
                             </select>
@@ -1662,8 +1660,8 @@ export default function VendorRFQsPage() {
                         {/* ── Buyer requirement hints ── */}
                         {(quotModal.bidBondMinValue != null || quotModal.bidBondMinValidity != null) && (
                           <div style={{
-                            padding: '8px 12px', background: 'rgba(10,110,209,0.06)',
-                            border: '1px solid rgba(10,110,209,0.15)', borderRadius: 'var(--radius-sm)',
+                            padding: '8px 12px', background: 'rgba(var(--primary-rgb, 10, 110, 209), 0.06)',
+                            border: '1px solid rgba(var(--primary-rgb, 10, 110, 209), 0.15)', borderRadius: 'var(--radius-sm)',
                             marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: '6px 16px',
                             fontSize: 13, color: 'var(--primary-600, #0a6ed1)',
                           }}>

@@ -55,7 +55,7 @@ export function MetricCard({ label, value, detail, icon: Icon, tone = 'primary',
       className={cn(
         'group min-w-0 p-4 transition-[border-color,box-shadow,transform,background-color] duration-200 hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-md sm:p-5',
         isPressed &&
-          'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]',
+          'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[var(--primary-dark,#388bfd)] dark:shadow-[0_0_0_1.5px_var(--primary-dark,#388bfd),0_0_25px_rgba(var(--primary-rgb,56,139,253),0.75),0_0_10px_rgba(var(--primary-rgb,56,139,253),0.9),inset_0_0_15px_rgba(var(--primary-rgb,56,139,253),0.2)]',
         className
       )}
       {...props}

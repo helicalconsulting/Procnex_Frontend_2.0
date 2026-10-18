@@ -1026,7 +1026,7 @@ export default function CompanySettingsPage() {
     (pendingResubmissionDeadline !== null && pendingResubmissionDeadline !== resubmissionDeadlineHours);
 
   // ── White Label / Branding ──
-  const { refresh: refreshBranding } = useBranding();
+  const { primaryColor: contextPrimaryColor, refresh: refreshBranding, setPrimaryColor: setContextPrimaryColor } = useBranding();
 
   const handleSaveGeneralSettings = useCallback(async () => {
     if (!canCreateSettings) return;
@@ -1095,7 +1095,7 @@ export default function CompanySettingsPage() {
   const [brandingName, setBrandingName] = useState('');
   const [brandingLogoUrl, setBrandingLogoUrl] = useState('');
   const [brandingFaviconUrl, setBrandingFaviconUrl] = useState('');
-  const [brandingColor, setBrandingColor] = useState('#0a6ed1');
+  const [brandingColor, setBrandingColor] = useState(contextPrimaryColor || '#0a6ed1');
   const [brandingLoginText, setBrandingLoginText] = useState('');
   const [brandingSupportEmail, setBrandingSupportEmail] = useState('');
   const [brandingCompanyPhone, setBrandingCompanyPhone] = useState('');
@@ -1184,6 +1184,9 @@ export default function CompanySettingsPage() {
       setProfile(updated);
       setBrandingDirty(false);
       setPageMsg('Branding & company details saved successfully! Changes applied immediately.');
+      if (updated.primaryColor) {
+        setContextPrimaryColor(updated.primaryColor);
+      }
       refreshBranding();
     } catch (err) {
       setPageMsg(err instanceof Error ? err.message : 'Failed to save branding settings');
@@ -1194,7 +1197,7 @@ export default function CompanySettingsPage() {
     canCreateSettings, brandingName, brandingLogoUrl, brandingColor, brandingLoginText,
     brandingSupportEmail, brandingCompanyPhone, brandingCompanyEmail, brandingCompanyWebsite,
     brandingCompanyAddress, brandingCompanyCity, brandingCompanyState, brandingCompanyCountry,
-    brandingBankName, profile, refreshBranding
+    brandingBankName, profile, refreshBranding, setContextPrimaryColor
   ]);
 
   const markBrandingDirty = useCallback(() => {
@@ -3228,7 +3231,7 @@ export default function CompanySettingsPage() {
                     padding: '14px 20px',
                     borderRadius: 8,
                     border: language === 'en' ? '2px solid var(--primary-500, #0a6ed1)' : '1px solid var(--border)',
-                    background: language === 'en' ? 'rgba(10, 110, 209, 0.08)' : 'var(--surface-card)',
+                    background: language === 'en' ? 'rgba(var(--primary-rgb, 10, 110, 209), 0.08)' : 'var(--surface-card)',
                     cursor: 'pointer',
                     fontWeight: 700,
                     fontSize: 15,
@@ -3257,7 +3260,7 @@ export default function CompanySettingsPage() {
                     padding: '14px 20px',
                     borderRadius: 8,
                     border: language === 'fr' ? '2px solid var(--primary-500, #0a6ed1)' : '1px solid var(--border)',
-                    background: language === 'fr' ? 'rgba(10, 110, 209, 0.08)' : 'var(--surface-card)',
+                    background: language === 'fr' ? 'rgba(var(--primary-rgb, 10, 110, 209), 0.08)' : 'var(--surface-card)',
                     cursor: 'pointer',
                     fontWeight: 700,
                     fontSize: 15,
@@ -3543,13 +3546,27 @@ export default function CompanySettingsPage() {
                     <input
                       type="color"
                       value={brandingColor}
-                      onChange={(e) => { setBrandingColor(e.target.value); markBrandingDirty(); }}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setBrandingColor(val);
+                        setContextPrimaryColor(val);
+                        markBrandingDirty();
+                      }}
                       aria-label="Primary color picker" className="cs-color-picker"
                     />
                     <Input
                       type="text"
                       value={brandingColor}
-                      onChange={(e) => { const v = e.target.value; if (/^#[0-9a-fA-F]{0,6}$/.test(v)) { setBrandingColor(v); markBrandingDirty(); } }}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (/^#[0-9a-fA-F]{0,6}$/.test(v)) {
+                          setBrandingColor(v);
+                          if (/^#[0-9a-fA-F]{6}$/.test(v)) {
+                            setContextPrimaryColor(v);
+                          }
+                          markBrandingDirty();
+                        }
+                      }}
                       placeholder="#0a6ed1"
                       aria-label="Primary color hex value" className="cs-color-hex"
                       maxLength={7}
@@ -3557,7 +3574,11 @@ export default function CompanySettingsPage() {
                     <Button variant="outline" size="default"
                       type="button"
                       className="settings-action"
-                      onClick={() => { setBrandingColor('#0a6ed1'); markBrandingDirty(); }}
+                      onClick={() => {
+                        setBrandingColor('#0a6ed1');
+                        setContextPrimaryColor('#0a6ed1');
+                        markBrandingDirty();
+                      }}
                       title="Reset to default color"
                     >
                       <RotateCcw size={14} /> Reset
@@ -3920,7 +3941,7 @@ export default function CompanySettingsPage() {
                     </>
                   ) : (
                     <>
-                      <Info size={20} style={{ color: '#0a6ed1', flexShrink: 0 }} />
+                      <Info size={20} style={{ color: 'var(--primary-500, #0a6ed1)', flexShrink: 0 }} />
                       <div>
                         <strong className="cs-email-status-title">Zero-Setup Platform Delivery Active</strong>
                         <span className="cs-email-status-subtitle">
@@ -3964,7 +3985,7 @@ export default function CompanySettingsPage() {
                   <div>
                     <div className="cs-domain-card">
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <Globe size={18} style={{ color: '#0a6ed1' }} />
+                        <Globe size={18} style={{ color: 'var(--primary-500, #0a6ed1)' }} />
                         <div>
                           <strong className="cs-domain-name">{profile.customDomain}</strong>
                           <span className={`cs-domain-badge ${profile.domainStatus === 'VERIFIED' ? 'cs-domain-badge--verified' : 'cs-domain-badge--pending'}`}>
@@ -4500,9 +4521,9 @@ export default function CompanySettingsPage() {
                                   display: 'inline-flex',
                                   alignItems: 'center',
                                   gap: 6,
-                                  background: 'rgba(10, 110, 209, 0.1)',
+                                  background: 'rgba(var(--primary-rgb, 10, 110, 209), 0.1)',
                                   color: 'var(--primary-500, #0a6ed1)',
-                                  border: '1px solid rgba(10, 110, 209, 0.25)',
+                                  border: '1px solid rgba(var(--primary-rgb, 10, 110, 209), 0.25)',
                                   padding: '4px 10px',
                                   borderRadius: 16,
                                   fontSize: 13,
@@ -4581,8 +4602,8 @@ export default function CompanySettingsPage() {
                                       key={optIdx}
                                       style={{
                                         fontSize: 11,
-                                        background: 'rgba(10, 110, 209, 0.08)',
-                                        border: '1px solid rgba(10, 110, 209, 0.2)',
+                                        background: 'rgba(var(--primary-rgb, 10, 110, 209), 0.08)',
+                                        border: '1px solid rgba(var(--primary-rgb, 10, 110, 209), 0.2)',
                                         color: 'var(--primary-500, #0a6ed1)',
                                         padding: '1px 6px',
                                         borderRadius: 8,
@@ -4600,7 +4621,7 @@ export default function CompanySettingsPage() {
                                 textTransform: 'capitalize',
                                 padding: '3px 10px',
                                 borderRadius: 12,
-                                background: 'rgba(10, 110, 209, 0.15)',
+                                background: 'rgba(var(--primary-rgb, 10, 110, 209), 0.15)',
                                 color: 'var(--primary-500, #0a6ed1)',
                                 fontSize: 13,
                                 fontWeight: 600,
@@ -6183,7 +6204,7 @@ export default function CompanySettingsPage() {
             style={{ maxWidth: 420, textAlign: 'center', padding: 0, overflow: 'hidden' }}
           >
             {/* Top gradient bar */}
-            <div style={{ height: 5, background: 'linear-gradient(90deg, #0a6ed1, #4795e8)' }} />
+            <div style={{ height: 5, background: 'linear-gradient(90deg, var(--primary-500, #0a6ed1), var(--primary-400, #4795e8))' }} />
 
             <div style={{ padding: '32px 32px 24px' }}>
               {/* Animated checkmark circle */}
@@ -6215,7 +6236,7 @@ export default function CompanySettingsPage() {
                   border: '1px solid var(--border, #e2e8f0)',
                   borderRadius: 10, padding: '14px 12px',
                 }}>
-                  <div style={{ fontSize: 29, fontWeight: 800, color: '#0a6ed1', lineHeight: 1 }}>
+                  <div style={{ fontSize: 29, fontWeight: 800, color: 'var(--primary-500, #0a6ed1)', lineHeight: 1 }}>
                     {backfillResult.updated}
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>

@@ -15,9 +15,9 @@
   background: var(--primary-500); color: #fff; font-size: 16px; font-weight: 700;
   cursor: pointer; font-family: inherit;
   transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
-  box-shadow: 0 2px 8px rgba(10,110,209,0.25);
+  box-shadow: 0 2px 8px rgba(var(--primary-rgb, 10, 110, 209),0.25);
 }
-.alvl-page__add-btn:hover { background: var(--primary-600); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(10,110,209,0.35); }
+.alvl-page__add-btn:hover { background: var(--primary-600); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(var(--primary-rgb, 10, 110, 209),0.35); }
 .alvl-page__add-btn:active { transform: translateY(0); }
 
 /* Summary */
@@ -34,12 +34,12 @@
   width: 44px; height: 44px; border-radius: var(--radius-md);
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
-.alvl-summary-card__icon--total   { background: rgba(10,110,209,0.1);  color: var(--primary-500); }
+.alvl-summary-card__icon--total   { background: rgba(var(--primary-rgb, 10, 110, 209),0.1);  color: var(--primary-500); }
 .alvl-summary-card__icon--modules { background: rgba(139,92,246,0.1);  color: #8b5cf6; }
 .alvl-summary-card__icon--avg     { background: rgba(233,115,12,0.1);  color: var(--warning-500); }
 .alvl-summary-card__icon--max     { background: rgba(16,126,62,0.1);   color: var(--success-500); }
 
-[data-theme="dark"] .alvl-summary-card__icon--total   { background: rgba(10,110,209,0.18); }
+[data-theme="dark"] .alvl-summary-card__icon--total   { background: rgba(var(--primary-rgb, 10, 110, 209),0.18); }
 [data-theme="dark"] .alvl-summary-card__icon--modules { background: rgba(139,92,246,0.18); }
 [data-theme="dark"] .alvl-summary-card__icon--avg     { background: rgba(233,115,12,0.18); }
 [data-theme="dark"] .alvl-summary-card__icon--max     { background: rgba(16,126,62,0.18); }
@@ -59,7 +59,7 @@
   transition: all 0.2s; font-family: inherit;
 }
 .alvl-module-pill:hover { color: var(--text-primary); background: var(--surface-hover); }
-.alvl-module-pill--active { border-color: var(--primary-500); color: var(--primary-500); background: rgba(10,110,209,0.06); }
+.alvl-module-pill--active { border-color: var(--primary-500); color: var(--primary-500); background: rgba(var(--primary-rgb, 10, 110, 209),0.06); }
 .alvl-module-pill__count { font-weight: 700; font-size: 14px; }
 
 /* ─── System Toggle ──────────────────────────────────────── */
@@ -129,7 +129,7 @@
 
 .alvl-system-toggle__btn--heliflow.alvl-system-toggle__btn--active {
   border-color: var(--primary-500);
-  background: rgba(10, 110, 209, 0.04);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.04);
 }
 
 [data-theme="dark"] .alvl-system-toggle__btn--rfq.alvl-system-toggle__btn--active {
@@ -137,7 +137,7 @@
 }
 
 [data-theme="dark"] .alvl-system-toggle__btn--heliflow.alvl-system-toggle__btn--active {
-  background: rgba(10, 110, 209, 0.08);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.08);
 }
 
 .alvl-system-toggle__sub {
@@ -167,12 +167,12 @@
 }
 
 .alvl-chain-card__system-tag--heliflow {
-  background: rgba(10, 110, 209, 0.1);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.1);
   color: var(--primary-500);
 }
 
 [data-theme="dark"] .alvl-chain-card__system-tag--rfq { background: rgba(217, 119, 6, 0.15); }
-[data-theme="dark"] .alvl-chain-card__system-tag--heliflow { background: rgba(10, 110, 209, 0.15); }
+[data-theme="dark"] .alvl-chain-card__system-tag--heliflow { background: rgba(var(--primary-rgb, 10, 110, 209), 0.15); }
 
 /* ─── Disabled / Greyed Out Chain Cards ──────────────────── */
 
@@ -404,7 +404,7 @@
   font-size: 16px; font-family: inherit; appearance: none;
   transition: border-color 0.2s, box-shadow 0.2s; outline: none; cursor: pointer;
 }
-.alvl-modal__select:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(10,110,209,0.1); }
+.alvl-modal__select:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(var(--primary-rgb, 10, 110, 209),0.1); }
 .alvl-modal__select:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .alvl-modal__select-icon {
@@ -415,10 +415,10 @@
 .alvl-modal__preview {
   display: flex; align-items: center; gap: 10px;
   padding: 12px 14px; border-radius: var(--radius-md);
-  background: rgba(10,110,209,0.05); font-size: 14px;
+  background: rgba(var(--primary-rgb, 10, 110, 209),0.05); font-size: 14px;
   color: var(--primary-500); font-weight: 500;
 }
-[data-theme="dark"] .alvl-modal__preview { background: rgba(10,110,209,0.08); }
+[data-theme="dark"] .alvl-modal__preview { background: rgba(var(--primary-rgb, 10, 110, 209),0.08); }
 .alvl-modal__preview svg { flex-shrink: 0; }
 
 .alvl-modal__footer {
@@ -434,7 +434,7 @@
 }
 .alvl-modal__btn--primary {
   background: var(--primary-500); color: #fff; border-color: var(--primary-500);
-  box-shadow: 0 2px 8px rgba(10,110,209,0.25);
+  box-shadow: 0 2px 8px rgba(var(--primary-rgb, 10, 110, 209),0.25);
 }
 .alvl-modal__btn--primary:hover { background: var(--primary-600); transform: translateY(-1px); }
 .alvl-modal__btn--primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
@@ -559,11 +559,11 @@
 .alvl-modal__value-preset--active {
   border-color: var(--primary-500);
   color: var(--primary-500);
-  background: rgba(10,110,209,0.06);
+  background: rgba(var(--primary-rgb, 10, 110, 209),0.06);
 }
 
 [data-theme="dark"] .alvl-modal__value-preset--active {
-  background: rgba(10,110,209,0.12);
+  background: rgba(var(--primary-rgb, 10, 110, 209),0.12);
 }
 
 .alvl-modal__value-note {
@@ -573,7 +573,7 @@
   margin-top: 4px;
   padding: 10px 12px;
   border-radius: var(--radius-sm);
-  background: rgba(10,110,209,0.06);
+  background: rgba(var(--primary-rgb, 10, 110, 209),0.06);
   font-size: 13px;
   color: var(--primary-500);
   font-weight: 500;
@@ -586,7 +586,7 @@
 }
 
 [data-theme="dark"] .alvl-modal__value-note {
-  background: rgba(10,110,209,0.1);
+  background: rgba(var(--primary-rgb, 10, 110, 209),0.1);
 }
 
 /* ─── Modal Time Input ───────────────────────────────────── */
@@ -606,7 +606,7 @@
 
 .alvl-modal__input:focus {
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px rgba(10,110,209,0.1);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb, 10, 110, 209),0.1);
 }
 
 .alvl-modal__time-input-row {
@@ -662,11 +662,11 @@
 .alvl-modal__time-preset--active {
   border-color: var(--primary-500);
   color: var(--primary-500);
-  background: rgba(10,110,209,0.06);
+  background: rgba(var(--primary-rgb, 10, 110, 209),0.06);
 }
 
 [data-theme="dark"] .alvl-modal__time-preset--active {
-  background: rgba(10,110,209,0.12);
+  background: rgba(var(--primary-rgb, 10, 110, 209),0.12);
 }
 
 .alvl-modal__time-note {

@@ -186,7 +186,7 @@ function getScoreGrade(score: number): { color: string; label: string } {
 }
 
 const RANK_COLORS = ['#f59e0b', '#9ca3af', '#d97706'];
-const VENDOR_BAR_COLORS = ['#0a6ed1', '#16a34a', '#7c3aed', '#ca8a04', '#0891b2', '#ea580c', '#db2777', '#dc2626'];
+const VENDOR_BAR_COLORS = ['var(--primary-500, #0a6ed1)', '#16a34a', '#7c3aed', '#ca8a04', '#0891b2', '#ea580c', '#db2777', '#dc2626'];
 
 export interface RFQDetailModalProps {
   rfq: RFQTableRow | null;

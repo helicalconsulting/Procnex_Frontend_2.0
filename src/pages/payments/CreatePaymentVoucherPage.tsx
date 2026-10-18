@@ -2398,7 +2398,7 @@ export default function CreatePaymentVoucherPage() {
                   alignItems: 'center',
                   gap: 12,
                 }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(10, 110, 209, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-500, #0a6ed1)' }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(var(--primary-rgb, 10, 110, 209), 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-500, #0a6ed1)' }}>
                     <FileText size={22} />
                   </div>
                   <div>
@@ -2553,8 +2553,8 @@ export default function CreatePaymentVoucherPage() {
                             type="button"
                             onClick={() => handleAddCustomInvoice()}
                             style={{
-                              background: 'rgba(10, 110, 209, 0.1)',
-                              border: '1px solid rgba(10, 110, 209, 0.3)',
+                              background: 'rgba(var(--primary-rgb, 10, 110, 209), 0.1)',
+                              border: '1px solid rgba(var(--primary-rgb, 10, 110, 209), 0.3)',
                               color: 'var(--primary-500, #0a6ed1)',
                               padding: '6px 14px',
                               borderRadius: 6,
@@ -3100,7 +3100,7 @@ export default function CreatePaymentVoucherPage() {
                         width: 30,
                         height: 30,
                         borderRadius: 8,
-                        background: 'rgba(10, 110, 209, 0.1)',
+                        background: 'rgba(var(--primary-rgb, 10, 110, 209), 0.1)',
                         color: 'var(--primary-500, #0a6ed1)',
                         display: 'flex',
                         alignItems: 'center',

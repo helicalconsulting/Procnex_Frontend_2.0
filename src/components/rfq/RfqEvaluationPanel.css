@@ -92,9 +92,9 @@
 }
 
 [data-theme='dark'] .rfq-eval__btn--active {
-  background: rgba(10, 110, 209, 0.15);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.15);
   color: var(--primary-400);
-  border-color: rgba(10, 110, 209, 0.3);
+  border-color: rgba(var(--primary-rgb, 10, 110, 209), 0.3);
 }
 
 .rfq-eval__btn--xs {
@@ -258,7 +258,7 @@
 
 .rfq-eval__weight-input:focus {
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 2px rgba(10, 110, 209, 0.08);
+  box-shadow: 0 0 0 2px rgba(var(--primary-rgb, 10, 110, 209), 0.08);
 }
 
 .rfq-eval__weight-input--xs {
@@ -432,7 +432,7 @@
 }
 
 .rfq-eval__subparam-badge--predef {
-  background: rgba(10, 110, 209, 0.08);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.08);
   color: var(--primary-600);
 }
 
@@ -442,7 +442,7 @@
 }
 
 [data-theme='dark'] .rfq-eval__subparam-badge--predef {
-  background: rgba(10, 110, 209, 0.2);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.2);
   color: var(--primary-400);
 }
 
@@ -607,7 +607,7 @@
 
 .rfq-eval__input:focus {
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 2px rgba(10, 110, 209, 0.08);
+  box-shadow: 0 0 0 2px rgba(var(--primary-rgb, 10, 110, 209), 0.08);
 }
 
 .rfq-eval__input--sm {
@@ -660,7 +660,7 @@
 }
 
 .rfq-eval__add-param:hover {
-  background: rgba(10, 110, 209, 0.04);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.04);
   border-color: var(--primary-300);
 }
 
@@ -879,7 +879,7 @@
 .rq-charts__mode-btn--active {
   background: var(--primary-500) !important;
   color: #ffffff !important;
-  box-shadow: 0 2px 6px rgba(10, 110, 209, 0.25);
+  box-shadow: 0 2px 6px rgba(var(--primary-rgb, 10, 110, 209), 0.25);
 }
 
 /* ─── Parameter Legend Chips Footnote (Image 2 style) ───── */
@@ -946,7 +946,7 @@
 }
 
 .rq-chart__tooltip-code-pill {
-  background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(10, 110, 209, 0.2));
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(var(--primary-rgb, 10, 110, 209), 0.2));
   color: #38bdf8;
   border: 1px solid rgba(56, 189, 248, 0.4);
   font-weight: 800;
@@ -1002,7 +1002,7 @@
 }
 
 .rq-chart__tooltip-badge--overall {
-  background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(10, 110, 209, 0.35)) !important;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(var(--primary-rgb, 10, 110, 209), 0.35)) !important;
   color: #38bdf8 !important;
   border: 1px solid rgba(56, 189, 248, 0.5) !important;
   box-shadow: 0 0 12px rgba(56, 189, 248, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;

@@ -57,8 +57,8 @@
 
 .grn-kpi-card--active-primary {
   border-color: var(--primary-500) !important;
-  background: rgba(10, 110, 209, 0.08) !important;
-  box-shadow: 0 0 0 2px rgba(10, 110, 209, 0.2) !important;
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.08) !important;
+  box-shadow: 0 0 0 2px rgba(var(--primary-rgb, 10, 110, 209), 0.2) !important;
 }
 
 .grn-kpi-card--active-warning {
@@ -118,7 +118,7 @@
 
 .grn-search-box:focus-within {
   border-color: var(--primary-500);
-  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.15);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb, 10, 110, 209), 0.15);
 }
 
 .grn-search-box input {
@@ -180,9 +180,9 @@
 }
 
 .grn-status-badge--po {
-  background: rgba(10, 110, 209, 0.12);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.12);
   color: var(--primary-500);
-  border: 1px solid rgba(10, 110, 209, 0.3);
+  border: 1px solid rgba(var(--primary-rgb, 10, 110, 209), 0.3);
 }
 
 /* Modal */
@@ -347,17 +347,17 @@
   font-size: 14px;
   font-weight: 600;
   color: #ffffff;
-  background: linear-gradient(135deg, #0a6ed1 0%, #0856a4 100%);
-  border: 1px solid #0a6ed1;
-  box-shadow: 0 3px 10px rgba(10, 110, 209, 0.25);
+  background: linear-gradient(135deg, var(--primary-500, #0a6ed1) 0%, var(--primary-600, #0856a4) 100%);
+  border: 1px solid var(--primary-500, #0a6ed1);
+  box-shadow: 0 3px 10px rgba(var(--primary-rgb, 10, 110, 209), 0.25);
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.2s ease;
 }
 
 .grn-btn-create-invoice:hover {
-  background: linear-gradient(135deg, #0856a4 0%, #063f78 100%);
-  box-shadow: 0 5px 16px rgba(10, 110, 209, 0.38);
+  background: linear-gradient(135deg, var(--primary-600, #0856a4) 0%, #063f78 100%);
+  box-shadow: 0 5px 16px rgba(var(--primary-rgb, 10, 110, 209), 0.38);
   transform: translateY(-1px);
 }
 

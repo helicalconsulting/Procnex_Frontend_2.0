@@ -80,7 +80,7 @@ interface VendorWidgetDefinition {
 }
 
 const VENDOR_WIDGETS: VendorWidgetDefinition[] = [
-  { id: 'kpis', name: 'Business snapshot', description: 'RFQs, quotations, orders, invoices, and revenue at a glance.', icon: BarChart3, accentColor: '#0a6ed1', fullWidth: true, category: 'kpis' },
+  { id: 'kpis', name: 'Business snapshot', description: 'RFQs, quotations, orders, invoices, and revenue at a glance.', icon: BarChart3, accentColor: 'var(--vendor-primary, #0a6ed1)', fullWidth: true, category: 'kpis' },
   { id: 'deadlines', name: 'Upcoming deadlines', description: 'RFQ closing dates sorted by urgency.', icon: Clock, accentColor: '#d97706', category: 'data' },
   { id: 'activity', name: 'Recent activity', description: 'Latest notifications and account events.', icon: FileText, accentColor: '#0284c7', category: 'data' },
   { id: 'quicknav', name: 'Quick actions', description: 'Shortcuts to common vendor workflows.', icon: Zap, accentColor: '#8b5cf6', category: 'actions' },
@@ -461,7 +461,7 @@ export default function VendorDashboard() {
 
     if (id === 'quicknav') {
       const actions = [
-        { label: 'Submit quotation', description: 'Respond to open RFQs', icon: FileText, path: getVendorPath('/vendor/rfqs'), accent: '#0a6ed1' },
+        { label: 'Submit quotation', description: 'Respond to open RFQs', icon: FileText, path: getVendorPath('/vendor/rfqs'), accent: 'var(--vendor-primary, #0a6ed1)' },
         { label: 'Create invoice', description: 'Submit invoice against order', icon: Plus, path: getVendorPath('/vendor/create-invoice'), accent: '#10b981' },
         { label: 'Track orders', description: 'View fulfillment status', icon: Package, path: getVendorPath('/vendor/orders'), accent: '#8b5cf6' },
         { label: 'Manage invoices', description: 'Track payment and review status', icon: Receipt, path: getVendorPath('/vendor/invoices'), accent: '#059669' },

@@ -258,8 +258,8 @@ function SignModal({
                       height: 20,
                       borderRadius: '50%',
                       background: c.color,
-                      border: penColor === c.color ? '2px solid #0a6ed1' : '2px solid #ffffff',
-                      boxShadow: penColor === c.color ? '0 0 0 2px rgba(10,110,209,0.4)' : '0 1px 3px rgba(0,0,0,0.2)',
+                      border: penColor === c.color ? '2px solid var(--primary-500, #0a6ed1)' : '2px solid #ffffff',
+                      boxShadow: penColor === c.color ? '0 0 0 2px rgba(var(--primary-rgb, 10, 110, 209), 0.4)' : '0 1px 3px rgba(0,0,0,0.2)',
                       cursor: 'pointer',
                       padding: 0,
                       transition: 'transform 0.15s, box-shadow 0.15s',
@@ -282,7 +282,7 @@ function SignModal({
                     onClick={() => { setSelectedSigId(s.id); setSelectedSigUrl(s.dataUrl); setHasDrawn(true); }}
                     style={{
                       border: selectedSigId === s.id ? '2px solid var(--primary-500, #0a6ed1)' : '1px solid var(--border)',
-                      background: selectedSigId === s.id ? 'rgba(10, 110, 209, 0.08)' : 'var(--surface-card, #ffffff)',
+                      background: selectedSigId === s.id ? 'rgba(var(--primary-rgb, 10, 110, 209), 0.08)' : 'var(--surface-card, #ffffff)',
                       borderRadius: 8,
                       padding: 10,
                       cursor: 'pointer',

@@ -102,7 +102,7 @@
   width: 40px;
   height: 40px;
   border-radius: 10px;
-  background: rgba(10, 110, 209, 0.12);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.12);
   color: var(--primary-500, #0a6ed1);
   display: flex;
   align-items: center;
@@ -205,17 +205,17 @@
 }
 .ctsm-template-card:hover {
   border-color: var(--primary-500, #0a6ed1);
-  background: rgba(10, 110, 209, 0.03);
-  box-shadow: 0 2px 12px rgba(10, 110, 209, 0.08);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.03);
+  box-shadow: 0 2px 12px rgba(var(--primary-rgb, 10, 110, 209), 0.08);
   transform: translateY(-1px);
 }
 .ctsm-template-card:focus-visible {
-  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.2);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb, 10, 110, 209), 0.2);
 }
 .ctsm-template-card--selected {
   border-color: var(--primary-500, #0a6ed1);
-  background: rgba(10, 110, 209, 0.06);
-  box-shadow: 0 2px 14px rgba(10, 110, 209, 0.12);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.06);
+  box-shadow: 0 2px 14px rgba(var(--primary-rgb, 10, 110, 209), 0.12);
 }
 
 /* Radio */
@@ -308,7 +308,7 @@
   flex-shrink: 0;
 }
 .ctsm-preview-btn:hover {
-  background: rgba(10, 110, 209, 0.08);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.08);
   border-color: var(--primary-500);
   color: var(--primary-500);
 }
@@ -352,7 +352,7 @@
 }
 .ctsm-input:focus {
   border-color: var(--primary-500, #0a6ed1);
-  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.12);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb, 10, 110, 209), 0.12);
 }
 .ctsm-input:disabled { opacity: 0.6; cursor: not-allowed; }
 .ctsm-currency { width: 150px; }
@@ -405,12 +405,12 @@
   background: var(--primary-500, #0a6ed1);
   border-color: var(--primary-500, #0a6ed1);
   color: #fff;
-  box-shadow: 0 2px 8px rgba(10, 110, 209, 0.3);
+  box-shadow: 0 2px 8px rgba(var(--primary-rgb, 10, 110, 209), 0.3);
 }
 .ctsm-btn--primary:hover:not(:disabled) {
   background: var(--primary-600, #0858a6);
   border-color: var(--primary-600, #0858a6);
-  box-shadow: 0 4px 14px rgba(10, 110, 209, 0.4);
+  box-shadow: 0 4px 14px rgba(var(--primary-rgb, 10, 110, 209), 0.4);
   transform: translateY(-1px);
 }
 .ctsm-btn--primary:active:not(:disabled) { transform: translateY(0); }
@@ -434,10 +434,10 @@
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255,255,255,0.06);
 }
 [data-theme="dark"] .ctsm-template-card--selected {
-  background: rgba(10, 110, 209, 0.1);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.1);
 }
 [data-theme="dark"] .ctsm-template-card:hover {
-  background: rgba(10, 110, 209, 0.06);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.06);
 }
 [data-theme="dark"] .ctsm-value-section {
   background: rgba(255,255,255,0.03);

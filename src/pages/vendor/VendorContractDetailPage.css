@@ -176,14 +176,14 @@
 }
 
 .vcd-action-btn--primary {
-  background: linear-gradient(135deg, #0a6ed1, #0854a0);
+  background: linear-gradient(135deg, var(--primary-500, #0a6ed1), var(--primary-600, #0854a0));
   color: #ffffff;
-  box-shadow: 0 2px 8px rgba(10, 110, 209, 0.25);
+  box-shadow: 0 2px 8px rgba(var(--primary-rgb, 10, 110, 209), 0.25);
 }
 
 .vcd-action-btn--primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 14px rgba(10, 110, 209, 0.35);
+  box-shadow: 0 4px 14px rgba(var(--primary-rgb, 10, 110, 209), 0.35);
 }
 
 .vcd-action-btn--secondary {
@@ -243,7 +243,7 @@
 }
 
 .vcd-balance__card-icon--total {
-  background: rgba(10, 110, 209, 0.1);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.1);
   color: var(--primary-500, #0a6ed1);
 }
 
@@ -364,7 +364,7 @@
 }
 
 .vcd-tab--active .vcd-tab__count {
-  background: rgba(10, 110, 209, 0.12);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.12);
   color: var(--primary-500, #0a6ed1);
 }
 
@@ -502,7 +502,7 @@
   gap: 8px;
   font-size: 14px;
   font-weight: 700;
-  color: #0a6ed1;
+  color: var(--primary-500, #0a6ed1);
 }
 
 .vcd-doc-preview__toolbar-right {
@@ -528,8 +528,8 @@
 
 .vcd-doc-preview__toggle:hover {
   background: #f1f5f9;
-  color: #0a6ed1;
-  border-color: #0a6ed1;
+  color: var(--primary-500, #0a6ed1);
+  border-color: var(--primary-500, #0a6ed1);
 }
 
 .vcd-doc-preview__body,
@@ -816,7 +816,7 @@
 
 .vcd-form-input:focus {
   border-color: var(--primary-500, #0a6ed1);
-  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.15);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb, 10, 110, 209), 0.15);
 }
 
 .vcd-security-badge {
@@ -825,7 +825,7 @@
   gap: 8px;
   padding: 10px 14px;
   border-radius: var(--radius-md);
-  background: rgba(10, 110, 209, 0.08);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.08);
   color: var(--primary-500, #0a6ed1);
   font-size: 13px;
   font-weight: 700;
@@ -963,7 +963,7 @@
 [data-theme="dark"] .vcd-summary__number,
 [data-theme="dark"] .vcd-po-number,
 [data-theme="dark"] .vcd-doc-preview__toolbar-left {
-  color: #4db1ff !important;
+  color: var(--primary, #4db1ff) !important;
 }
 
 [data-theme="dark"] .vcd-balance__card-icon--total {
@@ -1016,8 +1016,8 @@
 }
 
 [data-theme="dark"] .vcd-tab--active {
-  color: #4db1ff !important;
-  border-bottom-color: #4db1ff !important;
+  color: var(--primary, #4db1ff) !important;
+  border-bottom-color: var(--primary, #4db1ff) !important;
 }
 
 [data-theme="dark"] .vcd-signed-banner {

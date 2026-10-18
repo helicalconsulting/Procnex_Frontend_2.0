@@ -2050,7 +2050,7 @@ export default function CreatePurchaseInvoicePage() {
                           onChange={(e) => handleUpdateLineItem(item.id, 'itemName', e.target.value)}
                         />
                       </td>
-                      <td style={{ background: 'rgba(10, 110, 209, 0.03)' }}>
+                      <td style={{ background: 'rgba(var(--primary-rgb, 10, 110, 209), 0.03)' }}>
                         <span className="cpi-qty-chip cpi-qty-chip--po">{item.poQty}</span>
                       </td>
                       <td style={{ background: 'rgba(16, 185, 129, 0.03)' }}>

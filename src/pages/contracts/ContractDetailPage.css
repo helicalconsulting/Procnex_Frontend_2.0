@@ -48,8 +48,8 @@
   font-size: 14.5px;
   font-weight: 700;
   color: var(--primary-500, #0a6ed1);
-  background: rgba(10, 110, 209, 0.06);
-  border: 1px solid rgba(10, 110, 209, 0.15);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.06);
+  border: 1px solid rgba(var(--primary-rgb, 10, 110, 209), 0.15);
   border-radius: 10px;
   cursor: pointer;
   font-family: inherit;
@@ -58,9 +58,9 @@
 }
 
 .ctr-detail__back:hover {
-  background: rgba(10, 110, 209, 0.12);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.12);
   transform: translateX(-3px);
-  border-color: rgba(10, 110, 209, 0.3);
+  border-color: rgba(var(--primary-rgb, 10, 110, 209), 0.3);
 }
 
 [data-theme="dark"] .ctr-detail__back {
@@ -142,10 +142,10 @@
   font-weight: 700;
   font-family: var(--font-mono, monospace);
   color: var(--primary-500, #0a6ed1);
-  background: rgba(10, 110, 209, 0.08);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.08);
   padding: 3px 10px;
   border-radius: 6px;
-  border: 1px solid rgba(10, 110, 209, 0.2);
+  border: 1px solid rgba(var(--primary-rgb, 10, 110, 209), 0.2);
   display: inline-flex;
   align-items: center;
 }
@@ -291,7 +291,7 @@
 }
 
 .ctr-detail__balance-card-icon--total {
-  background: rgba(10, 110, 209, 0.1);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.1);
   color: var(--primary-500, #0a6ed1);
 }
 
@@ -493,7 +493,7 @@
 }
 
 .ctr-detail__tab--active .ctr-detail__tab-count {
-  background: rgba(10, 110, 209, 0.12);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.12);
   color: var(--primary-500, #0a6ed1);
 }
 
@@ -860,9 +860,9 @@
 }
 
 .ctr-table__action-btn:hover {
-  background: rgba(10, 110, 209, 0.1) !important;
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.1) !important;
   color: var(--primary-500) !important;
-  border-color: rgba(10, 110, 209, 0.2);
+  border-color: rgba(var(--primary-rgb, 10, 110, 209), 0.2);
 }
 
 /* ── Activity Tab ───────────────────────────────────────── */
@@ -887,9 +887,9 @@
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  background: rgba(10, 110, 209, 0.08);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.08);
   color: var(--primary-500, #0a6ed1);
-  border: 1px solid rgba(10, 110, 209, 0.2);
+  border: 1px solid rgba(var(--primary-rgb, 10, 110, 209), 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1020,11 +1020,11 @@
 
 .ctr-sign-modal__signer-field input:focus {
   border-color: var(--primary-500, #0a6ed1);
-  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.15);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb, 10, 110, 209), 0.15);
 }
 
 .ctr-sign-modal__canvas-wrap {
-  border: 1.5px dashed rgba(10, 110, 209, 0.4);
+  border: 1.5px dashed rgba(var(--primary-rgb, 10, 110, 209), 0.4);
   border-radius: 12px;
   padding: 4px;
   background: #ffffff !important;

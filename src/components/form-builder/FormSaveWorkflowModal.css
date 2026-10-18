@@ -49,7 +49,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(10, 110, 209, 0.25);
+  box-shadow: 0 2px 8px rgba(var(--primary-rgb, 10, 110, 209), 0.25);
 }
 
 .fwm-modal__title {
@@ -192,15 +192,15 @@
 
 .fwm-audience-card--selected {
   border-color: var(--primary-500);
-  background: rgba(10, 110, 209, 0.05);
-  box-shadow: 0 2px 8px rgba(10, 110, 209, 0.15);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.05);
+  box-shadow: 0 2px 8px rgba(var(--primary-rgb, 10, 110, 209), 0.15);
 }
 
 .fwm-audience-card__icon {
   width: 36px;
   height: 36px;
   border-radius: var(--radius-md);
-  background: rgba(10, 110, 209, 0.1);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.1);
   color: var(--primary-500);
   display: flex;
   align-items: center;
@@ -305,7 +305,7 @@
   align-items: center;
   gap: 6px;
   padding: 8px 14px;
-  background: rgba(10, 110, 209, 0.08);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.08);
   color: var(--primary-500);
   font-size: 12px;
   font-weight: 600;
@@ -335,7 +335,7 @@
 }
 
 .fwm-user-item--selected {
-  background: rgba(10, 110, 209, 0.1);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.1);
 }
 
 .fwm-user-item__avatar {
@@ -523,8 +523,8 @@ input:checked + .fwm-slider:before { transform: translateX(24px); }
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
-  background: rgba(10, 110, 209, 0.08);
-  border: 1px solid rgba(10, 110, 209, 0.2);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.08);
+  border: 1px solid rgba(var(--primary-rgb, 10, 110, 209), 0.2);
   border-radius: var(--radius-md);
   color: var(--primary-500);
   font-size: 13px;
@@ -561,7 +561,7 @@ input:checked + .fwm-slider:before { transform: translateX(24px); }
 
 .fwm-btn--secondary { background: var(--surface-card); color: var(--text-primary); border: 1px solid var(--border); }
 .fwm-btn--draft { background: var(--surface-card); color: var(--text-secondary); border: 1px solid var(--border); }
-.fwm-btn--primary { background: var(--primary-500); color: #ffffff; box-shadow: 0 2px 8px rgba(10, 110, 209, 0.25); }
+.fwm-btn--primary { background: var(--primary-500); color: #ffffff; box-shadow: 0 2px 8px rgba(var(--primary-rgb, 10, 110, 209), 0.25); }
 .fwm-btn--configure-wf { background: rgba(139, 92, 246, 0.1); color: #8b5cf6; border: 1px solid rgba(139, 92, 246, 0.2); }
 .fwm-btn--publish { background: var(--success-500); color: #ffffff; box-shadow: 0 2px 8px rgba(16, 126, 62, 0.25); }
 

@@ -2204,7 +2204,7 @@ export default function NewOnboardingPage() {
             {/* Header */}
             <div className="onb-template-preview-header">
               <div className="onb-template-preview-header__left">
-                <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(10,110,209,0.12)', color: 'var(--primary-500)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(var(--primary-rgb, 10, 110, 209), 0.12)', color: 'var(--primary-500)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <FileText size={22} />
                 </div>
                 <div>
@@ -2443,7 +2443,7 @@ export default function NewOnboardingPage() {
                             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-placeholder)', textTransform: 'uppercase' }}>FORMAL COMPLIANCE DOCUMENT</div>
                             <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)' }}>{previewDoc.name}</div>
                           </div>
-                          <span style={{ fontSize: 11, fontWeight: 700, background: 'rgba(10,110,209,0.1)', color: 'var(--primary-500)', padding: '4px 10px', borderRadius: 12 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, background: 'rgba(var(--primary-rgb, 10, 110, 209), 0.1)', color: 'var(--primary-500)', padding: '4px 10px', borderRadius: 12 }}>
                             {previewDoc.documentCategory.toUpperCase()}
                           </span>
                         </div>
@@ -2993,7 +2993,7 @@ export default function NewOnboardingPage() {
                               fontSize: 12,
                               fontWeight: 600,
                               color: 'var(--primary-500)',
-                              background: 'rgba(10,110,209,0.12)',
+                              background: 'rgba(var(--primary-rgb, 10, 110, 209), 0.12)',
                               padding: '3px 9px',
                               borderRadius: 10,
                               textTransform: 'capitalize',
@@ -3093,12 +3093,12 @@ export default function NewOnboardingPage() {
                       ? auditResult.duplicationRisk === 'HIGH'
                         ? 'rgba(239, 68, 68, 0.08)'
                         : 'rgba(245, 158, 11, 0.08)'
-                      : 'linear-gradient(135deg, rgba(10, 110, 209, 0.12), rgba(99, 102, 241, 0.08))',
+                      : 'linear-gradient(135deg, rgba(var(--primary-rgb, 10, 110, 209), 0.12), rgba(99, 102, 241, 0.08))',
                     border: auditResult?.matchedVendor
                       ? auditResult.duplicationRisk === 'HIGH'
                         ? '1px solid rgba(239, 68, 68, 0.25)'
                         : '1px solid rgba(245, 158, 11, 0.25)'
-                      : '1px solid rgba(10, 110, 209, 0.25)',
+                      : '1px solid rgba(var(--primary-rgb, 10, 110, 209), 0.25)',
                   }}>
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>

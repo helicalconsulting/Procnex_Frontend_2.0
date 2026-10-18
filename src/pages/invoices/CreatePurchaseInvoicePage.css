@@ -127,14 +127,14 @@
 }
 
 .cpi-btn--primary {
-  background: #0a6ed1;
+  background: var(--primary-500, #0a6ed1);
   color: #ffffff;
   border: none;
   box-shadow: 0 4px 14px color-mix(in srgb, var(--primary-500, #0a6ed1) 30%, transparent);
 }
 
 .cpi-btn--primary:hover:not(:disabled) {
-  background: #0856a4;
+  background: var(--primary-600, #0856a4);
   transform: translateY(-1px);
   box-shadow: 0 6px 20px color-mix(in srgb, var(--primary-500, #0a6ed1) 40%, transparent);
 }
@@ -740,7 +740,7 @@
 }
 
 .cpi-th--po {
-  background: rgba(10, 110, 209, 0.08) !important;
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.08) !important;
   color: var(--primary-500, #0a6ed1) !important;
 }
 
@@ -822,7 +822,7 @@
 }
 
 .cpi-dropzone {
-  border: 2px dashed rgba(10, 110, 209, 0.4);
+  border: 2px dashed rgba(var(--primary-rgb, 10, 110, 209), 0.4);
   border-radius: var(--radius-md, 12px);
   padding: 32px 20px;
   text-align: center;
@@ -906,8 +906,8 @@
 .cpi-workflow-notice {
   margin-top: 4px;
   padding: 10px 14px;
-  background: rgba(10, 110, 209, 0.08);
-  border: 1px solid rgba(10, 110, 209, 0.2);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.08);
+  border: 1px solid rgba(var(--primary-rgb, 10, 110, 209), 0.2);
   border-radius: 10px;
   color: var(--primary-500, #0a6ed1);
   font-size: 13px;

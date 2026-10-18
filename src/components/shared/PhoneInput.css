@@ -49,7 +49,7 @@
 .phone-input-trigger:focus-visible,
 .phone-input-trigger--open {
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.1);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb, 10, 110, 209), 0.1);
   z-index: 1;
   position: relative;
 }
@@ -144,7 +144,7 @@
 
 .phone-input-search:focus {
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.1);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb, 10, 110, 209), 0.1);
 }
 
 /* ─── Options List ───────────────────────────────────────── */
@@ -193,7 +193,7 @@
 }
 
 .phone-country-option--selected {
-  background: rgba(10, 110, 209, 0.06);
+  background: rgba(var(--primary-rgb, 10, 110, 209), 0.06);
   font-weight: 600;
 }
 
@@ -255,7 +255,7 @@
 
 .phone-input-field:focus {
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px rgba(10, 110, 209, 0.1);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb, 10, 110, 209), 0.1);
 }
 
 .phone-input-field--error {

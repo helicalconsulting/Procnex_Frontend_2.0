@@ -22,7 +22,7 @@ import './RfqEvaluationPanel.css';
 // ─── Parameter Color Palette ─────────────────────────────────
 
 const PARAM_COLORS = [
-  '#0a6ed1', // SAP Blue
+  'var(--primary-500, #0a6ed1)', // Primary Brand Accent
   '#107e3e', // Success Green
   '#e9730c', // Warning Orange
   '#7c3aed', // Purple
@@ -251,8 +251,8 @@ export default function VendorComparisonCharts({
           >
             <defs>
               <linearGradient id="classyCurveGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#0a6ed1" stopOpacity={0.35} />
-                <stop offset="95%" stopColor="#0a6ed1" stopOpacity={0.02} />
+                <stop offset="5%" stopColor="var(--primary-500, #0a6ed1)" stopOpacity={0.35} />
+                <stop offset="95%" stopColor="var(--primary-500, #0a6ed1)" stopOpacity={0.02} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.35} vertical={true} horizontal={true} />
@@ -322,7 +322,7 @@ export default function VendorComparisonCharts({
               name="Supplier Score Curve"
               type="monotone"
               dataKey="overallScore"
-              stroke="#0a6ed1"
+              stroke="var(--primary-500, #0a6ed1)"
               strokeWidth={3.5}
               fillOpacity={1}
               fill="url(#classyCurveGradient)"
@@ -331,13 +331,13 @@ export default function VendorComparisonCharts({
                 r: 6,
                 strokeWidth: 2.5,
                 fill: 'var(--surface-card, #1e2530)',
-                stroke: '#0a6ed1',
+                stroke: 'var(--primary-500, #0a6ed1)',
               }}
               activeDot={{
                 r: 9,
                 strokeWidth: 3,
                 fill: 'var(--surface-card, #1e2530)',
-                stroke: '#0a6ed1',
+                stroke: 'var(--primary-500, #0a6ed1)',
               }}
             />
           </AreaChart>
@@ -372,8 +372,8 @@ export default function VendorComparisonCharts({
                     display: 'inline-flex', alignItems: 'center', gap: 6,
                     padding: '5px 12px',
                     borderRadius: 20,
-                    background: 'rgba(10, 110, 209, 0.08)',
-                    border: '1px solid rgba(10, 110, 209, 0.2)',
+                    background: 'rgba(var(--primary-rgb, 10, 110, 209), 0.08)',
+                    border: '1px solid rgba(var(--primary-rgb, 10, 110, 209), 0.2)',
                     fontSize: 13, color: 'var(--text-primary)', fontWeight: 500,
                   }}
                 >
@@ -381,7 +381,7 @@ export default function VendorComparisonCharts({
                   <span>{v.name}</span>
                   <span className={v.overallScore >= 75 ? 'text-emerald-700 dark:text-emerald-300' : 'text-primary'} style={{
                     fontSize: 12, fontWeight: 700,
-                    background: v.overallScore >= 75 ? 'rgba(16, 126, 62, 0.12)' : 'rgba(10, 110, 209, 0.12)',
+                    background: v.overallScore >= 75 ? 'rgba(16, 126, 62, 0.12)' : 'rgba(var(--primary-rgb, 10, 110, 209), 0.12)',
                     padding: '1px 6px', borderRadius: 10,
                   }}>
                     {v.overallScore}%

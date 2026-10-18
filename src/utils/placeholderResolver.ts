@@ -258,10 +258,11 @@ export function resolvePlaceholders(templateText: string, context: ResolverConte
     '{{delivery_terms}}': context.deliveryTerms || 'FOB Destination',
   };
 
+  const activePrimaryColor = (typeof document !== 'undefined' && document.documentElement.style.getPropertyValue('--primary-500')?.trim()) || '#0a6ed1';
   // Signatures replacement with HTML img blocks or styled signature badges
   const companySigHtml = context.companySignatureUrl
     ? `<div style="display:inline-block; margin-top:8px; text-align:left;">
-        <img src="${context.companySignatureUrl}" alt="Company Signature" style="max-height:60px; max-width:180px; object-fit:contain; border-bottom:1px solid #0a6ed1; padding-bottom:4px;" />
+        <img src="${context.companySignatureUrl}" alt="Company Signature" style="max-height:60px; max-width:180px; object-fit:contain; border-bottom:1px solid ${activePrimaryColor}; padding-bottom:4px;" />
         <div style="font-size:11px; color:#64748b; margin-top:2px;">Digitally Signed by ${context.companyName || 'Authorized Signatory'}</div>
        </div>`
     : `<div style="display:inline-block; padding:8px 16px; border:1px dashed #cbd5e1; border-radius:6px; background:#f8fafc; font-size:12px; color:#64748b;">
