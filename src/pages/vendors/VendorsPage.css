@@ -115,18 +115,12 @@
 }
 
 .vendors-summary-card--active,
-.vendors-summary-card.active {
-  border: 1.5px solid rgba(var(--primary-rgb, 10, 110, 209), 0.45) !important;
-  box-shadow: 0 0 0 2px rgba(var(--primary-rgb, 10, 110, 209), 0.1), 0 4px 20px rgba(var(--primary-rgb, 10, 110, 209), 0.12) !important;
-  background: rgba(var(--primary-rgb, 10, 110, 209), 0.08) !important;
-  transform: translateY(-2px) !important;
-}
-
+.vendors-summary-card.active,
 [data-theme="dark"] .vendors-summary-card--active,
 [data-theme="dark"] .vendors-summary-card.active {
-  border: 1.5px solid var(--primary-dark, #388bfd) !important;
-  box-shadow: 0 0 0 1.5px var(--primary-dark, #388bfd), 0 0 25px rgba(var(--primary-rgb, 56, 139, 253), 0.75), 0 0 10px rgba(var(--primary-rgb, 56, 139, 253), 0.9), inset 0 0 15px rgba(var(--primary-rgb, 56, 139, 253), 0.2) !important;
-  background: rgba(var(--primary-rgb, 56, 139, 253), 0.2) !important;
+  border: 1.5px solid var(--card-glow-border) !important;
+  box-shadow: var(--card-glow-shadow) !important;
+  background: var(--card-glow-bg) !important;
   transform: translateY(-2px) !important;
 }
 
@@ -509,8 +503,19 @@
   background: var(--surface-card);
 }
 
-.vendors-table tbody tr:hover {
-  background: var(--surface-hover);
+.vendors-table tbody tr:hover,
+table tbody tr.group:hover {
+  background-color: var(--table-row-hover, var(--surface-hover));
+}
+
+table tbody tr.group:hover > td.sticky,
+.vendors-table tbody tr:hover > td.sticky {
+  background-color: var(--table-row-hover, var(--surface-hover)) !important;
+}
+
+/* Ensure secondary text in hovered rows remains clearly legible with proper contrast */
+table tbody tr.group:hover .vendors-status-toggle__label--inactive {
+  color: var(--text-secondary);
 }
 
 /* Status Left Indicator for Vendors */
@@ -827,9 +832,9 @@
 [data-theme="dark"] .vendors-card--active,
 .vendors-card.active,
 [data-theme="dark"] .vendors-card.active {
-  border: 1.5px solid #2563eb !important;
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.15) !important;
-  background: rgba(37, 99, 235, 0.08) !important;
+  border: 1.5px solid var(--card-glow-border) !important;
+  box-shadow: var(--card-glow-shadow) !important;
+  background: var(--card-glow-bg) !important;
 }
 
 .vendors-card__top {

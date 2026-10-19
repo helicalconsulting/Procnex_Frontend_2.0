@@ -830,15 +830,17 @@ function markdownReportToHtml(md: string, companyCode: string): string {
   const titleMatch = md.match(/^#\s+(.+)$/m);
   const reportTitle = titleMatch ? titleMatch[1].replace(/[*#]/g, '').trim() : 'Procnex Executive Intelligence Report';
 
+  const primaryHex = (typeof document !== 'undefined' && (document.documentElement.style.getPropertyValue('--primary-500')?.trim() || document.documentElement.style.getPropertyValue('--primary')?.trim())) || '#0a6ed1';
+
   let html = `
     <div style="font-family: '72', system-ui, -apple-system, sans-serif; color: #1e293b; padding: 10px 0;">
-      <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #0284c7; padding-bottom: 12px; margin-bottom: 20px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid ${primaryHex}; padding-bottom: 12px; margin-bottom: 20px;">
         <div>
           <h1 style="font-size: 20px; font-weight: 800; color: #0f172a; margin: 0 0 4px 0; border: none;">${reportTitle}</h1>
           <p style="font-size: 12px; color: #64748b; margin: 0;"><strong>Company:</strong> ${companyCode} &nbsp;|&nbsp; <strong>Generated:</strong> ${new Date().toLocaleDateString()}</p>
         </div>
         <div style="text-align: right;">
-          <span style="display: inline-block; background: #e0f2fe; color: #0369a1; font-weight: 700; font-size: 11px; padding: 4px 10px; border-radius: 9999px; border: 1px solid #bae6fd;">Live DB Audit</span>
+          <span style="display: inline-block; background: ${primaryHex}15; color: ${primaryHex}; font-weight: 700; font-size: 11px; padding: 4px 10px; border-radius: 9999px; border: 1px solid ${primaryHex}35;">Live DB Audit</span>
         </div>
       </div>
       <div>
@@ -890,7 +892,7 @@ function markdownReportToHtml(md: string, companyCode: string): string {
       if (inTable) flushTable();
 
       if (rawLine.startsWith('### ')) {
-        html += `<h4 style="font-size: 13px; font-weight: 700; color: #0369a1; text-transform: uppercase; margin: 14px 0 6px 0;">${cleanInline(rawLine.slice(4))}</h4>`;
+        html += `<h4 style="font-size: 13px; font-weight: 700; color: ${primaryHex}; text-transform: uppercase; margin: 14px 0 6px 0;">${cleanInline(rawLine.slice(4))}</h4>`;
       } else if (rawLine.startsWith('## ')) {
         html += `<h3 style="font-size: 15px; font-weight: 700; color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; margin: 18px 0 8px 0;">${cleanInline(rawLine.slice(3))}</h3>`;
       } else if (rawLine.startsWith('- ') || rawLine.startsWith('* ') || rawLine.startsWith('• ') || rawLine.startsWith('+ ')) {

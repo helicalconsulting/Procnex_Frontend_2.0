@@ -1013,7 +1013,7 @@ export default function VendorRFQsPage() {
               className={cn(
                 'cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-all duration-200',
                 isActive &&
-                  'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
+                  'card-selected border-[var(--card-glow-border)] shadow-[var(--card-glow-shadow)] bg-[var(--card-glow-bg)]'
               )}
               onClick={() => { setKpiFilter(isActive ? null : c.filter); setPage(1); }}
               role="button"

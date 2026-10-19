@@ -233,7 +233,7 @@ export default function FormResponsesPage() {
           className={cn(
             'flex min-h-24 items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 duration-200',
             statusFilter === 'ALL'
-              ? 'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)] -translate-y-0.5'
+              ? 'card-selected border-[var(--card-glow-border)] shadow-[var(--card-glow-shadow)] bg-[var(--card-glow-bg)] -translate-y-0.5'
               : 'border-border/70'
           )}
           onClick={() => setStatusFilter('ALL')}
@@ -254,7 +254,7 @@ export default function FormResponsesPage() {
           className={cn(
             'flex min-h-24 items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 duration-200',
             statusFilter === 'submitted'
-              ? 'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)] -translate-y-0.5'
+              ? 'card-selected border-[var(--card-glow-border)] shadow-[var(--card-glow-shadow)] bg-[var(--card-glow-bg)] -translate-y-0.5'
               : 'border-border/70'
           )}
           onClick={() => { setStatusFilter('submitted'); setCurrentPage(1); }}
@@ -275,7 +275,7 @@ export default function FormResponsesPage() {
           className={cn(
             'flex min-h-24 items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 duration-200',
             statusFilter === 'pending'
-              ? 'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)] -translate-y-0.5'
+              ? 'card-selected border-[var(--card-glow-border)] shadow-[var(--card-glow-shadow)] bg-[var(--card-glow-bg)] -translate-y-0.5'
               : 'border-border/70'
           )}
           onClick={() => { setStatusFilter('pending'); setCurrentPage(1); }}
@@ -296,7 +296,7 @@ export default function FormResponsesPage() {
           className={cn(
             'flex min-h-24 items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 duration-200',
             statusFilter === 'completed'
-              ? 'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)] -translate-y-0.5'
+              ? 'card-selected border-[var(--card-glow-border)] shadow-[var(--card-glow-shadow)] bg-[var(--card-glow-bg)] -translate-y-0.5'
               : 'border-border/70'
           )}
           onClick={() => { setStatusFilter('completed'); setCurrentPage(1); }}

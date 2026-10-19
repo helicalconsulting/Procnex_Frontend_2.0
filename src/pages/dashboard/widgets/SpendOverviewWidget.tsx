@@ -72,7 +72,7 @@ export default function SpendOverviewWidget() {
                         <div
                           className={cn(
                             'w-full rounded-t-md rounded-b-sm bg-primary transition-all duration-300 ease-out group-hover:brightness-110',
-                            isHighlighted && 'shadow-[0_2px_8px_-2px_rgba(var(--primary-rgb,10,110,209),0.35)] dark:shadow-[0_2px_10px_-2px_rgba(59,130,246,0.4)]'
+                            isHighlighted && 'shadow-[0_2px_8px_-2px_rgba(var(--primary-rgb),0.35)] dark:shadow-[0_2px_10px_-2px_rgba(var(--primary-rgb),0.4)]'
                           )}
                           style={{ height: `${Math.max(heightPct, 6)}%` }}
                         />

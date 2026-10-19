@@ -912,7 +912,7 @@ export default function KpiStatsWidget() {
               key={kpi.id}
               type="button"
               className={cn(
-                'group flex min-h-[78px] items-center gap-3 rounded-2xl border border-border/80 bg-card px-3.5 py-3 text-left shadow-sm outline-none transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-blue-400/70 hover:shadow-[0_0_0_1px_rgba(59,130,246,0.45),0_0_14px_rgba(59,130,246,0.28)] focus-visible:ring-2 focus-visible:ring-ring'
+                'group flex min-h-[78px] items-center gap-3 rounded-2xl border border-border/80 bg-card px-3.5 py-3 text-left shadow-sm outline-none transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-[0_0_0_1px_rgba(var(--primary-rgb),0.3),0_4px_14px_-2px_rgba(var(--primary-rgb),0.18)] focus-visible:ring-2 focus-visible:ring-ring'
               )}
               onClick={() => openKpi(kpi)}
               aria-label={`Open ${kpi.label} details`}

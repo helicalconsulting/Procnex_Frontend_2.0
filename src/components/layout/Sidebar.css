@@ -40,7 +40,7 @@
 }
 
 .sidebar__logo:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--shell-item-hover-bg);
 }
 
 .sidebar__logo-img {
@@ -80,7 +80,7 @@
   overflow-x: hidden;
   padding: 12px 0;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.1) transparent;
+  scrollbar-color: var(--shell-scrollbar) transparent;
 }
 
 .sidebar__nav::-webkit-scrollbar {
@@ -88,7 +88,7 @@
 }
 
 .sidebar__nav::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--shell-scrollbar);
   border-radius: 2px;
 }
 
@@ -103,7 +103,7 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 1.2px;
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--shell-section-label);
   white-space: nowrap;
   overflow: hidden;
   opacity: 1;
@@ -128,7 +128,7 @@
   margin: 2px 8px;
   height: 44px;
   border-radius: 8px;
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--shell-item-text);
   text-decoration: none;
   font-size: 16px;
   font-weight: 600;
@@ -143,8 +143,8 @@
 }
 
 .sidebar__item:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.95);
+  background: var(--shell-item-hover-bg);
+  color: var(--shell-item-hover-text);
 }
 
 .sidebar__item:active {
@@ -153,8 +153,8 @@
 
 /* Active State */
 .sidebar__item--active {
-  background: rgba(255, 255, 255, 0.14);
-  color: #ffffff;
+  background: var(--shell-item-active-bg);
+  color: var(--shell-item-active-text);
   font-weight: 700;
 }
 

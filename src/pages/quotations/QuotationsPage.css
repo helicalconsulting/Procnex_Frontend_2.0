@@ -199,21 +199,15 @@
 .quotation-workspace .quotation-metric[aria-pressed="true"],
 .quotation-metric[aria-pressed="true"],
 .quot-summary-card--active,
-.quot-summary-card.active {
-  border: 1.5px solid #2563eb !important;
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.15) !important;
-  background: rgba(37, 99, 235, 0.08) !important;
-  transform: translateY(-2px) !important;
-}
-
+.quot-summary-card.active,
 [data-theme="dark"] .quotation-workspace .quotation-metric[aria-pressed="true"],
 [data-theme="dark"] .quotation-metric[aria-pressed="true"],
 [data-theme="dark"] .quot-summary-card--active,
 [data-theme="dark"] .quot-summary-card.active {
-  border: 1.5px solid var(--primary-dark, #388bfd) !important;
-  background: rgba(var(--primary-rgb, 56, 139, 253), 0.2) !important;
-  box-shadow: 0 0 0 1.5px var(--primary-dark, #388bfd), 0 0 25px rgba(var(--primary-rgb, 56, 139, 253), 0.75), 0 0 10px rgba(var(--primary-rgb, 56, 139, 253), 0.9), inset 0 0 15px rgba(var(--primary-rgb, 56, 139, 253), 0.2) !important;
-  transform: translateY(-3px) !important;
+  border: 1.5px solid var(--card-glow-border) !important;
+  background: var(--card-glow-bg) !important;
+  box-shadow: var(--card-glow-shadow) !important;
+  transform: translateY(-2px) !important;
 }
 
 .quot-summary-card::before {
@@ -3775,7 +3769,7 @@
 }
 
 .quot-rfq-card:hover {
-  border-color: var(--primary-400, #388bfd);
+  border-color: var(--primary-400, var(--primary));
   box-shadow: 0 3px 12px rgba(var(--primary-rgb, 10, 110, 209), 0.08);
 }
 

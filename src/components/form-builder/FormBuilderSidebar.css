@@ -59,9 +59,9 @@
   justify-content: center;
   gap: 8px;
   padding: 9px 16px;
-  background: rgba(37, 99, 235, 0.1);
-  border: 1px solid rgba(37, 99, 235, 0.3);
-  color: #2563eb;
+  background: rgba(var(--primary-rgb), 0.1);
+  border: 1px solid rgba(var(--primary-rgb), 0.3);
+  color: var(--primary);
   border-radius: 4px;
   font-size: 15.5px;
   font-weight: 700;
@@ -70,12 +70,12 @@
 }
 
 [data-theme="dark"] .fbs-create-btn {
-  color: #60a5fa;
+  color: var(--primary);
 }
 
 .fbs-create-btn:hover {
-  background: rgba(37, 99, 235, 0.2);
-  border-color: #2563eb;
+  background: rgba(var(--primary-rgb), 0.2);
+  border-color: var(--primary);
 }
 
 .fbs-content {
@@ -171,8 +171,8 @@
   width: 30px;
   height: 30px;
   border-radius: 4px;
-  background: rgba(37, 99, 235, 0.12);
-  color: #2563eb;
+  background: rgba(var(--primary-rgb), 0.12);
+  color: var(--primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -233,12 +233,12 @@
 
 .fbs-form-card:hover {
   background: var(--cfb-bg-hover);
-  border-color: #2563eb;
+  border-color: var(--primary);
 }
 
 .fbs-form-card--active {
-  background: rgba(37, 99, 235, 0.12);
-  border-color: #2563eb;
+  background: rgba(var(--primary-rgb), 0.12);
+  border-color: var(--primary);
 }
 
 .fbs-form-card__icon {
@@ -246,7 +246,7 @@
   height: 32px;
   border-radius: 4px;
   background: var(--cfb-bg-sidebar);
-  color: #2563eb;
+  color: var(--primary);
   display: flex;
   align-items: center;
   justify-content: center;

@@ -15,8 +15,11 @@
 }
 .rfq-workspace { min-width: 0; }
 .rfq-workspace .rfq-metrics { gap: 12px; }
-.rfq-workspace .rfq-metrics > div { box-shadow: none; transform: none; }
-.rfq-workspace .rfq-metrics > [aria-pressed="true"] { border-color: var(--primary); background: var(--accent); box-shadow: none; }
+.rfq-workspace .rfq-metrics > [aria-pressed="true"] {
+  border: 1.5px solid var(--card-glow-border) !important;
+  background: var(--card-glow-bg) !important;
+  box-shadow: var(--card-glow-shadow) !important;
+}
 .rfq-toolbar, .rfq-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .rfq-toolbar { margin-bottom: 16px; }
 .rfq-toolbar__search { position: relative; flex: 1 1 300px; max-width: 560px; }
@@ -157,9 +160,7 @@
 }
 @media (prefers-reduced-motion: reduce) { .rfq-quote-window { animation: none; transition: none; } }
 
-/* These scopes override legacy global glass and snapshot theme rules. */
-.rfq-workspace .rfq-metrics > div { box-shadow: none !important; }
-.rfq-workspace .rfq-metrics > [aria-pressed="true"] { box-shadow: none !important; }
+/* Scoped typography and table rules */
 .rfq-quote-window .vquot-modal__header-rfq, .rfq-quote-window .vquot-modal__header-icon { color: var(--rfq-link); }
 .rfq-quote-window .rfq-quote-details .rfq-pricing-table th { background: var(--surface-elevated); color: var(--text-secondary); border-color: var(--border); }
 .rfq-quote-window .rfq-quote-details .rfq-pricing-table td { color: var(--text-primary); border-color: var(--border); }

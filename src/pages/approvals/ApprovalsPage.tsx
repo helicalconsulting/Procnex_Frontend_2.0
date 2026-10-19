@@ -654,7 +654,7 @@ export default function ApprovalsPage() {
               className={cn(
                 'cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-all duration-200',
                 isActive &&
-                  'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
+                  'card-selected border-[var(--card-glow-border)] shadow-[var(--card-glow-shadow)] bg-[var(--card-glow-bg)]'
               )}
               onClick={() => { setStatusFilter(c.filter); setCurrentPage(1); }}
               role="button"
@@ -795,7 +795,7 @@ export default function ApprovalsPage() {
               </thead>
               <tbody className="divide-y divide-border/60">
                 {paginated.map((req) => (
-                  <tr key={req.id} className="group cursor-pointer transition-colors hover:bg-accent/35" onClick={() => setDetailRequest(req)}>
+                  <tr key={req.id} className="group cursor-pointer transition-colors hover:bg-[var(--table-row-hover)]" onClick={() => setDetailRequest(req)}>
                     {visibleColumns.map((col) => (
                       <td
                         key={col.key}
@@ -807,7 +807,7 @@ export default function ApprovalsPage() {
                         {col.render(req, formatDateTime)}
                       </td>
                     ))}
-                    <td className="w-[340px] min-w-[340px] px-3 py-3.5 text-center sticky right-0 z-10 bg-card group-hover:bg-accent/35 transition-colors shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.1)] dark:shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.35)]" onClick={(e) => e.stopPropagation()}>
+                    <td className="w-[340px] min-w-[340px] px-3 py-3.5 text-center sticky right-0 z-10 bg-card group-hover:bg-[var(--table-row-hover)] transition-colors shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.1)] dark:shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.35)]" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0" title="View Details" onClick={() => setDetailRequest(req)}>
                           <Eye className="size-4 text-muted-foreground hover:text-foreground" />

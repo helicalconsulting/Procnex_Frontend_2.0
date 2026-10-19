@@ -1,8 +1,10 @@
 /* Layout and contrast only: retain the application's existing type scale. */
 .contract-workspace { --muted-foreground: #59677c; min-width: 0; }
-[data-theme="dark"] .contract-workspace { --muted-foreground: #9ba9b9; }
-.contract-workspace .contract-metrics > [aria-pressed] { box-shadow: none !important; transform: none !important; }
-.contract-workspace .contract-metrics > [aria-pressed="true"] { border-color: var(--primary) !important; background: var(--accent) !important; }
+.contract-workspace .contract-metrics > [aria-pressed="true"] {
+  border: 1.5px solid var(--card-glow-border) !important;
+  background: var(--card-glow-bg) !important;
+  box-shadow: var(--card-glow-shadow) !important;
+}
 .contract-register table { min-width: 940px; border-collapse: collapse; }
 .contract-register th, .contract-register td { padding: 18px 20px; vertical-align: middle; }
 .contract-register th { padding-top: 12px; padding-bottom: 12px; font-weight: 600; }

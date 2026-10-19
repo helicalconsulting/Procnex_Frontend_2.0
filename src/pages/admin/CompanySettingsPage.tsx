@@ -3224,25 +3224,13 @@ export default function CompanySettingsPage() {
                     setLanguage('en');
                     setLangMsg('System language set to English 🇺🇸');
                   }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    padding: '14px 20px',
-                    borderRadius: 8,
-                    border: language === 'en' ? '2px solid var(--primary-500, #0a6ed1)' : '1px solid var(--border)',
-                    background: language === 'en' ? 'rgba(var(--primary-rgb, 10, 110, 209), 0.08)' : 'var(--surface-card)',
-                    cursor: 'pointer',
-                    fontWeight: 700,
-                    fontSize: 15,
-                    color: 'var(--text-primary)',
-                    transition: 'all 0.2s',
-                  }}
+                  aria-pressed={language === 'en'}
+                  aria-label="English (Default System Language)"
                 >
-                  <span style={{ fontSize: 25 }}>🇺🇸</span>
-                  <div style={{ textAlign: 'left' }}>
-                    <div>English</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>Default System Language</div>
+                  <span className="cs-lang-card__flag">🇺🇸</span>
+                  <div className="cs-lang-card__content">
+                    <div className="cs-lang-card__name">English</div>
+                    <div className="cs-lang-card__desc">Default System Language</div>
                   </div>
                 </button>
 
@@ -3253,25 +3241,13 @@ export default function CompanySettingsPage() {
                     setLanguage('fr');
                     setLangMsg('Langue du système changée en Français 🇫🇷');
                   }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    padding: '14px 20px',
-                    borderRadius: 8,
-                    border: language === 'fr' ? '2px solid var(--primary-500, #0a6ed1)' : '1px solid var(--border)',
-                    background: language === 'fr' ? 'rgba(var(--primary-rgb, 10, 110, 209), 0.08)' : 'var(--surface-card)',
-                    cursor: 'pointer',
-                    fontWeight: 700,
-                    fontSize: 15,
-                    color: 'var(--text-primary)',
-                    transition: 'all 0.2s',
-                  }}
+                  aria-pressed={language === 'fr'}
+                  aria-label="Français (Langue Française)"
                 >
-                  <span style={{ fontSize: 25 }}>🇫🇷</span>
-                  <div style={{ textAlign: 'left' }}>
-                    <div>Français</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>Langue Française</div>
+                  <span className="cs-lang-card__flag">🇫🇷</span>
+                  <div className="cs-lang-card__content">
+                    <div className="cs-lang-card__name">Français</div>
+                    <div className="cs-lang-card__desc">Langue Française</div>
                   </div>
                 </button>
               </div>

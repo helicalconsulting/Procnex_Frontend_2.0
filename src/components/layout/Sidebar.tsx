@@ -325,13 +325,13 @@ export default function Sidebar({
         onMouseEnter={() => onHoverChange(true)}
         onMouseLeave={() => onHoverChange(false)}
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex flex-col overflow-hidden border-r border-white/10 [background:var(--shell-bg)] text-[var(--shell-text)] shadow-2xl shadow-slate-950/20 transition-[width,transform] duration-200 ease-out lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 flex flex-col overflow-hidden border-r border-[var(--shell-border)] [background:var(--shell-bg)] text-[var(--shell-text)] shadow-md shadow-slate-900/5 transition-[width,transform] duration-200 ease-out dark:shadow-slate-950/30 lg:translate-x-0',
           mobileOpen ? 'translate-x-0 w-[280px]' : '-translate-x-full',
           collapsed ? 'lg:w-20' : 'lg:w-[280px]',
         )}
       >
         <div
-          className="flex h-16 shrink-0 cursor-pointer items-center gap-3 border-b border-white/10 px-5"
+          className="flex h-16 shrink-0 cursor-pointer items-center gap-3 border-b border-[var(--shell-border)] px-5"
           onClick={() => {
             navigate(dashboardPath);
             onMobileClose();
@@ -350,11 +350,11 @@ export default function Sidebar({
             alt={companyName}
             crossOrigin="anonymous"
             referrerPolicy="no-referrer"
-            className="h-9 w-9 shrink-0 rounded-xl object-contain ring-1 ring-white/10"
+            className="h-9 w-9 shrink-0 rounded-xl object-contain ring-1 ring-[var(--shell-border)]"
           />
           <span
             className={cn(
-              'min-w-0 truncate text-[18px] font-semibold tracking-[-0.03em] text-white transition-opacity',
+              'min-w-0 truncate text-[18px] font-semibold tracking-[-0.03em] text-[var(--shell-text)] transition-opacity',
               collapsed && 'lg:pointer-events-none lg:opacity-0',
             )}
           >
@@ -362,12 +362,12 @@ export default function Sidebar({
           </span>
         </div>
 
-        <nav className="flex-1 overflow-x-hidden overflow-y-auto px-3 py-3 [scrollbar-color:rgba(255,255,255,0.18)_transparent] [scrollbar-width:thin]">
+        <nav className="flex-1 overflow-x-hidden overflow-y-auto px-3 py-3 [scrollbar-color:var(--shell-scrollbar)_transparent] [scrollbar-width:thin]">
           {NAV_SECTIONS.map((section) => (
             <div key={section.title} className="mb-2">
               <span
                 className={cn(
-                  'block px-3 pb-1.5 pt-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-white/40 transition-opacity',
+                  'block px-3 pb-1.5 pt-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--shell-section-label)] transition-opacity',
                   collapsed && 'lg:h-2 lg:overflow-hidden lg:px-0 lg:py-0 lg:opacity-0',
                 )}
               >
@@ -388,9 +388,11 @@ export default function Sidebar({
                     aria-current={isActive ? 'page' : undefined}
                     title={collapsed ? displayLabel : undefined}
                     className={cn(
-                      'group relative my-1 flex min-h-11 items-center gap-3 overflow-hidden rounded-xl px-3 text-[14px] font-medium text-white/65 outline-none transition-colors hover:bg-white/[0.08] hover:text-white focus-visible:ring-2 focus-visible:ring-[var(--shell-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900',
+                      'group relative my-1 flex min-h-11 items-center gap-3 overflow-hidden rounded-xl px-3 text-[14px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--shell-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--shell-bg)]',
                       collapsed && 'lg:justify-center lg:px-0',
-                      isActive && 'bg-white/[0.12] font-semibold text-white shadow-sm shadow-black/10',
+                      isActive
+                        ? 'bg-[var(--shell-item-active-bg)] font-semibold text-[var(--shell-item-active-text)] shadow-xs'
+                        : 'text-[var(--shell-item-text)] hover:bg-[var(--shell-item-hover-bg)] hover:text-[var(--shell-item-hover-text)]',
                     )}
                     onClick={() => {
                       onMobileClose();
@@ -400,7 +402,16 @@ export default function Sidebar({
                     {isActive && (
                       <span className="absolute inset-y-2 left-0 w-0.5 rounded-r-full bg-[var(--shell-accent)]" />
                     )}
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center">{item.icon}</span>
+                    <span
+                      className={cn(
+                        'flex h-5 w-5 shrink-0 items-center justify-center transition-colors',
+                        isActive
+                          ? 'text-[var(--shell-item-active-text)]'
+                          : 'text-[var(--shell-item-icon)] group-hover:text-[var(--shell-item-hover-text)]',
+                      )}
+                    >
+                      {item.icon}
+                    </span>
                     <span
                       className={cn(
                         'min-w-0 truncate transition-opacity',

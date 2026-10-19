@@ -174,18 +174,12 @@
 .quotation-detail-window.rfq-modal { background: var(--card) !important; }
 
 .quotation-detail-backdrop { z-index: 10004 !important; }
-.quotation-workspace .quotation-metric[aria-pressed="true"] {
-  border: 1.5px solid #2563eb !important;
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.15) !important;
-  background: rgba(37, 99, 235, 0.08) !important;
-  transform: translateY(-2px) !important;
-}
-
+.quotation-workspace .quotation-metric[aria-pressed="true"],
 [data-theme="dark"] .quotation-workspace .quotation-metric[aria-pressed="true"] {
-  border: 1.5px solid #388bfd !important;
-  background: rgba(56, 139, 253, 0.2) !important;
-  box-shadow: 0 0 0 1.5px #388bfd, 0 0 25px rgba(56, 139, 253, 0.75), 0 0 10px rgba(56, 139, 253, 0.9), inset 0 0 15px rgba(56, 139, 253, 0.2) !important;
-  transform: translateY(-3px) !important;
+  border: 1.5px solid var(--card-glow-border) !important;
+  background: var(--card-glow-bg) !important;
+  box-shadow: var(--card-glow-shadow) !important;
+  transform: translateY(-2px) !important;
 }
 .quotation-detail-window :is(.quot-view-modal__items-header,.quot-view-modal__item-row,.quot-view-modal__items-summary) { border-radius: 0 !important; box-shadow: none !important; }
 .quotation-detail-window .quot-view-modal__save-row { display: flex; justify-content: flex-end; margin-top: 0; }

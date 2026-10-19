@@ -660,18 +660,18 @@ body.vnd-is-dragging * { cursor: grabbing !important; }
 }
 
 .vnd-kpi:hover {
-  transform: translateY(-3px) scale(1.015);
-  border-color: rgba(var(--primary-rgb, 56, 139, 253), 0.45) !important;
-  box-shadow: 0 0 20px rgba(var(--primary-rgb, 56, 139, 253), 0.3), 0 12px 36px 0 rgba(0, 0, 0, 0.45) !important;
+  transform: translateY(-2px);
+  border-color: rgba(var(--primary-rgb), 0.35) !important;
+  box-shadow: 0 4px 16px -4px rgba(var(--primary-rgb), 0.16) !important;
 }
 
 .vnd-kpi--active,
 [data-theme="dark"] .vnd-kpi--active,
 .vnd-kpi.active,
 [data-theme="dark"] .vnd-kpi.active {
-  border: 1.5px solid #2563eb !important;
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.15) !important;
-  background: rgba(37, 99, 235, 0.08) !important;
+  border: 1.5px solid var(--card-glow-border) !important;
+  box-shadow: var(--card-glow-shadow) !important;
+  background: var(--card-glow-bg) !important;
 }
 
 .vnd-kpi__icon {

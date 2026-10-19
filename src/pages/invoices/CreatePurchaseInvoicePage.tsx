@@ -1316,7 +1316,7 @@ export default function CreatePurchaseInvoicePage() {
                 className={cn(
                   'cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-all duration-200',
                   isActive &&
-                    'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
+                    'card-selected border-[var(--card-glow-border)] shadow-[var(--card-glow-shadow)] bg-[var(--card-glow-bg)]'
                 )}
                 onClick={() => {
                   if (c.filter !== 'TOTAL_VOLUME') {
@@ -2165,8 +2165,8 @@ export default function CreatePurchaseInvoicePage() {
                       fontWeight: 600,
                       padding: '2px 8px',
                       borderRadius: 12,
-                      background: 'rgba(37, 99, 235, 0.1)',
-                      color: '#2563eb',
+                      background: 'rgba(var(--primary-rgb), 0.1)',
+                      color: 'var(--primary)',
                     }}
                   >
                     {attachments.length} {attachments.length === 1 ? 'Document' : 'Documents'}
@@ -2197,8 +2197,8 @@ export default function CreatePurchaseInvoicePage() {
                             width: 36,
                             height: 36,
                             borderRadius: 8,
-                            background: 'rgba(37, 99, 235, 0.1)',
-                            color: '#2563eb',
+                            background: 'rgba(var(--primary-rgb), 0.1)',
+                            color: 'var(--primary)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -2373,10 +2373,10 @@ export default function CreatePurchaseInvoicePage() {
                         gap: 5,
                         fontSize: 12,
                         fontWeight: 600,
-                        color: 'var(--primary-600, #2563eb)',
+                        color: 'var(--primary)',
                         cursor: 'pointer',
                         padding: '5px 10px',
-                        background: 'rgba(37, 99, 235, 0.08)',
+                        background: 'rgba(var(--primary-rgb), 0.08)',
                         borderRadius: 6,
                       }}
                     >

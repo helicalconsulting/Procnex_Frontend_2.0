@@ -151,8 +151,8 @@ const ALL_COLUMNS: VendorColumnDef[] = [
           {v.initials}
         </span>
         <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="truncate font-semibold text-foreground hover:text-primary transition-colors">{v.name}</span>
-          <span className="truncate text-xs text-muted-foreground">{v.email}</span>
+          <span className="truncate font-semibold text-foreground group-hover:text-primary transition-colors">{v.name}</span>
+          <span className="truncate text-xs text-muted-foreground group-hover:text-foreground/85 transition-colors">{v.email}</span>
         </div>
       </div>
     ),
@@ -168,8 +168,8 @@ const ALL_COLUMNS: VendorColumnDef[] = [
   {
     key: 'location', label: 'Location', defaultVisible: true, width: COL_META.location.width, align: 'left',
     render: (v) => (
-      <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground truncate">
-        <MapPin size={13} className="shrink-0" /> {v.location}
+      <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground group-hover:text-foreground/85 transition-colors truncate">
+        <MapPin size={13} className="shrink-0 text-muted-foreground group-hover:text-primary transition-colors" /> {v.location}
       </span>
     )
   },
@@ -236,19 +236,19 @@ const ALL_COLUMNS: VendorColumnDef[] = [
   },
   {
     key: 'joined', label: 'Joined', defaultVisible: true, width: COL_META.joined.width, align: 'left',
-    render: (v, fmtDate) => <span className="whitespace-nowrap text-sm text-muted-foreground">{fmtDate(v.createdAt)}</span>
+    render: (v, fmtDate) => <span className="whitespace-nowrap text-sm text-muted-foreground group-hover:text-foreground/85 transition-colors">{fmtDate(v.createdAt)}</span>
   },
   {
     key: 'contact', label: 'Contact Person', defaultVisible: false, width: COL_META.contact.width, align: 'left',
-    render: (v) => <span className="text-sm text-muted-foreground">{v.contactPerson}</span>
+    render: (v) => <span className="text-sm text-muted-foreground group-hover:text-foreground/85 transition-colors">{v.contactPerson}</span>
   },
   {
     key: 'phone', label: 'Phone', defaultVisible: false, width: COL_META.phone.width, align: 'left',
-    render: (v) => <span className="text-sm text-muted-foreground">{v.phone}</span>
+    render: (v) => <span className="text-sm text-muted-foreground group-hover:text-foreground/85 transition-colors">{v.phone}</span>
   },
   {
     key: 'website', label: 'Website', defaultVisible: false, width: COL_META.website.width, align: 'left',
-    render: (v) => <span className="text-sm text-muted-foreground">{v.website}</span>
+    render: (v) => <span className="text-sm text-muted-foreground group-hover:text-foreground/85 transition-colors">{v.website}</span>
   },
 ];
 
@@ -834,7 +834,7 @@ export default function VendorsPage() {
               className={cn(
                 'cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring/50 transition-all duration-200',
                 isActive &&
-                  'border-primary/45 ring-2 ring-primary/10 bg-primary/[0.08] dark:bg-primary/20 dark:border-[#388bfd] dark:shadow-[0_0_0_1.5px_#388bfd,0_0_25px_rgba(56,139,253,0.75),0_0_10px_rgba(56,139,253,0.9),inset_0_0_15px_rgba(56,139,253,0.2)]'
+                  'card-selected border-[var(--card-glow-border)] shadow-[var(--card-glow-shadow)] bg-[var(--card-glow-bg)]'
               )}
               onClick={() => {
                 setFilterMode((prev) => prev === c.filter ? 'all' : c.filter);
@@ -981,92 +981,112 @@ export default function VendorsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/60">
-                    {paginated.map((v) => (
-                      <tr
-                        key={v.id}
-                        className="group transition-colors hover:bg-accent/35 cursor-pointer"
-                        onClick={() => setDetailVendor(v)}
-                      >
-                        {visibleColumns.map((col) => {
-                          const align = COL_META[col.key]?.align ?? 'left';
-                          return (
-                            <td key={col.key} className="px-4 py-3.5 align-middle" style={{ textAlign: align }}>
-                              {col.render(v, formatDate, toggleActive, toggleMobileActive, canCreateVendor)}
-                            </td>
-                          );
-                        })}
+                    {paginated.map((v) => {
+                      const isSelected = detailVendor?.id === v.id;
+                      return (
+                        <tr
+                          key={v.id}
+                          className={cn(
+                            "group transition-colors cursor-pointer",
+                            isSelected
+                              ? "bg-[var(--table-row-selected)] border-l-2 border-primary"
+                              : "hover:bg-[var(--table-row-hover)]"
+                          )}
+                          onClick={() => setDetailVendor(v)}
+                        >
+                          {visibleColumns.map((col) => {
+                            const align = COL_META[col.key]?.align ?? 'left';
+                            return (
+                              <td key={col.key} className="px-4 py-3.5 align-middle" style={{ textAlign: align }}>
+                                {col.render(v, formatDate, toggleActive, toggleMobileActive, canCreateVendor)}
+                              </td>
+                            );
+                          })}
 
-                        <td className="px-4 py-3.5 align-middle text-right sticky right-0 z-10 bg-card group-hover:bg-accent/35 transition-colors shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.1)] dark:shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.35)] min-w-[160px] w-[160px]" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-1 whitespace-nowrap">
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              className="shrink-0"
-                              onClick={() => setDetailVendor(v)}
-                              title="View profile"
-                            >
-                              <Eye className="size-4" />
-                            </Button>
-
-                            {v.isActive && canCreateVendor && (
-                              <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                className="shrink-0"
-                                onClick={() => openCredentialsModal(v)}
-                                title="Resend password setup email"
-                              >
-                                <Key className="size-4" />
-                              </Button>
+                          <td
+                            className={cn(
+                              "px-4 py-3.5 align-middle text-right sticky right-0 z-10 transition-colors shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.1)] dark:shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.35)] min-w-[160px] w-[160px]",
+                              isSelected
+                                ? "bg-[var(--table-row-selected)] group-hover:bg-[var(--table-row-hover)]"
+                                : "bg-card group-hover:bg-[var(--table-row-hover)]"
                             )}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                className="shrink-0 text-muted-foreground group-hover:text-foreground hover:text-primary! hover:bg-primary/15! dark:hover:text-primary! dark:hover:bg-primary/25! transition-all duration-150"
+                                onClick={() => setDetailVendor(v)}
+                                title="View profile"
+                                aria-label="View profile"
+                              >
+                                <Eye className="size-4" />
+                              </Button>
 
-                            {canCreateVendor ? (
-                              <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                className="shrink-0"
-                                onClick={() => openEditModal(v)}
-                                title="Edit vendor"
-                              >
-                                <Edit3 className="size-4" />
-                              </Button>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                disabled
-                                className="opacity-50 shrink-0"
-                                title="Admin has not allowed this action."
-                              >
-                                <ShieldOff className="size-4" />
-                              </Button>
-                            )}
+                              {v.isActive && canCreateVendor && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  className="shrink-0 text-muted-foreground group-hover:text-foreground hover:text-amber-500! hover:bg-amber-500/15! dark:hover:text-amber-400! dark:hover:bg-amber-500/25! transition-all duration-150"
+                                  onClick={() => openCredentialsModal(v)}
+                                  title="Resend password setup email"
+                                  aria-label="Resend credentials"
+                                >
+                                  <Key className="size-4" />
+                                </Button>
+                              )}
 
-                            {canCreateVendor ? (
-                              <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive shrink-0"
-                                onClick={() => openDeleteModal(v)}
-                                title="Delete vendor"
-                              >
-                                <Trash2 className="size-4" />
-                              </Button>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                disabled
-                                className="opacity-50 shrink-0"
-                                title="Admin has not allowed this action."
-                              >
-                                <ShieldOff className="size-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                              {canCreateVendor ? (
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  className="shrink-0 text-muted-foreground group-hover:text-foreground hover:text-primary! hover:bg-primary/15! dark:hover:text-primary! dark:hover:bg-primary/25! transition-all duration-150"
+                                  onClick={() => openEditModal(v)}
+                                  title="Edit vendor"
+                                  aria-label="Edit vendor"
+                                >
+                                  <Edit3 className="size-4" />
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  disabled
+                                  className="opacity-40 shrink-0 text-muted-foreground"
+                                  title="Admin has not allowed this action."
+                                >
+                                  <ShieldOff className="size-4" />
+                                </Button>
+                              )}
+
+                              {canCreateVendor ? (
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  className="shrink-0 text-muted-foreground group-hover:text-foreground hover:text-destructive! hover:bg-destructive/15! dark:hover:text-destructive! dark:hover:bg-destructive/25! transition-all duration-150"
+                                  onClick={() => openDeleteModal(v)}
+                                  title="Delete vendor"
+                                  aria-label="Delete vendor"
+                                >
+                                  <Trash2 className="size-4" />
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  disabled
+                                  className="opacity-40 shrink-0 text-muted-foreground"
+                                  title="Admin has not allowed this action."
+                                >
+                                  <ShieldOff className="size-4" />
+                                </Button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

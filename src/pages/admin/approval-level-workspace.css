@@ -18,12 +18,14 @@
   box-shadow: 0 12px 36px 0 rgba(0, 0, 0, 0.45), inset 0 1px 0 0 rgba(255, 255, 255, 0.18);
   transform: translateY(-2px);
 }
+.approval-metric--active,
+.approval-metric.active,
 [data-theme="dark"] .approval-metric--active,
 [data-theme="dark"] .approval-metric.active {
-  border: 1.5px solid #388bfd !important;
-  background: rgba(56, 139, 253, 0.2) !important;
-  box-shadow: 0 0 0 1.5px #388bfd, 0 0 25px rgba(56, 139, 253, 0.75), 0 0 10px rgba(56, 139, 253, 0.9), inset 0 0 15px rgba(56, 139, 253, 0.2) !important;
-  transform: translateY(-3px) !important;
+  border: 1.5px solid var(--card-glow-border) !important;
+  background: var(--card-glow-bg) !important;
+  box-shadow: var(--card-glow-shadow) !important;
+  transform: translateY(-2px) !important;
 }
 .approval-metric > div { display: flex; flex-direction: column; gap: 2px; }
 .approval-metric__icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; background: var(--accent); color: var(--approval-accent); }

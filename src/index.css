@@ -231,8 +231,8 @@
   --secondary-foreground: #25334a;
   --muted: #edf2f7;
   --muted-foreground: #68758a;
-  --accent: var(--primary-50);
-  --accent-foreground: var(--primary-700);
+  --accent: color-mix(in srgb, var(--primary-500, #0a6ed1) 10%, #ffffff);
+  --accent-foreground: var(--primary-700, #085bb0);
   --destructive: #dc2626;
   --destructive-foreground: #ffffff;
   --input: #ccd7e4;
@@ -242,6 +242,8 @@
   --surface-elevated: #edf2f7;
   --surface-hover: #e6edf6;
   --surface-card: rgba(255, 255, 255, 0.94);
+  --table-row-hover: color-mix(in srgb, var(--primary-500) 6%, #f1f5fa);
+  --table-row-selected: color-mix(in srgb, var(--primary-500) 10%, #ffffff);
 
   --text-primary: var(--foreground);
   --text-secondary: var(--muted-foreground);
@@ -259,11 +261,19 @@
   --overlay: rgba(0, 0, 0, 0.5);
 
   /* SAP Shell (left panel) */
-  --shell-bg: linear-gradient(175deg, #354a5f 0%, #2c3e50 40%, #074a8a 100%);
-  --shell-text: #ffffff;
-  --shell-text-secondary: rgba(255, 255, 255, 0.6);
-  --shell-border: rgba(255, 255, 255, 0.1);
-  --shell-accent: #1a80e0;
+  --shell-bg: var(--shell-bg-light, linear-gradient(180deg, #ffffff 0%, #f8fafc 100%));
+  --shell-text: #0f172a;
+  --shell-text-secondary: #64748b;
+  --shell-section-label: #64748b;
+  --shell-border: #e2e8f0;
+  --shell-accent: var(--primary-500, #0a6ed1);
+  --shell-item-text: #334155;
+  --shell-item-icon: #64748b;
+  --shell-item-hover-bg: color-mix(in srgb, var(--primary-500, #0a6ed1) 8%, #f1f5f9);
+  --shell-item-hover-text: #0f172a;
+  --shell-item-active-bg: color-mix(in srgb, var(--primary-500, #0a6ed1) 12%, #edf4fc);
+  --shell-item-active-text: var(--primary-700, #085bb0);
+  --shell-scrollbar: rgba(0, 0, 0, 0.16);
 
   /* Error styling */
   --error-bg: #fff2f2;
@@ -293,8 +303,8 @@
   --secondary-foreground: #e4ebf3;
   --muted: #182331;
   --muted-foreground: #9ba9b9;
-  --accent: var(--primary-dark-accent, rgba(var(--primary-rgb, 94, 162, 255), 0.18));
-  --accent-foreground: var(--primary-100, #d7e8ff);
+  --accent: color-mix(in srgb, var(--primary, #5ea2ff) 16%, var(--card, #0f1726));
+  --accent-foreground: #ffffff;
   --destructive: #f05252;
   --destructive-foreground: #ffffff;
   --input: #334154;
@@ -304,6 +314,8 @@
   --surface-elevated: #101926;
   --surface-hover: #1a2635;
   --surface-card: rgba(18, 26, 39, 0.94);
+  --table-row-hover: color-mix(in srgb, var(--primary-dark) 12%, #141f2d);
+  --table-row-selected: color-mix(in srgb, var(--primary-dark) 18%, #0e1724);
 
   --text-primary: var(--foreground);
   --text-secondary: var(--muted-foreground);
@@ -321,11 +333,19 @@
   --overlay: rgba(0, 0, 0, 0.5);
 
   /* SAP Shell (left panel — darker variant) */
-  --shell-bg: var(--shell-bg-dark, linear-gradient(175deg, #0d1b2a 0%, #1b2838 40%, #0a3d6b 100%));
-  --shell-text: #e8eaed;
-  --shell-text-secondary: rgba(232, 234, 237, 0.5);
-  --shell-border: rgba(255, 255, 255, 0.06);
+  --shell-bg: var(--shell-bg-dark, linear-gradient(175deg, #0d1b2a 0%, #101b27 45%, #081a33 100%));
+  --shell-text: #f1f5f9;
+  --shell-text-secondary: rgba(232, 234, 237, 0.65);
+  --shell-section-label: rgba(255, 255, 255, 0.45);
+  --shell-border: rgba(255, 255, 255, 0.08);
   --shell-accent: var(--primary-dark, #4db1ff);
+  --shell-item-text: rgba(255, 255, 255, 0.72);
+  --shell-item-icon: rgba(255, 255, 255, 0.6);
+  --shell-item-hover-bg: rgba(255, 255, 255, 0.08);
+  --shell-item-hover-text: #ffffff;
+  --shell-item-active-bg: rgba(var(--primary-rgb, 10, 110, 209), 0.22);
+  --shell-item-active-text: #ffffff;
+  --shell-scrollbar: rgba(255, 255, 255, 0.15);
 
   /* Error styling */
   --error-bg: rgba(187, 0, 0, 0.12);
@@ -947,15 +967,21 @@ img {
 
 :root,
 [data-theme="light"] {
-  --card-glow-border: var(--card-glow-border-light, rgba(var(--primary-rgb, 10, 110, 209), 0.45));
-  --card-glow-shadow: var(--card-glow-shadow-light, 0 0 0 2px rgba(var(--primary-rgb, 10, 110, 209), 0.1), 0 4px 20px rgba(var(--primary-rgb, 10, 110, 209), 0.12));
-  --card-glow-bg: var(--card-glow-bg-light, rgba(var(--primary-rgb, 10, 110, 209), 0.08));
+  --card-glow-border: var(--card-glow-border-light, rgba(var(--primary-rgb, 10, 110, 209), 0.38));
+  --card-glow-shadow: var(--card-glow-shadow-light, 0 0 0 1.5px rgba(var(--primary-rgb, 10, 110, 209), 0.2), 0 4px 14px rgba(var(--primary-rgb, 10, 110, 209), 0.08));
+  --card-glow-bg: var(--card-glow-bg-light, rgba(var(--primary-rgb, 10, 110, 209), 0.05));
+  --interactive-glow-focus: 0 0 0 2.5px rgba(var(--primary-rgb, 10, 110, 209), 0.2);
+  --interactive-glow-subtle: 0 0 12px rgba(var(--primary-rgb, 10, 110, 209), 0.18);
+  --interactive-glow-button: 0 4px 14px -2px rgba(var(--primary-rgb, 10, 110, 209), 0.35);
 }
 
 [data-theme="dark"] {
-  --card-glow-border: var(--card-glow-border-dark, var(--primary-dark, #388bfd));
-  --card-glow-shadow: var(--card-glow-shadow-dark, 0 0 0 1.5px #388bfd, 0 0 25px rgba(var(--primary-rgb, 56, 139, 253), 0.75), 0 0 10px rgba(var(--primary-rgb, 56, 139, 253), 0.9), inset 0 0 15px rgba(var(--primary-rgb, 56, 139, 253), 0.2));
-  --card-glow-bg: var(--card-glow-bg-dark, rgba(var(--primary-rgb, 56, 139, 253), 0.2));
+  --card-glow-border: var(--card-glow-border-dark, rgba(var(--primary-rgb, 94, 162, 255), 0.42));
+  --card-glow-shadow: var(--card-glow-shadow-dark, 0 0 0 1px rgba(var(--primary-rgb, 94, 162, 255), 0.3), 0 2px 8px rgba(0, 0, 0, 0.35));
+  --card-glow-bg: var(--card-glow-bg-dark, rgba(var(--primary-rgb, 94, 162, 255), 0.06));
+  --interactive-glow-focus: 0 0 0 2px rgba(var(--primary-rgb, 94, 162, 255), 0.22);
+  --interactive-glow-subtle: 0 0 8px rgba(var(--primary-rgb, 94, 162, 255), 0.12);
+  --interactive-glow-button: 0 2px 8px rgba(var(--primary-rgb, 94, 162, 255), 0.25);
 }
 
 /* Master Active / Selected Card Glow Selector */
@@ -1122,8 +1148,8 @@ img {
 .glass-card:hover:not(.active),
 .po-card:hover:not(.active),
 .docs-card:hover:not(.active) {
-  border-color: var(--card-glow-border, rgba(var(--primary-rgb, 56, 139, 253), 0.4)) !important;
-  box-shadow: 0 12px 30px -24px var(--card-glow-border, rgba(var(--primary-rgb, 56, 139, 253), 0.55)) !important;
+  border-color: rgba(var(--primary-rgb), 0.35) !important;
+  box-shadow: 0 4px 16px -4px rgba(var(--primary-rgb), 0.16) !important;
   transform: translateY(-1px) !important;
 }
 

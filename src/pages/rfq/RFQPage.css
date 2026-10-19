@@ -121,18 +121,12 @@
   left: 100%;
 }
 
-.rfq-summary-card--active {
-  border-color: var(--primary-500) !important;
-  background: rgba(var(--primary-rgb, 10, 110, 209), 0.08) !important;
-  box-shadow: 0 12px 36px rgba(var(--primary-rgb, 10, 110, 209), 0.2), inset 0 1px 0 0 rgba(255, 255, 255, 0.8) !important;
-  transform: translateY(-3px);
-}
-
+.rfq-summary-card--active,
 [data-theme="dark"] .rfq-summary-card--active {
-  border: 1.5px solid var(--primary-dark, #388bfd) !important;
-  background: rgba(var(--primary-rgb, 56, 139, 253), 0.2) !important;
-  box-shadow: 0 0 0 1.5px var(--primary-dark, #388bfd), 0 0 25px rgba(var(--primary-rgb, 56, 139, 253), 0.75), 0 0 10px rgba(var(--primary-rgb, 56, 139, 253), 0.9), inset 0 0 15px rgba(var(--primary-rgb, 56, 139, 253), 0.2) !important;
-  transform: translateY(-3px);
+  border: 1.5px solid var(--card-glow-border) !important;
+  background: var(--card-glow-bg) !important;
+  box-shadow: var(--card-glow-shadow) !important;
+  transform: translateY(-2px);
 }
 
 .rfq-summary-card__icon {

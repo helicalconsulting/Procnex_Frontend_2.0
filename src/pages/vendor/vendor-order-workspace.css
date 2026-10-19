@@ -1,8 +1,10 @@
 /* Layout and surfaces only: retain the existing application type scale. */
 .order-workspace { --muted-foreground: #59677c; min-width: 0; }
-[data-theme="dark"] .order-workspace { --muted-foreground: #9ba9b9; }
-.order-metrics [aria-pressed="true"] { box-shadow: none !important; border-color: var(--primary); }
-.order-detail-focus { outline: none; }
+.order-metrics [aria-pressed="true"] {
+  border: 1.5px solid var(--card-glow-border) !important;
+  background: var(--card-glow-bg) !important;
+  box-shadow: var(--card-glow-shadow) !important;
+}
 .order-register-scroll { overflow-x: auto; }
 .order-register { min-width: 1080px; table-layout: fixed; }
 .order-workspace .order-register :is(th, td) { padding: 16px; border-inline: 0; }

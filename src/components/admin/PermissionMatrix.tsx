@@ -179,7 +179,7 @@ export default function PermissionMatrix({ permissions, editable, busy = false, 
                             />
                           ) : (
                             <span
-                              className="text-muted-foreground/50 text-sm select-none"
+                              className="text-muted-foreground/70 dark:text-muted-foreground/60 text-sm select-none"
                               aria-label={`${PERMISSION_LABELS[field]} not available for ${row.module}`}
                             >
                               —

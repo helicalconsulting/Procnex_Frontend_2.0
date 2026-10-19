@@ -210,17 +210,11 @@ export function generatePrimaryPalette(rawHex: string): Record<string, string> {
     '--primary-rgb': rgbStr,
     '--primary-light-rgb': lightRgbStr,
 
-    // Core Tailwind & shadcn tokens
-    '--primary': p500,
-    '--primary-foreground': getContrastForeground(p500),
+    // Primary action variants
     '--primary-hover': p600,
     '--primary-active': p700,
     '--primary-focus': p400,
     '--primary-subtle': p50,
-    '--accent': p50,
-    '--accent-foreground': p700,
-    '--ring': p400,
-    '--border-focus': p500,
 
     // Vendor portal aliases
     '--vendor-primary': p500,
@@ -233,21 +227,25 @@ export function generatePrimaryPalette(rawHex: string): Record<string, string> {
     '--primary-dark-accent': `rgba(${rgbStr}, 0.22)`,
     '--primary-dark-ring': darkRing,
 
-    // Shell sidebar accents
-    '--shell-accent': shade(hex, '#ffffff', 0.2),
-    '--shell-bg': `linear-gradient(175deg, #1e293b 0%, #152232 45%, ${shade(hex, '#000000', 0.6)} 100%)`,
+    // Shell sidebar backgrounds (mode-specific)
+    '--shell-bg-light': 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)',
     '--shell-bg-dark': `linear-gradient(175deg, #0d1b2a 0%, #101b27 45%, ${shade(hex, '#000000', 0.7)} 100%)`,
 
     // Card Selection & Interactive Glow System
-    '--card-glow-border': `rgba(${rgbStr}, 0.45)`,
-    '--card-glow-shadow': `0 0 0 2px rgba(${rgbStr}, 0.12), 0 4px 20px rgba(${rgbStr}, 0.14)`,
-    '--card-glow-bg': `rgba(${rgbStr}, 0.08)`,
-    '--card-glow-border-light': `rgba(${rgbStr}, 0.45)`,
-    '--card-glow-shadow-light': `0 0 0 2px rgba(${rgbStr}, 0.12), 0 4px 20px rgba(${rgbStr}, 0.14)`,
-    '--card-glow-bg-light': `rgba(${rgbStr}, 0.08)`,
-    '--card-glow-border-dark': darkPrimary,
-    '--card-glow-shadow-dark': `0 0 0 1.5px ${darkPrimary}, 0 0 25px rgba(${rgbStr}, 0.55), 0 0 10px rgba(${rgbStr}, 0.7), inset 0 0 15px rgba(${rgbStr}, 0.2)`,
-    '--card-glow-bg-dark': `rgba(${rgbStr}, 0.18)`,
+    '--card-glow-border': `rgba(${rgbStr}, 0.38)`,
+    '--card-glow-shadow': `0 0 0 1.5px rgba(${rgbStr}, 0.2), 0 4px 14px rgba(${rgbStr}, 0.08)`,
+    '--card-glow-bg': `rgba(${rgbStr}, 0.05)`,
+    '--card-glow-border-light': `rgba(${rgbStr}, 0.38)`,
+    '--card-glow-shadow-light': `0 0 0 1.5px rgba(${rgbStr}, 0.2), 0 4px 14px rgba(${rgbStr}, 0.08)`,
+    '--card-glow-bg-light': `rgba(${rgbStr}, 0.05)`,
+    '--card-glow-border-dark': `rgba(${rgbStr}, 0.45)`,
+    '--card-glow-shadow-dark': `0 0 0 1px rgba(${rgbStr}, 0.3), 0 2px 8px rgba(0, 0, 0, 0.35)`,
+    '--card-glow-bg-dark': `rgba(${rgbStr}, 0.06)`,
+
+    // Reusable interactive glow system tokens
+    '--interactive-glow-focus': `0 0 0 2px rgba(${rgbStr}, 0.22)`,
+    '--interactive-glow-subtle': `0 0 8px rgba(${rgbStr}, 0.12)`,
+    '--interactive-glow-button': `0 2px 8px rgba(${rgbStr}, 0.25)`,
   };
 }
 
@@ -256,6 +254,20 @@ export function applyPrimaryColor(hex: string) {
   if (typeof document === 'undefined') return;
   const palette = generatePrimaryPalette(hex);
   const root = document.documentElement;
+
+  // Clean up any stale inline theme overrides so CSS [data-theme="dark"] and [data-theme="light"] rules work correctly
+  root.style.removeProperty('--accent');
+  root.style.removeProperty('--accent-foreground');
+  root.style.removeProperty('--primary');
+  root.style.removeProperty('--primary-foreground');
+  root.style.removeProperty('--ring');
+  root.style.removeProperty('--border-focus');
+  root.style.removeProperty('--shell-bg');
+  root.style.removeProperty('--shell-accent');
+  root.style.removeProperty('--shell-text');
+  root.style.removeProperty('--shell-text-secondary');
+  root.style.removeProperty('--shell-border');
+
   for (const [key, val] of Object.entries(palette)) {
     root.style.setProperty(key, val);
   }

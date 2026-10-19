@@ -40,7 +40,7 @@ export function AuthLayout({
 }: AuthLayoutProps) {
   return (
     <main className="grid min-h-svh bg-background text-foreground lg:grid-cols-[minmax(360px,0.88fr)_minmax(520px,1.12fr)]">
-      <section className="relative hidden min-h-svh overflow-hidden [background:var(--shell-bg)] px-10 py-10 text-white lg:flex lg:flex-col xl:px-14 xl:py-12">
+      <section className="relative hidden min-h-svh overflow-hidden [background:var(--shell-bg-dark,linear-gradient(175deg,#0d1b2a_0%,#101b27_45%,#081a33_100%))] px-10 py-10 text-white lg:flex lg:flex-col xl:px-14 xl:py-12">
         <div aria-hidden="true" className="absolute -right-28 -top-24 size-96 rounded-full border border-white/[0.06]" />
         <div aria-hidden="true" className="absolute -bottom-48 -left-36 size-[34rem] rounded-full border border-white/[0.05]" />
         <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(circle_at_78%_18%,rgba(74,144,226,0.16),transparent_32%),radial-gradient(circle_at_18%_88%,rgba(45,212,191,0.08),transparent_30%)]" />

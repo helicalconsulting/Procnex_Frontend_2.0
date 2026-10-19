@@ -80,7 +80,7 @@ interface PreBuiltAgent {
 
 export function ProcnexAiReportsWidget() {
   const { isDark } = useTheme();
-  const { logoUrl, companyName } = useBranding();
+  const { logoUrl, companyName, primaryColor } = useBranding();
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
@@ -719,7 +719,7 @@ export function ProcnexAiReportsWidget() {
           <code
             key={i}
             className={`px-1.5 py-0.5 rounded text-[12px] font-mono ${
-              isDark ? 'bg-slate-800 text-sky-300 border border-slate-700' : 'bg-slate-100 text-sky-700 border border-slate-200'
+              isDark ? 'bg-slate-800 text-primary-300 border border-slate-700' : 'bg-slate-100 text-primary-700 border border-slate-200'
             }`}
           >
             {inner}
@@ -815,7 +815,7 @@ export function ProcnexAiReportsWidget() {
             <h4
               key={idx}
               className={`text-xs sm:text-[13px] font-semibold tracking-normal mt-3.5 mb-1.5 ${
-                isUserMessage ? 'text-white' : isDark ? 'text-sky-400' : 'text-sky-700'
+                isUserMessage ? 'text-white' : isDark ? 'text-primary' : 'text-primary-700'
               }`}
             >
               {parseInlineMarkdown(trimmed.slice(4), isUserMessage)}
@@ -897,18 +897,18 @@ export function ProcnexAiReportsWidget() {
           onClick={() => setIsHistoryDrawerOpen(true)}
           className={`group flex items-center gap-2.5 px-4 py-2.5 rounded-2xl text-xs font-semibold border shadow-md transition-all cursor-pointer ${
             isDark
-              ? 'bg-slate-900/90 border-slate-700/80 text-slate-200 hover:border-sky-500/60 hover:bg-slate-800 hover:text-white hover:shadow-sky-900/20'
-              : 'bg-white border-slate-200 text-slate-700 hover:border-sky-400 hover:bg-sky-50/60 hover:text-sky-700 hover:shadow-sky-100'
+              ? 'bg-slate-900/90 border-slate-700/80 text-slate-200 hover:border-primary/60 hover:bg-slate-800 hover:text-white hover:shadow-primary/20'
+              : 'bg-white border-slate-200 text-slate-700 hover:border-primary/40 hover:bg-primary-50/60 hover:text-primary-700 hover:shadow-primary/10'
           }`}
           title="View all previously generated reports"
         >
-          <Clock className="w-4 h-4 text-sky-400 group-hover:rotate-12 transition-transform" />
+          <Clock className="w-4 h-4 text-primary group-hover:rotate-12 transition-transform" />
           <span>Previously Generated Reports</span>
           {reportsHistory.length > 0 && (
             <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
               isDark
-                ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
-                : 'bg-sky-100 text-sky-700 border border-sky-200'
+                ? 'bg-primary/20 text-primary-300 border border-primary/40'
+                : 'bg-primary-100 text-primary-700 border border-primary-200'
             }`}>
               {reportsHistory.length}
             </span>
@@ -930,14 +930,19 @@ export function ProcnexAiReportsWidget() {
         <div className="flex flex-col items-center gap-3">
           <div className="relative flex items-center justify-center">
             {/* Ambient Glow Aura */}
-            <div className="absolute -inset-2 rounded-full bg-gradient-to-tr from-sky-500 via-blue-600 to-indigo-600 opacity-50 blur-lg" />
+            <div
+              className="absolute -inset-2 rounded-full opacity-60 blur-lg transition-all"
+              style={{
+                background: 'radial-gradient(circle, rgba(var(--primary-rgb), 0.55) 0%, rgba(var(--primary-rgb), 0.2) 50%, transparent 75%)',
+              }}
+            />
             
             {/* Logo Badge Container */}
             <div
               className={`relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl p-2.5 flex items-center justify-center border shadow-xl backdrop-blur-xl transition-all duration-200 ${
                 isDark
-                  ? 'bg-slate-900/90 border-sky-500/40 shadow-sky-950/60 ring-1 ring-sky-500/30'
-                  : 'bg-white border-sky-200 shadow-sky-200/50 ring-1 ring-sky-100'
+                  ? 'bg-slate-900/90 border-primary/40 shadow-primary/20 ring-1 ring-primary/30'
+                  : 'bg-white border-primary/20 shadow-primary/10 ring-1 ring-primary/10'
               }`}
             >
               <img
@@ -958,7 +963,17 @@ export function ProcnexAiReportsWidget() {
         {/* Executive Title */}
         <div className="space-y-1.5">
           <h1 className={`text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
-            Procurement & Sourcing <span className="bg-gradient-to-r from-sky-400 via-blue-400 to-indigo-400 bg-clip-text text-transparent">Intelligence Hub</span>
+            Procurement & Sourcing{' '}
+            <span
+              className="bg-clip-text text-transparent"
+              style={{
+                backgroundImage: isDark
+                  ? 'linear-gradient(135deg, var(--primary-300, #93c5fd) 0%, var(--primary, #5ea2ff) 50%, var(--primary-400, #60a5fa) 100%)'
+                  : 'linear-gradient(135deg, var(--primary-600, #0284c7) 0%, var(--primary-500, #0a6ed1) 50%, var(--primary-700, #0369a1) 100%)',
+              }}
+            >
+              Intelligence Hub
+            </span>
           </h1>
           <p className={`text-xs sm:text-sm max-w-2xl mx-auto font-normal leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
             Autonomous multi-engine audit, supplier spend analytics, and automated compliance reporting across purchase orders, invoices, and RFQs.
@@ -1004,7 +1019,7 @@ export function ProcnexAiReportsWidget() {
                   >
                   {msg.sender === 'assistant' && (
                     <div className={`w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0 mt-1 shadow-md border overflow-hidden p-1.5 ${
-                      isDark ? 'bg-slate-900 border-sky-500/40 shadow-sky-950/40' : 'bg-white border-sky-200 shadow-sky-100'
+                      isDark ? 'bg-slate-900 border-primary/40 shadow-primary/10' : 'bg-white border-primary/20 shadow-primary/5'
                     }`}>
                       <img
                         src={logoUrl || '/Procnex-logo.jpeg'}
@@ -1021,9 +1036,17 @@ export function ProcnexAiReportsWidget() {
                   )}
 
                   <div
+                    style={
+                      msg.sender === 'user'
+                        ? {
+                            background: 'linear-gradient(135deg, var(--primary-600, var(--primary)) 0%, var(--primary-700, var(--primary)) 100%)',
+                            boxShadow: '0 4px 14px rgba(var(--primary-rgb), 0.25)',
+                          }
+                        : undefined
+                    }
                     className={`group relative rounded-2xl transition-all shadow-md ${
                       msg.sender === 'user'
-                        ? 'max-w-[80%] bg-gradient-to-r from-sky-600 to-blue-600 text-white rounded-br-none shadow-sky-600/20 px-4 py-2.5 text-sm'
+                        ? 'max-w-[80%] text-primary-foreground rounded-br-none px-4 py-2.5 text-sm font-medium'
                         : isDark
                           ? 'max-w-[92%] sm:max-w-[88%] bg-slate-900/90 border border-slate-800 text-slate-200 rounded-bl-none shadow-slate-950/40 p-4 text-sm'
                           : 'max-w-[92%] sm:max-w-[88%] bg-white border border-slate-200 text-slate-800 rounded-bl-none shadow-slate-100 p-4 text-sm'
@@ -1033,12 +1056,12 @@ export function ProcnexAiReportsWidget() {
                       <div className={`flex items-center justify-between gap-4 mb-2.5 border-b pb-1.5 text-[11px] ${
                         isDark ? 'border-slate-800 text-slate-400' : 'border-slate-100 text-slate-500'
                       }`}>
-                        <span className="font-semibold text-sky-400">Procnex AI</span>
+                        <span className="font-semibold text-primary">Procnex AI</span>
                         <div className="flex items-center gap-2">
                           <span>{msg.timestamp}</span>
                           <button
                             onClick={() => handleCopy(msg.text, msg.id)}
-                            className="hover:text-sky-400 transition-colors cursor-pointer"
+                            className="hover:text-primary transition-colors cursor-pointer"
                             title="Copy"
                           >
                             {copiedId === msg.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
@@ -1068,7 +1091,7 @@ export function ProcnexAiReportsWidget() {
                       }`}>
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className={`p-2 rounded-xl border flex-shrink-0 ${
-                            isDark ? 'bg-sky-950/60 border-sky-500/30 text-sky-400' : 'bg-sky-50 border-sky-200 text-sky-600'
+                            isDark ? 'bg-primary/20 border-primary/40 text-primary-300' : 'bg-primary-50 border-primary-200 text-primary-700'
                           }`}>
                             <FileText className="w-4 h-4" />
                           </div>
@@ -1095,8 +1118,8 @@ export function ProcnexAiReportsWidget() {
                           disabled={downloadingPdfId === msg.id}
                           className={`flex-shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shadow-sm border cursor-pointer ${
                             isDark
-                              ? 'bg-sky-600/20 hover:bg-sky-600 text-sky-300 hover:text-white border-sky-500/40 shadow-sky-900/20 hover:shadow-sky-900/40'
-                              : 'bg-white hover:bg-sky-600 text-sky-700 hover:text-white border-sky-200 hover:border-sky-600 shadow-sky-100'
+                              ? 'bg-primary/20 hover:bg-primary text-primary-300 hover:text-primary-foreground border-primary/40 shadow-primary/20 hover:shadow-primary/40'
+                              : 'bg-white hover:bg-primary text-primary-700 hover:text-primary-foreground border-primary/30 hover:border-primary shadow-primary/10'
                           }`}
                         >
                           {downloadingPdfId === msg.id ? (
@@ -1130,7 +1153,7 @@ export function ProcnexAiReportsWidget() {
               {isGenerating && (
                 <div className="flex gap-3.5 justify-start">
                   <div className={`w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0 mt-1 shadow-md border overflow-hidden p-1.5 animate-pulse ${
-                    isDark ? 'bg-slate-900 border-sky-500/60 shadow-sky-950/40 ring-1 ring-sky-500/30' : 'bg-white border-sky-300 shadow-sky-100 ring-1 ring-sky-200'
+                    isDark ? 'bg-slate-900 border-primary/60 shadow-primary/30 ring-1 ring-primary/30' : 'bg-white border-primary/40 shadow-primary/10 ring-1 ring-primary/20'
                   }`}>
                     <img
                       src={logoUrl || '/Procnex-logo.jpeg'}
@@ -1150,7 +1173,7 @@ export function ProcnexAiReportsWidget() {
                     }`}
                   >
                     {statusMessage && (
-                      <div className={`flex items-center gap-2 text-xs font-mono ${isDark ? 'text-sky-400' : 'text-sky-600'}`}>
+                      <div className={`flex items-center gap-2 text-xs font-mono ${isDark ? 'text-primary' : 'text-primary-700'}`}>
                         <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                         <span>{statusMessage}</span>
                       </div>
@@ -1177,8 +1200,8 @@ export function ProcnexAiReportsWidget() {
               onClick={() => scrollToBottom(true)}
               className={`pointer-events-auto flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold shadow-xl backdrop-blur-md border transition-all duration-200 transform hover:scale-105 active:scale-95 cursor-pointer ${
                 isDark
-                  ? 'bg-slate-900/95 text-sky-400 border-sky-500/40 shadow-sky-950/80 hover:bg-slate-800 hover:text-white hover:border-sky-400'
-                  : 'bg-white/95 text-sky-700 border-sky-200 shadow-sky-200/60 hover:bg-sky-50 hover:text-sky-800 hover:border-sky-300'
+                  ? 'bg-slate-900/95 text-primary border-primary/40 shadow-slate-950/80 hover:bg-slate-800 hover:text-white hover:border-primary'
+                  : 'bg-white/95 text-primary-700 border-primary-200 shadow-slate-200/60 hover:bg-primary-50 hover:text-primary-800 hover:border-primary-300'
               }`}
               title="Scroll to latest response"
             >
@@ -1186,8 +1209,8 @@ export function ProcnexAiReportsWidget() {
               <span>Scroll to bottom</span>
               {isGenerating && (
                 <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
                 </span>
               )}
             </button>
@@ -1201,8 +1224,8 @@ export function ProcnexAiReportsWidget() {
               isListening
                 ? 'ring-2 ring-rose-500/70 border-rose-500 bg-rose-950/20 dark:bg-rose-950/30'
                 : isDark
-                  ? 'bg-slate-900/90 border border-slate-700/80 hover:border-sky-500/50 focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-500/20'
-                  : 'bg-white border border-slate-300 hover:border-sky-400 focus-within:border-sky-600 focus-within:ring-2 focus-within:ring-sky-500/20'
+                  ? 'bg-slate-900/90 border border-slate-700/80 hover:border-primary/50 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20'
+                  : 'bg-white border border-slate-300 hover:border-primary/40 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20'
             }`}
           >
             <input
@@ -1234,8 +1257,8 @@ export function ProcnexAiReportsWidget() {
                 isListening
                   ? 'bg-rose-500 text-white animate-pulse shadow-md shadow-rose-500/50 ring-2 ring-rose-400/60'
                   : isDark
-                    ? 'text-slate-400 hover:text-sky-400 hover:bg-slate-800'
-                    : 'text-slate-500 hover:text-sky-600 hover:bg-slate-100'
+                    ? 'text-slate-400 hover:text-primary hover:bg-slate-800'
+                    : 'text-slate-500 hover:text-primary hover:bg-slate-100'
               }`}
               title={isListening ? 'Listening... Click to stop recording' : 'Voice Input / Audio to Text (Click and speak)'}
             >
@@ -1249,12 +1272,16 @@ export function ProcnexAiReportsWidget() {
             <button
               onClick={() => handleSendMessage(prompt)}
               disabled={isGenerating || !prompt.trim()}
-              className="flex-shrink-0 bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 hover:from-sky-400 hover:to-blue-500 disabled:opacity-40 text-white font-medium text-xs px-4 py-1.5 rounded-full flex items-center gap-1.5 shadow-md shadow-sky-600/20 transition-all cursor-pointer"
+              style={{
+                background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-600, var(--primary)) 100%)',
+                boxShadow: '0 4px 14px rgba(var(--primary-rgb), 0.25)',
+              }}
+              className="flex-shrink-0 hover:opacity-95 active:scale-95 disabled:opacity-40 text-primary-foreground font-semibold text-xs px-4 py-1.5 rounded-full flex items-center gap-1.5 transition-all cursor-pointer"
             >
               {isGenerating ? (
                 <RefreshCw className="w-3 h-3 animate-spin" />
               ) : (
-                <Sparkles className="w-3 h-3 fill-white" />
+                <Sparkles className="w-3 h-3 fill-current" />
               )}
               <span>{isGenerating ? 'Processing...' : 'Run Query'}</span>
             </button>
@@ -1295,7 +1322,7 @@ export function ProcnexAiReportsWidget() {
               }`}
             >
               <div className="flex items-center gap-2">
-                <BarChart3 className={`w-4 h-4 ${isDark ? 'text-sky-400' : 'text-sky-600'}`} />
+                <BarChart3 className={`w-4 h-4 ${isDark ? 'text-primary' : 'text-primary-700'}`} />
                 <div>
                   <span className={`block text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Monthly Quota</span>
                   <span className={`font-semibold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
@@ -1327,7 +1354,7 @@ export function ProcnexAiReportsWidget() {
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Search pre-built reports..."
-              className={`w-full border rounded-full pl-10 pr-4 py-2 text-xs focus:outline-none focus:border-sky-500 ${
+              className={`w-full border rounded-full pl-10 pr-4 py-2 text-xs focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 ${
                 isDark
                   ? 'bg-slate-900/80 border-slate-800 text-slate-200 placeholder:text-slate-500'
                   : 'bg-white border-slate-200 text-slate-800 placeholder:text-slate-400'
@@ -1339,9 +1366,17 @@ export function ProcnexAiReportsWidget() {
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
             <button
               onClick={() => setSelectedCategory('all')}
-              className={`text-xs px-3.5 py-1.5 rounded-full font-medium transition-all ${
+              style={
                 selectedCategory === 'all'
-                  ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md shadow-sky-600/30'
+                  ? {
+                      background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-600, var(--primary)) 100%)',
+                      boxShadow: '0 4px 12px rgba(var(--primary-rgb), 0.3)',
+                    }
+                  : undefined
+              }
+              className={`text-xs px-3.5 py-1.5 rounded-full font-medium transition-all cursor-pointer ${
+                selectedCategory === 'all'
+                  ? 'text-primary-foreground font-semibold'
                   : isDark
                     ? 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200'
                     : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900'
@@ -1436,7 +1471,7 @@ export function ProcnexAiReportsWidget() {
 
                 <div>
                   <h3 className={`font-bold text-sm transition-colors ${
-                    isDark ? 'text-white group-hover:text-sky-300' : 'text-slate-900 group-hover:text-sky-700'
+                    isDark ? 'text-white group-hover:text-primary' : 'text-slate-900 group-hover:text-primary-700'
                   }`}>
                     {agent.title}
                   </h3>
@@ -1483,7 +1518,7 @@ export function ProcnexAiReportsWidget() {
             {/* Modal Header */}
             <div className={`p-5 border-b flex items-center justify-between ${isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
               <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-2xl border ${isDark ? 'bg-sky-600/20 border-sky-500/40 text-sky-400' : 'bg-sky-100 border-sky-300 text-sky-700'}`}>
+                <div className={`p-2 rounded-2xl border ${isDark ? 'bg-primary/20 border-primary/40 text-primary-300' : 'bg-primary-100 border-primary-300 text-primary-700'}`}>
                   <History className="w-5 h-5" />
                 </div>
                 <div>
@@ -1532,9 +1567,17 @@ export function ProcnexAiReportsWidget() {
                 <button
                   type="button"
                   onClick={() => setHistoryTab('all')}
+                  style={
+                    historyTab === 'all'
+                      ? {
+                          background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-600, var(--primary)) 100%)',
+                          boxShadow: '0 2px 8px rgba(var(--primary-rgb), 0.25)',
+                        }
+                      : undefined
+                  }
                   className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
                     historyTab === 'all'
-                      ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-sm'
+                      ? 'text-primary-foreground font-semibold'
                       : isDark
                         ? 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700/60'
                         : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
@@ -1579,8 +1622,8 @@ export function ProcnexAiReportsWidget() {
                           ? 'bg-slate-950/90 border-amber-500/40 shadow-sm shadow-amber-950/20 hover:border-amber-500/60'
                           : 'bg-amber-50/40 border-amber-200/80 shadow-sm hover:border-amber-300'
                         : isDark
-                          ? 'bg-slate-950/60 border-slate-800 hover:border-sky-500/40 hover:bg-slate-950'
-                          : 'bg-slate-50/70 border-slate-200 hover:border-sky-300 hover:bg-white'
+                          ? 'bg-slate-950/60 border-slate-800 hover:border-primary/40 hover:bg-slate-950'
+                          : 'bg-slate-50/70 border-slate-200 hover:border-primary/30 hover:bg-white'
                     }`}
                   >
                     <div className="flex items-start gap-3 min-w-0 cursor-pointer" onClick={() => setViewingReport(rpt)}>
@@ -1590,15 +1633,15 @@ export function ProcnexAiReportsWidget() {
                             ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
                             : 'bg-amber-100 border-amber-300 text-amber-600'
                           : isDark
-                            ? 'bg-sky-950/60 border-sky-500/30 text-sky-400'
-                            : 'bg-sky-50 border-sky-200 text-sky-600'
+                            ? 'bg-primary/20 border-primary/30 text-primary-300'
+                            : 'bg-primary-50 border-primary-200 text-primary-700'
                       }`}>
                         <FileText className="w-4 h-4" />
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <h4 className={`font-semibold text-xs truncate hover:underline ${
-                            isDark ? 'text-slate-200 hover:text-sky-300' : 'text-slate-800 hover:text-sky-600'
+                            isDark ? 'text-slate-200 hover:text-primary' : 'text-slate-800 hover:text-primary-700'
                           }`}>
                             {rpt.title}
                           </h4>
@@ -1626,8 +1669,8 @@ export function ProcnexAiReportsWidget() {
                         title="View Full Report"
                         className={`inline-flex items-center gap-1.5 font-semibold text-xs px-3 py-2 rounded-xl transition-all shadow-sm border cursor-pointer ${
                           isDark
-                            ? 'bg-sky-950/60 hover:bg-sky-600 text-sky-300 hover:text-white border-sky-500/40 hover:border-sky-500'
-                            : 'bg-white hover:bg-sky-600 text-sky-700 hover:text-white border-sky-200 hover:border-sky-600'
+                            ? 'bg-primary/15 hover:bg-primary text-primary-300 hover:text-primary-foreground border-primary/40 hover:border-primary'
+                            : 'bg-white hover:bg-primary text-primary-700 hover:text-primary-foreground border-primary/30 hover:border-primary'
                         }`}
                       >
                         <Eye className="w-3.5 h-3.5" />
@@ -1657,8 +1700,8 @@ export function ProcnexAiReportsWidget() {
                         disabled={downloadingPdfId === rpt.id}
                         className={`inline-flex items-center gap-1.5 font-semibold text-xs px-3.5 py-2 rounded-xl transition-all shadow-sm border cursor-pointer ${
                           isDark
-                            ? 'bg-sky-600/20 hover:bg-sky-600 text-sky-300 hover:text-white border-sky-500/40 shadow-sky-900/20'
-                            : 'bg-sky-50 hover:bg-sky-600 text-sky-700 hover:text-white border-sky-200 shadow-sky-100'
+                            ? 'bg-primary/20 hover:bg-primary text-primary-300 hover:text-primary-foreground border-primary/40 shadow-primary/20'
+                            : 'bg-primary-50 hover:bg-primary text-primary-700 hover:text-primary-foreground border-primary/30 shadow-primary/10'
                         }`}
                       >
                         {downloadingPdfId === rpt.id ? (
@@ -1722,7 +1765,7 @@ export function ProcnexAiReportsWidget() {
         >
           <div
             className={`w-full max-w-4xl rounded-3xl border shadow-2xl overflow-hidden flex flex-col max-h-[90vh] transition-all transform duration-200 ${
-              isDark ? 'bg-slate-900 border-slate-700 text-slate-100 shadow-sky-950/50' : 'bg-white border-slate-200 text-slate-900'
+              isDark ? 'bg-slate-900 border-slate-700 text-slate-100 shadow-slate-950/50' : 'bg-white border-slate-200 text-slate-900'
             }`}
             onClick={e => e.stopPropagation()}
           >
@@ -1737,8 +1780,8 @@ export function ProcnexAiReportsWidget() {
                       ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
                       : 'bg-amber-100 border-amber-300 text-amber-600'
                     : isDark
-                      ? 'bg-sky-600/20 border-sky-500/40 text-sky-400'
-                      : 'bg-sky-100 border-sky-300 text-sky-700'
+                      ? 'bg-primary/20 border-primary/40 text-primary-300'
+                      : 'bg-primary-100 border-primary-300 text-primary-700'
                 }`}>
                   <FileText className="w-5 h-5" />
                 </div>
@@ -1801,11 +1844,11 @@ export function ProcnexAiReportsWidget() {
                     )
                   }
                   disabled={downloadingPdfId === viewingReport.id}
-                  className={`inline-flex items-center gap-1.5 font-semibold text-xs px-3.5 py-2 rounded-xl transition-all shadow-sm border cursor-pointer ${
-                    isDark
-                      ? 'bg-sky-600 hover:bg-sky-500 text-white border-sky-500 shadow-sky-900/40'
-                      : 'bg-sky-600 hover:bg-sky-700 text-white border-sky-600 shadow-sky-100'
-                  }`}
+                  style={{
+                    background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-600, var(--primary)) 100%)',
+                    boxShadow: '0 2px 10px rgba(var(--primary-rgb), 0.25)',
+                  }}
+                  className="inline-flex items-center gap-1.5 font-semibold text-xs px-3.5 py-2 rounded-xl transition-all shadow-sm border border-transparent text-primary-foreground cursor-pointer hover:opacity-95"
                 >
                   {downloadingPdfId === viewingReport.id ? (
                     <>
