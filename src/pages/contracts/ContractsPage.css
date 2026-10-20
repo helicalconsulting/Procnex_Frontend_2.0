@@ -545,7 +545,8 @@
 }
 .ctr-signed-banner__value {
   font-weight: 700;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
   color: var(--text-primary);
 }
 .ctr-signed-banner__sep {

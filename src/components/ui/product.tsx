@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { Card } from './card';
 
 export function PageFrame({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('w-full px-1 py-2 sm:px-2 sm:py-3 lg:px-3', className)} {...props} />;
+  return <div className={cn('min-w-0 max-w-full w-full px-1 py-2 sm:px-2 sm:py-3 lg:px-3', className)} {...props} />;
 }
 
 interface PageLeadProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title' | 'action'> {

@@ -1,3 +1,5 @@
+import { applyBrandingProfile, readCachedProfile, applyPrimaryColor, DEFAULT_PRIMARY } from '../lib/branding';
+import { companySettingsService } from './companySettingsService';
 import { USE_MOCK } from '../config/mock';
 import { ALL_MOCK_USERS, MOCK_TOKEN } from '../config/mockData';
 import { apiRequest, API_BASE, authHeaders, ApiError, clearAllApiCache } from '../api/client';
@@ -363,11 +365,23 @@ async function migrateMockToken(): Promise<AuthResponse | null> {
   }
 }
 
+async function prepareSessionBranding(companyCode?: string): Promise<void> {
+  const code = companyCode?.toUpperCase();
+  const cached = code ? readCachedProfile(code) : null;
+  if (cached) { applyBrandingProfile(cached); return; }
+  applyPrimaryColor(DEFAULT_PRIMARY);
+  try {
+    const profile = await companySettingsService.getCompanyProfile();
+    if (!code || profile.companyCode?.toUpperCase() === code) applyBrandingProfile(profile);
+  } catch { /* Login remains available when branding cannot be fetched. */ }
+}
+
 export const authService = {
   login: async (payload: LoginPayload): Promise<AuthResponse> => {
     clearAllApiCache();
     const data = USE_MOCK ? await mockLogin(payload) : await apiLogin(payload);
     saveSession(data);
+    await prepareSessionBranding(data.user?.companyCode);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('heliflow_auth_change'));
     }
@@ -377,6 +391,7 @@ export const authService = {
   vendorLogin: async (payload: LoginPayload): Promise<AuthResponse> => {
     const data = USE_MOCK ? await mockVendorLogin(payload) : await apiVendorLogin(payload);
     saveSession(data, { vendorPortal: true });
+    await prepareSessionBranding(data.user?.companyCode);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('heliflow_auth_change'));
     }

@@ -1,3 +1,5 @@
+import { findVendorWithPhone } from '../../services/vendorPhoneService';
+import { normalizeVendorPhone } from '../../utils/vendorPhone';
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useServiceData } from '../../hooks/useServiceData';
@@ -486,9 +488,34 @@ export default function NewOnboardingPage() {
 
   const isPhoneInvalid = useMemo(() => {
     if (!contactPhone.trim()) return false;
-    const digits = contactPhone.replace(/\D/g, '');
+    const digits = normalizeVendorPhone(contactPhone, contactCountryCode).replace(/\D/g, '');
     return digits.length < 7 || digits.length > 15;
-  }, [contactPhone]);
+  }, [contactPhone, contactCountryCode]);
+
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [checkingPhone, setCheckingPhone] = useState(false);
+  const phoneCheckVersion = useRef(0);
+  const verifyPhone = useCallback(async () => {
+    if (!contactPhone.trim()) return;
+    const match = await findVendorWithPhone(contactPhone, contactCountryCode);
+    if (match) throw new Error(`This phone number is already used by ${match.name}. Enter a unique vendor phone number.`);
+  }, [contactPhone, contactCountryCode]);
+
+  useEffect(() => {
+    const version = ++phoneCheckVersion.current;
+    setPhoneError(null);
+    setCheckingPhone(false);
+    if (!contactPhone.trim() || isPhoneInvalid) return;
+    setCheckingPhone(true);
+    const timer = setTimeout(() => {
+      verifyPhone().catch(err => {
+        if (version === phoneCheckVersion.current) setPhoneError(err instanceof Error ? err.message : 'Unable to verify the phone number. Please try again.');
+      }).finally(() => {
+        if (version === phoneCheckVersion.current) setCheckingPhone(false);
+      });
+    }, 450);
+    return () => { clearTimeout(timer); phoneCheckVersion.current += 1; };
+  }, [contactPhone, isPhoneInvalid, verifyPhone]);
 
   const isEmailInvalid = useMemo(() => {
     if (!contactEmail.trim()) return false;
@@ -635,13 +662,19 @@ export default function NewOnboardingPage() {
       return;
     }
     if (contactPhone.trim()) {
-      const digits = contactPhone.replace(/\D/g, '');
+      const digits = normalizeVendorPhone(contactPhone, contactCountryCode).replace(/\D/g, '');
       if (digits.length < 7 || digits.length > 15) {
         setFormError('Please enter a valid phone number (7 to 15 digits)');
         return;
       }
     }
     setFormError(null);
+    try { await verifyPhone(); }
+    catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to verify the phone number. Please try again.';
+      setPhoneError(message); setFormError(message);
+      return;
+    }
     setShowPreSendConfidenceModal(true);
     setAuditLoading(true);
 
@@ -804,7 +837,7 @@ export default function NewOnboardingPage() {
     } finally {
       setAuditLoading(false);
     }
-  }, [companyName, contactEmail, contactPerson, contactPhone, contactCountryCode, invitations]);
+  }, [companyName, contactEmail, contactPerson, contactPhone, contactCountryCode, invitations, verifyPhone]);
 
   const executeSendInvite = useCallback(async () => {
     setShowPreSendConfidenceModal(false);
@@ -812,6 +845,8 @@ export default function NewOnboardingPage() {
     setFormError(null);
     setSentSuccess('');
     try {
+      // Recheck immediately before sending, even when an advisory name match was dismissed.
+      await verifyPhone();
       const validItems = items
         .map((it) => ({ itemCode: it.itemCode.trim(), itemName: it.itemName.trim() }))
         .filter((it) => it.itemCode && it.itemName);
@@ -819,11 +854,7 @@ export default function NewOnboardingPage() {
         companyName: companyName.trim(),
         contactEmail: contactEmail.trim(),
         contactPerson: contactPerson.trim() || undefined,
-        contactPhone: contactPhone.trim()
-          ? (contactPhone.trim().startsWith('+')
-              ? contactPhone.trim()
-              : `${contactCountryCode.startsWith('+') ? contactCountryCode : `+${contactCountryCode}`}${contactPhone.trim().replace(/^0+/, '')}`)
-          : undefined,
+        contactPhone: contactPhone.trim() ? normalizeVendorPhone(contactPhone, contactCountryCode) : undefined,
         category: selectedCategory.trim() || undefined,
         categoryId: selectedCategoryId || undefined,
         notes: notes.trim() || undefined,
@@ -884,7 +915,7 @@ export default function NewOnboardingPage() {
     } finally {
       setSending(false);
     }
-  }, [companyName, contactEmail, contactPerson, contactPhone, contactCountryCode, notes, items, selectedCategory, selectedCategoryId, selectedDocIds, onboardingFlexiFields, ndaRequired, mndaRequired, anyOtherRequired, ndaTemplateId, mndaTemplateId, anyOtherTemplateId, reload]);
+  }, [companyName, contactEmail, contactPerson, contactPhone, contactCountryCode, notes, items, selectedCategory, selectedCategoryId, selectedDocIds, onboardingFlexiFields, ndaRequired, mndaRequired, anyOtherRequired, ndaTemplateId, mndaTemplateId, anyOtherTemplateId, reload, verifyPhone]);
 
   const handleCopyCode = useCallback((code: string) => {
     navigator.clipboard.writeText(code).catch(() => {});
@@ -1206,9 +1237,11 @@ export default function NewOnboardingPage() {
                     onCountryCodeChange={setContactCountryCode}
                     value={contactPhone}
                     onChange={setContactPhone}
-                    hasError={isPhoneInvalid}
+                    hasError={isPhoneInvalid || !!phoneError}
                     placeholder="Type your mobile number"
                   />
+                  {checkingPhone && <span className="text-xs text-muted-foreground" role="status">Checking phone number…</span>}
+                  {phoneError && <span className="onb-field-error" role="alert">{phoneError}</span>}
                   {isPhoneInvalid && (
                     <span className="onb-field-error" role="alert">
                       Please enter a valid phone number (7 to 15 digits)
@@ -1550,7 +1583,7 @@ export default function NewOnboardingPage() {
 
               <button
                 type="submit"
-                disabled={sending || !canCreateOnboarding}
+                disabled={sending || checkingPhone || auditLoading || !canCreateOnboarding}
                 title={!canCreateOnboarding ? 'Admin has not allowed this action. You do not have permission to send onboarding invitations.' : 'Send Invitation Email'}
                 style={!canCreateOnboarding ? { opacity: 0.5, cursor: 'not-allowed', pointerEvents: 'auto' } : undefined}
                 className={`onb-form-submit ${!canCreateOnboarding ? 'onb-form-submit--disabled' : ''}`}

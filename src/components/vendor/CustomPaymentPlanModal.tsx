@@ -1,3 +1,4 @@
+import { Button } from '../ui/button';
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Plus, Trash2, Check, WandSparkles, FileText } from 'lucide-react';
@@ -106,7 +107,7 @@ export default function CustomPaymentPlanModal({ onClose, onSaved, editPlan, emb
                   } else if (normalized !== m.percentage) {
                     update(m.id, 'percentage', normalized);
                   }
-                }} /><span>%</span>
+                }} /><span aria-hidden="true">%</span>
             </div>
             <button type="button" className="rfq-icon-button rfq-icon-button--danger" aria-label={`Remove milestone ${i + 1}`} disabled={saving || milestones.length <= 1} onClick={() => setMilestones(rows => rows.filter(row => row.id !== m.id))}><Trash2 size={14} /></button>
           </div>
@@ -121,8 +122,8 @@ export default function CustomPaymentPlanModal({ onClose, onSaved, editPlan, emb
         {error && <p role="alert" className="rfq-error text-sm">{error}</p>}
       </div>
       <div className="rfq-plan-editor__footer">
-        <button type="button" className="vendor-btn vendor-btn--secondary" disabled={saving} onClick={onClose}>Cancel</button>
-        <button type="button" className="vendor-btn vendor-btn--primary" disabled={!!validation || saving} onClick={save}>{saving ? 'Saving…' : editPlan ? 'Update Payment Plan' : 'Save Payment Plan'}</button>
+        <Button type="button" variant="secondary" disabled={saving} onClick={onClose}>Cancel</Button>
+        <Button type="button" disabled={!!validation || saving} aria-busy={saving} onClick={save}>{saving ? 'Saving…' : editPlan ? 'Update Payment Plan' : 'Save Payment Plan'}</Button>
       </div>
     </div>
   );

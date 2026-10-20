@@ -44,6 +44,7 @@
 /* ─── Content Area ───────────────────────────────────────── */
 
 .app-layout__content {
+  min-width: 0;
   flex: 1 0 auto;
   padding: 24px 28px 120px;
   max-width: 100%;
@@ -92,6 +93,7 @@
   }
 
   .app-layout__content {
+  min-width: 0;
     padding: 20px 16px;
   }
 
@@ -122,6 +124,7 @@
   [data-theme="dark"] .app-layout__main,
   [data-theme="dark"] .app-layout__body,
   [data-theme="dark"] .app-layout__content {
+  min-width: 0;
     background: #ffffff !important;
     background-color: #ffffff !important;
     color: #0f172a !important;

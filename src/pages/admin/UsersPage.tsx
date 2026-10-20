@@ -1,3 +1,4 @@
+import { DataTableViewport } from '../../components/ui/data-table-viewport';
 import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
 import React from 'react';
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
@@ -867,12 +868,12 @@ export default function UsersPage() {
       ) : paginated.length > 0 ? (
         view === 'table' ? (
           <Card className="overflow-hidden">
-            <div className="users-table-wrap" role="region" aria-label="Users register" tabIndex={0}>
-              <table className="users-table" style={{ tableLayout: 'fixed', minWidth: `${44 + 164 + visibleColumns.reduce((sum, col) => sum + parseInt(col.width || '140'), 0)}px` }}>
+            <DataTableViewport stickyActions label="Users register">
+              <table className="users-table" style={{ tableLayout: 'fixed', minWidth: `${44 + 192 + visibleColumns.reduce((sum, col) => sum + parseInt(col.width || '140'), 0)}px` }}>
                 <colgroup>
                   <col style={{ width: '44px' }} />
                   {visibleColumns.map((col) => (<col key={col.key} style={{ width: col.width || 'auto' }} />))}
-                  <col style={{ width: '164px' }} />
+                  <col style={{ width: '192px' }} />
                 </colgroup>
                 <thead>
                   <tr>
@@ -889,7 +890,7 @@ export default function UsersPage() {
                     </th>
                     {visibleColumns.map((col) => (<th key={col.key}>{col.label}</th>))}
                     <th>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
                         <span>Actions</span>
                         <div className="col-btn-wrap">
                           <ColumnSettingsButton ref={colBtnRef} open={showColPanel} onClick={() => setShowColPanel((v) => !v)} />
@@ -967,7 +968,7 @@ export default function UsersPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </DataTableViewport>
             {filtered.length > perPage && (
               <div className="users-pagination">
                 <span className="users-pagination__info">

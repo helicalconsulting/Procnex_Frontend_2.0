@@ -1,3 +1,4 @@
+import { DataTableViewport } from '../../components/ui/data-table-viewport';
 import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
 import React, { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -129,14 +130,14 @@ interface VendorColumnDef {
 }
 
 const COL_META: Record<string, { width: string; align?: 'left'|'center'|'right' }> = {
-  vendor:       { width: '240px', align: 'left'   },
-  category:     { width: '130px', align: 'left'   },
-  location:     { width: '130px', align: 'left'   },
-  orders:       { width: '80px',  align: 'center' },
-  score:        { width: '90px',  align: 'center' },
-  status:       { width: '120px', align: 'left'   },
-  mobileAccess: { width: '150px', align: 'left'   },
-  joined:       { width: '110px', align: 'left'   },
+  vendor:       { width: '280px', align: 'left'   },
+  category:     { width: '190px', align: 'left'   },
+  location:     { width: '190px', align: 'left'   },
+  orders:       { width: '90px',  align: 'center' },
+  score:        { width: '125px',  align: 'center' },
+  status:       { width: '145px', align: 'left'   },
+  mobileAccess: { width: '180px', align: 'left'   },
+  joined:       { width: '140px', align: 'left'   },
   contact:      { width: '140px', align: 'left'   },
   phone:        { width: '140px', align: 'left'   },
   website:      { width: '120px', align: 'left'   },
@@ -151,7 +152,7 @@ const ALL_COLUMNS: VendorColumnDef[] = [
           {v.initials}
         </span>
         <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="truncate font-semibold text-foreground group-hover:text-primary transition-colors">{v.name}</span>
+          <span className="whitespace-normal break-words font-semibold text-foreground group-hover:text-primary transition-colors">{v.name}</span>
           <span className="truncate text-xs text-muted-foreground group-hover:text-foreground/85 transition-colors">{v.email}</span>
         </div>
       </div>
@@ -160,7 +161,7 @@ const ALL_COLUMNS: VendorColumnDef[] = [
   {
     key: 'category', label: 'Category', defaultVisible: true, width: COL_META.category.width, align: 'left',
     render: (v) => (
-      <Badge tone="info" className="font-semibold">
+      <Badge tone="info" className="max-w-full whitespace-normal font-semibold leading-snug">
         {v.category}
       </Badge>
     )
@@ -168,8 +169,8 @@ const ALL_COLUMNS: VendorColumnDef[] = [
   {
     key: 'location', label: 'Location', defaultVisible: true, width: COL_META.location.width, align: 'left',
     render: (v) => (
-      <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground group-hover:text-foreground/85 transition-colors truncate">
-        <MapPin size={13} className="shrink-0 text-muted-foreground group-hover:text-primary transition-colors" /> {v.location}
+      <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground group-hover:text-foreground/85 transition-colors max-w-full">
+        <MapPin size={13} className="shrink-0 text-muted-foreground group-hover:text-primary transition-colors" /><span className="truncate" title={v.location}>{v.location}</span>
       </span>
     )
   },
@@ -187,7 +188,7 @@ const ALL_COLUMNS: VendorColumnDef[] = [
       else if (score > 0) tone = 'danger';
 
       return (
-        <Badge tone={tone} className="font-semibold tabular-nums gap-1">
+        <Badge tone={tone} className="font-semibold tabular-nums gap-1 whitespace-nowrap">
           <Star size={11} fill="currentColor" className="opacity-80" />
           {score > 0 ? `${score}%` : '—'}
         </Badge>
@@ -935,13 +936,13 @@ export default function VendorsPage() {
         ) : paginated.length > 0 ? (
           view === 'table' ? (
             <>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[1100px] border-collapse text-sm">
+              <DataTableViewport stickyActions label="Vendors register">
+                <table className="w-full text-sm" style={{ minWidth: 192 + visibleColumns.reduce((sum, col) => sum + parseInt(COL_META[col.key]?.width || '140'), 0) }}>
                   <colgroup>
                     {visibleColumns.map((col) => (
                       <col key={col.key} style={{ width: COL_META[col.key]?.width || 'auto' }} />
                     ))}
-                    <col style={{ width: '160px' }} />
+                    <col style={{ width: '192px' }} />
                   </colgroup>
                   <thead>
                     <tr className="border-b border-border/75 bg-muted/45 text-left text-[12px] font-bold uppercase tracking-wide text-muted-foreground">
@@ -957,7 +958,7 @@ export default function VendorsPage() {
                           </th>
                         );
                       })}
-                      <th className="px-4 py-3 text-right sticky right-0 z-10 bg-muted/95 backdrop-blur-sm shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.1)] dark:shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.35)] min-w-[160px] w-[160px]">
+                      <th className="px-4 py-3 text-right sticky right-0 z-10 bg-muted/95 backdrop-blur-sm shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.1)] dark:shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.35)] min-w-[192px] w-[192px]">
                         <div className="flex items-center justify-end gap-2">
                           <span>Actions</span>
                           <div className="relative">
@@ -1005,7 +1006,7 @@ export default function VendorsPage() {
 
                           <td
                             className={cn(
-                              "px-4 py-3.5 align-middle text-right sticky right-0 z-10 transition-colors shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.1)] dark:shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.35)] min-w-[160px] w-[160px]",
+                              "px-4 py-3.5 align-middle text-right sticky right-0 z-10 transition-colors shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.1)] dark:shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.35)] min-w-[192px] w-[192px]",
                               isSelected
                                 ? "bg-[var(--table-row-selected)] group-hover:bg-[var(--table-row-hover)]"
                                 : "bg-card group-hover:bg-[var(--table-row-hover)]"
@@ -1089,7 +1090,7 @@ export default function VendorsPage() {
                     })}
                   </tbody>
                 </table>
-              </div>
+              </DataTableViewport>
             </>
           ) : (
             /* Cards View */
@@ -1107,7 +1108,7 @@ export default function VendorsPage() {
                           {v.initials}
                         </span>
                         <div className="min-w-0 flex flex-col">
-                          <span className="truncate font-semibold text-foreground group-hover:text-primary transition-colors">{v.name}</span>
+                          <span className="whitespace-normal break-words font-semibold text-foreground group-hover:text-primary transition-colors">{v.name}</span>
                           <span className="truncate text-xs text-muted-foreground">{v.category}</span>
                         </div>
                       </div>
@@ -1544,7 +1545,7 @@ export default function VendorsPage() {
                         </Badge>
                       </div>
                     </div>
-                    <div className="text-xs text-muted-foreground font-mono mt-0.5">
+                    <div className="text-xs text-muted-foreground tabular-nums mt-0.5">
                       VN-{String(detailVendor.id).length > 10 ? String(detailVendor.id).slice(-8).toUpperCase() : String(detailVendor.id).padStart(5, '0')} · Joined {formatDate(detailVendor.createdAt)}
                     </div>
                   </div>
@@ -2022,13 +2023,13 @@ export default function VendorsPage() {
                         </div>
                         <div className="flex flex-col gap-0.5">
                           <span className="text-[10px] uppercase font-bold text-muted-foreground/80">Account Number</span>
-                          <span className="font-semibold text-foreground truncate font-mono" style={{ color: detailVendor.bankAccountNumber ? 'inherit' : 'var(--destructive)' }}>
+                          <span className="font-semibold text-foreground truncate tabular-nums" style={{ color: detailVendor.bankAccountNumber ? 'inherit' : 'var(--destructive)' }}>
                             {detailVendor.bankAccountNumber || 'Not Configured'}
                           </span>
                         </div>
                         <div className="flex flex-col gap-0.5">
                           <span className="text-[10px] uppercase font-bold text-muted-foreground/80">IFSC Code</span>
-                          <span className="font-semibold text-foreground truncate font-mono" style={{ color: detailVendor.bankIfscCode ? 'inherit' : 'var(--destructive)' }}>
+                          <span className="font-semibold text-foreground truncate tabular-nums" style={{ color: detailVendor.bankIfscCode ? 'inherit' : 'var(--destructive)' }}>
                             {detailVendor.bankIfscCode || 'Not Configured'}
                           </span>
                         </div>

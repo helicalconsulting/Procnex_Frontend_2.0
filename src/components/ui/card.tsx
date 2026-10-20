@@ -18,7 +18,7 @@ const variantClasses: Record<CardVariant, string> = {
 
 const Card = React.forwardRef<HTMLDivElement, CardProps>(
   ({ className, variant = 'default', ...props }, ref) => (
-    <div ref={ref} className={cn('rounded-2xl text-card-foreground', variantClasses[variant], className)} {...props} />
+    <div ref={ref} className={cn('min-w-0 max-w-full rounded-2xl text-card-foreground', variantClasses[variant], className)} {...props} />
   ),
 );
 Card.displayName = 'Card';

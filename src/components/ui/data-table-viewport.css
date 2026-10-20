@@ -1,0 +1,21 @@
+.data-table-shell { min-width: 0; max-width: 100%; width: 100%; }
+.data-table-viewport { max-width: 100%; scrollbar-width: auto; }
+.data-table-scroll-tools { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--text-secondary); font-size: 12px; }
+.data-table-scroll-tools > span, .data-table-scroll-tools > div { display: flex; align-items: center; gap: 6px; }
+.data-table-scroll-tools button { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); cursor: pointer; }
+.data-table-scroll-tools button:disabled { opacity: .4; cursor: default; }
+.data-table-register table { border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+.data-table-register th { white-space: nowrap; }
+.data-table-register td { overflow-wrap: break-word; }
+.data-table-register :is(th, td):last-child { text-align: right; border-left: 1px solid var(--border); background: var(--card); border-radius: 0 !important; }
+.data-table-register th:last-child { background: var(--surface-elevated); }
+.data-table-register td:last-child > div { justify-content: flex-end; }
+.data-table-register td:last-child button { flex-shrink: 0; }
+@media (min-width: 768px) {
+  .data-table-register :is(th, td):last-child { position: sticky; right: 0; z-index: 2; box-shadow: -4px 0 8px -6px rgba(15, 23, 42, .3); }
+}
+@media (max-width: 767px) {
+  .data-table-register :is(th, td):last-child { position: static; box-shadow: none; }
+}
+
+.data-table-register tbody td { border-bottom: 1px solid var(--border); }

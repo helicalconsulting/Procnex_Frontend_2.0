@@ -1026,7 +1026,7 @@ export default function CompanySettingsPage() {
     (pendingResubmissionDeadline !== null && pendingResubmissionDeadline !== resubmissionDeadlineHours);
 
   // ── White Label / Branding ──
-  const { primaryColor: contextPrimaryColor, refresh: refreshBranding, setPrimaryColor: setContextPrimaryColor } = useBranding();
+  const { primaryColor: contextPrimaryColor, refresh: refreshBranding, applyProfile: applyBranding, setPrimaryColor: setContextPrimaryColor } = useBranding();
 
   const handleSaveGeneralSettings = useCallback(async () => {
     if (!canCreateSettings) return;
@@ -1184,10 +1184,7 @@ export default function CompanySettingsPage() {
       setProfile(updated);
       setBrandingDirty(false);
       setPageMsg('Branding & company details saved successfully! Changes applied immediately.');
-      if (updated.primaryColor) {
-        setContextPrimaryColor(updated.primaryColor);
-      }
-      refreshBranding();
+      applyBranding(updated);
     } catch (err) {
       setPageMsg(err instanceof Error ? err.message : 'Failed to save branding settings');
     } finally {
@@ -1197,7 +1194,7 @@ export default function CompanySettingsPage() {
     canCreateSettings, brandingName, brandingLogoUrl, brandingColor, brandingLoginText,
     brandingSupportEmail, brandingCompanyPhone, brandingCompanyEmail, brandingCompanyWebsite,
     brandingCompanyAddress, brandingCompanyCity, brandingCompanyState, brandingCompanyCountry,
-    brandingBankName, profile, refreshBranding, setContextPrimaryColor
+    brandingBankName, profile, applyBranding
   ]);
 
   const markBrandingDirty = useCallback(() => {

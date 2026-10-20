@@ -9,6 +9,7 @@ interface AuthLayoutProps {
   companyName: string;
   logoUrl?: string | null;
   tagline: string;
+  loginText?: string | null;
   features: string[];
   supportEmail?: string | null;
   portalLabel: string;
@@ -26,6 +27,7 @@ export function AuthLayout({
   companyName,
   logoUrl,
   tagline,
+  loginText,
   features,
   supportEmail,
   portalLabel,
@@ -43,11 +45,11 @@ export function AuthLayout({
       <section className="relative hidden min-h-svh overflow-hidden [background:var(--shell-bg-dark,linear-gradient(175deg,#0d1b2a_0%,#101b27_45%,#081a33_100%))] px-10 py-10 text-white lg:flex lg:flex-col xl:px-14 xl:py-12">
         <div aria-hidden="true" className="absolute -right-28 -top-24 size-96 rounded-full border border-white/[0.06]" />
         <div aria-hidden="true" className="absolute -bottom-48 -left-36 size-[34rem] rounded-full border border-white/[0.05]" />
-        <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(circle_at_78%_18%,rgba(74,144,226,0.16),transparent_32%),radial-gradient(circle_at_18%_88%,rgba(45,212,191,0.08),transparent_30%)]" />
+        <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(circle_at_78%_18%,rgba(var(--primary-rgb),0.16),transparent_32%),radial-gradient(circle_at_18%_88%,rgba(45,212,191,0.08),transparent_30%)]" />
 
         <div className="relative z-10 flex items-center gap-3.5">
           <img src={logoUrl || heliflowLogo} alt="" crossOrigin="anonymous" referrerPolicy="no-referrer" className="size-12 rounded-xl object-contain ring-1 ring-white/15" />
-          <span className="text-2xl font-bold tracking-[-0.035em] text-white">{companyName}</span>
+          <div><span className="text-2xl font-bold tracking-[-0.035em] text-white">{companyName}</span>{loginText && <p className="mt-2 text-sm text-white/75">{loginText}</p>}</div>
         </div>
 
         <div className="relative z-10 my-auto max-w-lg py-16">
@@ -59,7 +61,7 @@ export function AuthLayout({
           <ul className="mt-10 grid gap-4" aria-label="Platform capabilities">
             {(features || []).map((feature) => (
               <li key={feature} className="flex items-center gap-3 text-sm text-white/72">
-                <span className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-blue-400/15 text-blue-300 ring-1 ring-blue-300/15">
+                <span className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-[rgba(var(--primary-rgb),0.15)] text-[var(--primary-300)] ring-1 ring-[rgba(var(--primary-rgb),0.15)]">
                   <Check size={14} strokeWidth={2.5} />
                 </span>
                 {feature}
@@ -74,7 +76,7 @@ export function AuthLayout({
       </section>
 
       <section className="relative flex min-h-svh items-center justify-center overflow-hidden px-4 py-20 sm:px-8 lg:px-12">
-        <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(circle_at_82%_8%,rgba(37,99,235,0.09),transparent_30%),radial-gradient(circle_at_16%_92%,rgba(14,165,233,0.06),transparent_34%)]" />
+        <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(circle_at_82%_8%,rgba(var(--primary-rgb),0.09),transparent_30%),radial-gradient(circle_at_16%_92%,rgba(14,165,233,0.06),transparent_34%)]" />
         <button
           type="button"
           onClick={(event) => onThemeToggle({ x: event.clientX, y: event.clientY })}
@@ -99,7 +101,7 @@ export function AuthLayout({
         <div className="relative z-[1] w-full max-w-[440px]">
           <div className="mb-8 flex items-center gap-3 lg:hidden">
             <img src={logoUrl || heliflowLogo} alt="" crossOrigin="anonymous" referrerPolicy="no-referrer" className="size-11 rounded-xl object-contain ring-1 ring-border" />
-            <span className="text-2xl font-bold tracking-[-0.035em] text-foreground">{companyName}</span>
+            <div><span className="text-2xl font-bold tracking-[-0.035em] text-foreground">{companyName}</span>{loginText && <p className="mt-2 text-sm text-muted-foreground">{loginText}</p>}</div>
           </div>
 
           <motion.div

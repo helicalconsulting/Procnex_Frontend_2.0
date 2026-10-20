@@ -1,3 +1,4 @@
+import { companySettingsService } from './companySettingsService';
 import { USE_MOCK } from '../config/mock';
 import { apiRequest, API_BASE } from '../api/client';
 import { authService } from './authService';
@@ -876,6 +877,9 @@ async function apiGetRfq(rfqId: string): Promise<{ rfq: any; myQuotation: any; i
 }
 
 export interface CompanyBranding {
+  loginText?: string | null;
+  faviconUrl?: string | null;
+  primaryPortalName?: string | null;
   companyCode: string;
   companyName: string;
   logoUrl?: string | null;
@@ -884,7 +888,10 @@ export interface CompanyBranding {
 }
 
 async function apiGetCompanyBranding(companyCode: string): Promise<CompanyBranding> {
-  return apiRequest<CompanyBranding>(`/vendors/branding/${companyCode}`, { cacheTtlMs: 300_000 });
+  const branding = await apiRequest<CompanyBranding>(`/vendors/branding/${encodeURIComponent(companyCode)}`, { cacheTtlMs: 0 });
+  const profile = await companySettingsService.getPublicCompanyProfile(companyCode);
+  if (profile.companyCode?.toUpperCase() !== companyCode.toUpperCase()) throw new Error('Unable to load organization branding. Please try again.');
+  return { ...branding, ...profile, companyName: profile.companyName || branding.companyName };
 }
 
 export const vendorPortalService = {

@@ -177,3 +177,18 @@
 .rfq-quote-status--rejected { color: var(--error-text); background: var(--error-bg); border-color: var(--border); }
 
 :is(.rfq-workspace, .rfq-quote-window, .rfq-plan-editor) :is(input, textarea)::placeholder { color: var(--text-secondary); opacity: 1; }
+
+/* Keep these controls independent of page-specific vendor styles. */
+.rfq-plan-editor .vquot-modal__input {
+  width: 100%; min-width: 0; min-height: 42px; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface); color: var(--text-primary); font: inherit;
+}
+.rfq-plan-editor .rfq-percentage-input .vquot-modal__input {
+  padding-inline: 8px 32px; text-align: right; font-variant-numeric: tabular-nums;
+}
+.rfq-plan-editor__footer button { min-height: 40px; }
+@media (max-width: 480px) {
+  .rfq-plan-editor__footer { display: grid; grid-template-columns: 1fr; }
+  .rfq-plan-editor__footer button { width: 100%; }
+}

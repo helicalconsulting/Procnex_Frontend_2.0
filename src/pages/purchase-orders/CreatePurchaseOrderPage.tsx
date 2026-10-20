@@ -296,6 +296,7 @@ export default function CreatePurchaseOrderPage() {
   const [isDeletingPlan, setIsDeletingPlan] = useState(false);
   const [deletePlanError, setDeletePlanError] = useState<string | null>(null);
   const [planSaving, setPlanSaving] = useState(false);
+  const [planSaveMessage, setPlanSaveMessage] = useState('');
 
   const [deliveryDate, setDeliveryDate] = useState(new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10));
   const [shippingTerms, setShippingTerms] = useState('FOB Destination');
@@ -1785,6 +1786,7 @@ export default function CreatePurchaseOrderPage() {
                       disabled={planSaving}
                       aria-expanded={showCustomPlanModal}
                       onClick={() => {
+                        setPlanSaveMessage('');
                         setEditPlan(null);
                         setShowCustomPlanModal(true);
                         setShowViewPlanModal(false);
@@ -1797,6 +1799,7 @@ export default function CreatePurchaseOrderPage() {
                   )}
                 </div>
 
+                {planSaveMessage && <div role="status" className="my-3 flex items-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300"><CheckCircle2 size={18} />{planSaveMessage}</div>}
                 {/* Custom Payment Plan Modal */}
                 {showCustomPlanModal && (
                   <CustomPaymentPlanModal
@@ -1818,6 +1821,7 @@ export default function CreatePurchaseOrderPage() {
                       setEditPlan(null);
                     }}
                     onSaved={(plan) => {
+                      setPlanSaveMessage(`Payment plan “${plan.name}” saved and applied to this purchase order.`);
                       setCustomPlans((plans) =>
                         plans.some((p) => p.id === plan.id)
                           ? plans.map((p) => (p.id === plan.id ? plan : p))

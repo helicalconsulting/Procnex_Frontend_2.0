@@ -1,3 +1,4 @@
+import { DataTableViewport } from '../../components/ui/data-table-viewport';
 import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -1432,8 +1433,9 @@ export default function CreatePurchaseInvoicePage() {
               </div>
             ) : (
               <>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1080px] border-collapse text-sm">
+                <DataTableViewport stickyActions label="Purchase invoices">
+                  <table className="w-full min-w-[1244px] text-sm">
+                    <colgroup>{[44, 170, 230, 140, 100, 180, 220, 160].map((width, i) => <col key={i} style={{ width }} />)}</colgroup>
                     <thead>
                       <tr className="border-b border-border/75 bg-muted/45 text-left text-[12px] font-bold uppercase tracking-wide text-muted-foreground">
                         <th className="w-[42px] px-3 py-3 text-center">
@@ -1539,17 +1541,17 @@ export default function CreatePurchaseInvoicePage() {
                             <td className="px-3 py-3.5 font-medium text-foreground">{inv.vendorName || '—'}</td>
                             <td className="px-3 py-3.5 text-muted-foreground">{inv.submittedAt || inv.dueDate || '—'}</td>
                             <td className="px-3 py-3.5 font-medium text-muted-foreground">{companyDefaultCurrency}</td>
-                            <td className="px-3 py-3.5 text-right font-semibold font-mono text-foreground">
+                            <td className="px-3 py-3.5 text-right whitespace-nowrap font-semibold tabular-nums text-foreground">
                               {formatAmount(inv.amount, companyDefaultCurrency)}
                             </td>
                             <td className="px-3 py-3.5">
-                              <Badge tone={tone}>
+                              <Badge tone={tone} className="whitespace-nowrap [&>span]:shrink-0">
                                 <span className="size-1.5 rounded-full bg-current" />
                                 {statusLabel}
                               </Badge>
                             </td>
                             <td className="px-3 py-3.5 text-center">
-                              <div className="flex items-center justify-center gap-1">
+                              <div className="flex items-center justify-end gap-1">
                                 <Button
                                   variant="ghost"
                                   size="icon-sm"
@@ -1584,7 +1586,7 @@ export default function CreatePurchaseInvoicePage() {
                       })}
                     </tbody>
                   </table>
-                </div>
+                </DataTableViewport>
                 <TablePagination
                   currentPage={currentPage}
                   totalItems={filteredInvoices.length}
@@ -2107,7 +2109,7 @@ export default function CreatePurchaseInvoicePage() {
                           }
                         />
                       </td>
-                      <td style={{ textAlign: 'right', fontWeight: 700, fontFamily: 'var(--font-mono, monospace)' }}>
+                      <td style={{ textAlign: 'right', fontWeight: 700, fontFamily: 'var(--tabular-nums, monospace)' }}>
                         {formatAmount(lineTotal, currency)}
                       </td>
                       {!isReadOnly && (

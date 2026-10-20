@@ -1,3 +1,4 @@
+import { DataTableViewport } from '../../components/ui/data-table-viewport';
 import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { rfqService } from '../../services/rfqService';
@@ -55,21 +56,21 @@ export interface ColumnDef {
   width?: string;
 }
 
-const COL_META: Record<string, { align?: 'left'|'center'|'right' }> = {
-  rfqNumber:    { align: 'left'   },
-  title:        { align: 'left'   },
-  status:       { align: 'left'   },
-  creator:      { align: 'left'   },
-  createdAt:    { align: 'left'   },
-  itemCount:    { align: 'center' },
-  vendorCount:  { align: 'center' },
-  quotationCount:{ align: 'center' },
-  totalEstimate:{ align: 'right'  },
-  priority:     { align: 'left'   },
-  department:   { align: 'left'   },
-  closingDate:  { align: 'left'   },
-  currency:     { align: 'center' },
-  rfqType:      { align: 'center' },
+const COL_META: Record<string, { width: string; align?: 'left'|'center'|'right' }> = {
+  rfqNumber:    { width: '180px', align: 'left'   },
+  title:        { width: '240px', align: 'left'   },
+  status:       { width: '220px', align: 'left'   },
+  creator:      { width: '180px', align: 'left'   },
+  createdAt:    { width: '130px', align: 'left'   },
+  itemCount:    { width: '85px', align: 'center' },
+  vendorCount:  { width: '95px', align: 'center' },
+  quotationCount:{ width: '95px', align: 'center' },
+  totalEstimate:{ width: '160px', align: 'right'  },
+  priority:     { width: '120px', align: 'left'   },
+  department:   { width: '160px', align: 'left'   },
+  closingDate:  { width: '130px', align: 'left'   },
+  currency:     { width: '100px', align: 'center' },
+  rfqType:      { width: '100px', align: 'center' },
 };
 
 const ALL_COLUMNS: ColumnDef[] = [
@@ -79,7 +80,7 @@ const ALL_COLUMNS: ColumnDef[] = [
     defaultVisible: true,
     required: true,
     render: (rfq: MockRFQ, _formatDate: (d: string) => string, openDetail?: (rfq: MockRFQ) => void) => (
-      <button className="font-semibold text-primary transition-colors hover:text-primary/75 hover:underline" onClick={() => (openDetail as any)(rfq)}>
+      <button className="whitespace-nowrap font-semibold text-primary transition-colors hover:text-primary/75 hover:underline" onClick={() => (openDetail as any)(rfq)}>
         {rfq.rfqNumber}
       </button>
     ),
@@ -917,8 +918,9 @@ export default function RFQPage() {
           <TableSkeleton rows={5} columnWidths={['44px', '140px', '220px', '140px', '150px', '110px', '65px', '75px', '70px', '110px', '85px', '100px']} />
         ) : paginated.length > 0 ? (
           <>
-            <div className="hidden overflow-x-auto lg:block">
-              <table className="w-full min-w-[1000px] border-collapse text-sm">
+            <DataTableViewport stickyActions label="RFQ register" wrapperClassName="hidden lg:block">
+              <table className="w-full text-sm" style={{ minWidth: 44 + 224 + visibleColumns.reduce((sum, col) => sum + parseInt(COL_META[col.key]?.width || '140'), 0) }}>
+                <colgroup><col style={{ width: 44 }} />{visibleColumns.map(col => <col key={col.key} style={{ width: COL_META[col.key]?.width || '140px' }} />)}<col style={{ width: 224 }} /></colgroup>
                 <thead>
                   <tr className="border-b border-border/75 bg-muted/45 text-left text-[12px] font-bold uppercase tracking-wide text-muted-foreground">
                     <th className="w-11 px-4 py-3 text-center">
@@ -945,7 +947,7 @@ export default function RFQPage() {
                         </th>
                       );
                     })}
-                    <th className="w-24 px-4 py-3 text-center">
+                    <th className="w-56 px-4 py-3 text-right">
                       <div className="flex items-center justify-center gap-2">
                         <span>Actions</span>
                         <div className="relative">
@@ -1028,7 +1030,7 @@ export default function RFQPage() {
                           );
                         })}
 
-                        <td className="w-24 px-4 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
+                        <td className="w-56 px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-center gap-1">
                             {canUserActOnRFQ && (
                               <>
@@ -1101,7 +1103,7 @@ export default function RFQPage() {
                   })}
                 </tbody>
               </table>
-            </div>
+            </DataTableViewport>
 
             {/* Mobile View */}
             <div className="divide-y divide-border/65 lg:hidden">

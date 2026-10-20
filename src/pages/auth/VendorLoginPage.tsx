@@ -53,6 +53,7 @@ export default function VendorLoginPage() {
     <AuthLayout
       companyName={companyName}
       logoUrl={logoUrl}
+      loginText={loginText}
       tagline={loginText || 'A direct, transparent workspace for supplier collaboration and order management.'}
       features={['Respond to RFQs and submit quotations', 'Track purchase orders and invoices', 'Manage your company profile', 'Receive timely updates and notifications']}
       supportEmail={supportEmail}

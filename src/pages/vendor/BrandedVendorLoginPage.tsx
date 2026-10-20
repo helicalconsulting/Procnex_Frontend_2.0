@@ -1,8 +1,10 @@
+import { readCachedProfile, applyBrandingProfile } from '../../lib/branding';
+import type { CompanyProfile } from '../../services/companySettingsService';
 import { useState, useEffect, useLayoutEffect, type FormEvent } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { applyFavicon, applyTitle } from '../../context/BrandingContext';
+import { applyPrimaryColor, DEFAULT_PRIMARY, applyFavicon, applyTitle } from '../../context/BrandingContext';
 import { Eye, EyeOff, AlertCircle, CheckCircle2, LoaderCircle } from 'lucide-react';
 import { PORTAL_NAMES } from '../../config/portalNames';
 import { vendorPortalService, type CompanyBranding } from '../../services/vendorPortalService';
@@ -12,23 +14,12 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 
 function getCachedTenantBranding(code: string): CompanyBranding | null {
-  if (!code) return null;
-  try {
-    const raw = localStorage.getItem(`branding_cache_${code.toUpperCase()}`);
-    if (raw) return JSON.parse(raw) as CompanyBranding;
-  } catch {
-    // Ignore cache error
-  }
-  return null;
+  const profile = code ? readCachedProfile(code) : null;
+  return profile ? { ...profile, companyName: profile.companyName || code } : null;
 }
 
 function setCachedTenantBranding(code: string, branding: CompanyBranding): void {
-  if (!code) return;
-  try {
-    localStorage.setItem(`branding_cache_${code.toUpperCase()}`, JSON.stringify(branding));
-  } catch {
-    // Ignore cache error
-  }
+  applyBrandingProfile({ ...branding, companyCode: code } as CompanyProfile);
 }
 
 export const BrandedVendorLoginPage: React.FC = () => {
@@ -51,6 +42,9 @@ export const BrandedVendorLoginPage: React.FC = () => {
   const [tenantBranding, setTenantBranding] = useState<CompanyBranding | null>(() =>
     getCachedTenantBranding(resolvedCode)
   );
+  const activeBranding = tenantBranding?.companyCode?.toUpperCase() === resolvedCode
+    ? tenantBranding
+    : getCachedTenantBranding(resolvedCode);
   const [isInvalidCode, setIsInvalidCode] = useState(false);
   const [invalidCodeError, setInvalidCodeError] = useState('');
 
@@ -65,13 +59,12 @@ export const BrandedVendorLoginPage: React.FC = () => {
   useLayoutEffect(() => {
     const code = resolvedCode || companyCodeState;
     if (code) {
-      const activeName = tenantBranding?.companyName || `${code} Portal`;
+      applyPrimaryColor(activeBranding?.primaryColor || DEFAULT_PRIMARY);
+      const activeName = activeBranding?.companyName || `${code} Portal`;
       applyTitle(`${activeName} — Vendor Portal`);
-      if (tenantBranding?.logoUrl) {
-        applyFavicon(tenantBranding.logoUrl, tenantBranding.logoUrl);
-      }
+      applyFavicon(activeBranding?.faviconUrl || null, activeBranding?.logoUrl || null);
     }
-  }, [resolvedCode, companyCodeState, tenantBranding]);
+  }, [resolvedCode, companyCodeState, activeBranding]);
 
   useEffect(() => {
     let code = resolvedCode || getTenantCompanyCode() || '';
@@ -79,10 +72,12 @@ export const BrandedVendorLoginPage: React.FC = () => {
       setCompanyCodeState(code);
       setTenantCompanyCode(code);
 
+      let cancelled = false;
       // Async fetch fresh branding and validate company code registration
       vendorPortalService
         .getCompanyBranding(code)
         .then((b) => {
+          if (cancelled) return;
           setIsInvalidCode(false);
           setTenantBranding(b);
           setCachedTenantBranding(code, b);
@@ -94,10 +89,12 @@ export const BrandedVendorLoginPage: React.FC = () => {
           }
         })
         .catch((err: any) => {
+          if (cancelled) return;
           const msg = err?.message || `Company code '${code}' is not registered.`;
           setIsInvalidCode(true);
           setInvalidCodeError(msg);
         });
+      return () => { cancelled = true; };
     }
   }, [routeCompanyCode, searchParams, resolvedCode]);
 
@@ -157,15 +154,16 @@ export const BrandedVendorLoginPage: React.FC = () => {
     );
   }
 
-  const activeCode = companyCodeState || resolvedCode || 'VENDOR';
-  const companyName = tenantBranding?.companyName || (activeCode !== 'VENDOR' ? `${activeCode} Supplier Portal` : 'Supplier Portal');
-  const logoUrl = tenantBranding?.logoUrl || null;
-  const supportEmail = tenantBranding?.supportEmail || null;
+  const activeCode = resolvedCode || companyCodeState || 'VENDOR';
+  const companyName = activeBranding?.companyName || (activeCode !== 'VENDOR' ? `${activeCode} Supplier Portal` : 'Supplier Portal');
+  const logoUrl = activeBranding?.logoUrl || null;
+  const supportEmail = activeBranding?.supportEmail || null;
 
   return (
     <AuthLayout
       companyName={companyName}
       logoUrl={logoUrl}
+      loginText={activeBranding?.loginText}
       tagline="Supplier Collaboration & Order Management"
       features={[
         'Respond to RFQs & submit quotations',

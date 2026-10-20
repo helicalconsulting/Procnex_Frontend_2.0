@@ -226,7 +226,7 @@
   --popover: #ffffff;
   --popover-foreground: #152033;
   --primary: var(--primary-500);
-  --primary-foreground: #ffffff;
+  --primary-foreground: var(--brand-foreground, #ffffff);
   --secondary: #eaf0f7;
   --secondary-foreground: #25334a;
   --muted: #edf2f7;
@@ -298,7 +298,7 @@
   --popover: #151e2d;
   --popover-foreground: #edf3f9;
   --primary: var(--primary-dark, #5ea2ff);
-  --primary-foreground: #07111f;
+  --primary-foreground: var(--brand-dark-foreground, #07111f);
   --secondary: #1a2534;
   --secondary-foreground: #e4ebf3;
   --muted: #182331;

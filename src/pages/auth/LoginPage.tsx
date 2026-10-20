@@ -52,7 +52,8 @@ export default function LoginPage() {
     <AuthLayout
       companyName={companyName}
       logoUrl={logoUrl}
-      tagline={loginText || 'A focused workspace for sourcing, approvals, contracts, vendors, and payments.'}
+      loginText={loginText}
+      tagline="A focused workspace for sourcing, approvals, contracts, vendors, and payments."
       features={['End-to-end RFQ lifecycle management', 'Clear quotation comparison and scoring', 'Multi-level approval workflows', 'Vendor collaboration and performance tracking']}
       supportEmail={supportEmail}
       portalLabel={primaryPortalName}

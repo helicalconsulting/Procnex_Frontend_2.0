@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { MoveHorizontal } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MoveHorizontal } from 'lucide-react';
+import './data-table-viewport.css';
 import { cn } from '@/lib/utils';
 
 interface DataTableViewportProps {
@@ -7,6 +8,8 @@ interface DataTableViewportProps {
   children: ReactNode;
   className?: string;
   showHint?: boolean;
+  stickyActions?: boolean;
+  wrapperClassName?: string;
 }
 
 export function DataTableViewport({
@@ -14,16 +17,20 @@ export function DataTableViewport({
   children,
   className,
   showHint = true,
+  stickyActions = false,
+  wrapperClassName,
 }: DataTableViewportProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [hasOverflow, setHasOverflow] = useState(false);
   const [atEnd, setAtEnd] = useState(false);
+  const [atStart, setAtStart] = useState(true);
 
   const updateOverflow = useCallback(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
     const overflowing = viewport.scrollWidth > viewport.clientWidth + 2;
     setHasOverflow(overflowing);
+    setAtStart(viewport.scrollLeft <= 2);
     setAtEnd(!overflowing || viewport.scrollLeft + viewport.clientWidth >= viewport.scrollWidth - 2);
   }, []);
 
@@ -33,15 +40,19 @@ export function DataTableViewport({
     updateOverflow();
     const resizeObserver = new ResizeObserver(updateOverflow);
     resizeObserver.observe(viewport);
+    if (viewport.firstElementChild) resizeObserver.observe(viewport.firstElementChild);
     return () => resizeObserver.disconnect();
   }, [children, updateOverflow]);
 
   return (
-    <div className="relative min-w-0">
+    <div className={cn("data-table-shell", wrapperClassName)}>
       {showHint && hasOverflow && (
-        <div className="mb-2 flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground lg:hidden">
-          <MoveHorizontal size={14} aria-hidden="true" />
-          Scroll horizontally to view all columns
+        <div className="data-table-scroll-tools">
+          <span><MoveHorizontal size={14} aria-hidden="true" /> Scroll to view all columns</span>
+          <div>
+            <button type="button" aria-label={`Scroll ${label} left`} disabled={atStart} onClick={() => viewportRef.current?.scrollBy({ left: -320, behavior: 'smooth' })}><ChevronLeft size={16} /></button>
+            <button type="button" aria-label={`Scroll ${label} right`} disabled={atEnd} onClick={() => viewportRef.current?.scrollBy({ left: 320, behavior: 'smooth' })}><ChevronRight size={16} /></button>
+          </div>
         </div>
       )}
       <div
@@ -50,19 +61,15 @@ export function DataTableViewport({
         aria-label={label}
         tabIndex={hasOverflow ? 0 : undefined}
         className={cn(
-          'min-w-0 overflow-x-auto overscroll-x-contain focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+          'data-table-viewport min-w-0 overflow-x-auto overscroll-x-contain focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+          stickyActions && 'data-table-register',
           className,
         )}
         onScroll={updateOverflow}
       >
         {children}
       </div>
-      {hasOverflow && !atEnd && (
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute bottom-0 right-0 top-6 w-10 bg-gradient-to-l from-card/90 to-transparent lg:top-0"
-        />
-      )}
+
     </div>
   );
 }

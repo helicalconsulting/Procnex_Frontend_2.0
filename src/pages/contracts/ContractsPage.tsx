@@ -1,3 +1,4 @@
+import { DataTableViewport } from '../../components/ui/data-table-viewport';
 import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -265,7 +266,7 @@ export default function ContractsPage() {
       key: 'contract', label: 'Contract', defaultVisible: true, required: true, width: '220px',
       render: (r) => (
         <div>
-          <div className="font-semibold text-foreground font-mono text-xs">{r.contractNumber}</div>
+          <div className="font-semibold text-foreground tabular-nums text-xs">{r.contractNumber}</div>
           <div className="text-[12px] text-muted-foreground truncate max-w-[200px]">{r.title}</div>
         </div>
       ),
@@ -276,7 +277,7 @@ export default function ContractsPage() {
     },
     {
       key: 'value', label: 'Contract Value', defaultVisible: true, width: '130px',
-      render: (r) => <span className="font-semibold text-foreground font-mono">{formatAmount(r.contractValue, r.currency)}</span>,
+      render: (r) => <span className="font-semibold text-foreground tabular-nums">{formatAmount(r.contractValue, r.currency)}</span>,
     },
     {
       key: 'status', label: 'Status', defaultVisible: true, width: '160px',
@@ -533,7 +534,7 @@ export default function ContractsPage() {
                 <div className="flex items-center gap-2.5">
                   <CheckCircle2 className="size-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                   <div>
-                    <div className="text-xs font-bold text-foreground">{event.vendorName} · <span className="font-mono">{event.contractNumber}</span></div>
+                    <div className="text-xs font-bold text-foreground">{event.vendorName} · <span className="tabular-nums">{event.contractNumber}</span></div>
                     <div className="text-[12px] text-muted-foreground">Signed by {event.signedBy} · {getTimeAgo(event.signedAt)}</div>
                   </div>
                 </div>
@@ -693,8 +694,8 @@ export default function ContractsPage() {
       ) : paginated.length > 0 ? (
         view === 'table' ? (
           <Card className="overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
+            <DataTableViewport stickyActions label="Contracts register">
+              <table className="w-full min-w-[1180px] text-left text-sm" style={{ tableLayout: 'auto' }}>
                 <thead>
                   <tr className="border-b border-border/70 bg-muted/40 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">
                     <th className="px-4 py-3.5 w-10 text-center">
@@ -781,7 +782,7 @@ export default function ContractsPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </DataTableViewport>
           </Card>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -792,7 +793,7 @@ export default function ContractsPage() {
                 onClick={() => handleView(r.id)}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono text-xs text-muted-foreground">{r.contractNumber}</span>
+                  <span className="tabular-nums text-xs text-muted-foreground">{r.contractNumber}</span>
                   <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
                     <Badge variant="outline" className={cn(STATUS_TONES[r.status])}>
                       {STATUS_LABELS[r.status]}
@@ -812,7 +813,7 @@ export default function ContractsPage() {
                 <h3 className="mt-1 text-xs text-muted-foreground truncate">{r.title}</h3>
                 <div className="mt-4 flex items-center justify-between border-t border-border/50 pt-3 text-xs">
                   <span className="text-muted-foreground">{formatDate(r.startDate)}</span>
-                  <span className="font-bold text-foreground font-mono text-sm sm:text-base">{formatAmount(r.contractValue, r.currency)}</span>
+                  <span className="font-bold text-foreground tabular-nums text-sm sm:text-base">{formatAmount(r.contractValue, r.currency)}</span>
                 </div>
               </Card>
             ))}

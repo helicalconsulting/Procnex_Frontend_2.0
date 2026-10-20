@@ -1,3 +1,4 @@
+import { getActiveCompanyCode } from '../lib/branding';
 import { USE_MOCK } from '../config/mock';
 import { apiRequest, API_BASE, ApiError } from '../api/client';
 
@@ -351,7 +352,7 @@ async function mockGetCompanyProfile(): Promise<CompanyProfile> {
 /**
  * Try authenticated profile first. If 401 (stale/invalid token),
  * fall back to the public endpoint (no auth required).
- * Company code defaults to 'HFL' for the public endpoint.
+ * Public branding follows the company in the current URL or saved session.
  */
 async function apiGetCompanyProfile(): Promise<CompanyProfile> {
   const isBrowser = typeof window !== 'undefined' && typeof window.location !== 'undefined';
@@ -379,8 +380,8 @@ async function apiGetCompanyProfile(): Promise<CompanyProfile> {
  * Public endpoint — no auth required. Always returns profile data.
  * Never throws 401 errors.
  */
-async function apiGetPublicCompanyProfile(): Promise<CompanyProfile> {
-  const data = await apiRequest<{ profile: CompanyProfile }>('/company-settings/profile/public?companyCode=HFL', { cacheTtlMs: 300000 });
+async function apiGetPublicCompanyProfile(companyCode = getActiveCompanyCode() || 'HFL'): Promise<CompanyProfile> {
+  const data = await apiRequest<{ profile: CompanyProfile }>(`/company-settings/profile/public?companyCode=${encodeURIComponent(companyCode)}`, { cacheTtlMs: 0 });
   return data.profile;
 }
 
@@ -1535,6 +1536,7 @@ export const companySettingsService = {
   createPaymentPlan: USE_MOCK ? mockCreatePaymentPlan : apiCreatePaymentPlan,
   updatePaymentPlan: USE_MOCK ? mockUpdatePaymentPlan : apiUpdatePaymentPlan,
   deletePaymentPlan: USE_MOCK ? mockDeletePaymentPlan : apiDeletePaymentPlan,
+  getPublicCompanyProfile: apiGetPublicCompanyProfile,
   getCompanyProfile: USE_MOCK ? mockGetCompanyProfile : apiGetCompanyProfile,
   updateCompanyProfile: USE_MOCK ? mockUpdateCompanyProfile : apiUpdateCompanyProfile,
   getDefaultCurrency: USE_MOCK ? mockGetDefaultCurrency : apiGetDefaultCurrency,

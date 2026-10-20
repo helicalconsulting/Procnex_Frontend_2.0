@@ -1,3 +1,4 @@
+import { DataTableViewport } from '../../components/ui/data-table-viewport';
 import ColumnSettingsButton from '../../components/shared/ColumnSettingsButton';
 import React from 'react';
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
@@ -123,8 +124,8 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
           {req.requestedByInitials}
         </div>
         <div className="min-w-0">
-          <div className="font-semibold text-foreground font-mono text-sm tracking-tight">{req.referenceNumber}</div>
-          <div className="text-sm font-medium text-foreground truncate">{req.title}</div>
+          <div className="font-semibold text-foreground tabular-nums text-sm tracking-tight">{req.referenceNumber}</div>
+          <div className="text-sm font-medium text-foreground whitespace-normal">{req.title}</div>
           <div className="text-xs text-muted-foreground truncate">by {req.requestedBy} · {req.department}</div>
         </div>
       </div>
@@ -140,7 +141,7 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
   },
   {
     key: 'amount', label: 'Amount', defaultVisible: true, align: 'right',
-    render: (req) => <span className="font-mono font-semibold text-foreground whitespace-nowrap">{req.amount}</span>,
+    render: (req) => <span className="tabular-nums font-semibold text-foreground whitespace-nowrap">{req.amount}</span>,
   },
   {
     key: 'priority', label: 'Priority', defaultVisible: true, align: 'center',
@@ -165,7 +166,7 @@ const ALL_COLUMNS: ApprovalColumnDef[] = [
       const isApproved = req.status === 'APPROVED';
       const current = isApproved ? total + 1 : (req.currentLevel || 1);
       return (
-        <div className="inline-flex items-center justify-center gap-1.5 text-xs font-mono">
+        <div className="inline-flex items-center justify-center gap-1.5 text-xs tabular-nums">
           <Badge variant="secondary" className="font-semibold">
             L{isApproved ? total : Math.min(current, total)}/{total}
           </Badge>
@@ -481,6 +482,7 @@ export default function ApprovalsPage() {
 
   const totalPages = Math.ceil(filtered.length / perPage);
   const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
+  const actionsWidth = paginated.some(request => request.canAct) ? 384 : 144;
 
   const handleAction = useCallback(async () => {
     if (!actionModal) return;
@@ -745,8 +747,9 @@ export default function ApprovalsPage() {
         {loading && approvals.length === 0 ? (
           <TableSkeleton rows={5} columnWidths={['220px', '140px', '110px', '95px', '110px', '130px', '120px', '90px']} />
         ) : paginated.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1180px] border-collapse text-sm">
+          <DataTableViewport stickyActions label="Purchase order approvals">
+            <table className="w-full text-sm" style={{ minWidth: actionsWidth + visibleColumns.reduce((sum, col) => sum + (col.key === 'request' ? 340 : col.key === 'module' ? 180 : 150), 0) }}>
+              <colgroup>{visibleColumns.map(col => <col key={col.key} style={{ width: col.key === 'request' ? 340 : col.key === 'module' ? 180 : 150 }} />)}<col style={{ width: actionsWidth }} /></colgroup>
               <thead>
                 <tr className="border-b border-border/75 bg-muted/45 text-left text-[12px] font-bold uppercase tracking-wide text-muted-foreground">
                   {visibleColumns.map((col) => (
@@ -760,7 +763,7 @@ export default function ApprovalsPage() {
                       {col.label}
                     </th>
                   ))}
-                  <th className="w-[340px] min-w-[340px] px-4 py-3 text-center sticky right-0 z-10 bg-muted/95 backdrop-blur-sm shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.1)] dark:shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.35)]">
+                  <th className="px-4 py-3 text-center sticky right-0 z-10 bg-muted/95 backdrop-blur-sm shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.1)] dark:shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.35)]">
                     <div className="flex items-center justify-center gap-2">
                       <span>Actions</span>
                       <div className="relative">
@@ -807,7 +810,7 @@ export default function ApprovalsPage() {
                         {col.render(req, formatDateTime)}
                       </td>
                     ))}
-                    <td className="w-[340px] min-w-[340px] px-3 py-3.5 text-center sticky right-0 z-10 bg-card group-hover:bg-[var(--table-row-hover)] transition-colors shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.1)] dark:shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.35)]" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-3 py-3.5 text-center sticky right-0 z-10 bg-card group-hover:bg-[var(--table-row-hover)] transition-colors shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.1)] dark:shadow-[-4px_0_8px_-3px_rgba(0,0,0,0.35)]" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0" title="View Details" onClick={() => setDetailRequest(req)}>
                           <Eye className="size-4 text-muted-foreground hover:text-foreground" />
@@ -852,7 +855,7 @@ export default function ApprovalsPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </DataTableViewport>
         ) : (
           <EmptyState
             icon={CheckSquare}
@@ -930,7 +933,7 @@ export default function ApprovalsPage() {
                   </span>
                 </div>
                 <DialogDescription className="text-xs text-muted-foreground">
-                  Confirm decision for request <span className="font-mono font-bold text-foreground">{actionModal.request.referenceNumber}</span>
+                  Confirm decision for request <span className="tabular-nums font-bold text-foreground">{actionModal.request.referenceNumber}</span>
                 </DialogDescription>
               </div>
             </div>
@@ -949,7 +952,7 @@ export default function ApprovalsPage() {
               <div className="grid grid-cols-2 gap-3 pt-3 border-t border-border/60">
                 <div className="space-y-0.5">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Amount</span>
-                  <div className="text-sm sm:text-base font-bold text-foreground font-mono tracking-tight">
+                  <div className="text-sm sm:text-base font-bold text-foreground tabular-nums tracking-tight">
                     {actionModal.request.amount}
                   </div>
                 </div>
@@ -1064,7 +1067,7 @@ export default function ApprovalsPage() {
           <DialogContent className="max-w-xl p-6 sm:p-7">
             <DialogHeader className="space-y-1 pr-8">
               <div className="flex items-center gap-2.5">
-                <DialogTitle className="text-xl font-bold tracking-tight text-foreground font-mono">
+                <DialogTitle className="text-xl font-bold tracking-tight text-foreground tabular-nums">
                   {detailRequest.referenceNumber}
                 </DialogTitle>
                 {(() => {
@@ -1092,7 +1095,7 @@ export default function ApprovalsPage() {
                 })()}
               </div>
               <DialogDescription className="text-sm font-medium text-muted-foreground">
-                {detailRequest.requestedBy} · <span className="font-bold text-foreground font-mono">{detailRequest.amount}</span>
+                {detailRequest.requestedBy} · <span className="font-bold text-foreground tabular-nums">{detailRequest.amount}</span>
               </DialogDescription>
             </DialogHeader>
 
@@ -1118,7 +1121,7 @@ export default function ApprovalsPage() {
                       <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                         INVOICE REFERENCE
                       </div>
-                      <div className="mt-1 font-medium text-foreground font-mono break-words">
+                      <div className="mt-1 font-medium text-foreground tabular-nums break-words">
                         {detailRequest.referenceNumber}
                       </div>
                     </div>
@@ -1126,7 +1129,7 @@ export default function ApprovalsPage() {
                       <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                         AMOUNT
                       </div>
-                      <div className="mt-1 text-base font-bold text-foreground font-mono">
+                      <div className="mt-1 text-base font-bold text-foreground tabular-nums">
                         {detailRequest.amount}
                       </div>
                     </div>
@@ -1565,7 +1568,7 @@ function ApprovalChainView({ module, referenceId, onClose }: { module: string; r
                     </div>
                     <div className="flex items-center justify-between text-muted-foreground gap-2 flex-wrap">
                       <span>{isQuotation && isOriginator ? 'Vendor' : 'Action By'}: <strong className="text-foreground">{item.approverName || (isOriginator ? (isQuotation ? 'Vendor' : 'Originator') : 'Pending')}</strong></span>
-                      <span className="font-mono text-[11px]">{formattedTime}</span>
+                      <span className="tabular-nums text-[11px]">{formattedTime}</span>
                     </div>
                     {item.comments && (
                       <p className="mt-1 rounded-lg bg-muted/60 border border-border/50 p-2 text-xs italic text-foreground">
